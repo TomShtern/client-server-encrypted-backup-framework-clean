@@ -1,77 +1,159 @@
 # Root .gitignore for Encrypted Backup Framework
 
-# Build artifacts and IDE files
+# ==== PYTHON ====
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env/
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==== C++ BUILD ARTIFACTS ====
+# Build directories
 build/
 msvc-debug/
 x64/
+Debug/
+Release/
 lib/Debug/
+lib/Release/
 client.dir/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
+install_manifest.txt
+
+# Visual Studio files
+*.vcxproj*
+*.sln*
 ALL_BUILD.vcxproj*
 ZERO_CHECK.vcxproj*
 EncryptedBackupClient.sln*
-*.vcxproj*
+.vs/
 
 # Object and binary files
 *.obj
 *.exe
+*.dll
+*.lib
+*.a
+*.so
+*.dylib
 *.ilk
 *.pdb
 *.tlog
+*.exp
+*.idb
+*.ipdb
+*.iobj
+*.ipdb
 
-# Backup and temp files
-*.bak
-*~
+# ==== DEPENDENCIES AND THIRD-PARTY ====
+# Third-party libraries (crypto++, etc.)
+third_party/
+vendor/
+external/
+deps/
 
-# OS files
-.DS_Store
-Thumbs.db
+# Package managers
+node_modules/
+.npm/
+.yarn/
 
-_ZENTASKS
-
-# Ignore SQLite database files
-**/defensive.db
-
-# Ignore server log files
-**/server.log
-
-# Additional build artifacts
-*.log
-*.out
-client/EncryptedBackupClient.exe
-
-# Ignore data, logs, and runtime files
+# ==== DATA AND LOGS ====
+# Runtime data and logs
 /data/
 received_files/
 archive/
 benchmarks/
+*.log
+*.out
+server.log
+defensive.db
 
-# Ignore third-party dependencies (if not needed in repo)
-third_party/
+# Test files and temporary data
+test_file.txt
+*.tmp
+*.temp
 
-# Ignore test and output files
-*.json
-*.md
-!README.md
-!docs/*.md
-
-# Ignore private keys and sensitive info
+# ==== SECURITY AND KEYS ====
+# Private keys and sensitive info
 *.key
 *.der
-
-# Ignore VS Code and editor settings
-.vscode/
-*.code-workspace
-
-# Ignore Python cache and virtualenv
-__pycache__/
-*.pyc
-.venv/
-
-# Ignore other client/server artifacts
+*.pem
+*.p12
+*.pfx
+priv.key
+transfer.info
 client/priv.key
 client/transfer.info
 data/priv.key
 data/transfer.info
+
+# ==== IDE AND EDITOR SETTINGS ====
+# VS Code
+.vscode/
+*.code-workspace
+
+# Other editors
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ==== OS FILES ====
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ==== BACKUP AND TEMPORARY FILES ====
+*.bak
+*~
+*.backup
+_ZENTASKS
+
+# ==== OUTPUT AND GENERATED FILES ====
+# Test and output files (but keep essential docs)
+*.json
+!package.json
+!tsconfig.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# Documentation exceptions
+*.md
+!README.md
+!CHANGELOG.md
+!LICENSE.md
+!docs/*.md
+!.github/*.md
