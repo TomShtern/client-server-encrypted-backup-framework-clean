@@ -16,6 +16,8 @@ namespace CryptoPP {
         // Simple fallback implementation - may not handle all cases
         return false;
     }
+
+    // Template instantiation for IntToString - removed to avoid duplicate definition
     
     // Simple IntToString implementation for word64 (unsigned __int64)
     template<>

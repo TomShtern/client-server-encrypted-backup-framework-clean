@@ -5,30 +5,30 @@
 #include <cstring>
 #include <stdexcept>
 
-// Protocol constants
-constexpr uint8_t PROTOCOL_VERSION = 3;
-constexpr size_t CLIENT_ID_SIZE = 16;
-constexpr size_t HEADER_SIZE = 23;
-constexpr size_t MAX_FILENAME_SIZE = 255;
+// Protocol constants - definitions for extern declarations in header
+const uint8_t PROTOCOL_VERSION = 3;
+const size_t CLIENT_ID_SIZE = 16;
+const size_t HEADER_SIZE = 23;
+const size_t MAX_FILENAME_SIZE = 255;
 
 // Request codes
-constexpr uint16_t REQ_REGISTER = 1025;
-constexpr uint16_t REQ_SEND_PUBLIC_KEY = 1026;
-constexpr uint16_t REQ_RECONNECT = 1027;
-constexpr uint16_t REQ_SEND_FILE = 1028;
-constexpr uint16_t REQ_CRC_OK = 1029;
-constexpr uint16_t REQ_CRC_RETRY = 1030;
-constexpr uint16_t REQ_CRC_ABORT = 1031;
+const uint16_t REQ_REGISTER = 1025;
+const uint16_t REQ_SEND_PUBLIC_KEY = 1026;
+const uint16_t REQ_RECONNECT = 1027;
+const uint16_t REQ_SEND_FILE = 1028;
+const uint16_t REQ_CRC_OK = 1029;
+const uint16_t REQ_CRC_RETRY = 1030;
+const uint16_t REQ_CRC_ABORT = 1031;
 
 // Response codes
-constexpr uint16_t RESP_REGISTER_OK = 1600;
-constexpr uint16_t RESP_REGISTER_FAIL = 1601;
-constexpr uint16_t RESP_PUBKEY_AES_SENT = 1602;
-constexpr uint16_t RESP_FILE_CRC = 1603;
-constexpr uint16_t RESP_ACK = 1604;
-constexpr uint16_t RESP_RECONNECT_AES_SENT = 1605;
-constexpr uint16_t RESP_RECONNECT_FAIL = 1606;
-constexpr uint16_t RESP_ERROR = 1607;
+const uint16_t RESP_REGISTER_OK = 1600;
+const uint16_t RESP_REGISTER_FAIL = 1601;
+const uint16_t RESP_PUBKEY_AES_SENT = 1602;
+const uint16_t RESP_FILE_CRC = 1603;
+const uint16_t RESP_ACK = 1604;
+const uint16_t RESP_RECONNECT_AES_SENT = 1605;
+const uint16_t RESP_RECONNECT_FAIL = 1606;
+const uint16_t RESP_ERROR = 1607;
 
 // Protocol structures (packed)
 #pragma pack(push, 1)
@@ -46,12 +46,38 @@ struct ResponseHeader {
 };
 #pragma pack(pop)
 
-// Helper function to convert multi-byte integers to little-endian
+// Helper functions for guaranteed little-endian serialization
+void writeLE16(std::vector<uint8_t>& buffer, uint16_t value) {
+    buffer.push_back(value & 0xFF);
+    buffer.push_back((value >> 8) & 0xFF);
+}
+
+void writeLE32(std::vector<uint8_t>& buffer, uint32_t value) {
+    buffer.push_back(value & 0xFF);
+    buffer.push_back((value >> 8) & 0xFF);
+    buffer.push_back((value >> 16) & 0xFF);
+    buffer.push_back((value >> 24) & 0xFF);
+}
+
+uint16_t readLE16(const uint8_t* data) {
+    return static_cast<uint16_t>(data[0]) | (static_cast<uint16_t>(data[1]) << 8);
+}
+
+uint32_t readLE32(const uint8_t* data) {
+    return static_cast<uint32_t>(data[0]) | 
+           (static_cast<uint32_t>(data[1]) << 8) | 
+           (static_cast<uint32_t>(data[2]) << 16) | 
+           (static_cast<uint32_t>(data[3]) << 24);
+}
+
+// Deprecated functions - use writeLE/readLE instead
 uint16_t hostToLittleEndian16(uint16_t value) {
     uint8_t bytes[2];
     bytes[0] = value & 0xFF;
     bytes[1] = (value >> 8) & 0xFF;
-    return *reinterpret_cast<uint16_t*>(bytes);
+    uint16_t result;
+    std::memcpy(&result, bytes, 2);
+    return result;
 }
 
 uint32_t hostToLittleEndian32(uint32_t value) {
@@ -60,20 +86,19 @@ uint32_t hostToLittleEndian32(uint32_t value) {
     bytes[1] = (value >> 8) & 0xFF;
     bytes[2] = (value >> 16) & 0xFF;
     bytes[3] = (value >> 24) & 0xFF;
-    return *reinterpret_cast<uint32_t*>(bytes);
+    uint32_t result;
+    std::memcpy(&result, bytes, 4);
+    return result;
 }
 
 uint16_t littleEndianToHost16(uint16_t value) {
     const uint8_t* bytes = reinterpret_cast<const uint8_t*>(&value);
-    return static_cast<uint16_t>(bytes[0]) | (static_cast<uint16_t>(bytes[1]) << 8);
+    return readLE16(bytes);
 }
 
 uint32_t littleEndianToHost32(uint32_t value) {
     const uint8_t* bytes = reinterpret_cast<const uint8_t*>(&value);
-    return static_cast<uint32_t>(bytes[0]) | 
-           (static_cast<uint32_t>(bytes[1]) << 8) | 
-           (static_cast<uint32_t>(bytes[2]) << 16) | 
-           (static_cast<uint32_t>(bytes[3]) << 24);
+    return readLE32(bytes);
 }
 
 // Helper function to create padded string fields
@@ -84,20 +109,18 @@ std::vector<uint8_t> createPaddedString(const std::string& str, size_t targetSiz
     return result;
 }
 
-// Create registration request (Code 1025)
+// Create registration request (Code 1025) with proper manual serialization
 std::vector<uint8_t> createRegistrationRequest(const uint8_t* clientId, const std::string& username) {
     std::vector<uint8_t> request;
     
-    // Create header
-    RequestHeader header;
-    std::memcpy(header.client_id, clientId, CLIENT_ID_SIZE);
-    header.version = PROTOCOL_VERSION;
-    header.code = hostToLittleEndian16(REQ_REGISTER);
-    header.payload_size = hostToLittleEndian32(MAX_FILENAME_SIZE); // Username field size
+    // Manual header serialization for guaranteed little-endian compliance
+    // client_id(16) + version(1) + code(2) + payload_size(4) = 23 bytes
+    request.resize(CLIENT_ID_SIZE);
+    std::memcpy(request.data(), clientId, CLIENT_ID_SIZE);
     
-    // Add header to request
-    request.resize(sizeof(RequestHeader));
-    std::memcpy(request.data(), &header, sizeof(RequestHeader));
+    request.push_back(PROTOCOL_VERSION);
+    writeLE16(request, REQ_REGISTER);
+    writeLE32(request, MAX_FILENAME_SIZE); // Username field size
     
     // Add username payload (255 bytes, null-terminated, zero-padded)
     std::vector<uint8_t> usernameField = createPaddedString(username, MAX_FILENAME_SIZE);
@@ -107,53 +130,46 @@ std::vector<uint8_t> createRegistrationRequest(const uint8_t* clientId, const st
     return request;
 }
 
-// Create public key submission request (Code 1026)
+// Create public key submission request (Code 1026) with proper serialization
 std::vector<uint8_t> createPublicKeyRequest(const uint8_t* clientId, const std::string& username, 
                                           const std::string& publicKey) {
     std::vector<uint8_t> request;
     
-    // Calculate payload size: username (255) + public key (162)
-    uint32_t payloadSize = MAX_FILENAME_SIZE + 162;
+    // Validate public key size (162 bytes for RSA DER format)
+    if (publicKey.size() != 162) {
+        throw std::invalid_argument("Public key must be exactly 162 bytes for protocol compliance");
+    }
     
-    // Create header
-    RequestHeader header;
-    std::memcpy(header.client_id, clientId, CLIENT_ID_SIZE);
-    header.version = PROTOCOL_VERSION;
-    header.code = hostToLittleEndian16(REQ_SEND_PUBLIC_KEY);
-    header.payload_size = hostToLittleEndian32(payloadSize);
+    // Manual header serialization for guaranteed little-endian compliance
+    request.resize(CLIENT_ID_SIZE);
+    std::memcpy(request.data(), clientId, CLIENT_ID_SIZE);
     
-    // Add header to request
-    request.resize(sizeof(RequestHeader));
-    std::memcpy(request.data(), &header, sizeof(RequestHeader));
+    request.push_back(PROTOCOL_VERSION);
+    writeLE16(request, REQ_SEND_PUBLIC_KEY);
+    writeLE32(request, MAX_FILENAME_SIZE + 162); // username (255) + public key (162)
     
-    // Add username field (255 bytes)
+    // Add username field (255 bytes, null-terminated, zero-padded)
     std::vector<uint8_t> usernameField = createPaddedString(username, MAX_FILENAME_SIZE);
     request.insert(request.end(), usernameField.begin(), usernameField.end());
     
     // Add public key (exactly 162 bytes)
-    if (publicKey.size() != 162) {
-        throw std::invalid_argument("Public key must be exactly 162 bytes");
-    }
     request.insert(request.end(), publicKey.begin(), publicKey.end());
     
     std::cout << "[DEBUG] Created public key request: " << request.size() << " bytes" << std::endl;
     return request;
 }
 
-// Create reconnection request (Code 1027)
+// Create reconnection request (Code 1027) with proper serialization
 std::vector<uint8_t> createReconnectionRequest(const uint8_t* clientId, const std::string& username) {
     std::vector<uint8_t> request;
     
-    // Create header
-    RequestHeader header;
-    std::memcpy(header.client_id, clientId, CLIENT_ID_SIZE);
-    header.version = PROTOCOL_VERSION;
-    header.code = hostToLittleEndian16(REQ_RECONNECT);
-    header.payload_size = hostToLittleEndian32(MAX_FILENAME_SIZE); // Username field size
+    // Manual header serialization for guaranteed little-endian compliance
+    request.resize(CLIENT_ID_SIZE);
+    std::memcpy(request.data(), clientId, CLIENT_ID_SIZE);
     
-    // Add header to request
-    request.resize(sizeof(RequestHeader));
-    std::memcpy(request.data(), &header, sizeof(RequestHeader));
+    request.push_back(PROTOCOL_VERSION);
+    writeLE16(request, REQ_RECONNECT);
+    writeLE32(request, MAX_FILENAME_SIZE); // Username field size
     
     // Add username payload (255 bytes, null-terminated, zero-padded)
     std::vector<uint8_t> usernameField = createPaddedString(username, MAX_FILENAME_SIZE);
@@ -163,73 +179,96 @@ std::vector<uint8_t> createReconnectionRequest(const uint8_t* clientId, const st
     return request;
 }
 
-// Create file transfer request (Code 1028)
+// Create file transfer request (Code 1028) with chunking support
 std::vector<uint8_t> createFileTransferRequest(const uint8_t* clientId, const std::string& filename,
                                               const std::vector<uint8_t>& encryptedData, 
-                                              uint32_t originalSize) {
+                                              uint32_t originalSize, uint16_t packetNumber, 
+                                              uint16_t totalPackets) {
     std::vector<uint8_t> request;
+    
+    // Manual serialization for guaranteed little-endian compliance
+    // Header: client_id(16) + version(1) + code(2) + payload_size(4) = 23 bytes
+    request.resize(CLIENT_ID_SIZE);
+    std::memcpy(request.data(), clientId, CLIENT_ID_SIZE);
+    
+    request.push_back(PROTOCOL_VERSION);
+    writeLE16(request, REQ_SEND_FILE);
     
     // Calculate payload size: content_size(4) + orig_file_size(4) + packet_number(2) + total_packets(2) + filename(255) + data
     uint32_t payloadSize = 4 + 4 + 2 + 2 + MAX_FILENAME_SIZE + static_cast<uint32_t>(encryptedData.size());
+    writeLE32(request, payloadSize);
     
-    // Create header
-    RequestHeader header;
-    std::memcpy(header.client_id, clientId, CLIENT_ID_SIZE);
-    header.version = PROTOCOL_VERSION;
-    header.code = hostToLittleEndian16(REQ_SEND_FILE);
-    header.payload_size = hostToLittleEndian32(payloadSize);
+    // Payload fields - all manually serialized as little-endian
+    writeLE32(request, static_cast<uint32_t>(encryptedData.size())); // Content size
+    writeLE32(request, originalSize);                                // Original file size
+    writeLE16(request, packetNumber);                               // Packet number (1-based)
+    writeLE16(request, totalPackets);                               // Total packets
     
-    // Add header to request
-    request.resize(sizeof(RequestHeader));
-    std::memcpy(request.data(), &header, sizeof(RequestHeader));
-    
-    // Add payload fields
-    // Content size (encrypted data size)
-    uint32_t contentSize = hostToLittleEndian32(static_cast<uint32_t>(encryptedData.size()));
-    request.insert(request.end(), reinterpret_cast<uint8_t*>(&contentSize), 
-                   reinterpret_cast<uint8_t*>(&contentSize) + 4);
-    
-    // Original file size
-    uint32_t origSize = hostToLittleEndian32(originalSize);
-    request.insert(request.end(), reinterpret_cast<uint8_t*>(&origSize), 
-                   reinterpret_cast<uint8_t*>(&origSize) + 4);
-    
-    // Packet number (always 1 - no chunking)
-    uint16_t packetNum = hostToLittleEndian16(1);
-    request.insert(request.end(), reinterpret_cast<uint8_t*>(&packetNum), 
-                   reinterpret_cast<uint8_t*>(&packetNum) + 2);
-    
-    // Total packets (always 1 - no chunking)
-    uint16_t totalPackets = hostToLittleEndian16(1);
-    request.insert(request.end(), reinterpret_cast<uint8_t*>(&totalPackets), 
-                   reinterpret_cast<uint8_t*>(&totalPackets) + 2);
-    
-    // Filename field (255 bytes)
+    // Filename field (255 bytes, null-terminated, zero-padded)
     std::vector<uint8_t> filenameField = createPaddedString(filename, MAX_FILENAME_SIZE);
     request.insert(request.end(), filenameField.begin(), filenameField.end());
     
-    // Encrypted file data
+    // Encrypted file data chunk
     request.insert(request.end(), encryptedData.begin(), encryptedData.end());
     
-    std::cout << "[DEBUG] Created file transfer request: " << request.size() << " bytes" << std::endl;
+    std::cout << "[DEBUG] Created file transfer request: " << request.size() << " bytes (packet " 
+              << packetNumber << "/" << totalPackets << ")" << std::endl;
     return request;
 }
 
-// Create CRC verification requests (Codes 1029, 1030, 1031)
+// Overload for backward compatibility (single packet)
+std::vector<uint8_t> createFileTransferRequest(const uint8_t* clientId, const std::string& filename,
+                                              const std::vector<uint8_t>& encryptedData, 
+                                              uint32_t originalSize) {
+    return createFileTransferRequest(clientId, filename, encryptedData, originalSize, 1, 1);
+}
+
+// Split large files into chunks for transmission
+std::vector<std::vector<uint8_t>> createChunkedFileTransferRequests(const uint8_t* clientId, 
+                                                                   const std::string& filename,
+                                                                   const std::vector<uint8_t>& encryptedData, 
+                                                                   uint32_t originalSize) {
+    std::vector<std::vector<uint8_t>> requests;
+    
+    // Maximum chunk size: 1MB for data + headers (~1MB total per packet)
+    const size_t MAX_CHUNK_SIZE = 1024 * 1024; // 1MB
+    
+    if (encryptedData.size() <= MAX_CHUNK_SIZE) {
+        // Single packet
+        requests.push_back(createFileTransferRequest(clientId, filename, encryptedData, originalSize, 1, 1));
+        return requests;
+    }
+    
+    // Multiple packets needed
+    size_t totalChunks = (encryptedData.size() + MAX_CHUNK_SIZE - 1) / MAX_CHUNK_SIZE;
+    uint16_t totalPackets = static_cast<uint16_t>(std::min(totalChunks, static_cast<size_t>(65535)));
+    
+    for (uint16_t packet = 1; packet <= totalPackets; ++packet) {
+        size_t startOffset = (packet - 1) * MAX_CHUNK_SIZE;
+        size_t endOffset = std::min(startOffset + MAX_CHUNK_SIZE, encryptedData.size());
+        
+        std::vector<uint8_t> chunk(encryptedData.begin() + startOffset, encryptedData.begin() + endOffset);
+        requests.push_back(createFileTransferRequest(clientId, filename, chunk, originalSize, packet, totalPackets));
+        
+        std::cout << "[DEBUG] Created chunk " << packet << "/" << totalPackets 
+                  << " (" << chunk.size() << " bytes)" << std::endl;
+    }
+    
+    return requests;
+}
+
+// Create CRC verification requests (Codes 1029, 1030, 1031) with proper serialization
 std::vector<uint8_t> createCRCRequest(const uint8_t* clientId, uint16_t requestCode, 
                                      const std::string& filename) {
     std::vector<uint8_t> request;
     
-    // Create header
-    RequestHeader header;
-    std::memcpy(header.client_id, clientId, CLIENT_ID_SIZE);
-    header.version = PROTOCOL_VERSION;
-    header.code = hostToLittleEndian16(requestCode);
-    header.payload_size = hostToLittleEndian32(MAX_FILENAME_SIZE); // Filename field size
+    // Manual header serialization for guaranteed little-endian compliance
+    request.resize(CLIENT_ID_SIZE);
+    std::memcpy(request.data(), clientId, CLIENT_ID_SIZE);
     
-    // Add header to request
-    request.resize(sizeof(RequestHeader));
-    std::memcpy(request.data(), &header, sizeof(RequestHeader));
+    request.push_back(PROTOCOL_VERSION);
+    writeLE16(request, requestCode);
+    writeLE32(request, MAX_FILENAME_SIZE); // Filename field size
     
     // Add filename payload (255 bytes, null-terminated, zero-padded)
     std::vector<uint8_t> filenameField = createPaddedString(filename, MAX_FILENAME_SIZE);

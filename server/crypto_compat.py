@@ -10,6 +10,7 @@ try:
     from Crypto.Cipher import PKCS1_OAEP
     from Crypto.Util.Padding import pad, unpad
     from Crypto.Random import get_random_bytes
+    from Crypto.Hash import SHA256
     print("Using PyCryptodome")
     
 except ImportError:
@@ -25,23 +26,25 @@ except ImportError:
     # Create PyCryptodome-like interface
     class AES:
         BLOCKSIZE = 16
+        block_size = 16  # PyCryptodome compatibility
+        MODE_CBC = 2  # Standard CBC mode constant
         
         @staticmethod
-        def new(key, mode_obj, iv=None):
-            return AESCompat(key, mode_obj, iv)
+        def new(key, mode_constant, iv=None):
+            return AESCompat(key, mode_constant, iv)
     
     class AESCompat:
-        def __init__(self, key, mode_obj, iv=None):
+        def __init__(self, key, mode_constant, iv=None):
             self.key = key
             self.iv = iv or os.urandom(16)
             
-            if hasattr(mode_obj, 'MODE_CBC'):
+            if mode_constant == AES.MODE_CBC:
                 # CBC mode
                 cipher = Cipher(algorithms.AES(key), modes.CBC(self.iv), backend=default_backend())
                 self.encryptor = cipher.encryptor()
                 self.decryptor = cipher.decryptor()
             else:
-                raise ValueError("Unsupported AES mode")
+                raise ValueError(f"Unsupported AES mode: {mode_constant}")
         
         def encrypt(self, data):
             # Add PKCS7 padding
@@ -55,12 +58,11 @@ except ImportError:
             unpadder = padding.PKCS7(128).unpadder()
             return unpadder.update(decrypted) + unpadder.finalize()
     
-    class MODE_CBC:
-        pass
-    
     class RSA:
         @staticmethod
-        def generate(bits):
+        def generate(bits, randfunc=None):
+            # randfunc parameter is ignored when using cryptography library
+            # as it has its own secure random number generation
             private_key = rsa.generate_private_key(
                 public_exponent=65537,
                 key_size=bits,
@@ -94,13 +96,21 @@ except ImportError:
                 data = data.encode()
             return self.public_key.encrypt(
                 data,
-                asym_padding.PKCS1v15()
+                asym_padding.OAEP(
+                    mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None
+                )
             )
-        
+
         def decrypt(self, data):
             return self.private_key.decrypt(
                 data,
-                asym_padding.PKCS1v15()
+                asym_padding.OAEP(
+                    mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None
+                )
             )
         
         def export_key(self, format='DER'):
@@ -114,8 +124,9 @@ except ImportError:
                 raise ValueError("Unsupported format")
     
     class PKCS1_OAEP:
-        def __init__(self, key):
+        def __init__(self, key, hashAlgo=None):
             self.key = key
+            self.hash_algo = hashAlgo  # Ignored in this implementation
         
         def encrypt(self, data):
             return self.key.encrypt(data)
@@ -124,8 +135,8 @@ except ImportError:
             return self.key.decrypt(data)
         
         @staticmethod
-        def new(key):
-            return PKCS1_OAEP(key)
+        def new(key, hashAlgo=None):
+            return PKCS1_OAEP(key, hashAlgo)
     
     def pad(data, block_size):
         padder = padding.PKCS7(block_size * 8).padder()
@@ -138,5 +149,8 @@ except ImportError:
     def get_random_bytes(length):
         return os.urandom(length)
     
-    # Set mode constants
-    AES.MODE_CBC = MODE_CBC()
+    # Export SHA256 for PKCS1_OAEP compatibility
+    class SHA256:
+        pass  # Placeholder - not used directly in this implementation
+    
+    # MODE_CBC constant is already set in the AES class definition

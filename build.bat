@@ -20,12 +20,31 @@ if not exist "build\third_party\crypto++" mkdir "build\third_party\crypto++"
 REM 1) Compile client sources to build\client\
 echo Compiling client sources...
 "%CL_PATH%" /EHsc /D_WIN32_WINNT=0x0601 /std:c++14 /MT /c /I"include\client" /I"include\wrappers" /I"third_party\crypto++" /I"C:\Users\tom7s\Downloads\boost_1_88_0\boost_1_88_0" /Fo:"build\client\\" ^
-src\client\*.cpp
+src\client\cksum.cpp ^
+src\client\client.cpp ^
+src\client\main.cpp ^
+src\client\protocol.cpp
 
 REM 1.5) Compile wrappers separately to control dependencies
 echo Compiling other wrappers...
 "%CL_PATH%" /EHsc /D_WIN32_WINNT=0x0601 /std:c++14 /MT /c /I"include\wrappers" /I"third_party\crypto++" /Fo:"build\client\\" ^
-src\wrappers\AESWrapper.cpp src\wrappers\Base64Wrapper.cpp src\wrappers\RSAWrapper.cpp
+src\wrappers\AESWrapper.cpp src\wrappers\Base64Wrapper.cpp src\wrappers\RSAWrapper_stub.cpp
+
+if %ERRORLEVEL% neq 0 (
+    echo ERROR: Wrapper compilation failed
+    exit /b 1
+)
+
+REM 1.6) Compile algebra implementations to resolve template linking errors
+echo Compiling algebra implementations...
+"%CL_PATH%" /EHsc /D_WIN32_WINNT=0x0601 /std:c++14 /MT /c /I"third_party\crypto++" /Fo:"build\client\\" ^
+src\algebra_implementations.cpp
+
+if %ERRORLEVEL% neq 0 (
+    echo ERROR: Algebra implementations compilation failed
+    exit /b 1
+)
+
 REM Now using real RSA implementation instead of stub
 REM src\wrappers\RSAWrapper_stub.cpp (REMOVED - using real implementation)
 
@@ -59,10 +78,15 @@ third_party\crypto++\pubkey.cpp ^
 third_party\crypto++\integer.cpp ^
 third_party\crypto++\nbtheory.cpp ^
 third_party\crypto++\asn.cpp ^
-third_party\crypto++\randpool.cpp
+third_party\crypto++\randpool.cpp ^
+third_party\crypto++\pkcspad.cpp ^
+third_party\crypto++\primetab.cpp
 REM Removed algebra-problematic files:
-REM third_party\crypto++\abstract_implementations.cpp - has algebra template issues  
+REM third_party\crypto++\abstract_implementations.cpp - has algebra template issues
 REM third_party\crypto++\algebra_instantiations.cpp - has algebra template issues
+REM src\algebra_implementations.cpp - has compilation errors
+REM src\cryptopp_helpers_clean.cpp - has duplicate definitions
+REM src\cfb_stubs.cpp - has duplicate definitions
 REM third_party\crypto++\template_instantiations.cpp - has algebra template issues
 REM third_party\crypto++\randpool.cpp - has CFB template issues
 REM third_party\crypto++\integer.cpp - has algebra template issues
@@ -82,9 +106,16 @@ if exist "client\EncryptedBackupClient.exe" (
 REM 4) Link all object files to create the executable
 echo Linking executable...
 "%CL_PATH%" /EHsc /D_WIN32_WINNT=0x0601 /std:c++14 /MT /Fe:"client\EncryptedBackupClient.exe" ^
-build\client\*.obj ^
+build\client\AESWrapper.obj ^
+build\client\Base64Wrapper.obj ^
+build\client\RSAWrapper_stub.obj ^
+build\client\algebra_implementations.obj ^
+build\client\cksum.obj ^
+build\client\client.obj ^
+build\client\main.obj ^
+build\client\protocol.obj ^
 build\third_party\crypto++\*.obj ^
-ws2_32.lib advapi32.lib user32.lib gdi32.lib shell32.lib crypt32.lib /link /SUBSYSTEM:CONSOLE
+ws2_32.lib advapi32.lib user32.lib gdi32.lib shell32.lib crypt32.lib msimg32.lib comdlg32.lib bcrypt.lib /link /SUBSYSTEM:CONSOLE
 
 if %ERRORLEVEL% neq 0 (
     echo ERROR: Linking failed with error level %ERRORLEVEL%

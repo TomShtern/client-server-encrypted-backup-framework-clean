@@ -12,11 +12,8 @@ import sqlite3
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, Any, Tuple
 
-from Crypto.Cipher import AES
-from Crypto.PublicKey import RSA
-from Crypto.Cipher import PKCS1_OAEP
-from Crypto.Util.Padding import pad, unpad
-from Crypto.Random import get_random_bytes
+# Import crypto components through compatibility layer
+from crypto_compat import AES, RSA, PKCS1_OAEP, pad, unpad, get_random_bytes
 
 # GUI Integration
 try:
@@ -261,19 +258,34 @@ class BackupServer:
         self.maintenance_thread: Optional[threading.Thread] = None
         self.client_connection_semaphore: threading.Semaphore = threading.Semaphore(MAX_CONCURRENT_CLIENTS)
         
-        # Initialize GUI
+        # Initialize GUI in a separate thread to avoid blocking
         self.gui = None
         self.gui_enabled = False
         if GUI_AVAILABLE and ServerGUI is not None:
             try:
-                self.gui = ServerGUI()
-                self.gui_enabled = self.gui.initialize()
-                if self.gui_enabled:
-                    logger.info("Server GUI initialized successfully")
-                else:
-                    logger.warning("Server GUI initialization failed, continuing without GUI")
+                # Start GUI initialization in a separate thread
+                def init_gui():
+                    try:
+                        self.gui = ServerGUI()
+                        self.gui_enabled = self.gui.initialize()
+                        if self.gui_enabled:
+                            logger.info("Server GUI initialized successfully")
+                        else:
+                            logger.warning("Server GUI initialization failed, continuing without GUI")
+                    except Exception as e:
+                        logger.warning(f"Failed to initialize server GUI: {e}, continuing without GUI")
+                        self.gui = None
+                        self.gui_enabled = False
+
+                # Start GUI in background thread
+                gui_thread = threading.Thread(target=init_gui, daemon=True)
+                gui_thread.start()
+
+                # Don't wait for GUI - let server start immediately
+                logger.info("GUI initialization started in background")
+
             except Exception as e:
-                logger.warning(f"Failed to initialize server GUI: {e}, continuing without GUI")
+                logger.warning(f"Failed to start GUI thread: {e}, continuing without GUI")
                 self.gui = None
                 self.gui_enabled = False
         else:
@@ -580,6 +592,11 @@ class BackupServer:
             return
 
 
+        # Reset the semaphore to ensure we start with a clean state
+        # This handles any potential semaphore leaks from previous runs
+        logger.debug("Resetting client connection semaphore to clean state...")
+        self.client_connection_semaphore = threading.Semaphore(MAX_CONCURRENT_CLIENTS)
+
         # Initialize and configure the main server socket
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # Allow reuse of address
@@ -602,38 +619,90 @@ class BackupServer:
         logger.info(f"Maximum concurrent client handlers: {MAX_CONCURRENT_CLIENTS}.")
         logger.info("Server is now listening for incoming client connections...")
         
-        # Update GUI with server status
+        # Update GUI with server status - with delay to ensure GUI is ready
+        import time
+        time.sleep(0.5)  # Give GUI time to fully initialize
         self._update_gui_status(True, "0.0.0.0", self.port)
         self._update_gui_client_count()
+
+        # Force another update after a short delay to ensure it takes
+        def delayed_gui_update():
+            time.sleep(2.0)
+            self._update_gui_status(True, "0.0.0.0", self.port)
+            with self.clients_lock:
+                active_clients = len(self.clients)
+            try:
+                db_total_clients = self._db_execute("SELECT COUNT(*) FROM clients")[0][0]
+                self._update_gui_client_count(connected=active_clients, total=db_total_clients)
+            except:
+                self._update_gui_client_count(connected=active_clients)
+
+        # Start delayed update in background thread
+        threading.Thread(target=delayed_gui_update, daemon=True).start()
         
         # Main server loop: accepts new client connections
+        logger.info("Entering main accept loop...")
         try:
             while not self.shutdown_event.is_set(): # Continue as long as shutdown is not signaled
+                semaphore_acquired = False
+                client_conn = None
                 try:
                     # Attempt to acquire semaphore before accepting. If full, this will block.
                     # Timeout on acquire to prevent indefinite block if shutdown is needed.
+                    logger.debug("Attempting to acquire semaphore...")
                     if not self.client_connection_semaphore.acquire(blocking=True, timeout=0.5):
+                        logger.debug("Semaphore not acquired, continuing loop...")
                         continue # Semaphore not acquired, loop and check shutdown_event
 
+                    semaphore_acquired = True
+                    logger.debug("Semaphore acquired, calling accept()...")
                     client_conn, client_address = self.server_socket.accept()
                     # client_address is a tuple: (ip_string, port_integer)
                     logger.info(f"Accepted new connection from {client_address[0]}:{client_address[1]}. Starting handler thread.")
-                    
+
                     # Create and start a new thread to handle this client connection
                     # Pass semaphore to handler so it can release it.
                     handler_thread = threading.Thread(
-                        target=self._handle_client_connection, 
-                        args=(client_conn, client_address, self.client_connection_semaphore), 
+                        target=self._handle_client_connection,
+                        args=(client_conn, client_address, self.client_connection_semaphore),
                         daemon=True, # Daemon threads will exit when the main program exits
                         name=f"ClientHandler-{client_address[0]}-{client_address[1]}" # Assign an informative name
                     )
                     handler_thread.start()
+
+                    # If we reach here, the handler thread has been started successfully
+                    # The semaphore will be released by the handler thread, so we don't release it here
+                    semaphore_acquired = False
+
                 except socket.timeout:
+                    logger.debug("Socket accept timeout, continuing loop...")
+                    # If semaphore was acquired but accept() timed out, release it
+                    if semaphore_acquired:
+                        self.client_connection_semaphore.release()
+                        semaphore_acquired = False
                     continue # Timeout on self.server_socket.accept() is normal, allows checking shutdown_event
                 except OSError as e: # Socket might be closed if server is stopping
                      if not self.shutdown_event.is_set(): # Log only if this error is not part of a normal shutdown
                         logger.error(f"Socket error occurred while accepting connections: {e}")
+                     # If semaphore was acquired but socket error occurred, release it
+                     if semaphore_acquired:
+                        self.client_connection_semaphore.release()
+                        semaphore_acquired = False
                      break # Exit the accept loop if the server socket is no longer valid
+                except Exception as e:
+                    # Catch any other unexpected exceptions that could occur during accept or thread creation
+                    logger.error(f"Unexpected error in accept loop: {e}", exc_info=True)
+                    # If semaphore was acquired but an error occurred, release it
+                    if semaphore_acquired:
+                        self.client_connection_semaphore.release()
+                        semaphore_acquired = False
+                    # Close the client connection if it was created but handler thread failed to start
+                    if client_conn:
+                        try:
+                            client_conn.close()
+                        except Exception:
+                            pass
+                    continue # Continue the loop to try accepting more connections
         finally:
             self.running = False # Ensure running flag is cleared when loop exits
             logger.info("Server connection acceptance loop has terminated.")
@@ -1036,7 +1105,9 @@ class BackupServer:
               # Encrypt the new AES key using the client's RSA public key (PKCS1_OAEP padding)
             if not client.public_key_obj: # Should have been caught by client.set_public_key if import failed
                  raise ServerError("Internal Server Error: Client's public key object is not available for RSA encryption after an import attempt. This should not happen.")
-            cipher_rsa = PKCS1_OAEP.new(client.public_key_obj)
+            # Import SHA256 for OAEP padding to match client expectations
+            from crypto_compat import SHA256
+            cipher_rsa = PKCS1_OAEP.new(client.public_key_obj, hashAlgo=SHA256)
             aes_key = client.get_aes_key()
             if aes_key is None:
                 raise ServerError("Internal Server Error: Client's AES key is not available for encryption.")
@@ -1089,7 +1160,9 @@ class BackupServer:
             new_aes_key = get_random_bytes(AES_KEY_SIZE_BYTES)
             client.set_aes_key(new_aes_key) # Store new AES key in client object
               # Encrypt the new AES key with the client's stored public RSA key
-            cipher_rsa = PKCS1_OAEP.new(client.public_key_obj)
+            # Import SHA256 for OAEP padding to match client expectations
+            from crypto_compat import SHA256
+            cipher_rsa = PKCS1_OAEP.new(client.public_key_obj, hashAlgo=SHA256)
             aes_key = client.get_aes_key()
             if aes_key is None:
                 raise ServerError("Internal Server Error: Client's AES key is not available for encryption.")
@@ -1283,9 +1356,15 @@ class BackupServer:
                     try:
                         with open(temp_save_path, 'wb') as f_temp: # Write decrypted data to temp file
                             f_temp.write(decrypted_data)
+
+                        # On Windows, os.rename() fails if destination exists, so remove it first
+                        if os.path.exists(final_save_path):
+                            os.remove(final_save_path)
+                            logger.debug(f"Removed existing file '{final_save_path}' before saving new version")
+
                         os.rename(temp_save_path, final_save_path) # Atomically rename (on POSIX if same filesystem)
                         logger.info(f"Client '{client.name}': File '{filename_str}' (Original Size: {original_file_size} bytes) successfully decrypted and saved to storage path: '{final_save_path}'.")
-                        
+
                         # Update GUI with transfer statistics
                         self._update_gui_transfer_stats(bytes_transferred=original_file_size)
                         self._update_gui_success(f"File '{filename_str}' received from client '{client.name}'")

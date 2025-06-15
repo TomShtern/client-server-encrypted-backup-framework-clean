@@ -1,110 +1,119 @@
 #include "../../include/wrappers/AESWrapper.h"
+#include <stdexcept>
+#include <iostream>
+#include <string>
+#include <cstring>
+
+// Real AES implementation using Crypto++
 #include "../../third_party/crypto++/aes.h"
 #include "../../third_party/crypto++/modes.h"
 #include "../../third_party/crypto++/filters.h"
-#include "../../third_party/crypto++/hex.h"
-#include <stdexcept>
-#include <cstring>
-#include <random>
+#include "../../third_party/crypto++/osrng.h"
 
-using namespace CryptoPP;
-
+// AESWrapper implementation using Crypto++
 AESWrapper::AESWrapper(const unsigned char* key, size_t keyLength, bool useStaticZeroIV) {
-    if (!key || keyLength != AESWrapper::DEFAULT_KEYLENGTH) {
-        throw std::invalid_argument("Invalid key or key length");
+    if (!key || keyLength == 0) {
+        throw std::invalid_argument("Invalid key data");
     }
-    
+
+    // Validate key length (AES supports 128, 192, 256 bit keys)
+    if (keyLength != 16 && keyLength != 24 && keyLength != 32) {
+        throw std::invalid_argument("Invalid AES key length. Must be 16, 24, or 32 bytes.");
+    }
+
+    std::cout << "[AES] Initialized with " << keyLength << "-byte key (" << (keyLength * 8) << "-bit AES)" << std::endl;
     keyData.assign(key, key + keyLength);
-    
-    iv.resize(AES::BLOCKSIZE);
+
     if (useStaticZeroIV) {
-        std::fill(iv.begin(), iv.end(), 0);
-    } else {        // Generate random IV using standard library
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<int> dist(0, 255);
-        for (size_t i = 0; i < iv.size(); ++i) {
-            iv[i] = static_cast<unsigned char>(dist(gen));
-        }
+        iv.assign(16, 0); // Static IV of all zeros for protocol compliance
+        std::cout << "[AES] Using static zero IV for protocol compatibility" << std::endl;
+    } else {
+        // Generate random IV
+        iv.resize(16);
+        CryptoPP::AutoSeededRandomPool rng;
+        rng.GenerateBlock(iv.data(), 16);
+        std::cout << "[AES] Generated random IV" << std::endl;
     }
 }
 
 AESWrapper::~AESWrapper() {
-    // Clear sensitive data
-    std::fill(keyData.begin(), keyData.end(), 0);
-    std::fill(iv.begin(), iv.end(), 0);
+}
+
+void AESWrapper::generateKey(unsigned char* buffer, size_t length) {
+    if (!buffer || length == 0) {
+        throw std::invalid_argument("Invalid buffer for key generation");
+    }
+
+    // Validate key length
+    if (length != 16 && length != 24 && length != 32) {
+        throw std::invalid_argument("Invalid AES key length for generation. Must be 16, 24, or 32 bytes.");
+    }
+
+    CryptoPP::AutoSeededRandomPool rng;
+    rng.GenerateBlock(buffer, length);
+    std::cout << "[AES] Generated " << length << "-byte (" << (length * 8) << "-bit) random AES key" << std::endl;
 }
 
 const unsigned char* AESWrapper::getKey() const {
-    return keyData.empty() ? nullptr : keyData.data();
+    return keyData.data();
 }
 
 std::string AESWrapper::encrypt(const char* plain, size_t length) {
     if (!plain || length == 0) {
-        throw std::invalid_argument("Invalid input data");
+        throw std::invalid_argument("Invalid plaintext data for encryption");
     }
-    
+
     try {
         std::string ciphertext;
-        
-        CBC_Mode<AES>::Encryption encryption;
+
+        // Create AES-CBC encryption object
+        CryptoPP::CBC_Mode<CryptoPP::AES>::Encryption encryption;
         encryption.SetKeyWithIV(keyData.data(), keyData.size(), iv.data());
-        
-        StringSource ss(reinterpret_cast<const unsigned char*>(plain), length, true,
-            new StreamTransformationFilter(encryption,
-                new StringSink(ciphertext)
+
+        // Encrypt with PKCS7 padding
+        CryptoPP::StringSource ss(
+            reinterpret_cast<const CryptoPP::byte*>(plain), length, true,
+            new CryptoPP::StreamTransformationFilter(
+                encryption,
+                new CryptoPP::StringSink(ciphertext),
+                CryptoPP::StreamTransformationFilter::PKCS_PADDING
             )
         );
-        
-        // Prepend IV to ciphertext
-        std::string result;
-        result.reserve(iv.size() + ciphertext.size());
-        result.append(reinterpret_cast<const char*>(iv.data()), iv.size());
-        result.append(ciphertext);
-        
-        return result;
-    } catch (const Exception& e) {
+
+        std::cout << "[AES] Encrypted " << length << " bytes to " << ciphertext.length() << " bytes (with padding)" << std::endl;
+        return ciphertext;
+
+    } catch (const CryptoPP::Exception& e) {
         throw std::runtime_error("AES encryption failed: " + std::string(e.what()));
     }
 }
 
 std::string AESWrapper::decrypt(const char* cipher, size_t length) {
-    if (!cipher || length < AES::BLOCKSIZE) {
-        throw std::invalid_argument("Invalid cipher data or length too short");
+    if (!cipher || length == 0) {
+        throw std::invalid_argument("Invalid ciphertext data for decryption");
     }
-    
+
     try {
-        // Extract IV from the beginning of cipher
-        std::vector<unsigned char> extractedIv(cipher, cipher + AES::BLOCKSIZE);
-        
-        // Extract actual ciphertext
-        const char* actualCipher = cipher + AES::BLOCKSIZE;
-        size_t actualLength = length - AES::BLOCKSIZE;
-        
         std::string plaintext;
-        
-        CBC_Mode<AES>::Decryption decryption;
-        decryption.SetKeyWithIV(keyData.data(), keyData.size(), extractedIv.data());
-        
-        StringSource ss(reinterpret_cast<const unsigned char*>(actualCipher), actualLength, true,
-            new StreamTransformationFilter(decryption,
-                new StringSink(plaintext)
+
+        // Create AES-CBC decryption object
+        CryptoPP::CBC_Mode<CryptoPP::AES>::Decryption decryption;
+        decryption.SetKeyWithIV(keyData.data(), keyData.size(), iv.data());
+
+        // Decrypt with PKCS7 padding removal
+        CryptoPP::StringSource ss(
+            reinterpret_cast<const CryptoPP::byte*>(cipher), length, true,
+            new CryptoPP::StreamTransformationFilter(
+                decryption,
+                new CryptoPP::StringSink(plaintext),
+                CryptoPP::StreamTransformationFilter::PKCS_PADDING
             )
         );
-        
-        return plaintext;
-    } catch (const Exception& e) {
-        throw std::runtime_error("AES decryption failed: " + std::string(e.what()));
-    }
-}
 
-void AESWrapper::generateKey(unsigned char* buffer, size_t length) {
-    if (!buffer || length != AESWrapper::DEFAULT_KEYLENGTH) {
-        throw std::invalid_argument("Invalid buffer or length");
-    }    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<int> dist(0, 255);
-    for (size_t i = 0; i < length; ++i) {
-        buffer[i] = static_cast<unsigned char>(dist(gen));
+        std::cout << "[AES] Decrypted " << length << " bytes to " << plaintext.length() << " bytes (padding removed)" << std::endl;
+        return plaintext;
+
+    } catch (const CryptoPP::Exception& e) {
+        throw std::runtime_error("AES decryption failed: " + std::string(e.what()));
     }
 }

@@ -30,7 +30,13 @@ extern const uint16_t RESP_RECONNECT_AES_SENT;
 extern const uint16_t RESP_RECONNECT_FAIL;
 extern const uint16_t RESP_ERROR;
 
-// Endianness conversion functions
+// Guaranteed little-endian serialization functions (preferred)
+void writeLE16(std::vector<uint8_t>& buffer, uint16_t value);
+void writeLE32(std::vector<uint8_t>& buffer, uint32_t value);
+uint16_t readLE16(const uint8_t* data);
+uint32_t readLE32(const uint8_t* data);
+
+// Legacy endianness conversion functions (deprecated)
 uint16_t hostToLittleEndian16(uint16_t value);
 uint32_t hostToLittleEndian32(uint32_t value);
 uint16_t littleEndianToHost16(uint16_t value);
@@ -41,9 +47,20 @@ std::vector<uint8_t> createRegistrationRequest(const uint8_t* clientId, const st
 std::vector<uint8_t> createPublicKeyRequest(const uint8_t* clientId, const std::string& username, 
                                           const std::string& publicKey);
 std::vector<uint8_t> createReconnectionRequest(const uint8_t* clientId, const std::string& username);
+
+// File transfer functions with chunking support
 std::vector<uint8_t> createFileTransferRequest(const uint8_t* clientId, const std::string& filename,
                                               const std::vector<uint8_t>& encryptedData, 
                                               uint32_t originalSize);
+std::vector<uint8_t> createFileTransferRequest(const uint8_t* clientId, const std::string& filename,
+                                              const std::vector<uint8_t>& encryptedData, 
+                                              uint32_t originalSize, uint16_t packetNumber, 
+                                              uint16_t totalPackets);
+std::vector<std::vector<uint8_t>> createChunkedFileTransferRequests(const uint8_t* clientId, 
+                                                                   const std::string& filename,
+                                                                   const std::vector<uint8_t>& encryptedData, 
+                                                                   uint32_t originalSize);
+
 std::vector<uint8_t> createCRCRequest(const uint8_t* clientId, uint16_t requestCode, 
                                      const std::string& filename);
 

@@ -22,7 +22,11 @@
       "Bash(cmd.exe:*)",
       "Bash(grep:*)",
       "Bash(find:*)",
-      "Bash(diff:*)"
+      "Bash(diff:*)",
+      "Bash(timeout:*)",
+      "Bash(cd \"/mnt/c/Users/tom7s/Desktopp/Claude Folder 2/Client Server Encrypted Backup Framework\")",
+      "Bash(ps:*)",
+      "Bash(ss:*)"
     ],
     "deny": []
   }

@@ -4,13 +4,7 @@
 #include <vector>
 
 // Forward declarations for Crypto++ classes
-namespace CryptoPP {
-    class RSA;
-    namespace RSA {
-        class PublicKey;
-        class PrivateKey;
-    }
-}
+// Using opaque pointers to avoid header dependencies
 
 class RSAPublicWrapper {
 public:
@@ -19,7 +13,7 @@ public:
 
 private:
     std::vector<char> keyData;
-    CryptoPP::RSA::PublicKey publicKey;
+    void* publicKeyImpl; // Opaque pointer to CryptoPP::RSA::PublicKey
 
     RSAPublicWrapper(const RSAPublicWrapper& other) = delete;
     RSAPublicWrapper& operator=(const RSAPublicWrapper& other) = delete;
@@ -43,10 +37,10 @@ public:
     static const unsigned int BITS = 1024; // 1024-bit keys as required by server
 
 private:
-    std::vector<char> publicKeyData;
     std::vector<char> privateKeyData;
-    CryptoPP::RSA::PrivateKey privateKey;
-    CryptoPP::RSA::PublicKey publicKey;
+    std::vector<char> publicKeyData;
+    void* privateKeyImpl; // Opaque pointer to CryptoPP::RSA::PrivateKey
+    void* publicKeyImpl;  // Opaque pointer to CryptoPP::RSA::PublicKey
 
     RSAPrivateWrapper(const RSAPrivateWrapper& other) = delete;
     RSAPrivateWrapper& operator=(const RSAPrivateWrapper& other) = delete;

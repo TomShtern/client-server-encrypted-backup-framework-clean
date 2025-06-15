@@ -14,13 +14,24 @@
 #include <chrono>
 #include <thread>
 //#include <filesystem>
+#ifdef _WIN32
+#include <direct.h>
+#include <sys/stat.h>
+#endif
+#include <boost/asio.hpp>
+#include <boost/system/error_code.hpp>
+#include <boost/bind/bind.hpp>
+#include "../../include/client/ClientWebSocketServer.h"
+
+// For file operations instead of C++17 filesystem
 #include <atomic>
 #include <ctime>
 
 // Boost.Asio for cross-platform networking
-#include <boost/asio.hpp>
-#include <boost/system/error_code.hpp>
-#include <boost/bind/bind.hpp>
+#ifdef _WIN32
+#include <shellapi.h>
+#endif
+
 
 // Windows console control
 #ifdef _WIN32
@@ -35,10 +46,10 @@
 #include "../../include/wrappers/Base64Wrapper.h"
 #include "../../include/wrappers/RSAWrapper.h"
 
-// Optional GUI support
-#ifdef _WIN32
-#include "../../include/client/ClientGUI.h"
-#endif
+// Optional GUI support - already included in ClientWebSocketServer.h
+// #ifdef _WIN32
+// #include "../../include/client/ClientGUI.h"
+// #endif
 
 // Protocol constants
 constexpr uint8_t CLIENT_VERSION = 3;
@@ -194,6 +205,12 @@ private:
     // Performance metrics
     std::chrono::steady_clock::time_point operationStartTime;
 
+    // GUI support
+    void openGUIInBrowser();
+void updateGUIStatus(const std::string& operation, bool success, const std::string& details);
+void updateGUIProgress(double percentage, const std::string& speed = "", const std::string& eta = "", const std::string& transferred = "");
+void updateGUIPhase(const std::string& phase);
+
 public:
     Client();
     ~Client();
@@ -253,24 +270,32 @@ private:
     void displayPhase(const std::string& phase);
     void displaySummary();
 };
-
-// Constructor
+ // Constructor
 Client::Client() : socket(nullptr), connected(false), rsaPrivate(nullptr), 
                    fileRetries(0), crcRetries(0), reconnectAttempts(0),
                    keepAliveEnabled(false), lastError(ErrorType::NONE) {
     std::fill(clientID.begin(), clientID.end(), 0);
-    
+
+    // Clear old status files for file-based GUI
+    try {
+        std::remove("gui_status.json");
+        std::remove("gui_progress.json");
+    } catch (...) {}
+
+    // Open GUI in browser (file-based, no WebSocket server needed)
+    try {
+        openGUIInBrowser();
+        updateGUIStatus("System Startup", true, "File-based GUI interface loaded");
+    } catch (const std::exception& e) {
+        std::cout << "GUI startup failed: " << e.what() << std::endl;
+    }
+
 #ifdef _WIN32
     hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     GetConsoleScreenBufferInfo(hConsole, &consoleInfo);
     savedAttributes = consoleInfo.wAttributes;
-      // Initialize GUI (optional - graceful failure)
-    // Temporarily disabled for debugging
-    // try {
-    //     ClientGUIHelpers::initializeGUI();
-    // } catch (...) {
-    //     // GUI initialization failed - continue without GUI
-    // }
+    
+    std::cout << "✓ Using file-based GUI system (no server required)" << std::endl;
 #endif
 }
 
@@ -885,6 +910,11 @@ bool Client::performRegistration() {
                  "Payload size=" + std::to_string(payload.size()) + 
                  " bytes, Username='" + username + "'");
     
+    // Debug: show what we're sending
+    displayStatus("Debug: Registration packet", true, 
+                 "Payload size=" + std::to_string(payload.size()) + 
+                 " bytes, Username='" + username + "'");
+
     // Send registration request
     if (!sendRequest(REQ_REGISTER, payload)) {
         return false;
@@ -1382,6 +1412,8 @@ void Client::displayStatus(const std::string& operation, bool success, const std
     }
     std::cout << std::endl;
 #endif
+
+  updateGUIStatus(operation, success, details);
 }
 
 void Client::displayProgress(const std::string& operation, size_t current, size_t total) {
@@ -1433,6 +1465,11 @@ void Client::displayProgress(const std::string& operation, size_t current, size_
         std::cout << std::endl;
     }
 #endif
+double progressPercent = (total > 0) ? ((double)current / total) * 100.0 : 0.0;
+    std::string speed = formatBytes(static_cast<size_t>(stats.currentSpeed)) + "/s";
+    std::string eta = formatDuration(stats.estimatedTimeRemaining);
+    std::string transferred = formatBytes(current);
+    updateGUIProgress(progressPercent, speed, eta, transferred);
 }
 
 void Client::displayTransferStats() {
@@ -1544,6 +1581,7 @@ void Client::displayError(const std::string& message, ErrorType type) {
         // GUI update failed - continue without GUI
     }
     // }
+     updateGUIStatus("ERROR", false, message);
 }
 
 void Client::displaySeparator() {
@@ -1574,6 +1612,7 @@ void Client::displayPhase(const std::string& phase) {
     std::cout << "\n> " << phase << std::endl;
     displaySeparator();
 #endif
+updateGUIPhase(phase);
 }
 
 void Client::displaySummary() {
@@ -1608,8 +1647,8 @@ void Client::displaySummary() {
     }
 }
 
-// Main function
-int main() {
+// Backup client function that can be called from main
+bool runBackupClient() {
     // Write to a log file so we can see what's happening
     std::ofstream logFile("client_debug.log", std::ios::app);
     logFile << "=== ENCRYPTED BACKUP CLIENT DEBUG MODE ===" << std::endl;
@@ -1639,7 +1678,7 @@ int main() {
             std::cerr << "Fatal: Client initialization failed" << std::endl;
             std::cout << "\nPress Enter to exit...";
             std::cin.get();
-            return 1;
+            return false;
         }
 
         std::cout << "Client initialized successfully. Starting backup operation..." << std::endl;
@@ -1656,7 +1695,7 @@ int main() {
             std::cout << "\nPress Enter to exit...";
             std::cin.get();
 #endif
-            return 1;
+            return false;
         }
 
         std::cout << "\nBackup completed successfully!" << std::endl;
@@ -1673,7 +1712,7 @@ int main() {
         std::cin.get();
 #endif
 
-        return 0;
+        return true;
 
     } catch (const std::exception& e) {
         std::cerr << "Fatal exception: " << e.what() << std::endl;
@@ -1686,7 +1725,7 @@ int main() {
         std::cout << "\nPress Enter to exit...";
         std::cin.get();
 #endif
-        return 1;
+        return false;
     } catch (...) {
         std::cerr << "Fatal: Unknown exception occurred" << std::endl;
 #ifdef _WIN32
@@ -1698,6 +1737,81 @@ int main() {
         std::cout << "\nPress Enter to exit...";
         std::cin.get();
 #endif
-        return 1;
+        return false;
     }
+}
+void Client::openGUIInBrowser() {
+#ifdef _WIN32
+    char buffer[MAX_PATH];
+    if (_getcwd(buffer, MAX_PATH) == nullptr) {
+        std::cout << "⚠️  Could not get current directory" << std::endl;
+        return;
+    }
+    std::string currentPath(buffer);
+#else
+    std::string currentPath = ".";  // Fallback for non-Windows
+#endif
+    std::string guiPath = currentPath + "/gui.html";
+    
+    // Check if GUI file exists
+#ifdef _WIN32
+    struct _stat buffer2;
+    bool fileExists = (_stat(guiPath.c_str(), &buffer2) == 0);
+#else
+    std::ifstream file(guiPath);
+    bool fileExists = file.good();
+    file.close();
+#endif
+    
+    if (!fileExists) {
+        std::cout << "⚠️  GUI file not found at: " << guiPath << std::endl;
+        std::cout << "   GUI will not be available. Using console mode only." << std::endl;
+        return;
+    }
+    
+    // Open the local file directly in the browser instead of trying to serve it over HTTP
+    std::string url = "file:///" + guiPath;
+    
+    // Replace backslashes with forward slashes for Windows
+    std::replace(url.begin(), url.end(), '\\', '/');
+    
+    std::cout << "🎯 Opening modern GUI at: " << url << std::endl;
+    
+#ifdef _WIN32
+    ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#elif defined(__APPLE__)
+    system(("open \"" + url + "\"").c_str());
+#else
+    system(("xdg-open \"" + url + "\"").c_str());
+#endif
+}
+
+void Client::updateGUIStatus(const std::string& operation, bool success, const std::string& details) {
+    static std::ofstream statusFile("gui_status.json", std::ios::app);
+    
+    auto now = std::chrono::system_clock::now();
+    auto time = std::chrono::system_clock::to_time_t(now);
+    
+    statusFile << "{\"timestamp\":\"" << std::put_time(std::localtime(&time), "%H:%M:%S") << "\","
+               << "\"operation\":\"" << operation << "\","
+               << "\"success\":" << (success ? "true" : "false") << ","
+               << "\"details\":\"" << details << "\"}\n";
+    statusFile.flush();
+}
+
+void Client::updateGUIProgress(double percentage, const std::string& speed, const std::string& eta, const std::string& transferred) {
+    std::ofstream progressFile("gui_progress.json");
+    
+    progressFile << "{"
+                 << "\"percentage\":" << percentage << ","
+                 << "\"speed\":\"" << speed << "\","
+                 << "\"eta\":\"" << eta << "\","
+                 << "\"transferred\":\"" << transferred << "\""
+                 << "}\n";
+    progressFile.flush();
+    progressFile.close();
+}
+
+void Client::updateGUIPhase(const std::string& phase) {
+    updateGUIStatus("Phase Change", true, phase);
 }

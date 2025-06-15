@@ -114,14 +114,15 @@ def test_crypto_functionality():
         
         # Test RSA
         print("2. Testing RSA key generation...")
-        rsa_key = RSA.generate(512)  # 512-bit for speed
+        rsa_key = RSA.generate(1024)  # 1024-bit minimum required
         print("   ✓ RSA key generation successful")
         
         # Test encryption/decryption
         print("3. Testing RSA encryption...")
         test_data = b"Hello RSA!"
-        encrypted = rsa_key.encrypt(test_data)
-        decrypted = rsa_key.decrypt(encrypted)
+        cipher = PKCS1_OAEP.new(rsa_key)
+        encrypted = cipher.encrypt(test_data)
+        decrypted = cipher.decrypt(encrypted)
         
         if decrypted == test_data:
             print("   ✓ RSA encryption/decryption successful")
