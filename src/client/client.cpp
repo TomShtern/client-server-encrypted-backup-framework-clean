@@ -1493,9 +1493,9 @@ void Client::displaySplashScreen() {
     system("cls");
     
     SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-    std::cout << "\n╔════════════════════════════════════════════╗\n";
-    std::cout << "║     ENCRYPTED FILE BACKUP CLIENT v1.0      ║\n";
-    std::cout << "╚════════════════════════════════════════════╝\n";
+    std::cout << "\n================================================\n";
+    std::cout << "     ENCRYPTED FILE BACKUP CLIENT v1.0      \n";
+    std::cout << "================================================\n";
     
     SetConsoleTextAttribute(hConsole, savedAttributes);
     std::cout << "  Build Date: " << __DATE__ << " " << __TIME__ << "\n";
@@ -1506,8 +1506,7 @@ void Client::displaySplashScreen() {
     std::cout << "     ENCRYPTED FILE BACKUP CLIENT v1.0      \n";
     std::cout << "============================================\n";
     std::cout << "  Build Date: " << __DATE__ << " " << __TIME__ << "\n";
-    std::cout << "  Protocol Version: " << static_cast<int>(CLIENT_VERSION) << "\n";
-    std::cout << "  Encryption: RSA-1024 + AES-256-CBC\n\n";
+    std::cout << "  Protocol Version: " << static_cast<int>(CLIENT_VERSION) << "\n";    std::cout << "  Encryption: RSA-1024 + AES-256-CBC\n\n";
 #endif
 }
 
@@ -1587,7 +1586,7 @@ void Client::displayError(const std::string& message, ErrorType type) {
 void Client::displaySeparator() {
 #ifdef _WIN32
     SetConsoleTextAttribute(hConsole, FOREGROUND_INTENSITY);
-    std::cout << std::string(60, '─') << std::endl;
+    std::cout << std::string(60, '=') << std::endl;
     SetConsoleTextAttribute(hConsole, savedAttributes);
 #else
     std::cout << std::string(60, '-') << std::endl;
@@ -1598,7 +1597,7 @@ void Client::displayPhase(const std::string& phase) {
 #ifdef _WIN32
     std::cout << "\n";
     SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-    std::cout << "▶ " << phase << std::endl;
+    std::cout << "> " << phase << std::endl;
     SetConsoleTextAttribute(hConsole, savedAttributes);
     displaySeparator();
     
@@ -1751,7 +1750,7 @@ void Client::openGUIInBrowser() {
 #else
     std::string currentPath = ".";  // Fallback for non-Windows
 #endif
-    std::string guiPath = currentPath + "/gui.html";
+    std::string guiPath = currentPath + "/gui/gui.html";
     
     // Check if GUI file exists
 #ifdef _WIN32
