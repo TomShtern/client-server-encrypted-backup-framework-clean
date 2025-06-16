@@ -133,3 +133,29 @@ if exist "client\EncryptedBackupClient.exe" (
     echo ERROR: Build failed - executable not created
     exit /b 1
 )
+
+REM 1.7) Compile Simple Web Server for HTML Client
+echo Compiling Simple Web Server...
+"%CL_PATH%" /EHsc /D_WIN32_WINNT=0x0601 /std:c++14 /MT /c /I"include\client" /Fo:"build\client\\" ^
+src\client\SimpleWebServer.cpp
+
+if %ERRORLEVEL% neq 0 (
+    echo ERROR: Simple Web Server compilation failed
+    exit /b 1
+)
+
+REM 5) Build Simple Web Server for HTML Client
+echo Building Simple Web Server for HTML Client...
+"%CL_PATH%" /EHsc /D_WIN32_WINNT=0x0601 /std:c++14 /MT /Fe:"client\SimpleWebServer.exe" /I"include\client" ^
+build\client\SimpleWebServer.obj ^
+ws2_32.lib advapi32.lib /link /SUBSYSTEM:CONSOLE
+
+if %ERRORLEVEL% neq 0 (
+    echo WARNING: Simple Web Server linking failed - HTML client may not work
+) else (
+    if exist "client\SimpleWebServer.exe" (
+        echo Simple Web Server built successfully at client\SimpleWebServer.exe
+    ) else (
+        echo WARNING: Simple Web Server build failed
+    )
+)

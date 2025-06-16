@@ -1885,16 +1885,9 @@ void Client::updateGUIPhase(const std::string& phase) {
 }
 
 void Client::initializeWebSocketCommands() {
-    // Initialize WebSocket command handling
-    try {
-        ClientWebSocketServer::instance().onCommand = [this](const std::map<std::string, std::string>& command) {
-            handleGUICommand(command);
-        };
-        
-        displayStatus("WebSocket", true, "Command handling initialized");
-    } catch (const std::exception& e) {
-        displayError("Failed to initialize WebSocket commands: " + std::string(e.what()), ErrorType::NETWORK);
-    }
+    // Initialize WebSocket command handling - placeholder for future implementation
+    // TODO: Implement WebSocket command handling when needed
+    displayStatus("WebSocket", true, "Command handling placeholder initialized");
 }
 
 void Client::handleGUICommand(const std::map<std::string, std::string>& command) {
@@ -1991,5 +1984,20 @@ void Client::handleFileSelectedCommand(const std::map<std::string, std::string>&
         
         if (fileIt != command.end()) {
             std::string filePath = fileIt->second;
+            selectedFilePath = filePath;
             
-           
+            displayStatus("File selected", true, "File: " + filePath);
+            sendGUIResponse("file_selected", "File selection confirmed");
+        } else {
+            sendGUIResponse("file_selected", "Invalid parameters", false);
+        }
+    } catch ( const std::exception& e) {
+        sendGUIResponse("file_selected", "Error: " + std::string(e.what()), false);
+    }
+}
+
+void Client::sendGUIResponse(const std::string& type, const std::string& message, bool success) {
+    // Send response back to GUI - placeholder implementation
+    displayStatus("GUI Response", success, type + ": " + message);
+    // TODO: Implement actual GUI communication when needed
+}

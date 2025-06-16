@@ -1546,16 +1546,17 @@
                 <h2 class="panel-title">System Configuration</h2>
             </div>
             
-            <div class="config-section">                <label class="config-label" for="serverInput">Server Address</label>
+            <div class="config-section">
+                <label class="config-label" for="serverInput">Server Address</label>
                 <input type="text" class="config-input" id="serverInput" 
-                       placeholder="127.0.0.1:1256" value="127.0.0.1:1256" aria-describedby="serverHelp">
+                       placeholder="127.0.0.1:1256" aria-describedby="serverHelp">
                 <div id="serverHelp" class="sr-only">Enter server IP address and port</div>
             </div>
             
             <div class="config-section">
                 <label class="config-label" for="usernameInput">Username</label>
                 <input type="text" class="config-input" id="usernameInput" 
-                       placeholder="Enter username" value="testuser" maxlength="100" aria-describedby="usernameHelp">
+                       placeholder="Enter username" maxlength="100" aria-describedby="usernameHelp">
                 <div id="usernameHelp" class="sr-only">Username for authentication (max 100 characters)</div>
             </div>
             
@@ -1620,21 +1621,10 @@
                     <div class="progress-percentage neon-text" id="progressPercentage">0%</div>
                     <div class="progress-label" id="progressStatus">READY</div>
                 </div>
-            </div>            <div class="control-panel">
-                <button class="cyber-btn primary large control-btn" id="primaryAction" onclick="
-                    alert('Button clicked!'); 
-                    try {
-                        if (window.gui) {
-                            alert('GUI object found, calling handlePrimaryAction...');
-                            window.gui.handlePrimaryAction();
-                            alert('handlePrimaryAction completed successfully');
-                        } else {
-                            alert('ERROR: gui object not found!');
-                        }
-                    } catch (error) {
-                        alert('ERROR in handlePrimaryAction: ' + error.message);
-                    }
-                ">
+            </div>
+            
+            <div class="control-panel">
+                <button class="cyber-btn primary large control-btn" id="primaryAction" onclick="gui.handlePrimaryAction()">
                     <span class="btn-icon">🚀</span>
                     <span class="btn-text">CONNECT</span>
                 </button>
@@ -1802,13 +1792,14 @@
             resume() { return this._request('/api/resume', { method: 'POST' }); }
         }
 
-        // Configuration Manager (largely unchanged)        class ConfigManager {
+        // Configuration Manager (largely unchanged)
+        class ConfigManager {
             constructor() {
                 this.config = {
                     server: '127.0.0.1',
                     port: 1256,
-                    username: 'testuser', // Default username for testing
-                    filepath: 'test.txt', // Default file for testing
+                    username: '',
+                    filepath: '',
                 };
             }
             loadFromStorage() {
@@ -1945,20 +1936,10 @@
                 }
             }
 
-            // REFACTORED: Action Handlers now call the API            async handlePrimaryAction() {
-                console.log('Primary action clicked');
-                console.log('Current state:', this.state);
-                console.log('Current config:', this.config.config);
+            // REFACTORED: Action Handlers now call the API
+            async handlePrimaryAction() {
+                if (!this.validateAndUpdateUI()) return;
                 
-                if (!this.validateAndUpdateUI()) {
-                    console.log('Validation failed');
-                    const errors = this.config.validate();
-                    console.log('Validation errors:', errors);
-                    this.showToast('Please fill in all required fields: ' + errors.join(', '), 'error');
-                    return;
-                }
-                
-                console.log('Validation passed');
                 if (this.state.isRunning && this.state.isPaused) await this.resumeOperation();
                 else if (!this.state.isConnected) await this.connectToServer();
                 else if (!this.state.isRunning) await this.startBackup();
@@ -2208,16 +2189,11 @@
         }
         if (typeof ThemeManager === 'undefined') {
             class ThemeManager { loadSavedTheme() {} setTheme(t) { console.log(`Theme set to ${t}`) } }
-            window.ThemeManager = ThemeManager;        }
-        
-        // Initialize the GUI - make it global so onclick handlers can access it
-        try {
-            alert('About to create CyberBackupPro...');
-            window.gui = new CyberBackupPro();
-            alert('CyberBackupPro created successfully!');
-        } catch (error) {
-            alert('ERROR creating CyberBackupPro: ' + error.message);
+            window.ThemeManager = ThemeManager;
         }
+        
+        // Initialize the GUI
+        const gui = new CyberBackupPro();
     </script>
 </body>
 </html>

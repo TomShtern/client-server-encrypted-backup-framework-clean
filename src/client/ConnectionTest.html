@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Connection Test</title>
+</head>
+<body>
+    <h1>API Connection Test</h1>
+    <button onclick="testConnection()">Test API Connection</button>
+    <div id="result"></div>
+    
+    <script>
+    async function testConnection() {
+        const result = document.getElementById('result');
+        result.innerHTML = 'Testing...';
+        
+        try {
+            console.log('Attempting to connect to http://127.0.0.1:9090/api/status');
+            const response = await fetch('http://127.0.0.1:9090/api/status');
+            console.log('Response received:', response);
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Data:', data);
+                result.innerHTML = '<div style="color: green;">SUCCESS: ' + JSON.stringify(data) + '</div>';
+            } else {
+                result.innerHTML = '<div style="color: red;">HTTP Error: ' + response.status + '</div>';
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            result.innerHTML = '<div style="color: red;">Error: ' + error.message + '</div>';
+        }
+    }
+    </script>
+</body>
+</html>
