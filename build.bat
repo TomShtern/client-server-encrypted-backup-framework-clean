@@ -22,6 +22,7 @@ echo Compiling client sources...
 "%CL_PATH%" /EHsc /D_WIN32_WINNT=0x0601 /std:c++14 /MT /c /I"include\client" /I"include\wrappers" /I"third_party\crypto++" /I"C:\Users\tom7s\Downloads\boost_1_88_0\boost_1_88_0" /Fo:"build\client\\" ^
 src\client\cksum.cpp ^
 src\client\client.cpp ^
+src\client\ClientGUI.cpp ^
 src\client\main.cpp ^
 src\client\protocol.cpp
 
@@ -112,6 +113,7 @@ build\client\RSAWrapper.obj ^
 build\client\algebra_implementations.obj ^
 build\client\cksum.obj ^
 build\client\client.obj ^
+build\client\ClientGUI.obj ^
 build\client\main.obj ^
 build\client\protocol.obj ^
 build\third_party\crypto++\*.obj ^

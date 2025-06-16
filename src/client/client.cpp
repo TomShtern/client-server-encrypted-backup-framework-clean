@@ -22,6 +22,7 @@
 #include <boost/system/error_code.hpp>
 #include <boost/bind/bind.hpp>
 #include "../../include/client/ClientWebSocketServer.h"
+#include "../../include/client/ClientGUI.h"
 
 // For file operations instead of C++17 filesystem
 #include <atomic>
@@ -207,9 +208,24 @@ private:
 
     // GUI support
     void openGUIInBrowser();
-void updateGUIStatus(const std::string& operation, bool success, const std::string& details);
-void updateGUIProgress(double percentage, const std::string& speed = "", const std::string& eta = "", const std::string& transferred = "");
-void updateGUIPhase(const std::string& phase);
+    void updateGUIStatus(const std::string& operation, bool success, const std::string& details);
+    void updateGUIProgress(double percentage, const std::string& speed = "", const std::string& eta = "", const std::string& transferred = "");
+    void updateGUIPhase(const std::string& phase);
+    
+    // WebSocket command handling for interactive GUI
+    void initializeWebSocketCommands();
+    void handleGUICommand(const std::map<std::string, std::string>& command);
+    void handleConnectCommand(const std::map<std::string, std::string>& command);
+    void handleStartBackupCommand(const std::map<std::string, std::string>& command);
+    void handleFileSelectedCommand(const std::map<std::string, std::string>& command);
+    void sendGUIResponse(const std::string& type, const std::string& message, bool success = true);
+    
+    // Interactive mode variables
+    bool interactiveMode;
+    std::string pendingServerIP;
+    int pendingServerPort;
+    std::string pendingUsername;
+    std::string selectedFilePath;
 
 public:
     Client();
@@ -1867,3 +1883,113 @@ void Client::updateGUIProgress(double percentage, const std::string& speed, cons
 void Client::updateGUIPhase(const std::string& phase) {
     updateGUIStatus("Phase Change", true, phase);
 }
+
+void Client::initializeWebSocketCommands() {
+    // Initialize WebSocket command handling
+    try {
+        ClientWebSocketServer::instance().onCommand = [this](const std::map<std::string, std::string>& command) {
+            handleGUICommand(command);
+        };
+        
+        displayStatus("WebSocket", true, "Command handling initialized");
+    } catch (const std::exception& e) {
+        displayError("Failed to initialize WebSocket commands: " + std::string(e.what()), ErrorType::NETWORK);
+    }
+}
+
+void Client::handleGUICommand(const std::map<std::string, std::string>& command) {
+    // Generic command handler - dispatch to specific handlers based on command type
+    auto it = command.find("type");
+    if (it != command.end()) {
+        const std::string& type = it->second;
+        
+        if (type == "connect") {
+            handleConnectCommand(command);
+        } else if (type == "start_backup") {
+            handleStartBackupCommand(command);
+        } else if (type == "file_selected") {
+            handleFileSelectedCommand(command);
+        } else {
+            displayError("Unknown command type: " + type, ErrorType::PROTOCOL);
+        }
+    } else {
+        displayError("Invalid command format - missing type", ErrorType::PROTOCOL);
+    }
+}
+
+void Client::handleConnectCommand(const std::map<std::string, std::string>& command) {
+    // Handle connect command from GUI
+    try {
+        auto ipIt = command.find("server_ip");
+        auto portIt = command.find("server_port");
+        auto userIt = command.find("username");
+        
+        if (ipIt != command.end() && portIt != command.end() && userIt != command.end()) {
+            pendingServerIP = ipIt->second;
+            pendingServerPort = std::stoi(portIt->second);
+            pendingUsername = userIt->second;
+            
+            displayStatus("Connect command received", true, 
+                         "IP: " + pendingServerIP + ", Port: " + std::to_string(pendingServerPort) + 
+                         ", User: " + pendingUsername);
+            
+            // Attempt to connect to the server
+            if (connectToServer()) {
+                // Update client info
+                username = pendingUsername;
+                saveMeInfo();
+                
+                // Send success response
+                sendGUIResponse("connect", "Connection successful");
+            } else {
+                sendGUIResponse("connect", "Connection failed", false);
+            }
+        } else {
+            sendGUIResponse("connect", "Invalid parameters", false);
+        }
+    } catch (const std::exception& e) {
+        sendGUIResponse("connect", "Error: " + std::string(e.what()), false);
+    } catch (...) {
+        sendGUIResponse("connect", "Unknown error", false);
+    }
+}
+
+void Client::handleStartBackupCommand(const std::map<std::string, std::string>& command) {
+    // Handle start backup command from GUI
+    try {
+        auto fileIt = command.find("file");
+        
+        if (fileIt != command.end()) {
+            selectedFilePath = fileIt->second;
+            
+            displayStatus("Start backup command received", true, "File: " + selectedFilePath);
+            
+            // Update file path and re-read transfer info
+            filepath = selectedFilePath;
+            readTransferInfo();
+            
+            // Perform backup operation
+            if (run()) {
+                sendGUIResponse("start_backup", "Backup completed successfully");
+            } else {
+                sendGUIResponse("start_backup", "Backup failed", false);
+            }
+        } else {
+            sendGUIResponse("start_backup", "Invalid parameters", false);
+        }
+    } catch (const std::exception& e) {
+        sendGUIResponse("start_backup", "Error: " + std::string(e.what()), false);
+    } catch (...) {
+        sendGUIResponse("start_backup", "Unknown error", false);
+    }
+}
+
+void Client::handleFileSelectedCommand(const std::map<std::string, std::string>& command) {
+    // Handle file selected command from GUI
+    try {
+        auto fileIt = command.find("file");
+        
+        if (fileIt != command.end()) {
+            std::string filePath = fileIt->second;
+            
+           

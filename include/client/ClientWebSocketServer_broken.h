@@ -252,9 +252,7 @@ public:
 
     ~ClientWebSocketServer() {
         stop();
-    }
-
-    bool start() {
+    }    bool start() {
         if (running_) return true;
         
         if (!acceptor_) {
@@ -469,6 +467,243 @@ private:
         auto time_t = std::chrono::system_clock::to_time_t(now);
         std::stringstream ss;
         ss << std::put_time(std::localtime(&time_t), "%H:%M:%S");
+        return ss.str();
+    }
+};
+
+#endif // CLIENT_WEBSOCKET_SERVER_H
+class ClientGUI {
+private:
+    static ClientGUI* instance;
+    ClientWebSocketServer* wsServer;
+    bool guiEnabled;
+    
+    // Static web content server using Boost.Asio
+    class SimpleWebServer {
+        net::io_context& ioc_;
+        tcp::acceptor acceptor_;
+        std::string webRoot_;
+        
+    public:
+        SimpleWebServer(net::io_context& ioc, uint16_t port, const std::string& webRoot)
+            : ioc_(ioc)
+            , acceptor_(ioc, tcp::endpoint(tcp::v4(), port))
+            , webRoot_(webRoot) {
+            do_accept();
+        }
+        
+    private:
+        void do_accept() {
+            acceptor_.async_accept(
+                [this](beast::error_code ec, tcp::socket socket) {
+                    if (!ec) {
+                        handle_request(std::move(socket));
+                    }
+                    do_accept();
+                });
+        }
+        
+        void handle_request(tcp::socket socket) {
+            auto req = std::make_shared<beast::flat_buffer>();
+            auto parser = std::make_shared<beast::http::request_parser<beast::http::string_body>>();
+            
+            beast::http::async_read(socket, *req, *parser,
+                [this, socket = std::move(socket), req, parser](beast::error_code ec, std::size_t) mutable {
+                    if (!ec) {
+                        // Serve the GUI files
+                        std::string path = parser->get().target();
+                        if (path == "/") path = "/index.html";
+                        
+                        std::string content;
+                        std::string contentType = "text/html";
+                        
+                        if (path == "/index.html" || path == "/gui.html") {
+                            content = getGuiHtml();
+                        } else if (path == "/backup-client.js") {
+                            content = getGuiJs();
+                            contentType = "application/javascript";
+                        }
+                        
+                        beast::http::response<beast::http::string_body> res{
+                            beast::http::status::ok, parser->get().version()};
+                        res.set(beast::http::field::server, "SecureBackup/1.0");
+                        res.set(beast::http::field::content_type, contentType);
+                        res.body() = content;
+                        res.prepare_payload();
+                          beast::http::async_write(socket, res,
+                            [&socket](beast::error_code ec, std::size_t) {
+                                beast::error_code shutdown_ec;
+                                socket.shutdown(tcp::socket::shutdown_send, shutdown_ec);
+                            });
+                    }
+                });
+        }
+        
+        std::string getGuiHtml() {
+            // Return the HTML content (you can embed it here or load from file)
+            return R"(<!DOCTYPE html>
+<!-- Paste the enhanced-backup-gui.html content here -->
+)";
+        }
+        
+        std::string getGuiJs() {
+            // Return the JavaScript content (you can embed it here or load from file)
+            return R"(// backup-client.js content
+<!-- Paste the backup-client.js content here -->
+)";
+        }
+    };
+    
+public:
+    ClientGUI() : wsServer(nullptr), guiEnabled(false) {}
+    
+    ~ClientGUI() {
+        if (wsServer) {
+            delete wsServer;
+        }
+    }
+    
+    static ClientGUI* getInstance() {
+        if (!instance) {
+            instance = new ClientGUI();
+        }
+        return instance;
+    }    bool initialize(uint16_t wsPort = 8765) {
+        try {
+            std::cout << "Attempting to create WebSocket server on port " << wsPort << "..." << std::endl;
+            wsServer = new ClientWebSocketServer(wsPort);
+            
+            std::cout << "WebSocket server created, attempting to start..." << std::endl;
+            guiEnabled = wsServer->start();
+            
+            if (guiEnabled) {
+                std::cout << "WebSocket server started successfully on port " << wsPort << std::endl;
+                
+                // Verify the server is actually listening
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                
+                // Open GUI in default browser with correct port
+                #ifdef _WIN32
+                std::string url = "http://localhost:" + std::to_string(wsPort);
+                std::cout << "Opening GUI at: " << url << std::endl;
+                ShellExecuteA(NULL, "open", url.c_str(), NULL, NULL, SW_SHOWNORMAL);
+                #elif __APPLE__
+                system(("open http://localhost:" + std::to_string(wsPort)).c_str());
+                #else
+                system(("xdg-open http://localhost:" + std::to_string(wsPort)).c_str());
+                #endif
+            } else {
+                std::cout << "Failed to start WebSocket server" << std::endl;
+            }
+            
+            return guiEnabled;
+        } catch (const std::exception& e) {
+            std::cout << "Exception during GUI initialization: " << e.what() << std::endl;
+            return false;
+        } catch (...) {
+            std::cout << "Unknown exception during GUI initialization" << std::endl;
+            return false;
+        }
+    }
+    
+    void shutdown() {
+        if (wsServer) {
+            wsServer->stop();
+        }
+    }
+    
+    // GUI update methods
+    void updateOperation(const std::string& operation, bool success, const std::string& details = "") {
+        if (wsServer) {
+            wsServer->sendStatusUpdate(operation, success, details);
+        }
+    }
+    
+    void updateProgress(int current, int total, const std::string& speed = "", const std::string& eta = "") {
+        if (wsServer && total > 0) {
+            int percentage = (current * 100) / total;
+            std::string transferred = formatBytes(current) + " / " + formatBytes(total);
+            wsServer->sendProgressUpdate(percentage, speed, eta, transferred);
+        }
+    }
+    
+    void updatePhase(const std::string& phase) {
+        if (wsServer) {
+            wsServer->sendPhaseUpdate(phase);
+        }
+    }
+    
+    void updateConnectionStatus(bool connected) {
+        if (wsServer) {
+            wsServer->sendConnectionStatus(connected);
+        }
+    }
+    
+    void updateError(const std::string& error) {
+        if (wsServer) {
+            wsServer->sendError(error);
+        }
+    }
+      void showNotification(const std::string& title, const std::string& message) {
+        if (wsServer) {
+            SimpleJSON json;
+            json.add("type", "notification")
+                .add("title", title)
+                .add("message", message);
+            wsServer->broadcast(json.str());
+        }
+    }
+    
+    // Additional methods required by main.cpp
+    void showStatusWindow(bool show) {
+        // For WebSocket-based GUI, this is always "shown" when clients connect
+        // Just send a status update
+        if (wsServer && show) {
+            updateOperation("Status window visible", true, "GUI interface ready");
+        }
+    }
+      void setRetryCallback(const std::function<void()>& callback) {
+        // Store the callback for use when retry is requested from GUI
+        retryCallback = callback;
+        
+        // Set up message handler to process retry requests
+        if (wsServer) {
+            wsServer->setMessageHandler([this](const std::map<std::string, std::string>& data) {
+                if (data.find("type") != data.end() && data.at("type") == "retry" && retryCallback) {
+                    retryCallback();
+                }
+            });
+        }
+    }
+    
+    void setBackupState(bool inProgress, bool completed) {
+        if (wsServer) {
+            SimpleJSON json;
+            json.add("type", "backup_state")
+                .add("inProgress", inProgress)
+                .add("completed", completed);
+            wsServer->broadcast(json.str());
+        }
+    }
+    
+    ClientWebSocketServer* getWebSocketServer() {
+        return wsServer;
+    }
+
+private:
+    std::function<void()> retryCallback;
+    std::string formatBytes(size_t bytes) {
+        const char* sizes[] = {"B", "KB", "MB", "GB"};
+        int order = 0;
+        double size = static_cast<double>(bytes);
+        
+        while (size >= 1024 && order < 3) {
+            order++;
+            size /= 1024;
+        }
+        
+        std::stringstream ss;
+        ss << std::fixed << std::setprecision(2) << size << " " << sizes[order];
         return ss.str();
     }
 };
