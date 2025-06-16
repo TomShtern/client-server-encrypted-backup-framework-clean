@@ -26,9 +26,9 @@ src\client\main.cpp ^
 src\client\protocol.cpp
 
 REM 1.5) Compile wrappers separately to control dependencies
-echo Compiling other wrappers...
-"%CL_PATH%" /EHsc /D_WIN32_WINNT=0x0601 /std:c++14 /MT /c /I"include\wrappers" /I"third_party\crypto++" /Fo:"build\client\\" ^
-src\wrappers\AESWrapper.cpp src\wrappers\Base64Wrapper.cpp src\wrappers\RSAWrapper_stub.cpp
+echo Compiling production wrappers...
+"%CL_PATH%" /EHsc /D_WIN32_WINNT=0x0601 /std:c++14 /MT /D_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING /c /I"include\wrappers" /I"third_party\crypto++" /Fo:"build\client\\" ^
+src\wrappers\AESWrapper.cpp src\wrappers\Base64Wrapper.cpp src\wrappers\RSAWrapper.cpp
 
 if %ERRORLEVEL% neq 0 (
     echo ERROR: Wrapper compilation failed
@@ -50,7 +50,7 @@ REM src\wrappers\RSAWrapper_stub.cpp (REMOVED - using real implementation)
 
 REM 2) Compile required Crypto++ sources to build\third_party\crypto++\
 echo Compiling Crypto++ sources...
-"%CL_PATH%" /EHsc /D_WIN32_WINNT=0x0601 /std:c++14 /DCRYPTOPP_DISABLE_ASM=1 /DCRYPTOPP_DISABLE_X86ASM=1 /DCRYPTOPP_DISABLE_X64ASM=1 /c /I"third_party\crypto++" /Fo:"build\third_party\crypto++\\" ^
+"%CL_PATH%" /EHsc /D_WIN32_WINNT=0x0601 /std:c++14 /DCRYPTOPP_DISABLE_ASM=1 /DCRYPTOPP_DISABLE_X86ASM=1 /DCRYPTOPP_DISABLE_X64ASM=1 /D_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING /c /I"third_party\crypto++" /Fo:"build\third_party\crypto++\\" ^
 third_party\crypto++\base64.cpp ^
 third_party\crypto++\cryptlib.cpp ^
 third_party\crypto++\files.cpp ^
@@ -104,11 +104,11 @@ if exist "client\EncryptedBackupClient.exe" (
 )
 
 REM 4) Link all object files to create the executable
-echo Linking executable...
+echo Linking production executable with real RSA...
 "%CL_PATH%" /EHsc /D_WIN32_WINNT=0x0601 /std:c++14 /MT /Fe:"client\EncryptedBackupClient.exe" ^
 build\client\AESWrapper.obj ^
 build\client\Base64Wrapper.obj ^
-build\client\RSAWrapper_stub.obj ^
+build\client\RSAWrapper.obj ^
 build\client\algebra_implementations.obj ^
 build\client\cksum.obj ^
 build\client\client.obj ^

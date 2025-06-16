@@ -2,22 +2,44 @@
 #include <stdexcept>
 #include <iostream>
 #include <string>
+#include <algorithm>
 
-// Placeholder implementation for Base64 operations without Crypto++ dependency
-// This implementation provides dummy functionality to allow compilation
-// Replace with actual Base64 encoding/decoding for production use
+// Real Base64 implementation using Crypto++ library
+#include "../../third_party/crypto++/base64.h"
 
-// Base64Wrapper implementation
+// Base64Wrapper implementation with real Crypto++ functionality
 std::string Base64Wrapper::encode(const std::string& str) {
-    std::cout << "[WARNING] Base64Wrapper: Using dummy encoding. Replace with actual Base64 implementation." << std::endl;
-    return "<Base64Encoded>" + str + "</Base64Encoded>";
+    try {
+        std::string encoded;
+        CryptoPP::StringSource ss(str, true,
+            new CryptoPP::Base64Encoder(
+                new CryptoPP::StringSink(encoded)
+            ) // Base64Encoder
+        ); // StringSource
+        
+        // Remove newlines that Crypto++ Base64 encoder adds
+        encoded.erase(std::remove(encoded.begin(), encoded.end(), '\n'), encoded.end());
+        encoded.erase(std::remove(encoded.begin(), encoded.end(), '\r'), encoded.end());
+        
+        return encoded;
+    } catch (const std::exception& e) {
+        std::cerr << "[ERROR] Base64Wrapper::encode failed: " << e.what() << std::endl;
+        throw std::runtime_error("Base64 encoding failed");
+    }
 }
 
 std::string Base64Wrapper::decode(const std::string& str) {
-    std::cout << "[WARNING] Base64Wrapper: Using dummy decoding. Replace with actual Base64 implementation." << std::endl;
-    if (str.rfind("<Base64Encoded>", 0) == 0 && str.rfind("</Base64Encoded>") == str.length() - 16) {
-        return str.substr(15, str.length() - 15 - 16);
-    } else {
-        return "<Base64DecodingFailed>";
+    try {
+        std::string decoded;
+        CryptoPP::StringSource ss(str, true,
+            new CryptoPP::Base64Decoder(
+                new CryptoPP::StringSink(decoded)
+            ) // Base64Decoder
+        ); // StringSource
+        
+        return decoded;
+    } catch (const std::exception& e) {
+        std::cerr << "[ERROR] Base64Wrapper::decode failed: " << e.what() << std::endl;
+        throw std::runtime_error("Base64 decoding failed");
     }
 }

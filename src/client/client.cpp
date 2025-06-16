@@ -55,24 +55,24 @@
 constexpr uint8_t CLIENT_VERSION = 3;
 constexpr uint8_t SERVER_VERSION = 3;
 
-// Request codes
+// Request codes - MUST match server constants exactly
 constexpr uint16_t REQ_REGISTER = 1025;
 constexpr uint16_t REQ_SEND_PUBLIC_KEY = 1026;
 constexpr uint16_t REQ_RECONNECT = 1027;
 constexpr uint16_t REQ_SEND_FILE = 1028;
 constexpr uint16_t REQ_CRC_OK = 1029;
-constexpr uint16_t REQ_CRC_RETRY = 1030;
-constexpr uint16_t REQ_CRC_ABORT = 1031;
+constexpr uint16_t REQ_CRC_INVALID_RETRY = 1030;  // Fixed: matches server REQ_CRC_INVALID_RETRY
+constexpr uint16_t REQ_CRC_FAILED_ABORT = 1031;   // Fixed: matches server REQ_CRC_FAILED_ABORT
 
-// Response codes
-constexpr uint16_t RESP_REGISTER_OK = 1600;
-constexpr uint16_t RESP_REGISTER_FAIL = 1601;
+// Response codes - MUST match server constants exactly
+constexpr uint16_t RESP_REG_OK = 1600;              // Fixed: matches server RESP_REG_OK
+constexpr uint16_t RESP_REG_FAIL = 1601;            // Fixed: matches server RESP_REG_FAIL
 constexpr uint16_t RESP_PUBKEY_AES_SENT = 1602;
-constexpr uint16_t RESP_FILE_OK = 1603;
+constexpr uint16_t RESP_FILE_CRC = 1603;            // Fixed: matches server RESP_FILE_CRC
 constexpr uint16_t RESP_ACK = 1604;
 constexpr uint16_t RESP_RECONNECT_AES_SENT = 1605;
 constexpr uint16_t RESP_RECONNECT_FAIL = 1606;
-constexpr uint16_t RESP_ERROR = 1607;
+constexpr uint16_t RESP_GENERIC_SERVER_ERROR = 1607; // Fixed: matches server RESP_GENERIC_SERVER_ERROR
 
 // Size constants
 constexpr size_t CLIENT_ID_SIZE = 16;
@@ -674,13 +674,21 @@ bool Client::connectToServer() {
         boost::asio::ip::tcp::resolver::results_type endpoints = 
             resolver.resolve(serverIP, std::to_string(serverPort));
         
-        displayStatus("Connecting", true, "Establishing TCP connection...");
+        displayStatus("Connecting", true, "Resolving " + serverIP + ":" + std::to_string(serverPort));
         
-        boost::asio::connect(*socket, endpoints);
+        // Connect with proper error handling
+        boost::system::error_code connectError;
+        boost::asio::connect(*socket, endpoints, connectError);
+        
+        if (connectError) {
+            displayError("Connection failed: " + connectError.message() + 
+                        " (Code: " + std::to_string(connectError.value()) + ")", ErrorType::NETWORK);
+            return false;
+        }
 
         // Verify the connection is actually established
         if (!socket->is_open()) {
-            displayError("Socket failed to open", ErrorType::NETWORK);
+            displayError("Socket failed to open after connect", ErrorType::NETWORK);
             return false;
         }
 
@@ -692,14 +700,22 @@ bool Client::connectToServer() {
                      "Local: " + localEndpoint.address().to_string() + ":" + std::to_string(localEndpoint.port()) +
                      " -> Remote: " + remoteEndpoint.address().to_string() + ":" + std::to_string(remoteEndpoint.port()));
 
-        // Set socket options for timeouts and keep-alive
-        socket->set_option(boost::asio::ip::tcp::no_delay(true));
+        // Set socket options for better protocol handling
+        socket->set_option(boost::asio::ip::tcp::no_delay(true)); // Disable Nagle algorithm
+        socket->set_option(boost::asio::socket_base::keep_alive(true)); // Enable keep-alive
+        
+        // Set socket timeouts (platform-specific)
+#ifdef _WIN32
+        DWORD timeout = SOCKET_TIMEOUT_MS;
+        setsockopt(socket->native_handle(), SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+        setsockopt(socket->native_handle(), SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout, sizeof(timeout));
+#endif
 
         // Small delay to ensure connection is fully established
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
         connected = true;
-        displayStatus("Connected", true, "TCP connection established");
+        displayStatus("Connected", true, "TCP connection established and configured");
         
         // Update GUI connection status (optional)
         try {
@@ -710,7 +726,8 @@ bool Client::connectToServer() {
         
         return true;
         
-    } catch (const std::exception& e) {        displayError("Connection failed: " + std::string(e.what()), ErrorType::NETWORK);
+    } catch (const std::exception& e) {
+        displayError("Connection failed: " + std::string(e.what()), ErrorType::NETWORK);
         socket.reset();
         connected = false;
         
@@ -860,18 +877,37 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
     }
     
     try {
-        // Receive header
-        boost::asio::read(*socket, boost::asio::buffer(&header, sizeof(header)));
+        // Receive header - manually to handle endianness
+        std::vector<uint8_t> headerBytes(7); // ResponseHeader is 7 bytes
+        boost::asio::read(*socket, boost::asio::buffer(headerBytes));
+        
+        // Parse header manually with proper endianness handling
+        header.version = headerBytes[0];
+        header.code = headerBytes[1] | (headerBytes[2] << 8);  // Little-endian uint16_t
+        header.payload_size = headerBytes[3] | (headerBytes[4] << 8) | (headerBytes[5] << 16) | (headerBytes[6] << 24); // Little-endian uint32_t
+        
+        // Debug output for important responses
+        displayStatus("Debug: Response received", true, 
+                     "Version=" + std::to_string(header.version) +
+                     ", Code=" + std::to_string(header.code) +
+                     ", PayloadSize=" + std::to_string(header.payload_size));
         
         // Check version
         if (header.version != SERVER_VERSION) {
-            displayError("Invalid server version: " + std::to_string(header.version), ErrorType::PROTOCOL);
+            displayError("Protocol version mismatch - Server: " + std::to_string(header.version) + 
+                        ", Client expects: " + std::to_string(SERVER_VERSION), ErrorType::PROTOCOL);
             return false;
         }
         
         // Check for error response
-        if (header.code == RESP_ERROR) {
+        if (header.code == RESP_GENERIC_SERVER_ERROR) {
             displayError("Server returned general error", ErrorType::SERVER_ERROR);
+            return false;
+        }
+        
+        // Validate payload size
+        if (header.payload_size > MAX_PACKET_SIZE) {
+            displayError("Invalid payload size: " + std::to_string(header.payload_size), ErrorType::PROTOCOL);
             return false;
         }
         
@@ -899,21 +935,36 @@ bool Client::performRegistration() {
         displayError("RSA keys not available for registration", ErrorType::CRYPTO);
         return false;
     }
+      // Prepare registration payload - EXACTLY 255 bytes as expected by server
+    std::vector<uint8_t> payload(MAX_NAME_SIZE, 0);  // Initialize all bytes to 0
     
-    // Prepare registration payload
-    std::vector<uint8_t> payload(MAX_NAME_SIZE, 0);
+    // Validate username length
+    if (username.length() > MAX_NAME_SIZE - 1) {
+        displayError("Username too long: " + std::to_string(username.length()) + 
+                    " bytes (max: " + std::to_string(MAX_NAME_SIZE - 1) + ")", ErrorType::CONFIG);
+        return false;
+    }
+    
+    // Copy username to payload (null-terminated, zero-padded)
     std::copy(username.begin(), username.end(), payload.begin());
-      displayStatus("Sending registration", true, "Username: " + username);
+    // Ensure null termination (redundant but explicit)
+    payload[username.length()] = 0;
     
-    // Debug: show what we're sending
-    displayStatus("Debug: Registration packet", true, 
-                 "Payload size=" + std::to_string(payload.size()) + 
-                 " bytes, Username='" + username + "'");
+    displayStatus("Sending registration", true, "Username: " + username);
     
-    // Debug: show what we're sending
-    displayStatus("Debug: Registration packet", true, 
-                 "Payload size=" + std::to_string(payload.size()) + 
-                 " bytes, Username='" + username + "'");
+    // Debug: show exact payload construction
+    displayStatus("Debug: Registration payload", true, 
+                 "Size=" + std::to_string(payload.size()) + " bytes" +
+                 ", Username='" + username + "' (" + std::to_string(username.length()) + " chars)" +
+                 ", Null-terminated and zero-padded");
+    
+    // Debug: show first few bytes of payload for verification
+    std::stringstream payloadHex;
+    payloadHex << "First 32 bytes: ";
+    for (size_t i = 0; i < std::min(payload.size(), size_t(32)); ++i) {
+        payloadHex << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(payload[i]) << " ";
+    }
+    displayStatus("Debug: Payload bytes", true, payloadHex.str());
 
     // Send registration request
     if (!sendRequest(REQ_REGISTER, payload)) {
@@ -926,14 +977,15 @@ bool Client::performRegistration() {
     if (!receiveResponse(header, responsePayload)) {
         return false;
     }
-    
-    if (header.code == RESP_REGISTER_FAIL) {
+      if (header.code == RESP_REG_FAIL) {
         displayError("Registration failed: Username already exists", ErrorType::AUTHENTICATION);
         return false;
     }
     
-    if (header.code != RESP_REGISTER_OK || responsePayload.size() != CLIENT_ID_SIZE) {
-        displayError("Invalid registration response", ErrorType::PROTOCOL);
+    if (header.code != RESP_REG_OK || responsePayload.size() != CLIENT_ID_SIZE) {
+        displayError("Invalid registration response - Code: " + std::to_string(header.code) + 
+                    ", Expected: " + std::to_string(RESP_REG_OK) + 
+                    ", Payload size: " + std::to_string(responsePayload.size()), ErrorType::PROTOCOL);
         return false;
     }
     
@@ -1112,7 +1164,7 @@ bool Client::transferFile() {
         return false;
     }
     
-    if (header.code != RESP_FILE_OK || responsePayload.size() < 279) {
+    if (header.code != RESP_FILE_CRC || responsePayload.size() < 279) {
         displayError("Invalid file transfer response", ErrorType::PROTOCOL);
         return false;
     }
@@ -1183,7 +1235,7 @@ bool Client::verifyCRC(uint32_t serverCRC, const std::vector<uint8_t>& originalD
         crcRetries++;
         if (crcRetries < MAX_RETRIES) {
             displayStatus("CRC verification", false, "Mismatch - Retry " + std::to_string(crcRetries) + " of " + std::to_string(MAX_RETRIES));
-            sendRequest(REQ_CRC_RETRY, payload);
+            sendRequest(REQ_CRC_INVALID_RETRY, payload);
             
             // Reset CRC retries for next attempt
             int savedRetries = crcRetries;
@@ -1200,7 +1252,7 @@ bool Client::verifyCRC(uint32_t serverCRC, const std::vector<uint8_t>& originalD
             return result;
         } else {
             displayStatus("CRC verification", false, "Maximum retries exceeded - aborting");
-            sendRequest(REQ_CRC_ABORT, payload);
+            sendRequest(REQ_CRC_FAILED_ABORT, payload);
             return false;
         }
     }
@@ -1208,13 +1260,14 @@ bool Client::verifyCRC(uint32_t serverCRC, const std::vector<uint8_t>& originalD
 
 // Generate RSA keys
 bool Client::generateRSAKeys() {
+    std::cout << "[DEBUG] Client::generateRSAKeys() - Starting RSA key generation" << std::endl;
     try {
+        std::cout << "[DEBUG] Client::generateRSAKeys() - About to create RSAPrivateWrapper" << std::endl;
         auto start = std::chrono::steady_clock::now();
         rsaPrivate = new RSAPrivateWrapper();
-        auto end = std::chrono::steady_clock::now();
-
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        displayStatus("RSA key generation", true, "512-bit keys generated in " + std::to_string(duration) + "ms");
+        std::cout << "[DEBUG] Client::generateRSAKeys() - RSAPrivateWrapper created successfully" << std::endl;
+        auto end = std::chrono::steady_clock::now();        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+        displayStatus("RSA key generation", true, "1024-bit keys generated in " + std::to_string(duration) + "ms");
         return true;
     } catch (const std::exception& e) {
         displayError("Failed to generate RSA keys: " + std::string(e.what()), ErrorType::CRYPTO);

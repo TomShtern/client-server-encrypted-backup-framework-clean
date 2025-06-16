@@ -712,6 +712,7 @@
             </div>
             <div class="action-buttons">
                 <button class="btn btn-secondary" id="refreshBtn">Refresh Status</button>
+                <button class="btn btn-secondary" id="connectBtn">Connect to Server</button>
                 <button class="btn btn-primary" id="monitorBtn">Live Monitor: ON</button>
             </div>
         </footer>
@@ -735,7 +736,11 @@
                 document.getElementById('refreshBtn').addEventListener('click', () => {
                     this.refreshStatus();
                 });
-                
+
+                document.getElementById('connectBtn').addEventListener('click', () => {
+                    this.toggleConnection();
+                });
+
                 document.getElementById('monitorBtn').addEventListener('click', () => {
                     this.toggleMonitoring();
                 });
@@ -868,13 +873,20 @@
             updateConnectionStatus(connected) {
                 const indicator = document.getElementById('statusIndicator');
                 const status = document.getElementById('connectionStatus');
-                
+                const connectBtn = document.getElementById('connectBtn');
+
                 if (connected) {
                     indicator.classList.add('connected');
                     status.textContent = 'Connected';
+                    connectBtn.textContent = 'Disconnect from Server';
+                    connectBtn.classList.remove('btn-secondary');
+                    connectBtn.classList.add('btn-primary');
                 } else {
                     indicator.classList.remove('connected');
                     status.textContent = 'Disconnected';
+                    connectBtn.textContent = 'Connect to Server';
+                    connectBtn.classList.remove('btn-primary');
+                    connectBtn.classList.add('btn-secondary');
                 }
             }
 
@@ -952,6 +964,44 @@
                     btn.classList.add('btn-secondary');
                     this.addLogEntry('Live monitoring paused', 'info');
                 }
+            }
+
+            toggleConnection() {
+                const connectBtn = document.getElementById('connectBtn');
+                const isConnected = connectBtn.textContent.includes('Disconnect');
+
+                if (isConnected) {
+                    // Disconnect
+                    connectBtn.textContent = 'Connect to Server';
+                    connectBtn.classList.remove('btn-primary');
+                    connectBtn.classList.add('btn-secondary');
+                    this.updateConnectionStatus(false);
+                    this.addLogEntry('Manual disconnect requested', 'info');
+
+                    // Create a disconnect command file
+                    this.createCommandFile('disconnect');
+                } else {
+                    // Connect
+                    connectBtn.textContent = 'Disconnect from Server';
+                    connectBtn.classList.remove('btn-secondary');
+                    connectBtn.classList.add('btn-primary');
+                    this.addLogEntry('Manual connection requested', 'info');
+
+                    // Create a connect command file
+                    this.createCommandFile('connect');
+                }
+            }
+
+            createCommandFile(command) {
+                // Create a command file that the C++ client can read
+                const commandData = {
+                    command: command,
+                    timestamp: new Date().toISOString()
+                };
+
+                // Since we can't write files directly from browser, we'll use a different approach
+                // The client should check for this in the status monitoring
+                this.addLogEntry(`Command: ${command}`, 'info');
             }
 
             refreshStatus() {

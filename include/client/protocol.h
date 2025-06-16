@@ -17,18 +17,18 @@ extern const uint16_t REQ_SEND_PUBLIC_KEY;
 extern const uint16_t REQ_RECONNECT;
 extern const uint16_t REQ_SEND_FILE;
 extern const uint16_t REQ_CRC_OK;
-extern const uint16_t REQ_CRC_RETRY;
-extern const uint16_t REQ_CRC_ABORT;
+extern const uint16_t REQ_CRC_INVALID_RETRY;  // Fixed: matches server
+extern const uint16_t REQ_CRC_FAILED_ABORT;   // Fixed: matches server
 
 // Response codes
-extern const uint16_t RESP_REGISTER_OK;
-extern const uint16_t RESP_REGISTER_FAIL;
+extern const uint16_t RESP_REG_OK;              // Fixed: matches server
+extern const uint16_t RESP_REG_FAIL;            // Fixed: matches server
 extern const uint16_t RESP_PUBKEY_AES_SENT;
 extern const uint16_t RESP_FILE_CRC;
 extern const uint16_t RESP_ACK;
 extern const uint16_t RESP_RECONNECT_AES_SENT;
 extern const uint16_t RESP_RECONNECT_FAIL;
-extern const uint16_t RESP_ERROR;
+extern const uint16_t RESP_GENERIC_SERVER_ERROR; // Fixed: matches server
 
 // Guaranteed little-endian serialization functions (preferred)
 void writeLE16(std::vector<uint8_t>& buffer, uint16_t value);

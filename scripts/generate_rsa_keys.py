@@ -1,4 +1,4 @@
-from Cryptodome.PublicKey import RSA
+from Crypto.PublicKey import RSA
 import os
 
 def generate_rsa_key_pair():

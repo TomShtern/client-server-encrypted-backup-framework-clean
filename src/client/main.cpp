@@ -2,6 +2,18 @@
 #include <thread>
 #include <chrono>
 #include <atomic>
+#include <memory>
+#include <csignal>
+#include <exception>
+#include "../../include/client/ClientLogger.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#include <conio.h>
+#endif
+
+// Global logger instance
+ClientLogger* g_logger = nullptr;
 
 // Forward declaration - we need to include the actual client class
 class Client;
@@ -9,24 +21,91 @@ class Client;
 // Declare the actual client run function
 extern bool runBackupClient();
 
-int main() {
-    std::cout << "🔒 Encrypted Backup Client v3.0 - Starting...\n";
+// Signal handler for graceful shutdown
+std::atomic<bool> g_shutdownRequested(false);
 
-    try {
-        // For now, run the backup client directly without complex GUI initialization
-        // The client.cpp has its own GUI handling through ClientWebSocketServer
-        if (runBackupClient()) {
-            std::cout << "✅ Backup completed successfully!" << std::endl;
-            return 0;
-        } else {
-            std::cerr << "❌ Backup failed!" << std::endl;
-            return 1;
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "Fatal error: " << e.what() << std::endl;
-        return 1;
-    } catch (...) {
-        std::cerr << "Unknown fatal error occurred!" << std::endl;
-        return 1;
+void signalHandler(int signal) {
+    if (g_logger) {
+        g_logger->warning("Shutdown signal received: " + std::to_string(signal));
     }
+    g_shutdownRequested.store(true);
+}
+
+// Production-ready main function with comprehensive error handling
+int main() {
+    int exitCode = 1;
+    
+    try {
+        // Initialize logging system first
+        g_logger = new ClientLogger("client_debug.log", ClientLogger::LogLevel::INFO, true, true);
+        LOG_INFO("🔒 Encrypted Backup Client v3.0 - Production Ready");
+        LOG_INFO("Starting client initialization...");
+        
+        // Set up signal handlers for graceful shutdown
+        std::signal(SIGINT, signalHandler);
+        std::signal(SIGTERM, signalHandler);
+        
+#ifdef _WIN32
+        // Windows-specific console setup
+        SetConsoleTitleA("Encrypted Backup Client v3.0");
+        LOG_DEBUG("Windows console title set");
+#endif
+        
+        LOG_INFO("About to create client object...");
+        
+        // Run the main backup client
+        bool success = false;
+        try {
+            success = runBackupClient();
+        } catch (const std::runtime_error& e) {
+            LOG_ERRORF("Runtime error in backup client: %s", e.what());
+            std::cerr << "❌ Runtime error: " << e.what() << std::endl;
+        } catch (const std::logic_error& e) {
+            LOG_ERRORF("Logic error in backup client: %s", e.what());
+            std::cerr << "❌ Logic error: " << e.what() << std::endl;
+        } catch (const std::exception& e) {
+            LOG_ERRORF("Standard exception in backup client: %s", e.what());
+            std::cerr << "❌ Exception: " << e.what() << std::endl;
+        }
+        
+        if (success) {
+            LOG_INFO("✅ Backup completed successfully!");
+            std::cout << "✅ Backup completed successfully!" << std::endl;
+            exitCode = 0;
+        } else {
+            LOG_ERROR("❌ Backup failed!");
+            std::cerr << "❌ Backup failed!" << std::endl;
+            exitCode = 1;
+        }
+        
+    } catch (const std::bad_alloc& e) {
+        std::cerr << "❌ Memory allocation failed: " << e.what() << std::endl;
+        if (g_logger) LOG_CRITICAL("Memory allocation failed: " + std::string(e.what()));
+        exitCode = 2;
+    } catch (const std::exception& e) {
+        std::cerr << "❌ Fatal error: " << e.what() << std::endl;
+        if (g_logger) LOG_CRITICAL("Fatal error: " + std::string(e.what()));
+        exitCode = 3;
+    } catch (...) {
+        std::cerr << "❌ Unknown fatal error occurred!" << std::endl;
+        if (g_logger) LOG_CRITICAL("Unknown fatal error occurred!");
+        exitCode = 4;
+    }
+    
+    // Clean up logging
+    if (g_logger) {
+        LOG_INFOF("Client exiting with code: %d", exitCode);
+        delete g_logger;
+        g_logger = nullptr;
+    }
+    
+#ifdef _WIN32
+    // On Windows, wait for user input in debug builds
+    #ifdef _DEBUG
+    std::cout << "\nPress any key to exit..." << std::endl;
+    _getch();
+    #endif
+#endif
+    
+    return exitCode;
 }

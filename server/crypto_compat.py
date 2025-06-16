@@ -151,6 +151,31 @@ except ImportError:
     
     # Export SHA256 for PKCS1_OAEP compatibility
     class SHA256:
-        pass  # Placeholder - not used directly in this implementation
+        """SHA256 hash algorithm class for PKCS1_OAEP compatibility"""
+        @staticmethod
+        def new(data=None):
+            """Create a new SHA256 hash object"""
+            import hashlib
+            return hashlib.sha256(data) if data else hashlib.sha256()
+
+        @staticmethod
+        def digest_size():
+            """Return the digest size for SHA256"""
+            return 32
     
     # MODE_CBC constant is already set in the AES class definition
+
+# Export SHA256 for PKCS1_OAEP compatibility (available for both PyCryptodome and cryptography)
+if 'SHA256' not in globals():
+    class SHA256:
+        """SHA256 hash algorithm class for PKCS1_OAEP compatibility"""
+        @staticmethod
+        def new(data=None):
+            """Create a new SHA256 hash object"""
+            import hashlib
+            return hashlib.sha256(data) if data else hashlib.sha256()
+
+        @staticmethod
+        def digest_size():
+            """Return the digest size for SHA256"""
+            return 32

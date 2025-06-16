@@ -17,18 +17,18 @@ const uint16_t REQ_SEND_PUBLIC_KEY = 1026;
 const uint16_t REQ_RECONNECT = 1027;
 const uint16_t REQ_SEND_FILE = 1028;
 const uint16_t REQ_CRC_OK = 1029;
-const uint16_t REQ_CRC_RETRY = 1030;
-const uint16_t REQ_CRC_ABORT = 1031;
+const uint16_t REQ_CRC_INVALID_RETRY = 1030;  // Fixed: matches server
+const uint16_t REQ_CRC_FAILED_ABORT = 1031;   // Fixed: matches server
 
 // Response codes
-const uint16_t RESP_REGISTER_OK = 1600;
-const uint16_t RESP_REGISTER_FAIL = 1601;
+const uint16_t RESP_REG_OK = 1600;              // Fixed: matches server
+const uint16_t RESP_REG_FAIL = 1601;            // Fixed: matches server
 const uint16_t RESP_PUBKEY_AES_SENT = 1602;
 const uint16_t RESP_FILE_CRC = 1603;
 const uint16_t RESP_ACK = 1604;
 const uint16_t RESP_RECONNECT_AES_SENT = 1605;
 const uint16_t RESP_RECONNECT_FAIL = 1606;
-const uint16_t RESP_ERROR = 1607;
+const uint16_t RESP_GENERIC_SERVER_ERROR = 1607; // Fixed: matches server
 
 // Protocol structures (packed)
 #pragma pack(push, 1)
