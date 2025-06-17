@@ -21,6 +21,15 @@ except ImportError:
     TRAY_AVAILABLE = False
     print("Warning: pystray not available - system tray disabled")
 
+# Custom logging handler that puts messages into a queue
+class QueueLoggingHandler(logging.Handler):
+    def __init__(self, log_queue: queue.Queue):
+        super().__init__()
+        self.log_queue = log_queue
+
+    def emit(self, record):
+        self.log_queue.put(self.format(record))
+
 class ServerGUIStatus:
     """Server status information structure"""
     def __init__(self):
@@ -54,6 +63,10 @@ class ServerGUI:
         self.running = False
         self.gui_thread = None
         self.start_time = time.time()
+        self.shutdown_callback = None # For graceful server shutdown
+        self.refresh_callback = None # For manually refreshing stats
+        self.log_queue = queue.Queue() # Queue for log messages
+        self.log_text_widget = None # Reference to the log Text widget
         
         # GUI update lock
         self.lock = threading.Lock()
@@ -61,6 +74,18 @@ class ServerGUI:
         # Status widgets references
         self.status_labels = {}
         self.progress_vars = {}
+
+    def set_shutdown_callback(self, callback):
+        """Sets the callback function to be called when the server is exiting."""
+        self.shutdown_callback = callback
+
+    def set_refresh_callback(self, callback):
+        """Sets the callback function for refreshing stats."""
+        self.refresh_callback = callback
+
+    def get_log_queue(self) -> queue.Queue:
+        """Returns the log queue for the GUI."""
+        return self.log_queue
         
     def initialize(self) -> bool:
         """Initialize GUI system"""
@@ -129,17 +154,20 @@ class ServerGUI:
         
         # Configure grid weights
         self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1) # Allow main_frame to expand
         main_frame.columnconfigure(1, weight=1)
-        
+        # Allow sections to expand width-wise
+        main_frame.rowconfigure(5, weight=1) # Allow Error Display (and future Log) to expand height-wise
+
+
         # Title
         title_label = ttk.Label(main_frame, text="Encrypted Backup Server Status", 
                                font=('Arial', 14, 'bold'))
-        title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20))
+        title_label.grid(row=0, column=0, columnspan=2, pady=(0, 10)) # Reduced pady
         
         # Server Information Section
         server_frame = ttk.LabelFrame(main_frame, text="Server Information", padding="10")
-        server_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        server_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 5)) # Reduced pady
         server_frame.columnconfigure(1, weight=1)
         
         row = 0
@@ -235,20 +263,36 @@ class ServerGUI:
         
         # Error Display
         error_frame = ttk.LabelFrame(main_frame, text="Status Messages", padding="10")
-        error_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        error_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(0, 5)) # Reduced pady
         error_frame.columnconfigure(0, weight=1)
         
         self.status_labels['error'] = ttk.Label(error_frame, text="Ready", foreground='green')
         self.status_labels['error'].grid(row=0, column=0, sticky=tk.W)
+
+        # Activity Log Section
+        log_display_frame = ttk.LabelFrame(main_frame, text="Activity Log", padding="10")
+        log_display_frame.grid(row=6, column=0, columnspan=2, sticky="nsew", pady=(0, 5)) # Reduced pady
+        log_display_frame.columnconfigure(0, weight=1)
+        log_display_frame.rowconfigure(0, weight=1)
+        main_frame.rowconfigure(6, weight=2) # Give log display more weight
+
+        self.log_text_widget = tk.Text(log_display_frame, height=10, wrap=tk.WORD, state=tk.DISABLED)
+        self.log_text_widget.grid(row=0, column=0, sticky="nsew")
+
+        log_scrollbar = ttk.Scrollbar(log_display_frame, orient=tk.VERTICAL, command=self.log_text_widget.yview)
+        log_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.log_text_widget.config(yscrollcommand=log_scrollbar.set)
         
         # Control Buttons
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=6, column=0, columnspan=2, pady=(10, 0))
+        button_frame.grid(row=7, column=0, columnspan=2, pady=(5, 0)) # Reduced pady
         
         ttk.Button(button_frame, text="Hide Window", 
                   command=self._hide_status_window).pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Button(button_frame, text="Show Console", 
-                  command=self._show_console).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Button(button_frame, text="View Logs",
+                  command=self._view_logs).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Button(button_frame, text="Refresh Stats",
+                  command=self._on_refresh_stats_clicked).pack(side=tk.LEFT, padx=(0,10))
         ttk.Button(button_frame, text="Exit Server", 
                   command=self._exit_server).pack(side=tk.LEFT)
     
@@ -267,7 +311,7 @@ class ServerGUI:
             # Create menu
             menu = pystray.Menu(
                 pystray.MenuItem("Show Status", self._show_status_window),
-                pystray.MenuItem("Hide Console", self._hide_console),
+                pystray.MenuItem("View Logs", self._view_logs),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("Exit", self._exit_server)
             )
@@ -298,7 +342,32 @@ class ServerGUI:
                 self._apply_update(update)
         except queue.Empty:
             pass
-    
+
+        # Process log queue
+        try:
+            while True:
+                log_message = self.log_queue.get_nowait()
+                self._add_log_message_to_widget(log_message)
+        except queue.Empty:
+            pass
+
+    def _add_log_message_to_widget(self, message: str):
+        """Adds a log message to the Text widget and manages line limit."""
+        if not self.log_text_widget:
+            return
+
+        self.log_text_widget.config(state=tk.NORMAL)
+        self.log_text_widget.insert(tk.END, message + "\n")
+
+        # Limit lines in the text widget (e.g., 200 lines)
+        max_lines = 200
+        num_lines = int(self.log_text_widget.index('end-1c').split('.')[0])
+        if num_lines > max_lines:
+            self.log_text_widget.delete('1.0', f'{num_lines - max_lines}.0')
+
+        self.log_text_widget.see(tk.END) # Auto-scroll
+        self.log_text_widget.config(state=tk.DISABLED)
+
     def _apply_update(self, update: Dict[str, Any]):
         """Apply a status update to the GUI"""
         if not self.gui_enabled:
@@ -443,23 +512,89 @@ class ServerGUI:
         if self.root:
             self.root.withdraw()
     
-    def _show_console(self):
-        """Show console window (platform-specific)"""
-        # This is a simple implementation - could be enhanced
-        pass
-    
-    def _hide_console(self):
-        """Hide console window (platform-specific)"""
-        # This is a simple implementation - could be enhanced
-        pass
-    
+    def _view_logs(self):
+        """Shows the log viewer window."""
+        log_window = tk.Toplevel(self.root)
+        log_window.title("Server Logs")
+        log_window.geometry("800x600")
+
+        text_area = tk.Text(log_window, wrap=tk.WORD, state=tk.DISABLED)
+        text_area.pack(padx=10, pady=(10,0), expand=True, fill=tk.BOTH)
+
+        scrollbar = ttk.Scrollbar(text_area, command=text_area.yview)
+        text_area.config(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        def load_logs():
+            self._load_log_content(text_area)
+
+        button_frame = ttk.Frame(log_window)
+        button_frame.pack(pady=10)
+
+        refresh_button = ttk.Button(button_frame, text="Refresh", command=load_logs)
+        refresh_button.pack()
+
+        load_logs() # Initial load
+
+    def _load_log_content(self, text_widget: tk.Text):
+        """Loads log content into the given text widget."""
+        text_widget.config(state=tk.NORMAL)
+        text_widget.delete(1.0, tk.END)
+        try:
+            log_file_path = "server.log"
+            if os.path.exists(log_file_path):
+                file_size = os.path.getsize(log_file_path)
+                read_size = 10 * 1024  # Last 10KB
+
+                with open(log_file_path, 'rb') as f:
+                    if file_size > read_size:
+                        f.seek(-read_size, os.SEEK_END)
+                        # Read an extra line to ensure we don't cut off the first visible line
+                        try:
+                            # Skip the potentially partial first line
+                            f.readline()
+                        except Exception:
+                             # In case readline fails (e.g. binary data or very small chunk)
+                            f.seek(-read_size, os.SEEK_END) # Reset seek if readline failed
+
+                    content = f.read().decode('utf-8', errors='replace')
+
+                if not content.strip() and file_size > 0 : # if last 10k were all non-utf8
+                    text_widget.insert(tk.END, f"[Could not decode the last {read_size/1024:.0f}KB of the log file. It might contain binary data or be corrupted.]\n\n")
+                    text_widget.insert(tk.END, f"[Showing the beginning of the file instead...]\n\n")
+                    with open(log_file_path, 'r', encoding='utf-8', errors='replace') as f_full:
+                        content = f_full.read(read_size)
+
+
+                text_widget.insert(tk.END, content)
+                text_widget.see(tk.END) # Scroll to the end
+            else:
+                text_widget.insert(tk.END, "Log file (server.log) not found.")
+        except Exception as e:
+            text_widget.insert(tk.END, f"Error loading log file: {e}")
+        finally:
+            text_widget.config(state=tk.DISABLED)
+
     def _exit_server(self):
         """Exit the server application"""
         result = messagebox.askyesno("Exit Server", 
                                    "Are you sure you want to exit the backup server?")
         if result:
-            # Signal the main application to exit
-            os._exit(0)
+            if self.shutdown_callback:
+                try:
+                    self.shutdown_callback()
+                except Exception as e:
+                    print(f"Error during shutdown callback: {e}") # Log or handle as needed
+            # os._exit(0) # Removed to allow graceful shutdown by the server itself
+
+    def _on_refresh_stats_clicked(self):
+        """Handles the Refresh Stats button click."""
+        if self.refresh_callback:
+            try:
+                self.refresh_callback()
+            except Exception as e:
+                print(f"Error during refresh_callback: {e}") # Log or handle
+        self._update_uptime() # Also refresh uptime immediately
     
     # Public API methods for server integration
     def update_server_status(self, running: bool, address: str = "", port: int = 0):

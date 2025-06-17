@@ -20,7 +20,7 @@ from Crypto.Random import get_random_bytes
 
 # GUI Integration
 try:
-    from ServerGUI import ServerGUI
+    from ServerGUI import ServerGUI, QueueLoggingHandler # Import the handler
     GUI_AVAILABLE = True
 except ImportError as e:
     print(f"GUI components not available: {e}")
@@ -270,6 +270,17 @@ class BackupServer:
                 self.gui_enabled = self.gui.initialize()
                 if self.gui_enabled:
                     logger.info("Server GUI initialized successfully")
+                    self.gui.set_shutdown_callback(self.stop) # Register server's stop method
+                    self.gui.set_refresh_callback(self.request_gui_stats_refresh) # Register refresh callback
+
+                    # Setup logging to GUI
+                    log_q = self.gui.get_log_queue()
+                    gui_log_handler = QueueLoggingHandler(log_q)
+                    formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefmt='%H:%M:%S')
+                    gui_log_handler.setFormatter(formatter)
+                    gui_log_handler.setLevel(logging.INFO) # Set level for GUI logs
+                    logger.addHandler(gui_log_handler)
+                    logger.info("GUI logging handler configured and added.")
                 else:
                     logger.warning("Server GUI initialization failed, continuing without GUI")
             except Exception as e:
@@ -510,6 +521,13 @@ class BackupServer:
                     client_obj.cleanup_stale_partial_files() for client_obj in active_clients_list
                 )
 
+                # Calculate current active transfers by summing up partial files across all clients
+                current_active_transfers = 0
+                # active_clients_list was already created above under self.clients_lock for cleanup_stale_partial_files
+                for client_obj in active_clients_list: # Use the snapshot taken earlier
+                    with client_obj.lock: # Accessing client's partial_files should be thread-safe
+                        current_active_transfers += len(client_obj.partial_files)
+
                 # --- Console Status Update (Basic UI Element) ---
                 with self.clients_lock: # Get current count of active clients in memory
                     active_clients_in_memory = len(self.clients)
@@ -542,9 +560,16 @@ class BackupServer:
                 
                 # Update GUI with current stats
                 if isinstance(db_total_clients_count, int):
-                    self._update_gui_client_count(connected=active_clients_in_memory, total=db_total_clients_count)
+                    self._update_gui_client_count(
+                        connected=active_clients_in_memory,
+                        total=db_total_clients_count,
+                        active_transfers=current_active_transfers
+                    )
                 else:
-                    self._update_gui_client_count(connected=active_clients_in_memory)
+                    self._update_gui_client_count(
+                        connected=active_clients_in_memory,
+                        active_transfers=current_active_transfers
+                    )
                 
                 # Update GUI with maintenance stats
                 self._update_gui_maintenance_stats(
@@ -678,6 +703,42 @@ class BackupServer:
         # Update GUI to show server stopped
         self._update_gui_status(False)
 
+    def request_gui_stats_refresh(self):
+        """Gathers current server stats and pushes them to the GUI."""
+        if not self.gui_enabled or not self.gui:
+            logger.debug("GUI not enabled or not available, skipping stats refresh request.")
+            return
+
+        logger.debug("Processing GUI request for stats refresh...")
+        connected_clients = 0
+        with self.clients_lock:
+            connected_clients = len(self.clients)
+            active_clients_list_for_transfers = list(self.clients.values()) # Snapshot
+
+        total_registered_clients = 0
+        try:
+            db_total_clients_row = self._db_execute("SELECT COUNT(*) FROM clients", fetchone=True)
+            if db_total_clients_row and db_total_clients_row[0] is not None:
+                total_registered_clients = db_total_clients_row[0]
+            else: # Handle None or DB error case
+                logger.warning("Could not retrieve total registered clients from DB for stats refresh.")
+                total_registered_clients = -1 # Indicate an issue or unknown
+        except ServerError as e:
+            logger.error(f"Database error during stats refresh for total clients: {e}")
+            total_registered_clients = -1
+
+        current_active_transfers = 0
+        for client_obj in active_clients_list_for_transfers:
+            with client_obj.lock:
+                current_active_transfers += len(client_obj.partial_files)
+
+        logger.info(f"Manual Stats Refresh: Connected={connected_clients}, TotalReg={total_registered_clients}, ActiveTransfers={current_active_transfers}")
+        self._update_gui_client_count(
+            connected=connected_clients,
+            total=total_registered_clients if total_registered_clients != -1 else None, # Pass None if error
+            active_transfers=current_active_transfers
+        )
+        # One could also add calls to refresh other stats like _update_gui_transfer_stats if needed.
 
     def _read_exact(self, sock: socket.socket, num_bytes: int) -> bytes:
         """
@@ -1225,6 +1286,9 @@ class BackupServer:
                     "original_size": original_file_size,
                     "timestamp": time.monotonic() # Track activity for stale cleanup
                 }
+                # New transfer started, refresh GUI stats
+                if self.gui_enabled:
+                    self.request_gui_stats_refresh()
             
             file_state = client.partial_files.get(filename_str) # Get the current reassembly state for this file
             
@@ -1317,6 +1381,12 @@ class BackupServer:
                 finally:
                     # Whether processing was successful or failed, clear the partial file reassembly state from memory for this file
                     client.clear_partial_file(filename_str)
+
+                # File transfer completed (successfully or not, but all packets handled for this attempt)
+                # Refresh GUI stats to reflect one less active transfer for this file
+                if self.gui_enabled:
+                    self.request_gui_stats_refresh()
+
             # If not all packets for the file have been received yet, the server implicitly waits for more packets.
             # The specification does not require an ACK from the server for each individual file packet received.
 
