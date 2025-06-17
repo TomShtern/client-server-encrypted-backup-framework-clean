@@ -2206,9 +2206,14 @@
             }
             window.UIController = UIController;
         }
+        
         if (typeof ThemeManager === 'undefined') {
-            class ThemeManager { loadSavedTheme() {} setTheme(t) { console.log(`Theme set to ${t}`) } }
-            window.ThemeManager = ThemeManager;        }
+            class ThemeManager { 
+                loadSavedTheme() {} 
+                setTheme(t) { console.log(`Theme set to ${t}`); } 
+            }
+            window.ThemeManager = ThemeManager;
+        }
         
         // Initialize the GUI - make it global so onclick handlers can access it
         try {
