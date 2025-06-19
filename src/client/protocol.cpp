@@ -135,7 +135,7 @@ std::vector<uint8_t> createPublicKeyRequest(const uint8_t* clientId, const std::
                                           const std::string& publicKey) {
     std::vector<uint8_t> request;
     
-    // Validate public key size (162 bytes for RSA DER format)
+    // Validate public key size (162 bytes for RSA DER format - actual implementation)
     if (publicKey.size() != 162) {
         throw std::invalid_argument("Public key must be exactly 162 bytes for protocol compliance");
     }

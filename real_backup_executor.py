@@ -23,9 +23,15 @@ class RealBackupExecutor:
     Smart wrapper for EncryptedBackupClient.exe that provides real backup functionality
     with automated process control and verification.
     """
-    
     def __init__(self, client_exe_path: str = None):
-        self.client_exe = client_exe_path or r"client\EncryptedBackupClient.exe"
+        # Try backup version first as it might be more stable
+        if not client_exe_path:
+            if os.path.exists(r"client\EncryptedBackupClient_backup.exe"):
+                self.client_exe = r"client\EncryptedBackupClient_backup.exe"
+            else:
+                self.client_exe = r"client\EncryptedBackupClient.exe"
+        else:
+            self.client_exe = client_exe_path
         self.server_received_files = r"server\received_files"
         self.temp_dir = tempfile.mkdtemp()
         self.backup_process = None
@@ -217,10 +223,9 @@ class RealBackupExecutor:
                 dst.write(src.read())
             
             self._log_status("LAUNCH", f"Launching {self.client_exe}")
-            
-            # Launch client process with automated input handling
+              # Launch client process with automated input handling and BATCH MODE
             self.backup_process = subprocess.Popen(
-                [self.client_exe],
+                [self.client_exe, "--batch"],  # Use batch mode to prevent hanging
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -236,8 +241,7 @@ class RealBackupExecutor:
             )
             log_monitor_thread.daemon = True
             log_monitor_thread.start()
-            
-            # Monitor process and automatically handle input prompts
+              # Monitor process - no need for manual input in batch mode
             self._log_status("PROCESS", "Monitoring backup process...")
             
             timeout = 300  # 5 minute timeout
@@ -252,13 +256,6 @@ class RealBackupExecutor:
                     result['process_exit_code'] = poll_result
                     self._log_status("PROCESS", f"Client process finished with exit code: {poll_result}")
                     break
-                
-                # Send Enter key periodically to handle "Press Enter to exit" prompts
-                try:
-                    self.backup_process.stdin.write("\n")
-                    self.backup_process.stdin.flush()
-                except:
-                    pass  # Process might have finished
                 
                 # Check for network activity periodically
                 if self._check_network_activity(server_port):

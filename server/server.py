@@ -43,7 +43,7 @@ MAX_CONCURRENT_CLIENTS = 50 # Max number of concurrent client connections
 MAX_CLIENT_NAME_LENGTH = 100 # As per spec (implicit from me.info and general limits)
 MAX_FILENAME_FIELD_SIZE = 255 # Size of the filename field in protocol
 MAX_ACTUAL_FILENAME_LENGTH = 250 # Practical limit for actual filename within the field
-RSA_PUBLIC_KEY_SIZE = 162 # Bytes, DER format (for 1024-bit RSA - updated for Step 7)
+RSA_PUBLIC_KEY_SIZE = 162 # Bytes, DER format (for 1024-bit RSA - actual implementation)
 AES_KEY_SIZE_BYTES = 32 # 256-bit AES
 
 # Logging Configuration
@@ -1078,7 +1078,7 @@ class BackupServer:
         """
         Handles client's public key submission (Code 1026).
         Client object is already resolved by ID from request header.
-        Payload: char name[255]; uint8_t public_key[160];
+        Payload: char name[255]; uint8_t public_key[162];
         """
         name_field_protocol_len = 255
         expected_payload_size = name_field_protocol_len + RSA_PUBLIC_KEY_SIZE # Total expected payload size

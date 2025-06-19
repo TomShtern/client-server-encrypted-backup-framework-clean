@@ -47,6 +47,9 @@
 #include "../../include/wrappers/Base64Wrapper.h"
 #include "../../include/wrappers/RSAWrapper.h"
 
+// Global batch mode flag
+extern bool g_batchMode;
+
 // Optional GUI support - already included in ClientWebSocketServer.h
 // #ifdef _WIN32
 // #include "../../include/client/ClientGUI.h"
@@ -1741,27 +1744,31 @@ bool runBackupClient() {
 
         std::cout << "About to initialize client..." << std::endl;
         std::cout.flush();
-        
-        if (!client.initialize()) {
+          if (!client.initialize()) {
             std::cerr << "Fatal: Client initialization failed" << std::endl;
-            std::cout << "\nPress Enter to exit...";
-            std::cin.get();
+            if (!g_batchMode) {
+                std::cout << "\nPress Enter to exit...";
+                std::cin.get();
+            }
             return false;
         }
 
         std::cout << "Client initialized successfully. Starting backup operation..." << std::endl;
         if (!client.run()) {
             std::cerr << "Fatal: File backup failed" << std::endl;
-#ifdef _WIN32
-            // Show error notification via GUI if available
+#ifdef _WIN32            // Show error notification via GUI if available
             try {
-                ClientGUIHelpers::showNotification("Backup Error", "File backup operation failed");
-                ClientGUIHelpers::updateError("Backup failed");
+                if (!g_batchMode) {
+                    ClientGUIHelpers::showNotification("Backup Error", "File backup operation failed");
+                    ClientGUIHelpers::updateError("Backup failed");
+                }
             } catch (...) {}
 
             // Keep window open to show error
-            std::cout << "\nPress Enter to exit...";
-            std::cin.get();
+            if (!g_batchMode) {
+                std::cout << "\nPress Enter to exit...";
+                std::cin.get();
+            }
 #endif
             return false;
         }
@@ -1771,39 +1778,48 @@ bool runBackupClient() {
 #ifdef _WIN32
         // Show success notification via GUI if available
         try {
-            ClientGUIHelpers::showNotification("Backup Complete", "File backup completed successfully!");
-            ClientGUIHelpers::updatePhase("Backup Complete");
+            if (!g_batchMode) {
+                ClientGUIHelpers::showNotification("Backup Complete", "File backup completed successfully!");
+                ClientGUIHelpers::updatePhase("Backup Complete");
+            }
         } catch (...) {}
 
         // Keep window open to show success
-        std::cout << "\nPress Enter to exit...";
-        std::cin.get();
+        if (!g_batchMode) {
+            std::cout << "\nPress Enter to exit...";
+            std::cin.get();
+        }
 #endif
 
-        return true;
-
-    } catch (const std::exception& e) {
+        return true;    } catch (const std::exception& e) {
         std::cerr << "Fatal exception: " << e.what() << std::endl;
 #ifdef _WIN32
         try {
-            ClientGUIHelpers::showNotification("Critical Error", std::string("Exception: ") + e.what());
-            ClientGUIHelpers::updateError(std::string("Critical error: ") + e.what());
+            if (!g_batchMode) {
+                ClientGUIHelpers::showNotification("Critical Error", std::string("Exception: ") + e.what());
+                ClientGUIHelpers::updateError(std::string("Critical error: ") + e.what());
+            }
         } catch (...) {}
 
-        std::cout << "\nPress Enter to exit...";
-        std::cin.get();
+        if (!g_batchMode) {
+            std::cout << "\nPress Enter to exit...";
+            std::cin.get();
+        }
 #endif
-        return false;
-    } catch (...) {
+        return false;    } catch (...) {
         std::cerr << "Fatal: Unknown exception occurred" << std::endl;
 #ifdef _WIN32
         try {
-            ClientGUIHelpers::showNotification("Critical Error", "Unknown exception occurred");
-            ClientGUIHelpers::updateError("Unknown critical error");
+            if (!g_batchMode) {
+                ClientGUIHelpers::showNotification("Critical Error", "Unknown exception occurred");
+                ClientGUIHelpers::updateError("Unknown critical error");
+            }
         } catch (...) {}
 
-        std::cout << "\nPress Enter to exit...";
-        std::cin.get();
+        if (!g_batchMode) {
+            std::cout << "\nPress Enter to exit...";
+            std::cin.get();
+        }
 #endif
         return false;
     }

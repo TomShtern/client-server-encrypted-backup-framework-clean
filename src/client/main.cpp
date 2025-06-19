@@ -15,6 +15,9 @@
 // Global logger instance
 ClientLogger* g_logger = nullptr;
 
+// Global batch mode flag - accessible from other source files
+extern bool g_batchMode;
+
 // Forward declaration - we need to include the actual client class
 class Client;
 
@@ -31,14 +34,30 @@ void signalHandler(int signal) {
     g_shutdownRequested.store(true);
 }
 
+// Global flag for batch mode
+bool g_batchMode = false;
+
 // Production-ready main function with comprehensive error handling
-int main() {
+int main(int argc, char* argv[]) {
     int exitCode = 1;
+    
+    // Parse command line arguments
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "--batch" || arg == "--non-interactive" || arg == "-b") {
+            g_batchMode = true;
+            break;
+        }
+    }
     
     try {
         // Initialize logging system first
         g_logger = new ClientLogger("client_debug.log", ClientLogger::LogLevel::INFO, true, true);
-        LOG_INFO("🔒 Encrypted Backup Client v3.0 - Production Ready");
+        if (g_batchMode) {
+            LOG_INFO("🔒 Encrypted Backup Client v3.0 - BATCH MODE");
+        } else {
+            LOG_INFO("🔒 Encrypted Backup Client v3.0 - Production Ready");
+        }
         LOG_INFO("Starting client initialization...");
         
         // Set up signal handlers for graceful shutdown
@@ -67,14 +86,17 @@ int main() {
             LOG_ERRORF("Standard exception in backup client: %s", e.what());
             std::cerr << "❌ Exception: " << e.what() << std::endl;
         }
-        
-        if (success) {
+          if (success) {
             LOG_INFO("✅ Backup completed successfully!");
-            std::cout << "✅ Backup completed successfully!" << std::endl;
+            if (!g_batchMode) {
+                std::cout << "✅ Backup completed successfully!" << std::endl;
+            }
             exitCode = 0;
         } else {
             LOG_ERROR("❌ Backup failed!");
-            std::cerr << "❌ Backup failed!" << std::endl;
+            if (!g_batchMode) {
+                std::cerr << "❌ Backup failed!" << std::endl;
+            }
             exitCode = 1;
         }
         

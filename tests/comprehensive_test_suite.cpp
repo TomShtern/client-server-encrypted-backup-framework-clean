@@ -7,7 +7,7 @@
 #include <string>
 #include <chrono>
 #include <cassert>
-#include <filesystem>
+#include <cstdio>
 
 // Include project headers
 #include "../include/wrappers/RSAWrapper.h"
@@ -229,7 +229,7 @@ bool testFileOperations() {
         std::string readContent(data.begin(), data.end());
         
         // Clean up
-        std::filesystem::remove(testFileName);
+        std::remove(testFileName.c_str());
         
         return readContent == testContent;
     } catch (...) {

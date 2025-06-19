@@ -27,7 +27,7 @@ src\client\main.cpp ^
 src\client\protocol.cpp
 
 REM 1.5) Compile wrappers separately to control dependencies
-echo Compiling production wrappers...
+echo Compiling production wrappers (using real Crypto++ RSA implementation)...
 "%CL_PATH%" /EHsc /D_WIN32_WINNT=0x0601 /std:c++14 /MT /D_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING /c /I"include\wrappers" /I"third_party\crypto++" /Fo:"build\client\\" ^
 src\wrappers\AESWrapper.cpp src\wrappers\Base64Wrapper.cpp src\wrappers\RSAWrapper.cpp
 

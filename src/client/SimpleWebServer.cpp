@@ -106,8 +106,7 @@ public:
     void setProgress(int progress) {
         std::lock_guard<std::mutex> lock(mutex_);
         progress_ = progress;
-        std::cout << "[STATUS] Progress: " << progress << "%" << std::endl;
-    }
+        std::cout << "[STATUS] Progress: " << progress << "%" << std::endl;    }
     
     void setConnected(bool connected) {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -118,41 +117,14 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         client_id_ = id;
     }
-      void addLog(const std::string& message) {
+    
+    void addLog(const std::string& message) {
         std::lock_guard<std::mutex> lock(mutex_);
         logs_.push_back(message);
         if (logs_.size() > 100) {
             logs_.erase(logs_.begin());
         }
         std::cout << "[LOG] " << message << std::endl;
-    }
-    
-    JsonObject getStateJson() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        JsonObject state;
-        state.set("phase", phase_);
-        state.set("status", status_);
-        state.set("progress", progress_);
-        state.set("connected", connected_);
-        state.set("client_id", client_id_);
-        return state;
-    }
-};
-    }
-    
-    void setProgress(int progress) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        progress_ = progress;
-    }
-    
-    void setConnected(bool connected) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        connected_ = connected;
-    }
-    
-    void setClientId(const std::string& id) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        client_id_ = id;
     }
     
     JsonObject getStateJson() {

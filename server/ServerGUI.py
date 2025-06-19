@@ -2476,14 +2476,15 @@ class ServerGUI:
     def _show_settings(self):
         """Show settings dialog"""
         dialog = SettingsDialog(self.root, self.settings)
-        new_settings = dialog.show()
-        
+        new_settings = dialog.show()        
         if new_settings:
             self.settings = new_settings
             self._add_activity_log("⚙️ Settings updated")
             if self.toast_system:
                 self.toast_system.show_toast("Settings saved successfully", "success")
-            # Apply settings changes here    def _on_client_selected(self, client_data):
+            # Apply settings changes here
+            
+    def _on_client_selected(self, client_data):
         """Handle client selection in table"""
         self._add_activity_log(f"👤 Selected client: {client_data['name']}")
 
@@ -2593,10 +2594,12 @@ Path: {file['path']}
         if not selected:
             messagebox.showwarning("No Selection", "Please select a file first")
             return
-        
+
         file = selected[0]
         self._add_activity_log(f"✅ Verifying file: {file['filename']}")
-        # Actual verification logic would be implemented here    def _delete_file(self):
+        # Actual verification logic would be implemented here
+        
+    def _delete_file(self):
         """Delete selected file"""
         if not self.file_table:
             messagebox.showwarning("Not Available", "File table not initialized")

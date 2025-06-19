@@ -1719,9 +1719,29 @@
                 <button class="cyber-btn danger" id="confirmOkBtn" onclick="gui.confirmAction()">Confirm</button>
             </div>
         </div>
-    </div>
-    
-    <script>
+    </div>    <script>
+        // === IMMEDIATE TEST ===
+        alert('JavaScript is working! Script started loading...');
+        console.log('JavaScript is working! Script started loading...');
+        
+        // === COMPREHENSIVE DEBUG LOGGING ===
+        function debugLog(message) {
+            console.log('[DEBUG] ' + message);
+            // Also show in page for visibility
+            const debugDiv = document.getElementById('debug-output') || createDebugDiv();
+            debugDiv.innerHTML += '<div>[' + new Date().toLocaleTimeString() + '] ' + message + '</div>';
+        }
+        
+        function createDebugDiv() {
+            const div = document.createElement('div');
+            div.id = 'debug-output';
+            div.style.cssText = 'position:fixed;top:10px;right:10px;width:400px;height:200px;background:black;color:lime;padding:10px;border:1px solid lime;overflow-y:auto;z-index:9999;font-family:monospace;font-size:12px;';
+            document.body.appendChild(div);
+            return div;
+        }
+
+        debugLog('=== SCRIPT LOADING STARTED ===');
+
         /**
          * =================================================================
          * API-DRIVEN CLIENT GUI v3.0
@@ -1733,6 +1753,7 @@
          */
 
         // Interval Manager to prevent leaks
+        debugLog('Defining IntervalManager class...');
         class IntervalManager {
             constructor() {
                 this.intervals = new Map();
@@ -1750,13 +1771,14 @@
             clearAll() {
                 this.intervals.forEach(id => clearInterval(id));
                 this.intervals.clear();
-            }
-        }
+            }        }
+        debugLog('IntervalManager class defined successfully');
 
         /**
          * NEW: ApiClient
          * Handles all communication with the local C++ web server.
          */
+        debugLog('Defining ApiClient class...');
         class ApiClient {
             constructor(baseUrl = 'http://127.0.0.1:9090') {
                 this.baseUrl = baseUrl;
@@ -1795,14 +1817,15 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(fileInfo)
                 });
-            }
-
-            stop() { return this._request('/api/stop', { method: 'POST' }); }
+            }            stop() { return this._request('/api/stop', { method: 'POST' }); }
             pause() { return this._request('/api/pause', { method: 'POST' }); }
             resume() { return this._request('/api/resume', { method: 'POST' }); }
         }
+        debugLog('ApiClient class defined successfully');
 
-        // Configuration Manager (largely unchanged)        class ConfigManager {
+        // Configuration Manager (largely unchanged)        
+        debugLog('Defining ConfigManager class...');
+        class ConfigManager {
             constructor() {
                 this.config = {
                     server: '127.0.0.1',
@@ -1824,8 +1847,7 @@
             }
             saveToStorage() {
                 localStorage.setItem('cyberbackup_config', JSON.stringify(this.config));
-            }
-            validate() {
+            }            validate() {
                 const errors = [];
                 if (!this.config.server || !this.config.port) errors.push('Server address and port are required');
                 if (!this.config.username) errors.push('Username is required');
@@ -1833,8 +1855,10 @@
                 return errors;
             }
         }
+        debugLog('ConfigManager class defined successfully');
 
         // Main Application Class (Refactored for API communication)
+        debugLog('Defining CyberBackupPro class...');
         class CyberBackupPro {
             constructor() {
                 this.api = new ApiClient();
@@ -1945,7 +1969,8 @@
                 }
             }
 
-            // REFACTORED: Action Handlers now call the API            async handlePrimaryAction() {
+            // REFACTORED: Action Handlers now call the API           
+               async handlePrimaryAction() {
                 console.log('Primary action clicked');
                 console.log('Current state:', this.state);
                 console.log('Current config:', this.config.config);
@@ -2174,13 +2199,12 @@
             confirmAction() {
                 if(this.pendingConfirmAction) this.pendingConfirmAction();
                 this.hideConfirmModal();
-            }
-
-            updatePhase(phase) {
+            }            updatePhase(phase) {
                 this.state.currentPhase = phase;
                 document.getElementById('currentPhase').innerHTML = `<span class="neon-text purple">${phase.replace(/_/g, ' ')}</span>`;
             }
         }
+        debugLog('CyberBackupPro class defined successfully');
         
         // Dummy UI/Theme controllers to prevent errors if they are not defined elsewhere
         // In a real refactor, these would also be properly modularized.
@@ -2213,15 +2237,55 @@
                 setTheme(t) { console.log(`Theme set to ${t}`); } 
             }
             window.ThemeManager = ThemeManager;
-        }
-        
-        // Initialize the GUI - make it global so onclick handlers can access it
+        }        // Initialize the GUI - make it global so onclick handlers can access it
         try {
+            debugLog('Starting GUI initialization...');
+            console.log('About to create CyberBackupPro...');
             alert('About to create CyberBackupPro...');
+            
+            // Check if classes are defined
+            debugLog('Checking if classes are defined...');
+            if (typeof ApiClient === 'undefined') {
+                throw new Error('ApiClient class not defined');
+            }
+            debugLog('ApiClient class is defined');
+            
+            if (typeof ConfigManager === 'undefined') {
+                throw new Error('ConfigManager class not defined'); 
+            }
+            debugLog('ConfigManager class is defined');
+            
+            if (typeof IntervalManager === 'undefined') {
+                throw new Error('IntervalManager class not defined');
+            }
+            debugLog('IntervalManager class is defined');
+            
+            if (typeof CyberBackupPro === 'undefined') {
+                throw new Error('CyberBackupPro class not defined');
+            }
+            debugLog('CyberBackupPro class is defined');
+            
+            console.log('All classes are defined, creating CyberBackupPro...');
+            debugLog('All classes verified, instantiating CyberBackupPro...');
             window.gui = new CyberBackupPro();
-            alert('CyberBackupPro created successfully!');
+            console.log('CyberBackupPro created successfully!');
+            debugLog('CyberBackupPro instance created successfully');
+            alert('CyberBackupPro created successfully! window.gui is now available.');
+            
+            // Test the method exists
+            if (typeof window.gui.handlePrimaryAction === 'function') {
+                console.log('handlePrimaryAction method is available');
+                debugLog('handlePrimaryAction method verified');
+            } else {
+                throw new Error('handlePrimaryAction method not found on gui object');
+            }
+            
+            debugLog('=== GUI INITIALIZATION COMPLETED SUCCESSFULLY ===');
+            
         } catch (error) {
-            alert('ERROR creating CyberBackupPro: ' + error.message);
+            debugLog('ERROR during initialization: ' + error.message);
+            console.error('ERROR creating CyberBackupPro:', error);
+            alert('ERROR creating CyberBackupPro: ' + error.message + '\nStack: ' + error.stack);
         }
     </script>
 </body>

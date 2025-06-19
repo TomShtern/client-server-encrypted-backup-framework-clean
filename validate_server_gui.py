@@ -19,7 +19,7 @@ def validate_serverGUI():
     
     # Test 1: Import validation
     try:
-        from ServerGUI import (
+        from server.ServerGUI import (
             ServerGUI, ModernTheme, ModernCard, ModernProgressBar, 
             ModernStatusIndicator, ToastNotification, ModernTable,
             initialize_server_gui, get_server_gui, shutdown_server_gui,

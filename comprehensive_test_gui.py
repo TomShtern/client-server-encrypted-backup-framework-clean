@@ -17,7 +17,7 @@ def test_widget_creation():
     """Test custom widget creation"""
     print("Testing custom widget creation...")
     try:
-        from ServerGUI import ModernCard, ModernProgressBar, ModernStatusIndicator
+        from server.ServerGUI import ModernCard, ModernProgressBar, ModernStatusIndicator
         import tkinter as tk
         
         # Create a test root
@@ -50,7 +50,7 @@ def test_gui_operations():
     """Test GUI operations without displaying window"""
     print("\nTesting GUI operations...")
     try:
-        from ServerGUI import ServerGUI
+        from server.ServerGUI import ServerGUI
         
         gui = ServerGUI()
         
@@ -84,7 +84,7 @@ def test_gui_with_display():
     """Test GUI with actual display (brief)"""
     print("\nTesting GUI with display...")
     try:
-        from ServerGUI import initialize_server_gui, get_server_gui, shutdown_server_gui
+        from server.ServerGUI import initialize_server_gui, get_server_gui, shutdown_server_gui
         
         # Initialize GUI
         success = initialize_server_gui()
@@ -129,7 +129,7 @@ def test_database_operations():
     """Test database-related operations"""
     print("\nTesting database operations...")
     try:
-        from ServerGUI import ServerGUI
+        from server.ServerGUI import ServerGUI
         
         gui = ServerGUI()
         
@@ -154,7 +154,7 @@ def test_theme_and_styling():
     """Test theme and styling constants"""
     print("\nTesting theme and styling...")
     try:
-        from ServerGUI import ModernTheme
+        from server.ServerGUI import ModernTheme
         
         # Test theme constants
         print(f"✓ Primary background: {ModernTheme.PRIMARY_BG}")
@@ -189,7 +189,7 @@ def test_advanced_features():
     """Test advanced features availability"""
     print("\nTesting advanced features...")
     try:
-        from ServerGUI import CHARTS_AVAILABLE, SYSTEM_MONITOR_AVAILABLE, TRAY_AVAILABLE
+        from server.ServerGUI import CHARTS_AVAILABLE, SYSTEM_MONITOR_AVAILABLE, TRAY_AVAILABLE
         
         print(f"✓ Charts available: {CHARTS_AVAILABLE}")
         print(f"✓ System monitoring available: {SYSTEM_MONITOR_AVAILABLE}")
