@@ -181,9 +181,28 @@ class RealBackupExecutor:
         try:
             connections = psutil.net_connections()
             for conn in connections:
-                if conn.laddr.port == server_port or (conn.raddr and conn.raddr.port == server_port):
-                    self._log_status("NETWORK", f"Active connection found: {conn.laddr} -> {conn.raddr}")
-                    return True
+                try:
+                    # Check local address port
+                    laddr_match = False
+                    if hasattr(conn, 'laddr') and conn.laddr and hasattr(conn.laddr, 'port'):
+                        laddr_match = conn.laddr.port == server_port
+                    
+                    # Check remote address port
+                    raddr_match = False
+                    if hasattr(conn, 'raddr') and conn.raddr and hasattr(conn.raddr, 'port'):
+                        raddr_match = conn.raddr.port == server_port
+                    
+                    if laddr_match or raddr_match:
+                        laddr_str = f"{conn.laddr}" if conn.laddr else "None"
+                        raddr_str = f"{conn.raddr}" if conn.raddr else "None"
+                        self._log_status("NETWORK", f"Active connection found: {laddr_str} -> {raddr_str}")
+                        return True
+                        
+                except Exception as conn_error:
+                    # Skip this connection if it has unexpected structure
+                    self._log_status("DEBUG", f"Skipping connection due to attribute error: {conn_error}")
+                    continue
+                    
         except Exception as e:
             self._log_status("ERROR", f"Network check failed: {e}")
         return False
@@ -216,14 +235,13 @@ class RealBackupExecutor:
             
             # Generate transfer.info
             transfer_info = self._generate_transfer_info(server_ip, server_port, username, file_path)
-            
-            # Copy transfer.info to client directory
+              # Copy transfer.info to client directory
             client_transfer_info = "transfer.info"
             with open(transfer_info, 'r') as src, open(client_transfer_info, 'w') as dst:
                 dst.write(src.read())
             
             self._log_status("LAUNCH", f"Launching {self.client_exe}")
-              # Launch client process with automated input handling and BATCH MODE
+            # Launch client process with automated input handling and BATCH MODE
             self.backup_process = subprocess.Popen(
                 [self.client_exe, "--batch"],  # Use batch mode to prevent hanging
                 stdin=subprocess.PIPE,
@@ -241,7 +259,7 @@ class RealBackupExecutor:
             )
             log_monitor_thread.daemon = True
             log_monitor_thread.start()
-              # Monitor process - no need for manual input in batch mode
+            # Monitor process - no need for manual input in batch mode
             self._log_status("PROCESS", "Monitoring backup process...")
             
             timeout = 300  # 5 minute timeout

@@ -135,9 +135,9 @@ std::vector<uint8_t> createPublicKeyRequest(const uint8_t* clientId, const std::
                                           const std::string& publicKey) {
     std::vector<uint8_t> request;
     
-    // Validate public key size (162 bytes for RSA DER format - actual implementation)
-    if (publicKey.size() != 162) {
-        throw std::invalid_argument("Public key must be exactly 162 bytes for protocol compliance");
+    // Validate public key size (160 bytes for RSA X.509 format - per protocol specification)
+    if (publicKey.size() != 160) {
+        throw std::invalid_argument("Public key must be exactly 160 bytes for protocol compliance");
     }
     
     // Manual header serialization for guaranteed little-endian compliance
@@ -146,13 +146,13 @@ std::vector<uint8_t> createPublicKeyRequest(const uint8_t* clientId, const std::
     
     request.push_back(PROTOCOL_VERSION);
     writeLE16(request, REQ_SEND_PUBLIC_KEY);
-    writeLE32(request, MAX_FILENAME_SIZE + 162); // username (255) + public key (162)
+    writeLE32(request, MAX_FILENAME_SIZE + 160); // username (255) + public key (160)
     
     // Add username field (255 bytes, null-terminated, zero-padded)
     std::vector<uint8_t> usernameField = createPaddedString(username, MAX_FILENAME_SIZE);
     request.insert(request.end(), usernameField.begin(), usernameField.end());
     
-    // Add public key (exactly 162 bytes)
+    // Add public key (exactly 160 bytes)
     request.insert(request.end(), publicKey.begin(), publicKey.end());
     
     std::cout << "[DEBUG] Created public key request: " << request.size() << " bytes" << std::endl;

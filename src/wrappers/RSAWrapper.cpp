@@ -15,6 +15,12 @@
 #include <future>
 #include <atomic>
 
+// Windows headers for entropy sources
+#ifdef _WIN32
+#include <windows.h>
+#include <process.h>
+#endif
+
 // RSAPublicWrapper implementation using Crypto++
 RSAPublicWrapper::RSAPublicWrapper(const char* key, size_t keylen) : publicKeyImpl(nullptr) {
     if (!key || keylen == 0) {
@@ -101,7 +107,10 @@ std::string RSAPublicWrapper::encrypt(const char* plain, size_t length) {
     
     try {
         CryptoPP::RSA::PublicKey* publicKey = static_cast<CryptoPP::RSA::PublicKey*>(publicKeyImpl);
+
+        // Use AutoSeededRandomPool for consistency
         CryptoPP::AutoSeededRandomPool rng;
+
         // Use OAEP with SHA-256 for spec compliance
         CryptoPP::RSAES_OAEP_SHA256_Encryptor encryptor(*publicKey);
         
@@ -120,26 +129,22 @@ std::string RSAPublicWrapper::encrypt(const char* plain, size_t length) {
 // RSAPrivateWrapper implementation using Crypto++
 RSAPrivateWrapper::RSAPrivateWrapper() : privateKeyImpl(nullptr), publicKeyImpl(nullptr) {
     std::cout << "[DEBUG] RSAPrivateWrapper: Constructor called for " << BITS << " bits" << std::endl;
-    std::cout << "[DEBUG] RSAPrivateWrapper: Starting full 1024-bit RSA key pair generation..." << std::endl;
+    std::cout << "[DEBUG] RSAPrivateWrapper: Starting RSA key generation with AutoSeededRandomPool..." << std::endl;
     auto start = std::chrono::high_resolution_clock::now();
 
     try {
-        std::cout << "[DEBUG] RSAPrivateWrapper: About to construct AutoSeededRandomPool object..." << std::endl;
+        // Use AutoSeededRandomPool as recommended for Crypto++
         CryptoPP::AutoSeededRandomPool rng;
-        std::cout << "[DEBUG] RSAPrivateWrapper: AutoSeededRandomPool constructed successfully." << std::endl;
+
+        std::cout << "[DEBUG] RSAPrivateWrapper: AutoSeededRandomPool created successfully." << std::endl;
 
         privateKeyImpl = new CryptoPP::RSA::PrivateKey();
         CryptoPP::RSA::PrivateKey* privateKey = static_cast<CryptoPP::RSA::PrivateKey*>(privateKeyImpl);
 
-        std::cout << "[DEBUG] RSAPrivateWrapper: Generating 1024-bit RSA key pair using InvertibleRSAFunction (should complete in 1-3 seconds)..." << std::endl;
+        std::cout << "[DEBUG] RSAPrivateWrapper: Generating 1024-bit RSA key pair..." << std::endl;
+        privateKey->GenerateRandomWithKeySize(rng, 1024);
 
-        // Use InvertibleRSAFunction for more reliable key generation
-        CryptoPP::InvertibleRSAFunction params;
-        std::cout << "[DEBUG] RSAPrivateWrapper: Calling GenerateRandomWithKeySize..." << std::endl;
-        params.GenerateRandomWithKeySize(rng, 1024);
-        std::cout << "[DEBUG] RSAPrivateWrapper: GenerateRandomWithKeySize completed." << std::endl;
-        privateKey->AssignFrom(params);
-        std::cout << "[DEBUG] RSAPrivateWrapper: 1024-bit key generation completed successfully!" << std::endl;
+        std::cout << "[DEBUG] RSAPrivateWrapper: RSA key generation completed successfully!" << std::endl;
 
         // Extract public key from private key
         publicKeyImpl = new CryptoPP::RSA::PublicKey(*privateKey);
@@ -162,68 +167,8 @@ RSAPrivateWrapper::RSAPrivateWrapper() : privateKeyImpl(nullptr), publicKeyImpl(
         std::cout << "[DEBUG] RSAPrivateWrapper: Successfully generated " << BITS << "-bit RSA key pair in " << duration.count() << "ms" << std::endl;
         std::cout << "[DEBUG] RSAPrivateWrapper: Private key size: " << privateKeyData.size() << " bytes, Public key size: " << publicKeyData.size() << " bytes" << std::endl;
 
-        return;
-
     } catch (const std::exception& e) {
-        std::cerr << "[ERROR] RSAPrivateWrapper: Key generation process failed: " << e.what() << std::endl;
-        std::cout << "[DEBUG] RSAPrivateWrapper: Falling back to pre-generated keys..." << std::endl;
-
-        // If key generation fails, throw an error - no dummy implementations
-        throw std::runtime_error("RSA key generation failed and no fallback available");
-    }
-
-    // This code should not be reached if key generation succeeds
-    std::string privateKeyFile = "data/valid_private_key.der";
-    std::string publicKeyFile = "data/valid_public_key.der";
-
-    std::ifstream privateFile(privateKeyFile, std::ios::binary);
-    if (!privateFile.is_open()) {
-        std::cerr << "[ERROR] RSAPrivateWrapper: Cannot open fallback private key file: " << privateKeyFile << std::endl;
-        throw std::runtime_error("Cannot load fallback private key: " + privateKeyFile);
-    }
-
-    std::ifstream publicFile(publicKeyFile, std::ios::binary);
-    if (!publicFile.is_open()) {
-        std::cerr << "[ERROR] RSAPrivateWrapper: Cannot open fallback public key file: " << publicKeyFile << std::endl;
-        throw std::runtime_error("Cannot load fallback public key: " + publicKeyFile);
-    }
-
-    std::string privateData((std::istreambuf_iterator<char>(privateFile)), std::istreambuf_iterator<char>());
-    std::string publicData((std::istreambuf_iterator<char>(publicFile)), std::istreambuf_iterator<char>());
-    privateFile.close();
-    publicFile.close();
-
-    if (privateData.empty() || publicData.empty()) {
-        throw std::runtime_error("Fallback key files are empty or corrupted");
-    }
-
-    privateKeyData.assign(privateData.begin(), privateData.end());
-    publicKeyData.assign(publicData.begin(), publicData.end());
-
-    try {
-        // Load private key
-        CryptoPP::ByteQueue privateQueue;
-        privateQueue.Put(reinterpret_cast<const CryptoPP::byte*>(privateKeyData.data()), privateKeyData.size());
-        privateQueue.MessageEnd();
-
-        privateKeyImpl = new CryptoPP::RSA::PrivateKey();
-        CryptoPP::RSA::PrivateKey* privateKey = static_cast<CryptoPP::RSA::PrivateKey*>(privateKeyImpl);
-        privateKey->BERDecode(privateQueue);
-
-        // Load public key
-        CryptoPP::ByteQueue publicQueue;
-        publicQueue.Put(reinterpret_cast<const CryptoPP::byte*>(publicKeyData.data()), publicKeyData.size());
-        publicQueue.MessageEnd();
-
-        publicKeyImpl = new CryptoPP::RSA::PublicKey();
-        CryptoPP::RSA::PublicKey* publicKey = static_cast<CryptoPP::RSA::PublicKey*>(publicKeyImpl);
-        publicKey->BERDecode(publicQueue);
-
-        std::cout << "[DEBUG] RSAPrivateWrapper: Successfully loaded fallback keys from " << privateKeyFile << " and " << publicKeyFile << std::endl;
-        std::cout << "[DEBUG] RSAPrivateWrapper: Public key size: " << publicKeyData.size() << " bytes" << std::endl;
-
-    } catch (const CryptoPP::Exception& e) {
-        std::cerr << "[ERROR] RSAPrivateWrapper: Failed to load fallback keys: " << e.what() << std::endl;
+        std::cerr << "[ERROR] RSAPrivateWrapper: Key generation failed: " << e.what() << std::endl;
         if (privateKeyImpl) {
             delete static_cast<CryptoPP::RSA::PrivateKey*>(privateKeyImpl);
             privateKeyImpl = nullptr;
@@ -232,7 +177,7 @@ RSAPrivateWrapper::RSAPrivateWrapper() : privateKeyImpl(nullptr), publicKeyImpl(
             delete static_cast<CryptoPP::RSA::PublicKey*>(publicKeyImpl);
             publicKeyImpl = nullptr;
         }
-        throw std::runtime_error("Failed to load fallback RSA keys: " + std::string(e.what()));
+        throw std::runtime_error("Failed to generate RSA keys: " + std::string(e.what()));
     }
 }
 
@@ -360,7 +305,10 @@ std::string RSAPrivateWrapper::decrypt(const char* cipher, size_t length) {
 
     try {
         CryptoPP::RSA::PrivateKey* privateKey = static_cast<CryptoPP::RSA::PrivateKey*>(privateKeyImpl);
+
+        // Use AutoSeededRandomPool for consistency
         CryptoPP::AutoSeededRandomPool rng;
+
         // Use OAEP with SHA-256 for spec compliance
         CryptoPP::RSAES_OAEP_SHA256_Decryptor decryptor(*privateKey);
 

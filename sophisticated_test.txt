@@ -1,0 +1,4 @@
+Advanced CyberBackup 3.0 Test File
+Features: RSA+AES Encryption, GUI, WebSocket Server
+Timestamp: 2025-06-19 23:15
+This file tests the sophisticated client implementation.
