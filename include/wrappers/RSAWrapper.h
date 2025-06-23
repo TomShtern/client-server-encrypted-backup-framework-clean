@@ -45,6 +45,11 @@ private:
     RSAPrivateWrapper(const RSAPrivateWrapper& other) = delete;
     RSAPrivateWrapper& operator=(const RSAPrivateWrapper& other) = delete;
 
+    // Helper methods for key management
+    bool loadExistingKeys();
+    void saveKeysToData();
+    void saveKeysToFiles();
+
 public:
     // Generate new key
     RSAPrivateWrapper();

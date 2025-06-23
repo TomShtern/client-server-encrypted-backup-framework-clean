@@ -1,4 +1,4 @@
-#include "../../include/wrappers/RSAWrapperCNG.h"
+#include "../../include/wrappers/RSAWrapper.h"
 #include <fstream>
 #include <stdexcept>
 #include <iostream>
@@ -12,8 +12,8 @@ void CheckCNGStatus(NTSTATUS status, const std::string& operation) {
     }
 }
 
-// RSAPublicWrapperCNG implementation
-RSAPublicWrapperCNG::RSAPublicWrapperCNG(const char* key, size_t keylen) : hPublicKey(NULL) {
+// RSAPublicWrapper implementation (using CNG backend)
+RSAPublicWrapper::RSAPublicWrapper(const char* key, size_t keylen) : hPublicKey(NULL) {
     if (!key || keylen == 0) {
         throw std::invalid_argument("Invalid key data");
     }
@@ -43,10 +43,10 @@ RSAPublicWrapperCNG::RSAPublicWrapperCNG(const char* key, size_t keylen) : hPubl
     }
 
     if (hAlg) BCryptCloseAlgorithmProvider(hAlg, 0);
-    std::cout << "[DEBUG] RSAPublicWrapperCNG: Successfully loaded " << keylen << "-byte DER public key" << std::endl;
+    std::cout << "[DEBUG] RSAPublicWrapper: Successfully loaded " << keylen << "-byte DER public key" << std::endl;
 }
 
-RSAPublicWrapperCNG::RSAPublicWrapperCNG(const std::string& filename) : hPublicKey(NULL) {
+RSAPublicWrapper::RSAPublicWrapper(const std::string& filename) : hPublicKey(NULL) {
     std::ifstream file(filename, std::ios::binary);
     if (!file.is_open()) {
         throw std::runtime_error("Cannot open file: " + filename);
@@ -85,32 +85,32 @@ RSAPublicWrapperCNG::RSAPublicWrapperCNG(const std::string& filename) : hPublicK
     }
 
     if (hAlg) BCryptCloseAlgorithmProvider(hAlg, 0);
-    std::cout << "[DEBUG] RSAPublicWrapperCNG: Successfully loaded public key from " << filename << std::endl;
+    std::cout << "[DEBUG] RSAPublicWrapper: Successfully loaded public key from " << filename << std::endl;
 }
 
-RSAPublicWrapperCNG::~RSAPublicWrapperCNG() {
+RSAPublicWrapper::~RSAPublicWrapper() {
     if (hPublicKey) {
         BCryptDestroyKey(hPublicKey);
         hPublicKey = NULL;
     }
 }
 
-std::string RSAPublicWrapperCNG::getPublicKey() {
+std::string RSAPublicWrapper::getPublicKey() {
     return std::string(keyData.begin(), keyData.end());
 }
 
-void RSAPublicWrapperCNG::getPublicKey(char* keyout, size_t keylen) {
+void RSAPublicWrapper::getPublicKey(char* keyout, size_t keylen) {
     if (!keyout || keylen < keyData.size()) {
         throw std::invalid_argument("Invalid output buffer or insufficient size");
     }
     std::memcpy(keyout, keyData.data(), keyData.size());
 }
 
-std::string RSAPublicWrapperCNG::encrypt(const std::string& plain) {
+std::string RSAPublicWrapper::encrypt(const std::string& plain) {
     return encrypt(plain.c_str(), plain.size());
 }
 
-std::string RSAPublicWrapperCNG::encrypt(const char* plain, size_t length) {
+std::string RSAPublicWrapper::encrypt(const char* plain, size_t length) {
     if (!hPublicKey) {
         throw std::runtime_error("RSA public key not initialized");
     }
@@ -135,8 +135,8 @@ std::string RSAPublicWrapperCNG::encrypt(const char* plain, size_t length) {
     }
 }
 
-// RSAPrivateWrapperCNG implementation
-RSAPrivateWrapperCNG::RSAPrivateWrapperCNG() : hPrivateKey(NULL), hPublicKey(NULL) {
+// RSAPrivateWrapper implementation (using CNG backend)
+RSAPrivateWrapper::RSAPrivateWrapper() : hPrivateKey(NULL), hPublicKey(NULL) {
     BCRYPT_ALG_HANDLE hAlg = NULL;
     NTSTATUS status = BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_RSA_ALGORITHM, NULL, 0);
     CheckCNGStatus(status, "Open RSA algorithm provider");
@@ -178,10 +178,10 @@ RSAPrivateWrapperCNG::RSAPrivateWrapperCNG() : hPrivateKey(NULL), hPublicKey(NUL
     }
 
     if (hAlg) BCryptCloseAlgorithmProvider(hAlg, 0);
-    std::cout << "[DEBUG] RSAPrivateWrapperCNG: Successfully generated 1024-bit RSA key pair" << std::endl;
+    std::cout << "[DEBUG] RSAPrivateWrapper: Successfully generated 1024-bit RSA key pair" << std::endl;
 }
 
-RSAPrivateWrapperCNG::RSAPrivateWrapperCNG(const char* key, size_t keylen) : hPrivateKey(NULL), hPublicKey(NULL) {
+RSAPrivateWrapper::RSAPrivateWrapper(const char* key, size_t keylen) : hPrivateKey(NULL), hPublicKey(NULL) {
     if (!key || keylen == 0) {
         throw std::invalid_argument("Invalid key data");
     }

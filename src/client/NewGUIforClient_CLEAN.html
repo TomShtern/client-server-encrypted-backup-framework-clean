@@ -227,6 +227,14 @@
             </div>
         </div>
 
+        <div class="config-section">
+            <h3>File Selection</h3>
+            <div class="form-group">
+                <label for="file_to_upload">Select File to Backup:</label>
+                <input type="file" id="file_to_upload" name="file_to_upload" required>
+            </div>
+        </div>
+
         <div class="controls">
             <button class="cyber-btn" id="connectBtn" onclick="connectToServer()">CONNECT</button>
             <button class="cyber-btn" id="startBtn" onclick="startBackup()" disabled>START BACKUP</button>
@@ -342,37 +350,43 @@
 
         async function startBackup() {
             debugLog('Starting backup...');
-            addLog('Starting backup operation...', 'info');
-            
+
+            const fileInput = document.getElementById('file_to_upload');
+            const username = document.getElementById('username').value;
+
+            if (fileInput.files.length === 0) {
+                addLog('❌ ERROR: Please select a file to back up first.', 'error');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file); // The key 'file' MUST match the key expected by the Python server
+            formData.append('username', username);
+
+            addLog(`Initiating backup for: ${file.name}...`, 'info');
+
             try {
-                // For now, create a test file
-                const fileInfo = {
-                    name: 'test_backup.txt',
-                    path: 'test_file_path',
-                    size: 1024
-                };
-                
-                const result = await apiCall('/api/start_backup', {
+                const response = await fetch(appState.apiUrl + '/api/start_backup', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(fileInfo)
+                    body: formData // NOTE: Do not set Content-Type header, the browser handles it
                 });
-                
+                const result = await response.json();
+
                 if (result.success) {
                     appState.backing_up = true;
-                    addLog('✅ Backup started', 'success');
+                    addLog('✅ Backup started successfully!', 'success');
                     document.getElementById('operationStatus').textContent = 'Backing up';
                     document.getElementById('startBtn').disabled = true;
                     document.getElementById('stopBtn').disabled = false;
-                    
+
                     // Start monitoring progress
                     monitorProgress();
                 } else {
-                    addLog('❌ Backup failed to start: ' + result.message, 'error');
+                    addLog(`❌ Backup failed to start: ${result.message}`, 'error');
                 }
-                
             } catch (error) {
-                addLog('❌ Backup error: ' + error.message, 'error');
+                addLog(`❌ Network error during backup request: ${error.message}`, 'error');
             }
         }
 

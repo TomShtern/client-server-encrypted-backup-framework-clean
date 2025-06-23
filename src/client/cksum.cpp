@@ -1,4 +1,4 @@
-#include "cksum.h"
+#include "../../include/client/cksum.h"
 
 // CRC table for polynomial 0x04C11DB7 (used by Linux cksum)
 static const uint32_t crc_table[256] = {
