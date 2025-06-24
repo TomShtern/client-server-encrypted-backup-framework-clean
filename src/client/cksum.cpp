@@ -1,4 +1,5 @@
 #include "../../include/client/cksum.h"
+#include <iostream>
 
 // CRC table for polynomial 0x04C11DB7 (used by Linux cksum)
 static const uint32_t crc_table[256] = {
@@ -91,4 +92,25 @@ uint32_t calculateCRC(const uint8_t* data, size_t size) {
 // Alias for compatibility
 uint32_t calculateCRC32(const uint8_t* data, size_t size) {
     return calculateCRC(data, size);
+}
+
+// Add debug print to checksum calculation
+uint32_t calculateChecksum(const std::vector<uint8_t>& data) {
+    std::cout << "[DEBUG] Calculating checksum for data size: " << data.size() << std::endl;
+    uint32_t crc = 0x00000000;
+    
+    // Process file data
+    for (size_t i = 0; i < data.size(); i++) {
+        crc = (crc << 8) ^ crc_table[(crc >> 24) ^ data[i]];
+    }
+    
+    // Process file length
+    size_t length = data.size();
+    while (length > 0) {
+        crc = (crc << 8) ^ crc_table[(crc >> 24) ^ (length & 0xFF)];
+        length >>= 8;
+    }
+    
+    // Final inversion
+    return ~crc;
 }

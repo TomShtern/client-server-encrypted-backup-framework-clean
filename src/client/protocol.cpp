@@ -388,3 +388,17 @@ void printHexDump(const std::vector<uint8_t>& data, const std::string& label) {
     }
     std::cout << std::dec;
 }
+
+// Add debug print to protocol send
+void Protocol::sendRequest(int code, const std::vector<uint8_t>& payload) {
+    std::cout << "[DEBUG] Sending protocol request code: " << code << ", payload size: " << payload.size() << std::endl;
+    // ...existing code...
+}
+
+// Add debug print to protocol receive
+void Protocol::receiveResponse() {
+    std::cout << "[DEBUG] Waiting to receive protocol response..." << std::endl;
+    // ...existing code...
+    std::cout << "[DEBUG] Received protocol response code: " << responseCode << std::endl;
+    // ...existing code...
+}

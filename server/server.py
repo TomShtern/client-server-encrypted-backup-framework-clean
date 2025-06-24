@@ -49,7 +49,7 @@ AES_KEY_SIZE_BYTES = 32 # 256-bit AES
 # Logging Configuration
 LOG_FORMAT = '%(asctime)s - %(threadName)s - %(levelname)s - %(message)s'
 logging.basicConfig(
-    level=logging.INFO, # Change to logging.DEBUG for more verbose output
+    level=logging.DEBUG,  # Set to DEBUG for verbose output
     format=LOG_FORMAT,
     handlers=[
         logging.FileHandler("server.log", mode='a'), # Append mode
@@ -212,7 +212,7 @@ class BackupServer:
     encryption, file storage, and database interactions.
     """
     _CRC32_TABLE = ( # Standard POSIX cksum CRC32 table, used by _calculate_crc
-        0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b, 0x1a864db2, 0x1e475005,
+        0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b, 0x1a864db2, 0x1e475050,
         0x2608edb8, 0x22c9f00f, 0x2f8ad6d6, 0x2b4bcb61, 0x350c9b64, 0x31cd86d3, 0x3c8ea00a, 0x384fbdbd,
         0x4c11db70, 0x48d0c6c7, 0x4593e01e, 0x4152fda9, 0x5f15adac, 0x5bd4b01b, 0x569796c2, 0x52568b75,
         0x6a1936c8, 0x6ed82b7f, 0x639b0da6, 0x675a1011, 0x791d4014, 0x7ddc5da3, 0x709f7b7a, 0x745e66cd,
@@ -692,7 +692,7 @@ class BackupServer:
                 except Exception as e:
                     # Catch any other unexpected exceptions that could occur during accept or thread creation
                     logger.error(f"Unexpected error in accept loop: {e}", exc_info=True)
-                    # If semaphore was acquired but an error occurred, release it
+                    # If semaphore was acquired, release it
                     if semaphore_acquired:
                         self.client_connection_semaphore.release()
                         semaphore_acquired = False
@@ -1657,5 +1657,4 @@ if __name__ == "__main__":
             server_instance.stop() # Attempt to stop the server if it's still considered running
         
         logger.info("Server application has completed its full termination sequence.")
-        print("Server shutdown process complete. Exiting.")                                            
-          
+        print("Server shutdown process complete. Exiting.")

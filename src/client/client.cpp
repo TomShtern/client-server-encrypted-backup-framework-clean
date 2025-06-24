@@ -686,6 +686,7 @@ bool Client::savePrivateKey() {
 
 // Connect to server
 bool Client::connectToServer() {
+    std::cout << "[DEBUG] Attempting to connect to server at " << serverIP << ":" << serverPort << std::endl;
     try {
         socket = std::make_unique<boost::asio::ip::tcp::socket>(ioContext);
         
@@ -743,6 +744,7 @@ bool Client::connectToServer() {
             // GUI update failed - continue without GUI
         }
         
+        std::cout << "[DEBUG] Connected to server successfully." << std::endl;
         return true;
         
     } catch (const std::exception& e) {
@@ -757,6 +759,7 @@ bool Client::connectToServer() {
             // GUI update failed - continue without GUI
         }
         
+        std::cerr << "[ERROR] Failed to connect to server." << std::endl;
         return false;
     }
 }
