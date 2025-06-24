@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.15)
 project(EncryptedBackupClient VERSION 1.0)
 
+# IMPORTANT: When using vcpkg, configure CMake with:
+#   cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:/Users/tom7s/vcpkg/scripts/buildsystems/vcpkg.cmake -A x64
+# This will ensure vcpkg dependencies are found automatically.
+
 find_package(cryptopp CONFIG REQUIRED)
 
 add_executable(EncryptedBackupClient
@@ -16,7 +20,7 @@ add_executable(EncryptedBackupClient
 
 target_include_directories(EncryptedBackupClient PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    C:/Users/tom7s/vcpkg/installed/x64-windows/include/cryptopp
+    # vcpkg will inject cryptopp include path automatically
 )
 
 target_link_libraries(EncryptedBackupClient PRIVATE 
