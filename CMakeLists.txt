@@ -12,15 +12,20 @@ add_executable(EncryptedBackupClient
     src/client/client.cpp
     src/client/protocol.cpp
     src/client/cksum.cpp
+    src/client/ClientGUIHelpers.cpp
     src/wrappers/RSAWrapper.cpp
     src/wrappers/AESWrapper.cpp
     src/wrappers/Base64Wrapper.cpp
-    src/client/ClientGUIHelpers.cpp
 )
 
 target_include_directories(EncryptedBackupClient PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     # vcpkg will inject cryptopp include path automatically
+)
+
+target_compile_definitions(EncryptedBackupClient PRIVATE
+    _WIN32_WINNT=0x0A00  # Windows 10
+    WINVER=0x0A00
 )
 
 target_link_libraries(EncryptedBackupClient PRIVATE 

@@ -1,9 +1,9 @@
 #include "../../include/wrappers/RSAWrapper.h"
-#include <rsa.h>
-#include <osrng.h>
-#include <oaep.h>
-#include <sha.h>
-#include <files.h>
+#include <cryptopp/rsa.h>
+#include <cryptopp/osrng.h>
+#include <cryptopp/oaep.h>
+#include <cryptopp/sha.h>
+#include <cryptopp/files.h>
 #include <stdexcept>
 #include <iostream>
 #include <fstream>
