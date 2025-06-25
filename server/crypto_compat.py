@@ -34,17 +34,15 @@ except ImportError:
 # Unified SHA256 interface
 class SHA256:
     """SHA256 hash algorithm class for PKCS1_OAEP compatibility"""
+    # digest_size must be an attribute (not method) for PKCS1_OAEP compatibility
+    digest_size = 32  # SHA256 always has 32-byte (256-bit) digest size
+    
     @staticmethod
     def new(data: Optional[bytes] = None):
         if _CRYPTO_BACKEND == 'pycryptodome':
             return _PyCryptoSHA256.new(data) if data else _PyCryptoSHA256.new()
         import hashlib
         return hashlib.sha256(data) if data else hashlib.sha256()
-    @staticmethod
-    def digest_size() -> int:
-        if _CRYPTO_BACKEND == 'pycryptodome':
-            return _PyCryptoSHA256.digest_size
-        return 32
 
 # AES compatibility
 if _CRYPTO_BACKEND == 'pycryptodome':

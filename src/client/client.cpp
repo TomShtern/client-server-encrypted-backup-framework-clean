@@ -1083,18 +1083,38 @@ bool Client::sendPublicKey() {
         return false;
     }
     
-    // Prepare payload
+    // Get the actual public key first
+    std::string actualPublicKey = rsaPrivate->getPublicKey();
+    
+    displayStatus("Debug: Actual public key size", true, 
+                 std::to_string(actualPublicKey.size()) + " bytes, expected 160 bytes");
+    
+    // Prepare payload with exactly 415 bytes (255 username + 160 RSA key)
     std::vector<uint8_t> payload(MAX_NAME_SIZE + RSA_KEY_SIZE, 0);
     
-    // Add username
+    // Add username (255 bytes, null-terminated, zero-padded)
     std::copy(username.begin(), username.end(), payload.begin());
     
-    // Add public key
-    char publicKeyBuffer[RSAPublicWrapper::KEYSIZE];
-    rsaPrivate->getPublicKey(publicKeyBuffer, RSAPublicWrapper::KEYSIZE);
-    std::copy(publicKeyBuffer, publicKeyBuffer + RSAPublicWrapper::KEYSIZE, payload.begin() + MAX_NAME_SIZE);
+    // Add public key - ensure exactly 160 bytes
+    if (actualPublicKey.size() > RSA_KEY_SIZE) {
+        // Truncate if too large
+        displayStatus("Warning: Public key truncated", false, 
+                     "From " + std::to_string(actualPublicKey.size()) + " to " + std::to_string(RSA_KEY_SIZE) + " bytes");
+        std::copy(actualPublicKey.begin(), actualPublicKey.begin() + RSA_KEY_SIZE, payload.begin() + MAX_NAME_SIZE);
+    } else {
+        // Copy what we have and zero-pad the rest
+        std::copy(actualPublicKey.begin(), actualPublicKey.end(), payload.begin() + MAX_NAME_SIZE);
+        // Zero-padding is already done since payload was initialized with zeros
+    }
     
-    displayStatus("Sending public key", true, "RSA 1024-bit public key");
+    displayStatus("Sending public key", true, 
+                 "Payload: " + std::to_string(payload.size()) + " bytes (255 username + 160 RSA key)");
+    
+    // Debug: show exact payload construction
+    displayStatus("Debug: Public key payload", true, 
+                 "Size=" + std::to_string(payload.size()) + " bytes" +
+                 ", Username='" + username + "' (" + std::to_string(username.length()) + " chars)" +
+                 ", RSA key=" + std::to_string(actualPublicKey.size()) + " bytes (padded to 160)");
     
     // Send request
     if (!sendRequest(REQ_SEND_PUBLIC_KEY, payload)) {
