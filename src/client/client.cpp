@@ -1857,42 +1857,13 @@ bool runBackupClient() {
     }
 }
 void Client::openGUIInBrowser() {
-#ifdef _WIN32
-    char buffer[MAX_PATH];
-    if (_getcwd(buffer, MAX_PATH) == nullptr) {
-        std::cout << "⚠️  Could not get current directory" << std::endl;
-        return;
-    }
-    std::string currentPath(buffer);
-#else
-    std::string currentPath = ".";  // Fallback for non-Windows
-#endif
-    std::string guiPath = currentPath + "/gui/gui.html";
+    // Use the web server that serves the HTML GUI
+    std::string url = "http://localhost:8080/NewGUIforClient.html";
     
-    // Check if GUI file exists
-#ifdef _WIN32
-    struct _stat buffer2;
-    bool fileExists = (_stat(guiPath.c_str(), &buffer2) == 0);
-#else
-    std::ifstream file(guiPath);
-    bool fileExists = file.good();
-    file.close();
-#endif
+    std::cout << "🎯 Opening CyberBackup client GUI at: " << url << std::endl;
     
-    if (!fileExists) {
-        std::cout << "⚠️  GUI file not found at: " << guiPath << std::endl;
-        std::cout << "   GUI will not be available. Using console mode only." << std::endl;
-        return;
-    }
-    
-    // Open the local file directly in the browser instead of trying to serve it over HTTP
-    std::string url = "file:///" + guiPath;
-    
-    // Replace backslashes with forward slashes for Windows
-    std::replace(url.begin(), url.end(), '\\', '/');
-    
-    std::cout << "🎯 Opening modern GUI at: " << url << std::endl;
-    
+    std::cout << "🎯 Opening CyberBackup client GUI at: " << url << std::endl;
+
 #ifdef _WIN32
     ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #elif defined(__APPLE__)
