@@ -71,14 +71,14 @@ public:
         return true;
     }
     
-    // Verify RSA DER key format (162 bytes for protocol)
+    // Verify RSA DER key format (160 bytes for protocol specification)
     static bool verifyRSADERFormat(const std::string& derKey) {
-        if (derKey.size() != 162) {
-            std::cerr << "[CRYPTO ERROR] RSA DER key must be exactly 162 bytes for protocol, got " 
+        if (derKey.size() != 160) {
+            std::cerr << "[CRYPTO ERROR] RSA DER key must be exactly 160 bytes for protocol specification, got " 
                       << derKey.size() << " bytes" << std::endl;
             return false;
         }
-        std::cout << "[CRYPTO OK] RSA DER key is 162 bytes - SPEC COMPLIANT" << std::endl;
+        std::cout << "[CRYPTO OK] RSA DER key is 160 bytes - SPEC COMPLIANT" << std::endl;
         return true;
     }
     

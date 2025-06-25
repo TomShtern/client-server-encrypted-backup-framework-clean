@@ -66,7 +66,7 @@ constexpr uint16_t RESP_ERROR = 1607;
 // Size constants
 constexpr size_t CLIENT_ID_SIZE = 16;
 constexpr size_t MAX_NAME_SIZE = 255;
-constexpr size_t RSA_KEY_SIZE = 162; // Updated for 1024-bit keys in DER format
+constexpr size_t RSA_KEY_SIZE = 160; // Spec-compliant: 160 bytes for RSA public key in DER format
 constexpr size_t AES_KEY_SIZE = 32;
 constexpr size_t MAX_PACKET_SIZE = 1024 * 1024;  // 1MB per packet
 constexpr size_t OPTIMAL_BUFFER_SIZE = 64 * 1024; // 64KB for file reading

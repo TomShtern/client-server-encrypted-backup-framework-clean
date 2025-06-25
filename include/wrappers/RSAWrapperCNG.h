@@ -8,7 +8,7 @@
 
 class RSAPublicWrapperCNG {
 public:
-    static const unsigned int KEYSIZE = 162; // Size for 1024-bit keys in DER format
+    static const unsigned int KEYSIZE = 160; // Spec-compliant: 160 bytes for RSA public key in DER format
     static const unsigned int BITS = 1024;   // 1024-bit keys as required by server
 
 private:
