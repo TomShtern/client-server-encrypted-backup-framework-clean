@@ -254,6 +254,10 @@ private:
     bool testConnection();
     void enableKeepAlive();
     
+    // Socket management and recovery
+    bool validateSocketConnection();
+    bool attemptConnectionRecovery();
+    
     // Protocol operations
     bool performRegistration();
     bool performReconnection();
@@ -570,10 +574,13 @@ bool Client::loadMeInfo() {
     
     std::string line;
     
-    // Line 1: username
-    if (!std::getline(file, line) || line != username) {
+    // Line 1: username (stored for reference, but not validated)
+    // FIXED: Remove strict username validation that was preventing client ID loading
+    if (!std::getline(file, line)) {
         return false;
     }
+    // Store the username from me.info (but don't require exact match)
+    std::string storedUsername = line;
     
     // Line 2: UUID hex
     if (!std::getline(file, line) || line.length() != 32) {
@@ -812,16 +819,20 @@ void Client::closeConnection() {
     }
 }
 
-// Send request to server
+// Send request to server with robust error handling
 bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
+    // Basic connection validation
     if (!connected || !socket || !socket->is_open()) {
-        displayError("Not connected to server", ErrorType::NETWORK);
+        displayError("Client not connected to server", ErrorType::NETWORK);
         return false;
     }
     
     try {
-        // CRITICAL FIX: Manually construct header bytes in little-endian format
-        // The Python server expects little-endian format explicitly
+        // Construct complete message buffer for atomic transmission
+        std::vector<uint8_t> completeMessage;
+        completeMessage.reserve(23 + payload.size());
+        
+        // Manually construct header bytes in little-endian format
         std::vector<uint8_t> headerBytes(23);  // RequestHeader is 23 bytes total
 
         // Client ID (16 bytes) - copy as-is
@@ -841,52 +852,50 @@ bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
         headerBytes[21] = (payload_size_val >> 16) & 0xFF; // Byte 2
         headerBytes[22] = (payload_size_val >> 24) & 0xFF; // Byte 3
         
-        // Debug: show header values for important requests
-        if (code == REQ_REGISTER || code == REQ_RECONNECT || code == REQ_SEND_PUBLIC_KEY) {
-            displayStatus("Debug: Request header", true,
-                         "Version=" + std::to_string(CLIENT_VERSION) +
-                         ", Code=" + std::to_string(code) +
-                         ", PayloadSize=" + std::to_string(payload_size_val));
-
-            // Add hex dump of header bytes for debugging
-            std::stringstream hexDump;
-            hexDump << "Header hex: ";
-            for (size_t i = 0; i < headerBytes.size(); ++i) {
-                hexDump << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(headerBytes[i]) << " ";
-            }
-            displayStatus("Debug: Header bytes", true, hexDump.str());
+        // Combine header and payload into single message buffer
+        completeMessage.insert(completeMessage.end(), headerBytes.begin(), headerBytes.end());
+        if (!payload.empty()) {
+            completeMessage.insert(completeMessage.end(), payload.begin(), payload.end());
         }
         
-        // Send header
-        size_t headerBytesSent = boost::asio::write(*socket, boost::asio::buffer(headerBytes));
-        if (headerBytesSent != headerBytes.size()) {
-            displayError("Failed to send complete header", ErrorType::NETWORK);
+        // Debug output for critical requests
+        if (code == REQ_REGISTER || code == REQ_RECONNECT || code == REQ_SEND_PUBLIC_KEY) {
+            displayStatus("Sending request", true,
+                         "Code=" + std::to_string(code) +
+                         ", PayloadSize=" + std::to_string(payload_size_val) +
+                         ", TotalBytes=" + std::to_string(completeMessage.size()));
+        }
+        
+        // ATOMIC TRANSMISSION: Send complete message in one operation
+        boost::system::error_code sendError;
+        size_t totalBytesSent = boost::asio::write(*socket, boost::asio::buffer(completeMessage), sendError);
+        
+        // Check for transmission errors
+        if (sendError) {
+            displayError("Socket write failed: " + sendError.message(), ErrorType::NETWORK);
+            connected = false;
             return false;
         }
-
-        // Send payload if any
-        if (!payload.empty()) {
-            size_t payloadBytes = boost::asio::write(*socket, boost::asio::buffer(payload));
-            if (payloadBytes != payload.size()) {
-                displayError("Failed to send complete payload", ErrorType::NETWORK);
-                return false;
-            }
+        
+        // Verify complete transmission
+        if (totalBytesSent != completeMessage.size()) {
+            displayError("Incomplete write: " + std::to_string(totalBytesSent) + 
+                        "/" + std::to_string(completeMessage.size()) + " bytes", ErrorType::NETWORK);
+            connected = false;
+            return false;
         }
-
-        // Force flush the socket to ensure data is sent immediately
-        ioContext.poll();
-
-        // Debug: confirm data was sent for important requests
+        
+        // Success confirmation for critical requests
         if (code == REQ_REGISTER || code == REQ_RECONNECT || code == REQ_SEND_PUBLIC_KEY) {
-            displayStatus("Debug: Data sent", true,
-                         "Header: " + std::to_string(headerBytesSent) + " bytes, " +
-                         "Payload: " + std::to_string(payload.size()) + " bytes");
+            displayStatus("Request sent successfully", true, 
+                         std::to_string(totalBytesSent) + " bytes transmitted");
         }
-
+        
         return true;
         
     } catch (const std::exception& e) {
-        displayError("Failed to send request: " + std::string(e.what()), ErrorType::NETWORK);
+        displayError("Send request failed: " + std::string(e.what()), ErrorType::NETWORK);
+        connected = false;
         return false;
     }
 }
@@ -948,7 +957,7 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
     }
 }
 
-// Perform registration
+// Perform registration with streamlined error handling
 bool Client::performRegistration() {
     displayStatus("Starting registration", true, "Using pre-generated RSA keys");
 
@@ -957,7 +966,8 @@ bool Client::performRegistration() {
         displayError("RSA keys not available for registration", ErrorType::CRYPTO);
         return false;
     }
-      // Prepare registration payload - EXACTLY 255 bytes as expected by server
+    
+    // Prepare registration payload - EXACTLY 255 bytes as expected by server
     std::vector<uint8_t> payload(MAX_NAME_SIZE, 0);  // Initialize all bytes to 0
     
     // Validate username length
@@ -979,17 +989,10 @@ bool Client::performRegistration() {
                  "Size=" + std::to_string(payload.size()) + " bytes" +
                  ", Username='" + username + "' (" + std::to_string(username.length()) + " chars)" +
                  ", Null-terminated and zero-padded");
-    
-    // Debug: show first few bytes of payload for verification
-    std::stringstream payloadHex;
-    payloadHex << "First 32 bytes: ";
-    for (size_t i = 0; i < std::min(payload.size(), size_t(32)); ++i) {
-        payloadHex << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(payload[i]) << " ";
-    }
-    displayStatus("Debug: Payload bytes", true, payloadHex.str());
 
     // Send registration request
     if (!sendRequest(REQ_REGISTER, payload)) {
+        displayError("Failed to send registration request", ErrorType::NETWORK);
         return false;
     }
     
@@ -997,9 +1000,12 @@ bool Client::performRegistration() {
     ResponseHeader header;
     std::vector<uint8_t> responsePayload;
     if (!receiveResponse(header, responsePayload)) {
+        displayError("Failed to receive registration response", ErrorType::NETWORK);
         return false;
     }
-      if (header.code == RESP_REG_FAIL) {
+    
+    // Process response
+    if (header.code == RESP_REG_FAIL) {
         displayError("Registration failed: Username already exists", ErrorType::AUTHENTICATION);
         return false;
     }
@@ -1011,7 +1017,7 @@ bool Client::performRegistration() {
         return false;
     }
     
-    // Store client ID
+    // Success! Store client ID and save registration info
     std::copy(responsePayload.begin(), responsePayload.end(), clientID.begin());
     
     // Save info
@@ -1020,7 +1026,10 @@ bool Client::performRegistration() {
         return false;
     }
     
-    displayStatus("Registration", true, "New client ID: " + bytesToHex(clientID.data(), 8) + "...");
+    displayStatus("Registration successful", true, 
+                 "Client ID: " + bytesToHex(clientID.data(), 8) + "...");
+    
+    std::cout << "[DEBUG] Registration completed successfully" << std::endl;
     return true;
 }
 
@@ -1906,6 +1915,7 @@ void Client::updateGUIPhase(const std::string& phase) {
 void Client::initializeWebSocketCommands() {
     // Initialize WebSocket command handling - placeholder for future implementation
     // TODO: Implement WebSocket command handling when needed
+
     displayStatus("WebSocket", true, "Command handling placeholder initialized");
 }
 
@@ -1989,6 +1999,7 @@ void Client::handleStartBackupCommand(const std::map<std::string, std::string>& 
         } else {
             sendGUIResponse("start_backup", "Invalid parameters", false);
         }
+   
     } catch (const std::exception& e) {
         sendGUIResponse("start_backup", "Error: " + std::string(e.what()), false);
     } catch (...) {
@@ -2019,4 +2030,67 @@ void Client::sendGUIResponse(const std::string& type, const std::string& message
     // Send response back to GUI - placeholder implementation
     displayStatus("GUI Response", success, type + ": " + message);
     // TODO: Implement actual GUI communication when needed
+}
+
+// Socket validation and recovery functions
+bool Client::validateSocketConnection() {
+    if (!socket) {
+        std::cout << "[DEBUG] Socket validation failed: socket is null" << std::endl;
+        return false;
+    }
+    
+    if (!socket->is_open()) {
+        std::cout << "[DEBUG] Socket validation failed: socket is not open" << std::endl;
+        return false;
+    }
+    
+    // Check if socket is still connected by testing availability
+    try {
+        boost::system::error_code ec;
+        size_t available = socket->available(ec);
+        
+        if (ec) {
+            std::cout << "[DEBUG] Socket validation failed: " << ec.message() << std::endl;
+            return false;
+        }
+        
+        std::cout << "[DEBUG] Socket validation passed: " << available << " bytes available" << std::endl;
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cout << "[DEBUG] Socket validation exception: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool Client::attemptConnectionRecovery() {
+    std::cout << "[DEBUG] Attempting connection recovery..." << std::endl;
+    
+    // Close existing socket
+    if (socket && socket->is_open()) {
+        try {
+            socket->close();
+        } catch (...) {
+            // Ignore close errors
+        }
+    }
+    
+    connected = false;
+    socket.reset();
+    
+    // Short delay before reconnection
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    
+    // Attempt to reconnect
+    displayStatus("Connection recovery", true, "Attempting to reconnect...");
+    
+    if (connectToServer()) {
+        displayStatus("Connection recovery", true, "Successfully reconnected");
+        std::cout << "[DEBUG] Connection recovery successful" << std::endl;
+        return true;
+    } else {
+        displayError("Connection recovery failed", ErrorType::NETWORK);
+        std::cout << "[DEBUG] Connection recovery failed" << std::endl;
+        return false;
+    }
 }
