@@ -1806,15 +1806,28 @@
 
             async _request(endpoint, options = {}) {
                 try {
+                    console.log(`Making ${options.method || 'GET'} request to: ${this.baseUrl}${endpoint}`);
+                    if (options.body) {
+                        console.log('Request body:', options.body);
+                        debugLog(`API: ${options.method || 'GET'} ${endpoint} with body: ${options.body}`);
+                    }
                     const response = await fetch(`${this.baseUrl}${endpoint}`, options);
+                    console.log('Response status:', response.status, response.statusText);
+                    debugLog(`API: Response status: ${response.status} ${response.statusText}`);
                     if (!response.ok) {
                         const errorData = await response.json().catch(() => ({ message: response.statusText }));
+                        console.error('API Error data:', errorData);
+                        debugLog(`API ERROR: ${JSON.stringify(errorData)}`);
                         throw new Error(`API Error: ${errorData.message || 'Unknown Error'}`);
                     }
-                    return await response.json();
+                    const responseData = await response.json();
+                    console.log('Response data:', responseData);
+                    debugLog(`API: Response data: ${JSON.stringify(responseData)}`);
+                    return responseData;
                 } catch (err) {
                     // This catches network errors (e.g., C++ client not running) or API errors
                     console.error(`API request to ${endpoint} failed:`, err);
+                    debugLog(`API NETWORK ERROR: ${err.message}`);
                     throw err; // Re-throw to be handled by the calling function
                 }
             }
@@ -1824,6 +1837,8 @@
             }
 
             connect(config) {
+                console.log('ApiClient.connect() called with:', config);
+                debugLog('API: Making POST request to /api/connect');
                 return this._request('/api/connect', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2290,7 +2305,10 @@
             // NEW: Master Polling Function
             async pollStatus() {
                 try {
+                    console.log('pollStatus() - fetching status...');
                     const status = await this.api.getStatus();
+                    console.log('pollStatus() - received status:', status);
+                    debugLog('POLL: Status received: ' + JSON.stringify(status));
                     
                     // Update state machine
                     this.state.isConnected = status.isConnected;
@@ -2299,11 +2317,18 @@
                     this.state.currentPhase = status.phase;
                     this.state.clientId = status.clientId;
 
+                    console.log('pollStatus() - updated state:', this.state);
+                    debugLog('POLL: State updated - connected: ' + this.state.isConnected);
+
                     if (status.progress) this.updateProgress(status.progress);
                     if (status.log) this.addLog(status.log.operation, status.log.success ? 'success' : 'error', status.log.details);
                     
                     // The connection attempt succeeded if we get a valid poll response
                     if (this.state.isConnecting) this.state.isConnecting = false;
+
+                    // CRITICAL FIX: Update all UI elements after state changes
+                    this.updateAllUI();
+                    debugLog('POLL: UI updated after state change');
 
                 } catch (error) {
                     // This error means the C++ client is likely offline
@@ -2348,13 +2373,26 @@
             }
 
             async connectToServer() {
+                console.log('connectToServer() called');
+                debugLog('CONNECT: Starting connection attempt...');
                 this.state.isConnecting = true;
                 this.updateAllUI(); // Immediately show "Connecting..."
                 try {
-                    await this.api.connect(this.config.config);
+                    console.log('Sending config to API:', this.config.config);
+                    debugLog('CONNECT: Sending config to API: ' + JSON.stringify(this.config.config));
+                    const response = await this.api.connect(this.config.config);
+                    console.log('API connect response:', response);
+                    debugLog('CONNECT: API response received: ' + JSON.stringify(response));
                     // No need to do anything here, the next pollStatus will update the state
                     this.addLog('Connect command sent', 'info', `Awaiting response from ${this.config.config.server}`);
+                    debugLog('CONNECT: Command sent successfully');
+                    
+                    // Force immediate status poll to update GUI quickly
+                    setTimeout(() => this.pollStatus(), 100);
+                    debugLog('CONNECT: Immediate status poll scheduled');
                 } catch (error) {
+                    console.error('Connect error:', error);
+                    debugLog('CONNECT ERROR: ' + error.message);
                     this.state.isConnecting = false;
                     this.updateAllUI();
                     this.showToast('Failed to send connect command. Is the C++ client running?', 'error');
@@ -2391,20 +2429,36 @@
 
             // REFACTORED: UI Update Functions now read from this.state
             updateConnectionStatus() {
+                console.log('updateConnectionStatus() called - state:', this.state);
+                debugLog('UI: Updating connection status - connected: ' + this.state.isConnected + ', connecting: ' + this.state.isConnecting);
+                
                 const led = document.getElementById('connectionLed');
                 const text = document.getElementById('connectionText');
+                
+                if (!led || !text) {
+                    console.error('Connection status elements not found!');
+                    debugLog('UI ERROR: Connection status elements not found');
+                    return;
+                }
+                
                 led.classList.remove('connected', 'connecting');
 
                 if (this.state.isConnecting) {
                     led.classList.add('connecting');
                     text.textContent = 'CONNECTING...';
+                    console.log('UI: Set to CONNECTING...');
+                    debugLog('UI: Connection status set to CONNECTING');
                 } else if (this.state.isConnected) {
                     led.classList.add('connected');
                     text.textContent = 'ONLINE';
+                    console.log('UI: Set to ONLINE');
+                    debugLog('UI: Connection status set to ONLINE');
                     // Show notification when connected
                     this.system.notifications.showConnectionStatus(true);
                 } else {
                     text.textContent = 'OFFLINE';
+                    console.log('UI: Set to OFFLINE');
+                    debugLog('UI: Connection status set to OFFLINE');
                     // Show notification when disconnected (but not on initial load)
                     if (this.state.clientId) { // Only if we were previously connected
                         this.system.notifications.showConnectionStatus(false);
