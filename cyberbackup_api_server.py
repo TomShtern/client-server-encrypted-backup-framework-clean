@@ -149,6 +149,13 @@ def api_start_backup():
     """Start backup process"""
     global current_backup_process, backup_status
     
+    # DEBUG: Log request details
+    print(f"[DEBUG] Start backup request received")
+    print(f"[DEBUG] Content-Type: {request.content_type}")
+    print(f"[DEBUG] Request method: {request.method}")
+    print(f"[DEBUG] Has files: {'file' in request.files if request.files else False}")
+    print(f"[DEBUG] Request form keys: {list(request.form.keys()) if request.form else []}")
+    
     if backup_status['backing_up']:
         return jsonify({'success': False, 'message': 'Backup already in progress'}), 400
     
@@ -158,6 +165,7 @@ def api_start_backup():
     try:
         # Handle different request formats
         if request.content_type and 'multipart/form-data' in request.content_type:
+            print(f"[DEBUG] Using multipart/form-data path")
             # File upload format
             if 'file' not in request.files:
                 return jsonify({'success': False, 'message': 'No file uploaded'}), 400
@@ -175,6 +183,7 @@ def api_start_backup():
             filename = file.filename
             
         else:
+            print(f"[DEBUG] Using JSON/fallback path")
             # JSON format (current client GUI format)
             file_info = request.json or {}
             filename = file_info.get('filename', '')

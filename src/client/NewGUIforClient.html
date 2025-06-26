@@ -1846,11 +1846,19 @@
                 });
             }
 
-            startBackup(fileInfo) {
+            startBackup(file, username = 'testuser') {
+                // Create FormData to send the actual file
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('username', username);
+                
+                console.log('ApiClient.startBackup() called with file:', file.name, 'size:', file.size);
+                debugLog('API: Making multipart/form-data POST request to /api/start_backup');
+                
+                // Send FormData (no Content-Type header needed - browser sets it automatically with boundary)
                 return this._request('/api/start_backup', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(fileInfo)
+                    body: formData
                 });
             }            stop() { return this._request('/api/stop', { method: 'POST' }); }
             pause() { return this._request('/api/pause', { method: 'POST' }); }
@@ -2401,14 +2409,21 @@
 
             async startBackup() {
                 try {
-                    await this.api.startBackup({
-                        filename: this.state.selectedFile.name,
-                        size: this.state.selectedFile.size,
-                        type: this.state.selectedFile.type
-                    });
-                    this.addLog('Start backup command sent', 'success');
+                    // Check if a file is selected
+                    if (!this.state.selectedFile) {
+                        this.showToast('No file selected for backup.', 'error');
+                        return;
+                    }
+                    
+                    // Get username from config
+                    const username = this.config.config.username || 'testuser';
+                    
+                    // Send the actual file for upload
+                    await this.api.startBackup(this.state.selectedFile, username);
+                    this.addLog('File backup started', 'success', `Uploading ${this.state.selectedFile.name}`);
                 } catch (error) {
-                    this.showToast('Failed to start backup.', 'error');
+                    console.error('Backup start error:', error);
+                    this.showToast('Failed to start backup: ' + error.message, 'error');
                 }
             }
             
