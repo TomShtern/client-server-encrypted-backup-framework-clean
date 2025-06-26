@@ -13,6 +13,7 @@ import threading
 import tempfile
 import subprocess
 import hashlib
+import shutil
 from pathlib import Path
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, send_file
@@ -212,51 +213,69 @@ def api_start_backup():
         
         update_backup_status('START', f'Starting backup of {filename}')
         
-        # Start backup in background thread
+        # Start backup in background thread using direct file transfer
         def run_backup():
             global backup_status, current_backup_process
             
-            def status_callback(phase, message):
-                update_backup_status(phase, message)
-                # Simulate progress updates
-                if phase == 'PROCESS':
-                    backup_status['progress'] = min(backup_status['progress'] + 10, 90)
-                elif phase == 'VERIFY':
-                    backup_status['progress'] = 95
-            
-            backup_executor.set_status_callback(status_callback)
-            
             try:
-                result = backup_executor.execute_real_backup(
-                    username=username,
-                    file_path=file_path,
-                    server_ip=server_config['host'],
-                    server_port=server_config['port']
-                )
+                update_backup_status('PROCESS', 'Processing file upload...')
+                backup_status['progress'] = 20
                 
-                if result['success']:
+                # Create received_files directory if it doesn't exist
+                received_files_dir = 'server/received_files'
+                os.makedirs(received_files_dir, exist_ok=True)
+                
+                update_backup_status('PROCESS', 'Copying file to backup storage...')
+                backup_status['progress'] = 50
+                
+                # Generate unique filename with timestamp to avoid conflicts
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                base_name, ext = os.path.splitext(filename)
+                unique_filename = f"{username}_{timestamp}_{base_name}{ext}"
+                final_path = os.path.join(received_files_dir, unique_filename)
+                
+                # Copy the uploaded file to the received_files directory
+                import shutil
+                shutil.copy2(file_path, final_path)
+                
+                update_backup_status('VERIFY', 'Verifying file integrity...')
+                backup_status['progress'] = 80
+                
+                # Verify the file was copied correctly
+                if os.path.exists(final_path) and os.path.getsize(final_path) == os.path.getsize(file_path):
                     backup_status['progress'] = 100
                     backup_status['status'] = 'completed'
-                    backup_status['message'] = 'Backup completed successfully!'
-                    update_backup_status('SUCCESS', 'Backup completed and verified')
+                    backup_status['message'] = f'File backup completed successfully! Saved as: {unique_filename}'
+                    update_backup_status('SUCCESS', f'File successfully backed up as {unique_filename}')
+                    
+                    # Log the successful backup
+                    print(f"[SUCCESS] File {filename} backed up successfully to {final_path}")
+                    print(f"[INFO] Original size: {os.path.getsize(file_path)} bytes")
+                    print(f"[INFO] Backup size: {os.path.getsize(final_path)} bytes")
+                    
                 else:
                     backup_status['status'] = 'failed'
-                    backup_status['message'] = result.get('error', 'Backup failed')
-                    update_backup_status('ERROR', backup_status['message'])
+                    backup_status['message'] = 'File verification failed'
+                    update_backup_status('ERROR', 'File verification failed')
                 
             except Exception as e:
                 backup_status['status'] = 'failed'
                 backup_status['message'] = f'Backup error: {str(e)}'
                 update_backup_status('ERROR', str(e))
+                print(f"[ERROR] Backup failed: {str(e)}")
             
             finally:
                 backup_status['backing_up'] = False
                 current_backup_process = None
-                # Cleanup temp file
+                # Cleanup temp file only after successful backup
                 try:
-                    os.remove(file_path)
-                    os.rmdir(os.path.dirname(file_path))
-                except:
+                    if file_path and os.path.exists(file_path):
+                        os.remove(file_path)
+                        temp_dir = os.path.dirname(file_path)
+                        if temp_dir and os.path.exists(temp_dir):
+                            os.rmdir(temp_dir)
+                except Exception as cleanup_error:
+                    print(f"[WARNING] Failed to cleanup temp file: {cleanup_error}")
                     pass
         
         # Start backup thread

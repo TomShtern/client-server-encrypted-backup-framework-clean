@@ -1,0 +1,23 @@
+🎯 CyberBackup 3.0 Demo File 🎯
+
+This is a demonstration file you can use to test the file selection and upload functionality.
+
+Features being tested:
+✅ File selection via browser dialog
+✅ File information display (name, size)
+✅ File upload to server
+✅ File storage in received_files directory
+
+Test Date: June 27, 2025
+File Type: Text Document
+Purpose: User file selection testing
+
+Instructions:
+1. Open the CyberBackup GUI at http://localhost:9090/
+2. Click "📁 Select File to Backup" button
+3. Choose this file (demo_file_for_testing.txt)
+4. See the file details displayed in the interface
+5. Click the backup button to upload
+6. Check server/received_files directory for the uploaded file
+
+🚀 Happy Testing! 🚀
