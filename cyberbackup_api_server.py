@@ -357,11 +357,11 @@ def api_received_files():
 def serve_client():
     """Serve the CyberBackup 3.0 HTML client"""
     try:
-        return send_file('src/client/NewGUIforClient_CLEAN.html')
+        return send_file('src/client/NewGUIforClient.html')
     except FileNotFoundError:
         return """
         <h1>Error: Client GUI not found</h1>
-        <p>Please make sure src/client/NewGUIforClient_CLEAN.html exists.</p>
+        <p>Please make sure src/client/NewGUIforClient.html exists.</p>
         """, 404
 
 @app.route('/old')

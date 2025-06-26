@@ -1858,18 +1858,41 @@ bool runBackupClient() {
 }
 void Client::openGUIInBrowser() {
     // Use the web server that serves the HTML GUI
-    std::string url = "http://localhost:8080/NewGUIforClient.html";
-    
-    std::cout << "🎯 Opening CyberBackup client GUI at: " << url << std::endl;
+    std::string url = "http://localhost:9090/";
     
     std::cout << "🎯 Opening CyberBackup client GUI at: " << url << std::endl;
 
 #ifdef _WIN32
-    ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    HINSTANCE result = ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    if ((intptr_t)result <= 32) {
+        std::cout << "⚠️ ShellExecute failed with error code: " << (intptr_t)result << std::endl;
+        std::cout << "🌐 Please manually open your browser and navigate to: " << url << std::endl;
+        
+        // Try alternative method with start command
+        std::string command = "start \"\" \"" + url + "\"";
+        int cmdResult = system(command.c_str());
+        if (cmdResult != 0) {
+            std::cout << "⚠️ Alternative launch method also failed. Error code: " << cmdResult << std::endl;
+        } else {
+            std::cout << "✅ GUI launched using alternative method" << std::endl;
+        }
+    } else {
+        std::cout << "✅ GUI launched successfully" << std::endl;
+    }
 #elif defined(__APPLE__)
-    system(("open \"" + url + "\"").c_str());
+    int result = system(("open \"" + url + "\"").c_str());
+    if (result != 0) {
+        std::cout << "⚠️ Failed to open GUI. Please manually navigate to: " << url << std::endl;
+    } else {
+        std::cout << "✅ GUI launched successfully" << std::endl;
+    }
 #else
-    system(("xdg-open \"" + url + "\"").c_str());
+    int result = system(("xdg-open \"" + url + "\"").c_str());
+    if (result != 0) {
+        std::cout << "⚠️ Failed to open GUI. Please manually navigate to: " << url << std::endl;
+    } else {
+        std::cout << "✅ GUI launched successfully" << std::endl;
+    }
 #endif
 }
 

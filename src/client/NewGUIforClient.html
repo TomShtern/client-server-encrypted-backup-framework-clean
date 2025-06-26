@@ -1877,6 +1877,329 @@
         }
         debugLog('ConfigManager class defined successfully');
 
+        // UI Controller Classes (moved here to fix initialization order)
+        debugLog('Defining UIController class...');
+        class UIController {
+            createLogEntry(log) { 
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${log.type}`;
+                const icon = log.type === 'success' ? '✓' : log.type === 'error' ? '✗' : log.type === 'warning' ? '⚠' : 'ℹ';
+                entry.innerHTML = `<span class="log-timestamp">${log.timestamp}</span><div class="log-icon ${log.type}">${icon}</div><div class="log-content"><div class="log-message">${log.operation}</div><div class="log-details">${log.details || ''}</div></div>`;
+                return entry;
+             }
+            updateProgressRing(p) { 
+                const circle = document.getElementById('progressCircle');
+                if (!circle || !p) return;
+                if (!circle.getAttribute('data-circumference')) {
+                    const radius = parseFloat(circle.getAttribute('r'));
+                    circle.setAttribute('data-circumference', 2 * Math.PI * radius);
+                }
+                const circumference = circle.getAttribute('data-circumference');
+                circle.style.strokeDasharray = circumference;
+                circle.style.strokeDashoffset = circumference - (p / 100) * circumference;
+            }
+            showFilePreview(file) { /* Basic implementation */ }
+            getFileIcon(type) { return '📁'; }
+        }
+        debugLog('UIController class defined successfully');
+
+        // Enhanced UI Controller with better visual feedback
+        debugLog('Defining EnhancedUIController class...');
+        class EnhancedUIController extends UIController {
+            constructor() {
+                super();
+                this.animationId = null;
+            }
+
+            createLogEntry(log) { 
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${log.type}`;
+                entry.setAttribute('tabindex', '0');
+                entry.setAttribute('role', 'listitem');
+                
+                const icon = log.type === 'success' ? '✓' : log.type === 'error' ? '✗' : log.type === 'warning' ? '⚠' : 'ℹ';
+                entry.innerHTML = `
+                    <span class="log-timestamp">${log.timestamp}</span>
+                    <div class="log-icon ${log.type}">${icon}</div>
+                    <div class="log-content">
+                        <div class="log-message">${log.operation}</div>
+                        ${log.details ? `<div class="log-details">${log.details}</div>` : ''}
+                    </div>
+                `;
+
+                // Add entrance animation
+                entry.style.opacity = '0';
+                entry.style.transform = 'translateX(-20px)';
+                
+                requestAnimationFrame(() => {
+                    entry.style.transition = 'all 0.3s ease-out';
+                    entry.style.opacity = '1';
+                    entry.style.transform = 'translateX(0)';
+                });
+
+                return entry;
+            }
+
+            updateProgressRing(percentage) { 
+                const circle = document.getElementById('progressCircle');
+                const ring = document.querySelector('.progress-ring');
+                
+                if (!circle) return;
+
+                if (!circle.getAttribute('data-circumference')) {
+                    const radius = parseFloat(circle.getAttribute('r'));
+                    const circumference = 2 * Math.PI * radius;
+                    circle.setAttribute('data-circumference', circumference);
+                    circle.style.strokeDasharray = circumference;
+                }
+                
+                const circumference = parseFloat(circle.getAttribute('data-circumference'));
+                const offset = circumference - (percentage / 100) * circumference;
+                
+                // Animate the progress change
+                circle.style.transition = 'stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1)';
+                circle.style.strokeDashoffset = offset;
+
+                // Add glow effect when progress is active
+                if (ring) {
+                    if (percentage > 0 && percentage < 100) {
+                        ring.classList.add('active');
+                    } else {
+                        ring.classList.remove('active');
+                    }
+                }
+            }
+
+            showFilePreview(file) {
+                const previewContainer = document.getElementById('filePreview');
+                if (!previewContainer) return;
+
+                previewContainer.innerHTML = '';
+                
+                if (file.type.startsWith('image/')) {
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(file);
+                    img.style.maxWidth = '100px';
+                    img.style.maxHeight = '100px';
+                    img.style.borderRadius = '8px';
+                    previewContainer.appendChild(img);
+                } else {
+                    const icon = this.getFileIcon(file.type || file.name);
+                    previewContainer.innerHTML = `<div class="file-icon-large">${icon}</div>`;
+                }
+            }
+
+            getFileIcon(typeOrName) {
+                const type = typeOrName.toLowerCase();
+                if (type.includes('image/') || type.endsWith('.jpg') || type.endsWith('.png') || type.endsWith('.gif')) return '🖼️';
+                if (type.includes('video/') || type.endsWith('.mp4') || type.endsWith('.avi') || type.endsWith('.mov')) return '🎥';
+                if (type.includes('audio/') || type.endsWith('.mp3') || type.endsWith('.wav')) return '🎵';
+                if (type.includes('text/') || type.endsWith('.txt') || type.endsWith('.md')) return '📄';
+                if (type.endsWith('.pdf')) return '📕';
+                if (type.endsWith('.zip') || type.endsWith('.rar') || type.endsWith('.7z')) return '🗜️';
+                if (type.endsWith('.exe') || type.endsWith('.msi')) return '⚙️';
+                return '📁';
+            }
+        }
+        debugLog('EnhancedUIController class defined successfully');
+
+        // Browser Notification Manager
+        debugLog('Defining BrowserNotificationManager class...');
+        class BrowserNotificationManager {
+            constructor() {
+                this.supported = 'Notification' in window;
+                this.permission = this.supported ? Notification.permission : 'denied';
+                this.requestPermissionOnInit();
+            }
+
+            async requestPermissionOnInit() {
+                if (this.supported && this.permission === 'default') {
+                    try {
+                        this.permission = await Notification.requestPermission();
+                    } catch (error) {
+                        console.warn('Could not request notification permission:', error);
+                    }
+                }
+            }
+
+            show(title, message, options = {}) {
+                // Show toast notification in GUI
+                if (window.gui) {
+                    window.gui.showToast(`${title}: ${message}`, options.type || 'info');
+                }
+
+                // Show browser notification if supported and permitted
+                if (this.supported && this.permission === 'granted') {
+                    const notification = new Notification(title, {
+                        body: message,
+                        icon: options.icon || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="18" font-size="20">🚀</text></svg>',
+                        badge: options.badge || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="18" font-size="20">🔒</text></svg>',
+                        requireInteraction: options.requireInteraction || false,
+                        silent: options.silent || false
+                    });
+
+                    // Auto-close after 5 seconds unless persistent
+                    if (!options.persistent) {
+                        setTimeout(() => notification.close(), 5000);
+                    }
+
+                    return notification;
+                }
+
+                return null;
+            }
+
+            showConnectionStatus(connected) {
+                const title = connected ? 'Backup Client Connected' : 'Backup Client Disconnected';
+                const message = connected ? 'Successfully connected to backup server' : 'Lost connection to backup server';
+                this.show(title, message, { 
+                    type: connected ? 'success' : 'error',
+                    requireInteraction: !connected
+                });
+            }
+
+            showBackupComplete(filename, success) {
+                const title = success ? 'Backup Completed' : 'Backup Failed';
+                const message = success ? `Successfully backed up ${filename}` : `Failed to backup ${filename}`;
+                this.show(title, message, { 
+                    type: success ? 'success' : 'error',
+                    requireInteraction: !success
+                });
+            }
+
+            showProgress(percentage, filename) {
+                if (percentage === 25 || percentage === 50 || percentage === 75) {
+                    this.show('Backup Progress', `${filename} - ${percentage}% complete`, {
+                        type: 'info',
+                        silent: true
+                    });
+                }
+            }
+        }
+        debugLog('BrowserNotificationManager class defined successfully');
+
+        // Enhanced File Manager with modern APIs
+        debugLog('Defining EnhancedFileManager class...');
+        class EnhancedFileManager {
+            constructor() {
+                this.supportsFileSystemAccess = 'showOpenFilePicker' in window;
+                this.supportsDragDrop = true;
+            }
+
+            async selectFile() {
+                if (this.supportsFileSystemAccess) {
+                    try {
+                        const [fileHandle] = await window.showOpenFilePicker({
+                            types: [{
+                                description: 'All files',
+                                accept: { '*/*': [] }
+                            }],
+                            excludeAcceptAllOption: false,
+                            multiple: false
+                        });
+                        
+                        const file = await fileHandle.getFile();
+                        return file;
+                    } catch (error) {
+                        if (error.name !== 'AbortError') {
+                            console.warn('File picker error:', error);
+                        }
+                        return null;
+                    }
+                } else {
+                    // Fallback to traditional file input
+                    return new Promise((resolve) => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.onchange = () => resolve(input.files[0] || null);
+                        input.click();
+                    });
+                }
+            }
+
+            setupDragAndDrop(dropZone, onFileSelected) {
+                if (!this.supportsDragDrop) return;
+
+                dropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.add('drag-over');
+                });
+
+                dropZone.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('drag-over');
+                });
+
+                dropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('drag-over');
+                    
+                    const files = Array.from(e.dataTransfer.files);
+                    if (files.length > 0) {
+                        onFileSelected(files[0]);
+                    }
+                });
+            }
+        }
+        debugLog('EnhancedFileManager class defined successfully');
+
+        // System Integration Manager
+        debugLog('Defining SystemIntegrationManager class...');
+        class SystemIntegrationManager {
+            constructor() {
+                this.notifications = new BrowserNotificationManager();
+                this.fileManager = new EnhancedFileManager();
+                this.visibility = document.visibilityState;
+                this.setupVisibilityTracking();
+            }
+
+            setupVisibilityTracking() {
+                document.addEventListener('visibilitychange', () => {
+                    this.visibility = document.visibilityState;
+                });
+            }
+
+            isWindowVisible() {
+                return this.visibility === 'visible';
+            }
+
+            notifyIfHidden(title, message, options = {}) {
+                if (!this.isWindowVisible()) {
+                    this.notifications.show(title, message, { ...options, requireInteraction: true });
+                }
+            }
+
+            // Keyboard shortcuts
+            setupKeyboardShortcuts(gui) {
+                document.addEventListener('keydown', (e) => {
+                    // Ctrl+O: Open file
+                    if (e.ctrlKey && e.key === 'o') {
+                        e.preventDefault();
+                        gui.selectFile();
+                    }
+                    
+                    // Ctrl+Enter: Start backup
+                    if (e.ctrlKey && e.key === 'Enter') {
+                        e.preventDefault();
+                        gui.handlePrimaryAction();
+                    }
+                    
+                    // Escape: Stop operation
+                    if (e.key === 'Escape' && gui.state.isRunning) {
+                        e.preventDefault();
+                        gui.stopOperation();
+                    }
+                    
+                    // Ctrl+,: Open settings (future feature)
+                    if (e.ctrlKey && e.key === ',') {
+                        e.preventDefault();
+                        // gui.showSettings();
+                    }
+                });
+            }
+        }
+        debugLog('SystemIntegrationManager class defined successfully');
+
         // Main Application Class (Refactored for API communication)
         debugLog('Defining CyberBackupPro class...');
         class CyberBackupPro {
@@ -2269,33 +2592,7 @@
         }
         debugLog('CyberBackupPro class defined successfully');
         
-        // Dummy UI/Theme controllers to prevent errors if they are not defined elsewhere
-        // In a real refactor, these would also be properly modularized.
-        if (typeof UIController === 'undefined') {
-            class UIController {
-                createLogEntry(log) { 
-                    const entry = document.createElement('div');
-                    entry.className = `log-entry ${log.type}`;
-                    const icon = log.type === 'success' ? '✓' : log.type === 'error' ? '✗' : 'ℹ';
-                    entry.innerHTML = `<span class="log-timestamp">${log.timestamp}</span><div class="log-icon ${log.type}">${icon}</div><div class="log-content"><div class="log-message">${log.operation}</div><div class="log-details">${log.details || ''}</div></div>`;
-                    return entry;
-                 }
-                updateProgressRing(p) { 
-                    const circle = document.getElementById('progressCircle');
-                    if (!circle.getAttribute('data-circumference')) {
-                        const radius = parseFloat(circle.getAttribute('r'));
-                        circle.setAttribute('data-circumference', 2 * Math.PI * radius);
-                    }
-                    const circumference = circle.getAttribute('data-circumference');
-                    circle.style.strokeDasharray = circumference;
-                    circle.style.strokeDashoffset = circumference - (p / 100) * circumference;
-                }
-                showFilePreview(file) { /* Basic implementation */ }
-                getFileIcon(type) { return '📁'; }
-            }
-            window.UIController = UIController;
-        }
-        
+        // Theme Manager (keep this as it's still needed)
         if (typeof ThemeManager === 'undefined') {
             class ThemeManager { 
                 loadSavedTheme() {} 
@@ -2351,295 +2648,6 @@
             debugLog('ERROR during initialization: ' + error.message);
             console.error('ERROR creating CyberBackupPro:', error);
             alert('ERROR creating CyberBackupPro: ' + error.message + '\nStack: ' + error.stack);
-        }
-
-        // Browser notification system for cross-platform system integration
-        class BrowserNotificationManager {
-            constructor() {
-                this.supported = 'Notification' in window;
-                this.permission = this.supported ? Notification.permission : 'denied';
-                this.requestPermissionOnInit();
-            }
-
-            async requestPermissionOnInit() {
-                if (this.supported && this.permission === 'default') {
-                    try {
-                        this.permission = await Notification.requestPermission();
-                    } catch (error) {
-                        console.warn('Could not request notification permission:', error);
-                    }
-                }
-            }
-
-            show(title, message, options = {}) {
-                // Show toast notification in GUI
-                if (window.gui) {
-                    window.gui.showToast(`${title}: ${message}`, options.type || 'info');
-                }
-
-                // Show browser notification if supported and permitted
-                if (this.supported && this.permission === 'granted') {
-                    const notification = new Notification(title, {
-                        body: message,
-                        icon: options.icon || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="18" font-size="20">🚀</text></svg>',
-                        badge: options.badge || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="18" font-size="20">🔒</text></svg>',
-                        requireInteraction: options.requireInteraction || false,
-                        silent: options.silent || false
-                    });
-
-                    // Auto-close after 5 seconds unless persistent
-                    if (!options.persistent) {
-                        setTimeout(() => notification.close(), 5000);
-                    }
-
-                    return notification;
-                }
-
-                return null;
-            }
-
-            showConnectionStatus(connected) {
-                const title = connected ? 'Backup Client Connected' : 'Backup Client Disconnected';
-                const message = connected ? 'Successfully connected to backup server' : 'Lost connection to backup server';
-                this.show(title, message, { 
-                    type: connected ? 'success' : 'error',
-                    requireInteraction: !connected
-                });
-            }
-
-            showBackupComplete(filename, success) {
-                const title = success ? 'Backup Completed' : 'Backup Failed';
-                const message = success ? `Successfully backed up ${filename}` : `Failed to backup ${filename}`;
-                this.show(title, message, { 
-                    type: success ? 'success' : 'error',
-                    requireInteraction: !success
-                });
-            }
-
-            showProgress(percentage, filename) {
-                if (percentage === 25 || percentage === 50 || percentage === 75) {
-                    this.show('Backup Progress', `${filename} - ${percentage}% complete`, {
-                        type: 'info',
-                        silent: true
-                    });
-                }
-            }
-        }
-
-        // Enhanced File Manager with modern APIs
-        class EnhancedFileManager {
-            constructor() {
-                this.supportsFileSystemAccess = 'showOpenFilePicker' in window;
-                this.supportsDragDrop = true;
-            }
-
-            async selectFile() {
-                if (this.supportsFileSystemAccess) {
-                    try {
-                        const [fileHandle] = await window.showOpenFilePicker({
-                            types: [{
-                                description: 'All files',
-                                accept: { '*/*': [] }
-                            }],
-                            excludeAcceptAllOption: false,
-                            multiple: false
-                        });
-                        
-                        const file = await fileHandle.getFile();
-                        return file;
-                    } catch (error) {
-                        if (error.name !== 'AbortError') {
-                            console.warn('File picker error:', error);
-                        }
-                        return null;
-                    }
-                } else {
-                    // Fallback to traditional file input
-                    return new Promise((resolve) => {
-                        const input = document.createElement('input');
-                        input.type = 'file';
-                        input.onchange = () => resolve(input.files[0] || null);
-                        input.click();
-                    });
-                }
-            }
-
-            setupDragAndDrop(dropZone, onFileSelected) {
-                if (!this.supportsDragDrop) return;
-
-                dropZone.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    dropZone.classList.add('drag-over');
-                });
-
-                dropZone.addEventListener('dragleave', (e) => {
-                    e.preventDefault();
-                    dropZone.classList.remove('drag-over');
-                });
-
-                dropZone.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    dropZone.classList.remove('drag-over');
-                    
-                    const files = Array.from(e.dataTransfer.files);
-                    if (files.length > 0) {
-                        onFileSelected(files[0]);
-                    }
-                });
-            }
-        }
-
-        // Enhanced UI Controller with better visual feedback
-        class EnhancedUIController extends UIController {
-            constructor() {
-                super();
-                this.animationId = null;
-            }
-
-            createLogEntry(log) { 
-                const entry = document.createElement('div');
-                entry.className = `log-entry ${log.type}`;
-                entry.setAttribute('tabindex', '0');
-                entry.setAttribute('role', 'listitem');
-                
-                const icon = log.type === 'success' ? '✓' : log.type === 'error' ? '✗' : log.type === 'warning' ? '⚠' : 'ℹ';
-                entry.innerHTML = `
-                    <span class="log-timestamp">${log.timestamp}</span>
-                    <div class="log-icon ${log.type}">${icon}</div>
-                    <div class="log-content">
-                        <div class="log-message">${log.operation}</div>
-                        ${log.details ? `<div class="log-details">${log.details}</div>` : ''}
-                    </div>
-                `;
-
-                // Add entrance animation
-                entry.style.opacity = '0';
-                entry.style.transform = 'translateX(-20px)';
-                
-                requestAnimationFrame(() => {
-                    entry.style.transition = 'all 0.3s ease-out';
-                    entry.style.opacity = '1';
-                    entry.style.transform = 'translateX(0)';
-                });
-
-                return entry;
-            }
-
-            updateProgressRing(percentage) { 
-                const circle = document.getElementById('progressCircle');
-                const ring = document.querySelector('.progress-ring');
-                
-                if (!circle) return;
-
-                if (!circle.getAttribute('data-circumference')) {
-                    const radius = parseFloat(circle.getAttribute('r'));
-                    const circumference = 2 * Math.PI * radius;
-                    circle.setAttribute('data-circumference', circumference);
-                    circle.style.strokeDasharray = circumference;
-                }
-                
-                const circumference = parseFloat(circle.getAttribute('data-circumference'));
-                const offset = circumference - (percentage / 100) * circumference;
-                
-                // Animate the progress change
-                circle.style.transition = 'stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1)';
-                circle.style.strokeDashoffset = offset;
-
-                // Add glow effect when progress is active
-                if (ring) {
-                    if (percentage > 0 && percentage < 100) {
-                        ring.classList.add('active');
-                    } else {
-                        ring.classList.remove('active');
-                    }
-                }
-            }
-
-            showFilePreview(file) {
-                const previewContainer = document.getElementById('filePreview');
-                if (!previewContainer) return;
-
-                previewContainer.innerHTML = '';
-                
-                if (file.type.startsWith('image/')) {
-                    const img = document.createElement('img');
-                    img.src = URL.createObjectURL(file);
-                    img.style.maxWidth = '100px';
-                    img.style.maxHeight = '100px';
-                    img.style.borderRadius = '8px';
-                    previewContainer.appendChild(img);
-                } else {
-                    const icon = this.getFileIcon(file.type || file.name);
-                    previewContainer.innerHTML = `<div class="file-icon-large">${icon}</div>`;
-                }
-            }
-
-            getFileIcon(typeOrName) {
-                const type = typeOrName.toLowerCase();
-                if (type.includes('image/') || type.endsWith('.jpg') || type.endsWith('.png') || type.endsWith('.gif')) return '🖼️';
-                if (type.includes('video/') || type.endsWith('.mp4') || type.endsWith('.avi') || type.endsWith('.mov')) return '🎥';
-                if (type.includes('audio/') || type.endsWith('.mp3') || type.endsWith('.wav')) return '🎵';
-                if (type.includes('text/') || type.endsWith('.txt') || type.endsWith('.md')) return '📄';
-                if (type.endsWith('.pdf')) return '📕';
-                if (type.endsWith('.zip') || type.endsWith('.rar') || type.endsWith('.7z')) return '🗜️';
-                if (type.endsWith('.exe') || type.endsWith('.msi')) return '⚙️';
-                return '📁';
-            }
-        }
-
-        // System Integration Manager
-        class SystemIntegrationManager {
-            constructor() {
-                this.notifications = new BrowserNotificationManager();
-                this.fileManager = new EnhancedFileManager();
-                this.visibility = document.visibilityState;
-                this.setupVisibilityTracking();
-            }
-
-            setupVisibilityTracking() {
-                document.addEventListener('visibilitychange', () => {
-                    this.visibility = document.visibilityState;
-                });
-            }
-
-            isWindowVisible() {
-                return this.visibility === 'visible';
-            }
-
-            notifyIfHidden(title, message, options = {}) {
-                if (!this.isWindowVisible()) {
-                    this.notifications.show(title, message, { ...options, requireInteraction: true });
-                }
-            }
-
-            // Keyboard shortcuts
-            setupKeyboardShortcuts(gui) {
-                document.addEventListener('keydown', (e) => {
-                    // Ctrl+O: Open file
-                    if (e.ctrlKey && e.key === 'o') {
-                        e.preventDefault();
-                        gui.selectFile();
-                    }
-                    
-                    // Ctrl+Enter: Start backup
-                    if (e.ctrlKey && e.key === 'Enter') {
-                        e.preventDefault();
-                        gui.handlePrimaryAction();
-                    }
-                    
-                    // Escape: Stop operation
-                    if (e.key === 'Escape' && gui.state.isRunning) {
-                        e.preventDefault();
-                        gui.stopOperation();
-                    }
-                    
-                    // Ctrl+,: Open settings (future feature)
-                    if (e.ctrlKey && e.key === ',') {
-                        e.preventDefault();
-                        // gui.showSettings();
-                    }
-                });
-            }
         }
 
         // ...existing code...
