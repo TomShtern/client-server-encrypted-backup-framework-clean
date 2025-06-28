@@ -1,0 +1,8 @@
+{
+  "logging": {
+    "level": "WARNING"
+  },
+  "server": {
+    "timeout": 120
+  }
+}

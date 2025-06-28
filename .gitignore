@@ -1,22 +1,105 @@
 # Root .gitignore for Encrypted Backup Framework
 
+# ==== GENERAL ====/
+# OS-specific
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*~
+._*
+.fuse_hidden*
+.directory
+.Trash-*
+
+# IDE & Editor Configs
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.iml
+*.iws
+*.code-workspace
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build artifacts
+build/
+dist/
+out/
+
+# ==== C++ ====
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+*.cmake
+!CMakeLists.txt
+!CMakeListsTest.txt
+cmake-build-*/
+Testing/
+
+# MSVC
+Debug/
+Release/
+x64/
+ipch/
+*.vcxproj.filters
+*.vcxproj.user
+*.VC.db
+
+# Compiled files
+*.o
+*.obj
+*.slo
+*.lo
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+*.lai
+*.la
+*.exe
+*.out
+*.app
+*.pdb
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Coverage
+*.gcno
+*.gcda
+.ccache/
+
 # ==== PYTHON ====
-# Virtual environments
+# Virtual Environments
 .venv/
 venv/
 env/
 ENV/
 .env/
+.env.local
+.env.development.local
 
-# Python cache and compiled files
+# Cache & Compiled Files
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
 .Python
-build/
+.mypy_cache/
+.pyre/
+.pytest_cache/
+
+# Packaging & Dependencies
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -30,130 +113,113 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+Pipfile.lock
+poetry.lock
+pip-wheel-metadata/
+vcpkg_installed/
 
-# ==== C++ BUILD ARTIFACTS ====
-# Build directories
-build/
-msvc-debug/
-x64/
-Debug/
-Release/
-lib/Debug/
-lib/Release/
-client.dir/
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-install_manifest.txt
-
-# Visual Studio files
-*.vcxproj*
-*.sln*
-ALL_BUILD.vcxproj*
-ZERO_CHECK.vcxproj*
-EncryptedBackupClient.sln*
-.vs/
-
-# Object and binary files
-*.obj
-*.exe
-*.dll
-*.lib
-*.a
-*.so
-*.dylib
-*.ilk
-*.pdb
-*.tlog
-*.exp
-*.idb
-*.ipdb
-*.iobj
-*.ipdb
-
-# ==== DEPENDENCIES AND THIRD-PARTY ====
-# Third-party libraries (crypto++, etc.)
-third_party/
-vendor/
-external/
-deps/
-
-# Package managers
-node_modules/
-.npm/
-.yarn/
-
-# ==== DATA AND LOGS ====
-# Runtime data and logs
-/data/
-received_files/
-archive/
-benchmarks/
+# ==== PROJECT SPECIFIC ====
+# Logs
 *.log
-*.out
+logs/
+application.log
+client_debug.log
 server.log
+
+# Databases
+*.db
+*.db-wal
+*.db-journal
+*.sqlite
+auth.db
 defensive.db
 
-# Test files and temporary data
-test_file.txt
-*.tmp
-*.temp
-
-# ==== SECURITY AND KEYS ====
-# Private keys and sensitive info
-*.key
-*.der
+# Security (NEVER commit keys or sensitive configs)
 *.pem
+*.key
+*.cert
+*.crt
+*.cer
 *.p12
 *.pfx
-priv.key
-transfer.info
-client/priv.key
+*.jks
+*.keystore
+config.local.json
+config.dev.json
+*.config.local.*
+
+# Local IDE and tool settings
+.claude/
+.specstory/local/
+
+# Data & Backups
+data/
+received_files/
+test_data/
+test_backups/
+backup_storage/
+demo_file_for_testing.txt
+test_larger_file.txt
+test_upload_file.txt
+gui_test_file.txt
+
+# Test data files in client directory
+client/test_*.txt
+client/*_validation.txt
+
+# External Tools & Generated Dependencies
+third_party/
+supermemory-mcp/
+node_modules/
+vcpkg/
+vcpkg_installed/
+!vcpkg.json
+
+# Runtime & Status Files (specific files only)
+client/gui_progress.json
 client/transfer.info
-data/priv.key
-data/transfer.info
+client/gui_status.json
 
-# ==== IDE AND EDITOR SETTINGS ====
-# VS Code
-.vscode/
-*.code-workspace
+# Server runtime info
+server/port.info
 
-# Other editors
-.idea/
+# Security - Private Keys & Sensitive Data (SPECIFIC patterns)
+client/me.info
+client/priv.key
+client/*_info_hex.txt
+server/port.info
+
+# Hex dumps and temporary user data
+*_hex.txt
+*_info_hex.txt
+
+# Test data files (all test files should be in tests/ directory)
+client/test_*.txt
+client/*_validation.txt
+test_data/
+tests/test_*.txt
+tests/*_test_*.txt
+
+# Development Tools
+.specstory/
+
+# Reports & Test Results
+test_results.json
+gui_status.json
+coverage/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+codeviz_report_*.md
+*_REPORT.md
+*_SUMMARY.md
+
+# Temporary & Backup files
+*.bak
+*.backup
+*.tmp
+*.temp
 *.swp
 *.swo
-*~
-.project
-.settings/
-
-# ==== OS FILES ====
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-desktop.ini
-
-# ==== BACKUP AND TEMPORARY FILES ====
-*.bak
-*~
-*.backup
-_ZENTASKS
-
-# ==== OUTPUT AND GENERATED FILES ====
-# Test and output files (but keep essential docs)
-*.json
-!package.json
-!tsconfig.json
-!.vscode/tasks.json
-!.vscode/launch.json
-
-# Documentation exceptions
-*.md
-!README.md
-!CHANGELOG.md
-!LICENSE.md
-!docs/*.md
-!.github/*.md
+*.orig

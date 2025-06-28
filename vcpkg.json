@@ -1,0 +1,8 @@
+{
+  "dependencies": [
+    "boost-asio",
+    "boost-system", 
+    "boost-bind",
+    "cryptopp"
+  ]
+}

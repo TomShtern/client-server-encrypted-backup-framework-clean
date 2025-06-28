@@ -1,0 +1,8 @@
+{
+  "logging": {
+    "level": "DEBUG"
+  },
+  "server": {
+    "max_clients": 10
+  }
+}

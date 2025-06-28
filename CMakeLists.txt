@@ -2,9 +2,11 @@
 cmake_minimum_required(VERSION 3.15)
 project(EncryptedBackupClient VERSION 1.0)
 
-# 2. Find Dependencies: This finds the Crypto++ library that vcpkg installed.
-# The name "cryptopp" is the correct name vcpkg uses for this package.
-find_package(cryptopp CONFIG REQUIRED)
+# 2. Use Local Crypto++ Sources: Instead of vcpkg, use local crypto++ sources
+# This makes the project portable and avoids vcpkg dependency issues
+file(GLOB CRYPTOPP_SOURCES "third_party/crypto++/*.cpp")
+# Remove test and example files that we don't need
+list(FILTER CRYPTOPP_SOURCES EXCLUDE REGEX ".*/(test|bench|valid|dll|adhoc|fips|regtest|datatest).*\\.(cpp|c)$")
 
 # 3. Define the Executable: List all of our application's source files.
 add_executable(EncryptedBackupClient
@@ -16,18 +18,19 @@ add_executable(EncryptedBackupClient
     src/wrappers/RSAWrapper.cpp
     src/wrappers/AESWrapper.cpp
     src/wrappers/Base64Wrapper.cpp
+    ${CRYPTOPP_SOURCES}
 )
-
+ 
 # 4. Configure Include Directories: Tell our code where to find header files.
-# It needs our project's "include" folder and the Crypto++ headers (found automatically by vcpkg).
+# It needs our project's "include" folder and the local Crypto++ headers.
 target_include_directories(EncryptedBackupClient PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/crypto++
 )
 
-# 5. Link Libraries: Connect our executable to the Crypto++ library and required Windows libraries.
-# `cryptopp::cryptopp` is the correct target name for the library provided by vcpkg.
+# 5. Link Libraries: Connect our executable to the required Windows libraries.
+# Since we're using local crypto++ sources, we only need Windows libraries.
 target_link_libraries(EncryptedBackupClient PRIVATE 
-    cryptopp::cryptopp
     ws2_32      # Windows Sockets for networking
     crypt32     # Windows Cryptography API
 )

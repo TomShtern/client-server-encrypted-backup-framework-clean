@@ -1,0 +1,31 @@
+{
+  "server": {
+    "host": "localhost",
+    "port": 1256,
+    "max_clients": 50,
+    "timeout": 60,
+    "file_storage_dir": "received_files",
+    "database_name": "defensive.db"
+  },
+  "client": {
+    "retry_attempts": 3,
+    "timeout": 30,
+    "reconnect_delay": 5,
+    "chunk_size": 65536
+  },
+  "encryption": {
+    "rsa_key_size": 1024,
+    "aes_key_size": 256
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "application.log",
+    "max_file_size": "10MB",
+    "backup_count": 5
+  },
+  "performance": {
+    "maintenance_interval": 60,
+    "cleanup_old_files": true,
+    "max_file_age_days": 30
+  }
+}
