@@ -8,44 +8,37 @@ This is a Client-Server Encrypted Backup Framework implementing secure file tran
 
 ## Build Commands
 
-### Primary Build System
+### Primary Build System (CMake + vcpkg)
 ```bash
-# Main build (MSVC with C++17, includes GUI)
-.\build.bat
+# Configure CMake build system
+.\scripts\configure_cmake.bat
 
-# Alternative build scripts for different scenarios
-.\build_modern.bat          # Modern GUI build
-.\build_enhanced_gui.bat    # Enhanced GUI features
-.\build_simple.bat          # Simplified build
-.\build_minimal.bat         # Minimal feature set
-.\build_boost.bat           # Build with Boost dependencies
-.\build_ultra_modern.bat    # Ultra-modern GUI build
+# Build using CMake
+cmake --build build --config Debug      # Debug build
+cmake --build build --config Release    # Release build
+
+# Production deployment
+.\scripts\deploy_production.bat         # Complete production setup
 ```
 
-### Clean Build
+### Alternative Build Scripts (Limited Available)
 ```bash
-.\clean.bat                 # Remove all build artifacts
-.\rebuild_client.bat        # Clean and rebuild client
+# Benchmark build
+.\scripts\build_client_benchmark.bat    # Performance analysis tools
 ```
 
 ### Test Builds
 ```bash
-# Core RSA implementation tests (fully working)
-.\scripts\build_rsa_final_test.bat
-.\scripts\build_rsa_wrapper_final_test.bat
-
-# Additional crypto tests
-.\scripts\build_rsa_manual_test.bat
-.\scripts\build_rsa_pregenerated_test.bat
-.\tests\build_tests.bat     # Comprehensive test suite
+# Available test builds
+.\tests\build_tests.bat         # Comprehensive test suite  
+.\tests\build_tests_fixed.bat   # Fixed test build
 ```
 
 ## Running the System
 
 ### Start Server (Python)
 ```bash
-.\start_server.bat
-# OR
+# Start server directly
 cd server && python server.py
 # OR for GUI version
 cd server && python ServerGUI.py
@@ -54,25 +47,19 @@ Server runs on port 1256 by default, uses SQLite database (`defensive.db`) for c
 
 ### Start Client (C++)
 ```bash
-.\start_client.bat          # Build and run client automatically
-# OR manually
-cd client && EncryptedBackupClient.exe
+# Run client manually
+.\build\Debug\EncryptedBackupClient.exe
+# OR run backup operation
+.\client\run_real_backup.bat
 ```
 Requires `transfer.info` file with server:port, username, and file path.
 
 ### Testing & Validation
 ```bash
-# Comprehensive connection tests
-python tests/test_connection.py
-
-# Server testing
-python server/test_server.py
-python server/test_modern_gui.py
-
-# Direct client tests
-.\test_simple_debug.bat
-python test_complete_connection.py
-python diagnose_connection.py
+# Available test files
+python tests/test_gui_upload.py        # GUI upload testing
+python tests/test_larger_upload.py     # Large file upload testing  
+python tests/test_upload.py            # Basic upload testing
 ```
 
 ## Architecture
@@ -84,18 +71,23 @@ python diagnose_connection.py
 - **Encryption**: ✅ RSA-1024 + AES-256-CBC fully operational
 - **Build System**: ✅ Multiple build variants working with MSVC 19.44.35207
 
-### Client (C++17) - Ultra Modern Implementation
+### Client (C++17) - Modern Web-Based Implementation
 - **Main Logic**: `src/client/client.cpp` - Protocol implementation with Boost.Asio
-- **GUI**: `src/client/ClientGUI.cpp` - Windows native GUI with modern design
+- **GUI**: `src/client/NewGUIforClient.html` - HTML-based modern interface
+- **Web Backend**: `src/client/WebServerBackend.cpp` - Web server for GUI
+- **Web Server**: `src/client/SimpleWebServer_Clean.cpp` - Clean web server implementation
+- **GUI Helpers**: `src/client/ClientGUIHelpers.cpp` - GUI integration helpers
 - **Main Entry**: `src/client/main.cpp` - Threading and GUI integration
 - **Protocol**: `src/client/protocol.cpp` - Binary protocol with little-endian handling
 - **Checksum**: `src/client/cksum.cpp` - POSIX-compliant CRC implementation
+- **Logging**: `src/client/ClientLogger.cpp` - Dedicated logging system
 
 ### Crypto Wrappers (Production Ready)
-- **RSA**: `src/wrappers/RSAWrapper.cpp` - Windows CNG implementation (1024-bit)
-- **RSA Alternative**: `src/wrappers/RSAWrapperCNG.cpp` - Native Windows CNG
+- **RSA**: `src/wrappers/RSAWrapperCNG.cpp` - Primary Windows CNG implementation (1024-bit)
+- **RSA Alternative**: `src/wrappers/RSAWrapper.cpp` - Crypto++ implementation
 - **AES**: `src/wrappers/AESWrapper.cpp` - AES-256-CBC with Crypto++
 - **Base64**: `src/wrappers/Base64Wrapper.cpp` - Key encoding for network transfer
+- **Compression**: `src/utils/CompressionWrapper.cpp` - Data compression support
 
 ### Server (Python) - Glass Morphism GUI
 - **Core**: `server/server.py` - Multi-threaded TCP server with SQLite
@@ -137,17 +129,19 @@ python diagnose_connection.py
   - Windows CNG for RSA operations
 
 ### Build System Details
-- **Primary**: Direct MSVC compilation with optimized batch scripts
-- **No CMake**: Streamlined build process with multiple variant scripts
-- **Crypto++ Integration**: Selective compilation of required modules only
+- **Primary**: CMake with vcpkg package management
+- **CMake Configuration**: Modern CMake 3.15+ with proper C++17 support
+- **Package Management**: vcpkg for Boost and Crypto++ dependencies
+- **Crypto++ Integration**: Full library integration via vcpkg
 - **Windows Libraries**: ws2_32.lib, advapi32.lib, user32.lib, bcrypt.lib, crypt32.lib
 
 ## GUI Systems (Major Updates)
 
 ### Client GUI Features
-- **Ultra Modern Design**: Native Windows interface with modern styling
+- **Modern Web Interface**: HTML-based GUI with embedded web server
 - **Real-time Status**: Connection status, transfer progress, error reporting
 - **Interactive Controls**: Start/stop backup, retry operations, configuration
+- **Web Backend**: Dedicated web server backend for GUI functionality
 - **Threading**: Non-blocking UI with proper thread synchronization
 - **Error Handling**: Comprehensive error display and recovery options
 
@@ -164,28 +158,20 @@ python diagnose_connection.py
 
 ### Functional Tests
 ```bash
-# Core RSA implementation (working perfectly)
-.\build\test_rsa_final.exe
-.\build\test_rsa_wrapper_final.exe
+# Available test executables (build via CMake)
+cmake --build build --target test_rsa_size
+cmake --build build --target test_rsa_wrapper
 
-# Connection and protocol tests
-python tests/test_connection.py
-python test_complete_connection.py
-
-# Server testing
-python server/test_server.py
-python server/test_modern_gui.py
-
-# GUI testing
-python server/demo_advanced_gui.py
+# Upload and connection tests
+python tests/test_upload.py
+python tests/test_gui_upload.py
+python tests/test_larger_upload.py
 ```
 
 ### Performance Benchmarks
 ```bash
-# Comprehensive benchmark suite
-python benchmarks/run_all_benchmarks.py
-python benchmarks/benchmark_suite.py
-python benchmarks/network_benchmark.py
+# Available benchmark tools
+.\scripts\build_client_benchmark.bat     # Build performance analysis tools
 ```
 
 ## Critical Implementation Status
@@ -248,25 +234,15 @@ python benchmarks/network_benchmark.py
 
 ## Debug and Development Commands
 
-### Debug Client
+### Available Debug Tools
 ```bash
-.\debug_client.bat          # Debug mode client execution
-.\run_client_debug.bat      # Client with debug output
-.\test_simple_debug.bat     # Simple debug test
-```
+# CMake-based builds
+cmake --build build --config Debug     # Debug configuration build
+cmake --build build --config Release   # Release configuration build
 
-### Connection Diagnostics
-```bash
-python diagnose_connection.py          # Connection diagnostics
-python test_connection_simple.py       # Simple connection test
-python test_connection_exact.py        # Exact protocol test
-python verify_db.py                   # Database verification
-```
-
-### Build Diagnostics
-```bash
-.\build_test_direct.bat     # Direct build test
-.\build_simple_test.bat     # Simple test build
+# Client execution
+.\build\Debug\EncryptedBackupClient.exe    # Debug client
+.\build\Release\EncryptedBackupClient.exe  # Release client
 ```
 
 ## System Status Summary
