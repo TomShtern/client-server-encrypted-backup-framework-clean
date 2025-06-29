@@ -209,14 +209,10 @@ private:
     // Performance metrics
     std::chrono::steady_clock::time_point operationStartTime;
 
-    // GUI support
-    void openGUIInBrowser();
-    void updateGUIStatus(const std::string& operation, bool success, const std::string& details);
-    void updateGUIProgress(double percentage, const std::string& speed = "", const std::string& eta = "", const std::string& transferred = "");
-    void updateGUIPhase(const std::string& phase);
-    
+    // WebSocket server for GUI communication
+    std::unique_ptr<ClientWebSocketServer> webSocketServer;
+
     // WebSocket command handling for interactive GUI
-    void initializeWebSocketCommands();
     void handleGUICommand(const std::map<std::string, std::string>& command);
     void handleConnectCommand(const std::map<std::string, std::string>& command);
     void handleStartBackupCommand(const std::map<std::string, std::string>& command);
@@ -299,26 +295,20 @@ Client::Client() : socket(nullptr), connected(false), rsaPrivate(nullptr),
                    keepAliveEnabled(false), lastError(ErrorType::NONE) {
     std::fill(clientID.begin(), clientID.end(), 0);
 
-    // Clear old status files for file-based GUI
+    // Initialize and start WebSocket server for GUI communication
     try {
-        std::remove("gui_status.json");
-        std::remove("gui_progress.json");
-    } catch (...) {}
-
-    // Open GUI in browser (file-based, no WebSocket server needed)
-    try {
-        openGUIInBrowser();
-        updateGUIStatus("System Startup", true, "File-based GUI interface loaded");
+        webSocketServer = std::make_unique<ClientWebSocketServer>(8765); // Port 8765 for WebSocket
+        webSocketServer->setMessageHandler(std::bind(&Client::handleGUICommand, this, std::placeholders::_1));
+        webSocketServer->start();
+        displayStatus("GUI", true, "WebSocket server started on port 8765");
     } catch (const std::exception& e) {
-        std::cout << "GUI startup failed: " << e.what() << std::endl;
+        displayError("Failed to start WebSocket GUI server: " + std::string(e.what()), ErrorType::CONFIG);
     }
 
 #ifdef _WIN32
     hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     GetConsoleScreenBufferInfo(hConsole, &consoleInfo);
     savedAttributes = consoleInfo.wAttributes;
-    
-    std::cout << "✓ Using file-based GUI system (no server required)" << std::endl;
 #endif
 }
 
@@ -329,15 +319,11 @@ Client::~Client() {
     if (rsaPrivate) {
         delete rsaPrivate;
     }
+    if (webSocketServer) {
+        webSocketServer->stop();
+    }
 #ifdef _WIN32
     SetConsoleTextAttribute(hConsole, savedAttributes);
-    
-    // Shutdown GUI (optional - graceful failure)
-    try {
-        ClientGUIHelpers::shutdownGUI();
-    } catch (...) {
-        // GUI shutdown failed - continue cleanup
-    }
 #endif
 }
 
@@ -1517,7 +1503,7 @@ void Client::displayStatus(const std::string& operation, bool success, const std
     std::cout << std::endl;
 #endif
 
-  updateGUIStatus(operation, success, details);
+  // updateGUIStatus(operation, success, details);
 }
 
 void Client::displayProgress(const std::string& operation, size_t current, size_t total) {
@@ -1573,7 +1559,7 @@ double progressPercent = (total > 0) ? ((double)current / total) * 100.0 : 0.0;
     std::string speed = formatBytes(static_cast<size_t>(stats.currentSpeed)) + "/s";
     std::string eta = formatDuration(stats.estimatedTimeRemaining);
     std::string transferred = formatBytes(current);
-    updateGUIProgress(progressPercent, speed, eta, transferred);
+    // updateGUIProgress(progressPercent, speed, eta, transferred);
 }
 
 void Client::displayTransferStats() {
@@ -1715,7 +1701,7 @@ void Client::displayPhase(const std::string& phase) {
     std::cout << "\n> " << phase << std::endl;
     displaySeparator();
 #endif
-updateGUIPhase(phase);
+// updateGUIPhase(phase);
 }
 
 void Client::displaySummary() {
@@ -1856,55 +1842,72 @@ bool runBackupClient() {
         return false;
     }
 }
-void Client::openGUIInBrowser() {
-    // Use the web server that serves the HTML GUI
-    std::string url = "http://localhost:9090/";
-    
-    std::cout << "🎯 Opening CyberBackup client GUI at: " << url << std::endl;
-
-#ifdef _WIN32
-    HINSTANCE result = ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-    if ((intptr_t)result <= 32) {
-        std::cout << "⚠️ ShellExecute failed with error code: " << (intptr_t)result << std::endl;
-        std::cout << "🌐 Please manually open your browser and navigate to: " << url << std::endl;
+void Client::handleGUICommand(const std::map<std::string, std::string>& command) {
+    // Generic command handler - dispatch to specific handlers based on command type
+    auto it = command.find("type");
+    if (it != command.end()) {
+        const std::string& type = it->second;
         
-        // Try alternative method with start command
-        std::string command = "start \"\" \"" + url + "\"";
-        int cmdResult = system(command.c_str());
-        if (cmdResult != 0) {
-            std::cout << "⚠️ Alternative launch method also failed. Error code: " << cmdResult << std::endl;
+        if (type == "connect") {
+            handleConnectCommand(command);
+        } else if (type == "start_backup") {
+            handleStartBackupCommand(command);
+        } else if (type == "file_selected") {
+            handleFileSelectedCommand(command);
         } else {
-            std::cout << "✅ GUI launched using alternative method" << std::endl;
+            displayError("Unknown command type: " + type, ErrorType::PROTOCOL);
         }
     } else {
-        std::cout << "✅ GUI launched successfully" << std::endl;
+        displayError("Invalid command format - missing type", ErrorType::PROTOCOL);
     }
-#elif defined(__APPLE__)
-    int result = system(("open \"" + url + "\"").c_str());
-    if (result != 0) {
-        std::cout << "⚠️ Failed to open GUI. Please manually navigate to: " << url << std::endl;
-    } else {
-        std::cout << "✅ GUI launched successfully" << std::endl;
-    }
-#else
-    int result = system(("xdg-open \"" + url + "\"").c_str());
-    if (result != 0) {
-        std::cout << "⚠️ Failed to open GUI. Please manually navigate to: " << url << std::endl;
-    } else {
-        std::cout << "✅ GUI launched successfully" << std::endl;
-    }
-#endif
 }
 
-void Client::updateGUIStatus(const std::string& operation, bool success, const std::string& details) {
-    static std::ofstream statusFile("gui_status.json", std::ios::app);
-    
-    auto now = std::chrono::system_clock::now();
-    auto time = std::chrono::system_clock::to_time_t(now);
-    
-    statusFile << "{\"timestamp\":\"" << std::put_time(std::localtime(&time), "%H:%M:%S") << "\","
-               << "\"operation\":\"" << operation << "\","
-               << "\"success\":" << (success ? "true" : "false") << ","
+void Client::handleConnectCommand(const std::map<std::string, std::string>& command) {
+    // Handle connect command from GUI
+    try {
+        auto ipIt = command.find("server_ip");
+        auto portIt = command.find("server_port");
+        auto userIt = command.find("username");
+        
+        if (ipIt != command.end() && portIt != command.end() && userIt != command.end()) {
+            pendingServerIP = ipIt->second;
+            pendingServerPort = std::stoi(portIt->second);
+            pendingUsername = userIt->second;
+            
+            displayStatus("Connect command received", true, 
+                         "IP: " + pendingServerIP + ", Port: " + std::to_string(pendingServerPort) + 
+                         ", User: " + pendingUsername);
+            
+            // Attempt to connect to the server
+            if (connectToServer()) {
+                // Update client info
+                username = pendingUsername;
+                saveMeInfo();
+                
+                // Send success response
+                sendGUIResponse("connect", "Connection successful");
+            } else {
+                sendGUIResponse("connect", "Connection failed", false);
+            }
+        } else {
+            sendGUIResponse("connect", "Invalid parameters", false);
+        }
+    } catch (const std::exception& e) {
+        sendGUIResponse("connect", "Error: " + std::string(e.what()), false);
+    } catch (...) {
+        sendGUIResponse("connect", "Unknown error", false);
+    }
+}
+
+void Client::handleStartBackupCommand(const std::map<std::string, std::string>& command) {
+    // Handle start backup command from GUI
+    try {
+        auto fileIt = command.find("file");
+        
+        if (fileIt != command.end()) {
+            selectedFilePath = fileIt->second;
+            
+" << (success ? "true" : "false") << ","
                << "\"details\":\"" << details << "\"}\n";
     statusFile.flush();
 }
