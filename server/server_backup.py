@@ -23,11 +23,14 @@ from database import DatabaseManager
 # Import request handler module
 from request_handlers import RequestHandler
 
-# Import network server module
-from network_server import NetworkServer
-
 # GUI Integration
-from gui_integration import GUIManager, get_gui_manager, initialize_gui
+try:
+    from ServerGUI import ServerGUI
+    GUI_AVAILABLE = True
+except ImportError as e:
+    print(f"GUI components not available: {e}")
+    GUI_AVAILABLE = False
+    ServerGUI = None
 
 # --- Server Configuration Constants ---
 SERVER_VERSION = 3
@@ -240,16 +243,12 @@ class BackupServer:
         self.clients: Dict[bytes, Client] = {} # In-memory store: client_id_bytes -> Client object
         self.clients_by_name: Dict[str, bytes] = {} # In-memory store: client_name_str -> client_id_bytes
         self.clients_lock: threading.Lock = threading.Lock() # Protects access to clients and clients_by_name
-        
-        # Initialize network server with client handler and maintenance callbacks
-        self.network_server: NetworkServer = NetworkServer(
-            client_handler=self._handle_client_connection,
-            maintenance_handler=self._periodic_maintenance_job
-        )
-        
-        # Server state flags (now managed by NetworkServer but kept for compatibility)
-        self.running: bool = False
-        self.shutdown_event: threading.Event = threading.Event()
+        self.port: int = self._read_port_config()
+        self.server_socket: Optional[socket.socket] = None
+        self.running: bool = False # Flag to control server main loop
+        self.shutdown_event: threading.Event = threading.Event() # For coordinating graceful shutdown
+        self.maintenance_thread: Optional[threading.Thread] = None
+        self.client_connection_semaphore: threading.Semaphore = threading.Semaphore(MAX_CONCURRENT_CLIENTS)
         
         # Initialize database manager
         self.db_manager: DatabaseManager = DatabaseManager()
@@ -257,29 +256,56 @@ class BackupServer:
         # Initialize request handler
         self.request_handler: RequestHandler = RequestHandler(self)
         
-        # Initialize GUI manager
-        self.gui_manager = get_gui_manager()
-        self.gui_manager.initialize_gui()
+        # Initialize GUI in a separate thread to avoid blocking
+        self.gui = None
+        self.gui_enabled = False
+        if GUI_AVAILABLE and ServerGUI is not None:
+            try:
+                # Start GUI initialization in a separate thread
+                def init_gui():
+                    try:
+                        self.gui = ServerGUI()
+                        self.gui_enabled = self.gui.initialize()
+                        if self.gui_enabled:
+                            logger.info("Server GUI initialized successfully")
+                        else:
+                            logger.warning("Server GUI initialization failed, continuing without GUI")
+                    except Exception as e:
+                        logger.warning(f"Failed to initialize server GUI: {e}, continuing without GUI")
+                        self.gui = None
+                        self.gui_enabled = False
+
+                # Start GUI in background thread
+                gui_thread = threading.Thread(target=init_gui, daemon=True)
+                gui_thread.start()
+
+                # Don't wait for GUI - let server start immediately
+                logger.info("GUI initialization started in background")
+
+            except Exception as e:
+                logger.warning(f"Failed to start GUI thread: {e}, continuing without GUI")
+                self.gui = None
+                self.gui_enabled = False
+        else:
+            logger.info("GUI components not available, running in console mode")
         
         # Perform pre-flight checks and initialize database
         self.db_manager.check_startup_permissions() # Perform pre-flight checks before extensive setup
         self.db_manager.ensure_storage_dir() # Ensure 'received_files' directory exists
         self.db_manager.init_database()      # Initialize SQLite database and tables
         
-        # Note: Signal handlers are now managed by NetworkServer
-        # but we keep a reference for main server coordination
-        self.port = self.network_server.get_port()
+        # Setup signal handlers for graceful shutdown (Ctrl+C, kill)
+        if hasattr(signal, 'SIGTERM'): # SIGTERM is not available on all platforms (e.g. Windows sometimes)
+            signal.signal(signal.SIGTERM, self._signal_handler)
+        signal.signal(signal.SIGINT, self._signal_handler) # SIGINT is Ctrl+C
 
-    def create_client(self, client_id: bytes, name: str) -> 'Client':
-        """Factory method to create a new Client instance."""
-        return Client(client_id, name)
 
     def _signal_handler(self, signum: int, frame: Optional[Any]):
         """Handles termination signals (SIGINT, SIGTERM) for graceful shutdown."""
-        # Signal handling is now primarily managed by NetworkServer
-        # This method is kept for compatibility but delegates to network server
-        logger.warning(f"Signal received by main server. Delegating to network server...")
-        self.stop()
+        # Attempt to get a human-readable signal name
+        sig_name = signal.Signals(signum).name if isinstance(signum, signal.Signals) else f"Signal {signum}"
+        logger.warning(f"{sig_name} received by server. Initiating graceful shutdown sequence...")
+        self.stop() # Trigger the server shutdown process
     def _load_clients_from_db(self):
         """Loads existing client data from the database into memory at server startup."""
         logger.info("Loading existing clients from database into memory...")
@@ -319,93 +345,114 @@ class BackupServer:
         self.db_manager.save_file_info_to_db(client_id, file_name, path_name, verified)
 
 
-    # Port configuration is now handled by NetworkServer
+    def _read_port_config(self) -> int:
+        """Reads server port from `port.info`, defaults to `DEFAULT_PORT` on error."""
+        try:
+            with open(PORT_CONFIG_FILE, 'r') as f:
+                port_str = f.read().strip()
+                if not port_str: # Handle case where port.info is empty
+                    raise ValueError("Port configuration file is empty.")
+                port = int(port_str)
+                # Typically, ports 0-1023 are privileged. Users should use >1023.
+                if not (1024 <= port <= 65535):
+                    raise ValueError(f"Port number {port} is out of the recommended user range (1024-65535).")
+                logger.info(f"Successfully read port {port} from configuration file '{PORT_CONFIG_FILE}'.")
+                return port
+        except FileNotFoundError:
+            logger.warning(f"Port configuration file '{PORT_CONFIG_FILE}' not found. Using default port {DEFAULT_PORT}.")
+            return DEFAULT_PORT
+        except ValueError as e: # Catches empty file, non-integer content, and out-of-range errors
+            logger.warning(f"Invalid port configuration in '{PORT_CONFIG_FILE}': {e}. Using default port {DEFAULT_PORT}.")
+            return DEFAULT_PORT
+        except Exception as e: # Catch-all for other potential I/O errors
+            logger.error(f"Unexpected error reading port configuration file '{PORT_CONFIG_FILE}': {e}. Using default port {DEFAULT_PORT}.")
+            return DEFAULT_PORT
 
 
     def _periodic_maintenance_job(self):
         """
-        Runs periodically to perform maintenance tasks:
+        Runs periodically in a separate thread to perform maintenance tasks:
         - Cleans up inactive client sessions from memory.
         - Cleans up stale partial file transfer data for active clients.
         - Logs server status to console.
-        
-        Note: This method is now called by NetworkServer's maintenance thread.
         """
-        try:
-            # --- Inactive client session cleanup (from memory, not DB) ---
-            inactive_clients_removed_count = 0
-            with self.clients_lock: # Ensure thread-safe access to shared client dictionaries
-                current_monotonic_time = time.monotonic()
-                # Identify client IDs that have been inactive longer than CLIENT_SESSION_TIMEOUT
-                inactive_client_ids_to_remove = [
-                    cid for cid, client_obj in self.clients.items()
-                    if (current_monotonic_time - client_obj.last_seen) > CLIENT_SESSION_TIMEOUT
-                ]
-                # Remove identified inactive clients
-                for cid in inactive_client_ids_to_remove:
-                    client_obj = self.clients.pop(cid, None) # Safely remove from dict by ID
-                    if client_obj: # If client was found and removed
-                        self.clients_by_name.pop(client_obj.name, None) # Also remove from dict by name
-                        inactive_clients_removed_count += 1
-                        logger.info(f"Client '{client_obj.name}' (ID: {cid.hex()}) session timed out due to inactivity. Removed from active memory pool.")
-            
-            # --- Stale partial file transfer data cleanup (for currently active clients) ---
-            with self.clients_lock: # Get a list of current clients to iterate over (snapshot)
-                active_clients_list = list(self.clients.values()) 
-            
-            stale_partial_files_cleaned_count = sum(
-                client_obj.cleanup_stale_partial_files() for client_obj in active_clients_list
-            )
-
-            # --- Console Status Update (Basic UI Element) ---
-            with self.clients_lock: # Get current count of active clients in memory
-                active_clients_in_memory = len(self.clients)
-            
-            # Query database for overall stats (handle potential DB errors gracefully for status reporting)
+        logger.info("Server maintenance thread started.")
+        while not self.shutdown_event.is_set(): # Continue until server shutdown is signaled
             try:
-                db_total_clients_row = self.db_manager.execute("SELECT COUNT(*) FROM clients", fetchone=True)
-                db_total_clients_count = db_total_clients_row[0] if db_total_clients_row else "N/A (DB Error)"
-                db_total_files_row = self.db_manager.execute("SELECT COUNT(*) FROM files", fetchone=True)
-                db_total_files_count = db_total_files_row[0] if db_total_files_row else "N/A (DB Error)"
-                db_verified_files_row = self.db_manager.execute("SELECT COUNT(*) FROM files WHERE Verified = 1", fetchone=True)
-                db_verified_files_count = db_verified_files_row[0] if db_verified_files_row else "N/A (DB Error)"
-            except ServerError: # If db_manager.execute raises ServerError due to DB issues
-                db_total_clients_count, db_total_files_count, db_verified_files_count = "DB_Error", "DB_Error", "DB_Error"
+                # --- Inactive client session cleanup (from memory, not DB) ---
+                inactive_clients_removed_count = 0
+                with self.clients_lock: # Ensure thread-safe access to shared client dictionaries
+                    current_monotonic_time = time.monotonic()
+                    # Identify client IDs that have been inactive longer than CLIENT_SESSION_TIMEOUT
+                    inactive_client_ids_to_remove = [
+                        cid for cid, client_obj in self.clients.items()
+                        if (current_monotonic_time - client_obj.last_seen) > CLIENT_SESSION_TIMEOUT
+                    ]
+                    # Remove identified inactive clients
+                    for cid in inactive_client_ids_to_remove:
+                        client_obj = self.clients.pop(cid, None) # Safely remove from dict by ID
+                        if client_obj: # If client was found and removed
+                            self.clients_by_name.pop(client_obj.name, None) # Also remove from dict by name
+                            inactive_clients_removed_count += 1
+                            logger.info(f"Client '{client_obj.name}' (ID: {cid.hex()}) session timed out due to inactivity. Removed from active memory pool.")
+                  # --- Stale partial file transfer data cleanup (for currently active clients) ---
+                with self.clients_lock: # Get a list of current clients to iterate over (snapshot)
+                    active_clients_list = list(self.clients.values()) 
+                
+                stale_partial_files_cleaned_count = sum(
+                    client_obj.cleanup_stale_partial_files() for client_obj in active_clients_list
+                )
 
-            # Get network server connection stats
-            network_stats = self.network_server.get_connection_stats()
+                # --- Console Status Update (Basic UI Element) ---
+                with self.clients_lock: # Get current count of active clients in memory
+                    active_clients_in_memory = len(self.clients)
+                
+                # Query database for overall stats (handle potential DB errors gracefully for status reporting)
+                try:
+                    db_total_clients_row = self._db_execute("SELECT COUNT(*) FROM clients", fetchone=True)
+                    db_total_clients_count = db_total_clients_row[0] if db_total_clients_row else "N/A (DB Error)"
+                    db_total_files_row = self._db_execute("SELECT COUNT(*) FROM files", fetchone=True)
+                    db_total_files_count = db_total_files_row[0] if db_total_files_row else "N/A (DB Error)"
+                    db_verified_files_row = self._db_execute("SELECT COUNT(*) FROM files WHERE Verified = 1", fetchone=True)
+                    db_verified_files_count = db_verified_files_row[0] if db_verified_files_row else "N/A (DB Error)"
+                except ServerError: # If _db_execute raises ServerError due to DB issues
+                    db_total_clients_count, db_total_files_count, db_verified_files_count = "DB_Error", "DB_Error", "DB_Error"
 
-            # Construct a more structured status message for the console
-            current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            status_header = f"[Server Status @ {current_time_str}]"
-            status_lines = [
-                f"{status_header:<80}",
-                f"{'Active Client Sessions (In-Memory):':<40} {active_clients_in_memory:<10}",
-                f"{'Active Network Connections:':<40} {network_stats['active_connections']:<10}",
-                f"{'Total Registered Clients (DB):':<40} {db_total_clients_count:<10}",
-                f"{'Total Files Stored (DB):':<40} {db_total_files_count:<10}",
-                f"{'Verified Files (DB):':<40} {db_verified_files_count:<10}",
-                f"{'Cleaned Inactive Sessions (This Cycle):':<40} {inactive_clients_removed_count:<10}",
-                f"{'Cleaned Stale Partial Files (This Cycle):':<40} {stale_partial_files_cleaned_count:<10}",
-                f"{'-' * 80}"
-            ]
-            logger.info("\n" + "\n".join(status_lines))
+                # Construct a more structured status message for the console
+                current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                status_header = f"[Server Status @ {current_time_str}]"
+                status_lines = [
+                    f"{status_header:<80}",
+                    f"{'Active Client Sessions (In-Memory):':<40} {active_clients_in_memory:<10}",
+                    f"{'Total Registered Clients (DB):':<40} {db_total_clients_count:<10}",
+                    f"{'Total Files Stored (DB):':<40} {db_total_files_count:<10}",
+                    f"{'Verified Files (DB):':<40} {db_verified_files_count:<10}",
+                    f"{'Cleaned Inactive Sessions (This Cycle):':<40} {inactive_clients_removed_count:<10}",
+                    f"{'Cleaned Stale Partial Files (This Cycle):':<40} {stale_partial_files_cleaned_count:<10}",
+                    f"{'-' * 80}"
+                ]                # Log to file normally, print to console in a block
+                logger.info("\n" + "\n".join(status_lines))
+                
+                # Update GUI with current stats
+                if isinstance(db_total_clients_count, int):
+                    self._update_gui_client_count(connected=active_clients_in_memory, total=db_total_clients_count)
+                else:
+                    self._update_gui_client_count(connected=active_clients_in_memory)
+                
+                # Update GUI with maintenance stats
+                self._update_gui_maintenance_stats(
+                    files_cleaned=0,  # Could track file cleanup if implemented
+                    partial_files_cleaned=stale_partial_files_cleaned_count,
+                    clients_cleaned=inactive_clients_removed_count
+                )
+
+
+            except Exception as e: # Catch-all for any unexpected errors within the maintenance loop
+                logger.critical(f"Critical error in server's periodic maintenance job: {e}", exc_info=True)
             
-            # Update GUI with current stats
-            if isinstance(db_total_clients_count, int):
-                self._update_gui_client_count(connected=active_clients_in_memory, total=db_total_clients_count)
-            else:
-                self._update_gui_client_count(connected=active_clients_in_memory)
-            
-            # Update GUI with maintenance stats
-            self._update_gui_maintenance_stats(
-                files_cleaned=0,  # Could track file cleanup if implemented
-                partial_files_cleaned=stale_partial_files_cleaned_count,
-                clients_cleaned=inactive_clients_removed_count
-            )
-
-        except Exception as e: # Catch-all for any unexpected errors within the maintenance function
-            logger.critical(f"Critical error in server's periodic maintenance job: {e}", exc_info=True)
+            # Wait for the defined maintenance interval or until server shutdown is signaled
+            self.shutdown_event.wait(timeout=MAINTENANCE_INTERVAL) 
+        logger.info("Server maintenance thread has stopped.")
 
 
     def start(self):
@@ -456,18 +503,23 @@ class BackupServer:
         # Update GUI with server status - with delay to ensure GUI is ready
         import time
         time.sleep(0.5)  # Give GUI time to fully initialize
-        self.gui_manager.update_server_status(True, "0.0.0.0", self.port)
-        self.gui_manager.update_client_stats()
+        self._update_gui_status(True, "0.0.0.0", self.port)
+        self._update_gui_client_count()
 
-        # Force a complete status update with connected/total client counts
-        with self.clients_lock:
-            active_clients = len(self.clients)
-        try:
-            db_total_clients_row = self.db_manager.execute("SELECT COUNT(*) FROM clients", fetchone=True)
-            db_total_clients = db_total_clients_row[0] if db_total_clients_row else 0
-            self.gui_manager.force_status_update(True, "0.0.0.0", self.port, active_clients, db_total_clients)
-        except:
-            self.gui_manager.force_status_update(True, "0.0.0.0", self.port, active_clients, 0)
+        # Force another update after a short delay to ensure it takes
+        def delayed_gui_update():
+            time.sleep(2.0)
+            self._update_gui_status(True, "0.0.0.0", self.port)
+            with self.clients_lock:
+                active_clients = len(self.clients)
+            try:
+                db_total_clients = self._db_execute("SELECT COUNT(*) FROM clients")[0][0]
+                self._update_gui_client_count(connected=active_clients, total=db_total_clients)
+            except:
+                self._update_gui_client_count(connected=active_clients)
+
+        # Start delayed update in background thread
+        threading.Thread(target=delayed_gui_update, daemon=True).start()
         
         # Main server loop: accepts new client connections
         logger.info("Entering main accept loop...")
@@ -574,7 +626,7 @@ class BackupServer:
         logger.info("Server has been stopped.")
         
         # Update GUI to show server stopped
-        self.gui_manager.shutdown_gui()
+        self._update_gui_status(False)
 
 
     def _read_exact(self, sock: socket.socket, num_bytes: int) -> bytes:
@@ -833,9 +885,379 @@ class BackupServer:
 
 
     # Request handlers have been moved to request_handlers.py for better modularity
-    # Methods extracted: _handle_registration, _handle_send_public_key, _handle_reconnect,
-    # _handle_send_file, _handle_crc_ok, _handle_crc_invalid_retry, _handle_crc_failed_abort,
-    # _is_valid_filename_for_storage
+
+
+    # _handle_send_public_key moved to request_handlers.py
+
+
+    def _handle_reconnect(self, sock: socket.socket, client: Client, payload: bytes):
+        """
+        Handles client reconnection request (Code 1027).
+        Client object is already resolved by ID from request header.
+        Payload: char name[255]; (null-terminated, padded)
+        """
+        name_field_protocol_len = 255
+        if len(payload) != name_field_protocol_len:
+            raise ProtocolError(f"Reconnect Request (1027): Invalid payload size. Expected {name_field_protocol_len} bytes, got {len(payload)}.")
+        
+        try:
+            name_from_payload = self._parse_string_from_payload(payload, name_field_protocol_len, MAX_CLIENT_NAME_LENGTH, "Client Name")
+
+            # Validate that name in payload matches the known name for this client ID
+            if client.name != name_from_payload:
+                logger.warning(f"Reconnect: Name mismatch for Client ID {client.id.hex()}. Client's known name: '{client.name}', Name in payload: '{name_from_payload}'. Sending Reconnect Failed response.")
+                # Response Payload (1606): client_id[16] (client's ID from header, as per spec)
+                self._send_response(sock, RESP_RECONNECT_FAIL, client.id)
+                return
+            
+            # Client must have a public key on record from a previous session to encrypt a new AES key
+            if not client.public_key_obj: 
+                logger.warning(f"Reconnect Failed: Client '{client.name}' (ID: {client.id.hex()}) attempting to reconnect, but has no public key on record. Cannot send a new AES key.")
+                self._send_response(sock, RESP_RECONNECT_FAIL, client.id)
+                return
+
+            # Generate a new AES session key for this reconnected session
+            new_aes_key = get_random_bytes(AES_KEY_SIZE_BYTES)
+            client.set_aes_key(new_aes_key) # Store new AES key in client object
+              # Encrypt the new AES key with the client's stored public RSA key
+            # Import SHA256 for OAEP padding to match client expectations
+            from crypto_compat import SHA256
+            cipher_rsa = PKCS1_OAEP.new(client.public_key_obj, hashAlgo=SHA256)
+            aes_key = client.get_aes_key()
+            if aes_key is None:
+                raise ServerError("Internal Server Error: Client's AES key is not available for encryption.")
+            encrypted_aes_key = cipher_rsa.encrypt(aes_key)
+            
+            # Update client's record in the database (updates LastSeen and current session AESKey)
+            self._save_client_to_db(client)
+
+            # Construct and send Response 1605 (Reconnect Success + AES Key)
+            # Payload: client_id[16] (client's ID), encrypted_aes_key[]
+            response_payload = client.id + encrypted_aes_key
+            self._send_response(sock, RESP_RECONNECT_AES_SENT, response_payload)
+            logger.info(f"Client '{client.name}' reconnected successfully. A new AES session key has been sent (encrypted).")
+
+        except ProtocolError as e: # Errors from parsing or payload size
+            logger.error(f"Reconnect protocol error for client '{client.name}': {e}")
+            self._send_response(sock, RESP_RECONNECT_FAIL, client.id) # Send client's ID with failure
+        except Exception as e_reconnect: # Catch RSA encryption errors or other unexpected issues
+            logger.critical(f"Unexpected critical error during reconnect process for client '{client.name}': {e_reconnect}", exc_info=True)
+            self._send_response(sock, RESP_RECONNECT_FAIL, client.id)
+
+
+    def _is_valid_filename_for_storage(self, filename_str: str) -> bool:
+        """
+        Validates a filename string for storage on the server.
+        Checks length, allowed characters, and common OS reserved names.
+
+        Args:
+            filename_str: The filename string to validate.
+
+        Returns:
+            True if the filename is considered valid and safe for storage, False otherwise.
+        """
+        # Check actual length of the filename string (not the padded field size)
+        if not (1 <= len(filename_str) <= MAX_ACTUAL_FILENAME_LENGTH):
+            logger.debug(f"Filename validation failed for '{filename_str}': Length ({len(filename_str)}) is out of allowed range (1-{MAX_ACTUAL_FILENAME_LENGTH}).")
+            return False
+        
+        # Disallow path traversal characters (slashes, backslashes, '..') and null bytes within the actual filename
+        if '/' in filename_str or '\\' in filename_str or '..' in filename_str or '\0' in filename_str:
+            logger.debug(f"Filename validation failed for '{filename_str}': Contains path traversal sequence or null characters.")
+            return False
+        
+        # Regex for generally safe filename characters:
+        # Allows alphanumeric, dots, underscores, hyphens, and spaces.
+        # This can be made stricter or more lenient based on specific server OS and policies.
+        if not re.match(r"^[a-zA-Z0-9._\-\s]+$", filename_str):
+            logger.debug(f"Filename validation failed for '{filename_str}': Contains disallowed characters (does not match regex '^[a-zA-Z0-9._\\-\\s]+$').")
+            return False
+        
+        # Check for names that are problematic on some operating systems (e.g., Windows reserved names like CON, PRN)
+        # Comparison is case-insensitive for these reserved names.
+        # We check the base name of the file (without extension) against reserved names.
+        base_filename_no_ext = os.path.splitext(filename_str)[0].upper() # Get name part, uppercase
+        reserved_os_names = {"CON", "PRN", "AUX", "NUL"} | \
+                            {f"COM{i}" for i in range(1,10)} | \
+                            {f"LPT{i}" for i in range(1,10)}
+        if base_filename_no_ext in reserved_os_names:
+             logger.debug(f"Filename validation failed for '{filename_str}': Base name '{base_filename_no_ext}' is a reserved OS name.")
+             return False
+        
+        return True # If all checks pass, filename is considered valid
+
+
+    def _handle_send_file(self, sock: socket.socket, client: Client, payload: bytes):
+        """
+        Handles a file transfer packet (Code 1028) from a client.
+        Manages multi-packet reassembly, decryption, CRC calculation, and storage.
+        Client object is already resolved by ID from request header.
+
+        Payload Structure:
+          uint32_t encrypted_size;    // Size of 'content[]' in this specific packet
+          uint32_t original_size;     // Total original (decrypted) file size
+          uint16_t packet_number;     // Current packet number (1-based)
+          uint16_t total_packets;     // Total number of packets for this entire file
+          char     filename[255];     // Null-terminated, zero-padded filename field
+          uint8_t  content[];         // Encrypted file chunk for this packet
+        """
+        
+        # Size of the metadata part of the payload (fields before the actual file content)
+        metadata_header_size = 4 + 4 + 2 + 2 + MAX_FILENAME_FIELD_SIZE 
+        if len(payload) < metadata_header_size: # Payload must be at least this large
+            raise ProtocolError(f"SendFile Request (1028): Payload is too short for file metadata part ({len(payload)} bytes). Minimum expected: {metadata_header_size}.")        # Unpack metadata fields from the payload (all are little-endian)
+        encrypted_packet_content_size = struct.unpack("<I", payload[:4])[0]
+        original_file_size = struct.unpack("<I", payload[4:8])[0]
+        packet_number = struct.unpack("<H", payload[8:10])[0]
+        total_packets = struct.unpack("<H", payload[10:12])[0]
+        filename_bytes_padded = payload[12 : 12 + MAX_FILENAME_FIELD_SIZE] # Extract the 255-byte filename field
+          # --- Input Validations for File Transfer Metadata ---
+        if not (encrypted_packet_content_size > 0 and encrypted_packet_content_size <= MAX_PAYLOAD_READ_LIMIT - metadata_header_size): # Ensure content size is reasonable
+            raise ProtocolError(f"SendFile: Invalid encrypted_packet_content_size ({encrypted_packet_content_size}). Must be > 0 and within payload limits.")
+        if original_file_size < 0 or original_file_size > MAX_ORIGINAL_FILE_SIZE: # original_file_size can be 0 for empty file
+             raise ProtocolError(f"SendFile: Invalid original_file_size ({original_file_size}). Must be >= 0 and <= {MAX_ORIGINAL_FILE_SIZE}.")
+        if total_packets <= 0: # Must be at least one packet
+            raise ProtocolError(f"SendFile: Invalid total_packets ({total_packets}). Must be > 0.")
+        if packet_number < 1 or packet_number > total_packets: # Packet number must be within valid range
+            raise ProtocolError(f"SendFile: Invalid packet_number ({packet_number}). Must be between 1 and total_packets ({total_packets}).")
+        
+        # Parse and validate the filename string from its padded field
+        try:
+            # Filename is null-terminated within the MAX_FILENAME_FIELD_SIZE byte field
+            filename_str = filename_bytes_padded.split(b'\0', 1)[0].decode('utf-8')
+        except UnicodeDecodeError as e:
+            raise ProtocolError("SendFile: Filename field in payload is not valid UTF-8.") from e
+
+        if not self._is_valid_filename_for_storage(filename_str): # Uses MAX_ACTUAL_FILENAME_LENGTH internally
+            # If filename is invalid, we cannot proceed with this file transfer.
+            raise FileError(f"SendFile: Invalid or unsafe filename received: '{filename_str}'. Transfer aborted for this file.")
+
+        # Extract the actual encrypted content for this packet from the payload
+        actual_encrypted_content_in_payload = payload[metadata_header_size:]
+        if len(actual_encrypted_content_in_payload) != encrypted_packet_content_size: # Verify declared size matches actual
+            raise ProtocolError(f"SendFile: Mismatch for file '{filename_str}'. Declared encrypted content size in packet ({encrypted_packet_content_size}) does not match actual received content size ({len(actual_encrypted_content_in_payload)}).")
+
+        current_aes_key = client.get_aes_key() # Get the current AES session key for this client
+        if not current_aes_key:
+            # This state implies a protocol violation by the client (e.g., attempting to send a file
+            # before completing the public key exchange or a successful reconnect to get an AES key).
+            raise ClientError(f"SendFile: Client '{client.name}' has no active AES key for file decryption. This is a critical protocol violation.")
+        
+        logger.info(f"Client '{client.name}': Receiving file '{filename_str}', Packet {packet_number}/{total_packets} (EncSizeInPkt:{encrypted_packet_content_size}, OrigFileSize:{original_file_size}).")
+
+        # --- Multi-Packet Reassembly Logic ---
+        with client.lock: # Ensure thread-safe access to this specific client's partial_files dictionary
+            # Initialize or retrieve partial file reassembly state for this filename
+            if packet_number == 1: # This is the first packet for this file (or a new attempt for this file)
+                if filename_str in client.partial_files: # If restarting a transfer for an existing partial file
+                    logger.warning(f"Client '{client.name}': Receiving packet 1 for file '{filename_str}', but partial reassembly data already exists. Overwriting previous state and restarting transfer for this file.")
+                # Create a new entry for this file transfer
+                client.partial_files[filename_str] = {
+                    "total_packets": total_packets,
+                    "received_chunks": {}, # Store encrypted chunks here, map: packet_number -> chunk_bytes
+                    "original_size": original_file_size,
+                    "timestamp": time.monotonic() # Track activity for stale cleanup
+                }
+            
+            file_state = client.partial_files.get(filename_str) # Get the current reassembly state for this file
+            
+            # Consistency checks if this is not the first packet:
+            # Ensure total_packets and original_size match what was declared in packet 1.
+            if not file_state or \
+               (packet_number > 1 and (file_state["total_packets"] != total_packets or file_state["original_size"] != original_file_size)):
+                logger.error(f"Client '{client.name}': Inconsistent file transfer metadata for ongoing transfer of '{filename_str}'. Expected TotalPkts:{file_state.get('total_packets') if file_state else 'N/A'}/OrigSize:{file_state.get('original_size') if file_state else 'N/A'}, but current packet declares TotalPkts:{total_packets}/OrigSize:{original_file_size}. Aborting this file transfer attempt.")
+                if file_state : client.clear_partial_file(filename_str) # Clean up the inconsistent state from memory
+                self._send_response(sock, RESP_GENERIC_SERVER_ERROR) # Send a generic error to the client
+                return # Stop processing this request
+            
+            if packet_number in file_state["received_chunks"]: # Check for duplicate packets
+                logger.warning(f"Client '{client.name}': Received duplicate packet number {packet_number} for file '{filename_str}'. Overwriting previous chunk for this packet number.")
+            
+            # Store the received encrypted chunk for this packet number
+            file_state["received_chunks"][packet_number] = actual_encrypted_content_in_payload
+            file_state["timestamp"] = time.monotonic() # Update timestamp on receiving any packet for this file
+
+            # --- Check if all packets for the current file have been received ---
+            if len(file_state["received_chunks"]) == total_packets:
+                logger.info(f"Client '{client.name}': All {total_packets} packets for file '{filename_str}' have been received. Proceeding to reassemble and decrypt...")
+                
+                # Reassemble all encrypted chunks in the correct packet order
+                full_encrypted_data = b''
+                try:
+                    for i in range(1, total_packets + 1): # Iterate from packet 1 to total_packets
+                        full_encrypted_data += file_state["received_chunks"][i] # Append chunk
+                except KeyError: # Should not happen if len check above is correct and all packets stored
+                    logger.critical(f"INTERNAL SERVER LOGIC ERROR: A packet is missing during reassembly of '{filename_str}' for client '{client.name}' despite count match. This indicates a flaw in reassembly logic.")
+                    client.clear_partial_file(filename_str) # Cleanup partial state
+                    self._send_response(sock, RESP_GENERIC_SERVER_ERROR) # Send generic error
+                    return
+
+                try:
+                    # Decrypt the fully reassembled encrypted data
+                    # AES-CBC mode, IV is all zeros (as per simplified spec), PKCS7 padding
+                    cipher_aes = AES.new(current_aes_key, AES.MODE_CBC, iv=b'\0' * 16)
+                    decrypted_data = unpad(cipher_aes.decrypt(full_encrypted_data), AES.block_size)
+
+                    # Verify that the size of the decrypted data matches the original_file_size from metadata
+                    if len(decrypted_data) != original_file_size:
+                        raise FileError(f"Decrypted data size for file '{filename_str}' ({len(decrypted_data)}) does not match the declared original file size ({original_file_size}). File may be corrupted or there was a protocol error.")
+
+                    # Calculate CRC32 checksum on the fully decrypted data
+                    calculated_crc_val = self._calculate_crc(decrypted_data)
+                    
+                    # Atomically save the decrypted file to server storage:
+                    # 1. Write to a temporary file.
+                    # 2. If successful, rename the temporary file to the final destination path.
+                    # This prevents leaving partially written/corrupted files if the server crashes mid-write.
+                    temp_file_id = uuid.uuid4() # Generate a unique ID for the temporary filename
+                    temp_save_path = os.path.join(FILE_STORAGE_DIR, f"{filename_str}.{temp_file_id}.tmp_EncryptedBackup")
+                    final_save_path = os.path.join(FILE_STORAGE_DIR, filename_str) # Final path using the original filename
+                    
+                    try:
+                        with open(temp_save_path, 'wb') as f_temp: # Write decrypted data to temp file
+                            f_temp.write(decrypted_data)
+
+                        # On Windows, os.rename() fails if destination exists, so remove it first
+                        if os.path.exists(final_save_path):
+                            os.remove(final_save_path)
+                            logger.debug(f"Removed existing file '{final_save_path}' before saving new version")
+
+                        os.rename(temp_save_path, final_save_path) # Atomically rename (on POSIX if same filesystem)
+                        logger.info(f"Client '{client.name}': File '{filename_str}' (Original Size: {original_file_size} bytes) successfully decrypted and saved to storage path: '{final_save_path}'.")
+
+                        # Update GUI with transfer statistics
+                        self._update_gui_transfer_stats(bytes_transferred=original_file_size)
+                        self._update_gui_success(f"File '{filename_str}' received from client '{client.name}'")
+                    except OSError as e_os_save: # Catch errors during file write or rename
+                        raise FileError(f"Failed to save decrypted file '{filename_str}' to server storage: {e_os_save}") from e_os_save
+                    
+                    # Persist file information to the database (initially marked as not verified by client)
+                    self._save_file_info_to_db(client.id, filename_str, final_save_path, False) # Verified=False
+                    
+                    # Send Response Code 1603 (File Received + CRC Information)
+                    # Payload: client_id[16], file_size (TOTAL ENCRYPTED size of all chunks)[4], filename[255 (padded)], crc[4]
+                    response_payload = client.id + \
+                                       struct.pack("<I", len(full_encrypted_data)) + \
+                                       filename_bytes_padded + \
+                                       struct.pack("<I", calculated_crc_val)
+                    self._send_response(sock, RESP_FILE_CRC, response_payload)
+                    logger.info(f"Client '{client.name}': Sent CRC ({calculated_crc_val}) for file '{filename_str}'. Now awaiting client's CRC verification response.")
+
+                except (ValueError, FileError, ProtocolError) as e: # ValueError can come from unpad() or struct issues
+                    logger.error(f"Client '{client.name}': Error occurred during decryption or final processing of fully received file '{filename_str}': {e}")
+                    if 'temp_save_path' in locals() and os.path.exists(temp_save_path): # Ensure cleanup of temp file on error
+                        try: os.remove(temp_save_path)
+                        except OSError as e_rm_tmp: logger.error(f"Failed to remove temporary file '{temp_save_path}' after error: {e_rm_tmp}")
+                    self._send_response(sock, RESP_GENERIC_SERVER_ERROR) # Send a generic error to the client
+                except Exception as e_final_processing: # Catch-all for other unexpected errors during this stage
+                     logger.critical(f"Client '{client.name}': Unexpected critical error during final processing of file '{filename_str}': {e_final_processing}", exc_info=True)
+                     if 'temp_save_path' in locals() and os.path.exists(temp_save_path): os.remove(temp_save_path) # Cleanup
+                     self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
+                finally:
+                    # Whether processing was successful or failed, clear the partial file reassembly state from memory for this file
+                    client.clear_partial_file(filename_str)
+            # If not all packets for the file have been received yet, the server implicitly waits for more packets.
+            # The specification does not require an ACK from the server for each individual file packet received.
+
+    def _handle_crc_ok(self, sock: socket.socket, client: Client, payload: bytes):
+        """
+        Handles client's confirmation that CRC matches (Code 1029).
+        Client object is already resolved.
+        Payload: char filename[255]; (null-terminated, padded)
+        """
+        filename_field_protocol_len = 255 # Expected length of the filename field in the protocol
+        if len(payload) != filename_field_protocol_len:
+            raise ProtocolError(f"CRC OK Request (1029): Invalid payload size. Expected {filename_field_protocol_len} bytes, got {len(payload)}.")
+        
+        try:
+            # Parse filename from payload
+            filename_str = self._parse_string_from_payload(payload, filename_field_protocol_len, MAX_ACTUAL_FILENAME_LENGTH, "Filename")
+        except ProtocolError as e_parse: # Error during parsing of the filename
+            logger.error(f"Client '{client.name}': CRC OK request error - {e_parse}")
+            self._send_response(sock, RESP_GENERIC_SERVER_ERROR) # Send generic error if filename parsing fails
+            return
+
+        logger.info(f"Client '{client.name}' confirmed CRC OK for file '{filename_str}'. File transfer is now successfully completed and verified.")
+        # Determine the path where the file was saved (as done in _handle_send_file)
+        final_save_path = os.path.join(FILE_STORAGE_DIR, filename_str)
+        # Update the file's record in the database to mark it as verified
+        self._save_file_info_to_db(client.id, filename_str, final_save_path, True) # Verified=True
+        
+        # Send Response 1604 (General ACK)
+        # Payload: client_id[16] (client's own ID)
+        self._send_response(sock, RESP_ACK, client.id)
+
+
+    def _handle_crc_invalid_retry(self, sock: socket.socket, client: Client, payload: bytes):
+        """
+        Handles client's report that CRC does not match and they will retry (Code 1030).
+        Client object is already resolved.
+        Payload: char filename[255]; (null-terminated, padded)
+        """
+        filename_field_protocol_len = 255
+        if len(payload) != filename_field_protocol_len:
+            raise ProtocolError(f"CRC Invalid Retry Request (1030): Invalid payload size. Expected {filename_field_protocol_len}, got {len(payload)}.")
+        
+        try:
+            filename_str = self._parse_string_from_payload(payload, filename_field_protocol_len, MAX_ACTUAL_FILENAME_LENGTH, "Filename")
+        except ProtocolError as e_parse:
+            logger.error(f"Client '{client.name}': CRC Invalid Retry request error - {e_parse}")
+            self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
+            return
+            
+        logger.warning(f"Client '{client.name}' reported CRC invalid for file '{filename_str}'. Client will attempt to retry sending the entire file.")
+        # Server-Side Action:
+        # The file on disk (if it was saved from the previous attempt) is currently marked as unverified in the DB.
+        # The client is expected to re-initiate the entire file transfer sequence (REQ_SEND_FILE from packet 1).
+        # The server's in-memory partial file reassembly state for this filename (if any) was cleared
+        # when the RESP_FILE_CRC was sent after the previous attempt.
+        # If the file exists on disk from the failed attempt, it will be overwritten when the new transfer attempt succeeds.
+        # Ensure the database record reflects the file is not verified.
+        final_save_path = os.path.join(FILE_STORAGE_DIR, filename_str) # Path remains relevant for DB record
+        self._save_file_info_to_db(client.id, filename_str, final_save_path, False) # Ensure Verified=False
+        
+        # Send Response 1604 (General ACK)
+        self._send_response(sock, RESP_ACK, client.id)
+
+
+    def _handle_crc_failed_abort(self, sock: socket.socket, client: Client, payload: bytes):
+        """
+        Handles client's report of final CRC failure and aborting transfer (Code 1031).
+        Client object is already resolved.
+        Payload: char filename[255]; (null-terminated, padded)
+        """
+        filename_field_protocol_len = 255
+        if len(payload) != filename_field_protocol_len:
+            raise ProtocolError(f"CRC Failed Abort Request (1031): Invalid payload size. Expected {filename_field_protocol_len}, got {len(payload)}.")
+        
+        try:
+            filename_str = self._parse_string_from_payload(payload, filename_field_protocol_len, MAX_ACTUAL_FILENAME_LENGTH, "Filename")
+        except ProtocolError as e_parse:
+            logger.error(f"Client '{client.name}': CRC Failed Abort request error - {e_parse}")
+            self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
+            return
+
+        logger.error(f"Client '{client.name}' aborted transfer for file '{filename_str}' due to final CRC mismatch. Server will delete its copy of this file.")
+        final_save_path = os.path.join(FILE_STORAGE_DIR, filename_str) # Path to the file on server
+        
+        try: # Attempt to remove the corrupted/aborted file from server storage
+            if os.path.exists(final_save_path):
+                os.remove(final_save_path)
+                logger.info(f"Successfully removed aborted file from server storage: {final_save_path}")
+            else:
+                # This might happen if the file save failed previously or was already cleaned up.
+                logger.warning(f"Aborted file '{final_save_path}' was not found on server for deletion (Client: '{client.name}'). It might have failed saving earlier.")
+        except OSError as e_os_remove: # Catch errors during file deletion
+            logger.error(f"Error occurred while attempting to remove aborted file '{final_save_path}' from storage: {e_os_remove}")
+            
+        # Update Database: The file is confirmed as not verified.
+        # Depending on specific requirements, one might choose to delete the file record from the database entirely,
+        # or simply ensure its 'Verified' status is False. The specification implies keeping a record, so update Verified status.
+        self._save_file_info_to_db(client.id, filename_str, final_save_path, False) # Ensure Verified=False
+        
+        # Send Response 1604 (General ACK)
+        self._send_response(sock, RESP_ACK, client.id)
+
 
     def _calculate_crc(self, data: bytes) -> int:
         """
@@ -869,39 +1291,84 @@ class BackupServer:
     # --- GUI Helper Methods ---
     def _update_gui_status(self, running: bool, address: str = "", port: int = 0):
         """Update GUI server status if available."""
-        self.gui_manager.update_server_status(running, address, port)
+        if self.gui_enabled and self.gui:
+            try:
+                self.gui.update_server_status(running, address, port)
+            except Exception as e:
+                logger.debug(f"GUI status update failed: {e}")
 
     def _update_gui_client_count(self, connected=None, total=None, active_transfers=None):
         """Update GUI with current client count."""
-        # If connected not provided, get current count
-        if connected is None and hasattr(self, 'clients') and hasattr(self, 'clients_lock'):
-            with self.clients_lock:
-                connected = len(self.clients)
-        
-        self.gui_manager.update_client_stats(connected=connected, total=total, active_transfers=active_transfers)
+        if self.gui_enabled and self.gui:
+            try:
+                # Build arguments dict to only pass non-None values
+                kwargs = {}
+                if connected is not None:
+                    kwargs['connected'] = connected
+                elif hasattr(self, 'clients') and hasattr(self, 'clients_lock'):
+                    # If connected not provided, get current count
+                    with self.clients_lock:
+                        kwargs['connected'] = len(self.clients)
+                
+                if total is not None:
+                    kwargs['total'] = total
+                if active_transfers is not None:
+                    kwargs['active_transfers'] = active_transfers
+                
+                if kwargs:  # Only call if we have something to update
+                    self.gui.update_client_stats(**kwargs)
+            except Exception as e:
+                logger.debug(f"GUI client count update failed: {e}")
 
     def _update_gui_transfer_stats(self, bytes_transferred=None, last_activity=None):
         """Update GUI with transfer statistics."""
-        self.gui_manager.update_transfer_stats(bytes_transferred=bytes_transferred, last_activity=last_activity)
+        if self.gui_enabled and self.gui:
+            try:
+                # Build arguments dict to only pass non-None values
+                kwargs = {}
+                if bytes_transferred is not None:
+                    kwargs['bytes_transferred'] = bytes_transferred
+                if last_activity is not None:
+                    kwargs['last_activity'] = last_activity
+                else:
+                    kwargs['last_activity'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                self.gui.update_transfer_stats(**kwargs)
+            except Exception as e:
+                logger.debug(f"GUI transfer stats update failed: {e}")
 
     def _update_gui_maintenance_stats(self, files_cleaned=0, partial_files_cleaned=0, 
                                     clients_cleaned=0, last_cleanup=None):
         """Update GUI with maintenance statistics."""
-        stats = {
-            'files_cleaned': files_cleaned,
-            'partial_files_cleaned': partial_files_cleaned,
-            'clients_cleaned': clients_cleaned,
-            'last_cleanup': last_cleanup
-        }
-        self.gui_manager.update_maintenance_stats(stats)
+        if self.gui_enabled and self.gui:
+            try:
+                if last_cleanup is None:
+                    last_cleanup = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                stats = {
+                    'files_cleaned': files_cleaned,
+                    'partial_files_cleaned': partial_files_cleaned,
+                    'clients_cleaned': clients_cleaned,
+                    'last_cleanup': last_cleanup
+                }
+                self.gui.update_maintenance_stats(stats)
+            except Exception as e:
+                logger.debug(f"GUI maintenance stats update failed: {e}")
 
     def _update_gui_error(self, error_message: str):
         """Update GUI with error information."""
-        self.gui_manager.show_error(error_message)
+        if self.gui_enabled and self.gui:
+            try:
+                self.gui.show_error(error_message)
+            except Exception as e:
+                logger.debug(f"GUI error update failed: {e}")
     
     def _update_gui_success(self, success_message: str):
         """Update GUI with success information."""
-        self.gui_manager.show_success(success_message)
+        if self.gui_enabled and self.gui:
+            try:
+                self.gui.show_success(success_message)
+            except Exception as e:
+                logger.debug(f"GUI success update failed: {e}")
 
 
 # --- Main Execution Guard ---

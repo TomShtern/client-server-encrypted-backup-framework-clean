@@ -9,7 +9,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # 3. Define the Executable: List all of our application's source files.
 add_executable(EncryptedBackupClient
     src/client/main.cpp
-    src/client/client.cpp
+    src/client/ClientCore.cpp
+    src/client/ClientCrypto.cpp
+    src/client/ClientFileOps.cpp
+    src/client/ClientGUI.cpp
     src/client/protocol.cpp
     src/client/cksum.cpp
     src/client/ClientGUIHelpers.cpp

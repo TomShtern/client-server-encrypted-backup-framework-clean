@@ -1,0 +1,67 @@
+# config.py
+# Server Configuration Constants and Settings
+# Extracted from monolithic server.py for better modularity
+
+import logging
+import sys
+
+# --- Server Configuration Constants ---
+SERVER_VERSION = 3
+DEFAULT_PORT = 1256
+PORT_CONFIG_FILE = "port.info"
+DATABASE_NAME = "defensive.db"
+FILE_STORAGE_DIR = "received_files"  # Directory to store received files
+
+# Behavior Configuration
+CLIENT_SOCKET_TIMEOUT = 60.0  # Timeout for individual socket operations with a client
+CLIENT_SESSION_TIMEOUT = 10 * 60  # Overall inactivity timeout for a client session (10 minutes)
+PARTIAL_FILE_TIMEOUT = 15 * 60  # Timeout for incomplete multi-packet file transfers (15 minutes)
+MAINTENANCE_INTERVAL = 60.0  # How often to run maintenance tasks (seconds)
+MAX_PAYLOAD_READ_LIMIT = (16 * 1024 * 1024) + 1024  # Max size for a single payload read (16MB chunk + headers)
+MAX_ORIGINAL_FILE_SIZE = 4 * 1024 * 1024 * 1024  # Max original file size (e.g., 4GB) - for sanity checking
+MAX_CONCURRENT_CLIENTS = 50  # Max number of concurrent client connections
+
+MAX_CLIENT_NAME_LENGTH = 100  # As per spec (implicit from me.info and general limits)
+MAX_FILENAME_FIELD_SIZE = 255  # Size of the filename field in protocol
+MAX_ACTUAL_FILENAME_LENGTH = 250  # Practical limit for actual filename within the field
+RSA_PUBLIC_KEY_SIZE = 160  # Bytes, X.509 format (for 1024-bit RSA - per protocol specification)
+AES_KEY_SIZE_BYTES = 32  # 256-bit AES
+
+# Logging Configuration
+LOG_FORMAT = '%(asctime)s - %(threadName)s - %(levelname)s - %(message)s'
+
+def setup_logging():
+    """Configure logging for the backup server."""
+    logging.basicConfig(
+        level=logging.DEBUG,  # Set to DEBUG for verbose output
+        format=LOG_FORMAT,
+        handlers=[
+            logging.FileHandler("server.log", mode='a'),  # Append mode
+            logging.StreamHandler(sys.stdout)  # Also log to console
+        ]
+    )
+    return logging.getLogger(__name__)
+
+def read_port_config() -> int:
+    """Reads server port from `port.info`, defaults to `DEFAULT_PORT` on error."""
+    logger = logging.getLogger(__name__)
+    try:
+        with open(PORT_CONFIG_FILE, 'r') as f:
+            port_str = f.read().strip()
+            if not port_str:  # Handle case where port.info is empty
+                raise ValueError("Port configuration file is empty.")
+            port = int(port_str)
+            # Typically, ports 0-1023 are privileged. Users should use >1023.
+            if not (1024 <= port <= 65535):
+                raise ValueError(f"Port number {port} is out of the recommended user range (1024-65535).")
+            logger.info(f"Successfully read port {port} from configuration file '{PORT_CONFIG_FILE}'.")
+            return port
+    except FileNotFoundError:
+        logger.warning(f"Port configuration file '{PORT_CONFIG_FILE}' not found. Using default port {DEFAULT_PORT}.")
+        return DEFAULT_PORT
+    except ValueError as e:  # Catches empty file, non-integer content, and out-of-range errors
+        logger.warning(f"Invalid port configuration in '{PORT_CONFIG_FILE}': {e}. Using default port {DEFAULT_PORT}.")
+        return DEFAULT_PORT
+    except Exception as e:  # Catch-all for other potential I/O errors
+        logger.error(f"Unexpected error reading port configuration file '{PORT_CONFIG_FILE}': {e}. Using default port {DEFAULT_PORT}.")
+        return DEFAULT_PORT
