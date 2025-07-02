@@ -1,10 +1,21 @@
 # 1. Basic Project Setup: Define the project name and require a modern CMake version.
 cmake_minimum_required(VERSION 3.15)
+# Handle modern CMake policies for Boost
+cmake_policy(SET CMP0167 NEW)
 project(EncryptedBackupClient VERSION 1.0)
 
 # 2. Set C++ Standard: Enforce C++17 for compatibility.
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Fix Windows-specific compilation issues
+if(WIN32)
+    add_compile_definitions(
+        WIN32_LEAN_AND_MEAN    # Exclude rarely-used APIs
+        NOMINMAX               # Prevent Windows.h from defining min/max macros
+        _WIN32_WINNT=0x0601   # Target Windows 7 and later
+    )
+endif()
 
 # 3. Define the Executable: List all of our application's source files.
 add_executable(EncryptedBackupClient
@@ -12,15 +23,13 @@ add_executable(EncryptedBackupClient
     src/client/ClientCore.cpp
     src/client/ClientCrypto.cpp
     src/client/ClientFileOps.cpp
-    src/client/ClientGUI.cpp
     src/client/protocol.cpp
     src/client/cksum.cpp
-    src/client/ClientGUIHelpers.cpp
     src/client/ClientLogger.cpp
-    src/client/SimpleWebServer_Clean.cpp
-    src/client/WebServerBackend.cpp
+    # src/client/SimpleWebServer_Clean.cpp  # Standalone server with its own main()
+    # src/client/WebServerBackend.cpp  # Temporarily disabled due to compilation issues
     src/utils/CompressionWrapper.cpp
-    src/wrappers/RSAWrapperCNG.cpp
+    src/wrappers/RSAWrapper.cpp  # Using Crypto++ implementation
     src/wrappers/AESWrapper.cpp
     src/wrappers/Base64Wrapper.cpp
 )
@@ -30,27 +39,23 @@ target_include_directories(EncryptedBackupClient PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# 5. Find and Link Libraries: Use vcpkg to find and link Boost and Crypto++ libraries.
-find_package(Boost REQUIRED COMPONENTS asio system bind beast)
+# 5. Find and Link Libraries: Use vcpkg packages
+find_package(Boost REQUIRED COMPONENTS asio beast)
 find_package(cryptopp CONFIG REQUIRED)
+find_package(ZLIB REQUIRED)
 
 # 6. Link Libraries: Include both external and Windows system libraries
 target_link_libraries(EncryptedBackupClient PRIVATE 
     Boost::asio
-    Boost::system
-    Boost::bind
     Boost::beast
     cryptopp::cryptopp
+    ZLIB::ZLIB
 )
 
-# 7. Windows-specific libraries for CNG RSA implementation
+# 7. Windows-specific libraries (minimal set for networking)
 if(WIN32)
     target_link_libraries(EncryptedBackupClient PRIVATE 
-        ws2_32      # Windows Sockets
-        crypt32     # Windows Cryptography API
-        bcrypt      # Windows CNG (Cryptography Next Generation)
-        advapi32    # Advanced Windows API
-        user32      # Windows User Interface
+        ws2_32      # Windows Sockets - required for networking
     )
 endif()
 

@@ -2,55 +2,50 @@
 #include <iostream>
 #include <chrono>
 #include <algorithm>
+#include <zlib.h>
 
-// Simple compression implementation using run-length encoding for demonstration
-// In production, you would use zlib or another compression library
+// Helper function to log zlib errors
+void log_zlib_error(int ret, z_stream* strm) {
+    if (strm->msg) {
+        std::cerr << "Zlib error: " << ret << " - " << strm->msg << std::endl;
+    } else {
+        std::cerr << "Zlib error: " << ret << std::endl;
+    }
+}
 
 std::vector<uint8_t> CompressionWrapper::compress(const uint8_t* data, size_t size) {
     if (!data || size == 0) {
         return {};
     }
-    
-    // Simple run-length encoding implementation
-    std::vector<uint8_t> compressed;
-    compressed.reserve(size); // Reserve space to avoid frequent reallocations
-    
-    for (size_t i = 0; i < size; ) {
-        uint8_t currentByte = data[i];
-        size_t count = 1;
-        
-        // Count consecutive identical bytes (max 255)
-        while (i + count < size && data[i + count] == currentByte && count < 255) {
-            count++;
-        }
-        
-        if (count >= 3) {
-            // Use RLE for runs of 3 or more
-            compressed.push_back(0xFF); // Escape byte
-            compressed.push_back(static_cast<uint8_t>(count));
-            compressed.push_back(currentByte);
-        } else {
-            // Store bytes directly, escaping 0xFF
-            for (size_t j = 0; j < count; j++) {
-                if (currentByte == 0xFF) {
-                    compressed.push_back(0xFF);
-                    compressed.push_back(0x00); // Escaped 0xFF
-                } else {
-                    compressed.push_back(currentByte);
-                }
-            }
-        }
-        
-        i += count;
+
+    z_stream strm;
+    strm.zalloc = Z_NULL;
+    strm.zfree = Z_NULL;
+    strm.opaque = Z_NULL;
+
+    if (deflateInit(&strm, Z_DEFAULT_COMPRESSION) != Z_OK) {
+        return {};
     }
-    
-    // Only return compressed data if it's actually smaller
-    if (compressed.size() < size) {
-        return compressed;
-    } else {
-        // Return original data if compression didn't help
-        return std::vector<uint8_t>(data, data + size);
+
+    strm.avail_in = static_cast<uInt>(size);
+    strm.next_in = (Bytef*)data;
+
+    uLong bound = deflateBound(&strm, static_cast<uLong>(size));
+    std::vector<uint8_t> compressed(bound);
+
+    strm.avail_out = bound;
+    strm.next_out = (Bytef*)compressed.data();
+
+    int ret = deflate(&strm, Z_FINISH);
+    if (ret != Z_STREAM_END) {
+        log_zlib_error(ret, &strm);
+        deflateEnd(&strm);
+        return {};
     }
+
+    compressed.resize(strm.total_out);
+    deflateEnd(&strm);
+    return compressed;
 }
 
 std::vector<uint8_t> CompressionWrapper::compress(const std::string& data) {
@@ -61,36 +56,42 @@ std::vector<uint8_t> CompressionWrapper::decompress(const std::vector<uint8_t>& 
     if (compressedData.empty()) {
         return {};
     }
-    
-    std::vector<uint8_t> decompressed;
-    decompressed.reserve(compressedData.size() * 2); // Estimate decompressed size
-    
-    for (size_t i = 0; i < compressedData.size(); ) {
-        if (compressedData[i] == 0xFF && i + 1 < compressedData.size()) {
-            if (compressedData[i + 1] == 0x00) {
-                // Escaped 0xFF
-                decompressed.push_back(0xFF);
-                i += 2;
-            } else if (i + 2 < compressedData.size()) {
-                // RLE sequence
-                uint8_t count = compressedData[i + 1];
-                uint8_t value = compressedData[i + 2];
-                
-                for (uint8_t j = 0; j < count; j++) {
-                    decompressed.push_back(value);
-                }
-                i += 3;
-            } else {
-                // Malformed data
-                return {};
-            }
-        } else {
-            // Regular byte
-            decompressed.push_back(compressedData[i]);
-            i++;
-        }
+
+    z_stream strm;
+    strm.zalloc = Z_NULL;
+    strm.zfree = Z_NULL;
+    strm.opaque = Z_NULL;
+
+    if (inflateInit(&strm) != Z_OK) {
+        return {};
     }
-    
+
+    strm.avail_in = static_cast<uInt>(compressedData.size());
+    strm.next_in = (Bytef*)compressedData.data();
+
+    // A starting buffer size for the decompressed data.
+    // This will be expanded if needed.
+    size_t buffer_size = compressedData.size() * 4;
+    std::vector<uint8_t> decompressed(buffer_size);
+
+    int ret;
+    do {
+        strm.avail_out = static_cast<uInt>(buffer_size - strm.total_out);
+        strm.next_out = (Bytef*)decompressed.data() + strm.total_out;
+        ret = inflate(&strm, Z_NO_FLUSH);
+        if (ret != Z_OK && ret != Z_STREAM_END) {
+            log_zlib_error(ret, &strm);
+            inflateEnd(&strm);
+            return {};
+        }
+        if (strm.avail_out == 0 && ret != Z_STREAM_END) {
+            buffer_size *= 2;
+            decompressed.resize(buffer_size);
+        }
+    } while (ret != Z_STREAM_END);
+
+    decompressed.resize(strm.total_out);
+    inflateEnd(&strm);
     return decompressed;
 }
 
@@ -116,47 +117,28 @@ bool CompressionWrapper::shouldCompress(const uint8_t* data, size_t size) {
         return false;
     }
     
-    // Quick entropy check - if data has low entropy (many repeated bytes), compression will help
-    std::array<size_t, 256> byteFreq = {};
-    
-    // Sample first 1KB to estimate entropy
-    size_t sampleSize = std::min(size, static_cast<size_t>(1024));
-    for (size_t i = 0; i < sampleSize; i++) {
-        byteFreq[data[i]]++;
-    }
-    
-    // Count unique bytes
-    size_t uniqueBytes = 0;
-    for (size_t freq : byteFreq) {
-        if (freq > 0) {
-            uniqueBytes++;
-        }
-    }
-    
-    // If less than 50% unique bytes in sample, compression likely beneficial
-    return uniqueBytes < 128;
+    // With zlib, it's almost always beneficial to at least try to compress,
+    // as it's fast and effective on a wide range of data.
+    // The decision to use the compressed data will be made based on the result.
+    return true;
 }
 
 std::vector<uint8_t> EnhancedCompressionWrapper::compressWithMetrics(const uint8_t* data, size_t size, CompressionMetrics& metrics) {
     auto start = std::chrono::high_resolution_clock::now();
     
     metrics.originalSize = size;
-    metrics.compressionUsed = CompressionWrapper::shouldCompress(data, size);
     
     std::vector<uint8_t> result;
     
-    if (metrics.compressionUsed) {
+    if (CompressionWrapper::shouldCompress(data, size)) {
         result = CompressionWrapper::compress(data, size);
-        
-        // Check if compression was actually beneficial
-        if (result.size() >= size * CompressionWrapper::MIN_COMPRESSION_RATIO) {
-            // Compression didn't help enough, use original data
-            result = std::vector<uint8_t>(data, data + size);
-            metrics.compressionUsed = false;
-        }
+        metrics.compressionUsed = result.size() < size;
     } else {
-        // Don't compress, use original data
-        result = std::vector<uint8_t>(data, data + size);
+        metrics.compressionUsed = false;
+    }
+
+    if (!metrics.compressionUsed) {
+        result.assign(data, data + size);
     }
     
     auto end = std::chrono::high_resolution_clock::now();

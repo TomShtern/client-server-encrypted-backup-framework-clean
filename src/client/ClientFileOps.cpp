@@ -9,7 +9,7 @@
 bool Client::readTransferInfo() {
     std::ifstream file("transfer.info");
     if (!file.is_open()) {
-        displayError("Cannot open transfer.info", ErrorType::CONFIG);
+        std::cerr << "[ERROR] Cannot open transfer.info" << std::endl;
         return false;
     }
     
@@ -17,13 +17,13 @@ bool Client::readTransferInfo() {
     
     // Line 1: server:port
     if (!std::getline(file, line)) {
-        displayError("Invalid transfer.info format - missing server address", ErrorType::CONFIG);
+        std::cerr << "[ERROR] Invalid transfer.info format - missing server address" << std::endl;
         return false;
     }
     
     size_t colonPos = line.find(':');
     if (colonPos == std::string::npos) {
-        displayError("Invalid server address format (expected IP:port)", ErrorType::CONFIG);
+        std::cerr << "[ERROR] Invalid server address format (expected IP:port)" << std::endl;
         return false;
     }
     
@@ -31,54 +31,54 @@ bool Client::readTransferInfo() {
     try {
         serverPort = static_cast<uint16_t>(std::stoi(line.substr(colonPos + 1)));
     } catch (const std::exception& e) {
-        displayError("Invalid port number: " + std::string(e.what()), ErrorType::CONFIG);
+        std::cerr << "[ERROR] Invalid port number: " << e.what() << std::endl;
         return false;
     }
     
     // Line 2: username
     if (!std::getline(file, username) || username.empty()) {
-        displayError("Invalid username - cannot be empty", ErrorType::CONFIG);
+        std::cerr << "[ERROR] Invalid username - cannot be empty" << std::endl;
         return false;
     }
     
     if (username.length() > 100) {
-        displayError("Username too long (max 100 characters)", ErrorType::CONFIG);
+        std::cerr << "[ERROR] Username too long (max 100 characters)" << std::endl;
         return false;
     }
     
     // Line 3: filepath
     if (!std::getline(file, filepath) || filepath.empty()) {
-        displayError("Invalid file path - cannot be empty", ErrorType::CONFIG);
+        std::cerr << "[ERROR] Invalid file path - cannot be empty" << std::endl;
         return false;
     }
     
-    displayStatus("Configuration loaded", true, "transfer.info parsed successfully");
-    displayStatus("Server config", true, serverIP + ":" + std::to_string(serverPort));
-    displayStatus("User config", true, username);
-    displayStatus("File config", true, filepath);
+    std::cout << "[INFO] Configuration loaded: transfer.info parsed successfully" << std::endl;
+    std::cout << "[INFO] Server config: " << serverIP << ":" << serverPort << std::endl;
+    std::cout << "[INFO] User config: " << username << std::endl;
+    std::cout << "[INFO] File config: " << filepath << std::endl;
     
     return true;
 }
 
 bool Client::validateConfiguration() {
-    displayStatus("Validating configuration", true, "Checking parameters");
+    std::cout << "[INFO] Validating configuration: Checking parameters" << std::endl;
     
     // Validate server IP (Boost.Asio will handle IP validation during connect)
     if (serverIP.empty()) {
-        displayError("Invalid IP address: empty", ErrorType::CONFIG);
+        std::cerr << "[ERROR] Invalid IP address: empty" << std::endl;
         return false;
     }
     
     // Validate port
     if (serverPort == 0 || serverPort > 65535) {
-        displayError("Invalid port number: " + std::to_string(serverPort), ErrorType::CONFIG);
+        std::cerr << "[ERROR] Invalid port number: " << serverPort << std::endl;
         return false;
     }
     
     // Validate file exists and get size
     std::ifstream testFile(filepath, std::ios::binary);
     if (!testFile.is_open()) {
-        displayError("File not found: " + filepath, ErrorType::FILE_IO);
+        std::cerr << "[ERROR] File not found: " << filepath << std::endl;
         return false;
     }
     
@@ -87,13 +87,13 @@ bool Client::validateConfiguration() {
     testFile.close();
     
     if (stats.totalBytes == 0) {
-        displayError("File is empty: " + filepath, ErrorType::FILE_IO);
+        std::cerr << "[ERROR] File is empty: " << filepath << std::endl;
         return false;
     }
     
-    displayStatus("File validation", true, filepath + " (" + formatBytes(stats.totalBytes) + ")");
-    displayStatus("Server validation", true, serverIP + ":" + std::to_string(serverPort));
-    displayStatus("Username validation", true, username);
+    std::cout << "[INFO] File validation: " << filepath << " (" << formatBytes(stats.totalBytes) << ")" << std::endl;
+    std::cout << "[INFO] Server validation: " << serverIP << ":" << serverPort << std::endl;
+    std::cout << "[INFO] Username validation: " << username << std::endl;
     
     return true;
 }
@@ -126,8 +126,8 @@ bool Client::loadMeInfo() {
     }
     std::copy(bytes.begin(), bytes.end(), clientID.begin());
     
-    displayStatus("Client ID loaded", true, "UUID: " + line.substr(0, 8) + "...");
-    displayStatus("Stored username", true, storedUsername);
+    std::cout << "[INFO] Client ID loaded: UUID: " << line.substr(0, 8) << "..." << std::endl;
+    std::cout << "[INFO] Stored username: " << storedUsername << std::endl;
     
     // Line 3: private key base64 (we'll load separately)
     return true;
@@ -136,7 +136,7 @@ bool Client::loadMeInfo() {
 bool Client::saveMeInfo() {
     std::ofstream file("me.info");
     if (!file.is_open()) {
-        displayError("Cannot create me.info", ErrorType::FILE_IO);
+        std::cerr << "[ERROR] Cannot create me.info" << std::endl;
         return false;
     }
     
@@ -153,11 +153,11 @@ bool Client::saveMeInfo() {
     file.close();
     
     if (file.good()) {
-        displayStatus("Client info saved", true, "me.info created");
-        displayStatus("Saved data", true, "Username: " + username + ", ID: " + hexId.substr(0, 8) + "...");
+        std::cout << "[INFO] Client info saved: me.info created" << std::endl;
+        std::cout << "[INFO] Saved data: Username: " << username << ", ID: " << hexId.substr(0, 8) << "..." << std::endl;
         return true;
     } else {
-        displayError("Failed to write me.info", ErrorType::FILE_IO);
+        std::cerr << "[ERROR] Failed to write me.info" << std::endl;
         return false;
     }
 }
@@ -167,7 +167,7 @@ bool Client::saveMeInfo() {
 std::vector<uint8_t> Client::readFile(const std::string& path) {
     std::ifstream file(path, std::ios::binary);
     if (!file.is_open()) {
-        displayError("Cannot open file: " + path, ErrorType::FILE_IO);
+        std::cerr << "[ERROR] Cannot open file: " << path << std::endl;
         return {};
     }
     
@@ -176,7 +176,7 @@ std::vector<uint8_t> Client::readFile(const std::string& path) {
     file.seekg(0, std::ios::beg);
     
     if (size == 0) {
-        displayError("File is empty: " + path, ErrorType::FILE_IO);
+        std::cerr << "[ERROR] File is empty: " << path << std::endl;
         return {};
     }
     
@@ -190,7 +190,7 @@ std::vector<uint8_t> Client::readFile(const std::string& path) {
         
         std::streamsize actuallyRead = file.gcount();
         if (actuallyRead <= 0) {
-            displayError("Failed to read file data at offset " + std::to_string(bytesRead), ErrorType::FILE_IO);
+            std::cerr << "[ERROR] Failed to read file data at offset " << bytesRead << std::endl;
             return {};
         }
         
@@ -200,11 +200,11 @@ std::vector<uint8_t> Client::readFile(const std::string& path) {
     file.close();
     
     if (bytesRead != size) {
-        displayError("Incomplete file read: " + std::to_string(bytesRead) + "/" + std::to_string(size) + " bytes", ErrorType::FILE_IO);
+        std::cerr << "[ERROR] Incomplete file read: " << bytesRead << "/" << size << " bytes" << std::endl;
         return {};
     }
     
-    displayStatus("File read", true, path + " (" + formatBytes(size) + ")");
+    std::cout << "[INFO] File read: " << path << " (" << formatBytes(size) << ")" << std::endl;
     return data;
 }
 
@@ -212,10 +212,10 @@ std::vector<uint8_t> Client::readFile(const std::string& path) {
 
 bool Client::transferFile() {
     // Read file
-    displayStatus("Reading file", true, filepath);
+    std::cout << "[INFO] Reading file: " << filepath << std::endl;
     auto fileData = readFile(filepath);
     if (fileData.empty()) {
-        displayError("Cannot read file or file is empty", ErrorType::FILE_IO);
+        std::cerr << "[ERROR] Cannot read file or file is empty" << std::endl;
         return false;
     }
     
@@ -229,24 +229,24 @@ bool Client::transferFile() {
         filename = filename.substr(lastSlash + 1);
     }
     
-    displayStatus("File details", true, "Name: " + filename + ", Size: " + formatBytes(stats.totalBytes));
-    displayStatus("Encrypting file", true, "AES-256-CBC encryption");
+    std::cout << "[INFO] File details: Name: " << filename << ", Size: " << formatBytes(stats.totalBytes) << std::endl;
+    std::cout << "[INFO] Encrypting file: AES-256-CBC encryption" << std::endl;
     
     // Encrypt file
     std::string encryptedData = encryptFile(fileData);
     if (encryptedData.empty()) {
-        displayError("File encryption failed", ErrorType::CRYPTO);
+        std::cerr << "[ERROR] File encryption failed" << std::endl;
         return false;
     }
     
-    displayStatus("Encryption complete", true, "Encrypted size: " + formatBytes(encryptedData.size()));
+    std::cout << "[INFO] Encryption complete: Encrypted size: " << formatBytes(encryptedData.size()) << std::endl;
     
     // Calculate packets
     size_t encryptedSize = encryptedData.size();
     uint16_t totalPackets = static_cast<uint16_t>((encryptedSize + MAX_PACKET_SIZE - 1) / MAX_PACKET_SIZE);
     
-    displayStatus("Transfer preparation", true, "Splitting into " + std::to_string(totalPackets) + " packets");
-    displaySeparator();
+    std::cout << "[INFO] Transfer preparation: Splitting into " << totalPackets << " packets" << std::endl;
+    std::cout << "=== Transfer Progress ===" << std::endl;
     
     // Send packets
     for (uint16_t packet = 1; packet <= totalPackets; packet++) {
@@ -256,39 +256,37 @@ bool Client::transferFile() {
         std::string chunk = encryptedData.substr(offset, chunkSize);
         
         if (!sendFilePacket(filename, chunk, static_cast<uint32_t>(fileData.size()), packet, totalPackets)) {
-            displayError("Failed to send packet " + std::to_string(packet) + "/" + std::to_string(totalPackets), ErrorType::NETWORK);
+            std::cerr << "[ERROR] Failed to send packet " << packet << "/" << totalPackets << std::endl;
             return false;
         }
         
         stats.update(offset + chunkSize);
-        displayProgress("Transferring", stats.transferredBytes, encryptedData.size());
+        std::cout << "[PROGRESS] Transferring: " << stats.transferredBytes << "/" << encryptedData.size() << " bytes" << std::endl;
         
         if (packet % 10 == 0 || packet == totalPackets) {
-            displayTransferStats();
+            std::cout << "[STATS] Transfer stats updated" << std::endl;
         }
     }
     
-    displaySeparator();
-    displayStatus("Transfer complete", true, "All packets sent successfully");
-    displayStatus("Waiting for server", true, "Server calculating CRC...");
+    std::cout << "=== Transfer Progress ===" << std::endl;
+    std::cout << "[INFO] Transfer complete: All packets sent successfully" << std::endl;
+    std::cout << "[INFO] Waiting for server: Server calculating CRC..." << std::endl;
     
     // Receive CRC response
     ResponseHeader header;
     std::vector<uint8_t> responsePayload;
     if (!receiveResponse(header, responsePayload)) {
-        displayError("Failed to receive CRC response", ErrorType::NETWORK);
+        std::cerr << "[ERROR] Failed to receive CRC response" << std::endl;
         return false;
     }
     
     if (header.code != RESP_FILE_CRC) {
-        displayError("Invalid file transfer response code: " + std::to_string(header.code) + 
-                    ", expected: " + std::to_string(RESP_FILE_CRC), ErrorType::PROTOCOL);
+        std::cerr << "[ERROR] Invalid file transfer response code: " << header.code << ", expected: " << RESP_FILE_CRC << std::endl;
         return false;
     }
     
     if (responsePayload.size() < 279) {
-        displayError("Invalid file transfer response payload size: " + std::to_string(responsePayload.size()) + 
-                    " bytes, expected >= 279", ErrorType::PROTOCOL);
+        std::cerr << "[ERROR] Invalid file transfer response payload size: " << responsePayload.size() << " bytes, expected >= 279" << std::endl;
         return false;
     }
     
@@ -329,7 +327,7 @@ bool Client::sendFilePacket(const std::string& filename, const std::string& encr
         // Add filename (255 bytes, null-terminated, zero-padded)
         std::vector<uint8_t> filenameBytes(255, 0);
         if (filename.length() >= 255) {
-            displayError("Filename too long for packet: " + std::to_string(filename.length()) + " chars", ErrorType::CONFIG);
+            std::cerr << "[ERROR] Filename too long for packet: " << filename.length() << " chars" << std::endl;
             return false;
         }
         std::copy(filename.begin(), filename.end(), filenameBytes.begin());
@@ -340,16 +338,13 @@ bool Client::sendFilePacket(const std::string& filename, const std::string& encr
         
         // Debug info for first and last packets
         if (packetNum == 1 || packetNum == totalPackets) {
-            displayStatus("Debug: Packet " + std::to_string(packetNum), true,
-                         "EncSize=" + std::to_string(encryptedSize) + 
-                         ", OrigSize=" + std::to_string(originalSize) + 
-                         ", PayloadSize=" + std::to_string(payload.size()));
+            std::cout << "[DEBUG] Packet " << packetNum << ": EncSize=" << encryptedSize << ", OrigSize=" << originalSize << ", PayloadSize=" << payload.size() << std::endl;
         }
         
         return sendRequest(REQ_SEND_FILE, payload);
         
     } catch (const std::exception& e) {
-        displayError("Failed to create file packet: " + std::string(e.what()), ErrorType::PROTOCOL);
+        std::cerr << "[ERROR] Failed to create file packet: " << e.what() << std::endl;
         return false;
     }
 }
@@ -357,26 +352,25 @@ bool Client::sendFilePacket(const std::string& filename, const std::string& encr
 // === VERIFICATION OPERATIONS ===
 
 bool Client::verifyCRC(uint32_t serverCRC, const std::vector<uint8_t>& originalData, const std::string& filename) {
-    displayStatus("Calculating CRC", true, "Using cksum algorithm");
+    std::cout << "[INFO] Calculating CRC: Using cksum algorithm" << std::endl;
     
     uint32_t clientCRC = calculateCRC32(originalData.data(), originalData.size());
     
-    displayStatus("CRC verification", true, "Server: " + std::to_string(serverCRC) + 
-                  ", Client: " + std::to_string(clientCRC));
+    std::cout << "[INFO] CRC verification: Server: " << serverCRC << ", Client: " << clientCRC << std::endl;
     
     // Prepare filename payload
     std::vector<uint8_t> payload(255, 0);
     if (filename.length() >= 255) {
-        displayError("Filename too long for CRC verification", ErrorType::CONFIG);
+        std::cerr << "[ERROR] Filename too long for CRC verification" << std::endl;
         return false;
     }
     std::copy(filename.begin(), filename.end(), payload.begin());
     
     if (serverCRC == clientCRC) {
-        displayStatus("CRC verification", true, "✓ Checksums match - file integrity confirmed");
+        std::cout << "[INFO] CRC verification: ✓ Checksums match - file integrity confirmed" << std::endl;
         
         if (!sendRequest(REQ_CRC_OK, payload)) {
-            displayError("Failed to send CRC OK confirmation", ErrorType::NETWORK);
+            std::cerr << "[ERROR] Failed to send CRC OK confirmation" << std::endl;
             return false;
         }
         
@@ -384,19 +378,19 @@ bool Client::verifyCRC(uint32_t serverCRC, const std::vector<uint8_t>& originalD
         ResponseHeader header;
         std::vector<uint8_t> responsePayload;
         if (receiveResponse(header, responsePayload)) {
-            displayStatus("Transfer confirmed", true, "Server acknowledged successful transfer");
+            std::cout << "[INFO] Transfer confirmed: Server acknowledged successful transfer" << std::endl;
         } else {
-            displayStatus("Transfer warning", false, "CRC OK but no server acknowledgment");
+            std::cout << "[WARNING] Transfer warning: CRC OK but no server acknowledgment" << std::endl;
         }
         
         return true;
     } else {
         crcRetries++;
         if (crcRetries < MAX_RETRIES) {
-            displayStatus("CRC verification", false, "Mismatch - Retry " + std::to_string(crcRetries) + " of " + std::to_string(MAX_RETRIES));
+            std::cout << "[WARNING] CRC verification: Mismatch - Retry " << crcRetries << " of " << MAX_RETRIES << std::endl;
             
             if (!sendRequest(REQ_CRC_INVALID_RETRY, payload)) {
-                displayError("Failed to send CRC retry request", ErrorType::NETWORK);
+                std::cerr << "[ERROR] Failed to send CRC retry request" << std::endl;
                 return false;
             }
             
@@ -414,10 +408,10 @@ bool Client::verifyCRC(uint32_t serverCRC, const std::vector<uint8_t>& originalD
             
             return result;
         } else {
-            displayStatus("CRC verification", false, "Maximum retries exceeded - aborting");
+            std::cout << "[ERROR] CRC verification: Maximum retries exceeded - aborting" << std::endl;
             
             if (!sendRequest(REQ_CRC_FAILED_ABORT, payload)) {
-                displayError("Failed to send CRC abort request", ErrorType::NETWORK);
+                std::cerr << "[ERROR] Failed to send CRC abort request" << std::endl;
             }
             
             return false;
@@ -427,15 +421,14 @@ bool Client::verifyCRC(uint32_t serverCRC, const std::vector<uint8_t>& originalD
 
 uint32_t Client::calculateCRC32(const uint8_t* data, size_t size) {
     if (!data || size == 0) {
-        displayError("Invalid data for CRC calculation", ErrorType::PROTOCOL);
+        std::cerr << "[ERROR] Invalid data for CRC calculation" << std::endl;
         return 0;
     }
     
     // Use the project's cksum implementation (POSIX-compliant)
     uint32_t crc = calculateCRC(data, size);
     
-    displayStatus("CRC calculated", true, "Value: " + std::to_string(crc) + 
-                 " for " + formatBytes(size) + " of data");
+    std::cout << "[INFO] CRC calculated: Value: " << crc << " for " << formatBytes(size) << " of data" << std::endl;
     
     return crc;
 }
@@ -459,7 +452,7 @@ std::vector<uint8_t> Client::hexToBytes(const std::string& hex) {
     std::vector<uint8_t> bytes;
     
     if (hex.length() % 2 != 0) {
-        displayError("Invalid hex string length: " + std::to_string(hex.length()), ErrorType::PROTOCOL);
+        std::cerr << "[ERROR] Invalid hex string length: " << hex.length() << std::endl;
         return bytes;
     }
     
@@ -469,7 +462,7 @@ std::vector<uint8_t> Client::hexToBytes(const std::string& hex) {
             bytes.push_back(static_cast<uint8_t>(std::stoi(byteString, nullptr, 16)));
         }
     } catch (const std::exception& e) {
-        displayError("Failed to parse hex string: " + std::string(e.what()), ErrorType::PROTOCOL);
+        std::cerr << "[ERROR] Failed to parse hex string: " << e.what() << std::endl;
         bytes.clear();
     }
     
@@ -517,6 +510,8 @@ std::string Client::getCurrentTimestamp() {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&time_t), "%H:%M:%S");
+            std::tm tm_buf;
+        localtime_s(&tm_buf, &time_t);
+        ss << std::put_time(&tm_buf, "%H:%M:%S");
     return ss.str();
 }

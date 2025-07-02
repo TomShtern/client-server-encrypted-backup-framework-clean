@@ -3,7 +3,6 @@
 // Contains display functions, GUI command handling, and WebSocket integration
 
 #include "../../include/client/ClientCore.h"
-#include "../../include/client/ClientGUIHelpers.h"
 
 // === GUI COMMAND HANDLING ===
 

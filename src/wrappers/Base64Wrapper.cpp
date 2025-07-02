@@ -5,7 +5,7 @@
 #include <algorithm>
 
 // Real Base64 implementation using Crypto++ library
-#include "../../third_party/crypto++/base64.h"
+#include <cryptopp/base64.h>
 
 // Base64Wrapper implementation with real Crypto++ functionality
 std::string Base64Wrapper::encode(const std::string& str) {

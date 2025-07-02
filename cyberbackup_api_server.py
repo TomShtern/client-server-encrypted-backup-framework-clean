@@ -112,32 +112,81 @@ def api_status():
 
 @app.route('/api/connect', methods=['POST'])
 def api_connect():
-    """Connect to backup server with configuration"""
-    global server_config, backup_status
+    """Connect to backup server with configuration using real backup protocol"""
+    global server_config, backup_status, backup_executor
     
     try:
         config = request.json
         if config:
             server_config.update(config)
         
-        # Test connection to backup server
-        connected = check_backup_server_status()
+        update_backup_status('CONNECT', f'Testing connection to {server_config["host"]}:{server_config["port"]}...')
         
-        backup_status['connected'] = connected
-        if connected:
-            backup_status['status'] = 'connected'
-            backup_status['message'] = f'Connected to {server_config["host"]}:{server_config["port"]}'
-            update_backup_status('CONNECT', f'Connected to backup server at {server_config["host"]}:{server_config["port"]}')
-        else:
-            backup_status['status'] = 'connection_failed'
-            backup_status['message'] = f'Failed to connect to {server_config["host"]}:{server_config["port"]}'
-            update_backup_status('ERROR', f'Cannot connect to backup server at {server_config["host"]}:{server_config["port"]}')
+        # Create a small test file for connection verification
+        test_file_path = "test_connection.txt"
+        with open(test_file_path, 'w') as f:
+            f.write("Connection test file - " + datetime.now().isoformat())
         
-        return jsonify({
-            'success': connected,
-            'message': backup_status['message'],
-            'config': server_config
-        })
+        try:
+            # Use the real backup executor to test the connection
+            result = backup_executor.execute_real_backup(
+                username=server_config['username'],
+                file_path=test_file_path,
+                server_ip=server_config['host'],
+                server_port=int(server_config['port']),
+                timeout=10  # Short timeout for connection test
+            )
+            
+            connected = result.get('success', False)
+            
+            # Clean up test file
+            try:
+                os.remove(test_file_path)
+            except:
+                pass
+            
+            backup_status['connected'] = connected
+            if connected:
+                backup_status['status'] = 'connected'
+                backup_status['message'] = f'Successfully connected to backup server'
+                update_backup_status('CONNECT', f'Connection verified with backup server at {server_config["host"]}:{server_config["port"]}')
+            else:
+                backup_status['status'] = 'connection_failed'
+                error_msg = result.get('message', 'Connection test failed')
+                backup_status['message'] = f'Connection failed: {error_msg}'
+                update_backup_status('ERROR', f'Connection test failed: {error_msg}')
+            
+            return jsonify({
+                'success': connected,
+                'message': backup_status['message'],
+                'config': server_config,
+                'details': result
+            })
+            
+        except Exception as e:
+            error_msg = f"Connection test error: {str(e)}"
+            backup_status['status'] = 'error'
+            backup_status['message'] = error_msg
+            backup_status['connected'] = False
+            update_backup_status('ERROR', error_msg)
+            
+            # Clean up test file
+            try:
+                os.remove(test_file_path)
+            except:
+                pass
+            
+            return jsonify({
+                'success': False, 
+                'message': error_msg,
+                'config': server_config
+            })
+        
+    except Exception as e:
+        error_msg = f"Connection error: {str(e)}"
+        backup_status['status'] = 'error'
+        backup_status['message'] = error_msg
+        return jsonify({'success': False, 'message': error_msg}), 500
         
     except Exception as e:
         error_msg = f"Connection error: {str(e)}"
@@ -213,56 +262,54 @@ def api_start_backup():
         
         update_backup_status('START', f'Starting backup of {filename}')
         
-        # Start backup in background thread using direct file transfer
+        # Start backup in background thread using REAL backup protocol
         def run_backup():
             global backup_status, current_backup_process
             
             try:
-                update_backup_status('PROCESS', 'Processing file upload...')
-                backup_status['progress'] = 20
+                update_backup_status('CONNECT', 'Connecting to backup server...')
+                backup_status['progress'] = 10
                 
-                # Create received_files directory if it doesn't exist
-                received_files_dir = 'server/received_files'
-                os.makedirs(received_files_dir, exist_ok=True)
+                # Use the REAL backup executor to perform the backup
+                result = backup_executor.execute_real_backup(
+                    username=username,
+                    file_path=file_path,
+                    server_ip=server_config['host'],
+                    server_port=int(server_config['port']),
+                    timeout=180  # 3 minute timeout for backup
+                )
                 
-                update_backup_status('PROCESS', 'Copying file to backup storage...')
-                backup_status['progress'] = 50
+                update_backup_status('VERIFY', 'Verifying backup results...')
+                backup_status['progress'] = 90
                 
-                # Generate unique filename with timestamp to avoid conflicts
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                base_name, ext = os.path.splitext(filename)
-                unique_filename = f"{username}_{timestamp}_{base_name}{ext}"
-                final_path = os.path.join(received_files_dir, unique_filename)
-                
-                # Copy the uploaded file to the received_files directory
-                import shutil
-                shutil.copy2(file_path, final_path)
-                
-                update_backup_status('VERIFY', 'Verifying file integrity...')
-                backup_status['progress'] = 80
-                
-                # Verify the file was copied correctly
-                if os.path.exists(final_path) and os.path.getsize(final_path) == os.path.getsize(file_path):
+                if result.get('success', False):
                     backup_status['progress'] = 100
                     backup_status['status'] = 'completed'
-                    backup_status['message'] = f'File backup completed successfully! Saved as: {unique_filename}'
-                    update_backup_status('SUCCESS', f'File successfully backed up as {unique_filename}')
+                    backup_status['message'] = f'File backup completed successfully using real backup protocol!'
+                    update_backup_status('SUCCESS', f'Real backup completed for {filename}')
                     
-                    # Log the successful backup
-                    print(f"[SUCCESS] File {filename} backed up successfully to {final_path}")
-                    print(f"[INFO] Original size: {os.path.getsize(file_path)} bytes")
-                    print(f"[INFO] Backup size: {os.path.getsize(final_path)} bytes")
+                    # Log the successful backup with details
+                    verification = result.get('verification', {})
+                    print(f"[SUCCESS] Real backup completed for {filename}")
+                    print(f"[INFO] Process exit code: {result.get('process_exit_code', 'N/A')}")
+                    print(f"[INFO] Network activity detected: {result.get('network_activity', False)}")
+                    print(f"[INFO] File verification: {verification.get('transferred', False)}")
+                    if verification.get('received_file'):
+                        print(f"[INFO] Received file: {verification['received_file']}")
                     
                 else:
                     backup_status['status'] = 'failed'
-                    backup_status['message'] = 'File verification failed'
-                    update_backup_status('ERROR', 'File verification failed')
+                    error_msg = result.get('error', 'Unknown backup error')
+                    backup_status['message'] = f'Real backup failed: {error_msg}'
+                    update_backup_status('ERROR', f'Real backup failed: {error_msg}')
+                    print(f"[ERROR] Real backup failed: {error_msg}")
+                    print(f"[DEBUG] Full result: {result}")
                 
             except Exception as e:
                 backup_status['status'] = 'failed'
-                backup_status['message'] = f'Backup error: {str(e)}'
-                update_backup_status('ERROR', str(e))
-                print(f"[ERROR] Backup failed: {str(e)}")
+                backup_status['message'] = f'Backup execution error: {str(e)}'
+                update_backup_status('ERROR', f'Backup execution error: {str(e)}')
+                print(f"[ERROR] Backup execution failed: {str(e)}")
             
             finally:
                 backup_status['backing_up'] = False

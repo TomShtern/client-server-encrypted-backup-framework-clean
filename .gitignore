@@ -43,6 +43,10 @@ cmake_install.cmake
 !CMakeListsTest.txt
 cmake-build-*/
 Testing/
+# Build directories
+build*/
+Build*/
+BUILD*/
 
 # MSVC
 Debug/
@@ -171,9 +175,18 @@ client/*_validation.txt
 third_party/
 supermemory-mcp/
 node_modules/
-vcpkg/
+# vcpkg - keep directory structure but ignore build artifacts
+vcpkg/buildtrees/
+vcpkg/packages/
+vcpkg/downloads/
+vcpkg/installed/
+vcpkg/.vcpkg-root
 vcpkg_installed/
 !vcpkg.json
+!vcpkg/
+!vcpkg/vcpkg.exe
+!vcpkg/bootstrap-vcpkg.bat
+!vcpkg/scripts/
 
 # Runtime & Status Files (specific files only)
 client/gui_progress.json

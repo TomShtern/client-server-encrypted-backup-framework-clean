@@ -3,6 +3,16 @@
 #include <stdexcept>
 #include <iostream>
 
+// Windows headers for CNG
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <bcrypt.h>
+#include <ntstatus.h>
+
+#pragma comment(lib, "bcrypt.lib")
+
 // Helper function to check CNG status and throw exception on failure
 void CheckCNGStatus(NTSTATUS status, const std::string& operation) {
     if (status != STATUS_SUCCESS) {

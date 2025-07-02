@@ -35,11 +35,6 @@
 #include "../../include/wrappers/Base64Wrapper.h"
 #include "../../include/wrappers/RSAWrapper.h"
 
-// Optional GUI support
-#ifdef _WIN32
-#include "../../include/client/ClientGUI.h"
-#endif
-
 // Protocol constants
 constexpr uint8_t CLIENT_VERSION = 3;
 constexpr uint8_t SERVER_VERSION = 3;
@@ -201,38 +196,6 @@ public:
     // Main interface
     bool initialize();
     bool run();
-
-    // GUI interface methods
-    bool reconnect() {
-        std::cout << "🔄 Reconnection requested from GUI..." << std::endl;
-        closeConnection();
-
-        #ifdef _WIN32
-        if (ClientGUI::getInstance()) {
-            ClientGUI::getInstance()->updateOperation("Reconnecting...", true, "Attempting to reconnect to server");
-            ClientGUI::getInstance()->updateConnectionStatus(false);
-        }
-        #endif
-
-        if (connectToServer()) {
-            std::cout << "✅ Reconnection successful!" << std::endl;
-            #ifdef _WIN32
-            if (ClientGUI::getInstance()) {
-                ClientGUI::getInstance()->updateOperation("Reconnected successfully", true, "Connection restored");
-            }
-            #endif
-            return true;
-        } else {
-            std::cout << "❌ Reconnection failed!" << std::endl;
-            #ifdef _WIN32
-            if (ClientGUI::getInstance()) {
-                ClientGUI::getInstance()->updateOperation("Reconnection failed", false, "Unable to connect to server");
-                ClientGUI::getInstance()->updateError("Reconnection failed - server may be unavailable");
-            }
-            #endif
-            return false;
-        }
-    }
     
 private:
     // Configuration
@@ -296,60 +259,6 @@ Client::Client() : socket(nullptr), connected(false), rsaPrivate(nullptr),
     hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     GetConsoleScreenBufferInfo(hConsole, &consoleInfo);
     savedAttributes = consoleInfo.wAttributes;
-    // Initialize GUI with detailed debug output
-    std::cout << "Attempting to initialize GUI..." << std::endl;
-    bool guiInitialized = false;    try {
-        guiInitialized = ClientGUIHelpers::initializeGUI();
-        if (guiInitialized) {
-            std::cout << "GUI initialized successfully! Window should be visible now." << std::endl;
-            
-            // Set up enhanced GUI callbacks for full functionality
-            #ifdef _WIN32
-            try {
-                if (ClientGUI::getInstance()) {
-                    ClientGUI* gui = ClientGUI::getInstance();
-
-                    // Set up retry callback for the GUI reconnect button
-                    gui->setRetryCallback([this]() {
-                        // Retry connection logic
-                        std::cout << "🔄 Retry connection requested from GUI..." << std::endl;
-                        this->displayStatus("Reconnection requested", true, "Attempting to reconnect from GUI");
-                        this->closeConnection();
-                        if (this->connectToServer()) {
-                            this->displayStatus("Reconnection successful", true, "Connected from GUI request");
-                        } else {
-                            this->displayError("Reconnection failed", ErrorType::NETWORK);
-                        }
-                    });
-
-                    // Initialize GUI with current configuration
-                    gui->updateServerInfo(serverIP, serverPort, filepath);
-                    gui->updatePhase("🚀 ULTRA MODERN GUI Initialized");
-                    gui->updateOperation("Ready for connection", true, "Enhanced GUI loaded successfully");
-                    gui->setBackupState(false, false);
-
-                    // Force window to be visible and on top
-                    gui->showStatusWindow(true);
-
-                    std::cout << "🎯 Enhanced GUI callbacks configured successfully!" << std::endl;
-                    std::cout << "🖥️  GUI window should now be visible on your screen!" << std::endl;
-                    std::cout << "📱 Look for the 'ULTRA MODERN Backup Client' window!" << std::endl;
-                }
-            } catch (...) {
-                std::cout << "Could not set up enhanced GUI callbacks" << std::endl;
-            }
-            #endif
-        } else {
-            std::cout << "GUI initialization failed, but no exception thrown. GUI might not be available." << std::endl;
-        }
-        // Ensure initial connection status is disconnected and progress is reset
-        ClientGUIHelpers::updateConnectionStatus(false);
-        ClientGUIHelpers::updateProgress(0, 0, "", "");
-    } catch (const std::exception& e) {
-        std::cout << "GUI initialization failed with exception: " << e.what() << std::endl;
-    } catch (...) {
-        std::cout << "GUI initialization failed with unknown exception. Check if GUI components are properly linked." << std::endl;
-    }
 #endif
 }
 
@@ -362,13 +271,6 @@ Client::~Client() {
     }
 #ifdef _WIN32
     SetConsoleTextAttribute(hConsole, savedAttributes);
-    
-    // Shutdown GUI (optional - graceful failure)
-    try {
-        ClientGUIHelpers::shutdownGUI();
-    } catch (...) {
-        // GUI shutdown failed - continue cleanup
-    }
 #endif
 }
 
@@ -418,17 +320,8 @@ bool Client::run() {
     for (int attempt = 1; attempt <= 3 && !connectedSuccessfully; attempt++) {
         if (attempt > 1) {
             displayStatus("Connection attempt", true, "Retry " + std::to_string(attempt) + " of 3");
-            // Update GUI with retry status
-            try {
-                ClientGUIHelpers::updateOperation("Retrying connection", true, "Attempt " + std::to_string(attempt) + " of 3");
-            } catch (...) {}
             std::this_thread::sleep_for(std::chrono::milliseconds(RECONNECT_DELAY_MS));
-        } else {
-            // Update GUI with initial connection attempt
-            try {
-                ClientGUIHelpers::updateOperation("Connecting to server", true, serverIP + ":" + std::to_string(serverPort));
-            } catch (...) {}
-        }
+        } 
         
         if (connectToServer()) {
             connectedSuccessfully = true;
@@ -437,11 +330,6 @@ bool Client::run() {
     
     if (!connectedSuccessfully) {
         displayError("Failed to connect after 3 attempts", ErrorType::NETWORK);
-        // Update GUI with failure status
-        try {
-            ClientGUIHelpers::updateOperation("Connection failed", false, "Server unreachable");
-            ClientGUIHelpers::updateError("Cannot connect to server at " + serverIP + ":" + std::to_string(serverPort));
-        } catch (...) {}
         return false;
     }displayConnectionInfo();
     
@@ -771,40 +659,11 @@ bool Client::connectToServer() {
         connected = true;
         displayStatus("Connected", true, "TCP connection established");
         
-        // Update enhanced GUI connection status
-        try {
-            ClientGUIHelpers::updateConnectionStatus(true);
-            #ifdef _WIN32
-            if (ClientGUI::getInstance()) {
-                ClientGUI::getInstance()->updateConnectionStatus(true);
-                ClientGUI::getInstance()->updateOperation("Connected to server", true,
-                    "TCP connection established to " + serverIP + ":" + std::to_string(serverPort));
-                ClientGUI::getInstance()->updateServerInfo(serverIP, serverPort, filepath);
-            }
-            #endif
-        } catch (...) {
-            // GUI update failed - continue without GUI
-        }
-        
         return true;
         
     } catch (const std::exception& e) {        displayError("Connection failed: " + std::string(e.what()), ErrorType::NETWORK);
         socket.reset();
         connected = false;
-        
-        // Update enhanced GUI connection status
-        try {
-            ClientGUIHelpers::updateConnectionStatus(false);
-            #ifdef _WIN32
-            if (ClientGUI::getInstance()) {
-                ClientGUI::getInstance()->updateConnectionStatus(false);
-                ClientGUI::getInstance()->updateError("Connection failed: " + std::string(e.what()));
-                ClientGUI::getInstance()->updateOperation("Connection failed", false, "Unable to connect to server");
-            }
-            #endif
-        } catch (...) {
-            // GUI update failed - continue without GUI
-        }
         
         return false;
     }
@@ -865,13 +724,6 @@ void Client::closeConnection() {
         }    }
     socket.reset();
     connected = false;
-    
-    // Update GUI connection status (optional)
-    try {
-        ClientGUIHelpers::updateConnectionStatus(false);
-    } catch (...) {
-        // GUI update failed - continue without GUI
-    }
 }
 
 // Send request to server
@@ -1493,13 +1345,6 @@ void Client::displayStatus(const std::string& operation, bool success, const std
         SetConsoleTextAttribute(hConsole, savedAttributes);
     }
     std::cout << std::endl;
-    
-    // Update GUI operation status (optional)
-    try {
-        ClientGUIHelpers::updateOperation(operation, success, details);
-    } catch (...) {
-        // GUI update failed - continue without GUI
-    }
 #else
     std::cout << "[" << getCurrentTimestamp() << "] ";
     std::cout << (success ? "[OK] " : "[FAIL] ") << operation;
@@ -1535,35 +1380,6 @@ void Client::displayProgress(const std::string& operation, size_t current, size_
     
     if (current >= total) {
         std::cout << std::endl;
-    }
-    
-    // Update GUI progress (optional)
-    try {
-        std::string speed = "";
-        std::string eta = "";
-        if (stats.currentSpeed > 0) {
-            speed = formatBytes(static_cast<size_t>(stats.currentSpeed)) + "/s";
-        }
-        if (stats.estimatedTimeRemaining > 0) {
-            eta = formatDuration(stats.estimatedTimeRemaining);
-        }
-        ClientGUIHelpers::updateProgress(static_cast<int>(current), static_cast<int>(total), speed, eta);
-
-        // Enhanced GUI updates
-        #ifdef _WIN32
-        if (ClientGUI::getInstance()) {
-            ClientGUI::getInstance()->updateProgress(static_cast<int>(current), static_cast<int>(total), speed, eta);
-            ClientGUI::getInstance()->setBackupState(true, false); // Backup in progress
-
-            // Update transfer statistics
-            std::string transferred = formatBytes(current);
-            std::string totalSize = formatBytes(total);
-            ClientGUI::getInstance()->updateTransferStats(transferred + " / " + totalSize, 1, 1);
-            ClientGUI::getInstance()->updateFileInfo(filepath, totalSize);
-        }
-        #endif
-    } catch (...) {
-        // GUI update failed - continue without GUI
     }
 #else
     std::cout << "\r" << operation << " " << percentage << "% (" 
@@ -1675,15 +1491,6 @@ void Client::displayError(const std::string& message, ErrorType type) {
                 break;
         }
           std::cerr << message << std::endl;
-    
-    // Update GUI error status and show notification (optional)
-    try {
-        ClientGUIHelpers::updateError(message);
-        ClientGUIHelpers::showNotification("Backup Error", message);
-    } catch (...) {
-        // GUI update failed - continue without GUI
-    }
-    // }
 }
 
 void Client::displaySeparator() {
@@ -1703,13 +1510,6 @@ void Client::displayPhase(const std::string& phase) {
     std::cout << "▶ " << phase << std::endl;
     SetConsoleTextAttribute(hConsole, savedAttributes);
     displaySeparator();
-    
-    // Update GUI phase (optional)
-    try {
-        ClientGUIHelpers::updatePhase(phase);
-    } catch (...) {
-        // GUI update failed - continue without GUI
-    }
 #else
     std::cout << "\n> " << phase << std::endl;
     displaySeparator();
@@ -1736,17 +1536,6 @@ void Client::displaySummary() {
     std::cout << "  Average Speed: " << formatBytes(static_cast<size_t>(stats.averageSpeed)) << "/s\n";    std::cout << "  Server: " << serverIP << ":" << serverPort << "\n";
     std::cout << "  Timestamp: " << getCurrentTimestamp() << "\n";
     displaySeparator();
-    
-    // Show GUI completion notification (optional)
-    try {
-        std::string successMessage = "File backup completed successfully!\n\nFile: " + filepath + 
-                                   "\nSize: " + formatBytes(stats.totalBytes) + 
-                                   "\nDuration: " + formatDuration(static_cast<int>(totalDuration));
-        ClientGUIHelpers::showNotification("Backup Complete", successMessage);
-    } catch (...) {
-        // GUI notification failed - continue without GUI
-    }
-}
 
 // Function to run the backup client (called from main.cpp)
 bool runBackupClient() {

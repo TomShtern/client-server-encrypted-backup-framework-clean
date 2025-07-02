@@ -56,10 +56,11 @@ public:
      * @return True if compression is recommended
      */
     static bool shouldCompress(const uint8_t* data, size_t size);
-    
-private:
+
     static constexpr size_t MIN_COMPRESSION_SIZE = 1024; // Don't compress files smaller than 1KB
     static constexpr double MIN_COMPRESSION_RATIO = 0.9; // Must achieve at least 10% compression
+    
+private:
 };
 
 /**

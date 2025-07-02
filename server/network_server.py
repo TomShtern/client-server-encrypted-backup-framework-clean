@@ -9,12 +9,12 @@ import struct
 import logging
 from typing import Tuple, Optional, Callable, Any
 
-from .config import (
+from config import (
     CLIENT_SOCKET_TIMEOUT, MAX_PAYLOAD_READ_LIMIT, MAX_CONCURRENT_CLIENTS,
     SERVER_VERSION
 )
-from .exceptions import ProtocolError
-from .protocol import (
+from exceptions import ProtocolError
+from protocol import (
     REQ_REGISTER, REQ_RECONNECT, RESP_GENERIC_SERVER_ERROR, RESP_RECONNECT_FAIL
 )
 

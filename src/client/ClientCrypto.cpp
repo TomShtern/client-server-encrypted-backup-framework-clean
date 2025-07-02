@@ -15,13 +15,13 @@ bool Client::generateRSAKeys() {
         std::cout << "[DEBUG] Client::generateRSAKeys() - RSAPrivateWrapper created successfully" << std::endl;
         auto end = std::chrono::steady_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        displayStatus("RSA key generation", true, "1024-bit keys generated in " + std::to_string(duration) + "ms");
+        std::cout << "[INFO] RSA key generation: 1024-bit keys generated in " << duration << "ms" << std::endl;
         return true;
     } catch (const std::exception& e) {
-        displayError("Failed to generate RSA keys: " + std::string(e.what()), ErrorType::CRYPTO);
+        std::cerr << "[ERROR] Failed to generate RSA keys: " << e.what() << std::endl;
         return false;
     } catch (...) {
-        displayError("Failed to generate RSA keys: Unknown exception", ErrorType::CRYPTO);
+        std::cerr << "[ERROR] Failed to generate RSA keys: Unknown exception" << std::endl;
         return false;
     }
 }
@@ -36,10 +36,10 @@ bool Client::loadPrivateKey() {
         try {
             // priv.key contains binary DER data, use the char* constructor
             rsaPrivate = new RSAPrivateWrapper(keyData.c_str(), keyData.length());
-            displayStatus("Private key loaded", true, "From priv.key");
+            std::cout << "[INFO] Private key loaded: From priv.key" << std::endl;
             return true;
         } catch (const std::exception& e) {
-            displayStatus("Loading private key", false, std::string("Failed to parse priv.key: ") + e.what());
+            std::cerr << "[ERROR] Loading private key: Failed to parse priv.key: " << e.what() << std::endl;
             delete rsaPrivate;
             rsaPrivate = nullptr;
         }
@@ -67,13 +67,13 @@ bool Client::loadPrivateKey() {
         std::ofstream privKey("priv.key", std::ios::binary);
         if (privKey.is_open()) {
             privKey.write(decoded.c_str(), decoded.length());
-            displayStatus("Private key cached", true, "Saved to priv.key");
+            std::cout << "[INFO] Private key cached: Saved to priv.key" << std::endl;
         }
         
-        displayStatus("Private key loaded", true, "From me.info");
+        std::cout << "[INFO] Private key loaded: From me.info" << std::endl;
         return true;
     } catch (const std::exception& e) {
-        displayStatus("Loading private key", false, std::string("Failed to decode from me.info: ") + e.what());
+        std::cerr << "[ERROR] Loading private key: Failed to decode from me.info: " << e.what() << std::endl;
         if (rsaPrivate) {
             delete rsaPrivate;
             rsaPrivate = nullptr;
@@ -84,7 +84,7 @@ bool Client::loadPrivateKey() {
 
 bool Client::savePrivateKey() {
     if (!rsaPrivate) {
-        displayError("No RSA private key to save", ErrorType::CRYPTO);
+        std::cerr << "[ERROR] No RSA private key to save" << std::endl;
         return false;
     }
     
@@ -92,7 +92,7 @@ bool Client::savePrivateKey() {
         std::string privateKey = rsaPrivate->getPrivateKey();
         std::ofstream file("priv.key", std::ios::binary);
         if (!file.is_open()) {
-            displayError("Cannot create priv.key", ErrorType::FILE_IO);
+            std::cerr << "[ERROR] Cannot create priv.key" << std::endl;
             return false;
         }
         
@@ -100,14 +100,14 @@ bool Client::savePrivateKey() {
         file.close();
         
         if (file.good()) {
-            displayStatus("Private key saved", true, "priv.key created (" + std::to_string(privateKey.length()) + " bytes)");
+            std::cout << "[INFO] Private key saved: priv.key created (" << privateKey.length() << " bytes)" << std::endl;
             return true;
         } else {
-            displayError("Failed to write priv.key", ErrorType::FILE_IO);
+            std::cerr << "[ERROR] Failed to write priv.key" << std::endl;
             return false;
         }
     } catch (const std::exception& e) {
-        displayError("Failed to save private key: " + std::string(e.what()), ErrorType::CRYPTO);
+        std::cerr << "[ERROR] Failed to save private key: " << e.what() << std::endl;
         return false;
     }
 }
@@ -116,7 +116,7 @@ bool Client::savePrivateKey() {
 
 bool Client::decryptAESKey(const std::vector<uint8_t>& encryptedKey) {
     if (!rsaPrivate) {
-        displayError("No RSA private key available", ErrorType::CRYPTO);
+        std::cerr << "[ERROR] No RSA private key available" << std::endl;
         return false;
     }
     
@@ -125,25 +125,24 @@ bool Client::decryptAESKey(const std::vector<uint8_t>& encryptedKey) {
         aesKey = rsaPrivate->decrypt(encrypted);
         
         if (aesKey.size() != AES_KEY_SIZE) {
-            displayError("Invalid AES key size: " + std::to_string(aesKey.size()) + " bytes (expected " + 
-                        std::to_string(AES_KEY_SIZE) + ")", ErrorType::CRYPTO);
+            std::cerr << "[ERROR] Invalid AES key size: " << aesKey.size() << " bytes (expected " << AES_KEY_SIZE << ")" << std::endl;
             return false;
         }
         
-        displayStatus("AES key decrypted", true, "256-bit key ready (" + std::to_string(aesKey.size()) + " bytes)");
+        std::cout << "[INFO] AES key decrypted: 256-bit key ready (" << aesKey.size() << " bytes)" << std::endl;
         return true;
     } catch (const std::exception& e) {
-        displayError("Failed to decrypt AES key: " + std::string(e.what()), ErrorType::CRYPTO);
+        std::cerr << "[ERROR] Failed to decrypt AES key: " << e.what() << std::endl;
         return false;
     } catch (...) {
-        displayError("Failed to decrypt AES key: Unknown exception", ErrorType::CRYPTO);
+        std::cerr << "[ERROR] Failed to decrypt AES key: Unknown exception" << std::endl;
         return false;
     }
 }
 
 std::string Client::encryptFile(const std::vector<uint8_t>& data) {
     if (aesKey.empty()) {
-        displayError("No AES key available", ErrorType::CRYPTO);
+        std::cerr << "[ERROR] No AES key available" << std::endl;
         return "";
     }
     
@@ -151,11 +150,10 @@ std::string Client::encryptFile(const std::vector<uint8_t>& data) {
         auto start = std::chrono::steady_clock::now();
         
         // Debug: Check actual AES key size
-        displayStatus("AES key debug", true, "Key size: " + std::to_string(aesKey.size()) + " bytes");
+        std::cout << "[DEBUG] AES key debug: Key size: " << aesKey.size() << " bytes" << std::endl;
         
         if (aesKey.size() != AES_KEY_SIZE) {
-            displayError("Invalid AES key size: " + std::to_string(aesKey.size()) + " bytes (expected " + 
-                        std::to_string(AES_KEY_SIZE) + ")", ErrorType::CRYPTO);
+            std::cerr << "[ERROR] Invalid AES key size: " << aesKey.size() << " bytes (expected " << AES_KEY_SIZE << ")" << std::endl;
             return "";
         }
         
@@ -167,19 +165,16 @@ std::string Client::encryptFile(const std::vector<uint8_t>& data) {
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         double speed = (data.size() / 1024.0 / 1024.0) / (duration / 1000.0);
         
-        displayStatus("Encryption performance", true, 
-                     std::to_string(duration) + "ms (" + 
-                     std::to_string(static_cast<int>(speed)) + " MB/s)");
+        std::cout << "[INFO] Encryption performance: " << duration << "ms (" << static_cast<int>(speed) << " MB/s)" << std::endl;
         
-        displayStatus("File encryption", true, "Original: " + formatBytes(data.size()) + 
-                     ", Encrypted: " + formatBytes(result.size()));
+        std::cout << "[INFO] File encryption: Original: " << formatBytes(data.size()) << ", Encrypted: " << formatBytes(result.size()) << std::endl;
         
         return result;
     } catch (const std::exception& e) {
-        displayError("Failed to encrypt file: " + std::string(e.what()), ErrorType::CRYPTO);
+        std::cerr << "[ERROR] Failed to encrypt file: " << e.what() << std::endl;
         return "";
     } catch (...) {
-        displayError("Failed to encrypt file: Unknown exception", ErrorType::CRYPTO);
+        std::cerr << "[ERROR] Failed to encrypt file: Unknown exception" << std::endl;
         return "";
     }
 }
@@ -188,7 +183,7 @@ std::string Client::encryptFile(const std::vector<uint8_t>& data) {
 
 bool Client::sendPublicKey() {
     if (!rsaPrivate) {
-        displayError("No RSA keys available", ErrorType::CRYPTO);
+        std::cerr << "[ERROR] No RSA keys available" << std::endl;
         return false;
     }
     
@@ -196,15 +191,14 @@ bool Client::sendPublicKey() {
         // Get the actual public key first
         std::string actualPublicKey = rsaPrivate->getPublicKey();
         
-        displayStatus("Debug: Actual public key size", true, 
-                     std::to_string(actualPublicKey.size()) + " bytes, expected " + std::to_string(RSA_KEY_SIZE) + " bytes");
+        std::cout << "[DEBUG] Actual public key size: " << actualPublicKey.size() << " bytes, expected " << RSA_KEY_SIZE << " bytes" << std::endl;
         
         // Prepare payload with exactly 415 bytes (255 username + 160 RSA key)
         std::vector<uint8_t> payload(MAX_NAME_SIZE + RSA_KEY_SIZE, 0);
         
         // Add username (255 bytes, null-terminated, zero-padded)
         if (username.length() >= MAX_NAME_SIZE) {
-            displayError("Username too long for public key payload", ErrorType::CONFIG);
+            std::cerr << "[ERROR] Username too long for public key payload" << std::endl;
             return false;
         }
         std::copy(username.begin(), username.end(), payload.begin());
@@ -212,8 +206,7 @@ bool Client::sendPublicKey() {
         // Add public key - ensure exactly 160 bytes
         if (actualPublicKey.size() > RSA_KEY_SIZE) {
             // Truncate if too large
-            displayStatus("Warning: Public key truncated", false, 
-                         "From " + std::to_string(actualPublicKey.size()) + " to " + std::to_string(RSA_KEY_SIZE) + " bytes");
+            std::cout << "[WARNING] Public key truncated: From " << actualPublicKey.size() << " to " << RSA_KEY_SIZE << " bytes" << std::endl;
             std::copy(actualPublicKey.begin(), actualPublicKey.begin() + RSA_KEY_SIZE, payload.begin() + MAX_NAME_SIZE);
         } else {
             // Copy what we have and zero-pad the rest
@@ -221,20 +214,14 @@ bool Client::sendPublicKey() {
             // Zero-padding is already done since payload was initialized with zeros
         }
         
-        displayStatus("Sending public key", true, 
-                     "Payload: " + std::to_string(payload.size()) + " bytes (" + 
-                     std::to_string(MAX_NAME_SIZE) + " username + " + std::to_string(RSA_KEY_SIZE) + " RSA key)");
+        std::cout << "[INFO] Sending public key: Payload: " << payload.size() << " bytes (" << MAX_NAME_SIZE << " username + " << RSA_KEY_SIZE << " RSA key)" << std::endl;
         
         // Debug: show exact payload construction
-        displayStatus("Debug: Public key payload", true, 
-                     "Size=" + std::to_string(payload.size()) + " bytes" +
-                     ", Username='" + username + "' (" + std::to_string(username.length()) + " chars)" +
-                     ", RSA key=" + std::to_string(actualPublicKey.size()) + " bytes (padded to " + 
-                     std::to_string(RSA_KEY_SIZE) + ")");
+        std::cout << "[DEBUG] Public key payload: Size=" << payload.size() << " bytes, Username='" << username << "' (" << username.length() << " chars), RSA key=" << actualPublicKey.size() << " bytes (padded to " << RSA_KEY_SIZE << ")" << std::endl;
         
         // Send request
         if (!sendRequest(REQ_SEND_PUBLIC_KEY, payload)) {
-            displayError("Failed to send public key request", ErrorType::NETWORK);
+            std::cerr << "[ERROR] Failed to send public key request" << std::endl;
             return false;
         }
         
@@ -242,41 +229,39 @@ bool Client::sendPublicKey() {
         ResponseHeader header;
         std::vector<uint8_t> responsePayload;
         if (!receiveResponse(header, responsePayload)) {
-            displayError("Failed to receive public key response", ErrorType::NETWORK);
+            std::cerr << "[ERROR] Failed to receive public key response" << std::endl;
             return false;
         }
         
         if (header.code != RESP_PUBKEY_AES_SENT) {
-            displayError("Invalid public key response code: " + std::to_string(header.code) + 
-                        ", expected: " + std::to_string(RESP_PUBKEY_AES_SENT), ErrorType::PROTOCOL);
+            std::cerr << "[ERROR] Invalid public key response code: " << header.code << ", expected: " << RESP_PUBKEY_AES_SENT << std::endl;
             return false;
         }
         
         if (responsePayload.size() <= CLIENT_ID_SIZE) {
-            displayError("Invalid public key response payload size: " + std::to_string(responsePayload.size()) + 
-                        " bytes, expected > " + std::to_string(CLIENT_ID_SIZE), ErrorType::PROTOCOL);
+            std::cerr << "[ERROR] Invalid public key response payload size: " << responsePayload.size() << " bytes, expected > " << CLIENT_ID_SIZE << std::endl;
             return false;
         }
         
         // Extract encrypted AES key
         std::vector<uint8_t> encryptedKey(responsePayload.begin() + CLIENT_ID_SIZE, responsePayload.end());
         
-        displayStatus("Received AES key", true, "Encrypted with RSA (" + std::to_string(encryptedKey.size()) + " bytes)");
+        std::cout << "[INFO] Received AES key: Encrypted with RSA (" << encryptedKey.size() << " bytes)" << std::endl;
         
         // Decrypt AES key
         if (!decryptAESKey(encryptedKey)) {
-            displayError("Failed to decrypt received AES key", ErrorType::CRYPTO);
+            std::cerr << "[ERROR] Failed to decrypt received AES key" << std::endl;
             return false;
         }
         
-        displayStatus("Key exchange", true, "AES-256 key established successfully");
+        std::cout << "[INFO] Key exchange: AES-256 key established successfully" << std::endl;
         return true;
         
     } catch (const std::exception& e) {
-        displayError("Public key exchange failed: " + std::string(e.what()), ErrorType::CRYPTO);
+        std::cerr << "[ERROR] Public key exchange failed: " << e.what() << std::endl;
         return false;
     } catch (...) {
-        displayError("Public key exchange failed: Unknown exception", ErrorType::CRYPTO);
+        std::cerr << "[ERROR] Public key exchange failed: Unknown exception" << std::endl;
         return false;
     }
 }

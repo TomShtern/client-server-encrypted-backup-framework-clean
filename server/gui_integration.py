@@ -405,3 +405,71 @@ class GUIManager:
         except Exception as e:
             logger.error(f"Failed to update GUI maintenance stats: {e}")
             return False
+
+    def update_server_status(self, running: bool, address: str, port: int) -> bool:
+        """Update the GUI with server status information."""
+        if not self.is_gui_enabled():
+            return False
+        
+        try:
+            with self.gui_lock:
+                if self.gui and hasattr(self.gui, 'update_server_status'):
+                    self.gui.update_server_status(running, address, port)
+                    return True
+                return False
+        except Exception as e:
+            logger.error(f"Failed to update GUI server status: {e}")
+            return False
+
+    def update_client_stats(self, connected: int = 0, total: int = 0, active_transfers: int = 0) -> bool:
+        """Update the GUI with client statistics."""
+        if not self.is_gui_enabled():
+            return False
+        
+        try:
+            with self.gui_lock:
+                if self.gui and hasattr(self.gui, 'update_client_stats'):
+                    self.gui.update_client_stats(connected, total, active_transfers)
+                    return True
+                return False
+        except Exception as e:
+            logger.error(f"Failed to update GUI client stats: {e}")
+            return False
+
+    def force_status_update(self, running: bool, address: str, port: int, active_clients: int, total_clients: int) -> bool:
+        """Force a GUI status update with all parameters."""
+        if not self.is_gui_enabled():
+            return False
+        
+        try:
+            with self.gui_lock:
+                if self.gui and hasattr(self.gui, 'force_status_update'):
+                    self.gui.force_status_update(running, address, port, active_clients, total_clients)
+                    return True
+                return False
+        except Exception as e:
+            logger.error(f"Failed to force GUI status update: {e}")
+            return False
+
+    def update_transfer_stats(self, bytes_transferred: int = 0, last_activity: str = "") -> bool:
+        """Update the GUI with transfer statistics."""
+        if not self.is_gui_enabled():
+            return False
+        
+        try:
+            with self.gui_lock:
+                if self.gui and hasattr(self.gui, 'update_transfer_stats'):
+                    self.gui.update_transfer_stats(bytes_transferred, last_activity)
+                    return True
+                return False
+        except Exception as e:
+            logger.error(f"Failed to update GUI transfer stats: {e}")
+            return False
+
+    def show_error(self, error_message: str) -> bool:
+        """Show an error message in the GUI."""
+        return self.update_gui_error(error_message)
+
+    def show_success(self, success_message: str) -> bool:
+        """Show a success message in the GUI."""
+        return self.show_gui_notification("Success", success_message, "success")

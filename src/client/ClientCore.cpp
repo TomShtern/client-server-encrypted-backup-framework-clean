@@ -3,7 +3,6 @@
 // Contains networking, connection management, and protocol handling
 
 #include "../../include/client/ClientCore.h"
-#include "../../include/client/ClientGUIHelpers.h"
 
 // === CONSTRUCTOR & DESTRUCTOR ===
 
@@ -13,15 +12,7 @@ Client::Client() : socket(nullptr), connected(false), rsaPrivate(nullptr),
                    interactiveMode(false), pendingServerPort(0) {
     std::fill(clientID.begin(), clientID.end(), 0);
 
-    // Initialize and start WebSocket server for GUI communication
-    try {
-        webSocketServer = std::make_unique<ClientWebSocketServer>(8765); // Port 8765 for WebSocket
-        webSocketServer->setMessageHandler(std::bind(&Client::handleGUICommand, this, std::placeholders::_1));
-        webSocketServer->start();
-        displayStatus("GUI", true, "WebSocket server started on port 8765");
-    } catch (const std::exception& e) {
-        displayError("Failed to start WebSocket GUI server: " + std::string(e.what()), ErrorType::CONFIG);
-    }
+    // WebSocket server removed - using HTML GUI instead
 
 #ifdef _WIN32
     hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -36,9 +27,7 @@ Client::~Client() {
     if (rsaPrivate) {
         delete rsaPrivate;
     }
-    if (webSocketServer) {
-        webSocketServer->stop();
-    }
+    // WebSocket server cleanup removed
 #ifdef _WIN32
     SetConsoleTextAttribute(hConsole, savedAttributes);
 #endif
@@ -48,11 +37,11 @@ Client::~Client() {
 
 bool Client::initialize() {
     operationStartTime = std::chrono::steady_clock::now();
-    displaySplashScreen();
+    // Display functions removed - using HTML GUI
     
-    displayPhase("Initialization");
+    std::cout << "[PHASE] Initialization" << std::endl;
     
-    displayStatus("System initialization", true, "Starting client v1.0");
+    std::cout << "[INFO] System initialization: Starting client v1.0" << std::endl;
     
     if (!readTransferInfo()) {
         return false;
@@ -63,13 +52,13 @@ bool Client::initialize() {
     }
 
     // Pre-generate or load RSA keys during initialization to avoid delays during registration
-    displayStatus("Preparing RSA keys", true, "1024-bit key pair for encryption");
+    std::cout << "[INFO] Preparing RSA keys: 1024-bit key pair for encryption" << std::endl;
 
     // Try to load existing keys first to avoid regeneration
     if (loadPrivateKey()) {
-        displayStatus("RSA keys loaded", true, "Using cached key pair");
+        std::cout << "[INFO] RSA keys loaded: Using cached key pair" << std::endl;
     } else {
-        displayStatus("Generating RSA keys", true, "Creating new 1024-bit key pair...");
+        std::cout << "[INFO] Generating RSA keys: Creating new 1024-bit key pair..." << std::endl;
         if (!generateRSAKeys()) {
             return false;
         }
@@ -77,20 +66,20 @@ bool Client::initialize() {
         savePrivateKey();
     }
 
-    displayStatus("Initialization complete", true, "Ready to connect");
+    std::cout << "[INFO] Initialization complete: Ready to connect" << std::endl;
     return true;
 }
 
 bool Client::run() {
-    displayPhase("Connection Setup");
+    std::cout << "[PHASE] Connection Setup" << std::endl;
     
-    displayStatus("Connecting to server", true, serverIP + ":" + std::to_string(serverPort));
+    std::cout << "[INFO] Connecting to server: " << serverIP << ":" << serverPort << std::endl;
     
     // Try to connect with retries
     bool connectedSuccessfully = false;
     for (int attempt = 1; attempt <= 3 && !connectedSuccessfully; attempt++) {
         if (attempt > 1) {
-            displayStatus("Connection attempt", true, "Retry " + std::to_string(attempt) + " of 3");
+            std::cout << "[INFO] Connection attempt: Retry " << attempt << " of 3" << std::endl;
             std::this_thread::sleep_for(std::chrono::milliseconds(RECONNECT_DELAY_MS));
         }
         
@@ -100,39 +89,39 @@ bool Client::run() {
     }
     
     if (!connectedSuccessfully) {
-        displayError("Failed to connect after 3 attempts", ErrorType::NETWORK);
+        std::cerr << "[ERROR] Failed to connect after 3 attempts" << std::endl;
         return false;
     }
     
-    displayConnectionInfo();
+    std::cout << "[INFO] Connection established" << std::endl;
     
     // Enable keep-alive for long transfers
     enableKeepAlive();
     
-    displayPhase("Authentication");
+    std::cout << "[PHASE] Authentication" << std::endl;
     
     // Check if we have existing registration
     bool hasRegistration = loadMeInfo();
     
     if (hasRegistration) {
-        displayStatus("Client credentials", true, "Found existing registration");
-        displayStatus("Attempting reconnection", true, "Client: " + username);
+        std::cout << "[INFO] Client credentials: Found existing registration" << std::endl;
+        std::cout << "[INFO] Attempting reconnection: Client: " << username << std::endl;
         
         // Load private key
         if (!loadPrivateKey()) {
-            displayStatus("Loading private key", false, "Key not found");
+            std::cerr << "[ERROR] Loading private key: Key not found" << std::endl;
             hasRegistration = false;
         } else {
             // Try reconnection
             if (!performReconnection()) {
-                displayStatus("Reconnection", false, "Server rejected - will register as new client");
+                std::cout << "[WARNING] Reconnection: Server rejected - will register as new client" << std::endl;
                 hasRegistration = false;
             }
         }
     }
     
     if (!hasRegistration) {
-        displayStatus("Registering new client", true, username);
+        std::cout << "[INFO] Registering new client: " << username << std::endl;
         
         if (!performRegistration()) {
             return false;
@@ -143,7 +132,7 @@ bool Client::run() {
         }
     }
     
-    displayPhase("File Transfer");
+    std::cout << "[PHASE] File Transfer" << std::endl;
     
     // Transfer the file with retry logic
     bool transferSuccess = false;
@@ -151,8 +140,7 @@ bool Client::run() {
     
     while (fileRetries < MAX_RETRIES && !transferSuccess) {
         if (fileRetries > 0) {
-            displayStatus("File transfer", false, "Retrying (attempt " + 
-                         std::to_string(fileRetries + 1) + " of " + std::to_string(MAX_RETRIES) + ")");
+            std::cout << "[WARNING] File transfer: Retrying (attempt " << (fileRetries + 1) << " of " << MAX_RETRIES << ")" << std::endl;
             std::this_thread::sleep_for(std::chrono::seconds(2));
         }
         
@@ -164,12 +152,12 @@ bool Client::run() {
     }
     
     if (!transferSuccess) {
-        displayError("File transfer failed after " + std::to_string(MAX_RETRIES) + " attempts", ErrorType::NETWORK);
+        std::cerr << "[ERROR] File transfer failed after " << MAX_RETRIES << " attempts" << std::endl;
         return false;
     }
     
-    displayPhase("Transfer Complete");
-    displaySummary();
+    std::cout << "[PHASE] Transfer Complete" << std::endl;
+    std::cout << "[INFO] Transfer completed successfully" << std::endl;
     
     return true;
 }
@@ -185,21 +173,20 @@ bool Client::connectToServer() {
         boost::asio::ip::tcp::resolver::results_type endpoints = 
             resolver.resolve(serverIP, std::to_string(serverPort));
         
-        displayStatus("Connecting", true, "Resolving " + serverIP + ":" + std::to_string(serverPort));
+        std::cout << "[INFO] Connecting: Resolving " << serverIP << ":" << serverPort << std::endl;
         
         // Connect with proper error handling
         boost::system::error_code connectError;
         boost::asio::connect(*socket, endpoints, connectError);
         
         if (connectError) {
-            displayError("Connection failed: " + connectError.message() + 
-                        " (Code: " + std::to_string(connectError.value()) + ")", ErrorType::NETWORK);
+            std::cerr << "[ERROR] Connection failed: " << connectError.message() << " (Code: " << connectError.value() << ")" << std::endl;
             return false;
         }
 
         // Verify the connection is actually established
         if (!socket->is_open()) {
-            displayError("Socket failed to open after connect", ErrorType::NETWORK);
+            std::cerr << "[ERROR] Socket failed to open after connect" << std::endl;
             return false;
         }
 
@@ -207,9 +194,7 @@ bool Client::connectToServer() {
         auto localEndpoint = socket->local_endpoint();
         auto remoteEndpoint = socket->remote_endpoint();
 
-        displayStatus("Connection verified", true,
-                     "Local: " + localEndpoint.address().to_string() + ":" + std::to_string(localEndpoint.port()) +
-                     " -> Remote: " + remoteEndpoint.address().to_string() + ":" + std::to_string(remoteEndpoint.port()));
+        std::cout << "[INFO] Connection verified - Local: " << localEndpoint.address().to_string() << ":" << localEndpoint.port() << " -> Remote: " << remoteEndpoint.address().to_string() << ":" << remoteEndpoint.port() << std::endl;
 
         // Set socket options for better protocol handling
         socket->set_option(boost::asio::ip::tcp::no_delay(true)); // Disable Nagle algorithm
@@ -226,29 +211,19 @@ bool Client::connectToServer() {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
         connected = true;
-        displayStatus("Connected", true, "TCP connection established and configured");
+        std::cout << "[INFO] Connected: TCP connection established and configured" << std::endl;
         
-        // Update GUI connection status (optional)
-        try {
-            ClientGUIHelpers::updateConnectionStatus(true);
-        } catch (...) {
-            // GUI update failed - continue without GUI
-        }
+        // GUI update removed - using HTML GUI
         
         std::cout << "[DEBUG] Connected to server successfully." << std::endl;
         return true;
         
     } catch (const std::exception& e) {
-        displayError("Connection failed: " + std::string(e.what()), ErrorType::NETWORK);
+        std::cerr << "[ERROR] Connection failed: " << e.what() << std::endl;
         socket.reset();
         connected = false;
         
-        // Update GUI connection status (optional)
-        try {
-            ClientGUIHelpers::updateConnectionStatus(false);
-        } catch (...) {
-            // GUI update failed - continue without GUI
-        }
+        // GUI update removed - using HTML GUI
         
         std::cerr << "[ERROR] Failed to connect to server." << std::endl;
         return false;
@@ -266,12 +241,7 @@ void Client::closeConnection() {
     socket.reset();
     connected = false;
     
-    // Update GUI connection status (optional)
-    try {
-        ClientGUIHelpers::updateConnectionStatus(false);
-    } catch (...) {
-        // GUI update failed - continue without GUI
-    }
+    // GUI update removed - using HTML GUI
 }
 
 bool Client::testConnection() {
@@ -285,7 +255,7 @@ bool Client::testConnection() {
     auto end = std::chrono::steady_clock::now();
     auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     
-    displayStatus("Connection test", true, "Latency: " + std::to_string(latency) + "ms");
+    std::cout << "[INFO] Connection test: Latency: " << latency << "ms" << std::endl;
     return latency < 1000; // Good if under 1 second
 }
 
@@ -294,9 +264,9 @@ void Client::enableKeepAlive() {
         try {
             socket->set_option(boost::asio::socket_base::keep_alive(true));
             keepAliveEnabled = true;
-            displayStatus("Keep-alive", true, "Enabled for stable connection");
+            std::cout << "[INFO] Keep-alive: Enabled for stable connection" << std::endl;
         } catch (const std::exception& e) {
-            displayStatus("Keep-alive", false, "Could not enable: " + std::string(e.what()));
+            std::cerr << "[WARNING] Keep-alive: Could not enable: " << e.what() << std::endl;
         }
     }
 }
@@ -306,7 +276,7 @@ void Client::enableKeepAlive() {
 bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
     // Basic connection validation
     if (!connected || !socket || !socket->is_open()) {
-        displayError("Client not connected to server", ErrorType::NETWORK);
+        std::cerr << "[ERROR] Client not connected to server" << std::endl;
         return false;
     }
     
@@ -343,10 +313,7 @@ bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
         
         // Debug output for critical requests
         if (code == REQ_REGISTER || code == REQ_RECONNECT || code == REQ_SEND_PUBLIC_KEY) {
-            displayStatus("Sending request", true,
-                         "Code=" + std::to_string(code) +
-                         ", PayloadSize=" + std::to_string(payload_size_val) +
-                         ", TotalBytes=" + std::to_string(completeMessage.size()));
+            std::cout << "[INFO] Sending request: Code=" << code << ", PayloadSize=" << payload_size_val << ", TotalBytes=" << completeMessage.size() << std::endl;
         }
         
         // ATOMIC TRANSMISSION: Send complete message in one operation
@@ -355,29 +322,27 @@ bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
         
         // Check for transmission errors
         if (sendError) {
-            displayError("Socket write failed: " + sendError.message(), ErrorType::NETWORK);
+            std::cerr << "[ERROR] Socket write failed: " << sendError.message() << std::endl;
             connected = false;
             return false;
         }
         
         // Verify complete transmission
         if (totalBytesSent != completeMessage.size()) {
-            displayError("Incomplete write: " + std::to_string(totalBytesSent) + 
-                        "/" + std::to_string(completeMessage.size()) + " bytes", ErrorType::NETWORK);
+            std::cerr << "[ERROR] Incomplete write: " << totalBytesSent << "/" << completeMessage.size() << " bytes" << std::endl;
             connected = false;
             return false;
         }
         
         // Success confirmation for critical requests
         if (code == REQ_REGISTER || code == REQ_RECONNECT || code == REQ_SEND_PUBLIC_KEY) {
-            displayStatus("Request sent successfully", true, 
-                         std::to_string(totalBytesSent) + " bytes transmitted");
+            std::cout << "[INFO] Request sent successfully: " << totalBytesSent << " bytes transmitted" << std::endl;
         }
         
         return true;
         
     } catch (const std::exception& e) {
-        displayError("Send request failed: " + std::string(e.what()), ErrorType::NETWORK);
+        std::cerr << "[ERROR] Send request failed: " << e.what() << std::endl;
         connected = false;
         return false;
     }
@@ -385,7 +350,7 @@ bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
 
 bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& payload) {
     if (!connected || !socket || !socket->is_open()) {
-        displayError("Not connected to server", ErrorType::NETWORK);
+        std::cerr << "[ERROR] Not connected to server" << std::endl;
         return false;
     }
     
@@ -400,27 +365,23 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
         header.payload_size = headerBytes[3] | (headerBytes[4] << 8) | (headerBytes[5] << 16) | (headerBytes[6] << 24); // Little-endian uint32_t
         
         // Debug output for important responses
-        displayStatus("Debug: Response received", true, 
-                     "Version=" + std::to_string(header.version) +
-                     ", Code=" + std::to_string(header.code) +
-                     ", PayloadSize=" + std::to_string(header.payload_size));
+        std::cout << "[DEBUG] Response received: Version=" << header.version << ", Code=" << header.code << ", PayloadSize=" << header.payload_size << std::endl;
         
         // Check version
         if (header.version != SERVER_VERSION) {
-            displayError("Protocol version mismatch - Server: " + std::to_string(header.version) + 
-                        ", Client expects: " + std::to_string(SERVER_VERSION), ErrorType::PROTOCOL);
+            std::cerr << "[ERROR] Protocol version mismatch - Server: " << header.version << ", Client expects: " << SERVER_VERSION << std::endl;
             return false;
         }
         
         // Check for error response
         if (header.code == RESP_GENERIC_SERVER_ERROR) {
-            displayError("Server returned general error", ErrorType::SERVER_ERROR);
+            std::cerr << "[ERROR] Server returned general error" << std::endl;
             return false;
         }
         
         // Validate payload size
         if (header.payload_size > MAX_PACKET_SIZE) {
-            displayError("Invalid payload size: " + std::to_string(header.payload_size), ErrorType::PROTOCOL);
+            std::cerr << "[ERROR] Invalid payload size: " << header.payload_size << std::endl;
             return false;
         }
         
@@ -434,17 +395,17 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
         return true;
         
     } catch (const std::exception& e) {
-        displayError("Failed to receive response: " + std::string(e.what()), ErrorType::NETWORK);
+        std::cerr << "[ERROR] Failed to receive response: " << e.what() << std::endl;
         return false;
     }
 }
 
 bool Client::performRegistration() {
-    displayStatus("Starting registration", true, "Using pre-generated RSA keys");
+    std::cout << "[INFO] Starting registration: Using pre-generated RSA keys" << std::endl;
 
     // RSA keys should already be generated during initialization
     if (!rsaPrivate) {
-        displayError("RSA keys not available for registration", ErrorType::CRYPTO);
+        std::cerr << "[ERROR] RSA keys not available for registration" << std::endl;
         return false;
     }
     
@@ -453,8 +414,7 @@ bool Client::performRegistration() {
     
     // Validate username length
     if (username.length() > MAX_NAME_SIZE - 1) {
-        displayError("Username too long: " + std::to_string(username.length()) + 
-                    " bytes (max: " + std::to_string(MAX_NAME_SIZE - 1) + ")", ErrorType::CONFIG);
+        std::cerr << "[ERROR] Username too long: " << username.length() << " bytes (max: " << (MAX_NAME_SIZE - 1) << ")" << std::endl;
         return false;
     }
     
@@ -463,17 +423,14 @@ bool Client::performRegistration() {
     // Ensure null termination (redundant but explicit)
     payload[username.length()] = 0;
     
-    displayStatus("Sending registration", true, "Username: " + username);
+    std::cout << "[INFO] Sending registration: Username: " << username << std::endl;
     
     // Debug: show exact payload construction
-    displayStatus("Debug: Registration payload", true, 
-                 "Size=" + std::to_string(payload.size()) + " bytes" +
-                 ", Username='" + username + "' (" + std::to_string(username.length()) + " chars)" +
-                 ", Null-terminated and zero-padded");
+    std::cout << "[DEBUG] Registration payload: Size=" << payload.size() << " bytes, Username='" << username << "' (" << username.length() << " chars), Null-terminated and zero-padded" << std::endl;
 
     // Send registration request
     if (!sendRequest(REQ_REGISTER, payload)) {
-        displayError("Failed to send registration request", ErrorType::NETWORK);
+        std::cerr << "[ERROR] Failed to send registration request" << std::endl;
         return false;
     }
     
@@ -481,20 +438,18 @@ bool Client::performRegistration() {
     ResponseHeader header;
     std::vector<uint8_t> responsePayload;
     if (!receiveResponse(header, responsePayload)) {
-        displayError("Failed to receive registration response", ErrorType::NETWORK);
+        std::cerr << "[ERROR] Failed to receive registration response" << std::endl;
         return false;
     }
     
     // Process response
     if (header.code == RESP_REG_FAIL) {
-        displayError("Registration failed: Username already exists", ErrorType::AUTHENTICATION);
+        std::cerr << "[ERROR] Registration failed: Username already exists" << std::endl;
         return false;
     }
     
     if (header.code != RESP_REG_OK || responsePayload.size() != CLIENT_ID_SIZE) {
-        displayError("Invalid registration response - Code: " + std::to_string(header.code) + 
-                    ", Expected: " + std::to_string(RESP_REG_OK) + 
-                    ", Payload size: " + std::to_string(responsePayload.size()), ErrorType::PROTOCOL);
+        std::cerr << "[ERROR] Invalid registration response - Code: " << header.code << ", Expected: " << RESP_REG_OK << ", Payload size: " << responsePayload.size() << std::endl;
         return false;
     }
     
@@ -503,12 +458,11 @@ bool Client::performRegistration() {
     
     // Save info
     if (!saveMeInfo() || !savePrivateKey()) {
-        displayError("Failed to save registration info", ErrorType::FILE_IO);
+        std::cerr << "[ERROR] Failed to save registration info" << std::endl;
         return false;
     }
     
-    displayStatus("Registration successful", true, 
-                 "Client ID: " + bytesToHex(clientID.data(), 8) + "...");
+    std::cout << "[INFO] Registration successful: Client ID: " << bytesToHex(clientID.data(), 8) << "..." << std::endl;
     
     std::cout << "[DEBUG] Registration completed successfully" << std::endl;
     return true;
@@ -519,7 +473,7 @@ bool Client::performReconnection() {
     std::vector<uint8_t> payload(MAX_NAME_SIZE, 0);
     std::copy(username.begin(), username.end(), payload.begin());
     
-    displayStatus("Sending reconnection", true, "Client ID: " + bytesToHex(clientID.data(), 8) + "...");
+    std::cout << "[INFO] Sending reconnection: Client ID: " << bytesToHex(clientID.data(), 8) << "..." << std::endl;
     
     // Send reconnection request
     if (!sendRequest(REQ_RECONNECT, payload)) {
@@ -538,21 +492,21 @@ bool Client::performReconnection() {
     }
     
     if (header.code != RESP_RECONNECT_AES_SENT || responsePayload.size() <= CLIENT_ID_SIZE) {
-        displayError("Invalid reconnection response", ErrorType::PROTOCOL);
+        std::cerr << "[ERROR] Invalid reconnection response" << std::endl;
         return false;
     }
     
     // Extract encrypted AES key
     std::vector<uint8_t> encryptedKey(responsePayload.begin() + CLIENT_ID_SIZE, responsePayload.end());
     
-    displayStatus("Decrypting AES key", true, "Using stored RSA private key");
+    std::cout << "[INFO] Decrypting AES key: Using stored RSA private key" << std::endl;
     
     // Decrypt AES key
     if (!decryptAESKey(encryptedKey)) {
         return false;
     }
     
-    displayStatus("Reconnection", true, "Successfully authenticated");
+    std::cout << "[INFO] Reconnection: Successfully authenticated" << std::endl;
     return true;
 }
 
@@ -607,14 +561,14 @@ bool Client::attemptConnectionRecovery() {
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     
     // Attempt to reconnect
-    displayStatus("Connection recovery", true, "Attempting to reconnect...");
+    std::cout << "[INFO] Connection recovery: Attempting to reconnect..." << std::endl;
     
     if (connectToServer()) {
-        displayStatus("Connection recovery", true, "Successfully reconnected");
+        std::cout << "[INFO] Connection recovery: Successfully reconnected" << std::endl;
         std::cout << "[DEBUG] Connection recovery successful" << std::endl;
         return true;
     } else {
-        displayError("Connection recovery failed", ErrorType::NETWORK);
+        std::cerr << "[ERROR] Connection recovery failed" << std::endl;
         std::cout << "[DEBUG] Connection recovery failed" << std::endl;
         return false;
     }
@@ -623,111 +577,21 @@ bool Client::attemptConnectionRecovery() {
 // === GLOBAL FUNCTION ===
 
 bool runBackupClient() {
-    // Write to a log file so we can see what's happening
-    std::ofstream logFile("client_debug.log", std::ios::app);
-    logFile << "=== ENCRYPTED BACKUP CLIENT DEBUG MODE ===" << std::endl;
-    logFile << "Application started at: " << __DATE__ << " " << __TIME__ << std::endl;
-    logFile.flush();
-    
-    // Also try console output
     std::cout << "=== ENCRYPTED BACKUP CLIENT DEBUG MODE ===" << std::endl;
     std::cout << "Console application started!" << std::endl;
     std::cout << "Starting client with console output..." << std::endl;
 
-    try {
-        logFile << "About to create client object..." << std::endl;
-        logFile.flush();
-        std::cout << "About to create client object..." << std::endl;
-        std::cout.flush();
-        
-        Client client;
-        logFile << "Client object created successfully!" << std::endl;
-        logFile.flush();
-        std::cout << "Client object created successfully!" << std::endl;
-
-        std::cout << "About to initialize client..." << std::endl;
-        std::cout.flush();
-        
-        if (!client.initialize()) {
-            std::cerr << "Fatal: Client initialization failed" << std::endl;
-            if (!g_batchMode) {
-                std::cout << "\nPress Enter to exit...";
-                std::cin.get();
-            }
-            return false;
-        }
-
-        std::cout << "Client initialized successfully. Starting backup operation..." << std::endl;
-        if (!client.run()) {
-            std::cerr << "Fatal: File backup failed" << std::endl;
-#ifdef _WIN32
-            // Show error notification via GUI if available
-            try {
-                if (!g_batchMode) {
-                    ClientGUIHelpers::showNotification("Backup Error", "File backup operation failed");
-                    ClientGUIHelpers::updateError("Backup failed");
-                }
-            } catch (...) {}
-
-            // Keep window open to show error
-            if (!g_batchMode) {
-                std::cout << "\nPress Enter to exit...";
-                std::cin.get();
-            }
-#endif
-            return false;
-        }
-
-        std::cout << "\nBackup completed successfully!" << std::endl;
-
-#ifdef _WIN32
-        // Show success notification via GUI if available
-        try {
-            if (!g_batchMode) {
-                ClientGUIHelpers::showNotification("Backup Complete", "File backup completed successfully!");
-                ClientGUIHelpers::updatePhase("Backup Complete");
-            }
-        } catch (...) {}
-
-        // Keep window open to show success
-        if (!g_batchMode) {
-            std::cout << "\nPress Enter to exit...";
-            std::cin.get();
-        }
-#endif
-
-        return true;
-    } catch (const std::exception& e) {
-        std::cerr << "Fatal exception: " << e.what() << std::endl;
-#ifdef _WIN32
-        try {
-            if (!g_batchMode) {
-                ClientGUIHelpers::showNotification("Critical Error", std::string("Exception: ") + e.what());
-                ClientGUIHelpers::updateError(std::string("Critical error: ") + e.what());
-            }
-        } catch (...) {}
-
-        if (!g_batchMode) {
-            std::cout << "\nPress Enter to exit...";
-            std::cin.get();
-        }
-#endif
-        return false;
-    } catch (...) {
-        std::cerr << "Fatal: Unknown exception occurred" << std::endl;
-#ifdef _WIN32
-        try {
-            if (!g_batchMode) {
-                ClientGUIHelpers::showNotification("Critical Error", "Unknown exception occurred");
-                ClientGUIHelpers::updateError("Unknown critical error");
-            }
-        } catch (...) {}
-
-        if (!g_batchMode) {
-            std::cout << "\nPress Enter to exit...";
-            std::cin.get();
-        }
-#endif
+    Client client;
+    if (!client.initialize()) {
+        std::cerr << "Fatal: Client initialization failed" << std::endl;
         return false;
     }
+
+    if (!client.run()) {
+        std::cerr << "Fatal: File backup failed" << std::endl;
+        return false;
+    }
+
+    std::cout << "\nBackup completed successfully!" << std::endl;
+    return true;
 }

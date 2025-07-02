@@ -27,7 +27,7 @@ from request_handlers import RequestHandler
 from network_server import NetworkServer
 
 # GUI Integration
-from gui_integration import GUIManager, get_gui_manager, initialize_gui
+from gui_integration import GUIManager
 
 # --- Server Configuration Constants ---
 SERVER_VERSION = 3
@@ -241,10 +241,19 @@ class BackupServer:
         self.clients_by_name: Dict[str, bytes] = {} # In-memory store: client_name_str -> client_id_bytes
         self.clients_lock: threading.Lock = threading.Lock() # Protects access to clients and clients_by_name
         
-        # Initialize network server with client handler and maintenance callbacks
+        # Server state flags
+        self.running: bool = False
+        self.shutdown_event: threading.Event = threading.Event()
+        
+        # Use default port for now
+        self.port = DEFAULT_PORT
+        
+        # Initialize network server with proper parameters
         self.network_server: NetworkServer = NetworkServer(
-            client_handler=self._handle_client_connection,
-            maintenance_handler=self._periodic_maintenance_job
+            port=self.port,
+            request_handler=self._handle_client_connection,
+            client_resolver=self.create_client,
+            shutdown_event=self.shutdown_event
         )
         
         # Server state flags (now managed by NetworkServer but kept for compatibility)
@@ -258,7 +267,7 @@ class BackupServer:
         self.request_handler: RequestHandler = RequestHandler(self)
         
         # Initialize GUI manager
-        self.gui_manager = get_gui_manager()
+        self.gui_manager = GUIManager()
         self.gui_manager.initialize_gui()
         
         # Perform pre-flight checks and initialize database
@@ -268,7 +277,7 @@ class BackupServer:
         
         # Note: Signal handlers are now managed by NetworkServer
         # but we keep a reference for main server coordination
-        self.port = self.network_server.get_port()
+        # Port is already set during NetworkServer initialization
 
     def create_client(self, client_id: bytes, name: str) -> 'Client':
         """Factory method to create a new Client instance."""

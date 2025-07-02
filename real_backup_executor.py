@@ -24,14 +24,27 @@ class RealBackupExecutor:
     with automated process control and verification.
     """
     def __init__(self, client_exe_path: str = None):
-        # Try backup version first as it might be more stable
+        # Try different possible locations for the client executable
         if not client_exe_path:
-            if os.path.exists(r"client\EncryptedBackupClient_backup.exe"):
-                self.client_exe = r"client\EncryptedBackupClient_backup.exe"
-            else:
-                self.client_exe = r"client\EncryptedBackupClient.exe"
+            possible_paths = [
+                r"build\Release\EncryptedBackupClient.exe",
+                r"client\EncryptedBackupClient_backup.exe",
+                r"client\EncryptedBackupClient.exe",
+                r"EncryptedBackupClient.exe"
+            ]
+            
+            self.client_exe = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    self.client_exe = path
+                    break
+            
+            if not self.client_exe:
+                # Default to the most likely location
+                self.client_exe = r"build\Release\EncryptedBackupClient.exe"
         else:
             self.client_exe = client_exe_path
+        
         self.server_received_files = r"server\received_files"
         self.temp_dir = tempfile.mkdtemp()
         self.backup_process = None
@@ -208,7 +221,8 @@ class RealBackupExecutor:
         return False
     
     def execute_real_backup(self, username: str, file_path: str, 
-                           server_ip: str = "127.0.0.1", server_port: int = 1256) -> Dict[str, Any]:
+                           server_ip: str = "127.0.0.1", server_port: int = 1256, 
+                           timeout: int = 30) -> Dict[str, Any]:
         """
         Execute REAL backup using the existing C++ client with full verification
         """
@@ -230,7 +244,7 @@ class RealBackupExecutor:
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"Source file does not exist: {file_path}")
             
-            if not os.path.exists(self.client_exe):
+            if not self.client_exe or not os.path.exists(self.client_exe):
                 raise FileNotFoundError(f"Client executable not found: {self.client_exe}")
             
             # Generate transfer.info
@@ -242,6 +256,9 @@ class RealBackupExecutor:
             
             self._log_status("LAUNCH", f"Launching {self.client_exe}")
             # Launch client process with automated input handling and BATCH MODE
+            if not self.client_exe:
+                raise RuntimeError("Client executable path is not set")
+                
             self.backup_process = subprocess.Popen(
                 [self.client_exe, "--batch"],  # Use batch mode to prevent hanging
                 stdin=subprocess.PIPE,

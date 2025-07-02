@@ -21,6 +21,12 @@
 #include <map>
 
 #ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <direct.h>
 #include <sys/stat.h>
 #include <windows.h>
@@ -35,15 +41,13 @@
 #include <boost/bind/bind.hpp>
 
 // Project-specific includes
-#include "ClientWebSocketServer.h"
-#include "ClientGUI.h"
 #include "../client/cksum.h"
 #include "../wrappers/AESWrapper.h"
 #include "../wrappers/Base64Wrapper.h"
 #include "../wrappers/RSAWrapper.h"
 
 // Global batch mode flag (defined in main.cpp)
-extern bool g_batchMode;
+// extern bool g_batchMode;
 
 // Protocol constants
 constexpr uint8_t CLIENT_VERSION = 3;
@@ -192,6 +196,10 @@ private:
     
     // === PERFORMANCE METRICS ===
     std::chrono::steady_clock::time_point operationStartTime;
+    
+    // === INTERACTIVE MODE ===
+    bool interactiveMode;
+    uint16_t pendingServerPort;
 
 #ifdef _WIN32
     // === CONSOLE CONTROL (Windows) ===
@@ -199,14 +207,6 @@ private:
     CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
     WORD savedAttributes;
 #endif
-
-    // === GUI INTEGRATION ===
-    std::unique_ptr<ClientWebSocketServer> webSocketServer;
-    bool interactiveMode;
-    std::string pendingServerIP;
-    int pendingServerPort;
-    std::string pendingUsername;
-    std::string selectedFilePath;
 
 public:
     // === CORE LIFECYCLE ===
@@ -249,35 +249,12 @@ public:
     bool verifyCRC(uint32_t serverCRC, const std::vector<uint8_t>& originalData, const std::string& filename);
     uint32_t calculateCRC32(const uint8_t* data, size_t size);
 
-    // === GUI & DISPLAY OPERATIONS (ClientGUI.cpp) ===
-    void handleGUICommand(const std::map<std::string, std::string>& command);
-    void handleConnectCommand(const std::map<std::string, std::string>& command);
-    void handleStartBackupCommand(const std::map<std::string, std::string>& command);
-    void handleFileSelectedCommand(const std::map<std::string, std::string>& command);
-    void sendGUIResponse(const std::string& type, const std::string& message, bool success = true);
-    void displayStatus(const std::string& operation, bool success, const std::string& details = "");
-    void displayProgress(const std::string& operation, size_t current, size_t total);
-    void displayTransferStats();
-    void displaySplashScreen();
-    void clearLine();
-    void displayConnectionInfo();
-    void displayError(const std::string& message, ErrorType type = ErrorType::NONE);
-    void displaySeparator();
-    void displayPhase(const std::string& phase);
-    void displaySummary();
-
     // === UTILITY FUNCTIONS ===
     std::string bytesToHex(const uint8_t* data, size_t size);
     std::vector<uint8_t> hexToBytes(const std::string& hex);
     std::string formatBytes(size_t bytes);
     std::string formatDuration(int seconds);
     std::string getCurrentTimestamp();
-
-    // === GUI STATUS UPDATE HELPERS ===
-    void updateGUIStatus(const std::string& operation, bool success, const std::string& details);
-    void updateGUIProgress(double percentage, const std::string& speed, const std::string& eta, const std::string& transferred);
-    void updateGUIPhase(const std::string& phase);
-    void initializeWebSocketCommands();
 };
 
 // === GLOBAL FUNCTION (defined in ClientCore.cpp) ===

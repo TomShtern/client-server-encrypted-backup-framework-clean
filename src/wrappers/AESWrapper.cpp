@@ -5,10 +5,10 @@
 #include <cstring>
 
 // Real AES implementation using Crypto++
-#include "../../third_party/crypto++/aes.h"
-#include "../../third_party/crypto++/modes.h"
-#include "../../third_party/crypto++/filters.h"
-#include "../../third_party/crypto++/osrng.h"
+#include <cryptopp/aes.h>
+#include <cryptopp/modes.h>
+#include <cryptopp/filters.h>
+#include <cryptopp/osrng.h>
 
 // AESWrapper implementation using Crypto++
 AESWrapper::AESWrapper(const unsigned char* key, size_t keyLength, bool useStaticZeroIV) {
