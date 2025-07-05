@@ -17,7 +17,15 @@ if(WIN32)
     )
 endif()
 
-# 3. Define the Executable: List all of our application's source files.
+# 3. Vcpkg Integration Check
+# To configure with vcpkg, use: cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg\scripts\buildsystems\vcpkg.cmake"
+if(DEFINED CMAKE_TOOLCHAIN_FILE)
+    message(STATUS "Using vcpkg toolchain: ${CMAKE_TOOLCHAIN_FILE}")
+else()
+    message(WARNING "No vcpkg toolchain detected. Make sure to use: cmake -DCMAKE_TOOLCHAIN_FILE=\"vcpkg\\scripts\\buildsystems\\vcpkg.cmake\"")
+endif()
+
+# 4. Define the Executable: List all of our application's source files.
 add_executable(EncryptedBackupClient
     src/client/main.cpp
     src/client/ClientCore.cpp
@@ -34,17 +42,33 @@ add_executable(EncryptedBackupClient
     src/wrappers/Base64Wrapper.cpp
 )
  
-# 4. Configure Include Directories: Tell our code where to find header files.
+# 5. Configure Include Directories: Tell our code where to find header files.
 target_include_directories(EncryptedBackupClient PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# 5. Find and Link Libraries: Use vcpkg packages
-find_package(Boost REQUIRED COMPONENTS asio beast)
+# 6. Find and Link Libraries: Use vcpkg packages with fallback
+# Try modern config-based discovery first (vcpkg style)
+find_package(Boost CONFIG QUIET COMPONENTS asio beast)
+
+if(NOT Boost_FOUND)
+    # Fallback to traditional FindBoost module
+    message(STATUS "Config-based Boost discovery failed, trying traditional FindBoost...")
+    find_package(Boost REQUIRED COMPONENTS system thread)
+    
+    if(NOT Boost_FOUND)
+        message(FATAL_ERROR 
+            "Boost not found! Please install Boost using vcpkg:\n"
+            "  vcpkg install boost-asio boost-beast\n"
+            "Or ensure Boost is installed and CMAKE_PREFIX_PATH includes the Boost installation directory."
+        )
+    endif()
+endif()
+
 find_package(cryptopp CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
 
-# 6. Link Libraries: Include both external and Windows system libraries
+# 7. Link Libraries: Include both external and Windows system libraries
 target_link_libraries(EncryptedBackupClient PRIVATE 
     Boost::asio
     Boost::beast
@@ -52,14 +76,14 @@ target_link_libraries(EncryptedBackupClient PRIVATE
     ZLIB::ZLIB
 )
 
-# 7. Windows-specific libraries (minimal set for networking)
+# 8. Windows-specific libraries (minimal set for networking)
 if(WIN32)
     target_link_libraries(EncryptedBackupClient PRIVATE 
         ws2_32      # Windows Sockets - required for networking
     )
 endif()
 
-# 8. Compiler-specific optimizations
+# 9. Compiler-specific optimizations
 if(MSVC)
     target_compile_options(EncryptedBackupClient PRIVATE /W4)
 else()

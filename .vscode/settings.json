@@ -1,3 +1,10 @@
 {
-    "coderabbit.agentType": "Claude Code"
+    "coderabbit.agentType": "Native",
+    "coderabbit.autoReviewMode": "auto",
+    "C_Cpp.workspaceParsingPriority": "medium",
+    "cmake.configureArgs": [
+        "-DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake"
+    ],
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "cmake.generator": "Visual Studio 17 2022"
 }
