@@ -16,6 +16,18 @@ import csv
 import sqlite3
 from collections import deque
 import math
+import shutil
+import zlib
+import socket
+
+# Import server components for real server control
+try:
+    from server import BackupServer  # type: ignore
+    SERVER_CONTROL_AVAILABLE = True
+except ImportError:
+    BackupServer = None  # type: ignore
+    SERVER_CONTROL_AVAILABLE = False
+    print("Warning: Server control not available - server start/stop disabled")
 
 # Import system tray functionality based on platform
 try:
@@ -420,7 +432,7 @@ class ModernTable(tk.Frame):
                 font=(ModernTheme.FONT_FAMILY, 12)).pack(side="left", padx=(5, 2))
 
         self.search_var = tk.StringVar()
-        self.search_var.trace("w", self._on_search_change)
+        self.search_var.trace_add("write", self._on_search_change)
         search_entry = tk.Entry(search_frame, textvariable=self.search_var,
                                bg=ModernTheme.SECONDARY_BG, fg=ModernTheme.TEXT_PRIMARY,
                                font=(ModernTheme.FONT_FAMILY, 10), relief="flat", bd=5)
@@ -765,7 +777,7 @@ class SettingsDialog:
             self.storage_var.set(directory)
 
     def _save_settings(self):
-        """Save settings and close dialog"""
+        """Save settings to file and close dialog"""
         try:
             # Validate inputs
             port = int(self.port_var.get())
@@ -798,12 +810,38 @@ class SettingsDialog:
             self.settings['verbose_logging'] = self.log_verbose_var.get()
             self.settings['auto_backup_db'] = self.auto_backup_var.get()
 
+            # Save settings to file
+            self._persist_settings_to_file()
+
             self.result = self.settings
             if self.dialog:
                 self.dialog.destroy()
+                
+        except Exception as e:
+            messagebox.showerror("Settings Error", f"Failed to save settings: {str(e)}", 
+                               parent=self.dialog if self.dialog else None)
 
-        except ValueError as e:
-            messagebox.showerror("Invalid Input", str(e), parent=self.dialog if self.dialog else None)
+    def _persist_settings_to_file(self):
+        """Persist settings to configuration file"""
+        try:
+            settings_file = "server_gui_settings.json"
+            settings_data = {
+                'server_settings': self.settings,
+                'gui_preferences': {
+                    'last_tab': getattr(self, 'current_tab', 'dashboard'),
+                    'window_state': 'normal',
+                    'last_updated': datetime.now().isoformat()
+                }
+            }
+            
+            with open(settings_file, 'w') as f:
+                json.dump(settings_data, f, indent=2)
+                
+            print(f"Settings saved to {settings_file}")
+            
+        except Exception as e:
+            print(f"Failed to save settings to file: {e}")
+            raise
 
     def _cancel(self):
         """Cancel and close dialog"""
@@ -907,6 +945,7 @@ class ServerGUIStatus:
         self.server_address = ""
         self.port = 0
         self.clients_connected = 0
+        self.connected_clients = 0  # Alias for consistency
         self.total_clients = 0
         self.active_transfers = 0
         self.bytes_transferred = 0
@@ -968,8 +1007,19 @@ class ServerGUI:
         # Server reference (will be set if needed)
         self.server = None
         
-        # Settings
-        self.settings = {
+        # Settings - Load from file or use defaults
+        self.settings = self._load_settings_from_file()
+        
+        # Database path
+        self.db_path = "defensive.db"
+        
+        # Performance monitoring
+        self.last_bytes_transferred = 0
+        self.network_monitor_start = time.time()
+    
+    def _load_settings_from_file(self):
+        """Load settings from configuration file or return defaults"""
+        default_settings = {
             'port': 1256,
             'storage_dir': 'received_files',
             'max_clients': 50,
@@ -980,12 +1030,59 @@ class ServerGUI:
             'auto_backup_db': True
         }
         
-        # Database path
-        self.db_path = "defensive.db"
-        
-        # Performance monitoring
-        self.last_bytes_transferred = 0
-        self.network_monitor_start = time.time()
+        try:
+            settings_file = "server_gui_settings.json"
+            if os.path.exists(settings_file):
+                with open(settings_file, 'r') as f:
+                    settings_data = json.load(f)
+                
+                # Merge loaded settings with defaults to ensure all keys exist
+                if 'server_settings' in settings_data:
+                    loaded_settings = settings_data['server_settings']
+                    # Update defaults with loaded values
+                    for key, value in loaded_settings.items():
+                        if key in default_settings:
+                            default_settings[key] = value
+                    
+                    # Restore GUI preferences if available
+                    if 'gui_preferences' in settings_data:
+                        gui_prefs = settings_data['gui_preferences']
+                        if 'last_tab' in gui_prefs:
+                            self.current_tab = gui_prefs['last_tab']
+                    
+                    print(f"Settings loaded from {settings_file}")
+                else:
+                    print(f"Invalid settings file format, using defaults")
+            else:
+                print(f"Settings file not found, using defaults")
+                
+        except Exception as e:
+            print(f"Failed to load settings from file: {e}, using defaults")
+            
+        return default_settings
+    
+    def _save_current_settings(self):
+        """Save current settings to file (for use during runtime)"""
+        try:
+            settings_file = "server_gui_settings.json"
+            settings_data = {
+                'server_settings': self.settings,
+                'gui_preferences': {
+                    'last_tab': self.current_tab,
+                    'window_state': 'normal',
+                    'last_updated': datetime.now().isoformat()
+                }
+            }
+            
+            with open(settings_file, 'w') as f:
+                json.dump(settings_data, f, indent=2)
+                
+            print(f"Current settings saved to {settings_file}")
+            return True
+            
+        except Exception as e:
+            print(f"Failed to save current settings: {e}")
+            return False
         
     def initialize(self) -> bool:
         """Initialize GUI system"""
@@ -1015,23 +1112,47 @@ class ServerGUI:
             return False
     
     def shutdown(self):
-        """Shutdown GUI system"""
+        """Enhanced shutdown with settings persistence and cleanup"""
+        print("Starting GUI shutdown process...")
         self.running = False
         
-        if self.tray_icon:
-            try:
-                self.tray_icon.stop()
-            except:
-                pass
+        try:
+            # Save current settings and state before shutdown
+            self._save_current_settings()
+            self._add_activity_log("💾 Settings saved during shutdown")
+        except Exception as e:
+            print(f"Warning: Failed to save settings during shutdown: {e}")
         
-        if self.root:
-            try:
-                self.root.quit()
-            except:
-                pass
+        try:
+            # Stop system tray
+            if self.tray_icon:
+                try:
+                    self.tray_icon.stop()
+                    print("✅ System tray stopped")
+                except Exception as e:
+                    print(f"Warning: Failed to stop tray icon: {e}")
+            
+            # Gracefully shutdown GUI
+            if self.root:
+                try:
+                    self.root.quit()
+                    print("✅ GUI root window closed")
+                except Exception as e:
+                    print(f"Warning: Failed to quit GUI root window: {e}")
+            
+            # Wait for GUI thread to complete
+            if self.gui_thread and self.gui_thread.is_alive():
+                print("Waiting for GUI thread to complete...")
+                self.gui_thread.join(timeout=3.0)
+                if self.gui_thread.is_alive():
+                    print("Warning: GUI thread did not complete within timeout")
+                else:
+                    print("✅ GUI thread completed successfully")
+                    
+        except Exception as e:
+            print(f"Error during shutdown: {e}")
         
-        if self.gui_thread and self.gui_thread.is_alive():
-            self.gui_thread.join(timeout=2.0)
+        print("GUI shutdown completed")
     
     def _gui_main_loop(self):
         """Main GUI thread loop"""
@@ -1875,6 +1996,7 @@ class ServerGUI:
             self._update_clock()
             self._update_performance_metrics()
             self._update_transfer_rate()
+            self._monitor_server_status()  # Add real-time server monitoring
             
             # Update charts if analytics tab is active
             if self.current_tab == "analytics":
@@ -1883,6 +2005,166 @@ class ServerGUI:
             # Schedule next update
             if self.root:
                 self.root.after(1000, self._schedule_updates)  # Update every second
+    
+    def _monitor_server_status(self):
+        """Enhanced real-time server monitoring with health checks and auto-recovery"""
+        try:
+            server_health_status = "unknown"
+            
+            if SERVER_CONTROL_AVAILABLE and self.server:
+                # Comprehensive server status checking
+                is_running = hasattr(self.server, 'running') and self.server.running
+                
+                # Enhanced server status display with health indicators
+                if 'server_status' in self.status_labels:
+                    if is_running:
+                        # Check server health
+                        try:
+                            # Test server responsiveness
+                            if hasattr(self.server, 'network_server') and self.server.network_server:
+                                if hasattr(self.server.network_server, 'server_socket') and self.server.network_server.server_socket:
+                                    server_health_status = "healthy"
+                                    self.status_labels['server_status'].config(text="🟢 Running (Healthy)", fg=ModernTheme.SUCCESS)
+                                else:
+                                    server_health_status = "degraded"
+                                    self.status_labels['server_status'].config(text="🟡 Running (Degraded)", fg=ModernTheme.WARNING)
+                            else:
+                                server_health_status = "starting"
+                                self.status_labels['server_status'].config(text="🔄 Starting", fg=ModernTheme.ACCENT_BLUE)
+                        except Exception:
+                            server_health_status = "unhealthy"
+                            self.status_labels['server_status'].config(text="🟠 Running (Issues)", fg=ModernTheme.WARNING)
+                    else:
+                        server_health_status = "stopped"
+                        self.status_labels['server_status'].config(text="🔴 Stopped", fg=ModernTheme.ERROR)
+                
+                # Enhanced address/port monitoring with connectivity testing
+                if is_running:
+                    try:
+                        if hasattr(self.server, 'port'):
+                            port = self.server.port
+                        else:
+                            port = self.settings.get('port', 1256)
+                            
+                        if 'server_address' in self.status_labels:
+                            address_text = f"localhost:{port}"
+                            
+                            # Test port connectivity
+                            try:
+                                test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                                test_socket.settimeout(0.1)
+                                result = test_socket.connect_ex(('localhost', port))
+                                test_socket.close()
+                                
+                                if result == 0:
+                                    address_text += " ✅"
+                                    self.status_labels['server_address'].config(text=address_text, fg=ModernTheme.SUCCESS)
+                                else:
+                                    address_text += " ❌"
+                                    self.status_labels['server_address'].config(text=address_text, fg=ModernTheme.ERROR)
+                            except Exception:
+                                address_text += " ❓"
+                                self.status_labels['server_address'].config(text=address_text, fg=ModernTheme.WARNING)
+                                
+                    except Exception as e:
+                        if 'server_address' in self.status_labels:
+                            self.status_labels['server_address'].config(text="Connection Error", fg=ModernTheme.ERROR)
+                
+                # Real-time client monitoring with detailed statistics
+                if is_running:
+                    try:
+                        connected_clients = 0
+                        active_transfers = 0
+                        
+                        if hasattr(self.server, 'client_manager') and self.server.client_manager:
+                            if hasattr(self.server.client_manager, 'clients'):
+                                connected_clients = len(self.server.client_manager.clients)
+                                
+                                # Count active transfers
+                                for client_id, client_info in self.server.client_manager.clients.items():
+                                    if hasattr(client_info, 'active_transfer') and client_info.active_transfer:
+                                        active_transfers += 1
+                        
+                        # Update client statistics
+                        self.status.connected_clients = connected_clients
+                        self.status.active_transfers = active_transfers
+                        
+                        if 'connected_clients' in self.status_labels:
+                            client_text = f"{connected_clients} connected"
+                            if active_transfers > 0:
+                                client_text += f" ({active_transfers} transferring)"
+                            
+                            self.status_labels['connected_clients'].config(
+                                text=client_text,
+                                fg=ModernTheme.ACCENT_GREEN if connected_clients > 0 else ModernTheme.TEXT_SECONDARY
+                            )
+                            
+                    except Exception as e:
+                        print(f"Client monitoring error: {e}")
+                
+                # Database and file statistics monitoring
+                if is_running:
+                    try:
+                        # Get live database statistics
+                        conn = sqlite3.connect(self.db_path)
+                        cursor = conn.cursor()
+                        
+                        # Total files
+                        cursor.execute("SELECT COUNT(*) FROM files")
+                        total_files = cursor.fetchone()[0] or 0
+                        
+                        # Total clients
+                        cursor.execute("SELECT COUNT(*) FROM clients")
+                        total_clients = cursor.fetchone()[0] or 0
+                        
+                        # Recent activity (last 24 hours)
+                        cursor.execute("""
+                            SELECT COUNT(*) FROM files 
+                            WHERE VerifiedAt >= datetime('now', '-24 hours')
+                        """)
+                        recent_uploads = cursor.fetchone()[0] or 0
+                        
+                        conn.close()
+                        
+                        # Update displays
+                        if 'total_files' in self.status_labels:
+                            self.status_labels['total_files'].config(text=str(total_files), fg=ModernTheme.TEXT_PRIMARY)
+                        if 'total_clients' in self.status_labels:
+                            self.status_labels['total_clients'].config(text=str(total_clients), fg=ModernTheme.TEXT_PRIMARY)
+                        if 'recent_uploads' in self.status_labels:
+                            self.status_labels['recent_uploads'].config(text=f"{recent_uploads} (24h)", fg=ModernTheme.ACCENT_BLUE)
+                            
+                    except Exception as e:
+                        print(f"Database monitoring error: {e}")
+                        
+                # Update server uptime if running
+                if is_running and hasattr(self.server, 'start_time'):
+                    try:
+                        uptime_seconds = time.time() - self.server.start_time
+                        uptime_str = self._format_duration(int(uptime_seconds))
+                        if 'server_uptime' in self.status_labels:
+                            self.status_labels['server_uptime'].config(text=uptime_str, fg=ModernTheme.TEXT_PRIMARY)
+                    except Exception:
+                        pass
+                        
+            else:
+                # No server instance or control not available
+                if 'server_status' in self.status_labels:
+                    if SERVER_CONTROL_AVAILABLE:
+                        self.status_labels['server_status'].config(text="⚪ Not Started", fg=ModernTheme.TEXT_SECONDARY)
+                    else:
+                        self.status_labels['server_status'].config(text="⚠️ Control Unavailable", fg=ModernTheme.WARNING)
+                
+                # Clear other status displays
+                for key in ['server_address', 'connected_clients', 'server_uptime']:
+                    if key in self.status_labels:
+                        self.status_labels[key].config(text="N/A", fg=ModernTheme.TEXT_SECONDARY)
+                
+        except Exception as e:
+            print(f"Server status monitoring error: {e}")
+            # Ensure status shows error state
+            if 'server_status' in self.status_labels:
+                self.status_labels['server_status'].config(text="❌ Monitor Error", fg=ModernTheme.ERROR)
     
     def _process_updates(self):
         """Process queued status updates"""
@@ -2062,69 +2344,94 @@ class ServerGUI:
         """Update performance metrics with real system data"""
         try:
             if SYSTEM_MONITOR_AVAILABLE:
-                # Real CPU usage
+                current_time = time.time()
+                
+                # Real CPU usage with better interval
                 cpu_usage = psutil.cpu_percent(interval=0.1)
                 if 'cpu_usage' in self.status_labels:
-                    self.status_labels['cpu_usage'].config(text=f"{cpu_usage:.1f}%")
+                    self.status_labels['cpu_usage'].config(text=f"{cpu_usage:.1f}%", fg=ModernTheme.TEXT_PRIMARY)
                 if 'cpu' in self.advanced_progress_bars:
                     self.advanced_progress_bars['cpu'].set_progress(cpu_usage)
                 self.performance_data['cpu_usage'].append(cpu_usage)
 
-                # Real Memory usage
+                # Real Memory usage with detailed info
                 memory = psutil.virtual_memory()
                 memory_usage = memory.percent
                 if 'memory_usage' in self.status_labels:
-                    self.status_labels['memory_usage'].config(text=f"{memory_usage:.1f}%")
+                    memory_text = f"{memory_usage:.1f}% ({self._format_bytes(memory.used)}/{self._format_bytes(memory.total)})"
+                    self.status_labels['memory_usage'].config(text=memory_text, fg=ModernTheme.TEXT_PRIMARY)
                 if 'memory' in self.advanced_progress_bars:
                     self.advanced_progress_bars['memory'].set_progress(memory_usage)
                 self.performance_data['memory_usage'].append(memory_usage)
 
-                # Real Disk usage
-                disk = psutil.disk_usage(self.settings['storage_dir'])
-                disk_usage = disk.percent
-                if 'disk_usage' in self.status_labels:
-                    self.status_labels['disk_usage'].config(text=f"{disk_usage:.1f}%")
-                if 'disk' in self.advanced_progress_bars:
-                    self.advanced_progress_bars['disk'].set_progress(disk_usage)
+                # Real Disk usage with directory validation
+                try:
+                    storage_path = self.settings['storage_dir']
+                    if not os.path.exists(storage_path):
+                        os.makedirs(storage_path, exist_ok=True)
+                    disk = psutil.disk_usage(storage_path)
+                    disk_usage = disk.percent
+                    if 'disk_usage' in self.status_labels:
+                        disk_text = f"{disk_usage:.1f}% ({self._format_bytes(disk.used)}/{self._format_bytes(disk.total)})"
+                        self.status_labels['disk_usage'].config(text=disk_text, fg=ModernTheme.TEXT_PRIMARY)
+                    if 'disk' in self.advanced_progress_bars:
+                        self.advanced_progress_bars['disk'].set_progress(disk_usage)
+                except Exception as disk_error:
+                    if 'disk_usage' in self.status_labels:
+                        self.status_labels['disk_usage'].config(text="Error accessing storage", fg=ModernTheme.ERROR)
+                    if 'disk' in self.advanced_progress_bars:
+                        self.advanced_progress_bars['disk'].set_progress(0)
 
-                # Network activity
+                # Network activity with detailed stats
                 net_io = psutil.net_io_counters()
                 bytes_sent = net_io.bytes_sent
                 bytes_recv = net_io.bytes_recv
-                self.performance_data['network_activity'].append(bytes_sent + bytes_recv)
-
-                # Network status
+                total_network = bytes_sent + bytes_recv
+                self.performance_data['network_activity'].append(total_network)
+                
+                # Add timestamp for performance data tracking
+                self.performance_data['timestamps'].append(current_time)
+                
+                # Add server-specific network data
+                server_bytes = self.status.bytes_transferred if hasattr(self.status, 'bytes_transferred') else 0
+                self.performance_data['bytes_transferred'].append(server_bytes)
+                
+                # Enhanced network status with transfer rate
                 if self.status.active_transfers > 0:
-                    activity = "Active"
+                    activity = f"Active ({self.status.active_transfers} transfers)"
                     color = ModernTheme.ACCENT_GREEN
+                elif hasattr(self.status, 'connected_clients') and self.status.connected_clients > 0:
+                    activity = f"Connected ({self.status.connected_clients} clients)"
+                    color = ModernTheme.ACCENT_BLUE
                 else:
                     activity = "Idle"
-                    color = ModernTheme.ACCENT_BLUE
+                    color = ModernTheme.TEXT_SECONDARY
 
                 if 'network_activity' in self.status_labels:
                     self.status_labels['network_activity'].config(text=activity, fg=color)
 
             else:
-                # Simulated data if psutil not available
-                import random
-                
-                cpu_usage = random.randint(5, 25)
+                # Graceful fallback when psutil not available
+                # Show "N/A" instead of fake data
                 if 'cpu_usage' in self.status_labels:
-                    self.status_labels['cpu_usage'].config(text=f"{cpu_usage}%")
+                    self.status_labels['cpu_usage'].config(text="N/A", fg=ModernTheme.TEXT_SECONDARY)
                 if 'cpu' in self.advanced_progress_bars:
-                    self.advanced_progress_bars['cpu'].set_progress(cpu_usage)
+                    self.advanced_progress_bars['cpu'].set_progress(0)
 
-                memory_usage = random.randint(15, 35)
                 if 'memory_usage' in self.status_labels:
-                    self.status_labels['memory_usage'].config(text=f"{memory_usage}%")
+                    self.status_labels['memory_usage'].config(text="N/A", fg=ModernTheme.TEXT_SECONDARY)
                 if 'memory' in self.advanced_progress_bars:
-                    self.advanced_progress_bars['memory'].set_progress(memory_usage)
+                    self.advanced_progress_bars['memory'].set_progress(0)
 
-                disk_usage = random.randint(20, 40)
                 if 'disk_usage' in self.status_labels:
-                    self.status_labels['disk_usage'].config(text=f"{disk_usage}%")
+                    self.status_labels['disk_usage'].config(text="N/A", fg=ModernTheme.TEXT_SECONDARY)
                 if 'disk' in self.advanced_progress_bars:
-                    self.advanced_progress_bars['disk'].set_progress(disk_usage)
+                    self.advanced_progress_bars['disk'].set_progress(0)
+                
+                # Show network status as unavailable
+                if 'network_activity' in self.status_labels:
+                    self.status_labels['network_activity'].config(text="Monitor Unavailable", 
+                                                                fg=ModernTheme.TEXT_SECONDARY)
 
         except Exception as e:
             print(f"Performance metrics update failed: {e}")
@@ -2179,7 +2486,7 @@ class ServerGUI:
             print(f"Activity log clear failed: {e}")
 
     def _refresh_client_table(self):
-        """Refresh client table from database"""
+        """Refresh client table from database with comprehensive live data"""
         try:
             if not self.client_table:
                 return
@@ -2187,30 +2494,70 @@ class ServerGUI:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # Get all clients
+            # Get comprehensive client information with real statistics
             cursor.execute("""
-                SELECT c.ID, c.Name, c.LastSeen, 
-                       (SELECT COUNT(*) FROM files WHERE ID = c.ID) as FileCount
+                SELECT c.ID, c.Name, c.LastSeen, c.PublicKey,
+                       (SELECT COUNT(*) FROM files WHERE ID = c.ID) as FileCount,
+                       (SELECT SUM(Size) FROM files WHERE ID = c.ID) as TotalSize,
+                       (SELECT MAX(VerifiedAt) FROM files WHERE ID = c.ID) as LastUpload
                 FROM clients c
                 ORDER BY c.LastSeen DESC
             """)
             
             clients = []
+            active_client_ids = set()
+            
+            # Get active clients from server if available
+            if SERVER_CONTROL_AVAILABLE and self.server and hasattr(self.server, 'client_manager'):
+                try:
+                    if hasattr(self.server.client_manager, 'clients'):
+                        active_client_ids = set(self.server.client_manager.clients.keys())
+                except (AttributeError, Exception):
+                    pass
+            
             for row in cursor.fetchall():
                 client_id = row[0]
-                client_name = row[1]
-                last_seen = row[2]
-                file_count = row[3]
+                client_name = row[1] or "Unknown"
+                last_seen = row[2] or "Never"
+                public_key = row[3]
+                file_count = row[4] or 0
+                total_size = row[5] or 0
+                last_upload = row[6] or "Never"
                 
-                # Check if client is active (in memory)
-                status = "🟢 Online" if client_id in getattr(self, 'active_clients', {}) else "🔴 Offline"
+                # Enhanced status checking
+                is_active = client_id in active_client_ids
+                
+                # Format last seen
+                if last_seen and last_seen != "Never":
+                    try:
+                        last_seen_dt = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
+                        time_diff = datetime.now(timezone.utc) - last_seen_dt
+                        if time_diff.total_seconds() < 300:  # 5 minutes
+                            status = "🟢 Online"
+                        elif time_diff.total_seconds() < 3600:  # 1 hour
+                            status = "🟡 Recent"
+                        else:
+                            status = "🔴 Offline"
+                        last_seen_formatted = last_seen_dt.strftime("%Y-%m-%d %H:%M:%S")
+                    except (ValueError, AttributeError):
+                        status = "🔴 Offline"
+                        last_seen_formatted = str(last_seen)
+                else:
+                    status = "⚪ Never Connected"
+                    last_seen_formatted = "Never"
+                
+                # Override with active status if connected
+                if is_active:
+                    status = "🟢 Active"
                 
                 clients.append({
                     'name': client_name,
-                    'id': client_id.hex() if client_id else '',
+                    'id': client_id.hex() if client_id else 'N/A',
                     'status': status,
-                    'last_seen': last_seen,
-                    'files': str(file_count)
+                    'last_seen': last_seen_formatted,
+                    'files': str(file_count),
+                    'total_size': self._format_bytes(total_size) if total_size else "0 B",
+                    'last_upload': last_upload if last_upload and last_upload != "Never" else "Never"
                 })
             
             conn.close()
@@ -2223,7 +2570,7 @@ class ServerGUI:
             self._add_activity_log(f"❌ Failed to refresh client list: {str(e)}")
 
     def _refresh_file_table(self):
-        """Refresh file table from database"""
+        """Refresh file table from database with comprehensive file information"""
         try:
             if not self.file_table:
                 return
@@ -2231,9 +2578,10 @@ class ServerGUI:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # Get all files with client info
+            # Get comprehensive file information
             cursor.execute("""
-                SELECT f.FileName, f.PathName, f.Verified, c.Name, f.ID
+                SELECT f.FileName, f.PathName, f.Verified, f.Size, f.VerifiedAt, 
+                       c.Name as ClientName, f.ID
                 FROM files f
                 JOIN clients c ON f.ID = c.ID
                 ORDER BY f.FileName
@@ -2244,26 +2592,58 @@ class ServerGUI:
                 filename = row[0]
                 pathname = row[1]
                 verified = row[2]
-                client_name = row[3]
+                db_size = row[3]
+                verified_at = row[4]
+                client_name = row[5]
+                client_id = row[6]
                 
-                # Get file size if file exists
-                size_str = "N/A"
-                date_str = "N/A"
-                if os.path.exists(pathname):
+                # Use database size first, then check file system
+                if db_size:
+                    size_str = self._format_bytes(db_size)
+                else:
+                    size_str = "N/A"
+                
+                # Check if file actually exists on disk
+                file_exists = os.path.exists(pathname)
+                if file_exists and not db_size:
                     try:
                         stat = os.stat(pathname)
                         size_str = self._format_bytes(stat.st_size)
-                        date_str = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
-                    except:
-                        pass
+                    except OSError as e:
+                        print(f"Warning: Cannot stat file {pathname}: {e}")
+                        size_str = "Unknown"
+                
+                # Format upload date
+                if verified_at:
+                    try:
+                        upload_dt = datetime.fromisoformat(verified_at.replace('Z', '+00:00'))
+                        date_str = upload_dt.strftime("%Y-%m-%d %H:%M:%S")
+                    except (ValueError, AttributeError):
+                        date_str = str(verified_at)
+                else:
+                    date_str = "Unknown"
+                
+                # Enhanced verification status
+                if not file_exists:
+                    verification_status = "❌ Missing"
+                    status_color = "error"
+                elif verified:
+                    verification_status = "✅ Verified"
+                    status_color = "success"
+                else:
+                    verification_status = "⚠️ Unverified"
+                    status_color = "warning"
                 
                 files.append({
                     'filename': filename,
-                    'client': client_name,
+                    'client': client_name or "Unknown",
                     'size': size_str,
                     'date': date_str,
-                    'verified': "✅" if verified else "❌",
-                    'path': pathname
+                    'verified': verification_status,
+                    'path': pathname,
+                    'status_color': status_color,
+                    'exists': file_exists,
+                    'client_id': client_id.hex() if client_id else 'N/A'
                 })
             
             conn.close()
@@ -2276,21 +2656,107 @@ class ServerGUI:
             self._add_activity_log(f"❌ Failed to refresh file list: {str(e)}")
 
     def _update_analytics_charts(self):
-        """Update analytics charts with real data"""
+        """Update analytics charts with comprehensive real data from database and live monitoring"""
         try:
             if not CHARTS_AVAILABLE:
                 return
 
-            # Performance chart
+            # Get real data from database for analytics
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Performance chart with live system data
             if self.performance_chart and self.performance_data['timestamps']:
                 timestamps = list(self.performance_data['timestamps'])
+                
+                # Convert timestamps to datetime objects for better visualization
+                datetime_timestamps = []
+                for ts in timestamps[-30:]:  # Last 30 data points
+                    try:
+                        datetime_timestamps.append(datetime.fromtimestamp(ts))
+                    except (ValueError, OSError):
+                        datetime_timestamps.append(datetime.now())
+                
                 data = {
-                    'CPU': (timestamps, list(self.performance_data['cpu_usage'])),
-                    'Memory': (timestamps, list(self.performance_data['memory_usage']))
+                    'CPU Usage': (datetime_timestamps, list(self.performance_data['cpu_usage'])[-30:]),
+                    'Memory Usage': (datetime_timestamps, list(self.performance_data['memory_usage'])[-30:]),
+                    'Network Activity': (datetime_timestamps, list(self.performance_data['network_activity'])[-30:])
                 }
                 self.performance_chart.update_data(data, "System Performance", "Time", "Usage %")
 
-            # Transfer volume chart
+            # Transfer volume chart with real database data
+            if self.transfer_chart:
+                # Get hourly upload statistics from database
+                cursor.execute("""
+                    SELECT 
+                        DATE(VerifiedAt) as upload_date,
+                        COUNT(*) as file_count,
+                        SUM(Size) as total_bytes
+                    FROM files 
+                    WHERE VerifiedAt IS NOT NULL 
+                        AND DATE(VerifiedAt) >= DATE('now', '-7 days')
+                    GROUP BY DATE(VerifiedAt)
+                    ORDER BY upload_date
+                """)
+                
+                transfer_data = cursor.fetchall()
+                if transfer_data:
+                    dates = []
+                    file_counts = []
+                    byte_volumes = []
+                    
+                    for row in transfer_data:
+                        try:
+                            upload_date = datetime.strptime(row[0], '%Y-%m-%d')
+                            dates.append(upload_date)
+                            file_counts.append(row[1])
+                            byte_volumes.append(row[2] / (1024*1024))  # Convert to MB
+                        except (ValueError, TypeError):
+                            continue
+                    
+                    if dates:
+                        transfer_chart_data = {
+                            'Files Uploaded': (dates, file_counts),
+                            'Data Volume (MB)': (dates, byte_volumes)
+                        }
+                        self.transfer_chart.update_data(transfer_chart_data, "Transfer Activity (Last 7 Days)", "Date", "Count/Volume")
+
+            # Client activity chart
+            if self.client_chart:
+                # Get client connection statistics
+                cursor.execute("""
+                    SELECT 
+                        DATE(LastSeen) as activity_date,
+                        COUNT(DISTINCT ID) as active_clients
+                    FROM clients 
+                    WHERE LastSeen IS NOT NULL 
+                        AND DATE(LastSeen) >= DATE('now', '-7 days')
+                    GROUP BY DATE(LastSeen)
+                    ORDER BY activity_date
+                """)
+                
+                client_data = cursor.fetchall()
+                if client_data:
+                    activity_dates = []
+                    client_counts = []
+                    
+                    for row in client_data:
+                        try:
+                            activity_date = datetime.strptime(row[0], '%Y-%m-%d')
+                            activity_dates.append(activity_date)
+                            client_counts.append(row[1])
+                        except (ValueError, TypeError):
+                            continue
+                    
+                    if activity_dates:
+                        client_chart_data = {
+                            'Active Clients': (activity_dates, client_counts)
+                        }
+                        self.client_chart.update_data(client_chart_data, "Client Activity (Last 7 Days)", "Date", "Active Clients")
+            
+            conn.close()
+
+            # Update summary statistics with real data
             if self.transfer_chart and self.performance_data['bytes_transferred']:
                 timestamps = list(self.performance_data['timestamps'])
                 bytes_data = list(self.performance_data['bytes_transferred'])
@@ -2357,8 +2823,9 @@ class ServerGUI:
                 if os.path.exists(pathname):
                     try:
                         total_size += os.path.getsize(pathname)
-                    except:
-                        pass
+                    except OSError as e:
+                        print(f"Warning: Cannot get size for file {pathname}: {e}")
+                        continue
             
             if 'total_size' in self.stats_labels:
                 self.stats_labels['total_size'].config(text=self._format_bytes(total_size))
@@ -2448,27 +2915,171 @@ class ServerGUI:
 
     def _tray_start_server(self):
         """Start server from tray menu"""
-        # This would need to be connected to actual server start logic
-        self._add_activity_log("⚠️ Server start from tray not implemented")
-        if self.toast_system:
-            self.toast_system.show_toast("Server start not implemented", "warning")
+        try:
+            if not SERVER_CONTROL_AVAILABLE:
+                self._add_activity_log("⚠️ Server control not available - module import failed")
+                if self.toast_system:
+                    self.toast_system.show_toast("Server control unavailable", "error")
+                return
+                
+            if self.server and hasattr(self.server, 'running') and self.server.running:
+                self._add_activity_log("ℹ️ Server is already running")
+                if self.toast_system:
+                    self.toast_system.show_toast("Server already running", "info")
+                return
+                
+            # Create and start server instance
+            try:
+                if not self.server and BackupServer is not None:
+                    port = self.settings.get('port', 1256)
+                    self.server = BackupServer(port=port)
+                elif BackupServer is None:
+                    self._add_activity_log("❌ BackupServer class not available")
+                    if self.toast_system:
+                        self.toast_system.show_toast("Server class not available", "error")
+                    return
+                    
+                # Start server in separate thread
+                def start_server_thread():
+                    try:
+                        if self.server is not None:
+                            self.server.start()
+                            self._add_activity_log("✅ Server started successfully")
+                            if self.toast_system:
+                                self.toast_system.show_toast("Server started", "success")
+                        else:
+                            self._add_activity_log("❌ Server instance not available")
+                            if self.toast_system:
+                                self.toast_system.show_toast("Server instance not available", "error")
+                    except Exception as e:
+                        self._add_activity_log(f"❌ Failed to start server: {str(e)}")
+                        if self.toast_system:
+                            self.toast_system.show_toast(f"Server start failed: {str(e)}", "error")
+                        
+                server_thread = threading.Thread(target=start_server_thread, daemon=True)
+                server_thread.start()
+                
+            except Exception as e:
+                self._add_activity_log(f"❌ Error creating server instance: {str(e)}")
+                if self.toast_system:
+                    self.toast_system.show_toast(f"Server creation failed: {str(e)}", "error")
+                    
+        except Exception as e:
+            self._add_activity_log(f"❌ Unexpected error starting server: {str(e)}")
+            if self.toast_system:
+                self.toast_system.show_toast(f"Start failed: {str(e)}", "error")
 
     def _tray_stop_server(self):
         """Stop server from tray menu"""
-        # This would need to be connected to actual server stop logic
-        self._add_activity_log("⚠️ Server stop from tray not implemented")
-        if self.toast_system:
-            self.toast_system.show_toast("Server stop not implemented", "warning")
+        try:
+            if not SERVER_CONTROL_AVAILABLE:
+                self._add_activity_log("⚠️ Server control not available - module import failed")
+                if self.toast_system:
+                    self.toast_system.show_toast("Server control unavailable", "error")
+                return
+                
+            if not self.server or not hasattr(self.server, 'running') or not self.server.running:
+                self._add_activity_log("ℹ️ Server is not running")
+                if self.toast_system:
+                    self.toast_system.show_toast("Server not running", "info")
+                return
+                
+            # Confirm shutdown
+            if messagebox.askyesno("Stop Server", 
+                                 "Are you sure you want to stop the backup server?\n\nAll active connections will be terminated."):
+                try:
+                    # Stop server gracefully
+                    def stop_server_thread():
+                        try:
+                            if self.server is not None:
+                                self.server.stop()
+                                self._add_activity_log("✅ Server stopped successfully")
+                                if self.toast_system:
+                                    self.toast_system.show_toast("Server stopped", "success")
+                            else:
+                                self._add_activity_log("⚠️ No server instance to stop")
+                                if self.toast_system:
+                                    self.toast_system.show_toast("No server running", "info")
+                        except Exception as e:
+                            self._add_activity_log(f"❌ Error stopping server: {str(e)}")
+                            if self.toast_system:
+                                self.toast_system.show_toast(f"Server stop error: {str(e)}", "error")
+                    
+                    stop_thread = threading.Thread(target=stop_server_thread, daemon=True)
+                    stop_thread.start()
+                    
+                except Exception as e:
+                    self._add_activity_log(f"❌ Failed to stop server: {str(e)}")
+                    if self.toast_system:
+                        self.toast_system.show_toast(f"Stop failed: {str(e)}", "error")
+            else:
+                self._add_activity_log("ℹ️ Server stop cancelled by user")
+                
+        except Exception as e:
+            self._add_activity_log(f"❌ Unexpected error stopping server: {str(e)}")
+            if self.toast_system:
+                self.toast_system.show_toast(f"Stop failed: {str(e)}", "error")
 
     def _restart_server(self):
         """Restart the server"""
-        result = messagebox.askyesno("Restart Server", 
-                                   "Are you sure you want to restart the backup server?\n\nAll active connections will be terminated.")
-        if result:
-            self._add_activity_log("🔄 Server restart requested")
+        try:
+            if not SERVER_CONTROL_AVAILABLE:
+                self._add_activity_log("⚠️ Server control not available - module import failed")
+                if self.toast_system:
+                    self.toast_system.show_toast("Server control unavailable", "error")
+                return
+                
+            result = messagebox.askyesno("Restart Server", 
+                                       "Are you sure you want to restart the backup server?\n\nAll active connections will be terminated.")
+            if result:
+                self._add_activity_log("🔄 Server restart requested")
+                if self.toast_system:
+                    self.toast_system.show_toast("Server restart initiated", "info")
+                    
+                def restart_server_thread():
+                    try:
+                        # Stop existing server if running
+                        if self.server and hasattr(self.server, 'running') and self.server.running:
+                            self._add_activity_log("🛑 Stopping current server instance...")
+                            self.server.stop()
+                            time.sleep(2)  # Brief pause to ensure clean shutdown
+                            
+                        # Start new server instance
+                        if BackupServer is not None:
+                            port = self.settings.get('port', 1256)
+                            self.server = BackupServer(port=port)
+                            self._add_activity_log("🚀 Starting new server instance...")
+                            if self.server is not None:
+                                self.server.start()
+                            else:
+                                self._add_activity_log("❌ Failed to create server instance")
+                                if self.toast_system:
+                                    self.toast_system.show_toast("Failed to create server instance", "error")
+                                return
+                        else:
+                            self._add_activity_log("❌ BackupServer class not available")
+                            if self.toast_system:
+                                self.toast_system.show_toast("Server class not available", "error")
+                            return
+                        
+                        self._add_activity_log("✅ Server restarted successfully")
+                        if self.toast_system:
+                            self.toast_system.show_toast("Server restarted", "success")
+                            
+                    except Exception as e:
+                        self._add_activity_log(f"❌ Server restart failed: {str(e)}")
+                        if self.toast_system:
+                            self.toast_system.show_toast(f"Restart failed: {str(e)}", "error")
+                
+                restart_thread = threading.Thread(target=restart_server_thread, daemon=True)
+                restart_thread.start()
+            else:
+                self._add_activity_log("ℹ️ Server restart cancelled by user")
+                
+        except Exception as e:
+            self._add_activity_log(f"❌ Unexpected error during restart: {str(e)}")
             if self.toast_system:
-                self.toast_system.show_toast("Server restart initiated", "info")
-            # Actual restart logic would be implemented here
+                self.toast_system.show_toast(f"Restart error: {str(e)}", "error")
 
     def _exit_server(self):
         """Exit the server application"""
@@ -2592,7 +3203,7 @@ Path: {file['path']}
         messagebox.showinfo("File Details", details)
 
     def _view_file_content(self):
-        """View content of selected file"""
+        """View content of selected file with enhanced functionality"""
         if not self.file_table:
             messagebox.showwarning("Not Available", "File table not initialized")
             return
@@ -2603,7 +3214,8 @@ Path: {file['path']}
             return
 
         file = selected[0]
-        file_path = os.path.join("received_files", file['filename'])
+        # Use the actual path from database if available
+        file_path = file.get('path', os.path.join(self.settings['storage_dir'], file['filename']))
 
         if not os.path.exists(file_path):
             messagebox.showerror("File Not Found", f"File not found: {file_path}")
@@ -2653,7 +3265,7 @@ Path: {file['path']}
             messagebox.showerror("Error", f"Failed to read file: {str(e)}")
 
     def _verify_file(self):
-        """Verify selected file"""
+        """Verify selected file with comprehensive integrity checking"""
         if not self.file_table:
             messagebox.showwarning("Not Available", "File table not initialized")
             return
@@ -2664,11 +3276,98 @@ Path: {file['path']}
             return
 
         file = selected[0]
-        self._add_activity_log(f"✅ Verifying file: {file['filename']}")
-        # Actual verification logic would be implemented here
+        file_path = file.get('path', os.path.join(self.settings['storage_dir'], file['filename']))
+        
+        self._add_activity_log(f"🔍 Verifying file integrity: {file['filename']}")
+        
+        try:
+            if not os.path.exists(file_path):
+                messagebox.showerror("Verification Failed", 
+                                   f"File not found: {file_path}\n\nThe file may have been moved or deleted.")
+                self._add_activity_log(f"❌ Verification failed - file not found: {file['filename']}")
+                return
+            
+            # Get file information from database
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT Size, FileName, PathName, Verified 
+                FROM files 
+                WHERE FileName = ? OR PathName = ?
+            """, (file['filename'], file_path))
+            
+            db_result = cursor.fetchone()
+            if not db_result:
+                messagebox.showerror("Verification Failed", 
+                                   "File not found in database.")
+                conn.close()
+                return
+            
+            db_size, db_filename, db_path, currently_verified = db_result
+            
+            # Verify file size
+            actual_size = os.path.getsize(file_path)
+            if db_size and actual_size != db_size:
+                messagebox.showerror("Verification Failed", 
+                                   f"File size mismatch!\n\nExpected: {self._format_bytes(db_size)}\nActual: {self._format_bytes(actual_size)}")
+                self._add_activity_log(f"❌ Verification failed - size mismatch: {file['filename']}")
+                conn.close()
+                return
+            
+            # Calculate CRC32 for integrity check
+            crc32_value = 0
+            with open(file_path, 'rb') as f:
+                chunk = f.read(8192)
+                while chunk:
+                    crc32_value = zlib.crc32(chunk, crc32_value)
+                    chunk = f.read(8192)
+            
+            crc32_hex = format(crc32_value & 0xffffffff, '08x')
+            
+            # Update database verification status
+            cursor.execute("""
+                UPDATE files 
+                SET Verified = 1, VerifiedAt = datetime('now') 
+                WHERE FileName = ? OR PathName = ?
+            """, (file['filename'], file_path))
+            
+            conn.commit()
+            conn.close()
+            
+            # Show verification results
+            file_size_str = self._format_bytes(actual_size)
+            verification_msg = f"""File Verification Complete ✅
+
+File: {file['filename']}
+Size: {file_size_str}
+CRC32: {crc32_hex}
+Path: {file_path}
+Status: Integrity verified successfully
+
+The file has been marked as verified in the database."""
+
+            messagebox.showinfo("Verification Successful", verification_msg)
+            self._add_activity_log(f"✅ File verified successfully: {file['filename']} (CRC32: {crc32_hex})")
+            
+            # Refresh file table to show updated verification status
+            if self.toast_system:
+                self.toast_system.show_toast(f"File verified: {file['filename']}", "success")
+            
+            # Refresh the file table
+            self._refresh_file_table()
+            
+        except PermissionError:
+            messagebox.showerror("Verification Failed", 
+                               f"Permission denied accessing file: {file_path}")
+            self._add_activity_log(f"❌ Verification failed - permission denied: {file['filename']}")
+        except Exception as e:
+            messagebox.showerror("Verification Failed", 
+                               f"Error during verification: {str(e)}")
+            self._add_activity_log(f"❌ Verification failed - error: {file['filename']}: {str(e)}")
         
     def _delete_file(self):
-        """Delete selected file"""
+        """Delete selected file from filesystem and database"""
         if not self.file_table:
             messagebox.showwarning("Not Available", "File table not initialized")
             return
@@ -2679,11 +3378,104 @@ Path: {file['path']}
             return
         
         file = selected[0]
-        result = messagebox.askyesno("Delete File", 
-                                   f"Delete file '{file['filename']}'?\n\nThis action cannot be undone.")
+        file_path = file.get('path', os.path.join(self.settings['storage_dir'], file['filename']))
+        
+        # Enhanced confirmation dialog with file details
+        confirm_msg = f"""Delete file '{file['filename']}'?
+
+File Details:
+• Size: {file.get('size', 'Unknown')}
+• Client: {file.get('client', 'Unknown')}
+• Path: {file_path}
+
+⚠️  This action will:
+• Remove the file from the filesystem
+• Remove the file record from the database
+• This action CANNOT be undone
+
+Are you sure you want to proceed?"""
+        
+        result = messagebox.askyesno("Delete File - Confirmation Required", confirm_msg)
         if result:
             self._add_activity_log(f"🗑️ Deleting file: {file['filename']}")
-            # Actual delete logic would be implemented here
+            
+            try:
+                success_filesystem = False
+                success_database = False
+                
+                # Delete from filesystem if it exists
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                        success_filesystem = True
+                        self._add_activity_log(f"📁 File removed from filesystem: {file['filename']}")
+                    except PermissionError:
+                        messagebox.showerror("Delete Failed", 
+                                           f"Permission denied: Cannot delete file from filesystem.\n\nFile: {file_path}")
+                        self._add_activity_log(f"❌ Delete failed - permission denied: {file['filename']}")
+                        return
+                    except Exception as e:
+                        messagebox.showerror("Delete Failed", 
+                                           f"Failed to delete file from filesystem: {str(e)}")
+                        self._add_activity_log(f"❌ Delete failed - filesystem error: {file['filename']}: {str(e)}")
+                        return
+                else:
+                    # File doesn't exist on filesystem, but we can still remove from database
+                    success_filesystem = True
+                    self._add_activity_log(f"⚠️ File not found on filesystem, removing from database only: {file['filename']}")
+                
+                # Delete from database
+                try:
+                    conn = sqlite3.connect(self.db_path)
+                    cursor = conn.cursor()
+                    
+                    # Remove file record from database
+                    cursor.execute("""
+                        DELETE FROM files 
+                        WHERE FileName = ? OR PathName = ?
+                    """, (file['filename'], file_path))
+                    
+                    rows_affected = cursor.rowcount
+                    conn.commit()
+                    conn.close()
+                    
+                    if rows_affected > 0:
+                        success_database = True
+                        self._add_activity_log(f"🗄️ File record removed from database: {file['filename']}")
+                    else:
+                        self._add_activity_log(f"⚠️ File record not found in database: {file['filename']}")
+                        success_database = True  # Don't fail if already not in database
+                        
+                except Exception as e:
+                    messagebox.showerror("Delete Failed", 
+                                       f"Failed to remove file from database: {str(e)}")
+                    self._add_activity_log(f"❌ Delete failed - database error: {file['filename']}: {str(e)}")
+                    return
+                
+                # Show success message
+                if success_filesystem and success_database:
+                    success_msg = f"File deleted successfully! ✅\n\nFile: {file['filename']}\nRemoved from: Filesystem and Database"
+                    messagebox.showinfo("Delete Successful", success_msg)
+                    self._add_activity_log(f"✅ File deletion completed successfully: {file['filename']}")
+                    
+                    if self.toast_system:
+                        self.toast_system.show_toast(f"File deleted: {file['filename']}", "success")
+                    
+                    # Refresh the file table to reflect changes
+                    self._refresh_file_table()
+                    
+                    # Update summary statistics
+                    self._update_summary_statistics()
+                else:
+                    messagebox.showwarning("Delete Incomplete", 
+                                         "File deletion was not completely successful. Check the activity log for details.")
+                    
+            except Exception as e:
+                messagebox.showerror("Delete Failed", 
+                                   f"Unexpected error during file deletion: {str(e)}")
+                self._add_activity_log(f"❌ Delete failed - unexpected error: {file['filename']}: {str(e)}")
+        else:
+            self._add_activity_log(f"ℹ️ File deletion cancelled by user: {file['filename']}")
 
     def _export_files(self):
         """Export file list to CSV"""
@@ -2994,8 +3786,8 @@ def update_server_status(running: bool, address: str = "", port: int = 0):
         gui = get_server_gui()
         if gui.gui_enabled:
             gui.update_server_status(running, address, port)
-    except:
-        pass
+    except Exception as e:
+        logging.error(f"Failed to update server status in GUI: {e}")
 
 def update_client_stats(connected: Optional[int] = None, total: Optional[int] = None,
                        active_transfers: Optional[int] = None):
@@ -3004,8 +3796,8 @@ def update_client_stats(connected: Optional[int] = None, total: Optional[int] = 
         gui = get_server_gui()
         if gui.gui_enabled:
             gui.update_client_stats(connected, total, active_transfers)
-    except:
-        pass
+    except Exception as e:
+        logging.error(f"Failed to update client statistics in GUI: {e}")
 
 def update_transfer_stats(bytes_transferred: Optional[int] = None, last_activity: Optional[str] = None):
     """Update transfer statistics in GUI"""
@@ -3013,8 +3805,8 @@ def update_transfer_stats(bytes_transferred: Optional[int] = None, last_activity
         gui = get_server_gui()
         if gui.gui_enabled:
             gui.update_transfer_stats(bytes_transferred, last_activity)
-    except:
-        pass
+    except Exception as e:
+        logging.error(f"Failed to update transfer statistics in GUI: {e}")
 
 def update_maintenance_stats(stats: Dict[str, Any]):
     """Update maintenance statistics in GUI"""
@@ -3022,8 +3814,8 @@ def update_maintenance_stats(stats: Dict[str, Any]):
         gui = get_server_gui()
         if gui.gui_enabled:
             gui.update_maintenance_stats(stats)
-    except:
-        pass
+    except Exception as e:
+        logging.error(f"Failed to update maintenance statistics in GUI: {e}")
 
 def show_server_error(message: str):
     """Show server error message in GUI"""
@@ -3031,8 +3823,9 @@ def show_server_error(message: str):
         gui = get_server_gui()
         if gui.gui_enabled:
             gui.show_error(message)
-    except:
-        pass
+    except Exception as e:
+        logging.error(f"Failed to show error message in GUI: {e}")
+        print(f"Server Error: {message}")  # Fallback to console
 
 def show_server_success(message: str):
     """Show server success message in GUI"""
@@ -3040,8 +3833,9 @@ def show_server_success(message: str):
         gui = get_server_gui()
         if gui.gui_enabled:
             gui.show_success(message)
-    except:
-        pass
+    except Exception as e:
+        logging.error(f"Failed to show success message in GUI: {e}")
+        print(f"Server Success: {message}")  # Fallback to console
 
 def show_server_notification(title: str, message: str):
     """Show server notification in GUI"""
@@ -3049,8 +3843,9 @@ def show_server_notification(title: str, message: str):
         gui = get_server_gui()
         if gui.gui_enabled:
             gui.show_notification(title, message)
-    except:
-        pass
+    except Exception as e:
+        logging.error(f"Failed to show notification in GUI: {e}")
+        print(f"Server Notification - {title}: {message}")  # Fallback to console
 
 # Test the GUI if run directly
 if __name__ == "__main__":

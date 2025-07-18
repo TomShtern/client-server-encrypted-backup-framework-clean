@@ -11,6 +11,9 @@ import sys
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, Any, Tuple
 
+# Import singleton manager
+from server_singleton import ensure_single_server_instance
+
 # Import crypto components through compatibility layer
 from crypto_compat import AES, RSA, PKCS1_OAEP, pad, unpad, get_random_bytes
 
@@ -237,6 +240,9 @@ class BackupServer:
 
     def __init__(self):
         """Initializes the BackupServer instance."""
+        # Ensure single server instance
+        self.singleton_manager = ensure_single_server_instance("BackupServer", DEFAULT_PORT)
+        
         self.clients: Dict[bytes, Client] = {} # In-memory store: client_id_bytes -> Client object
         self.clients_by_name: Dict[str, bytes] = {} # In-memory store: client_name_str -> client_id_bytes
         self.clients_lock: threading.Lock = threading.Lock() # Protects access to clients and clients_by_name
@@ -572,6 +578,10 @@ class BackupServer:
             except OSError as e: # Catch potential errors if socket is already closed or in a bad state
                 logger.error(f"Error encountered while closing server socket: {e}")
             self.server_socket = None # Mark as closed
+        
+        # Clean up singleton locks
+        if hasattr(self, 'singleton_manager'):
+            self.singleton_manager.cleanup()
         
         # Note: Active client handler threads are daemon threads. They will be terminated automatically
         # when the main thread (or the last non-daemon thread) exits.
