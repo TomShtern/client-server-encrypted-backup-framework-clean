@@ -156,6 +156,7 @@
             background: var(--text-contrast);
             padding: 2px 6px;
             border-radius: var(--radius-sm);
+            -webkit-backdrop-filter: blur(10px);
             backdrop-filter: blur(10px);
         }
 
@@ -178,6 +179,8 @@
         /* Enhanced Glass Card with RGB Border Animation and Drop Shadows */
         .glass-card {
             background: var(--bg-card);
+            -webkit-backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             backdrop-filter: blur(20px);
             border: 2px solid transparent;
             border-radius: var(--radius-xl);
@@ -833,8 +836,7 @@
             min-width: auto;
         }
 
-        
-         {
+        .cyber-btn.control {
             /* Extend cyber-btn for control buttons - Enhanced with better accessibility */
         }
 
@@ -1151,6 +1153,7 @@
             animation: toast-slide-in 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
+            -webkit-backdrop-filter: blur(20px);
             backdrop-filter: blur(20px);
             box-shadow: 
                 0 4px 12px rgba(0, 0, 0, 0.5),
@@ -1237,6 +1240,7 @@
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.9);
+            -webkit-backdrop-filter: blur(15px);
             backdrop-filter: blur(15px);
             z-index: 2000;
             display: none;
@@ -1263,6 +1267,7 @@
             width: 90%;
             position: relative;
             animation: modal-slide-up 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            -webkit-backdrop-filter: blur(20px);
             backdrop-filter: blur(20px);
         }
 
@@ -1582,7 +1587,9 @@
                 <label class="config-label">Target File</label>
                 <div class="file-drop-zone" id="fileDropZone">
                     <input type="file" class="file-input" id="fileInput" 
-                           aria-describedby="fileHelp" accept="*/*">
+                           aria-describedby="fileHelp" accept="*/*" 
+                           title="Select a file to backup" 
+                           aria-label="File selection for backup">
                     <div class="file-button">
                         📁 Select File to Backup
                         <span class="sr-only">or drag and drop a file here</span>
@@ -1641,15 +1648,15 @@
                     <div class="progress-label" id="progressStatus">READY</div>
                 </div>
             </div>            <div class="control-panel">
-                <button class="cyber-btn primary large control-btn" id="primaryAction">
+                <button type="button" class="cyber-btn primary large control-btn" id="primaryAction">
                     <span class="btn-icon">🚀</span>
                     <span class="btn-text">CONNECT</span>
                 </button>
-                <button class="cyber-btn secondary large control-btn" id="pauseBtn" disabled>
+                <button type="button" class="cyber-btn secondary large control-btn" id="pauseBtn" disabled>
                     <span class="btn-icon">⏸️</span>
                     <span class="btn-text">PAUSE</span>
                 </button>
-                <button class="cyber-btn danger large control-btn" id="stopBtn" disabled>
+                <button type="button" class="cyber-btn danger large control-btn" id="stopBtn" disabled>
                     <span class="btn-icon">🛑</span>
                     <span class="btn-text">STOP</span>
                 </button>
@@ -1682,7 +1689,7 @@
                 <div class="btn-group">
                     <button class="cyber-btn success small" data-action="export-log">📥 Export</button>
                     <button class="cyber-btn danger small" data-action="clear-log">🗑️ Clear</button>
-                    <button class="cyber-btn primary small" id="autoScrollBtn">
+                    <button type="button" class="cyber-btn primary small" id="autoScrollBtn">
                         📜 Auto-scroll: ON
                     </button>
                 </div>
@@ -1697,7 +1704,7 @@
         <div class="debug-panel glass-card" role="region" aria-label="Developer console">
             <div class="panel-header">
                 <h2 class="panel-title">Developer Console</h2>
-                <button class="cyber-btn primary small" id="debugToggle" 
+                <button type="button" class="cyber-btn primary small" id="debugToggle" 
                         aria-expanded="false">🔧 Toggle Debug</button>
             </div>
             
@@ -1723,7 +1730,7 @@
             <p class="modal-message" id="confirmMessage">Are you sure?</p>
             <div class="modal-buttons">
                 <button class="cyber-btn secondary" data-action="cancel-modal">Cancel</button>
-                <button class="cyber-btn danger" id="confirmOkBtn">Confirm</button>
+                <button type="button" class="cyber-btn danger" id="confirmOkBtn">Confirm</button>
             </div>
         </div>
     </div>    <script>
@@ -1857,6 +1864,7 @@
                     z-index: 9999;
                     font-family: 'Courier New', monospace;
                     font-size: 12px;
+                    -webkit-backdrop-filter: blur(10px);
                     backdrop-filter: blur(10px);
                     display: ${this.isEnabled ? 'block' : 'none'};
                 `;
