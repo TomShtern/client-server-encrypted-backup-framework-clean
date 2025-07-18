@@ -2319,11 +2319,11 @@
                     debugLog('POLL: Status received: ' + JSON.stringify(status));
                     
                     // Update state machine
-                    this.state.isConnected = status.isConnected;
+                    this.state.isConnected = status.connected === "true" || status.connected === true;
                     this.state.isRunning = status.isRunning;
                     this.state.isPaused = status.isPaused;
                     this.state.currentPhase = status.phase;
-                    this.state.clientId = status.clientId;
+                    this.state.clientId = status.client_id;
 
                     console.log('pollStatus() - updated state:', this.state);
                     debugLog('POLL: State updated - connected: ' + this.state.isConnected);

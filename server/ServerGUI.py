@@ -1360,6 +1360,13 @@ class ServerGUI:
                               relief="flat", bd=0, padx=15, pady=5)
         details_btn.pack(side="left", padx=5)
 
+        view_content_btn = tk.Button(control_frame, text="👁️ View Content",
+                                   command=self._view_file_content,
+                                   bg=ModernTheme.ACCENT_PURPLE, fg=ModernTheme.TEXT_PRIMARY,
+                                   font=(ModernTheme.FONT_FAMILY, ModernTheme.FONT_SIZE_SMALL),
+                                   relief="flat", bd=0, padx=15, pady=5)
+        view_content_btn.pack(side="left", padx=2)
+
         verify_btn = tk.Button(control_frame, text="✅ Verify",
                              command=self._verify_file,
                              bg=ModernTheme.SUCCESS, fg=ModernTheme.TEXT_PRIMARY,
@@ -2583,6 +2590,67 @@ Verified: {file['verified']}
 Path: {file['path']}
 """
         messagebox.showinfo("File Details", details)
+
+    def _view_file_content(self):
+        """View content of selected file"""
+        if not self.file_table:
+            messagebox.showwarning("Not Available", "File table not initialized")
+            return
+
+        selected = self.file_table.get_selected_items()
+        if not selected:
+            messagebox.showwarning("No Selection", "Please select a file first")
+            return
+
+        file = selected[0]
+        file_path = os.path.join("received_files", file['filename'])
+
+        if not os.path.exists(file_path):
+            messagebox.showerror("File Not Found", f"File not found: {file_path}")
+            return
+
+        try:
+            # Try to read as text file first
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Create a new window to display content
+            content_window = tk.Toplevel(self.root)
+            content_window.title(f"File Content: {file['filename']}")
+            content_window.geometry("800x600")
+            content_window.configure(bg=ModernTheme.PRIMARY_BG)
+
+            # Create text widget with scrollbar
+            text_frame = tk.Frame(content_window, bg=ModernTheme.PRIMARY_BG)
+            text_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+            text_widget = tk.Text(text_frame, bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_PRIMARY,
+                                font=(ModernTheme.FONT_FAMILY, 10), wrap="word")
+            scrollbar = tk.Scrollbar(text_frame, orient="vertical", command=text_widget.yview)
+            text_widget.configure(yscrollcommand=scrollbar.set)
+
+            text_widget.pack(side="left", fill="both", expand=True)
+            scrollbar.pack(side="right", fill="y")
+
+            # Insert content
+            text_widget.insert("1.0", content)
+            text_widget.configure(state="disabled")  # Make read-only
+
+        except UnicodeDecodeError:
+            # If it's not a text file, show hex dump
+            try:
+                with open(file_path, 'rb') as f:
+                    binary_content = f.read()
+
+                hex_content = ' '.join(f'{byte:02x}' for byte in binary_content[:1024])  # First 1KB
+                if len(binary_content) > 1024:
+                    hex_content += "\n\n... (truncated, showing first 1KB of binary data)"
+
+                messagebox.showinfo("Binary File", f"File appears to be binary.\n\nHex dump (first 1KB):\n{hex_content}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to read file: {str(e)}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to read file: {str(e)}")
 
     def _verify_file(self):
         """Verify selected file"""

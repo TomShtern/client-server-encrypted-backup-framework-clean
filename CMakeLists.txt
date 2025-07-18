@@ -28,14 +28,8 @@ endif()
 # 4. Define the Executable: List all of our application's source files.
 add_executable(EncryptedBackupClient
     src/client/main.cpp
-    src/client/ClientCore.cpp
-    src/client/ClientCrypto.cpp
-    src/client/ClientFileOps.cpp
-    src/client/protocol.cpp
-    src/client/cksum.cpp
-    src/client/ClientLogger.cpp
-    # src/client/SimpleWebServer_Clean.cpp  # Standalone server with its own main()
-    # src/client/WebServerBackend.cpp  # Temporarily disabled due to compilation issues
+    src/client/client.cpp  # Consolidated client implementation (1.6K lines, complete with CRC)
+    src/client/WebServerBackend.cpp  # HTTP API server for HTML GUI
     src/utils/CompressionWrapper.cpp
     src/wrappers/RSAWrapper.cpp  # Using Crypto++ implementation
     src/wrappers/AESWrapper.cpp

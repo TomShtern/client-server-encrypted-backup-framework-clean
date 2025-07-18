@@ -5,32 +5,24 @@
 #include <memory>
 #include <csignal>
 #include <exception>
-#include "../../include/client/ClientLogger.h"
+#include <string>
 
 #ifdef _WIN32
 #include <windows.h>
 #include <conio.h>
 #endif
 
-// Global logger instance
-ClientLogger* g_logger = nullptr;
-
 // Global batch mode flag - accessible from other source files
 extern bool g_batchMode;
 
-// Forward declaration - we need to include the actual client class
-class Client;
-
-// Declare the actual client run function
-extern bool runBackupClient();
+// Include the client header
+#include "client/client.h"
 
 // Signal handler for graceful shutdown
 std::atomic<bool> g_shutdownRequested(false);
 
 void signalHandler(int signal) {
-    if (g_logger) {
-        g_logger->warning("Shutdown signal received: " + std::to_string(signal));
-    }
+    std::cout << "Shutdown signal received: " << signal << std::endl;
     g_shutdownRequested.store(true);
 }
 
@@ -51,75 +43,59 @@ int main(int argc, char* argv[]) {
     }
     
     try {
-        // Initialize logging system first
-        g_logger = new ClientLogger("client_debug.log", ClientLogger::LogLevel::INFO, true, true);
+        // Initialize console output
         if (g_batchMode) {
-            LOG_INFO("🔒 Encrypted Backup Client v3.0 - BATCH MODE");
+            std::cout << "🔒 Encrypted Backup Client v3.0 - BATCH MODE" << std::endl;
         } else {
-            LOG_INFO("🔒 Encrypted Backup Client v3.0 - Production Ready");
+            std::cout << "🔒 Encrypted Backup Client v3.0 - Production Ready" << std::endl;
         }
-        LOG_INFO("Starting client initialization...");
-        
+        std::cout << "Starting client initialization..." << std::endl;
+
         // Set up signal handlers for graceful shutdown
         std::signal(SIGINT, signalHandler);
         std::signal(SIGTERM, signalHandler);
-        
+
 #ifdef _WIN32
         // Windows-specific console setup
         SetConsoleTitleA("Encrypted Backup Client v3.0");
-        LOG_DEBUG("Windows console title set");
+        std::cout << "Windows console title set" << std::endl;
 #endif
-        
-        LOG_INFO("About to create client object...");
-        
-        // Run the main backup client
-        bool success = false;
-        try {
-            success = runBackupClient();
-        } catch (const std::runtime_error& e) {
-            LOG_ERRORF("Runtime error in backup client: %s", e.what());
-            std::cerr << "❌ Runtime error: " << e.what() << std::endl;
-        } catch (const std::logic_error& e) {
-            LOG_ERRORF("Logic error in backup client: %s", e.what());
-            std::cerr << "❌ Logic error: " << e.what() << std::endl;
-        } catch (const std::exception& e) {
-            LOG_ERRORF("Standard exception in backup client: %s", e.what());
-            std::cerr << "❌ Exception: " << e.what() << std::endl;
+
+        std::cout << "About to create client object..." << std::endl;
+
+        // Create persistent client object that keeps GUI running
+        Client client;
+
+        if (!client.initialize()) {
+            std::cout << "❌ Client initialization failed!" << std::endl;
+            return 1;
         }
-          if (success) {
-            LOG_INFO("✅ Backup completed successfully!");
-            if (!g_batchMode) {
-                std::cout << "✅ Backup completed successfully!" << std::endl;
-            }
-            exitCode = 0;
-        } else {
-            LOG_ERROR("❌ Backup failed!");
-            if (!g_batchMode) {
-                std::cerr << "❌ Backup failed!" << std::endl;
-            }
-            exitCode = 1;
+
+        std::cout << "✅ Client initialized successfully!" << std::endl;
+        std::cout << "🌐 Web GUI available at: http://127.0.0.1:9090" << std::endl;
+        std::cout << "📁 Ready for backup operations..." << std::endl;
+        std::cout << "Press Ctrl+C to exit" << std::endl;
+
+        // Keep the client alive and GUI server running
+        while (!g_shutdownRequested.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
+
+        std::cout << "✅ Shutdown requested, cleaning up..." << std::endl;
+        exitCode = 0;
         
     } catch (const std::bad_alloc& e) {
         std::cerr << "❌ Memory allocation failed: " << e.what() << std::endl;
-        if (g_logger) LOG_CRITICAL("Memory allocation failed: " + std::string(e.what()));
         exitCode = 2;
     } catch (const std::exception& e) {
         std::cerr << "❌ Fatal error: " << e.what() << std::endl;
-        if (g_logger) LOG_CRITICAL("Fatal error: " + std::string(e.what()));
         exitCode = 3;
     } catch (...) {
         std::cerr << "❌ Unknown fatal error occurred!" << std::endl;
-        if (g_logger) LOG_CRITICAL("Unknown fatal error occurred!");
         exitCode = 4;
     }
-    
-    // Clean up logging
-    if (g_logger) {
-        LOG_INFOF("Client exiting with code: %d", exitCode);
-        delete g_logger;
-        g_logger = nullptr;
-    }
+
+    std::cout << "Client exiting with code: " << exitCode << std::endl;
     
 #ifdef _WIN32
     // On Windows, wait for user input in debug builds

@@ -2,307 +2,137 @@
 // Encrypted File Backup System - Enhanced Client Implementation
 // Fully compliant with project specifications
 
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <iomanip>
-#include <string>
-#include <vector>
-#include <array>
-#include <cstring>
-#include <algorithm>
-#include <chrono>
-#include <thread>
-//#include <filesystem>
-#ifdef _WIN32
-#include <direct.h>
-#include <sys/stat.h>
-#endif
-#include <boost/asio.hpp>
-#include <boost/system/error_code.hpp>
-#include <boost/bind/bind.hpp>
-#include "../../include/client/ClientWebSocketServer.h"
-#include "../../include/client/ClientGUI.h"
+#include "../../include/client/client.h"
 
-// For file operations instead of C++17 filesystem
-#include <atomic>
-#include <ctime>
-
-// Boost.Asio for cross-platform networking
-#ifdef _WIN32
-#include <shellapi.h>
-#endif
-
-
-// Windows console control
-#ifdef _WIN32
-#include <windows.h>
-#include <io.h>
-#include <fcntl.h>
-#endif
-
-// Required wrapper includes (provided by project)
-#include "../../include/client/cksum.h"
-#include "../../include/wrappers/AESWrapper.h"
-#include "../../include/wrappers/Base64Wrapper.h"
-#include "../../include/wrappers/RSAWrapper.h"
-
-// Global batch mode flag
-extern bool g_batchMode;
-
-// Optional GUI support - already included in ClientWebSocketServer.h
-// #ifdef _WIN32
-// #include "../../include/client/ClientGUI.h"
-// #endif
-
-// Protocol constants
-constexpr uint8_t CLIENT_VERSION = 3;
-constexpr uint8_t SERVER_VERSION = 3;
-
-// Request codes - MUST match server constants exactly
-constexpr uint16_t REQ_REGISTER = 1025;
-constexpr uint16_t REQ_SEND_PUBLIC_KEY = 1026;
-constexpr uint16_t REQ_RECONNECT = 1027;
-constexpr uint16_t REQ_SEND_FILE = 1028;
-constexpr uint16_t REQ_CRC_OK = 1029;
-constexpr uint16_t REQ_CRC_INVALID_RETRY = 1030;  // Fixed: matches server REQ_CRC_INVALID_RETRY
-constexpr uint16_t REQ_CRC_FAILED_ABORT = 1031;   // Fixed: matches server REQ_CRC_FAILED_ABORT
-
-// Response codes - MUST match server constants exactly
-constexpr uint16_t RESP_REG_OK = 1600;              // Fixed: matches server RESP_REG_OK
-constexpr uint16_t RESP_REG_FAIL = 1601;            // Fixed: matches server RESP_REG_FAIL
-constexpr uint16_t RESP_PUBKEY_AES_SENT = 1602;
-constexpr uint16_t RESP_FILE_CRC = 1603;            // Fixed: matches server RESP_FILE_CRC
-constexpr uint16_t RESP_ACK = 1604;
-constexpr uint16_t RESP_RECONNECT_AES_SENT = 1605;
-constexpr uint16_t RESP_RECONNECT_FAIL = 1606;
-constexpr uint16_t RESP_GENERIC_SERVER_ERROR = 1607; // Fixed: matches server RESP_GENERIC_SERVER_ERROR
-
-// Size constants
-constexpr size_t CLIENT_ID_SIZE = 16;
-constexpr size_t MAX_NAME_SIZE = 255;
-constexpr size_t RSA_KEY_SIZE = 160; // Spec-compliant: 160 bytes for RSA public key in DER format
-constexpr size_t AES_KEY_SIZE = 32;
-constexpr size_t MAX_PACKET_SIZE = 1024 * 1024;  // 1MB per packet
-constexpr size_t OPTIMAL_BUFFER_SIZE = 64 * 1024; // 64KB for file reading
-
-// Other constants
-constexpr int MAX_RETRIES = 3;
-constexpr int SOCKET_TIMEOUT_MS = 30000; // 30 seconds
-constexpr int RECONNECT_DELAY_MS = 5000; // 5 seconds between reconnect attempts
-constexpr int KEEPALIVE_INTERVAL = 60;   // 60 seconds
-
-// Protocol structures
-#pragma pack(push, 1)
-struct RequestHeader {
-    uint8_t client_id[16];
-    uint8_t version;
-    uint16_t code;
-    uint32_t payload_size;
+// CRC table for polynomial 0x04C11DB7 (used by Linux cksum)
+static const uint32_t crc_table[256] = {
+    0x00000000, 0x04C11DB7, 0x09823B6E, 0x0D4326D9,
+    0x130476DC, 0x17C56B6B, 0x1A864DB2, 0x1E475005,
+    0x2608EDB8, 0x22C9F00F, 0x2F8AD6D6, 0x2B4BCB61,
+    0x350C9B64, 0x31CD86D3, 0x3C8EA00A, 0x384FBDBD,
+    0x4C11DB70, 0x48D0C6C7, 0x4593E01E, 0x4152FDA9,
+    0x5F15ADAC, 0x5BD4B01B, 0x569796C2, 0x52568B75,
+    0x6A1936C8, 0x6ED82B7F, 0x639B0DA6, 0x675A1011,
+    0x791D4014, 0x7DDC5DA3, 0x709F7B7A, 0x745E66CD,
+    0x9823B6E0, 0x9CE2AB57, 0x91A18D8E, 0x95609039,
+    0x8B27C03C, 0x8FE6DD8B, 0x82A5FB52, 0x8664E6E5,
+    0xBE2B5B58, 0xBAEA46EF, 0xB7A96036, 0xB3687D81,
+    0xAD2F2D84, 0xA9EE3033, 0xA4AD16EA, 0xA06C0B5D,
+    0xD4326D90, 0xD0F37027, 0xDDB056FE, 0xD9714B49,
+    0xC7361B4C, 0xC3F706FB, 0xCEB42022, 0xCA753D95,
+    0xF23A8028, 0xF6FB9D9F, 0xFBB8BB46, 0xFF79A6F1,
+    0xE13EF6F4, 0xE5FFEB43, 0xE8BCCD9A, 0xEC7DD02D,
+    0x34867077, 0x30476DC0, 0x3D044B19, 0x39C556AE,
+    0x278206AB, 0x23431B1C, 0x2E003DC5, 0x2AC12072,
+    0x128E9DCF, 0x164F8078, 0x1B0CA6A1, 0x1FCDBB16,
+    0x018AEB13, 0x054BF6A4, 0x0808D07D, 0x0CC9CDCA,
+    0x7897AB07, 0x7C56B6B0, 0x71159069, 0x75D48DDE,
+    0x6B93DDDB, 0x6F52C06C, 0x6211E6B5, 0x66D0FB02,
+    0x5E9F46BF, 0x5A5E5B08, 0x571D7DD1, 0x53DC6066,
+    0x4D9B3063, 0x495A2DD4, 0x44190B0D, 0x40D816BA,
+    0xACA5C697, 0xA864DB20, 0xA527FDF9, 0xA1E6E04E,
+    0xBFA1B04B, 0xBB60ADFC, 0xB6238B25, 0xB2E29692,
+    0x8AAD2B2F, 0x8E6C3698, 0x832F1041, 0x87EE0DF6,
+    0x99A95DF3, 0x9D684044, 0x902B669D, 0x94EA7B2A,
+    0xE0B41DE7, 0xE4750050, 0xE9362689, 0xEDF73B3E,
+    0xF3B06B3B, 0xF771768C, 0xFA325055, 0xFEF34DE2,
+    0xC6BCF05F, 0xC27DEDE8, 0xCF3ECB31, 0xCBFFD686,
+    0xD5B88683, 0xD1799B34, 0xDC3ABDED, 0xD8FBA05A,
+    0x690CE0EE, 0x6DCDFD59, 0x608EDB80, 0x644FC637,
+    0x7A089632, 0x7EC98B85, 0x738AAD5C, 0x774BB0EB,
+    0x4F040D56, 0x4BC510E1, 0x46863638, 0x42472B8F,
+    0x5C007B8A, 0x58C1663D, 0x558240E4, 0x51435D53,
+    0x251D3B9E, 0x21DC2629, 0x2C9F00F0, 0x285E1D47,
+    0x36194D42, 0x32D850F5, 0x3F9B762C, 0x3B5A6B9B,
+    0x0315D626, 0x07D4CB91, 0x0A97ED48, 0x0E56F0FF,
+    0x1011A0FA, 0x14D0BD4D, 0x19939B94, 0x1D528623,
+    0xF12F560E, 0xF5EE4BB9, 0xF8AD6D60, 0xFC6C70D7,
+    0xE22B20D2, 0xE6EA3D65, 0xEBA91BBC, 0xEF68060B,
+    0xD727BBB6, 0xD3E6A601, 0xDEA580D8, 0xDA649D6F,
+    0xC423CD6A, 0xC0E2D0DD, 0xCDA1F604, 0xC960EBB3,
+    0xBD3E8D7E, 0xB9FF90C9, 0xB4BCB610, 0xB07DABA7,
+    0xAE3AFBA2, 0xAAFBE615, 0xA7B8C0CC, 0xA379DD7B,
+    0x9B3660C6, 0x9FF77D71, 0x92B45BA8, 0x9675461F,
+    0x8832161A, 0x8CF30BAD, 0x81B02D74, 0x857130C3,
+    0x5D8A9099, 0x594B8D2E, 0x5408ABF7, 0x50C9B640,
+    0x4E8EE645, 0x4A4FFBF2, 0x470CDD2B, 0x43CDC09C,
+    0x7B827D21, 0x7F436096, 0x7200464F, 0x76C15BF8,
+    0x68860BFD, 0x6C47164A, 0x61043093, 0x65C52D24,
+    0x119B4BE9, 0x155A565E, 0x18197087, 0x1CD86D30,
+    0x029F3D35, 0x065E2082, 0x0B1D065B, 0x0FDC1BEC,
+    0x3793A651, 0x3352BBE6, 0x3E119D3F, 0x3AD08088,
+    0x2497D08D, 0x2056CD3A, 0x2D15EBE3, 0x29D4F654,
+    0xC5A92679, 0xC1683BCE, 0xCC2B1D17, 0xC8EA00A0,
+    0xD6AD50A5, 0xD26C4D12, 0xDF2F6BCB, 0xDBEE767C,
+    0xE3A1CBC1, 0xE760D676, 0xEA23F0AF, 0xEEE2ED18,
+    0xF0A5BD1D, 0xF464A0AA, 0xF9278673, 0xFDE69BC4,
+    0x89B8FD09, 0x8D79E0BE, 0x803AC667, 0x84FBDBD0,
+    0x9ABC8BD5, 0x9E7D9662, 0x933EB0BB, 0x97FFAD0C,
+    0xAFB010B1, 0xAB710D06, 0xA6322BDF, 0xA2F33668,
+    0xBCB4666D, 0xB8757BDA, 0xB5365D03, 0xB1F740B4
 };
 
-struct ResponseHeader {
-    uint8_t version;
-    uint16_t code;
-    uint32_t payload_size;
-};
-#pragma pack(pop)
+// Implementation of TransferStats methods
+TransferStats::TransferStats() : totalBytes(0), transferredBytes(0), lastTransferredBytes(0),
+                  currentSpeed(0.0), averageSpeed(0.0), estimatedTimeRemaining(0) {}
 
-// Transfer statistics structure
-struct TransferStats {
-    std::chrono::steady_clock::time_point startTime;
-    std::chrono::steady_clock::time_point lastUpdateTime;
-    size_t totalBytes;
-    size_t transferredBytes;
-    size_t lastTransferredBytes;
-    double currentSpeed;
-    double averageSpeed;
-    int estimatedTimeRemaining;
-    
-    TransferStats() : totalBytes(0), transferredBytes(0), lastTransferredBytes(0),
-                      currentSpeed(0.0), averageSpeed(0.0), estimatedTimeRemaining(0) {}
-    
-    void reset() {
-        startTime = std::chrono::steady_clock::now();
-        lastUpdateTime = startTime;
-        transferredBytes = 0;
-        lastTransferredBytes = 0;
-        currentSpeed = 0.0;
-        averageSpeed = 0.0;
-        estimatedTimeRemaining = 0;
+void TransferStats::reset() {
+    startTime = std::chrono::steady_clock::now();
+    lastUpdateTime = startTime;
+    transferredBytes = 0;
+    lastTransferredBytes = 0;
+    currentSpeed = 0.0;
+    averageSpeed = 0.0;
+    estimatedTimeRemaining = 0;
+}
+
+void TransferStats::update(size_t newBytes) {
+    auto now = std::chrono::steady_clock::now();
+    transferredBytes = newBytes;
+
+    // Calculate current speed
+    auto timeSinceLastUpdate = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdateTime).count();
+    if (timeSinceLastUpdate > 0) {
+        currentSpeed = ((transferredBytes - lastTransferredBytes) * 1000.0) / timeSinceLastUpdate;
     }
-    
-    void update(size_t newBytes) {
-        auto now = std::chrono::steady_clock::now();
-        transferredBytes = newBytes;
-        
-        // Calculate current speed
-        auto timeSinceLastUpdate = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdateTime).count();
-        if (timeSinceLastUpdate > 0) {
-            currentSpeed = ((transferredBytes - lastTransferredBytes) * 1000.0) / timeSinceLastUpdate;
-        }
-        
-        // Calculate average speed
-        auto totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count();
-        if (totalTime > 0) {
-            averageSpeed = (transferredBytes * 1000.0) / totalTime;
-        }
-        
-        // Calculate estimated time remaining
-        if (averageSpeed > 0 && totalBytes > transferredBytes) {
-            estimatedTimeRemaining = static_cast<int>((totalBytes - transferredBytes) / averageSpeed);
-        }
-        
-        lastUpdateTime = now;
-        lastTransferredBytes = transferredBytes;
+
+    // Calculate average speed
+    auto totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count();
+    if (totalTime > 0) {
+        averageSpeed = (transferredBytes * 1000.0) / totalTime;
     }
-};
 
-// Enhanced error codes for better debugging
-enum class ErrorType {
-    NONE,
-    NETWORK,
-    FILE_IO,
-    PROTOCOL,
-    CRYPTO,
-    CONFIG,
-    AUTHENTICATION,
-    SERVER_ERROR
-};
+    // Calculate estimated time remaining
+    if (averageSpeed > 0 && totalBytes > transferredBytes) {
+        estimatedTimeRemaining = static_cast<int>((totalBytes - transferredBytes) / averageSpeed);
+    }
 
-class Client {
-private:
-    // Boost.Asio networking
-    boost::asio::io_context ioContext;
-    std::unique_ptr<boost::asio::ip::tcp::socket> socket;
-    std::string serverIP;
-    uint16_t serverPort;
-    bool connected;
-    std::atomic<bool> keepAliveEnabled;
-    
-    // Client info
-    std::array<uint8_t, CLIENT_ID_SIZE> clientID;
-    std::string username;
-    std::string filepath;
-    
-    // Crypto
-    RSAPrivateWrapper* rsaPrivate;
-    std::string aesKey;
-    
-    // Retry counters
-    int fileRetries;
-    int crcRetries;
-    int reconnectAttempts;
-    
-    // Transfer statistics
-    TransferStats stats;
-    
-    // Console output control
-    HANDLE hConsole;
-    CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
-    WORD savedAttributes;
-    
-    // Error tracking
-    ErrorType lastError;
-    std::string lastErrorDetails;
-    
-    // Performance metrics
-    std::chrono::steady_clock::time_point operationStartTime;
+    lastUpdateTime = now;
+    lastTransferredBytes = transferredBytes;
+}
 
-    // WebSocket server for GUI communication
-    std::unique_ptr<ClientWebSocketServer> webSocketServer;
+// ============================================================================
+// CLIENT CLASS IMPLEMENTATION
+// ============================================================================
 
-    // WebSocket command handling for interactive GUI
-    void handleGUICommand(const std::map<std::string, std::string>& command);
-    void handleConnectCommand(const std::map<std::string, std::string>& command);
-    void handleStartBackupCommand(const std::map<std::string, std::string>& command);
-    void handleFileSelectedCommand(const std::map<std::string, std::string>& command);
-    void sendGUIResponse(const std::string& type, const std::string& message, bool success = true);
-    
-    // Interactive mode variables
-    bool interactiveMode;
-    std::string pendingServerIP;
-    int pendingServerPort;
-    std::string pendingUsername;
-    std::string selectedFilePath;
-
-public:
-    Client();
-    ~Client();
-    
-    // Main interface
-    bool initialize();
-    bool run();
-    
-private:
-    // Configuration
-    bool readTransferInfo();
-    bool validateConfiguration();
-    bool loadMeInfo();
-    bool saveMeInfo();
-    bool loadPrivateKey();
-    bool savePrivateKey();
-      // Network operations
-    bool connectToServer();
-    void closeConnection();
-    bool sendRequest(uint16_t code, const std::vector<uint8_t>& payload = {});
-    bool receiveResponse(ResponseHeader& header, std::vector<uint8_t>& payload);
-    bool testConnection();
-    void enableKeepAlive();
-    
-    // Socket management and recovery
-    bool validateSocketConnection();
-    bool attemptConnectionRecovery();
-    
-    // Protocol operations
-    bool performRegistration();
-    bool performReconnection();
-    bool sendPublicKey();
-    bool transferFile();
-    bool sendFilePacket(const std::string& filename, const std::string& encryptedData, 
-                       uint32_t originalSize, uint16_t packetNum, uint16_t totalPackets);
-    bool verifyCRC(uint32_t serverCRC, const std::vector<uint8_t>& originalData, const std::string& filename);
-    
-    // Crypto operations
-    bool generateRSAKeys();
-    bool decryptAESKey(const std::vector<uint8_t>& encryptedKey);
-    std::string encryptFile(const std::vector<uint8_t>& data);
-    
-    // Utility functions
-    std::vector<uint8_t> readFile(const std::string& path);
-    std::string bytesToHex(const uint8_t* data, size_t size);
-    std::vector<uint8_t> hexToBytes(const std::string& hex);
-    uint32_t calculateCRC32(const uint8_t* data, size_t size);
-    std::string formatBytes(size_t bytes);
-    std::string formatDuration(int seconds);
-    std::string getCurrentTimestamp();
-    
-    // Visual feedback
-    void displayStatus(const std::string& operation, bool success, const std::string& details = "");
-    void displayProgress(const std::string& operation, size_t current, size_t total);
-    void displayTransferStats();
-    void displaySplashScreen();
-    void clearLine();
-    void displayConnectionInfo();
-    void displayError(const std::string& message, ErrorType type = ErrorType::NONE);
-    void displaySeparator();
-    void displayPhase(const std::string& phase);
-    void displaySummary();
-};
  // Constructor
-Client::Client() : socket(nullptr), connected(false), rsaPrivate(nullptr), 
+Client::Client() : socket(nullptr), connected(false), rsaPrivate(nullptr),
                    fileRetries(0), crcRetries(0), reconnectAttempts(0),
                    keepAliveEnabled(false), lastError(ErrorType::NONE) {
     std::fill(clientID.begin(), clientID.end(), 0);
 
-    // Initialize and start WebSocket server for GUI communication
+    // Initialize HTTP API server for HTML GUI
     try {
-        webSocketServer = std::make_unique<ClientWebSocketServer>(8765); // Port 8765 for WebSocket
-        webSocketServer->setMessageHandler(std::bind(&Client::handleGUICommand, this, std::placeholders::_1));
-        webSocketServer->start();
-        displayStatus("GUI", true, "WebSocket server started on port 8765");
+        webServer = std::make_unique<WebServerBackend>();
+        // Set backup callback for API operations
+        webServer->setBackupCallback([this]() { return this->runBackupOperation(); });
+        if (webServer->start("127.0.0.1", 9090)) {
+            std::cout << "[GUI] HTTP API server started on port 9090" << std::endl;
+        } else {
+            std::cout << "[ERROR] Failed to start HTTP API server" << std::endl;
+        }
     } catch (const std::exception& e) {
-        displayError("Failed to start WebSocket GUI server: " + std::string(e.what()), ErrorType::CONFIG);
+        std::cout << "[ERROR] Failed to start HTTP API server: " << e.what() << std::endl;
     }
 
 #ifdef _WIN32
@@ -319,8 +149,10 @@ Client::~Client() {
     if (rsaPrivate) {
         delete rsaPrivate;
     }
-    if (webSocketServer) {
-        webSocketServer->stop();
+    // Clean up HTTP API server
+    if (webServer) {
+        webServer->stop();
+        std::cout << "[GUI] HTTP API server stopped" << std::endl;
     }
 #ifdef _WIN32
     SetConsoleTextAttribute(hConsole, savedAttributes);
@@ -368,14 +200,13 @@ bool Client::run() {
     displayPhase("Connection Setup");
     
     displayStatus("Connecting to server", true, serverIP + ":" + std::to_string(serverPort));
-    
-    // Try to connect with retries
+      // Try to connect with retries
     bool connectedSuccessfully = false;
     for (int attempt = 1; attempt <= 3 && !connectedSuccessfully; attempt++) {
         if (attempt > 1) {
             displayStatus("Connection attempt", true, "Retry " + std::to_string(attempt) + " of 3");
             std::this_thread::sleep_for(std::chrono::milliseconds(RECONNECT_DELAY_MS));
-        }
+        } 
         
         if (connectToServer()) {
             connectedSuccessfully = true;
@@ -385,13 +216,16 @@ bool Client::run() {
     if (!connectedSuccessfully) {
         displayError("Failed to connect after 3 attempts", ErrorType::NETWORK);
         return false;
-    }
-      displayConnectionInfo();
+    }displayConnectionInfo();
     
-    // Test connection quality - Skip for now as test request causes server error
-    // if (!testConnection()) {
-    //     displayStatus("Connection test", false, "Poor connection quality detected");
-    // }
+    // Test connection quality with proper error handling
+    displayStatus("Testing connection", true, "Verifying server communication...");
+    if (!testConnection()) {
+        displayStatus("Connection test", false, "Poor connection quality or server not responding properly");
+        // Don't fail here, just warn the user
+    } else {
+        displayStatus("Connection test", true, "Server communication verified");
+    }
     
     // Enable keep-alive for long transfers
     enableKeepAlive();
@@ -560,13 +394,10 @@ bool Client::loadMeInfo() {
     
     std::string line;
     
-    // Line 1: username (stored for reference, but not validated)
-    // FIXED: Remove strict username validation that was preventing client ID loading
-    if (!std::getline(file, line)) {
+    // Line 1: username
+    if (!std::getline(file, line) || line != username) {
         return false;
     }
-    // Store the username from me.info (but don't require exact match)
-    std::string storedUsername = line;
     
     // Line 2: UUID hex
     if (!std::getline(file, line) || line.length() != 32) {
@@ -679,7 +510,6 @@ bool Client::savePrivateKey() {
 
 // Connect to server
 bool Client::connectToServer() {
-    std::cout << "[DEBUG] Attempting to connect to server at " << serverIP << ":" << serverPort << std::endl;
     try {
         socket = std::make_unique<boost::asio::ip::tcp::socket>(ioContext);
         
@@ -687,21 +517,13 @@ bool Client::connectToServer() {
         boost::asio::ip::tcp::resolver::results_type endpoints = 
             resolver.resolve(serverIP, std::to_string(serverPort));
         
-        displayStatus("Connecting", true, "Resolving " + serverIP + ":" + std::to_string(serverPort));
+        displayStatus("Connecting", true, "Establishing TCP connection...");
         
-        // Connect with proper error handling
-        boost::system::error_code connectError;
-        boost::asio::connect(*socket, endpoints, connectError);
-        
-        if (connectError) {
-            displayError("Connection failed: " + connectError.message() + 
-                        " (Code: " + std::to_string(connectError.value()) + ")", ErrorType::NETWORK);
-            return false;
-        }
+        boost::asio::connect(*socket, endpoints);
 
         // Verify the connection is actually established
         if (!socket->is_open()) {
-            displayError("Socket failed to open after connect", ErrorType::NETWORK);
+            displayError("Socket failed to open", ErrorType::NETWORK);
             return false;
         }
 
@@ -713,64 +535,55 @@ bool Client::connectToServer() {
                      "Local: " + localEndpoint.address().to_string() + ":" + std::to_string(localEndpoint.port()) +
                      " -> Remote: " + remoteEndpoint.address().to_string() + ":" + std::to_string(remoteEndpoint.port()));
 
-        // Set socket options for better protocol handling
-        socket->set_option(boost::asio::ip::tcp::no_delay(true)); // Disable Nagle algorithm
-        socket->set_option(boost::asio::socket_base::keep_alive(true)); // Enable keep-alive
-        
-        // Set socket timeouts (platform-specific)
-#ifdef _WIN32
-        DWORD timeout = SOCKET_TIMEOUT_MS;
-        setsockopt(socket->native_handle(), SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
-        setsockopt(socket->native_handle(), SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout, sizeof(timeout));
-#endif
+        // Set socket options for timeouts and keep-alive
+        socket->set_option(boost::asio::ip::tcp::no_delay(true));
 
         // Small delay to ensure connection is fully established
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
         connected = true;
-        displayStatus("Connected", true, "TCP connection established and configured");
+        displayStatus("Connected", true, "TCP connection established");
         
-        // Update GUI connection status (optional)
-        try {
-            ClientGUIHelpers::updateConnectionStatus(true);
-        } catch (...) {
-            // GUI update failed - continue without GUI
-        }
-        
-        std::cout << "[DEBUG] Connected to server successfully." << std::endl;
         return true;
         
-    } catch (const std::exception& e) {
-        displayError("Connection failed: " + std::string(e.what()), ErrorType::NETWORK);
+    } catch (const std::exception& e) {        displayError("Connection failed: " + std::string(e.what()), ErrorType::NETWORK);
         socket.reset();
         connected = false;
         
-        // Update GUI connection status (optional)
-        try {
-            ClientGUIHelpers::updateConnectionStatus(false);
-        } catch (...) {
-            // GUI update failed - continue without GUI
-        }
-        
-        std::cerr << "[ERROR] Failed to connect to server." << std::endl;
         return false;
     }
 }
 
 // Test connection quality
 bool Client::testConnection() {
-    auto start = std::chrono::steady_clock::now();
-    
-    // Send a small test request (empty payload)
-    if (!sendRequest(0, {})) {
+    if (!socket || !socket->is_open()) {
+        displayError("Cannot test connection - socket not open", ErrorType::NETWORK);
         return false;
     }
     
-    auto end = std::chrono::steady_clock::now();
-    auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    
-    displayStatus("Connection test", true, "Latency: " + std::to_string(latency) + "ms");
-    return latency < 1000; // Good if under 1 second
+    try {
+        auto start = std::chrono::steady_clock::now();
+        
+        // Instead of sending a test request with invalid code,
+        // just check if the socket is still connected and responsive
+        boost::system::error_code ec;
+        size_t available = socket->available(ec);
+        
+        if (ec) {
+            displayError("Connection test failed: " + ec.message(), ErrorType::NETWORK);
+            return false;
+        }
+        
+        auto end = std::chrono::steady_clock::now();
+        auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+        
+        displayStatus("Connection test", true, "Socket responsive (checked in " + std::to_string(latency) + "ms)");
+        return true;
+        
+    } catch (const std::exception& e) {
+        displayError("Connection test exception: " + std::string(e.what()), ErrorType::NETWORK);
+        return false;
+    }
 }
 
 // Enable keep-alive
@@ -796,29 +609,18 @@ void Client::closeConnection() {
         }    }
     socket.reset();
     connected = false;
-    
-    // Update GUI connection status (optional)
-    try {
-        ClientGUIHelpers::updateConnectionStatus(false);
-    } catch (...) {
-        // GUI update failed - continue without GUI
-    }
 }
 
-// Send request to server with robust error handling
+// Send request to server
 bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
-    // Basic connection validation
     if (!connected || !socket || !socket->is_open()) {
-        displayError("Client not connected to server", ErrorType::NETWORK);
+        displayError("Not connected to server", ErrorType::NETWORK);
         return false;
     }
     
     try {
-        // Construct complete message buffer for atomic transmission
-        std::vector<uint8_t> completeMessage;
-        completeMessage.reserve(23 + payload.size());
-        
-        // Manually construct header bytes in little-endian format
+        // CRITICAL FIX: Manually construct header bytes in little-endian format
+        // The Python server expects little-endian format explicitly
         std::vector<uint8_t> headerBytes(23);  // RequestHeader is 23 bytes total
 
         // Client ID (16 bytes) - copy as-is
@@ -838,50 +640,52 @@ bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
         headerBytes[21] = (payload_size_val >> 16) & 0xFF; // Byte 2
         headerBytes[22] = (payload_size_val >> 24) & 0xFF; // Byte 3
         
-        // Combine header and payload into single message buffer
-        completeMessage.insert(completeMessage.end(), headerBytes.begin(), headerBytes.end());
+        // Debug: show header values for important requests
+        if (code == REQ_REGISTER || code == REQ_RECONNECT || code == REQ_SEND_PUBLIC_KEY) {
+            displayStatus("Debug: Request header", true,
+                         "Version=" + std::to_string(CLIENT_VERSION) +
+                         ", Code=" + std::to_string(code) +
+                         ", PayloadSize=" + std::to_string(payload_size_val));
+
+            // Add hex dump of header bytes for debugging
+            std::stringstream hexDump;
+            hexDump << "Header hex: ";
+            for (size_t i = 0; i < headerBytes.size(); ++i) {
+                hexDump << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(headerBytes[i]) << " ";
+            }
+            displayStatus("Debug: Header bytes", true, hexDump.str());
+        }
+        
+        // Send header
+        size_t headerBytesSent = boost::asio::write(*socket, boost::asio::buffer(headerBytes));
+        if (headerBytesSent != headerBytes.size()) {
+            displayError("Failed to send complete header", ErrorType::NETWORK);
+            return false;
+        }
+
+        // Send payload if any
         if (!payload.empty()) {
-            completeMessage.insert(completeMessage.end(), payload.begin(), payload.end());
+            size_t payloadBytes = boost::asio::write(*socket, boost::asio::buffer(payload));
+            if (payloadBytes != payload.size()) {
+                displayError("Failed to send complete payload", ErrorType::NETWORK);
+                return false;
+            }
         }
-        
-        // Debug output for critical requests
+
+        // Force flush the socket to ensure data is sent immediately
+        ioContext.poll();
+
+        // Debug: confirm data was sent for important requests
         if (code == REQ_REGISTER || code == REQ_RECONNECT || code == REQ_SEND_PUBLIC_KEY) {
-            displayStatus("Sending request", true,
-                         "Code=" + std::to_string(code) +
-                         ", PayloadSize=" + std::to_string(payload_size_val) +
-                         ", TotalBytes=" + std::to_string(completeMessage.size()));
+            displayStatus("Debug: Data sent", true,
+                         "Header: " + std::to_string(headerBytesSent) + " bytes, " +
+                         "Payload: " + std::to_string(payload.size()) + " bytes");
         }
-        
-        // ATOMIC TRANSMISSION: Send complete message in one operation
-        boost::system::error_code sendError;
-        size_t totalBytesSent = boost::asio::write(*socket, boost::asio::buffer(completeMessage), sendError);
-        
-        // Check for transmission errors
-        if (sendError) {
-            displayError("Socket write failed: " + sendError.message(), ErrorType::NETWORK);
-            connected = false;
-            return false;
-        }
-        
-        // Verify complete transmission
-        if (totalBytesSent != completeMessage.size()) {
-            displayError("Incomplete write: " + std::to_string(totalBytesSent) + 
-                        "/" + std::to_string(completeMessage.size()) + " bytes", ErrorType::NETWORK);
-            connected = false;
-            return false;
-        }
-        
-        // Success confirmation for critical requests
-        if (code == REQ_REGISTER || code == REQ_RECONNECT || code == REQ_SEND_PUBLIC_KEY) {
-            displayStatus("Request sent successfully", true, 
-                         std::to_string(totalBytesSent) + " bytes transmitted");
-        }
-        
+
         return true;
         
     } catch (const std::exception& e) {
-        displayError("Send request failed: " + std::string(e.what()), ErrorType::NETWORK);
-        connected = false;
+        displayError("Failed to send request: " + std::string(e.what()), ErrorType::NETWORK);
         return false;
     }
 }
@@ -894,37 +698,18 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
     }
     
     try {
-        // Receive header - manually to handle endianness
-        std::vector<uint8_t> headerBytes(7); // ResponseHeader is 7 bytes
-        boost::asio::read(*socket, boost::asio::buffer(headerBytes));
-        
-        // Parse header manually with proper endianness handling
-        header.version = headerBytes[0];
-        header.code = headerBytes[1] | (headerBytes[2] << 8);  // Little-endian uint16_t
-        header.payload_size = headerBytes[3] | (headerBytes[4] << 8) | (headerBytes[5] << 16) | (headerBytes[6] << 24); // Little-endian uint32_t
-        
-        // Debug output for important responses
-        displayStatus("Debug: Response received", true, 
-                     "Version=" + std::to_string(header.version) +
-                     ", Code=" + std::to_string(header.code) +
-                     ", PayloadSize=" + std::to_string(header.payload_size));
+        // Receive header
+        boost::asio::read(*socket, boost::asio::buffer(&header, sizeof(header)));
         
         // Check version
         if (header.version != SERVER_VERSION) {
-            displayError("Protocol version mismatch - Server: " + std::to_string(header.version) + 
-                        ", Client expects: " + std::to_string(SERVER_VERSION), ErrorType::PROTOCOL);
+            displayError("Invalid server version: " + std::to_string(header.version), ErrorType::PROTOCOL);
             return false;
         }
         
         // Check for error response
-        if (header.code == RESP_GENERIC_SERVER_ERROR) {
+        if (header.code == RESP_ERROR) {
             displayError("Server returned general error", ErrorType::SERVER_ERROR);
-            return false;
-        }
-        
-        // Validate payload size
-        if (header.payload_size > MAX_PACKET_SIZE) {
-            displayError("Invalid payload size: " + std::to_string(header.payload_size), ErrorType::PROTOCOL);
             return false;
         }
         
@@ -943,7 +728,7 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
     }
 }
 
-// Perform registration with streamlined error handling
+// Perform registration
 bool Client::performRegistration() {
     displayStatus("Starting registration", true, "Using pre-generated RSA keys");
 
@@ -953,32 +738,18 @@ bool Client::performRegistration() {
         return false;
     }
     
-    // Prepare registration payload - EXACTLY 255 bytes as expected by server
-    std::vector<uint8_t> payload(MAX_NAME_SIZE, 0);  // Initialize all bytes to 0
-    
-    // Validate username length
-    if (username.length() > MAX_NAME_SIZE - 1) {
-        displayError("Username too long: " + std::to_string(username.length()) + 
-                    " bytes (max: " + std::to_string(MAX_NAME_SIZE - 1) + ")", ErrorType::CONFIG);
-        return false;
-    }
-    
-    // Copy username to payload (null-terminated, zero-padded)
+    // Prepare registration payload
+    std::vector<uint8_t> payload(MAX_NAME_SIZE, 0);
     std::copy(username.begin(), username.end(), payload.begin());
-    // Ensure null termination (redundant but explicit)
-    payload[username.length()] = 0;
+      displayStatus("Sending registration", true, "Username: " + username);
     
-    displayStatus("Sending registration", true, "Username: " + username);
-    
-    // Debug: show exact payload construction
-    displayStatus("Debug: Registration payload", true, 
-                 "Size=" + std::to_string(payload.size()) + " bytes" +
-                 ", Username='" + username + "' (" + std::to_string(username.length()) + " chars)" +
-                 ", Null-terminated and zero-padded");
+    // Debug: show what we're sending
+    displayStatus("Debug: Registration packet", true, 
+                 "Payload size=" + std::to_string(payload.size()) + 
+                 " bytes, Username='" + username + "'");
 
     // Send registration request
     if (!sendRequest(REQ_REGISTER, payload)) {
-        displayError("Failed to send registration request", ErrorType::NETWORK);
         return false;
     }
     
@@ -986,24 +757,20 @@ bool Client::performRegistration() {
     ResponseHeader header;
     std::vector<uint8_t> responsePayload;
     if (!receiveResponse(header, responsePayload)) {
-        displayError("Failed to receive registration response", ErrorType::NETWORK);
         return false;
     }
     
-    // Process response
-    if (header.code == RESP_REG_FAIL) {
+    if (header.code == RESP_REGISTER_FAIL) {
         displayError("Registration failed: Username already exists", ErrorType::AUTHENTICATION);
         return false;
     }
     
-    if (header.code != RESP_REG_OK || responsePayload.size() != CLIENT_ID_SIZE) {
-        displayError("Invalid registration response - Code: " + std::to_string(header.code) + 
-                    ", Expected: " + std::to_string(RESP_REG_OK) + 
-                    ", Payload size: " + std::to_string(responsePayload.size()), ErrorType::PROTOCOL);
+    if (header.code != RESP_REGISTER_OK || responsePayload.size() != CLIENT_ID_SIZE) {
+        displayError("Invalid registration response", ErrorType::PROTOCOL);
         return false;
     }
     
-    // Success! Store client ID and save registration info
+    // Store client ID
     std::copy(responsePayload.begin(), responsePayload.end(), clientID.begin());
     
     // Save info
@@ -1012,10 +779,7 @@ bool Client::performRegistration() {
         return false;
     }
     
-    displayStatus("Registration successful", true, 
-                 "Client ID: " + bytesToHex(clientID.data(), 8) + "...");
-    
-    std::cout << "[DEBUG] Registration completed successfully" << std::endl;
+    displayStatus("Registration", true, "New client ID: " + bytesToHex(clientID.data(), 8) + "...");
     return true;
 }
 
@@ -1069,38 +833,18 @@ bool Client::sendPublicKey() {
         return false;
     }
     
-    // Get the actual public key first
-    std::string actualPublicKey = rsaPrivate->getPublicKey();
-    
-    displayStatus("Debug: Actual public key size", true, 
-                 std::to_string(actualPublicKey.size()) + " bytes, expected 160 bytes");
-    
-    // Prepare payload with exactly 415 bytes (255 username + 160 RSA key)
+    // Prepare payload
     std::vector<uint8_t> payload(MAX_NAME_SIZE + RSA_KEY_SIZE, 0);
     
-    // Add username (255 bytes, null-terminated, zero-padded)
+    // Add username
     std::copy(username.begin(), username.end(), payload.begin());
     
-    // Add public key - ensure exactly 160 bytes
-    if (actualPublicKey.size() > RSA_KEY_SIZE) {
-        // Truncate if too large
-        displayStatus("Warning: Public key truncated", false, 
-                     "From " + std::to_string(actualPublicKey.size()) + " to " + std::to_string(RSA_KEY_SIZE) + " bytes");
-        std::copy(actualPublicKey.begin(), actualPublicKey.begin() + RSA_KEY_SIZE, payload.begin() + MAX_NAME_SIZE);
-    } else {
-        // Copy what we have and zero-pad the rest
-        std::copy(actualPublicKey.begin(), actualPublicKey.end(), payload.begin() + MAX_NAME_SIZE);
-        // Zero-padding is already done since payload was initialized with zeros
-    }
+    // Add public key
+    char publicKeyBuffer[RSAPublicWrapper::KEYSIZE];
+    rsaPrivate->getPublicKey(publicKeyBuffer, RSAPublicWrapper::KEYSIZE);
+    std::copy(publicKeyBuffer, publicKeyBuffer + RSAPublicWrapper::KEYSIZE, payload.begin() + MAX_NAME_SIZE);
     
-    displayStatus("Sending public key", true, 
-                 "Payload: " + std::to_string(payload.size()) + " bytes (255 username + 160 RSA key)");
-    
-    // Debug: show exact payload construction
-    displayStatus("Debug: Public key payload", true, 
-                 "Size=" + std::to_string(payload.size()) + " bytes" +
-                 ", Username='" + username + "' (" + std::to_string(username.length()) + " chars)" +
-                 ", RSA key=" + std::to_string(actualPublicKey.size()) + " bytes (padded to 160)");
+    displayStatus("Sending public key", true, "RSA 1024-bit public key");
     
     // Send request
     if (!sendRequest(REQ_SEND_PUBLIC_KEY, payload)) {
@@ -1201,7 +945,7 @@ bool Client::transferFile() {
         return false;
     }
     
-    if (header.code != RESP_FILE_CRC || responsePayload.size() < 279) {
+    if (header.code != RESP_FILE_OK || responsePayload.size() < 279) {
         displayError("Invalid file transfer response", ErrorType::PROTOCOL);
         return false;
     }
@@ -1272,7 +1016,7 @@ bool Client::verifyCRC(uint32_t serverCRC, const std::vector<uint8_t>& originalD
         crcRetries++;
         if (crcRetries < MAX_RETRIES) {
             displayStatus("CRC verification", false, "Mismatch - Retry " + std::to_string(crcRetries) + " of " + std::to_string(MAX_RETRIES));
-            sendRequest(REQ_CRC_INVALID_RETRY, payload);
+            sendRequest(REQ_CRC_RETRY, payload);
             
             // Reset CRC retries for next attempt
             int savedRetries = crcRetries;
@@ -1289,7 +1033,7 @@ bool Client::verifyCRC(uint32_t serverCRC, const std::vector<uint8_t>& originalD
             return result;
         } else {
             displayStatus("CRC verification", false, "Maximum retries exceeded - aborting");
-            sendRequest(REQ_CRC_FAILED_ABORT, payload);
+            sendRequest(REQ_CRC_ABORT, payload);
             return false;
         }
     }
@@ -1297,14 +1041,13 @@ bool Client::verifyCRC(uint32_t serverCRC, const std::vector<uint8_t>& originalD
 
 // Generate RSA keys
 bool Client::generateRSAKeys() {
-    std::cout << "[DEBUG] Client::generateRSAKeys() - Starting RSA key generation" << std::endl;
     try {
-        std::cout << "[DEBUG] Client::generateRSAKeys() - About to create RSAPrivateWrapper" << std::endl;
         auto start = std::chrono::steady_clock::now();
         rsaPrivate = new RSAPrivateWrapper();
-        std::cout << "[DEBUG] Client::generateRSAKeys() - RSAPrivateWrapper created successfully" << std::endl;
-        auto end = std::chrono::steady_clock::now();        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        displayStatus("RSA key generation", true, "1024-bit keys generated in " + std::to_string(duration) + "ms");
+        auto end = std::chrono::steady_clock::now();
+
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+        displayStatus("RSA key generation", true, "512-bit keys generated in " + std::to_string(duration) + "ms");
         return true;
     } catch (const std::exception& e) {
         displayError("Failed to generate RSA keys: " + std::string(e.what()), ErrorType::CRYPTO);
@@ -1418,7 +1161,27 @@ std::vector<uint8_t> Client::hexToBytes(const std::string& hex) {
     return bytes;
 }
 
-// Calculate CRC32 using provided wrapper
+// Linux cksum compatible CRC implementation
+uint32_t calculateCRC(const uint8_t* data, size_t size) {
+    uint32_t crc = 0x00000000;
+
+    // Process file data
+    for (size_t i = 0; i < size; i++) {
+        crc = (crc << 8) ^ crc_table[(crc >> 24) ^ data[i]];
+    }
+
+    // Process file length
+    size_t length = size;
+    while (length > 0) {
+        crc = (crc << 8) ^ crc_table[(crc >> 24) ^ (length & 0xFF)];
+        length >>= 8;
+    }
+
+    // Final inversion
+    return ~crc;
+}
+
+// Calculate CRC32 using consolidated implementation
 uint32_t Client::calculateCRC32(const uint8_t* data, size_t size) {
     return calculateCRC(data, size);
 }
@@ -1487,13 +1250,6 @@ void Client::displayStatus(const std::string& operation, bool success, const std
         SetConsoleTextAttribute(hConsole, savedAttributes);
     }
     std::cout << std::endl;
-    
-    // Update GUI operation status (optional)
-    try {
-        ClientGUIHelpers::updateOperation(operation, success, details);
-    } catch (...) {
-        // GUI update failed - continue without GUI
-    }
 #else
     std::cout << "[" << getCurrentTimestamp() << "] ";
     std::cout << (success ? "[OK] " : "[FAIL] ") << operation;
@@ -1502,8 +1258,6 @@ void Client::displayStatus(const std::string& operation, bool success, const std
     }
     std::cout << std::endl;
 #endif
-
-  // updateGUIStatus(operation, success, details);
 }
 
 void Client::displayProgress(const std::string& operation, size_t current, size_t total) {
@@ -1532,21 +1286,6 @@ void Client::displayProgress(const std::string& operation, size_t current, size_
     if (current >= total) {
         std::cout << std::endl;
     }
-    
-    // Update GUI progress (optional)
-    try {
-        std::string speed = "";
-        std::string eta = "";
-        if (stats.currentSpeed > 0) {
-            speed = formatBytes(static_cast<size_t>(stats.currentSpeed)) + "/s";
-        }
-        if (stats.estimatedTimeRemaining > 0) {
-            eta = formatDuration(stats.estimatedTimeRemaining);
-        }
-        ClientGUIHelpers::updateProgress(static_cast<int>(current), static_cast<int>(total), speed, eta);
-    } catch (...) {
-        // GUI update failed - continue without GUI
-    }
 #else
     std::cout << "\r" << operation << " " << percentage << "% (" 
               << formatBytes(current) << "/" << formatBytes(total) << ")";
@@ -1555,11 +1294,6 @@ void Client::displayProgress(const std::string& operation, size_t current, size_
         std::cout << std::endl;
     }
 #endif
-double progressPercent = (total > 0) ? ((double)current / total) * 100.0 : 0.0;
-    std::string speed = formatBytes(static_cast<size_t>(stats.currentSpeed)) + "/s";
-    std::string eta = formatDuration(stats.estimatedTimeRemaining);
-    std::string transferred = formatBytes(current);
-    // updateGUIProgress(progressPercent, speed, eta, transferred);
 }
 
 void Client::displayTransferStats() {
@@ -1583,9 +1317,9 @@ void Client::displaySplashScreen() {
     system("cls");
     
     SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-    std::cout << "\n================================================\n";
-    std::cout << "     ENCRYPTED FILE BACKUP CLIENT v1.0      \n";
-    std::cout << "================================================\n";
+    std::cout << "\n╔════════════════════════════════════════════╗\n";
+    std::cout << "║     ENCRYPTED FILE BACKUP CLIENT v1.0      ║\n";
+    std::cout << "╚════════════════════════════════════════════╝\n";
     
     SetConsoleTextAttribute(hConsole, savedAttributes);
     std::cout << "  Build Date: " << __DATE__ << " " << __TIME__ << "\n";
@@ -1596,7 +1330,8 @@ void Client::displaySplashScreen() {
     std::cout << "     ENCRYPTED FILE BACKUP CLIENT v1.0      \n";
     std::cout << "============================================\n";
     std::cout << "  Build Date: " << __DATE__ << " " << __TIME__ << "\n";
-    std::cout << "  Protocol Version: " << static_cast<int>(CLIENT_VERSION) << "\n";    std::cout << "  Encryption: RSA-1024 + AES-256-CBC\n\n";
+    std::cout << "  Protocol Version: " << static_cast<int>(CLIENT_VERSION) << "\n";
+    std::cout << "  Encryption: RSA-1024 + AES-256-CBC\n\n";
 #endif
 }
 
@@ -1661,22 +1396,12 @@ void Client::displayError(const std::string& message, ErrorType type) {
                 break;
         }
           std::cerr << message << std::endl;
-    
-    // Update GUI error status and show notification (optional)
-    try {
-        ClientGUIHelpers::updateError(message);
-        ClientGUIHelpers::showNotification("Backup Error", message);
-    } catch (...) {
-        // GUI update failed - continue without GUI
-    }
-    // }
-     updateGUIStatus("ERROR", false, message);
 }
 
 void Client::displaySeparator() {
 #ifdef _WIN32
     SetConsoleTextAttribute(hConsole, FOREGROUND_INTENSITY);
-    std::cout << std::string(60, '=') << std::endl;
+    std::cout << std::string(60, '─') << std::endl;
     SetConsoleTextAttribute(hConsole, savedAttributes);
 #else
     std::cout << std::string(60, '-') << std::endl;
@@ -1687,21 +1412,13 @@ void Client::displayPhase(const std::string& phase) {
 #ifdef _WIN32
     std::cout << "\n";
     SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-    std::cout << "> " << phase << std::endl;
+    std::cout << "▶ " << phase << std::endl;
     SetConsoleTextAttribute(hConsole, savedAttributes);
     displaySeparator();
-    
-    // Update GUI phase (optional)
-    try {
-        ClientGUIHelpers::updatePhase(phase);
-    } catch (...) {
-        // GUI update failed - continue without GUI
-    }
 #else
     std::cout << "\n> " << phase << std::endl;
     displaySeparator();
 #endif
-// updateGUIPhase(phase);
 }
 
 void Client::displaySummary() {
@@ -1721,393 +1438,52 @@ void Client::displaySummary() {
     std::cout << "  File: " << filepath << "\n";
     std::cout << "  Size: " << formatBytes(stats.totalBytes) << "\n";
     std::cout << "  Duration: " << formatDuration(static_cast<int>(totalDuration)) << "\n";
-    std::cout << "  Average Speed: " << formatBytes(static_cast<size_t>(stats.averageSpeed)) << "/s\n";    std::cout << "  Server: " << serverIP << ":" << serverPort << "\n";
+    std::cout << "  Average Speed: " << formatBytes(static_cast<size_t>(stats.averageSpeed)) << "/s\n";
+    std::cout << "  Server: " << serverIP << ":" << serverPort << "\n";
     std::cout << "  Timestamp: " << getCurrentTimestamp() << "\n";
     displaySeparator();
-    
-    // Show GUI completion notification (optional)
+}
+
+// GUI-triggered backup operation (doesn't shut down WebServer)
+bool Client::runBackupOperation() {
     try {
-        std::string successMessage = "File backup completed successfully!\n\nFile: " + filepath + 
-                                   "\nSize: " + formatBytes(stats.totalBytes) + 
-                                   "\nDuration: " + formatDuration(static_cast<int>(totalDuration));
-        ClientGUIHelpers::showNotification("Backup Complete", successMessage);
+        // Re-read configuration in case it changed
+        if (!readTransferInfo()) {
+            return false;
+        }
+
+        if (!validateConfiguration()) {
+            return false;
+        }
+
+        // Run the backup operation
+        return run();
+
+    } catch (const std::exception& e) {
+        displayError("Backup operation failed: " + std::string(e.what()), ErrorType::GENERAL);
+        return false;
     } catch (...) {
-        // GUI notification failed - continue without GUI
+        displayError("Unknown error in backup operation", ErrorType::GENERAL);
+        return false;
     }
 }
 
-// Backup client function that can be called from main
+// Function to run the backup client (called from main.cpp)
 bool runBackupClient() {
-    // Write to a log file so we can see what's happening
-    std::ofstream logFile("client_debug.log", std::ios::app);
-    logFile << "=== ENCRYPTED BACKUP CLIENT DEBUG MODE ===" << std::endl;
-    logFile << "Application started at: " << __DATE__ << " " << __TIME__ << std::endl;
-    logFile.flush();
-    
-    // Also try console output
-    std::cout << "=== ENCRYPTED BACKUP CLIENT DEBUG MODE ===" << std::endl;
-    std::cout << "Console application started!" << std::endl;
-    std::cout << "Starting client with console output..." << std::endl;
-
     try {
-        logFile << "About to create client object..." << std::endl;
-        logFile.flush();
-        std::cout << "About to create client object..." << std::endl;
-        std::cout.flush();
-        
         Client client;
-        logFile << "Client object created successfully!" << std::endl;
-        logFile.flush();
-        std::cout << "Client object created successfully!" << std::endl;
 
-        std::cout << "About to initialize client..." << std::endl;
-        std::cout.flush();
-          if (!client.initialize()) {
-            std::cerr << "Fatal: Client initialization failed" << std::endl;
-            if (!g_batchMode) {
-                std::cout << "\nPress Enter to exit...";
-                std::cin.get();
-            }
+        if (!client.initialize()) {
             return false;
         }
 
-        std::cout << "Client initialized successfully. Starting backup operation..." << std::endl;
-        if (!client.run()) {
-            std::cerr << "Fatal: File backup failed" << std::endl;
-#ifdef _WIN32            // Show error notification via GUI if available
-            try {
-                if (!g_batchMode) {
-                    ClientGUIHelpers::showNotification("Backup Error", "File backup operation failed");
-                    ClientGUIHelpers::updateError("Backup failed");
-                }
-            } catch (...) {}
+        return client.run();
 
-            // Keep window open to show error
-            if (!g_batchMode) {
-                std::cout << "\nPress Enter to exit...";
-                std::cin.get();
-            }
-#endif
-            return false;
-        }
-
-        std::cout << "\nBackup completed successfully!" << std::endl;
-
-#ifdef _WIN32
-        // Show success notification via GUI if available
-        try {
-            if (!g_batchMode) {
-                ClientGUIHelpers::showNotification("Backup Complete", "File backup completed successfully!");
-                ClientGUIHelpers::updatePhase("Backup Complete");
-            }
-        } catch (...) {}
-
-        // Keep window open to show success
-        if (!g_batchMode) {
-            std::cout << "\nPress Enter to exit...";
-            std::cin.get();
-        }
-#endif
-
-        return true;    } catch (const std::exception& e) {
-        std::cerr << "Fatal exception: " << e.what() << std::endl;
-#ifdef _WIN32
-        try {
-            if (!g_batchMode) {
-                ClientGUIHelpers::showNotification("Critical Error", std::string("Exception: ") + e.what());
-                ClientGUIHelpers::updateError(std::string("Critical error: ") + e.what());
-            }
-        } catch (...) {}
-
-        if (!g_batchMode) {
-            std::cout << "\nPress Enter to exit...";
-            std::cin.get();
-        }
-#endif
-        return false;    } catch (...) {
-        std::cerr << "Fatal: Unknown exception occurred" << std::endl;
-#ifdef _WIN32
-        try {
-            if (!g_batchMode) {
-                ClientGUIHelpers::showNotification("Critical Error", "Unknown exception occurred");
-                ClientGUIHelpers::updateError("Unknown critical error");
-            }
-        } catch (...) {}
-
-        if (!g_batchMode) {
-            std::cout << "\nPress Enter to exit...";
-            std::cin.get();
-        }
-#endif
-        return false;
-    }
-}
-void Client::handleGUICommand(const std::map<std::string, std::string>& command) {
-    // Generic command handler - dispatch to specific handlers based on command type
-    auto it = command.find("type");
-    if (it != command.end()) {
-        const std::string& type = it->second;
-        
-        if (type == "connect") {
-            handleConnectCommand(command);
-        } else if (type == "start_backup") {
-            handleStartBackupCommand(command);
-        } else if (type == "file_selected") {
-            handleFileSelectedCommand(command);
-        } else {
-            displayError("Unknown command type: " + type, ErrorType::PROTOCOL);
-        }
-    } else {
-        displayError("Invalid command format - missing type", ErrorType::PROTOCOL);
-    }
-}
-
-void Client::handleConnectCommand(const std::map<std::string, std::string>& command) {
-    // Handle connect command from GUI
-    try {
-        auto ipIt = command.find("server_ip");
-        auto portIt = command.find("server_port");
-        auto userIt = command.find("username");
-        
-        if (ipIt != command.end() && portIt != command.end() && userIt != command.end()) {
-            pendingServerIP = ipIt->second;
-            pendingServerPort = std::stoi(portIt->second);
-            pendingUsername = userIt->second;
-            
-            displayStatus("Connect command received", true, 
-                         "IP: " + pendingServerIP + ", Port: " + std::to_string(pendingServerPort) + 
-                         ", User: " + pendingUsername);
-            
-            // Attempt to connect to the server
-            if (connectToServer()) {
-                // Update client info
-                username = pendingUsername;
-                saveMeInfo();
-                
-                // Send success response
-                sendGUIResponse("connect", "Connection successful");
-            } else {
-                sendGUIResponse("connect", "Connection failed", false);
-            }
-        } else {
-            sendGUIResponse("connect", "Invalid parameters", false);
-        }
     } catch (const std::exception& e) {
-        sendGUIResponse("connect", "Error: " + std::string(e.what()), false);
+        std::cerr << "Error in runBackupClient: " << e.what() << std::endl;
+        return false;
     } catch (...) {
-        sendGUIResponse("connect", "Unknown error", false);
-    }
-}
-
-void Client::handleStartBackupCommand(const std::map<std::string, std::string>& command) {
-    // Handle start backup command from GUI
-    try {
-        auto fileIt = command.find("file");
-        
-        if (fileIt != command.end()) {
-            selectedFilePath = fileIt->second;
-            
-" << (success ? "true" : "false") << ","
-               << "\"details\":\"" << details << "\"}\n";
-    statusFile.flush();
-}
-
-void Client::updateGUIProgress(double percentage, const std::string& speed, const std::string& eta, const std::string& transferred) {
-    std::ofstream progressFile("gui_progress.json");
-    
-    progressFile << "{"
-                 << "\"percentage\":" << percentage << ","
-                 << "\"speed\":\"" << speed << "\","
-                 << "\"eta\":\"" << eta << "\","
-                 << "\"transferred\":\"" << transferred << "\""
-                 << "}\n";
-    progressFile.flush();
-    progressFile.close();
-}
-
-void Client::updateGUIPhase(const std::string& phase) {
-    updateGUIStatus("Phase Change", true, phase);
-}
-
-void Client::initializeWebSocketCommands() {
-    // Initialize WebSocket command handling - placeholder for future implementation
-    // TODO: Implement WebSocket command handling when needed
-
-    displayStatus("WebSocket", true, "Command handling placeholder initialized");
-}
-
-void Client::handleGUICommand(const std::map<std::string, std::string>& command) {
-    // Generic command handler - dispatch to specific handlers based on command type
-    auto it = command.find("type");
-    if (it != command.end()) {
-        const std::string& type = it->second;
-        
-        if (type == "connect") {
-            handleConnectCommand(command);
-        } else if (type == "start_backup") {
-            handleStartBackupCommand(command);
-        } else if (type == "file_selected") {
-            handleFileSelectedCommand(command);
-        } else {
-            displayError("Unknown command type: " + type, ErrorType::PROTOCOL);
-        }
-    } else {
-        displayError("Invalid command format - missing type", ErrorType::PROTOCOL);
-    }
-}
-
-void Client::handleConnectCommand(const std::map<std::string, std::string>& command) {
-    // Handle connect command from GUI
-    try {
-        auto ipIt = command.find("server_ip");
-        auto portIt = command.find("server_port");
-        auto userIt = command.find("username");
-        
-        if (ipIt != command.end() && portIt != command.end() && userIt != command.end()) {
-            pendingServerIP = ipIt->second;
-            pendingServerPort = std::stoi(portIt->second);
-            pendingUsername = userIt->second;
-            
-            displayStatus("Connect command received", true, 
-                         "IP: " + pendingServerIP + ", Port: " + std::to_string(pendingServerPort) + 
-                         ", User: " + pendingUsername);
-            
-            // Attempt to connect to the server
-            if (connectToServer()) {
-                // Update client info
-                username = pendingUsername;
-                saveMeInfo();
-                
-                // Send success response
-                sendGUIResponse("connect", "Connection successful");
-            } else {
-                sendGUIResponse("connect", "Connection failed", false);
-            }
-        } else {
-            sendGUIResponse("connect", "Invalid parameters", false);
-        }
-    } catch (const std::exception& e) {
-        sendGUIResponse("connect", "Error: " + std::string(e.what()), false);
-    } catch (...) {
-        sendGUIResponse("connect", "Unknown error", false);
-    }
-}
-
-void Client::handleStartBackupCommand(const std::map<std::string, std::string>& command) {
-    // Handle start backup command from GUI
-    try {
-        auto fileIt = command.find("file");
-        
-        if (fileIt != command.end()) {
-            selectedFilePath = fileIt->second;
-            
-            displayStatus("Start backup command received", true, "File: " + selectedFilePath);
-            
-            // Update file path and re-read transfer info
-            filepath = selectedFilePath;
-            readTransferInfo();
-            
-            // Perform backup operation
-            if (run()) {
-                sendGUIResponse("start_backup", "Backup completed successfully");
-            } else {
-                sendGUIResponse("start_backup", "Backup failed", false);
-            }
-        } else {
-            sendGUIResponse("start_backup", "Invalid parameters", false);
-        }
-   
-    } catch (const std::exception& e) {
-        sendGUIResponse("start_backup", "Error: " + std::string(e.what()), false);
-    } catch (...) {
-        sendGUIResponse("start_backup", "Unknown error", false);
-    }
-}
-
-void Client::handleFileSelectedCommand(const std::map<std::string, std::string>& command) {
-    // Handle file selected command from GUI
-    try {
-        auto fileIt = command.find("file");
-        
-        if (fileIt != command.end()) {
-            std::string filePath = fileIt->second;
-            selectedFilePath = filePath;
-            
-            displayStatus("File selected", true, "File: " + filePath);
-            sendGUIResponse("file_selected", "File selection confirmed");
-        } else {
-            sendGUIResponse("file_selected", "Invalid parameters", false);
-        }
-    } catch ( const std::exception& e) {
-        sendGUIResponse("file_selected", "Error: " + std::string(e.what()), false);
-    }
-}
-
-void Client::sendGUIResponse(const std::string& type, const std::string& message, bool success) {
-    // Send response back to GUI - placeholder implementation
-    displayStatus("GUI Response", success, type + ": " + message);
-    // TODO: Implement actual GUI communication when needed
-}
-
-// Socket validation and recovery functions
-bool Client::validateSocketConnection() {
-    if (!socket) {
-        std::cout << "[DEBUG] Socket validation failed: socket is null" << std::endl;
-        return false;
-    }
-    
-    if (!socket->is_open()) {
-        std::cout << "[DEBUG] Socket validation failed: socket is not open" << std::endl;
-        return false;
-    }
-    
-    // Check if socket is still connected by testing availability
-    try {
-        boost::system::error_code ec;
-        size_t available = socket->available(ec);
-        
-        if (ec) {
-            std::cout << "[DEBUG] Socket validation failed: " << ec.message() << std::endl;
-            return false;
-        }
-        
-        std::cout << "[DEBUG] Socket validation passed: " << available << " bytes available" << std::endl;
-        return true;
-        
-    } catch (const std::exception& e) {
-        std::cout << "[DEBUG] Socket validation exception: " << e.what() << std::endl;
-        return false;
-    }
-}
-
-bool Client::attemptConnectionRecovery() {
-    std::cout << "[DEBUG] Attempting connection recovery..." << std::endl;
-    
-    // Close existing socket
-    if (socket && socket->is_open()) {
-        try {
-            socket->close();
-        } catch (...) {
-            // Ignore close errors
-        }
-    }
-    
-    connected = false;
-    socket.reset();
-    
-    // Short delay before reconnection
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    
-    // Attempt to reconnect
-    displayStatus("Connection recovery", true, "Attempting to reconnect...");
-    
-    if (connectToServer()) {
-        displayStatus("Connection recovery", true, "Successfully reconnected");
-        std::cout << "[DEBUG] Connection recovery successful" << std::endl;
-        return true;
-    } else {
-        displayError("Connection recovery failed", ErrorType::NETWORK);
-        std::cout << "[DEBUG] Connection recovery failed" << std::endl;
+        std::cerr << "Unknown error in runBackupClient" << std::endl;
         return false;
     }
 }
