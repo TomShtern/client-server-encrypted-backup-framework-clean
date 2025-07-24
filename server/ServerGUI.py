@@ -22,7 +22,7 @@ import socket
 
 # Import server components for real server control
 try:
-    from server import BackupServer
+    from server import BackupServer # type: ignore
     SERVER_CONTROL_AVAILABLE = True
 except ImportError:
     BackupServer = None
@@ -1942,7 +1942,7 @@ class ServerGUI:
 
     def _start_server(self):
         """Start the backup server."""
-        from server import BackupServer # Local import to avoid circular dependency
+        from server import BackupServer # Local import to avoid circular dependency # type: ignore
         if self.server and not self.server.running:
             try:
                 # The server's start method is already designed to run in threads
@@ -2148,7 +2148,7 @@ class ServerGUI:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.clock_label.config(text=now)
 
-    def _update_performance_metrics(self, performance_data: dict = None):
+    def _update_performance_metrics(self, performance_data: Optional[dict] = None):
         """Update performance metrics on the dashboard."""
         if not SYSTEM_MONITOR_AVAILABLE:
             return
@@ -2219,7 +2219,7 @@ class ServerGUI:
                 'Online': online_clients,
                 'Offline': offline_clients
             }
-            self.client_chart.update_data(chart_data, title="Client Status", chart_type="pie")
+            self.client_chart.update_data(chart_data, title="Client Status")
 
     def _refresh_client_table(self):
         """Refresh the client table with data from the database."""

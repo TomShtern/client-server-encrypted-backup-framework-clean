@@ -104,7 +104,7 @@ class Client:
         self.id: bytes = client_id
         self.name: str = name
         self.public_key_bytes: Optional[bytes] = public_key_bytes
-        self.public_key_obj: Optional[RSA.RsaKey] = None # PyCryptodome RSA key object
+        self.public_key_obj: Optional[Any] = None # PyCryptodome RSA key object or compatibility layer equivalent
         self.aes_key: Optional[bytes] = None # Current session AES key
         self.last_seen: float = time.monotonic() # Monotonic time for session timeout
         self.partial_files: Dict[str, Dict[str, Any]] = {} # For reassembling multi-packet files
