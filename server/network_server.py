@@ -341,11 +341,10 @@ class NetworkServer:
                 # Process the Request
                 self.request_handler(
                     sock=client_conn,
-                    client_id=client_id_from_header,
-                    client_obj=active_client_obj,
-                    request_code=code_from_header,
-                    payload=payload_bytes,
-                    send_response_func=self._send_response
+                    client_id_from_header=client_id_from_header,
+                    client=active_client_obj,
+                    code=code_from_header,
+                    payload=payload_bytes
                 )
                 
         except (TimeoutError, ConnectionError) as e:

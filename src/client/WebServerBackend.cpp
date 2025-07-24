@@ -165,6 +165,49 @@ public:
 // Global application state
 BackupState g_state;
 
+// Static file cache for performance
+class StaticFileCache {
+private:
+    std::mutex cache_mutex_;
+    std::string cached_html_;
+    bool html_loaded_;
+    
+public:
+    StaticFileCache() : html_loaded_(false) {}
+    
+    std::string getHTML() {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        
+        if (!html_loaded_) {
+            try {
+                std::ifstream file("src/client/NewGUIforClient.html");
+                if (file.is_open()) {
+                    cached_html_ = std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+                    html_loaded_ = true;
+                    std::cout << "Static file cache: HTML loaded (" << cached_html_.size() << " bytes)" << std::endl;
+                } else {
+                    return ""; // Return empty string if file can't be opened
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Error loading HTML file: " << e.what() << std::endl;
+                return "";
+            }
+        }
+        
+        return cached_html_;
+    }
+    
+    void clearCache() {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        cached_html_.clear();
+        html_loaded_ = false;
+        std::cout << "Static file cache: Cache cleared" << std::endl;
+    }
+};
+
+// Global static file cache
+StaticFileCache g_static_cache;
+
 // CORS headers for web client
 void add_cors_headers(http::response<http::string_body>& res) {
     res.set(http::field::access_control_allow_origin, "*");
@@ -298,75 +341,128 @@ handle_request(http::request<Body, http::basic_fields<Allocator>>&& req) {
         // POST /api/start_backup - Start backup operation (GUI endpoint)
         else if (req.method() == http::verb::post && target == "/api/start_backup") {
             try {
-                if (g_backup_callback == nullptr) {
+                // Check if we have the new config-based callback, prefer it over legacy
+                if (g_backup_callback_with_config == nullptr && g_backup_callback == nullptr) {
                     JsonObject response;
                     response.set("success", false);
                     response.set("error", "Backup service not available");
                     res.result(http::status::service_unavailable);
                     res.body() = response.serialize();
                 } else {
-                    // Parse multipart/form-data to extract file
+                    // Parse multipart/form-data to extract both file and configuration
                     std::string body = req.body();
                     std::string content_type = std::string(req[http::field::content_type]);
 
-                    // Simple multipart parsing - look for filename and file data
+                    // Initialize configuration with defaults that can be overridden
+                    WebServerBackend::BackupConfig config;
+                    config.serverIP = "127.0.0.1";
+                    config.serverPort = 1256;
+                    config.username = "testuser";
+                    
                     std::string filename = "uploaded_file.txt";
                     std::string file_data;
 
-                    // Extract filename from Content-Disposition header
-                    size_t filename_pos = body.find("filename=\"");
-                    if (filename_pos != std::string::npos) {
-                        filename_pos += 10; // Skip 'filename="'
-                        size_t end_pos = body.find("\"", filename_pos);
-                        if (end_pos != std::string::npos) {
-                            filename = body.substr(filename_pos, end_pos - filename_pos);
+                    // Parse multipart form data to extract both config and file
+                    // This simple parser looks for form fields and file data
+                    size_t pos = 0;
+                    while (pos < body.size()) {
+                        // Find next boundary
+                        size_t boundary_start = body.find("Content-Disposition:", pos);
+                        if (boundary_start == std::string::npos) break;
+                        
+                        size_t name_start = body.find("name=\"", boundary_start);
+                        if (name_start != std::string::npos) {
+                            name_start += 6; // Skip 'name="'
+                            size_t name_end = body.find("\"", name_start);
+                            if (name_end != std::string::npos) {
+                                std::string field_name = body.substr(name_start, name_end - name_start);
+                                
+                                // Find data start (after double CRLF)
+                                size_t data_start = body.find("\r\n\r\n", boundary_start);
+                                if (data_start != std::string::npos) {
+                                    data_start += 4;
+                                    size_t data_end = body.find("\r\n--", data_start);
+                                    if (data_end == std::string::npos) {
+                                        data_end = body.size();
+                                    }
+                                    
+                                    std::string field_value = body.substr(data_start, data_end - data_start);
+                                    
+                                    // Parse configuration fields
+                                    if (field_name == "server" && !field_value.empty()) {
+                                        config.serverIP = field_value;
+                                    } else if (field_name == "port" && !field_value.empty()) {
+                                        try {
+                                            config.serverPort = static_cast<uint16_t>(std::stoi(field_value));
+                                        } catch (...) {
+                                            // Keep default port on parse error
+                                        }
+                                    } else if (field_name == "username" && !field_value.empty()) {
+                                        config.username = field_value;
+                                    } else if (field_name == "file") {
+                                        // This is the file data
+                                        size_t filename_pos = body.find("filename=\"", boundary_start);
+                                        if (filename_pos != std::string::npos) {
+                                            filename_pos += 10;
+                                            size_t filename_end = body.find("\"", filename_pos);
+                                            if (filename_end != std::string::npos) {
+                                                filename = body.substr(filename_pos, filename_end - filename_pos);
+                                            }
+                                        }
+                                        file_data = field_value;
+                                    }
+                                }
+                            }
                         }
-                    }
-
-                    // Extract file data (after double CRLF)
-                    size_t data_start = body.find("\r\n\r\n");
-                    if (data_start != std::string::npos) {
-                        data_start += 4; // Skip "\r\n\r\n"
-                        size_t data_end = body.find("\r\n--", data_start);
-                        if (data_end != std::string::npos) {
-                            file_data = body.substr(data_start, data_end - data_start);
-                        }
+                        pos = boundary_start + 1;
                     }
 
                     if (!file_data.empty()) {
-                        // Save the uploaded file
+                        // Save the uploaded file temporarily
                         std::ofstream outfile(filename, std::ios::binary);
                         if (outfile.is_open()) {
                             outfile.write(file_data.c_str(), file_data.size());
                             outfile.close();
 
-                            // Update transfer.info with the uploaded filename
-                            std::ofstream config_file("transfer.info");
-                            if (config_file.is_open()) {
-                                config_file << "127.0.0.1:1256" << std::endl;
-                                config_file << "testuser" << std::endl;
-                                config_file << filename << std::endl;
-                                config_file.close();
-                            }
-
+                            // Set the filepath in configuration
+                            config.filepath = filename;
+                            
                             g_state.setPhase("BACKUP_IN_PROGRESS");
                             g_state.setStatus("Starting backup...");
                             g_state.setProgress(0);
                             g_state.addLog("Backup operation started for " + filename);
+                            
+                            // Start progress simulation for this backup
+                            start_progress_simulation();
 
-                            // Start backup in a separate thread
-                            std::thread backup_thread([&]() {
-                                bool success = g_backup_callback();
-                                if (success) {
+                            // Start backup in a separate thread with configuration
+                            std::thread backup_thread([config]() {
+                                bool success = false;
+                                
+                                // Prefer new config-based callback if available
+                                if (g_backup_callback_with_config != nullptr) {
+                                    success = g_backup_callback_with_config(config);
+                                } else if (g_backup_callback != nullptr) {
+                                    // Fall back to legacy callback (still needs transfer.info)
+                                    // Create temporary transfer.info for backward compatibility
+                                    std::ofstream temp_config("transfer.info");
+                                    if (temp_config.is_open()) {
+                                        temp_config << config.serverIP << ":" << config.serverPort << std::endl;
+                                        temp_config << config.username << std::endl;
+                                        temp_config << config.filepath << std::endl;
+                                        temp_config.close();
+                                    }
+                                    success = g_backup_callback();
+                                }
+                                
+                                 if (success) {
                                     g_state.setPhase("COMPLETED");
                                     g_state.setStatus("Backup completed successfully");
-                                    g_state.setProgress(100);
-                                    g_state.addLog("Backup completed successfully");
+                                    g_state.addLog("Backup completed for " + config.filepath);
                                 } else {
                                     g_state.setPhase("FAILED");
                                     g_state.setStatus("Backup failed");
-                                    g_state.setProgress(0);
-                                    g_state.addLog("Backup operation failed");
+                                    g_state.addLog("Backup failed for " + config.filepath);
                                 }
                             });
                             backup_thread.detach();
@@ -375,22 +471,35 @@ handle_request(http::request<Body, http::basic_fields<Allocator>>&& req) {
                             response.set("success", true);
                             response.set("message", "File uploaded and backup started");
                             response.set("filename", filename);
+                            response.set("server", config.serverIP + ":" + std::to_string(config.serverPort));
+                            response.set("username", config.username);
                             response.set("task_id", "BACKUP_" + std::to_string(time(nullptr)));
 
                             res.result(http::status::ok);
+                            res.set(http::field::content_type, "application/json");
                             res.body() = response.serialize();
                         } else {
-                            throw std::runtime_error("Failed to save uploaded file");
+                            JsonObject response;
+                            response.set("success", false);
+                            response.set("error", "Failed to save uploaded file");
+                            res.result(http::status::internal_server_error);
+                            res.body() = response.serialize();
                         }
                     } else {
-                        throw std::runtime_error("No file data found in request");
+                        JsonObject response;
+                        response.set("success", false);
+                        response.set("error", "No file data received");
+                        res.result(http::status::bad_request);
+                        res.body() = response.serialize();
                     }
                 }
             } catch (const std::exception& e) {
+                std::cerr << "Error in /api/start_backup: " << e.what() << std::endl;
                 JsonObject response;
                 response.set("success", false);
-                response.set("error", e.what());
-                res.result(http::status::bad_request);
+                response.set("error", "Server error: " + std::string(e.what()));
+                res.result(http::status::internal_server_error);
+                res.set(http::field::content_type, "application/json");
                 res.body() = response.serialize();
             }
         }
@@ -408,6 +517,9 @@ handle_request(http::request<Body, http::basic_fields<Allocator>>&& req) {
                     g_state.setStatus("Starting backup...");
                     g_state.setProgress(0);
                     g_state.addLog("Backup operation started");
+
+                    // Start progress simulation for this backup
+                    start_progress_simulation();
 
                     // Start backup in a separate thread to avoid blocking the HTTP response
                     std::thread backup_thread([&]() {
@@ -484,27 +596,6 @@ handle_request(http::request<Body, http::basic_fields<Allocator>>&& req) {
             
             res.result(http::status::ok);
             res.body() = response.serialize();
-        }
-
-        // GET / - Serve HTML client
-        else if (req.method() == http::verb::get && (target == "/" || target == "/index.html")) {
-            try {
-                std::ifstream file("src/client/NewGUIforClient.html");
-                if (file.is_open()) {
-                    std::string html_content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-                    res.result(http::status::ok);
-                    res.set(http::field::content_type, "text/html");
-                    res.body() = html_content;
-                } else {
-                    res.result(http::status::not_found);
-                    res.set(http::field::content_type, "text/plain");
-                    res.body() = "HTML client not found";
-                }
-            } catch (const std::exception& e) {
-                res.result(http::status::internal_server_error);
-                res.set(http::field::content_type, "text/plain");
-                res.body() = std::string("Error loading HTML: ") + e.what();
-            }
         }
 
         // Unknown endpoint
@@ -618,29 +709,42 @@ private:
     }
 };
 
-// Progress simulation thread (for demo purposes)
+// Optimized progress simulation thread - only active when needed
+std::atomic<bool> g_progress_thread_running(false);
+
 void progress_simulator() {
-    while (true) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    while (g_progress_thread_running.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000)); // Reduced frequency
         
-        if (g_state.getPhase() == "BACKUP_IN_PROGRESS") {
+        std::string current_phase = g_state.getPhase();
+        if (current_phase == "BACKUP_IN_PROGRESS") {
             int current = g_state.getProgress();
             if (current < 100) {
                 g_state.setProgress(current + 10);
-                g_state.setStatus("Backup in progress... " + std::to_string(current + 10) + "%");
-                
-                if (current + 10 >= 100) {
-                    g_state.setPhase("COMPLETED");
-                    g_state.setStatus("Backup completed successfully");
-                    g_state.addLog("Backup completed successfully");
-                }
+                g_state.setStatus("Backing up... " + std::to_string(g_state.getProgress()) + "%");
+            } else if (current_phase == "COMPLETED" || current_phase == "FAILED" || current_phase == "STOPPED") {
+                // Stop the progress thread when operation is complete
+                break;
             }
         }
     }
+    g_progress_thread_running.store(false);
 }
 
-// Function pointer for backup operations
-std::function<bool()> g_backup_callback = nullptr;
+void start_progress_simulation() {
+    if (!g_progress_thread_running.load()) {
+        g_progress_thread_running.store(true);
+        std::thread(progress_simulator).detach();
+    }
+}
+
+void stop_progress_simulation() {
+    g_progress_thread_running.store(false);
+}
+
+// Function pointers for backup operations
+std::function<bool()> g_backup_callback = nullptr;  // Legacy callback
+std::function<bool(const WebServerBackend::BackupConfig&)> g_backup_callback_with_config = nullptr;  // New callback
 
 // Implementation class for PIMPL idiom
 class WebServerBackend::Impl {
@@ -648,7 +752,6 @@ public:
     std::unique_ptr<net::io_context> ioc_;
     std::shared_ptr<HttpListener> listener_;
     std::thread server_thread_;
-    std::thread progress_thread_;
     std::atomic<bool> running_;
 
     Impl() : running_(false) {}
@@ -675,8 +778,7 @@ public:
             listener_ = std::make_shared<HttpListener>(*ioc_, tcp::endpoint{addr, port});
             listener_->run();
 
-            // Start progress simulator thread
-            progress_thread_ = std::thread(progress_simulator);
+            // Progress simulation will be started on-demand when needed
 
             // Start server thread
             server_thread_ = std::thread([this]() {
@@ -714,9 +816,8 @@ public:
             server_thread_.join();
         }
 
-        if (progress_thread_.joinable()) {
-            progress_thread_.detach(); // Let it finish naturally
-        }
+        // Stop any running progress simulation
+        stop_progress_simulation();
 
         std::cout << "WebServer stopped" << std::endl;
     }
@@ -745,4 +846,8 @@ bool WebServerBackend::isRunning() const {
 
 void WebServerBackend::setBackupCallback(std::function<bool()> callback) {
     g_backup_callback = callback;
+}
+
+void WebServerBackend::setBackupCallbackWithConfig(std::function<bool(const BackupConfig&)> callback) {
+    g_backup_callback_with_config = callback;
 }

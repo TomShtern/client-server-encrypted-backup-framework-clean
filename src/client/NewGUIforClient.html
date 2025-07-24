@@ -47,12 +47,6 @@
             --glass-border: rgba(255, 255, 255, 0.2);
             --glass-border-active: rgba(0, 255, 255, 0.6);
             
-            /* Enhanced Glow Effects */
-            --glow-pink: 0 0 10px var(--neon-pink), 0 0 20px var(--neon-pink), 0 0 40px var(--neon-pink);
-            --glow-blue: 0 0 10px var(--neon-blue), 0 0 20px var(--neon-blue), 0 0 40px var(--neon-blue);
-            --glow-green: 0 0 10px var(--neon-green), 0 0 20px var(--neon-green), 0 0 40px var(--neon-green);
-            --glow-purple: 0 0 10px var(--neon-purple), 0 0 20px var(--neon-purple), 0 0 40px var(--neon-purple);
-            
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             --transition-fast: all 0.15s ease-out;
             
@@ -1998,597 +1992,556 @@
                 this.baseUrl = baseUrl;
             }
 
-            async _request(endpoint, options = {}) {
-                try {
-                    console.log(`Making ${options.method || 'GET'} request to: ${this.baseUrl}${endpoint}`);
-                    if (options.body) {
-                        console.log('Request body:', options.body);
-                        debugLog(`API: ${options.method || 'GET'} ${endpoint} with body: ${options.body}`);
-                    }
-                    const response = await fetch(`${this.baseUrl}${endpoint}`, options);
-                    console.log('Response status:', response.status, response.statusText);
-                    debugLog(`API: Response status: ${response.status} ${response.statusText}`);
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({ message: response.statusText }));
-                        console.error('API Error data:', errorData);
-                        debugLog(`API ERROR: ${JSON.stringify(errorData)}`);
-                        throw new Error(`API Error: ${errorData.message || 'Unknown Error'}`);
-                    }
-                    const responseData = await response.json();
-                    console.log('Response data:', responseData);
-                    debugLog(`API: Response data: ${JSON.stringify(responseData)}`);
-                    return responseData;
-                } catch (err) {
-                    // This catches network errors (e.g., C++ client not running) or API errors
-                    console.error(`API request to ${endpoint} failed:`, err);
-                    debugLog(`API NETWORK ERROR: ${err.message}`);
-                    throw err; // Re-throw to be handled by the calling function
+            async getStatus() {
+                debugLog('Fetching status...', 'API');
+                const response = await fetch(`${this.baseUrl}/api/status`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
+                const data = await response.json();
+                debugLog('Status response:' + JSON.stringify(data), 'API');
+                return data;
             }
 
-            getStatus() {
-                return this._request('/api/status');
-            }
-
-            connect(config) {
-                console.log('ApiClient.connect() called with:', config);
-                debugLog('API: Making POST request to /api/connect');
-                return this._request('/api/connect', {
+            async connect(config) {
+                debugLog('Connecting to server...' + JSON.stringify(config), 'API');
+                const response = await fetch(`${this.baseUrl}/api/connect`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config)
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(config),
                 });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                debugLog('Connect response:' + JSON.stringify(data), 'API');
+                return data;
             }
 
-            startBackup(file, username = 'testuser') {
-                // Create FormData to send the actual file
+            async startBackup(file, config) {
+                debugLog('Starting backup...', 'API');
                 const formData = new FormData();
                 formData.append('file', file);
-                formData.append('username', username);
-                
-                console.log('ApiClient.startBackup() called with file:', file.name, 'size:', file.size);
-                debugLog('API: Making multipart/form-data POST request to /api/start_backup');
-                
-                // Send FormData (no Content-Type header needed - browser sets it automatically with boundary)
-                return this._request('/api/start_backup', {
+                formData.append('username', config.username);
+                formData.append('server', config.serverIP);
+                formData.append('port', config.serverPort);
+
+                const response = await fetch(`${this.baseUrl}/api/start_backup`, {
                     method: 'POST',
-                    body: formData
+                    body: formData,
                 });
-            }            stop() { return this._request('/api/stop', { method: 'POST' }); }
-            pause() { return this._request('/api/pause', { method: 'POST' }); }
-            resume() { return this._request('/api/resume', { method: 'POST' }); }
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                debugLog('Start backup response:' + JSON.stringify(data), 'API');
+                return data;
+            }
+
+            async stopBackup() {
+                debugLog('Stopping backup...', 'API');
+                const response = await fetch(`${this.baseUrl}/api/stop`, { method: 'POST' });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                debugLog('Stop backup response:' + JSON.stringify(data), 'API');
+                return data;
+            }
+
+            async pauseBackup() {
+                debugLog('Pausing backup...', 'API');
+                const response = await fetch(`${this.baseUrl}/api/pause`, { method: 'POST' });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                debugLog('Pause backup response:' + JSON.stringify(data), 'API');
+                return data;
+            }
+
+            async resumeBackup() {
+                debugLog('Resuming backup...', 'API');
+                const response = await fetch(`${this.baseUrl}/api/resume`, { method: 'POST' });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                debugLog('Resume backup response:' + JSON.stringify(data), 'API');
+                return data;
+            }
+
+            async getServerInfo() {
+                debugLog('Fetching server info...', 'API');
+                const response = await fetch(`${this.baseUrl}/api/server_info`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                debugLog('Server info response:' + JSON.stringify(data), 'API');
+                return data;
+            }
+
+            async getReceivedFiles() {
+                debugLog('Fetching received files...', 'API');
+                const response = await fetch(`${this.baseUrl}/api/received_files`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                debugLog('Received files response:' + JSON.stringify(data), 'API');
+                return data;
+            }
         }
         debugLog('ApiClient class defined successfully');
 
-        // Configuration Manager (largely unchanged)        
-        debugLog('Defining ConfigManager class...');
-        class ConfigManager {
-            constructor() {
-                this.config = {
-                    server: '127.0.0.1',
-                    port: 1256,
-                    username: 'testuser', // Default username for testing
-                    filepath: 'test.txt', // Default file for testing
-                };
-            }
-            loadFromStorage() {
-                try {
-                    const saved = localStorage.getItem('cyberbackup_config');
-                    if (saved) {
-                        this.config = { ...this.config, ...JSON.parse(saved) };
-                    }
-                } catch (error) {
-                    console.warn('Invalid config in localStorage.');
-                    localStorage.removeItem('cyberbackup_config');
-                }
-            }
-            saveToStorage() {
-                localStorage.setItem('cyberbackup_config', JSON.stringify(this.config));
-            }            validate() {
-                const errors = [];
-                if (!this.config.server || !this.config.port) errors.push('Server address and port are required');
-                if (!this.config.username) errors.push('Username is required');
-                if (!this.config.filepath) errors.push('A file must be selected');
-                return errors;
-            }
-        }
-        debugLog('ConfigManager class defined successfully');
-
-        // UI Controller Classes (moved here to fix initialization order)
-        debugLog('Defining UIController class...');
-        class UIController {
-            createLogEntry(log) { 
-                const entry = document.createElement('div');
-                entry.className = `log-entry ${log.type}`;
-                const icon = log.type === 'success' ? '✓' : log.type === 'error' ? '✗' : log.type === 'warning' ? '⚠' : 'ℹ';
-                entry.innerHTML = `<span class="log-timestamp">${log.timestamp}</span><div class="log-icon ${log.type}">${icon}</div><div class="log-content"><div class="log-message">${log.operation}</div><div class="log-details">${log.details || ''}</div></div>`;
-                return entry;
-             }
-            updateProgressRing(p) { 
-                const circle = document.getElementById('progressCircle');
-                if (!circle || !p) return;
-                if (!circle.getAttribute('data-circumference')) {
-                    const radius = parseFloat(circle.getAttribute('r'));
-                    circle.setAttribute('data-circumference', 2 * Math.PI * radius);
-                }
-                const circumference = circle.getAttribute('data-circumference');
-                circle.style.strokeDasharray = circumference;
-                circle.style.strokeDashoffset = circumference - (p / 100) * circumference;
-            }
-            showFilePreview(file) { /* Basic implementation */ }
-            getFileIcon(type) { return '📁'; }
-        }
-        debugLog('UIController class defined successfully');
-
-        // Enhanced UI Controller with better visual feedback
-        debugLog('Defining EnhancedUIController class...');
-        class EnhancedUIController extends UIController {
-            constructor() {
-                super();
-                this.animationId = null;
-            }
-
-            createLogEntry(log) { 
-                const entry = document.createElement('div');
-                entry.className = `log-entry ${log.type}`;
-                entry.setAttribute('tabindex', '0');
-                entry.setAttribute('role', 'listitem');
-                
-                const icon = log.type === 'success' ? '✓' : log.type === 'error' ? '✗' : log.type === 'warning' ? '⚠' : 'ℹ';
-                entry.innerHTML = `
-                    <span class="log-timestamp">${log.timestamp}</span>
-                    <div class="log-icon ${log.type}">${icon}</div>
-                    <div class="log-content">
-                        <div class="log-message">${log.operation}</div>
-                        ${log.details ? `<div class="log-details">${log.details}</div>` : ''}
-                    </div>
-                `;
-
-                // Add entrance animation
-                entry.style.opacity = '0';
-                entry.style.transform = 'translateX(-20px)';
-                
-                requestAnimationFrame(() => {
-                    entry.style.transition = 'all 0.3s ease-out';
-                    entry.style.opacity = '1';
-                    entry.style.transform = 'translateX(0)';
-                });
-
-                return entry;
-            }
-
-            updateProgressRing(percentage) { 
-                const circle = document.getElementById('progressCircle');
-                const ring = document.querySelector('.progress-ring');
-                
-                if (!circle) return;
-
-                if (!circle.getAttribute('data-circumference')) {
-                    const radius = parseFloat(circle.getAttribute('r'));
-                    const circumference = 2 * Math.PI * radius;
-                    circle.setAttribute('data-circumference', circumference);
-                    circle.style.strokeDasharray = circumference;
-                }
-                
-                const circumference = parseFloat(circle.getAttribute('data-circumference'));
-                const offset = circumference - (percentage / 100) * circumference;
-                
-                // Animate the progress change
-                circle.style.transition = 'stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1)';
-                circle.style.strokeDashoffset = offset;
-
-                // Add glow effect when progress is active
-                if (ring) {
-                    if (percentage > 0 && percentage < 100) {
-                        ring.classList.add('active');
-                    } else {
-                        ring.classList.remove('active');
-                    }
-                }
-            }
-
-            showFilePreview(file) {
-                const previewContainer = document.getElementById('filePreview');
-                if (!previewContainer) return;
-
-                previewContainer.innerHTML = '';
-                
-                if (file.type.startsWith('image/')) {
-                    const img = document.createElement('img');
-                    img.src = URL.createObjectURL(file);
-                    img.style.maxWidth = '100px';
-                    img.style.maxHeight = '100px';
-                    img.style.borderRadius = '8px';
-                    previewContainer.appendChild(img);
-                } else {
-                    const icon = this.getFileIcon(file.type || file.name);
-                    previewContainer.innerHTML = `<div class="file-icon-large">${icon}</div>`;
-                }
-            }
-
-            getFileIcon(typeOrName) {
-                const type = typeOrName.toLowerCase();
-                if (type.includes('image/') || type.endsWith('.jpg') || type.endsWith('.png') || type.endsWith('.gif')) return '🖼️';
-                if (type.includes('video/') || type.endsWith('.mp4') || type.endsWith('.avi') || type.endsWith('.mov')) return '🎥';
-                if (type.includes('audio/') || type.endsWith('.mp3') || type.endsWith('.wav')) return '🎵';
-                if (type.includes('text/') || type.endsWith('.txt') || type.endsWith('.md')) return '📄';
-                if (type.endsWith('.pdf')) return '📕';
-                if (type.endsWith('.zip') || type.endsWith('.rar') || type.endsWith('.7z')) return '🗜️';
-                if (type.endsWith('.exe') || type.endsWith('.msi')) return '⚙️';
-                return '📁';
-            }
-        }
-        debugLog('EnhancedUIController class defined successfully');
-
-        // Browser Notification Manager
-        debugLog('Defining BrowserNotificationManager class...');
-        class BrowserNotificationManager {
-            constructor() {
-                this.supported = 'Notification' in window;
-                this.permission = this.supported ? Notification.permission : 'denied';
-                this.requestPermissionOnInit();
-            }
-
-            async requestPermissionOnInit() {
-                if (this.supported && this.permission === 'default') {
-                    try {
-                        this.permission = await Notification.requestPermission();
-                    } catch (error) {
-                        console.warn('Could not request notification permission:', error);
-                    }
-                }
-            }
-
-            show(title, message, options = {}) {
-                // Show toast notification in GUI
-                if (window.gui) {
-                    window.gui.showToast(`${title}: ${message}`, options.type || 'info');
-                }
-
-                // Show browser notification if supported and permitted
-                if (this.supported && this.permission === 'granted') {
-                    const notification = new Notification(title, {
-                        body: message,
-                        icon: options.icon || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="18" font-size="20">🚀</text></svg>',
-                        badge: options.badge || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="18" font-size="20">🔒</text></svg>',
-                        requireInteraction: options.requireInteraction || false,
-                        silent: options.silent || false
-                    });
-
-                    // Auto-close after 5 seconds unless persistent
-                    if (!options.persistent) {
-                        setTimeout(() => notification.close(), 5000);
-                    }
-
-                    return notification;
-                }
-
-                return null;
-            }
-
-            showConnectionStatus(connected) {
-                const title = connected ? 'Backup Client Connected' : 'Backup Client Disconnected';
-                const message = connected ? 'Successfully connected to backup server' : 'Lost connection to backup server';
-                this.show(title, message, { 
-                    type: connected ? 'success' : 'error',
-                    requireInteraction: !connected
-                });
-            }
-
-            showBackupComplete(filename, success) {
-                const title = success ? 'Backup Completed' : 'Backup Failed';
-                const message = success ? `Successfully backed up ${filename}` : `Failed to backup ${filename}`;
-                this.show(title, message, { 
-                    type: success ? 'success' : 'error',
-                    requireInteraction: !success
-                });
-            }
-
-            showProgress(percentage, filename) {
-                if (percentage === 25 || percentage === 50 || percentage === 75) {
-                    this.show('Backup Progress', `${filename} - ${percentage}% complete`, {
-                        type: 'info',
-                        silent: true
-                    });
-                }
-            }
-        }
-        debugLog('BrowserNotificationManager class defined successfully');
-
-        // Enhanced File Manager with modern APIs
-        debugLog('Defining EnhancedFileManager class...');
-        class EnhancedFileManager {
+        /**
+         * NEW: FileManager
+         * Handles file selection (modern File System Access API with fallback).
+         */
+        debugLog('Defining FileManager class...');
+        class FileManager {
             constructor() {
                 this.supportsFileSystemAccess = 'showOpenFilePicker' in window;
-                this.supportsDragDrop = true;
+                debugLog(`File System Access API supported: ${this.supportsFileSystemAccess}`, 'FILE_MANAGER');
             }
 
             async selectFile() {
+                // First try modern File System Access API
                 if (this.supportsFileSystemAccess) {
                     try {
+                        console.log('[FileManager] Attempting modern file picker...');
                         const [fileHandle] = await window.showOpenFilePicker({
                             types: [{
                                 description: 'All files',
-                                accept: { '*/*': [] }
+                                accept: {
+                                    '*/*': ['.*']
+                                }
                             }],
-                            excludeAcceptAllOption: false,
                             multiple: false
                         });
                         
                         const file = await fileHandle.getFile();
+                        console.log('[FileManager] Modern file picker succeeded:', file.name);
                         return file;
                     } catch (error) {
                         if (error.name !== 'AbortError') {
-                            console.warn('File picker error:', error);
+                            console.warn('[FileManager] Modern file picker failed:', error);
+                            console.log('[FileManager] Falling back to traditional input...');
+                        } else {
+                            console.log('[FileManager] User cancelled modern file picker');
+                            return null;
                         }
-                        return null;
                     }
-                } else {
-                    // Fallback to traditional file input
-                    return new Promise((resolve) => {
+                }
+                
+                // Fallback to traditional file input - improved version
+                console.log('[FileManager] Using traditional file input fallback');
+                return new Promise((resolve, reject) => {
+                    try {
                         const input = document.createElement('input');
                         input.type = 'file';
-                        input.onchange = () => resolve(input.files[0] || null);
+                        input.accept = '*/*';
+                        input.style.display = 'none';
+                        
+                        // Add to DOM for better browser compatibility
+                        document.body.appendChild(input);
+                        
+                        // Set up event handlers
+                        const cleanup = () => {
+                            if (input.parentNode) {
+                                input.parentNode.removeChild(input);
+                            }
+                        };
+                        
+                        input.onchange = (event) => {
+                            const file = event.target.files[0] || null;
+                            console.log('[FileManager] Traditional file picker result:', file ? file.name : 'No file selected');
+                            cleanup();
+                            resolve(file);
+                        };
+                        
+                        input.oncancel = () => {
+                            console.log('[FileManager] User cancelled traditional file picker');
+                            cleanup();
+                            resolve(null);
+                        };
+                        
+                        // Handle case where user closes dialog without triggering change
+                        const handleFocus = () => {
+                            setTimeout(() => {
+                                if (!input.files.length) {
+                                    console.log('[FileManager] Focus returned, assuming dialog was cancelled');
+                                    cleanup();
+                                    resolve(null);
+                                }
+                                window.removeEventListener('focus', handleFocus);
+                            }, 300);
+                        };
+                        
+                        window.addEventListener('focus', handleFocus);
+                        
+                        // Trigger file dialog
                         input.click();
-                    });
-                }
+                        
+                        // Safety timeout
+                        setTimeout(() => {
+                            if (input.parentNode) {
+                                console.warn('[FileManager] File picker timeout, cleaning up');
+                                cleanup();
+                                resolve(null);
+                            }
+                        }, 30000);
+                        
+                    } catch (error) {
+                        console.error('[FileManager] Fallback file picker error:', error);
+                        reject(error);
+                    }
+                });
             }
 
             setupDragAndDrop(dropZone, onFileSelected) {
-                if (!this.supportsDragDrop) return;
-
                 dropZone.addEventListener('dragover', (e) => {
                     e.preventDefault();
                     dropZone.classList.add('drag-over');
                 });
 
-                dropZone.addEventListener('dragleave', (e) => {
-                    e.preventDefault();
+                dropZone.addEventListener('dragleave', () => {
                     dropZone.classList.remove('drag-over');
                 });
 
                 dropZone.addEventListener('drop', (e) => {
                     e.preventDefault();
                     dropZone.classList.remove('drag-over');
-                    
-                    const files = Array.from(e.dataTransfer.files);
-                    if (files.length > 0) {
-                        onFileSelected(files[0]);
+                    if (e.dataTransfer.files.length > 0) {
+                        onFileSelected(e.dataTransfer.files[0]);
+                    }
+                });
+
+                // Handle click on the drop zone to trigger file input
+                dropZone.addEventListener('click', () => {
+                    const fileInput = dropZone.querySelector('.file-input');
+                    if (fileInput) {
+                        fileInput.click();
+                    }
+                });
+
+                // Handle file input change directly
+                const fileInput = dropZone.querySelector('.file-input');
+                if (fileInput) {
+                    fileInput.addEventListener('change', (e) => {
+                        if (e.target.files.length > 0) {
+                            onFileSelected(e.target.files[0]);
+                        }
+                    });
+                }
+            }
+        }
+        debugLog('FileManager class defined successfully');
+
+        /**
+         * NEW: SystemManager
+         * Handles system-level interactions like notifications, modals, and keyboard shortcuts.
+         */
+        debugLog('Defining SystemManager class...');
+        class SystemManager {
+            constructor() {
+                this.notifications = new NotificationManager();
+                this.modal = new ModalManager();
+                this.confirmModal = new ConfirmModalManager();
+                this.fileManager = new FileManager();
+            }
+
+            setupKeyboardShortcuts(appInstance) {
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        this.modal.hide();
+                        this.confirmModal.hide();
+                    }
+                    // Ctrl+S to save config
+                    if (e.ctrlKey && e.key === 's') {
+                        e.preventDefault();
+                        appInstance.saveConfig();
+                    }
+                    // Ctrl+B to start backup
+                    if (e.ctrlKey && e.key === 'b') {
+                        e.preventDefault();
+                        appInstance.handlePrimaryAction();
+                    }
+                    // Ctrl+P to pause/resume
+                    if (e.ctrlKey && e.key === 'p') {
+                        e.preventDefault();
+                        appInstance.togglePause();
+                    }
+                    // Ctrl+T to stop
+                    if (e.ctrlKey && e.key === 't') {
+                        e.preventDefault();
+                        appInstance.stopBackup();
                     }
                 });
             }
         }
-        debugLog('EnhancedFileManager class defined successfully');
+        debugLog('SystemManager class defined successfully');
 
-        // System Integration Manager
-        debugLog('Defining SystemIntegrationManager class...');
-        class SystemIntegrationManager {
+        /**
+         * NEW: NotificationManager
+         * Handles browser notifications.
+         */
+        debugLog('Defining NotificationManager class...');
+        class NotificationManager {
             constructor() {
-                this.notifications = new BrowserNotificationManager();
-                this.fileManager = new EnhancedFileManager();
-                this.visibility = document.visibilityState;
-                this.setupVisibilityTracking();
-            }
-
-            setupVisibilityTracking() {
-                document.addEventListener('visibilitychange', () => {
-                    this.visibility = document.visibilityState;
-                });
-            }
-
-            isWindowVisible() {
-                return this.visibility === 'visible';
-            }
-
-            notifyIfHidden(title, message, options = {}) {
-                if (!this.isWindowVisible()) {
-                    this.notifications.show(title, message, { ...options, requireInteraction: true });
+                if (!('Notification' in window)) {
+                    debugLog('Browser does not support notifications.', 'NOTIFICATIONS');
                 }
             }
 
-            // Keyboard shortcuts
-            setupKeyboardShortcuts(gui) {
-                document.addEventListener('keydown', (e) => {
-                    // Ctrl+O: Open file
-                    if (e.ctrlKey && e.key === 'o') {
-                        e.preventDefault();
-                        gui.selectFile();
-                    }
-                    
-                    // Ctrl+Enter: Start backup
-                    if (e.ctrlKey && e.key === 'Enter') {
-                        e.preventDefault();
-                        gui.handlePrimaryAction();
-                    }
-                    
-                    // Escape: Stop operation
-                    if (e.key === 'Escape' && gui.state.isRunning) {
-                        e.preventDefault();
-                        gui.stopOperation();
-                    }
-                    
-                    // Ctrl+,: Open settings (future feature)
-                    if (e.ctrlKey && e.key === ',') {
-                        e.preventDefault();
-                        // gui.showSettings();
+            async requestPermission() {
+                if (!('Notification' in window)) return;
+                const permission = await Notification.requestPermission();
+                debugLog(`Notification permission: ${permission}`, 'NOTIFICATIONS');
+                return permission;
+            }
+
+            show(title, body, options = {}) {
+                if (!('Notification' in window) || Notification.permission !== 'granted') {
+                    debugLog('Notification permission not granted or not supported.', 'NOTIFICATIONS');
+                    return;
+                }
+                const notification = new Notification(title, { body, ...options });
+                debugLog(`Notification shown: ${title} - ${body}`, 'NOTIFICATIONS');
+                return notification;
+            }
+        }
+        debugLog('NotificationManager class defined successfully');
+
+        /**
+         * NEW: ModalManager
+         * Handles generic modal dialogs.
+         */
+        debugLog('Defining ModalManager class...');
+        class ModalManager {
+            constructor() {
+                this.modalOverlay = document.getElementById('confirmModal'); // Reusing for simplicity
+                this.modalTitle = document.getElementById('confirmTitle');
+                this.modalMessage = document.getElementById('confirmMessage');
+                this.confirmOkBtn = document.getElementById('confirmOkBtn');
+                this.cancelBtn = this.modalOverlay.querySelector('[data-action="cancel-modal"]');
+
+                this.resolve = null;
+                this.reject = null;
+
+                this.cancelBtn.addEventListener('click', () => this.hide());
+                this.modalOverlay.addEventListener('click', (e) => {
+                    if (e.target === this.modalOverlay) {
+                        this.hide();
                     }
                 });
             }
-        }
-        debugLog('SystemIntegrationManager class defined successfully');
 
-        // Main Application Class (Refactored for API communication)
-        debugLog('Defining CyberBackupPro class...');
-        class CyberBackupPro {
+            show(title, message, onConfirm) {
+                this.modalTitle.textContent = title;
+                this.modalMessage.textContent = message;
+                this.confirmOkBtn.onclick = () => {
+                    onConfirm();
+                    this.hide();
+                };
+                this.modalOverlay.classList.add('show');
+            }
+
+            hide() {
+                this.modalOverlay.classList.remove('show');
+            }
+        }
+        debugLog('ModalManager class defined successfully');
+
+        /**
+         * NEW: ConfirmModalManager
+         * Handles confirmation dialogs with Promises.
+         */
+        debugLog('Defining ConfirmModalManager class...');
+        class ConfirmModalManager extends ModalManager {
             constructor() {
-                this.api = new ApiClient();
-                this.config = new ConfigManager();
+                super();
+                this.confirmOkBtn.removeEventListener('click', this.confirmOkBtn.onclick); // Remove old listener
+                this.confirmOkBtn.addEventListener('click', () => {
+                    if (this.resolve) this.resolve(true);
+                    this.hide();
+                });
+                this.cancelBtn.removeEventListener('click', this.cancelBtn.onclick); // Remove old listener
+                this.cancelBtn.addEventListener('click', () => {
+                    if (this.resolve) this.resolve(false);
+                    this.hide();
+                });
+            }
+
+            async confirm(title, message) {
+                this.modalTitle.textContent = title;
+                this.modalMessage.textContent = message;
+                this.modalOverlay.classList.add('show');
+                return new Promise((resolve, reject) => {
+                    this.resolve = resolve;
+                    this.reject = reject;
+                });
+            }
+        }
+        debugLog('ConfirmModalManager class defined successfully');
+
+        /**
+         * Main Application Logic (App class)
+         */
+        debugLog('Defining App class...');
+        class App {
+            constructor() {
+                this.apiClient = new ApiClient();
+                this.system = new SystemManager();
                 this.intervals = new IntervalManager();
-                this.ui = new EnhancedUIController(); // Use enhanced UI controller
-                this.system = new SystemIntegrationManager(); // Add system integration
+
+                this.elements = {
+                    connectionLed: document.getElementById('connectionLed'),
+                    connectionText: document.getElementById('connectionText'),
+                    serverInput: document.getElementById('serverInput'),
+                    usernameInput: document.getElementById('usernameInput'),
+                    fileDropZone: document.getElementById('fileDropZone'),
+                    fileInput: document.getElementById('fileInput'),
+                    selectedFileDisplay: document.getElementById('selectedFile'),
+                    filePreview: document.getElementById('filePreview'),
+                    clientIdDisplay: document.getElementById('clientId'),
+                    primaryActionButton: document.getElementById('primaryAction'),
+                    pauseButton: document.getElementById('pauseBtn'),
+                    stopButton: document.getElementById('stopBtn'),
+                    currentPhaseDisplay: document.getElementById('currentPhase'),
+                    progressCircle: document.getElementById('progressCircle'),
+                    progressPercentage: document.getElementById('progressPercentage'),
+                    progressStatus: document.getElementById('progressStatus'),
+                    speedStat: document.getElementById('speedStat'),
+                    etaStat: document.getElementById('etaStat'),
+                    transferredStat: document.getElementById('transferredStat'),
+                    sizeStat: document.getElementById('sizeStat'),
+                    logContainer: document.getElementById('logContainer'),
+                    autoScrollBtn: document.getElementById('autoScrollBtn'),
+                    debugToggle: document.getElementById('debugToggle'),
+                    debugContent: document.getElementById('debugContent'),
+                    statusJsonViewer: document.getElementById('statusJsonViewer'),
+                    progressJsonViewer: document.getElementById('progressJsonViewer'),
+                    toastContainer: document.getElementById('toastContainer'),
+                    confirmModal: document.getElementById('confirmModal'),
+                    confirmTitle: document.getElementById('confirmTitle'),
+                    confirmMessage: document.getElementById('confirmMessage'),
+                    confirmOkBtn: document.getElementById('confirmOkBtn'),
+                    cancelModalBtn: document.getElementById('cancelModalBtn')
+                };
 
                 this.state = {
-                    isConnecting: false, // NEW: Tracks the connection attempt itself
-                    isConnected: false,  // Is the C++ client connected to the remote server
+                    isConnected: false,
                     isRunning: false,
                     isPaused: false,
+                    phase: 'SYSTEM_READY',
+                    progress: 0,
+                    file_name: '',
+                    file_size: 0,
+                    transferred: 0,
+                    speed: 0,
+                    eta: '--:--',
                     clientId: null,
-                    currentPhase: 'SYSTEM_READY',
-                    logs: [],
-                    progress: {},
-                    debugVisible: false,
-                    autoScroll: true,
+                    log: { operation: 'System Initialized', success: true, details: '' },
+                    lastApiStatus: null,
                     selectedFile: null
                 };
 
-                // State management for preventing race conditions
+                // Enhanced state management for preventing race conditions and optimizing performance
                 this.stateManagement = {
                     isPolling: false,
                     isUpdatingUI: false,
                     lastPollTime: 0,
                     pollCooldown: 500, // Minimum time between polls in ms
+                    adaptivePollInterval: 1000, // Dynamic interval that adapts based on activity
+                    maxPollInterval: 5000, // Maximum interval when idle
+                    minPollInterval: 500, // Minimum interval when active
+                    consecutiveNoChangeCount: 0, // Track periods of no activity
                     uiUpdateQueue: [],
-                    updateUIDebounced: this.debounce(() => this._updateAllUI(), 100)
+                    updateUIDebounced: this.debounce(() => this._updateAllUI(), 150) // Slightly increased debounce
                 };
                 
                 this.pendingConfirmAction = null;
-                
-                this.init();
-            }
+                this.autoScrollLog = true;
+                this.themeManager = new ThemeManager();
 
-            // Utility function for debouncing
-            debounce(func, wait) {
-                let timeout;
-                return function executedFunction(...args) {
-                    const later = () => {
-                        clearTimeout(timeout);
-                        func(...args);
-                    };
-                    clearTimeout(timeout);
-                    timeout = setTimeout(later, wait);
-                };
-            }
-            
-            async init() {
-                console.log('🚀 CyberBackup Pro v3.0 (API Driven) Initializing...');
-                this.config.loadFromStorage();
-                this.updateConfigDisplay();
-                this.setupEventListeners();
-                this.ui = new EnhancedUIController(); // Use enhanced UI controller
-                this.theme = new ThemeManager(); // assuming ThemeManager exists
-                this.theme.loadSavedTheme();
+                this.initEventListeners();
+                this.loadSavedConfig();
+                this.themeManager.loadSavedTheme();
                 this.system.setupKeyboardShortcuts(this); // Add keyboard shortcuts
 
-                // Start master status polling
-                this.intervals.set('statusPoll', () => this.pollStatus(), 1000);
+                // Initialize lazy loading system for performance
+                this.lazyComponents = new Map();
+                this.initializeLazyLoading();
+
+                // Start adaptive status polling with intelligent frequency adjustment
+                this.startAdaptivePolling();
                 this.addLog('System Initialized', 'success', 'Ready to connect to C++ client.');
                 this.system.notifications.show('CyberBackup Pro', 'Application ready', { type: 'info', silent: true });
                 
-                try {
-                    // Initialize with enhanced file drop zone
-                    const dropZone = document.querySelector('.file-drop-zone');
-                    if (dropZone) {
-                        this.system.fileManager.setupDragAndDrop(dropZone, (file) => {
-                            this.handleFileSelection({ target: { files: [file] } });
-                        });
-                    }
-                } catch (error) {
-                    console.warn('Could not setup enhanced file handling:', error);
-                }
+                // Request notification permission on startup
+                this.system.notifications.requestPermission();
             }
 
-            setupEventListeners() {
-                try {
-                    // Configuration inputs with validation
-                    const serverInput = document.getElementById('serverInput');
-                    const usernameInput = document.getElementById('usernameInput');
-                    const fileInput = document.getElementById('fileInput');
-                    const fileButton = document.querySelector('.file-button');
-                    
-                    if (serverInput) {
-                        serverInput.addEventListener('input', (e) => {
-                            this.updateServerConfig(e.target.value);
-                            this.validateAndUpdateUI();
-                        });
-                    }
-                    
-                    if (usernameInput) {
-                        usernameInput.addEventListener('input', (e) => {
-                            this.config.config.username = e.target.value;
-                            this.validateAndUpdateUI();
-                        });
-                    }
-                    
-                    // File input event listener
-                    if (fileInput) {
-                        fileInput.addEventListener('change', (e) => this.handleFileSelection(e));
-                    }
-                    
-                    // File button click handler (replace onclick)
-                    if (fileButton) {
-                        fileButton.addEventListener('click', (e) => {
-                            e.preventDefault();
-                            this.selectFile();
-                        });
-                    }
+            initEventListeners() {
+                this.elements.primaryActionButton.addEventListener('click', () => this.handlePrimaryAction());
+                this.elements.pauseButton.addEventListener('click', () => this.togglePause());
+                this.elements.stopButton.addEventListener('click', () => this.stopBackup());
+                
+                // Config save button
+                document.querySelector('[data-action="save-config"]').addEventListener('click', () => this.saveConfig());
 
-                    // Configuration buttons
-                    this.setupButton('.cyber-btn.success[data-action="save-config"]', () => this.saveConfiguration());
-                    
-                    // Theme buttons
-                    this.setupButton('.theme-btn.cyberpunk', () => this.setTheme('cyberpunk'));
-                    this.setupButton('.theme-btn.dark', () => this.setTheme('dark'));
-                    this.setupButton('.theme-btn.matrix', () => this.setTheme('matrix'));
-                    
-                    // Control buttons
-                    this.setupButton('#primaryAction', () => this.handlePrimaryAction());
-                    this.setupButton('#pauseBtn', () => this.pauseOperation());
-                    this.setupButton('#stopBtn', () => this.stopOperation());
-                    
-                    // Log buttons
-                    this.setupButton('.cyber-btn.success.small[data-action="export-log"]', () => this.exportLog());
-                    this.setupButton('.cyber-btn.danger.small[data-action="clear-log"]', () => this.clearLog());
-                    this.setupButton('#autoScrollBtn', () => this.toggleAutoScroll());
-                    
-                    // Debug button
-                    this.setupButton('#debugToggle', () => this.toggleDebug());
-                    
-                    // Modal buttons
-                    this.setupButton('.cyber-btn.secondary[data-action="cancel-modal"]', () => this.hideConfirmModal());
-                    this.setupButton('#confirmOkBtn', () => this.confirmAction());
-                    
-                    debugLog('EVENT: All event listeners setup successfully');
-                } catch (error) {
-                    debugLog('EVENT ERROR: Failed to setup event listeners: ' + error.message);
-                }
-            }
+                // File drop zone
+                this.system.fileManager.setupDragAndDrop(
+                    this.elements.fileDropZone,
+                    (file) => this.handleFileSelection(file)
+                );
 
-            // Helper method to setup button event listeners safely
-            setupButton(selector, handler) {
-                const element = document.querySelector(selector);
-                if (element) {
-                    element.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        handler();
+                // Log controls
+                document.querySelector('[data-action="export-log"]').addEventListener('click', () => this.exportLog());
+                document.querySelector('[data-action="clear-log"]').addEventListener('click', () => this.clearLog());
+                this.elements.autoScrollBtn.addEventListener('click', () => this.toggleAutoScroll());
+
+                // Debug toggle
+                this.elements.debugToggle.addEventListener('click', () => this.toggleDebugConsole());
+
+                // Theme buttons
+                document.querySelectorAll('.theme-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const theme = e.target.classList[1]; // e.g., 'cyberpunk', 'dark', 'matrix'
+                        this.themeManager.setTheme(theme);
                     });
-                    debugLog('EVENT: Setup listener for ' + selector);
-                } else {
-                    debugLog('EVENT WARNING: Element not found for selector: ' + selector);
-                }
+                });
+
+                // Modals
+                this.elements.confirmOkBtn.addEventListener('click', () => {
+                    if (this.pendingConfirmAction) {
+                        this.pendingConfirmAction.resolve(true);
+                        this.pendingConfirmAction = null;
+                    }
+                    this.system.confirmModal.hide();
+                });
+                this.elements.cancelModalBtn.addEventListener('click', () => {
+                    if (this.pendingConfirmAction) {
+                        this.pendingConfirmAction.resolve(false);
+                        this.pendingConfirmAction = null;
+                    }
+                    this.system.confirmModal.hide();
+                });
             }
-            
-            // Enhanced Master Polling Function with Race Condition Protection
+
             async pollStatus() {
-                // Prevent concurrent polls
                 if (this.stateManagement.isPolling) {
-                    debugLog('POLL: Skipping poll - already in progress');
+                    debugLog('Skipping poll: already polling', 'POLL');
                     return;
                 }
 
-                // Respect cooldown period
                 const now = Date.now();
                 if (now - this.stateManagement.lastPollTime < this.stateManagement.pollCooldown) {
-                    debugLog('POLL: Skipping poll - in cooldown period');
+                    debugLog('Skipping poll: cooldown active', 'POLL');
                     return;
                 }
 
@@ -2596,64 +2549,192 @@
                 this.stateManagement.lastPollTime = now;
 
                 try {
-                    debugLog('POLL: Starting status poll...');
-                    const status = await this.api.getStatus();
-                    debugLog('POLL: Status received: ' + JSON.stringify(status));
-                    
-                    // Batch state updates to prevent partial state inconsistencies
-                    const newState = {
-                        isConnected: status.connected === "true" || status.connected === true,
-                        isRunning: status.isRunning,
-                        isPaused: status.isPaused,
-                        currentPhase: status.phase,
-                        clientId: status.client_id
-                    };
+                    const status = await this.apiClient.getStatus();
+                    debugLog('Raw API Status:' + JSON.stringify(status), 'POLL');
 
-                    // Check if state actually changed to avoid unnecessary UI updates
-                    const stateChanged = (
-                        this.state.isConnected !== newState.isConnected ||
-                        this.state.isRunning !== newState.isRunning ||
-                        this.state.isPaused !== newState.isPaused ||
-                        this.state.currentPhase !== newState.currentPhase ||
-                        this.state.clientId !== newState.clientId
-                    );
+                    let stateChanged = false;
 
-                    // Apply state changes atomically
-                    Object.assign(this.state, newState);
-
-                    // Clear connecting flag if we got a successful response
-                    if (this.state.isConnecting) {
-                        this.state.isConnecting = false;
+                    // Check for changes in connection status
+                    if (this.state.isConnected !== status.isConnected) {
+                        this.state.isConnected = status.isConnected;
                         stateChanged = true;
                     }
 
-                    debugLog('POLL: State updated - connected: ' + this.state.isConnected + ', changed: ' + stateChanged);
+                    // Check for changes in running status
+                    if (this.state.isRunning !== status.isRunning) {
+                        this.state.isRunning = status.isRunning;
+                        stateChanged = true;
+                    }
+
+                    // Check for changes in paused status
+                    if (this.state.isPaused !== status.isPaused) {
+                        this.state.isPaused = status.isPaused;
+                        stateChanged = true;
+                    }
+
+                    // Check for changes in phase
+                    if (this.state.phase !== status.phase) {
+                        this.state.phase = status.phase;
+                        stateChanged = true;
+                    }
+
+                    // Check for changes in progress percentage
+                    if (this.state.progress !== status.progress.percentage) {
+                        this.state.progress = status.progress.percentage;
+                        stateChanged = true;
+                    }
+
+                    // Check for changes in log message (operation)
+                    if (this.state.log.operation !== status.log.operation) {
+                        this.state.log.operation = status.log.operation;
+                        stateChanged = true;
+                    }
+
+                    // Adaptive polling frequency adjustment
+                    if (stateChanged) {
+                        this.stateManagement.consecutiveNoChangeCount = 0;
+                        // Faster polling when there are changes
+                        this.stateManagement.adaptivePollInterval = Math.max(
+                            this.stateManagement.minPollInterval,
+                            this.stateManagement.adaptivePollInterval * 0.8
+                        );
+                    } else {
+                        this.stateManagement.consecutiveNoChangeCount++;
+                        // Slower polling when no changes
+                        if (this.stateManagement.consecutiveNoChangeCount >= 3) {
+                            this.stateManagement.adaptivePollInterval = Math.min(
+                                this.stateManagement.maxPollInterval,
+                                this.stateManagement.adaptivePollInterval * 1.2
+                            );
+                        }
+                    }
+
+                    debugLog('POLL: State updated - connected: ' + this.state.isConnected + ', changed: ' + stateChanged + ', nextInterval: ' + this.stateManagement.adaptivePollInterval + 'ms');
 
                     // Handle additional data
                     if (status.progress) this.updateProgress(status.progress);
-                    if (status.log) this.addLog(status.log.operation, status.log.success ? 'success' : 'error', status.log.details);
-                    
-                    // Only update UI if state actually changed
-                    if (stateChanged) {
-                        this.stateManagement.updateUIDebounced();
-                    }
+                    if (status.clientId) this.state.clientId = status.clientId;
+                    if (status.log) this.addLog(status.log.operation, status.log.success ? 'info' : 'error', status.log.details);
+
+                    this.state.lastApiStatus = status; // Store raw status for debug
+                    this.updateAllUI();
 
                 } catch (error) {
-                    debugLog('POLL ERROR: ' + error.message);
-                    // Handle offline state - only update if actually changing
-                    const wasConnected = this.state.isConnected || this.state.isConnecting;
-                    
-                    this.state.isConnecting = false;
+                    console.error('Error polling status:', error);
+                    debugLog('Error polling status: ' + error.message, 'ERROR');
                     this.state.isConnected = false;
                     this.state.isRunning = false;
-                    
-                    // Only update UI if we were previously connected
-                    if (wasConnected) {
-                        this.stateManagement.updateUIDebounced();
-                    }
+                    this.state.isPaused = false;
+                    this.state.phase = 'ERROR';
+                    this.state.log = { operation: 'API Error', success: false, details: error.message };
+                    this.updateAllUI();
                 } finally {
                     this.stateManagement.isPolling = false;
                 }
+            }
+
+            // Lazy loading system for performance optimization
+            initializeLazyLoading() {
+                // Mark components for lazy initialization
+                this.lazyComponents.set('debugConsole', {
+                    initialized: false,
+                    element: '#debugContent',
+                    initFunction: () => this.initializeDebugConsole()
+                });
+                
+                this.lazyComponents.set('advancedSettings', {
+                    initialized: false,
+                    element: '.advanced-settings',
+                    initFunction: () => this.initializeAdvancedSettings()
+                });
+
+                // Set up intersection observer for components that become visible
+                if ('IntersectionObserver' in window) {
+                    this.setupLazyLoadObserver();
+                }
+                
+                console.log('[LazyLoad] Lazy loading system initialized for', this.lazyComponents.size, 'components');
+            }
+
+            setupLazyLoadObserver() {
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const componentId = entry.target.getAttribute('data-lazy-component');
+                            if (componentId && this.lazyComponents.has(componentId)) {
+                                this.loadLazyComponent(componentId);
+                            }
+                        }
+                    });
+                }, { threshold: 0.1 });
+
+                // Observe elements marked for lazy loading
+                document.querySelectorAll('[data-lazy-component]').forEach(el => {
+                    observer.observe(el);
+                });
+            }
+
+            loadLazyComponent(componentId) {
+                const component = this.lazyComponents.get(componentId);
+                if (component && !component.initialized) {
+                    console.log('[LazyLoad] Loading component:', componentId);
+                    try {
+                        component.initFunction();
+                        component.initialized = true;
+                        console.log('[LazyLoad] Component loaded successfully:', componentId);
+                    } catch (error) {
+                        console.error('[LazyLoad] Failed to load component:', componentId, error);
+                    }
+                }
+            }
+
+            initializeDebugConsole() {
+                // Initialize debug console only when needed
+                const debugContent = document.getElementById('debugContent');
+                if (debugContent && !debugContent.getAttribute('data-initialized')) {
+                    debugContent.setAttribute('data-initialized', 'true');
+                    // Additional heavy debug console initialization can go here
+                    console.log('[LazyLoad] Debug console initialized');
+                }
+            }
+
+            initializeAdvancedSettings() {
+                // Initialize advanced settings panel only when accessed
+                const advancedSettings = document.querySelector('.advanced-settings');
+                if (advancedSettings && !advancedSettings.getAttribute('data-initialized')) {
+                    advancedSettings.setAttribute('data-initialized', 'true');
+                    // Additional heavy settings initialization can go here  
+                    console.log('[LazyLoad] Advanced settings initialized');
+                }
+            }
+
+            // Adaptive polling system - adjusts frequency based on activity
+            startAdaptivePolling() {
+                const scheduleNextPoll = () => {
+                    if (this.intervals && this.intervals.has) {
+                        this.intervals.clear('statusPoll');
+                        this.intervals.set('statusPoll', () => {
+                            this.pollStatus().then(() => {
+                                scheduleNextPoll(); // Schedule next poll with updated interval
+                            }).catch(() => {
+                                scheduleNextPoll(); // Continue even on error
+                            });
+                        }, this.stateManagement.adaptivePollInterval);
+                    } else {
+                        // Fallback if intervals system not ready
+                        setTimeout(() => {
+                            this.pollStatus().then(() => {
+                                scheduleNextPoll();
+                            }).catch(() => {
+                                scheduleNextPoll();
+                            });
+                        }, this.stateManagement.adaptivePollInterval);
+                    }
+                };
+                
+                // Start the adaptive polling
+                scheduleNextPoll();
+                console.log('[Polling] Adaptive polling started with initial interval:', this.stateManagement.adaptivePollInterval + 'ms');
             }
 
             // Public UI Update Function (uses debouncing)
@@ -2661,677 +2742,670 @@
                 this.stateManagement.updateUIDebounced();
             }
 
-            // Private UI Update Function (actual implementation)
             _updateAllUI() {
-                // Prevent concurrent UI updates
+                debugLog('Updating all UI elements...', 'UI');
                 if (this.stateManagement.isUpdatingUI) {
-                    debugLog('UI: Skipping UI update - already in progress');
+                    debugLog('Skipping UI update: already updating', 'UI');
                     return;
                 }
-
                 this.stateManagement.isUpdatingUI = true;
-                
+
                 try {
-                    debugLog('UI: Starting UI update...');
-                    this.updateConnectionStatus();
-                    this.updateControlButtons();
-                    this.updatePhase(this.state.currentPhase);
-                    this.updateClientIdDisplay();
-                    
-                    if (this.state.debugVisible) {
-                        const statusViewer = document.getElementById('statusJsonViewer');
-                        const progressViewer = document.getElementById('progressJsonViewer');
-                        if (statusViewer) statusViewer.textContent = JSON.stringify(this.state, null, 2);
-                        if (progressViewer) progressViewer.textContent = JSON.stringify(this.state.progress, null, 2);
+                    // Update connection status
+                    this.elements.connectionLed.classList.toggle('connected', this.state.isConnected);
+                    this.elements.connectionLed.classList.toggle('connecting', this.state.phase === 'CONNECT');
+                    this.elements.connectionText.textContent = this.state.isConnected ? 'ONLINE' : 'OFFLINE';
+
+                    // Update primary action button
+                    if (this.state.isConnected && !this.state.isRunning) {
+                        this.elements.primaryActionButton.textContent = '🚀 START BACKUP';
+                        this.elements.primaryActionButton.classList.remove('primary');
+                        this.elements.primaryActionButton.classList.add('success');
+                        this.elements.primaryActionButton.disabled = false;
+                    } else if (this.state.isRunning) {
+                        this.elements.primaryActionButton.textContent = '🔄 BACKING UP...';
+                        this.elements.primaryActionButton.classList.remove('success');
+                        this.elements.primaryActionButton.classList.add('primary');
+                        this.elements.primaryActionButton.disabled = true;
+                    } else {
+                        this.elements.primaryActionButton.textContent = '🚀 CONNECT';
+                        this.elements.primaryActionButton.classList.remove('success');
+                        this.elements.primaryActionButton.classList.add('primary');
+                        this.elements.primaryActionButton.disabled = false;
                     }
-                    
-                    debugLog('UI: UI update completed');
+
+                    // Update pause/stop buttons
+                    this.elements.pauseButton.disabled = !this.state.isRunning;
+                    this.elements.stopButton.disabled = !this.state.isRunning;
+                    this.elements.pauseButton.textContent = this.state.isPaused ? '▶️ RESUME' : '⏸️ PAUSE';
+                    this.elements.pauseButton.classList.toggle('primary', this.state.isPaused);
+                    this.elements.pauseButton.classList.toggle('secondary', !this.state.isPaused);
+
+                    // Update phase display
+                    this.elements.currentPhaseDisplay.querySelector('span').textContent = this.state.phase.replace(/_/g, ' ');
+                    this.elements.currentPhaseDisplay.querySelector('span').className = `neon-text ${this.getPhaseColor(this.state.phase)}`;
+
+                    // Update progress ring
+                    const radius = this.elements.progressCircle.r.baseVal.value;
+                    const circumference = radius * 2 * Math.PI;
+                    const offset = circumference - (this.state.progress / 100) * circumference;
+                    this.elements.progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
+                    this.elements.progressCircle.style.strokeDashoffset = offset;
+                    this.elements.progressCircle.classList.toggle('active', this.state.isRunning);
+
+                    this.elements.progressPercentage.textContent = `${Math.round(this.state.progress)}%`;
+                    this.elements.progressStatus.textContent = this.state.log.operation || this.state.message;
+
+                    // Update stats grid
+                    this.elements.speedStat.textContent = this.formatBytesPerSecond(this.state.speed);
+                    this.elements.etaStat.textContent = this.formatTime(this.state.eta);
+                    this.elements.transferredStat.textContent = this.formatBytes(this.state.transferred);
+                    this.elements.sizeStat.textContent = this.formatBytes(this.state.file_size);
+
+                    // Update selected file display
+                    if (this.state.selectedFile) {
+                        this.elements.selectedFileDisplay.innerHTML = `
+                            <span class="file-icon neon-text blue">📄</span>
+                            <div class="file-details">
+                                <div class="file-name">${this.state.selectedFile.name}</div>
+                                <div class="file-size">${this.formatBytes(this.state.selectedFile.size)}</div>
+                            </div>
+                        `;
+                        this.elements.selectedFileDisplay.classList.add('file-info');
+                        this.elements.filePreview.innerHTML = ''; // Clear previous preview
+                        this.elements.filePreview.style.display = 'flex';
+                        this.renderFilePreview(this.state.selectedFile);
+                    } else {
+                        this.elements.selectedFileDisplay.textContent = 'No file selected';
+                        this.elements.selectedFileDisplay.classList.remove('file-info');
+                        this.elements.filePreview.style.display = 'none';
+                    }
+
+                    // Update client ID
+                    this.elements.clientIdDisplay.textContent = this.state.clientId ? this.state.clientId.substring(0, 8) + '...' : 'Not connected';
+
+                    // Update debug JSON viewers
+                    if (this.elements.statusJsonViewer) {
+                        this.elements.statusJsonViewer.textContent = JSON.stringify(this.state.lastApiStatus, null, 2);
+                    }
+                    if (this.elements.progressJsonViewer) {
+                        this.elements.progressJsonViewer.textContent = JSON.stringify(this.state, null, 2);
+                    }
+
                 } catch (error) {
-                    debugLog('UI ERROR: ' + error.message);
+                    console.error('Error updating UI:', error);
+                    debugLog('Error updating UI: ' + error.message, 'ERROR');
                 } finally {
                     this.stateManagement.isUpdatingUI = false;
                 }
             }
 
-            // REFACTORED: Action Handlers now call the API           
-               async handlePrimaryAction() {
-                console.log('Primary action clicked');
-                console.log('Current state:', this.state);
-                console.log('Current config:', this.config.config);
-                
-                if (!this.validateAndUpdateUI()) {
-                    console.log('Validation failed');
-                    const errors = this.config.validate();
-                    console.log('Validation errors:', errors);
-                    this.showToast('Please fill in all required fields: ' + errors.join(', '), 'error');
-                    return;
+            getPhaseColor(phase) {
+                switch (phase) {
+                    case 'SYSTEM_READY': return 'purple';
+                    case 'CONNECT': return 'blue';
+                    case 'CONNECTED': return 'green';
+                    case 'START': return 'blue';
+                    case 'BACKING_UP': return 'blue';
+                    case 'VERIFY': return 'yellow';
+                    case 'COMPLETED': return 'green';
+                    case 'SUCCESS': return 'green';
+                    case 'PAUSED': return 'yellow';
+                    case 'STOPPED': return 'pink';
+                    case 'FAILED': return 'red';
+                    case 'ERROR': return 'red';
+                    case 'CONNECTION_FAILED': return 'red';
+                    case 'SERVER_OFFLINE': return 'red';
+                    default: return 'purple';
                 }
-                
-                console.log('Validation passed');
-                if (this.state.isRunning && this.state.isPaused) await this.resumeOperation();
-                else if (!this.state.isConnected) await this.connectToServer();
-                else if (!this.state.isRunning) await this.startBackup();
             }
 
-            async connectToServer() {
-                debugLog('CONNECT: Starting connection attempt...');
-                
-                // Prevent multiple simultaneous connection attempts
-                if (this.state.isConnecting) {
-                    debugLog('CONNECT: Connection already in progress, ignoring request');
-                    return;
-                }
-                
-                this.state.isConnecting = true;
-                this.updateAllUI(); // Immediately show "Connecting..."
-                
-                try {
-                    debugLog('CONNECT: Sending config to API: ' + JSON.stringify(this.config.config));
-                    const response = await this.api.connect(this.config.config);
-                    debugLog('CONNECT: API response received: ' + JSON.stringify(response));
-                    
-                    this.addLog('Connect command sent', 'info', `Awaiting response from ${this.config.config.server}`);
-                    debugLog('CONNECT: Command sent successfully');
-                    
-                    // The regular polling will handle state updates - no need for immediate poll
-                    // This prevents race conditions with the main polling loop
-                    
-                } catch (error) {
-                    debugLog('CONNECT ERROR: ' + error.message);
-                    this.state.isConnecting = false;
+            async handlePrimaryAction() {
+                if (!this.state.isConnected) {
+                    // Connect to server
+                    const serverAddress = this.elements.serverInput.value;
+                    const username = this.elements.usernameInput.value;
+                    const [serverIP, serverPortStr] = serverAddress.split(':');
+                    const serverPort = parseInt(serverPortStr);
+
+                    if (!serverIP || isNaN(serverPort) || !username) {
+                        this.showToast('Please enter valid server address and username.', 'error');
+                        this.addLog('Connection failed', 'error', 'Invalid server address or username.');
+                        return;
+                    }
+
+                    this.addLog(`Attempting to connect to ${serverIP}:${serverPort} as ${username}...`, 'info');
+                    this.state.phase = 'CONNECT';
+                    this.state.log = { operation: 'Connecting...', success: true, details: '' };
                     this.updateAllUI();
-                    this.showToast('Failed to send connect command. Is the C++ client running?', 'error');
-                    this.addLog('Connection failed', 'error', error.message);
-                }
-            }
 
-            async startBackup() {
-                try {
-                    // Check if a file is selected
+                    try {
+                        const result = await this.apiClient.connect({ host: serverIP, port: serverPort, username: username });
+                        if (result.success) {
+                            this.showToast('Connected to server successfully!', 'success');
+                            this.addLog('Connected to server', 'success', `Server: ${serverIP}:${serverPort}`);
+                            this.state.isConnected = true;
+                            this.state.phase = 'CONNECTED';
+                            this.state.log = { operation: 'Ready for backup', success: true, details: '' };
+                            this.updateAllUI();
+                        } else {
+                            this.showToast(`Connection failed: ${result.message}`, 'error');
+                            this.addLog('Connection failed', 'error', result.message);
+                            this.state.isConnected = false;
+                            this.state.phase = 'CONNECTION_FAILED';
+                            this.state.log = { operation: 'Connection Failed', success: false, details: result.message };
+                            this.updateAllUI();
+                        }
+                    } catch (error) {
+                        this.showToast(`API Error: ${error.message}`, 'error');
+                        this.addLog('API Error', 'error', error.message);
+                        this.state.isConnected = false;
+                        this.state.phase = 'ERROR';
+                        this.state.log = { operation: 'API Error', success: false, details: error.message };
+                        this.updateAllUI();
+                    }
+                } else if (this.state.isConnected && !this.state.isRunning) {
+                    // Start backup
                     if (!this.state.selectedFile) {
-                        this.showToast('No file selected for backup.', 'error');
+                        this.showToast('Please select a file to backup first.', 'warning');
+                        this.addLog('Backup failed', 'warning', 'No file selected.');
                         return;
                     }
-                    
-                    // Get username from config
-                    const username = this.config.config.username || 'testuser';
-                    
-                    // Send the actual file for upload
-                    await this.api.startBackup(this.state.selectedFile, username);
-                    this.addLog('File backup started', 'success', `Uploading ${this.state.selectedFile.name}`);
-                } catch (error) {
-                    console.error('Backup start error:', error);
-                    this.showToast('Failed to start backup: ' + error.message, 'error');
-                }
-            }
-            
-            async pauseOperation() { try { await this.api.pause(); } catch(e) { this.showToast('Failed to send pause command', 'error'); } }
-            async resumeOperation() { try { await this.api.resume(); } catch(e) { this.showToast('Failed to send resume command', 'error'); } }
-            
-            stopOperation() {
-                this.showConfirmModal('Stop Operation', 'Are you sure?', () => this.executeStop());
-            }
 
-            async executeStop() {
-                try {
-                    await this.api.stop();
-                } catch (e) {
-                    this.showToast('Failed to send stop command', 'error');
-                }
-            }
+                    const confirm = await this.system.confirmModal.confirm(
+                        'Confirm Backup',
+                        `Are you sure you want to backup "${this.state.selectedFile.name}" to ${this.elements.serverInput.value}?`
+                    );
 
-            // REFACTORED: UI Update Functions now read from this.state
-            updateConnectionStatus() {
-                console.log('updateConnectionStatus() called - state:', this.state);
-                debugLog('UI: Updating connection status - connected: ' + this.state.isConnected + ', connecting: ' + this.state.isConnecting);
-                
-                const led = document.getElementById('connectionLed');
-                const text = document.getElementById('connectionText');
-                
-                if (!led || !text) {
-                    console.error('Connection status elements not found!');
-                    debugLog('UI ERROR: Connection status elements not found');
-                    return;
-                }
-                
-                led.classList.remove('connected', 'connecting');
+                    if (confirm) {
+                        this.addLog(`Starting backup of ${this.state.selectedFile.name}...`, 'info');
+                        this.state.isRunning = true;
+                        this.state.phase = 'START';
+                        this.state.log = { operation: 'Initiating backup', success: true, details: '' };
+                        this.updateAllUI();
 
-                if (this.state.isConnecting) {
-                    led.classList.add('connecting');
-                    text.textContent = 'CONNECTING...';
-                    console.log('UI: Set to CONNECTING...');
-                    debugLog('UI: Connection status set to CONNECTING');
-                } else if (this.state.isConnected) {
-                    led.classList.add('connected');
-                    text.textContent = 'ONLINE';
-                    console.log('UI: Set to ONLINE');
-                    debugLog('UI: Connection status set to ONLINE');
-                    // Show notification when connected
-                    this.system.notifications.showConnectionStatus(true);
-                } else {
-                    text.textContent = 'OFFLINE';
-                    console.log('UI: Set to OFFLINE');
-                    debugLog('UI: Connection status set to OFFLINE');
-                    // Show notification when disconnected (but not on initial load)
-                    if (this.state.clientId) { // Only if we were previously connected
-                        this.system.notifications.showConnectionStatus(false);
-                    }
-                }
-            }
-
-            updateControlButtons() {
-                const primaryBtn = document.getElementById('primaryAction');
-                const pauseBtn = document.getElementById('pauseBtn');
-                const stopBtn = document.getElementById('stopBtn');
-                
-                const primaryIcon = primaryBtn.querySelector('.btn-icon');
-                const primaryText = primaryBtn.querySelector('.btn-text');
-                
-                primaryBtn.disabled = false; // Enable by default, disable in specific cases
-                pauseBtn.disabled = true;
-                stopBtn.disabled = true;
-
-                if (this.state.isConnecting) {
-                    primaryBtn.disabled = true;
-                    primaryText.textContent = 'CONNECTING';
-                } else if (this.state.isRunning) {
-                    if (this.state.isPaused) {
-                        primaryIcon.textContent = '▶️';
-                        primaryText.textContent = 'RESUME';
+                        try {
+                            const result = await this.apiClient.startBackup(
+                                this.state.selectedFile,
+                                { 
+                                    username: this.elements.usernameInput.value,
+                                    serverIP: this.elements.serverInput.value.split(':')[0],
+                                    serverPort: parseInt(this.elements.serverInput.value.split(':')[1])
+                                }
+                            );
+                            if (result.success) {
+                                this.showToast('Backup process started!', 'success');
+                                this.addLog('Backup initiated', 'success', `File: ${result.filename}`);
+                                // Status polling will update the rest
+                            } else {
+                                this.showToast(`Backup failed: ${result.message}`, 'error');
+                                this.addLog('Backup failed', 'error', result.message);
+                                this.state.isRunning = false;
+                                this.state.phase = 'FAILED';
+                                this.state.log = { operation: 'Backup Failed', success: false, details: result.message };
+                                this.updateAllUI();
+                            }
+                        } catch (error) {
+                            this.showToast(`API Error: ${error.message}`, 'error');
+                            this.addLog('API Error', 'error', error.message);
+                            this.state.isRunning = false;
+                            this.state.phase = 'ERROR';
+                            this.state.log = { operation: 'API Error', success: false, details: error.message };
+                            this.updateAllUI();
+                        }
                     } else {
-                        primaryBtn.disabled = true;
-                        primaryIcon.textContent = '🔗';
-                        primaryText.textContent = 'TRANSFERRING';
-                        pauseBtn.disabled = false;
+                        this.addLog('Backup cancelled by user', 'info');
+                        this.showToast('Backup cancelled.', 'info');
                     }
-                    stopBtn.disabled = false;
-                } else if (this.state.isConnected) {
-                    primaryIcon.textContent = '🚀';
-                    primaryText.textContent = 'START BACKUP';
-                    if (!this.state.selectedFile) primaryBtn.disabled = true;
-                    stopBtn.disabled = false;
-                } else { // Offline
-                    primaryIcon.textContent = '🚀';
-                    primaryText.textContent = 'CONNECT';
-                    if (!this.validateAndUpdateUI()) primaryBtn.disabled = true;
-                }
-
-                // Lock/unlock config panel
-                const panel = document.querySelector('.config-panel');
-                const inputs = panel.querySelectorAll('input, button');
-                const isBusy = this.state.isConnecting || this.state.isRunning;
-                panel.style.opacity = isBusy ? '0.6' : '1';
-                inputs.forEach(input => input.disabled = isBusy);
-            }
-
-            updateProgress(data) {
-                // This function is now just for rendering progress data from the state
-                this.state.progress = data;
-                const percentage = data.percentage || 0;
-                this.ui.updateProgressRing(percentage);
-                document.getElementById('progressPercentage').textContent = Math.round(percentage) + '%';
-                document.getElementById('speedStat').textContent = data.speed || '0 B/s';
-                document.getElementById('etaStat').textContent = data.eta || '--:--';
-                document.getElementById('transferredStat').textContent = this.formatBytes(data.transferred || 0);
-                
-                // Show progress notifications at key milestones
-                if (this.state.selectedFile) {
-                    this.system.notifications.showProgress(Math.round(percentage), this.state.selectedFile.name);
                 }
             }
-            
-            updateClientIdDisplay() {
-                const clientIdEl = document.getElementById('clientId');
-                if (this.state.clientId) {
-                    clientIdEl.textContent = this.state.clientId.substring(0, 8) + '...';
-                    clientIdEl.title = this.state.clientId;
+
+            async togglePause() {
+                if (this.state.isRunning) {
+                    if (this.state.isPaused) {
+                        this.addLog('Resuming backup...', 'info');
+                        this.state.phase = 'RESUME';
+                        this.state.log = { operation: 'Resuming backup', success: true, details: '' };
+                        this.updateAllUI();
+                        try {
+                            const result = await this.apiClient.resumeBackup();
+                            if (result.success) {
+                                this.showToast('Backup resumed!', 'info');
+                                this.addLog('Backup resumed', 'success');
+                                this.state.isPaused = false;
+                                this.state.phase = 'BACKING_UP';
+                                this.state.log = { operation: 'Backing up...', success: true, details: '' };
+                                this.updateAllUI();
+                            } else {
+                                this.showToast(`Resume failed: ${result.message}`, 'error');
+                                this.addLog('Resume failed', 'error', result.message);
+                            }
+                        } catch (error) {
+                            this.showToast(`API Error: ${error.message}`, 'error');
+                            this.addLog('API Error', 'error', error.message);
+                        }
+                    } else {
+                        this.addLog('Pausing backup...', 'info');
+                        this.state.phase = 'PAUSE';
+                        this.state.log = { operation: 'Pausing backup', success: true, details: '' };
+                        this.updateAllUI();
+                        try {
+                            const result = await this.apiClient.pauseBackup();
+                            if (result.success) {
+                                this.showToast('Backup paused!', 'warning');
+                                this.addLog('Backup paused', 'warning');
+                                this.state.isPaused = true;
+                                this.state.phase = 'PAUSED';
+                                this.state.log = { operation: 'Backup paused', success: true, details: '' };
+                                this.updateAllUI();
+                            } else {
+                                this.showToast(`Pause failed: ${result.message}`, 'error');
+                                this.addLog('Pause failed', 'error', result.message);
+                            }
+                        } catch (error) {
+                            this.showToast(`API Error: ${error.message}`, 'error');
+                            this.addLog('API Error', 'error', error.message);
+                        }
+                    }
+                }
+            }
+
+            async stopBackup() {
+                if (this.state.isRunning) {
+                    const confirm = await this.system.confirmModal.confirm(
+                        'Confirm Stop',
+                        'Are you sure you want to stop the current backup operation?'
+                    );
+
+                    if (confirm) {
+                        this.addLog('Stopping backup...', 'info');
+                        this.state.phase = 'STOP';
+                        this.state.log = { operation: 'Stopping backup', success: true, details: '' };
+                        this.updateAllUI();
+                        try {
+                            const result = await this.apiClient.stopBackup();
+                            if (result.success) {
+                                this.showToast('Backup stopped!', 'info');
+                                this.addLog('Backup stopped', 'info');
+                                this.state.isRunning = false;
+                                this.state.isPaused = false;
+                                this.state.progress = 0;
+                                this.state.phase = 'STOPPED';
+                                this.state.log = { operation: 'Backup stopped', success: true, details: '' };
+                                this.updateAllUI();
+                            } else {
+                                this.showToast(`Stop failed: ${result.message}`, 'error');
+                                this.addLog('Stop failed', 'error', result.message);
+                            }
+                        } catch (error) {
+                            this.showToast(`API Error: ${error.message}`, 'error');
+                            this.addLog('API Error', 'error', error.message);
+                        }
+                    }
                 } else {
-                    clientIdEl.textContent = 'Not connected';
-                }
-            }
-            
-            // Other functions (logging, modals, etc.) remain largely the same...
-            addLog(operation, type, details) {
-                const timestamp = new Date().toLocaleTimeString();
-                const log = { timestamp, operation, type, details, id: Date.now() + Math.random() };
-                this.state.logs.push(log);
-                const logContainer = document.getElementById('logContainer');
-                const entry = this.ui.createLogEntry(log); // Assumes UIController.createLogEntry exists
-                logContainer.appendChild(entry);
-                if (this.state.autoScroll) {
-                    logContainer.scrollTop = logContainer.scrollHeight;
-                }
-                if (logContainer.children.length > 200) {
-                    logContainer.removeChild(logContainer.firstChild);
+                    this.addLog('Stop cancelled by user', 'info');
+                    this.showToast('Stop cancelled.', 'info');
                 }
             }
 
-            showToast(message, type = 'info') {
-                const container = document.getElementById('toastContainer');
-                const toast = document.createElement('div');
-                toast.className = `toast ${type}`;
-                
-                const content = document.createElement('div');
-                content.className = 'toast-content';
-                
-                const messageEl = document.createElement('div');
-                messageEl.className = 'toast-message';
-                messageEl.textContent = message;
-                
-                const closeBtn = document.createElement('button');
-                closeBtn.className = 'toast-close';
-                closeBtn.textContent = '×';
-                closeBtn.addEventListener('click', () => {
-                    if (container.contains(toast)) {
-                        toast.style.animation = 'toast-slide-out 0.3s forwards';
-                        setTimeout(() => toast.remove(), 300);
-                    }
-                });
-                
-                content.appendChild(messageEl);
-                content.appendChild(closeBtn);
-                toast.appendChild(content);
-                container.appendChild(toast);
-                
-                // Auto-remove after 5 seconds
-                setTimeout(() => {
-                    if (container.contains(toast)) {
-                        toast.style.animation = 'toast-slide-out 0.3s forwards';
-                        setTimeout(() => toast.remove(), 300);
-                    }
-                }, 5000);
+            handleFileSelection(file) {
+                debugLog('File selected:' + file.name, 'FILE_MANAGER');
+                this.state.selectedFile = file;
+                this.updateAllUI();
+                this.addLog(`File selected: ${file.name}`, 'info', `Size: ${this.formatBytes(file.size)}`);
             }
 
-            formatBytes(bytes) {
-                if (bytes === 0) return '0 B';
-                const k = 1024;
-                const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-                const i = Math.floor(Math.log(bytes) / Math.log(k));
-                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-            }
+            renderFilePreview(file) {
+                const previewContainer = this.elements.filePreview;
+                previewContainer.innerHTML = '';
 
-             // ... [The rest of the helper functions: clearLog, exportLog, modal handlers, file handlers, etc.]
-            updateServerConfig(value) {
-                const parts = value.split(':');
-                this.config.config.server = parts[0] || '';
-                this.config.config.port = parseInt(parts[1]) || 1256;
-            }
-
-            validateAndUpdateUI() {
-                const errors = this.config.validate();
-                if (errors.length > 0) {
-                    // Optionally show errors, but the button state is handled by updateControlButtons
-                    return false;
-                }
-                return true;
-            }
-
-            handleFileSelection(event) {
-                try {
-                    const file = event.target.files[0];
-                    if (!file) {
-                        debugLog('FILE: No file selected');
-                        return;
-                    }
-                    
-                    // Validate file
-                    const validation = this.validateFile(file);
-                    if (!validation.valid) {
-                        this.showToast(validation.message, 'error');
-                        this.addLog('File validation failed', 'error', validation.message);
-                        return;
-                    }
-                    
-                    this.state.selectedFile = file;
-                    this.config.config.filepath = file.name; // For saving config
-                    const sizeFormatted = this.formatBytes(file.size);
-                    
-                    // Update UI with file information
-                    const selectedFileEl = document.getElementById('selectedFile');
-                    if (selectedFileEl) {
-                        selectedFileEl.innerHTML = `
-                            <div class="config-value file-info">
-                                <span class="file-icon">${this.ui.getFileIcon(file.type || file.name)}</span>
-                                <div class="file-details">
-                                    <div class="file-name" title="${file.name}">${file.name}</div>
-                                    <div class="file-size">${sizeFormatted}</div>
-                                </div>
-                            </div>
+                if (file.type.startsWith('image/')) {
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(file);
+                    img.style.maxWidth = '100px';
+                    img.style.maxHeight = '100px';
+                    img.style.borderRadius = 'var(--radius-sm)';
+                    img.style.border = '1px solid var(--glass-border)';
+                    previewContainer.appendChild(img);
+                } else if (file.type === 'application/pdf') {
+                    const icon = document.createElement('span');
+                    icon.className = 'file-icon-large neon-text purple';
+                    icon.textContent = '📄';
+                    const text = document.createElement('span');
+                    text.textContent = 'PDF Document';
+                    text.style.color = 'var(--text-secondary)';
+                    previewContainer.appendChild(icon);
+                    previewContainer.appendChild(text);
+                } else if (file.type.startsWith('text/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const content = e.target.result;
+                        const previewText = document.createElement('pre');
+                        previewText.textContent = content.substring(0, 100) + (content.length > 100 ? '...' : '');
+                        previewText.style.cssText = `
+                            font-family: 'Share Tech Mono', monospace;
+                            font-size: 0.75rem;
+                            color: var(--text-dim);
+                            background: var(--bg-black);
+                            padding: var(--space-sm);
+                            border-radius: var(--radius-sm);
+                            max-height: 80px;
+                            overflow: hidden;
+                            white-space: pre-wrap;
+                            word-break: break-all;
                         `;
-                    }
-                    
-                    // Update size stat
-                    const sizeStatEl = document.getElementById('sizeStat');
-                    if (sizeStatEl) {
-                        sizeStatEl.textContent = sizeFormatted;
-                    }
-                    
-                    // Show file preview if supported
-                    this.ui.showFilePreview(file);
-                    
-                    this.addLog('File selected', 'success', `${file.name} (${sizeFormatted})`);
-                    this.showToast(`File selected: ${file.name}`, 'success');
-                    this.updateAllUI();
-                    
-                    debugLog('FILE: Successfully selected file: ' + file.name + ' (' + sizeFormatted + ')');
-                    
-                } catch (error) {
-                    this.showToast('Failed to select file', 'error');
-                    this.addLog('File selection error', 'error', error.message);
-                    debugLog('FILE ERROR: ' + error.message);
-                }
-            }
-
-            validateFile(file) {
-                const maxSize = 100 * 1024 * 1024; // 100MB limit
-                const minSize = 1; // At least 1 byte
-                
-                if (file.size === 0) {
-                    return { valid: false, message: 'File is empty' };
-                }
-                
-                if (file.size < minSize) {
-                    return { valid: false, message: 'File is too small' };
-                }
-                
-                if (file.size > maxSize) {
-                    return { valid: false, message: `File is too large (max ${this.formatBytes(maxSize)})` };
-                }
-                
-                // Check for suspicious file types (basic security)
-                const suspiciousExtensions = ['.exe', '.bat', '.cmd', '.scr', '.pif', '.com'];
-                const fileExt = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
-                
-                if (suspiciousExtensions.includes(fileExt)) {
-                    return { 
-                        valid: false, 
-                        message: `${fileExt.toUpperCase()} files are not allowed for security reasons` 
+                        previewContainer.appendChild(previewText);
                     };
-                }
-                
-                return { valid: true, message: 'File validation passed' };
-            }
-
-            async selectFile() {
-                try {
-                    const file = await this.system.fileManager.selectFile();
-                    if (file) {
-                        this.handleFileSelection({ target: { files: [file] } });
-                    }
-                } catch (error) {
-                    this.addLog('File selection failed', 'error', error.message);
+                    reader.readAsText(file);
+                } else {
+                    const icon = document.createElement('span');
+                    icon.className = 'file-icon-large neon-text blue';
+                    icon.textContent = '🗄️';
+                    const text = document.createElement('span');
+                    text.textContent = 'Binary File';
+                    text.style.color = 'var(--text-secondary)';
+                    previewContainer.appendChild(icon);
+                    previewContainer.appendChild(text);
                 }
             }
 
-            saveConfiguration() {
-                this.config.saveToStorage();
-                this.showToast('Configuration saved to browser storage.', 'success');
+            addLog(message, type = 'info', details = '') {
+                const logEntry = document.createElement('div');
+                logEntry.className = `log-entry ${type}`;
+                logEntry.setAttribute('tabindex', '0'); // Make it focusable
+                logEntry.innerHTML = `
+                    <span class="log-timestamp">${new Date().toLocaleTimeString()}</span>
+                    <span class="log-icon ${type}">${this.getLogIcon(type)}</span>
+                    <div class="log-content">
+                        <div class="log-message">${message}</div>
+                        ${details ? `<div class="log-details">${details}</div>` : ''}
+                    </div>
+                `;
+                this.elements.logContainer.prepend(logEntry); // Add to top
+
+                // Limit log entries
+                while (this.elements.logContainer.children.length > 200) {
+                    this.elements.logContainer.removeChild(this.elements.logContainer.lastChild);
+                }
+
+                if (this.autoScrollLog) {
+                    this.elements.logContainer.scrollTop = 0; // Scroll to top for prepend
+                }
+
+                // Announce to screen readers
+                this.system.announce(`${type} log: ${message}. ${details}`);
             }
 
-            showConfirmModal(title, message, onConfirm) {
-                this.pendingConfirmAction = onConfirm;
-                document.getElementById('confirmTitle').textContent = title;
-                document.getElementById('confirmMessage').textContent = message;
-                document.getElementById('confirmModal').classList.add('show');
-            }
-
-            hideConfirmModal() {
-                document.getElementById('confirmModal').classList.remove('show');
-            }
-
-            confirmAction() {
-                if(this.pendingConfirmAction) this.pendingConfirmAction();
-                this.hideConfirmModal();
-            }
-
-            updatePhase(phase) {
-                this.state.currentPhase = phase;
-                document.getElementById('currentPhase').innerHTML = `<span class="neon-text purple">${phase.replace(/_/g, ' ')}</span>`;
-            }
-
-            // === MISSING METHOD IMPLEMENTATIONS ===
-
-            exportLog() {
-                try {
-                    const logData = this.state.logs.map(log => ({
-                        timestamp: log.timestamp,
-                        type: log.type,
-                        operation: log.operation,
-                        details: log.details || ''
-                    }));
-                    
-                    const exportData = {
-                        timestamp: new Date().toISOString(),
-                        clientVersion: 'CyberBackup Pro v3.0',
-                        totalLogs: logData.length,
-                        logs: logData
-                    };
-                    
-                    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `cyberbackup-log-${new Date().toISOString().split('T')[0]}.json`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    
-                    this.showToast('Log exported successfully', 'success');
-                    this.addLog('Log Export', 'success', `Exported ${logData.length} log entries`);
-                    debugLog('EXPORT: Log exported successfully with ' + logData.length + ' entries');
-                } catch (error) {
-                    this.showToast('Failed to export log', 'error');
-                    this.addLog('Export Error', 'error', error.message);
-                    debugLog('EXPORT ERROR: ' + error.message);
+            getLogIcon(type) {
+                switch (type) {
+                    case 'success': return '✅';
+                    case 'error': return '❌';
+                    case 'warning': return '⚠️';
+                    case 'info': return 'ℹ️';
+                    default: return '💬';
                 }
             }
 
             clearLog() {
-                this.showConfirmModal(
-                    'Clear All Logs',
-                    'Are you sure you want to clear all operation logs? This action cannot be undone.',
-                    () => {
-                        this.state.logs = [];
-                        const logContainer = document.getElementById('logContainer');
-                        if (logContainer) {
-                            logContainer.innerHTML = '';
-                        }
-                        this.showToast('All logs cleared', 'info');
-                        this.addLog('Log Management', 'info', 'All previous logs cleared');
-                        debugLog('LOGS: All logs cleared by user');
-                    }
-                );
+                this.elements.logContainer.innerHTML = '';
+                this.addLog('Log cleared', 'info');
+                this.showToast('Operation log cleared.', 'info');
+            }
+
+            exportLog() {
+                const logEntries = Array.from(this.elements.logContainer.children).map(entryDiv => {
+                    const timestamp = entryDiv.querySelector('.log-timestamp').textContent;
+                    const message = entryDiv.querySelector('.log-message').textContent;
+                    const details = entryDiv.querySelector('.log-details') ? entryDiv.querySelector('.log-details').textContent : '';
+                    const type = entryDiv.classList.contains('success') ? 'SUCCESS' :
+                                 entryDiv.classList.contains('error') ? 'ERROR' :
+                                 entryDiv.classList.contains('warning') ? 'WARNING' : 'INFO';
+                    return `[${timestamp}] [${type}] ${message} ${details}`.trim();
+                }).reverse(); // Reverse to get chronological order
+
+                const blob = new Blob([logEntries.join('\n')], { type: 'text/plain;charset=utf-8' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `cyberbackup_log_${new Date().toISOString().slice(0,10)}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                this.showToast('Log exported successfully.', 'success');
             }
 
             toggleAutoScroll() {
-                this.state.autoScroll = !this.state.autoScroll;
-                const btn = document.getElementById('autoScrollBtn');
-                if (btn) {
-                    btn.textContent = `📜 Auto-scroll: ${this.state.autoScroll ? 'ON' : 'OFF'}`;
-                    btn.classList.toggle('active', this.state.autoScroll);
-                }
-                this.showToast(`Auto-scroll ${this.state.autoScroll ? 'enabled' : 'disabled'}`, 'info');
-                debugLog('UI: Auto-scroll toggled to ' + this.state.autoScroll);
+                this.autoScrollLog = !this.autoScrollLog;
+                this.elements.autoScrollBtn.textContent = `📜 Auto-scroll: ${this.autoScrollLog ? 'ON' : 'OFF'}`;
+                this.showToast(`Auto-scroll ${this.autoScrollLog ? 'enabled' : 'disabled'}.`, 'info');
             }
 
-            toggleDebug() {
-                this.state.debugVisible = !this.state.debugVisible;
-                const debugContent = document.getElementById('debugContent');
-                const debugToggle = document.getElementById('debugToggle');
-                
-                if (debugContent) {
-                    debugContent.classList.toggle('show', this.state.debugVisible);
+            toggleDebugConsole() {
+                const debugPanel = document.querySelector('.debug-panel');
+                const debugContent = this.elements.debugContent;
+                const isExpanded = this.elements.debugToggle.getAttribute('aria-expanded') === 'true';
+
+                if (isExpanded) {
+                    debugPanel.style.maxHeight = '0';
+                    debugContent.classList.remove('show');
+                    this.elements.debugToggle.setAttribute('aria-expanded', 'false');
+                } else {
+                    debugPanel.style.maxHeight = debugPanel.scrollHeight + 'px'; // Set to actual height
+                    debugContent.classList.add('show');
+                    this.elements.debugToggle.setAttribute('aria-expanded', 'true');
+                    this.system.loadLazyComponent('debugConsole'); // Lazy load debug console content
                 }
-                
-                if (debugToggle) {
-                    debugToggle.setAttribute('aria-expanded', this.state.debugVisible.toString());
-                    debugToggle.textContent = `🔧 ${this.state.debugVisible ? 'Hide' : 'Show'} Debug`;
+            }
+
+            showToast(message, type = 'info', duration = 3000) {
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.innerHTML = `
+                    <div class="toast-content">
+                        <span class="toast-message">${message}</span>
+                        <button class="toast-close" aria-label="Close notification">&times;</button>
+                    </div>
+                `;
+                this.elements.toastContainer.prepend(toast); // Add to top
+
+                toast.querySelector('.toast-close').addEventListener('click', () => {
+                    toast.style.animation = 'toast-slide-out 0.4s forwards';
+                    toast.addEventListener('animationend', () => toast.remove());
+                });
+
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.style.animation = 'toast-slide-out 0.4s forwards';
+                        toast.addEventListener('animationend', () => toast.remove());
+                    }
+                }, duration);
+            }
+
+            formatBytes(bytes) {
+                if (bytes === 0) return '0 B';
+                const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+                return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
+            }
+
+            formatBytesPerSecond(bytesPerSecond) {
+                if (bytesPerSecond === 0) return '0 B/s';
+                const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s', 'TB/s'];
+                const i = parseInt(Math.floor(Math.log(bytesPerSecond) / Math.log(1024)));
+                return Math.round(bytesPerSecond / Math.pow(1024, i), 2) + ' ' + sizes[i];
+            }
+
+            formatTime(seconds) {
+                if (seconds === '--:--') return seconds; // Handle initial state
+                if (seconds < 0) return '--:--';
+                const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
+                const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+                const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+                return `${h}:${m}:${s}`;
+            }
+
+            saveConfig() {
+                const config = {
+                    serverAddress: this.elements.serverInput.value,
+                    username: this.elements.usernameInput.value,
+                };
+                localStorage.setItem('cyberbackup_config', JSON.stringify(config));
+                this.showToast('Configuration saved!', 'success');
+                this.addLog('Configuration saved', 'info');
+            }
+
+            loadSavedConfig() {
+                try {
+                    const savedConfig = localStorage.getItem('cyberbackup_config');
+                    if (savedConfig) {
+                        const config = JSON.parse(savedConfig);
+                        this.elements.serverInput.value = config.serverAddress || '127.0.0.1:1256';
+                        this.elements.usernameInput.value = config.username || 'testuser';
+                        this.addLog('Loaded saved configuration', 'info');
+                    }
+                } catch (error) {
+                    console.warn('Failed to load saved config:', error);
+                    this.addLog('Failed to load config', 'warning', error.message);
                 }
-                
-                this.showToast(`Debug panel ${this.state.debugVisible ? 'shown' : 'hidden'}`, 'info');
-                debugLog('UI: Debug panel toggled to ' + (this.state.debugVisible ? 'visible' : 'hidden'));
+            }
+
+            debounce(func, delay) {
+                let timeout;
+                return function(...args) {
+                    const context = this;
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => func.apply(context, args), delay);
+                };
+            }
+        }
+        debugLog('App class defined successfully');
+
+        /**
+         * NEW: ThemeManager
+         * Handles dynamic theme switching.
+         */
+        debugLog('Defining ThemeManager class...');
+        class ThemeManager {
+            constructor() {
+                this.themes = {
+                    cyberpunk: {
+                        '--neon-pink': '#FF00FF',
+                        '--neon-blue': '#00FFFF',
+                        '--neon-purple': '#8A2BE2',
+                        '--neon-green': '#00FF00',
+                        '--neon-yellow': '#FFFF00',
+                        '--neon-orange': '#FF4500',
+                        '--neon-red': '#FF0040',
+                        '--electric-blue': '#0080FF',
+                        '--cyber-lime': '#32CD32',
+                        '--plasma-pink': '#FF1493',
+                        '--bg-black': '#000000',
+                        '--bg-dark': '#0A0A0A',
+                        '--bg-medium': '#1A1A2E',
+                        '--bg-light': '#16213E',
+                        '--bg-card': 'rgba(26, 26, 46, 0.95)',
+                        '--bg-glass': 'rgba(255, 255, 255, 0.05)',
+                        '--text-primary': '#FFFFFF',
+                        '--text-secondary': '#E0E0E0',
+                        '--text-dim': '#888888',
+                        '--text-contrast': 'rgba(0, 0, 0, 0.8)',
+                        '--glass-border': 'rgba(255, 255, 255, 0.2)',
+                        '--glass-border-active': 'rgba(0, 255, 255, 0.6)',
+                    },
+                    dark: {
+                        '--neon-pink': '#FF69B4',
+                        '--neon-blue': '#6495ED',
+                        '--neon-purple': '#9370DB',
+                        '--neon-green': '#3CB371',
+                        '--neon-yellow': '#FFD700',
+                        '--neon-orange': '#FF8C00',
+                        '--neon-red': '#DC143C',
+                        '--electric-blue': '#4169E1',
+                        '--cyber-lime': '#6B8E23',
+                        '--plasma-pink': '#FF6347',
+                        '--bg-black': '#121212',
+                        '--bg-dark': '#1E1E1E',
+                        '--bg-medium': '#2C2C2C',
+                        '--bg-light': '#3A3A3A',
+                        '--bg-card': 'rgba(44, 44, 44, 0.95)',
+                        '--bg-glass': 'rgba(255, 255, 255, 0.03)',
+                        '--text-primary': '#E0E0E0',
+                        '--text-secondary': '#B0B0B0',
+                        '--text-dim': '#777777',
+                        '--text-contrast': 'rgba(0, 0, 0, 0.7)',
+                        '--glass-border': 'rgba(255, 255, 255, 0.1)',
+                        '--glass-border-active': 'rgba(100, 149, 237, 0.6)',
+                    },
+                    matrix: {
+                        '--neon-pink': '#00FF41', /* Green */
+                        '--neon-blue': '#00FF41', /* Green */
+                        '--neon-purple': '#00FF41', /* Green */
+                        '--neon-green': '#00FF41', /* Green */
+                        '--neon-yellow': '#00FF41', /* Green */
+                        '--neon-orange': '#00FF41', /* Green */
+                        '--neon-red': '#00FF41', /* Green */
+                        '--electric-blue': '#00FF41', /* Green */
+                        '--cyber-lime': '#00FF41', /* Green */
+                        '--plasma-pink': '#00FF41', /* Green */
+                        '--bg-black': '#000000',
+                        '--bg-dark': '#000000',
+                        '--bg-medium': '#000000',
+                        '--bg-light': '#000000',
+                        '--bg-card': 'rgba(0, 0, 0, 0.9)',
+                        '--bg-glass': 'rgba(0, 255, 0, 0.05)',
+                        '--text-primary': '#00FF41',
+                        '--text-secondary': '#00AA00',
+                        '--text-dim': '#006600',
+                        '--text-contrast': 'rgba(0, 0, 0, 0.9)',
+                        '--glass-border': 'rgba(0, 255, 0, 0.2)',
+                        '--glass-border-active': 'rgba(0, 255, 0, 0.6)',
+                    }
+                };
+                this.currentTheme = 'cyberpunk';
             }
 
             setTheme(themeName) {
-                try {
-                    // Use the ThemeManager to handle theme changes
-                    if (this.theme && this.theme.setTheme(themeName)) {
-                        this.showToast(`Theme changed to ${themeName}`, 'success');
-                        this.addLog('Theme Change', 'info', `Switched to ${themeName} theme`);
+                if (this.themes[themeName]) {
+                    const theme = this.themes[themeName];
+                    for (const [prop, value] of Object.entries(theme)) {
+                        document.documentElement.style.setProperty(prop, value);
+                    }
+                    this.currentTheme = themeName;
+                    this.updateActiveThemeButton();
+                    localStorage.setItem('cyberbackup_theme', themeName);
+                    debugLog(`Theme set to: ${themeName}`, 'THEME');
+                }
+            }
+
+            loadSavedTheme() {
+                const savedTheme = localStorage.getItem('cyberbackup_theme');
+                if (savedTheme && this.themes[savedTheme]) {
+                    this.setTheme(savedTheme);
+                } else {
+                    this.setTheme(this.currentTheme); // Apply default if no saved theme or invalid
+                }
+            }
+
+            updateActiveThemeButton() {
+                document.querySelectorAll('.theme-btn').forEach(btn => {
+                    if (btn.classList.contains(this.currentTheme)) {
+                        btn.classList.add('active');
                     } else {
-                        // Fallback if ThemeManager not available
-                        document.body.setAttribute('data-theme', themeName);
-                        localStorage.setItem('cyberbackup_theme', themeName);
-                        this.showToast(`Theme changed to ${themeName}`, 'success');
-                        debugLog('THEME: Used fallback theme change for ' + themeName);
+                        btn.classList.remove('active');
                     }
-                } catch (error) {
-                    this.showToast('Failed to change theme', 'error');
-                    debugLog('THEME ERROR: ' + error.message);
-                }
+                });
             }
         }
-        debugLog('CyberBackupPro class defined successfully');
-        
-        // Enhanced Theme Manager
-        if (typeof ThemeManager === 'undefined') {
-            class ThemeManager { 
-                constructor() {
-                    this.currentTheme = 'cyberpunk';
-                    this.themes = {
-                        cyberpunk: {
-                            name: 'Cyberpunk',
-                            primary: '#FF00FF',
-                            secondary: '#00FFFF',
-                            accent: '#8A2BE2'
-                        },
-                        dark: {
-                            name: 'Dark',
-                            primary: '#2C3E50',
-                            secondary: '#34495E',
-                            accent: '#1A1A1A'
-                        },
-                        matrix: {
-                            name: 'Matrix',
-                            primary: '#00FF00',
-                            secondary: '#003300',
-                            accent: '#000000'
-                        }
-                    };
-                }
+        debugLog('ThemeManager class defined successfully');
 
-                loadSavedTheme() {
-                    try {
-                        const saved = localStorage.getItem('cyberbackup_theme');
-                        if (saved && this.themes[saved]) {
-                            this.setTheme(saved);
-                        } else {
-                            this.setTheme('cyberpunk'); // default
-                        }
-                        debugLog('THEME: Loaded saved theme: ' + this.currentTheme);
-                    } catch (error) {
-                        debugLog('THEME ERROR loading saved theme: ' + error.message);
-                        this.setTheme('cyberpunk'); // fallback
-                    }
-                }
+        // Initialize the main application
+        debugLog('Initializing App instance...');
+        const app = new App();
+        debugLog('App instance initialized.');
 
-                setTheme(themeName) {
-                    if (!this.themes[themeName]) {
-                        debugLog('THEME ERROR: Unknown theme: ' + themeName);
-                        return false;
-                    }
+        // Initial UI update
+        app.updateAllUI();
 
-                    try {
-                        this.currentTheme = themeName;
-                        
-                        // Update theme buttons
-                        document.querySelectorAll('.theme-btn').forEach(btn => {
-                            btn.classList.remove('active');
-                        });
-                        
-                        const selectedBtn = document.querySelector(`.theme-btn.${themeName}`);
-                        if (selectedBtn) {
-                            selectedBtn.classList.add('active');
-                        }
-                        
-                        // Apply theme to body
-                        document.body.setAttribute('data-theme', themeName);
-                        
-                        // Store in localStorage
-                        localStorage.setItem('cyberbackup_theme', themeName);
-                        
-                        debugLog('THEME: Successfully set theme to ' + themeName);
-                        return true;
-                    } catch (error) {
-                        debugLog('THEME ERROR setting theme: ' + error.message);
-                        return false;
-                    }
-                }
-
-                getCurrentTheme() {
-                    return this.currentTheme;
-                }
-
-                getAvailableThemes() {
-                    return Object.keys(this.themes);
-                }
-            }
-            window.ThemeManager = ThemeManager;
-        }
-
-        // Initialize the GUI - make it global so onclick handlers can access it
-        try {
-            debugLog('Starting GUI initialization...');
-            console.log('About to create CyberBackupPro...');
-            alert('About to create CyberBackupPro...');
-            
-            // Check if classes are defined
-            debugLog('Checking if classes are defined...');
-            if (typeof ApiClient === 'undefined') {
-                throw new Error('ApiClient class not defined');
-            }
-            debugLog('ApiClient class is defined');
-            
-            if (typeof ConfigManager === 'undefined') {
-                throw new Error('ConfigManager class not defined'); 
-            }
-            debugLog('ConfigManager class is defined');
-            
-            if (typeof IntervalManager === 'undefined') {
-                throw new Error('IntervalManager class not defined');
-            }
-            debugLog('IntervalManager class is defined');
-            
-            if (typeof CyberBackupPro === 'undefined') {
-                throw new Error('CyberBackupPro class not defined');
-            }
-            debugLog('CyberBackupPro class is defined');
-            
-            console.log('All classes are defined, creating CyberBackupPro...');
-            debugLog('All classes verified, instantiating CyberBackupPro...');
-            window.gui = new CyberBackupPro();
-            console.log('CyberBackupPro created successfully!');
-            debugLog('CyberBackupPro instance created successfully');
-            alert('CyberBackupPro created successfully! window.gui is now available.');
-            
-            // Test the method exists
-            if (typeof window.gui.handlePrimaryAction === 'function') {
-                console.log('handlePrimaryAction method is available');
-                debugLog('handlePrimaryAction method verified');
-            } else {
-                throw new Error('handlePrimaryAction method not found on gui object');
-            }
-            
-            debugLog('=== GUI INITIALIZATION COMPLETED SUCCESSFULLY ===');
-            
-        } catch (error) {
-            debugLog('ERROR during initialization: ' + error.message);
-            console.error('ERROR creating CyberBackupPro:', error);
-            alert('ERROR creating CyberBackupPro: ' + error.message + '\nStack: ' + error.stack);
-        }
-
-        // ...existing code...
+        debugLog('=== SCRIPT LOADING COMPLETE ===');
     </script>
 </body>
 </html>

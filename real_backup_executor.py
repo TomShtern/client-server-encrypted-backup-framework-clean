@@ -23,7 +23,7 @@ class RealBackupExecutor:
     Smart wrapper for EncryptedBackupClient.exe that provides real backup functionality
     with automated process control and verification.
     """
-    def __init__(self, client_exe_path: str = None):
+    def __init__(self, client_exe_path: Optional[str] = None):
         # Try different possible locations for the client executable
         if not client_exe_path:
             possible_paths = [
@@ -67,14 +67,17 @@ class RealBackupExecutor:
     def _generate_transfer_info(self, server_ip: str, server_port: int, 
                               username: str, file_path: str) -> str:
         """Generate transfer.info file for the C++ client"""
+        # Convert to absolute path to ensure client finds the correct file
+        absolute_file_path = os.path.abspath(file_path)
+        
         transfer_info_path = os.path.join(self.temp_dir, "transfer.info")
         
         with open(transfer_info_path, 'w') as f:
             f.write(f"{server_ip}:{server_port}\n")
             f.write(f"{username}\n")
-            f.write(f"{file_path}\n")
+            f.write(f"{absolute_file_path}\n")
             
-        self._log_status("CONFIG", f"Generated transfer.info: {server_ip}:{server_port}, {username}, {file_path}")
+        self._log_status("CONFIG", f"Generated transfer.info: {server_ip}:{server_port}, {username}, {absolute_file_path}")
         return transfer_info_path
     
     def _calculate_file_hash(self, file_path: str) -> str:

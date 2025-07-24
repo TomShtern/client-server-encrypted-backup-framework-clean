@@ -69,12 +69,12 @@ def open_gui():
         return False
 
 def main():
-    print("🚀 CyberBackup 3.0 - GUI Launcher")
+    print("CyberBackup 3.0 - GUI Launcher")
     print("=" * 50)
     
     # Check if API server port is available
     if not check_port_available(9090):
-        print("⚠️  Port 9090 is already in use.")
+        print("Port 9090 is already in use.")
         print("   The API server might already be running.")
         print("   Opening GUI anyway...")
     else:
@@ -84,17 +84,17 @@ def main():
         if server_process:
             print("⏳ Waiting for API server to be ready...")
             if wait_for_server(9090):
-                print("✅ API server is ready!")
+                print("API server is ready!")
             else:
-                print("⚠️  API server may not be fully ready, but continuing...")
+                print("API server may not be fully ready, but continuing...")
         else:
             print("❌ Failed to start API server")
             return 1
     
-    print("🌐 Opening GUI in browser...")
+    print("Opening GUI in browser...")
     if open_gui():
         print()
-        print("🎉 GUI should now be open in your browser!")
+        print("GUI should now be open in your browser!")
         print()
         print("Instructions:")
         print("1. The GUI is now open in your web browser")
@@ -110,7 +110,7 @@ def main():
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            print("\n👋 Shutting down...")
+            print("\nShutting down...")
             return 0
     else:
         print("❌ Failed to open GUI")

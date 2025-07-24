@@ -1,0 +1,14 @@
+This is a test file for the improved backup system.
+The client now supports direct configuration without transfer.info files.
+File selection through the web GUI should work much better now!
+
+Features implemented:
+- Improved file picker fallback mechanism
+- Static file caching in WebServerBackend
+- Reduced polling frequency (10x improvement)
+- Thread optimization
+- Request debouncing
+- Lazy loading of GUI components
+- Direct configuration passing (no more transfer.info dependency)
+
+This test verifies the complete file upload flow.

@@ -1,0 +1,10 @@
+VERIFICATION_TEST_FILE_2025-07-22_22:14:42
+Created by Claude Code on 2025-07-22 at 22:14:42
+This file tests the path resolution fix in real_backup_executor.py
+Original content hash will be compared with received content hash
+UNIQUE_CONTENT_MARKER_792837492847
+File size should match exactly between source and destination
+Testing absolute path resolution in transfer.info generation
+Fix implemented: os.path.abspath(file_path) on line 71 of real_backup_executor.py
+Expected result: Full absolute path in transfer.info, not just filename
+SUCCESS_IF_CONTENTS_MATCH_EXACTLY

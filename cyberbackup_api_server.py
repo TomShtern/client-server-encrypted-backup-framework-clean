@@ -233,24 +233,9 @@ def api_start_backup():
             filename = file.filename
             
         else:
-            print(f"[DEBUG] Using JSON/fallback path")
-            # JSON format (current client GUI format)
-            file_info = request.json or {}
-            filename = file_info.get('filename', '')
-            
-            if not filename:
-                return jsonify({'success': False, 'message': 'No filename provided'}), 400
-            
-            # For JSON format, we need to create a dummy file since the GUI doesn't upload actual content
-            # This is a limitation - the GUI needs to be updated to actually upload files
-            temp_dir = tempfile.mkdtemp()
-            file_path = os.path.join(temp_dir, filename)
-            
-            # Create a test file with some content
-            with open(file_path, 'w') as f:
-                f.write(f"Test backup file: {filename}\nCreated for testing CyberBackup 3.0")
-            
-            username = server_config['username']
+            # If not multipart/form-data, it's an invalid request for file upload
+            print(f"[DEBUG] Invalid content type for /api/start_backup: {request.content_type}")
+            return jsonify({'success': False, 'message': 'Invalid request: file upload expected'}), 400
         
         # Update status
         backup_status['backing_up'] = True
@@ -550,7 +535,8 @@ def main():
             threaded=True
         )
     except KeyboardInterrupt:
-        print("\n👋 API Server shutdown requested")
+        print("
+👋 API Server shutdown requested")
     except Exception as e:
         print(f"❌ Server error: {e}")
 

@@ -72,17 +72,35 @@ int main(int argc, char* argv[]) {
         }
 
         std::cout << "✅ Client initialized successfully!" << std::endl;
-        std::cout << "🌐 Web GUI available at: http://127.0.0.1:9090" << std::endl;
-        std::cout << "📁 Ready for backup operations..." << std::endl;
-        std::cout << "Press Ctrl+C to exit" << std::endl;
 
-        // Keep the client alive and GUI server running
-        while (!g_shutdownRequested.load()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        if (g_batchMode) {
+            // Batch mode: perform single backup operation and exit
+            std::cout << "🔄 Starting backup operation..." << std::endl;
+            
+            bool backupSuccess = client.runBackupOperation();
+            
+            if (backupSuccess) {
+                std::cout << "✅ Backup completed successfully!" << std::endl;
+                exitCode = 0;
+            } else {
+                std::cout << "❌ Backup operation failed!" << std::endl;
+                exitCode = 1;
+            }
+        } else {
+            // Interactive mode: run web GUI server
+            std::cout << "🌐 Web GUI available at: http://127.0.0.1:9090" << std::endl;
+            std::cout << "📁 Ready for backup operations..." << std::endl;
+            std::cout << "Press Ctrl+C to exit" << std::endl;
+
+            // Keep the client alive and GUI server running
+            // Reduced from 100ms to 1000ms to significantly reduce CPU usage
+            while (!g_shutdownRequested.load()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            }
+
+            std::cout << "✅ Shutdown requested, cleaning up..." << std::endl;
+            exitCode = 0;
         }
-
-        std::cout << "✅ Shutdown requested, cleaning up..." << std::endl;
-        exitCode = 0;
         
     } catch (const std::bad_alloc& e) {
         std::cerr << "❌ Memory allocation failed: " << e.what() << std::endl;

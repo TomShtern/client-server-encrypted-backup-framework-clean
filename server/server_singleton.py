@@ -1,10 +1,8 @@
+
+
 """
-Server Singleton Manager - Ensures only one Python server instance runs at a time
-Provides multiple mechanisms to prevent multiple server instances:
-1. PID file locking 
-2. Socket binding check
-3. File locking mechanism
-4. Process checking
+Server Singleton Manager - Ensures only one Python server instance runs at a time.
+If a new instance is started, it will terminate the old one and take its place.
 """
 
 import os
@@ -24,343 +22,174 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-# Try to import fcntl for file locking (Unix/Linux)
-try:
-    import fcntl
-    HAS_FCNTL = True
-except ImportError:
-    HAS_FCNTL = False
-
 logger = logging.getLogger(__name__)
 
 class ServerSingletonManager:
-    """Manages single server instance enforcement using multiple mechanisms."""
+    """
+    Manages a single server instance. If a new instance is launched,
+    it terminates the existing one.
+    """
     
     def __init__(self, server_name: str = "BackupServer", port: int = 1256):
         """
         Initialize the singleton manager.
         
         Args:
-            server_name: Name of the server process
-            port: Port the server will bind to
+            server_name: A unique name for the server process (e.g., "BackupServer", "BackupServerGUI").
+            port: The port the server will use. This helps in identifying the process.
         """
         self.server_name = server_name
         self.port = port
-        self.pid_file = Path(f"{server_name}_{port}.pid")
-        self.lock_file = Path(f"{server_name}_{port}.lock")
-        self.lock_fd: Optional[int] = None
+        # Use a temporary directory for lock files for better cross-platform compatibility
+        self.lock_dir = Path(os.environ.get("TEMP", "/tmp"))
+        self.pid_file = self.lock_dir / f"{server_name}_{port}.pid"
         self.is_locked = False
         
-        # Register cleanup on exit
+        # Register cleanup to run when the process exits
         atexit.register(self.cleanup)
-    
-    def acquire_singleton_lock(self) -> bool:
+
+    def _is_process_running(self, pid: int) -> bool:
+        """Check if a process with the given PID is running."""
+        if not HAS_PSUTIL:
+            # Basic check for non-psutil environments
+            try:
+                os.kill(pid, 0)
+            except OSError:
+                return False
+            else:
+                return True
+        
+        return psutil.pid_exists(pid)
+
+    def _terminate_process(self, pid: int):
+        """Terminates the process with the given PID."""
+        if not self._is_process_running(pid):
+            logger.info(f"Process with PID {pid} is not running. No action needed.")
+            return
+
+        logger.warning(f"Terminating existing server process with PID {pid}.")
+        try:
+            if HAS_PSUTIL:
+                p = psutil.Process(pid)
+                # Try to terminate gracefully first, then kill
+                p.terminate()
+                try:
+                    p.wait(timeout=3)
+                except psutil.TimeoutExpired:
+                    logger.warning(f"Process {pid} did not terminate gracefully. Killing it.")
+                    p.kill()
+                    p.wait(timeout=3)
+            else:
+                # Fallback for systems without psutil
+                os.kill(pid, signal.SIGTERM)
+                time.sleep(2) # Give it time to die
+
+            logger.info(f"Process {pid} terminated.")
+            # Wait a moment for OS to release resources (e.g., network port)
+            time.sleep(1.5)
+
+        except Exception as e:
+            logger.error(f"Failed to terminate process {pid}: {e}", exc_info=True)
+            # This is critical, if we can't kill the old process, the new one shouldn't start.
+            raise RuntimeError(f"Could not terminate existing process {pid}.") from e
+
+    def acquire_lock(self) -> bool:
         """
-        Acquire singleton lock using multiple mechanisms.
+        Acquires the singleton lock. If an existing instance is found, it's terminated.
         
         Returns:
-            True if lock acquired successfully, False if another instance is running
+            True if the lock was acquired, False otherwise.
         """
-        try:
-            # Method 1: Check if port is already in use
-            if self._is_port_in_use():
-                logger.error(f"Port {self.port} is already in use by another process")
-                return False
-            
-            # Method 2: Check PID file
-            if self._check_pid_file():
-                logger.error("Another server instance is already running (PID file check)")
-                return False
-            
-            # Method 3: File locking mechanism
-            if not self._acquire_file_lock():
-                logger.error("Could not acquire file lock - another instance may be running")
-                return False
-            
-            # Method 4: Process name checking
-            if self._check_running_processes():
-                logger.error("Found another server process with same name")
-                return False
-            
-            # All checks passed - create PID file and mark as locked
-            self._create_pid_file()
-            self.is_locked = True
-            
-            logger.info(f"Successfully acquired singleton lock for {self.server_name} on port {self.port}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error acquiring singleton lock: {e}")
-            self.cleanup()
-            return False
-    
-    def _is_port_in_use(self) -> bool:
-        """Check if the port is already in use."""
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                result = sock.bind(('127.0.0.1', self.port))
-                return False  # Port is available
-        except OSError:
-            return True  # Port is in use
-    
-    def _check_pid_file(self) -> bool:
-        """Check if PID file exists and contains a running process."""
-        if not self.pid_file.exists():
-            return False
-        
-        try:
-            with open(self.pid_file, 'r') as f:
-                pid = int(f.read().strip())
-            
-            # Check if process is still running
-            if self._is_process_running(pid):
-                logger.warning(f"Found running process with PID {pid} from PID file")
-                return True
-            else:
-                # Stale PID file - remove it
-                logger.info(f"Removing stale PID file for process {pid}")
-                self.pid_file.unlink()
-                return False
-                
-        except (ValueError, OSError) as e:
-            logger.warning(f"Error reading PID file: {e}")
-            # Remove corrupted PID file
+        # 1. Check for an existing PID file and terminate the process if it's running
+        if self.pid_file.exists():
             try:
-                self.pid_file.unlink()
-            except OSError:
-                pass
-            return False
-    
-    def _is_process_running(self, pid: int) -> bool:
-        """Check if a process with given PID is running."""
-        if HAS_PSUTIL:
-            try:
-                return psutil.pid_exists(pid)
-            except (psutil.Error, OSError):
-                return False
-        else:
-            # Fallback for Windows without psutil
-            try:
-                if sys.platform == "win32":
-                    import subprocess
-                    result = subprocess.run(['tasklist', '/FI', f'PID eq {pid}'], 
-                                          capture_output=True, text=True)
-                    return str(pid) in result.stdout
-                else:
-                    # Unix-like systems
-                    try:
-                        os.kill(pid, 0)
-                        return True
-                    except OSError:
-                        return False
-            except Exception:
-                return False
-    
-    def _acquire_file_lock(self) -> bool:
-        """Acquire exclusive file lock."""
-        if not HAS_FCNTL:
-            # Windows fallback - use file existence as lock
-            try:
-                if self.lock_file.exists():
-                    # Check if lock is stale
-                    try:
-                        with open(self.lock_file, 'r') as f:
-                            pid = int(f.read().strip())
-                        if not self._is_process_running(pid):
-                            # Stale lock, remove it
-                            self.lock_file.unlink()
-                        else:
-                            return False  # Active lock
-                    except (ValueError, OSError):
-                        # Corrupted lock file, remove it
-                        self.lock_file.unlink()
-                
-                # Create new lock file
-                with open(self.lock_file, 'w') as f:
-                    f.write(str(os.getpid()))
-                return True
-                
-            except OSError:
-                return False
-        
-        try:
-            self.lock_fd = os.open(str(self.lock_file), os.O_CREAT | os.O_WRONLY | os.O_TRUNC)
-            fcntl.flock(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            
-            # Write current PID to lock file
-            os.write(self.lock_fd, str(os.getpid()).encode())
-            os.fsync(self.lock_fd)
-            
-            return True
-            
-        except (OSError, IOError) as e:
-            if self.lock_fd:
+                pid = int(self.pid_file.read_text().strip())
+                self._terminate_process(pid)
+            except (ValueError, OSError) as e:
+                logger.warning(f"Could not read or process PID file {self.pid_file}: {e}. Assuming stale lock.")
+            except RuntimeError as e:
+                logger.critical(f"CRITICAL: {e}")
+                return False # Failed to kill the old process
+            finally:
+                # Clean up the old PID file
                 try:
-                    os.close(self.lock_fd)
+                    self.pid_file.unlink()
                 except OSError:
-                    pass
-                self.lock_fd = None
+                    pass # May already be gone
+
+        # 2. Check if the port is in use (it shouldn't be, but this is a safety check)
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(("127.0.0.1", self.port))
+        except socket.error as e:
+            logger.error(f"Port {self.port} is still in use, even after termination attempt. Error: {e}")
+            logger.error("This may be due to another application using the port, or the OS being slow to release it.")
             return False
-    
-    def _check_running_processes(self) -> bool:
-        """Check for other running server processes."""
-        if not HAS_PSUTIL:
-            # Simplified check without psutil
+
+        # 3. We are clear to start. Create our own PID file.
+        try:
+            self.pid_file.write_text(str(os.getpid()))
+            self.is_locked = True
+            logger.info(f"Successfully acquired singleton lock for {self.server_name} (PID: {os.getpid()}).")
+            return True
+        except OSError as e:
+            logger.error(f"Failed to create new PID file {self.pid_file}: {e}")
+            return False
+
+    def cleanup(self):
+        """Cleans up the PID file upon process exit."""
+        if self.is_locked:
             try:
-                if sys.platform == "win32":
-                    import subprocess
-                    result = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq python.exe'], 
-                                          capture_output=True, text=True)
-                    lines = result.stdout.split('\n')
-                    python_processes = [line for line in lines if 'python.exe' in line.lower()]
-                    # Basic heuristic - if more than 2 python processes, might be another server
-                    return len(python_processes) > 2
-                else:
-                    return False  # Skip process checking on Unix without psutil
-            except Exception:
-                return False
-        
-        try:
-            current_pid = os.getpid()
-            
-            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-                try:
-                    if proc.info['pid'] == current_pid:
-                        continue
-                    
-                    # Check process name and command line
-                    cmdline = ' '.join(proc.info['cmdline'] or [])
-                    if ('server.py' in cmdline and 
-                        'python' in proc.info['name'].lower() and
-                        str(self.port) in cmdline):
-                        logger.warning(f"Found potential server process: PID {proc.info['pid']}, CMD: {cmdline}")
-                        return True
-                        
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    continue
-            
-            return False
-            
-        except Exception as e:
-            logger.warning(f"Error checking running processes: {e}")
-            return False
-    
-    def _create_pid_file(self) -> None:
-        """Create PID file with current process ID."""
-        try:
-            with open(self.pid_file, 'w') as f:
-                f.write(str(os.getpid()))
-            logger.debug(f"Created PID file: {self.pid_file}")
-        except OSError as e:
-            logger.error(f"Failed to create PID file: {e}")
-    
-    def cleanup(self) -> None:
-        """Clean up all locks and files."""
-        if not self.is_locked:
-            return
-        
-        try:
-            # Remove PID file
-            if self.pid_file.exists():
-                self.pid_file.unlink()
-                logger.debug(f"Removed PID file: {self.pid_file}")
-        except OSError as e:
-            logger.warning(f"Failed to remove PID file: {e}")
-        
-        try:
-            # Release file lock
-            if self.lock_fd and HAS_FCNTL:
-                fcntl.flock(self.lock_fd, fcntl.LOCK_UN)
-                os.close(self.lock_fd)
-                self.lock_fd = None
-                logger.debug("Released file lock")
-        except OSError as e:
-            logger.warning(f"Failed to release file lock: {e}")
-        
-        try:
-            # Remove lock file
-            if self.lock_file.exists():
-                self.lock_file.unlink()
-                logger.debug(f"Removed lock file: {self.lock_file}")
-        except OSError as e:
-            logger.warning(f"Failed to remove lock file: {e}")
-        
+                if self.pid_file.exists() and int(self.pid_file.read_text().strip()) == os.getpid():
+                    self.pid_file.unlink()
+                    logger.info(f"Cleaned up PID file {self.pid_file}.")
+            except (OSError, ValueError) as e:
+                logger.warning(f"Error during PID file cleanup: {e}")
         self.is_locked = False
-        logger.info("Singleton cleanup completed")
-    
-    def force_cleanup_stale_locks(self) -> None:
-        """Force cleanup of stale lock files (use with caution)."""
-        logger.warning("Forcing cleanup of potentially stale lock files...")
-        
-        try:
-            if self.pid_file.exists():
-                self.pid_file.unlink()
-                logger.info(f"Force removed PID file: {self.pid_file}")
-        except OSError as e:
-            logger.error(f"Failed to force remove PID file: {e}")
-        
-        try:
-            if self.lock_file.exists():
-                self.lock_file.unlink()
-                logger.info(f"Force removed lock file: {self.lock_file}")
-        except OSError as e:
-            logger.error(f"Failed to force remove lock file: {e}")
 
-
-def ensure_single_server_instance(server_name: str = "BackupServer", port: int = 1256) -> ServerSingletonManager:
+def ensure_single_server_instance(server_name: str = "BackupServer", port: int = 1256) -> "ServerSingletonManager":
     """
-    Convenience function to ensure only one server instance runs.
+    Ensures only one instance of the server is running.
+    If another instance is found, it is terminated.
     
     Args:
-        server_name: Name of the server process
-        port: Port the server will bind to
+        server_name: A unique name for the server process.
+        port: The port the server will use.
         
     Returns:
-        ServerSingletonManager instance if successful
+        A ServerSingletonManager instance.
         
     Raises:
-        SystemExit: If another instance is already running
+        SystemExit: If the lock cannot be acquired.
     """
     singleton = ServerSingletonManager(server_name, port)
     
-    if not singleton.acquire_singleton_lock():
-        print(f"\n❌ ERROR: Another {server_name} instance is already running on port {port}")
-        print("   Possible solutions:")
-        print("   1. Stop the existing server instance")
-        print("   2. Wait for the existing server to finish")
-        print("   3. Use a different port")
-        print("   4. Kill existing server processes if they're stuck")
-        print(f"   5. Force cleanup: python -c \"from server_singleton import ServerSingletonManager; ServerSingletonManager('{server_name}', {port}).force_cleanup_stale_locks()\"")
-        print()
+    if not singleton.acquire_lock():
+        print(f"\n❌ ERROR: Could not acquire singleton lock for {server_name} on port {port}.")
+        print("   Another instance may be running and could not be terminated,")
+        print("   or the port might be in use by another application.")
         sys.exit(1)
     
     return singleton
 
-
-# CLI utility for managing server instances
+# CLI utility for checking and cleaning up
 if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description="Server Singleton Management Utility")
-    parser.add_argument("--cleanup", action="store_true", help="Force cleanup stale lock files")
-    parser.add_argument("--check", action="store_true", help="Check if server is running")
+    parser.add_argument("--cleanup", action="store_true", help="Force cleanup of a stale lock file")
     parser.add_argument("--port", type=int, default=1256, help="Server port (default: 1256)")
     parser.add_argument("--name", default="BackupServer", help="Server name (default: BackupServer)")
     
     args = parser.parse_args()
     
-    singleton = ServerSingletonManager(args.name, args.port)
-    
     if args.cleanup:
-        singleton.force_cleanup_stale_locks()
-        print("✅ Lock cleanup completed")
-    elif args.check:
-        if singleton._is_port_in_use():
-            print(f"❌ Server appears to be running on port {args.port}")
-            sys.exit(1)
+        pid_file = Path(os.environ.get("TEMP", "/tmp")) / f"{args.name}_{args.port}.pid"
+        if pid_file.exists():
+            try:
+                pid_file.unlink()
+                print(f"✅ Stale lock file removed: {pid_file}")
+            except OSError as e:
+                print(f"❌ Failed to remove lock file: {e}")
         else:
-            print(f"✅ No server running on port {args.port}")
-            sys.exit(0)
-    else:
-        print("Use --cleanup or --check options")
+            print("ℹ️ No lock file found to clean up.")

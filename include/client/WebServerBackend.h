@@ -5,6 +5,9 @@
 #include <memory>
 #include <functional>
 
+// Forward declaration for BackupConfig
+class Client;
+
 /**
  * WebServerBackend - HTTP API Server for HTML Client Integration
  * 
@@ -40,11 +43,30 @@ public:
      */
     bool isRunning() const;
 
+    // Configuration structure for backup operations (matching Client::BackupConfig)
+    struct BackupConfig {
+        std::string serverIP;
+        uint16_t serverPort;
+        std::string username;
+        std::string filepath;
+        
+        bool isValid() const {
+            return !serverIP.empty() && serverPort > 0 && serverPort <= 65535 && 
+                   !username.empty() && username.length() <= 100 && !filepath.empty();
+        }
+    };
+
     /**
      * Set the backup callback function
      * @param callback Function to call for backup operations
      */
     void setBackupCallback(std::function<bool()> callback);
+    
+    /**
+     * Set the new backup callback function with direct configuration
+     * @param callback Function to call for backup operations with config
+     */
+    void setBackupCallbackWithConfig(std::function<bool(const BackupConfig&)> callback);
     
     // Non-copyable
     WebServerBackend(const WebServerBackend&) = delete;

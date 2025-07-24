@@ -1,0 +1,2 @@
+FILE WITH SPACES - PATH RESOLUTION TEST
+This tests absolute path generation with spaces

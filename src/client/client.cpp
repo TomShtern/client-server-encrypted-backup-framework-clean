@@ -30,7 +30,7 @@ static const uint32_t crc_table[256] = {
     0x6B93DDDB, 0x6F52C06C, 0x6211E6B5, 0x66D0FB02,
     0x5E9F46BF, 0x5A5E5B08, 0x571D7DD1, 0x53DC6066,
     0x4D9B3063, 0x495A2DD4, 0x44190B0D, 0x40D816BA,
-    0xACA5C697, 0xA864DB20, 0xA527FDF9, 0xA1E6E04E,
+    0ACA5C697, 0xA864DB20, 0xA527FDF9, 0xA1E6E04E,
     0xBFA1B04B, 0xBB60ADFC, 0xB6238B25, 0xB2E29692,
     0x8AAD2B2F, 0x8E6C3698, 0x832F1041, 0x87EE0DF6,
     0x99A95DF3, 0x9D684044, 0x902B669D, 0x94EA7B2A,
@@ -124,10 +124,26 @@ Client::Client() : socket(nullptr), connected(false), rsaPrivate(nullptr),
     // Initialize HTTP API server for HTML GUI
     try {
         webServer = std::make_unique<WebServerBackend>();
-        // Set backup callback for API operations
+        
+        // Set both callback types for maximum compatibility
+        // Legacy callback for backward compatibility
         webServer->setBackupCallback([this]() { return this->runBackupOperation(); });
+        
+        // New config-based callback that eliminates transfer.info dependency
+        webServer->setBackupCallbackWithConfig([this](const WebServerBackend::BackupConfig& config) {
+            // Convert WebServerBackend::BackupConfig to Client::BackupConfig
+            Client::BackupConfig clientConfig;
+            clientConfig.serverIP = config.serverIP;
+            clientConfig.serverPort = config.serverPort;
+            clientConfig.username = config.username;
+            clientConfig.filepath = config.filepath;
+            
+            return this->runBackupOperation(clientConfig);
+        });
+        
         if (webServer->start("127.0.0.1", 9090)) {
             std::cout << "[GUI] HTTP API server started on port 9090" << std::endl;
+            std::cout << "[GUI] New configuration-based backup system enabled" << std::endl;
         } else {
             std::cout << "[ERROR] Failed to start HTTP API server" << std::endl;
         }
@@ -216,7 +232,8 @@ bool Client::run() {
     if (!connectedSuccessfully) {
         displayError("Failed to connect after 3 attempts", ErrorType::NETWORK);
         return false;
-    }displayConnectionInfo();
+    }
+    displayConnectionInfo();
     
     // Test connection quality with proper error handling
     displayStatus("Testing connection", true, "Verifying server communication...");
@@ -226,7 +243,7 @@ bool Client::run() {
     } else {
         displayStatus("Connection test", true, "Server communication verified");
     }
-    
+
     // Enable keep-alive for long transfers
     enableKeepAlive();
     
@@ -272,7 +289,7 @@ bool Client::run() {
     
     while (fileRetries < MAX_RETRIES && !transferSuccess) {
         if (fileRetries > 0) {
-            displayStatus("File transfer", false, "Retrying (attempt " + 
+            displayStatus("File transfer", false, "Retrying (attempt " +
                          std::to_string(fileRetries + 1) + " of " + std::to_string(MAX_RETRIES) + ")");
             std::this_thread::sleep_for(std::chrono::seconds(2));
         }
@@ -381,6 +398,70 @@ bool Client::validateConfiguration() {
     displayStatus("File validation", true, filepath + " (" + formatBytes(stats.totalBytes) + ")");
     displayStatus("Server validation", true, serverIP + ":" + std::to_string(serverPort));
     displayStatus("Username validation", true, username);
+    
+    return true;
+}
+
+// New method: validate and apply configuration directly (no file I/O)
+bool Client::validateAndApplyConfig(const BackupConfig& config) {
+    displayStatus("Validating direct configuration", true, "Checking parameters");
+    
+    // Basic validation using the BackupConfig isValid() method
+    if (!config.isValid()) {
+        displayError("Invalid configuration provided", ErrorType::CONFIG);
+        return false;
+    }
+    
+    // Additional validation for server IP (more thorough than just non-empty check)
+    if (config.serverIP.empty() || config.serverIP.length() > 253) {
+        displayError("Invalid IP address: " + config.serverIP, ErrorType::CONFIG);
+        return false;
+    }
+    
+    // Validate port range
+    if (config.serverPort == 0 || config.serverPort > 65535) {
+        displayError("Invalid port number: " + std::to_string(config.serverPort), ErrorType::CONFIG);
+        return false;
+    }
+    
+    // Validate username length and characters
+    if (config.username.empty() || config.username.length() > 100) {
+        displayError("Invalid username length (1-100 characters required)", ErrorType::CONFIG);
+        return false;
+    }
+    
+    // Validate file exists and get size
+    std::ifstream testFile(config.filepath, std::ios::binary);
+    if (!testFile.is_open()) {
+        displayError("File not found: " + config.filepath, ErrorType::FILE_IO);
+        return false;
+    }
+    
+    testFile.seekg(0, std::ios::end);
+    std::streampos fileSize = testFile.tellg();
+    testFile.close();
+    
+    if (fileSize == 0) {
+        displayError("File is empty: " + config.filepath, ErrorType::FILE_IO);
+        return false;
+    }
+    
+    if (fileSize > (4LL * 1024 * 1024 * 1024)) { // 4GB limit
+        displayError("File too large (max 4GB): " + config.filepath, ErrorType::FILE_IO);
+        return false;
+    }
+    
+    // Apply the validated configuration to the client instance
+    serverIP = config.serverIP;
+    serverPort = config.serverPort;
+    username = config.username;
+    filepath = config.filepath;
+    stats.totalBytes = static_cast<size_t>(fileSize);
+    
+    // Display validation success
+    displayStatus("Direct configuration applied", true, config.filepath + " (" + formatBytes(stats.totalBytes) + ")");
+    displayStatus("Server configuration", true, config.serverIP + ":" + std::to_string(config.serverPort));
+    displayStatus("Username configured", true, config.username);
     
     return true;
 }
@@ -1107,7 +1188,7 @@ std::string Client::encryptFile(const std::vector<uint8_t>& data) {
         double speed = (data.size() / 1024.0 / 1024.0) / (duration / 1000.0);
         
         displayStatus("Encryption performance", true, 
-                     std::to_string(duration) + "ms (" + 
+                     std::to_string(duration) + "ms (" +
                      std::to_string(static_cast<int>(speed)) + " MB/s)");
         
         return result;
@@ -1447,7 +1528,7 @@ void Client::displaySummary() {
 // GUI-triggered backup operation (doesn't shut down WebServer)
 bool Client::runBackupOperation() {
     try {
-        // Re-read configuration in case it changed
+        // Re-read configuration in case it changed (legacy mode)
         if (!readTransferInfo()) {
             return false;
         }
@@ -1455,6 +1536,30 @@ bool Client::runBackupOperation() {
         if (!validateConfiguration()) {
             return false;
         }
+
+        // Run the backup operation
+        return run();
+
+    } catch (const std::exception& e) {
+        displayError("Backup operation failed: " + std::string(e.what()), ErrorType::GENERAL);
+        return false;
+    } catch (...) {
+        displayError("Unknown error in backup operation", ErrorType::GENERAL);
+        return false;
+    }
+}
+
+// New backup operation with direct configuration (eliminates transfer.info dependency)
+bool Client::runBackupOperation(const BackupConfig& config) {
+    try {
+        // Validate and apply the provided configuration
+        if (!validateAndApplyConfig(config)) {
+            return false;
+        }
+
+        displayStatus("Configuration applied directly", true, 
+            "Server: " + config.serverIP + ":" + std::to_string(config.serverPort) + 
+            ", User: " + config.username + ", File: " + config.filepath);
 
         // Run the backup operation
         return run();

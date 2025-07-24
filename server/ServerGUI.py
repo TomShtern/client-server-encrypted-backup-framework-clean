@@ -22,12 +22,15 @@ import socket
 
 # Import server components for real server control
 try:
-    from server import BackupServer  # type: ignore
+    from server import BackupServer
     SERVER_CONTROL_AVAILABLE = True
 except ImportError:
-    BackupServer = None  # type: ignore
+    BackupServer = None
     SERVER_CONTROL_AVAILABLE = False
     print("Warning: Server control not available - server start/stop disabled")
+
+# Import singleton manager
+from server_singleton import ensure_single_server_instance
 
 # Import system tray functionality based on platform
 try:
@@ -962,7 +965,9 @@ class ServerGUIStatus:
 class ServerGUI:
     """ULTRA MODERN GUI class for the server dashboard - Enhanced version"""
 
-    def __init__(self):
+    def __init__(self, server=None):
+        self.singleton_manager = ensure_single_server_instance("BackupServerGUI", 1257)
+        self.server = server
         self.status = ServerGUIStatus()
         self.gui_enabled = False
         self.root = None
@@ -1878,8 +1883,8 @@ class ServerGUI:
         row1 = tk.Frame(button_frame, bg=ModernTheme.CARD_BG)
         row1.pack(fill="x", pady=(0, 3))
 
-        self._create_compact_button(row1, "👥 Clients", lambda: self._switch_tab("clients"), ModernTheme.ACCENT_BLUE)
-        self._create_compact_button(row1, "📁 Files", lambda: self._switch_tab("files"), ModernTheme.ACCENT_PURPLE)
+        self._create_compact_button(row1, "▶️ Start", self._start_server, ModernTheme.SUCCESS)
+        self._create_compact_button(row1, "🛑 Stop", self._stop_server, ModernTheme.ERROR)
 
         # Row 2
         row2 = tk.Frame(button_frame, bg=ModernTheme.CARD_BG)
@@ -1894,6 +1899,43 @@ class ServerGUI:
 
         self._create_compact_button(row3, "📈 Analytics", lambda: self._switch_tab("analytics"), ModernTheme.ACCENT_ORANGE)
         self._create_compact_button(row3, "❌ Exit", self._exit_server, ModernTheme.ERROR)
+
+    def _start_server(self):
+        """Start the backup server."""
+        if self.server and not self.server.running:
+            try:
+                # Start server in a new thread to avoid blocking the GUI
+                server_thread = threading.Thread(target=self.server.start, daemon=True)
+                server_thread.start()
+                self.toast_system.show_toast("Server started successfully!", "success")
+                self._add_activity_log("Server started.")
+                self.update_server_status(True, self.settings.get('port', 1256))
+            except Exception as e:
+                self.toast_system.show_toast(f"Failed to start server: {e}", "error")
+                self._add_activity_log(f"Error starting server: {e}")
+        else:
+            self.toast_system.show_toast("Server is already running.", "warning")
+
+    def _stop_server(self):
+        """Stop the backup server."""
+        if self.server and self.server.running:
+            try:
+                self.server.stop()
+                self.toast_system.show_toast("Server stopped successfully!", "success")
+                self._add_activity_log("Server stopped.")
+                self.update_server_status(False)
+            except Exception as e:
+                self.toast_system.show_toast(f"Failed to stop server: {e}", "error")
+                self._add_activity_log(f"Error stopping server: {e}")
+        else:
+            self.toast_system.show_toast("Server is not running.", "warning")
+
+    def _restart_server(self):
+        """Restart the backup server."""
+        self._add_activity_log("Attempting to restart server...")
+        self._stop_server()
+        # Add a small delay to ensure the port is released
+        self.root.after(1000, self._start_server)
 
     def _create_compact_button(self, parent, text, command, color):
         """Create a compact modern button"""

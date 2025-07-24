@@ -1,0 +1,17 @@
+{
+  "server_settings": {
+    "port": 1256,
+    "storage_dir": "received_files",
+    "max_clients": 50,
+    "session_timeout": 10,
+    "maintenance_interval": 60,
+    "max_file_size_mb": 4096,
+    "verbose_logging": false,
+    "auto_backup_db": true
+  },
+  "gui_preferences": {
+    "last_tab": "dashboard",
+    "window_state": "normal",
+    "last_updated": "2025-07-23T17:11:56.711339"
+  }
+}

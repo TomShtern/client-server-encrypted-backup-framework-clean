@@ -167,17 +167,33 @@ public:
     bool initialize();
     bool run();
 
+    // Configuration structure for backup operations
+    struct BackupConfig {
+        std::string serverIP;
+        uint16_t serverPort;
+        std::string username;
+        std::string filepath;
+        
+        // Validation method
+        bool isValid() const {
+            return !serverIP.empty() && serverPort > 0 && serverPort <= 65535 && 
+                   !username.empty() && username.length() <= 100 && !filepath.empty();
+        }
+    };
+
     // GUI interface for web-triggered operations
     bool runBackupOperation();
+    bool runBackupOperation(const BackupConfig& config);
 
     // Non-copyable
     Client(const Client&) = delete;
     Client& operator=(const Client&) = delete;
 
 private:
-    // Configuration
-    bool readTransferInfo();
-    bool validateConfiguration();
+    // Configuration methods
+    bool readTransferInfo();  // Legacy method, will be deprecated
+    bool validateConfiguration();  // Legacy method, will be deprecated
+    bool validateAndApplyConfig(const BackupConfig& config);  // New method
     bool loadMeInfo();
     bool saveMeInfo();
     bool loadPrivateKey();
@@ -223,7 +239,6 @@ private:
     void displayConnectionInfo();
     void displayError(const std::string& message, ErrorType type = ErrorType::NONE);
     void displaySeparator();
-    void displayPhase(const std::string& phase);
     void displaySummary();
 };
 
