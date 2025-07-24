@@ -46,13 +46,15 @@ def start_api_server():
             sys.executable, 
             'cyberbackup_api_server.py'
         ], 
-        stdout=subprocess.PIPE, 
-        stderr=subprocess.PIPE,
+        # Redirect stdout and stderr to the parent process's stdout/stderr
+        # This makes API server output visible in the console for debugging
+        stdout=sys.stdout, 
+        stderr=sys.stderr,
         creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
         )
         return server_process
     except Exception as e:
-        print(f"❌ Failed to start API server: {e}")
+        print(f"Failed to start API server: {e}")
         return None
 
 def open_gui():
@@ -62,7 +64,7 @@ def open_gui():
     try:
         # Open the GUI via the API server (solves CORS issues)
         webbrowser.open(gui_url)
-        print(f"✅ GUI opened in browser: {gui_url}")
+        print(f"GUI opened in browser: {gui_url}")
         return True
     except Exception as e:
         print(f"❌ Failed to open GUI: {e}")
@@ -78,11 +80,11 @@ def main():
         print("   The API server might already be running.")
         print("   Opening GUI anyway...")
     else:
-        print("📡 Starting API server...")
+        print("Starting API server...")
         server_process = start_api_server()
         
         if server_process:
-            print("⏳ Waiting for API server to be ready...")
+            print("Waiting for API server to be ready...")
             if wait_for_server(9090):
                 print("API server is ready!")
             else:
@@ -113,7 +115,7 @@ def main():
             print("\nShutting down...")
             return 0
     else:
-        print("❌ Failed to open GUI")
+        print("Failed to open GUI")
         return 1
 
 if __name__ == "__main__":

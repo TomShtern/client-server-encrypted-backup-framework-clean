@@ -527,18 +527,53 @@ def main():
     print_startup_info()
     
     # Start the server
-    try:
+    # Run Flask app in a separate thread if not in debug mode and not main process
+    if not debug_mode and os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        # When Flask's reloader is active, it forks a new process.
+        # We only want to run the app in a thread in the child process.
+        # In the parent process, we just let it exit so launch_gui.py can continue.
+        threading.Thread(target=lambda: app.run(
+            host='127.0.0.1',
+            port=9090,
+            debug=debug_mode,
+            threaded=True
+        )).start()
+        # In the parent process, we return immediately so launch_gui.py can proceed
+        return
+    else:
+        # In debug mode or in the reloader's child process, run normally (blocking)
         app.run(
             host='127.0.0.1',
             port=9090,
             debug=debug_mode,
             threaded=True
         )
-    except KeyboardInterrupt:
-        print("
-👋 API Server shutdown requested")
-    except Exception as e:
-        print(f"❌ Server error: {e}")
+    if not debug_mode and os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        # Run Flask app in a separate thread for non-blocking execution
+        # This is for when launch_gui.py calls it
+        threading.Thread(target=lambda: app.run(
+            host='127.0.0.1',
+            port=9090,
+            debug=debug_mode,
+            threaded=True
+        )).start()
+        # The main thread of cyberbackup_api_server.py will now exit,
+        # allowing launch_gui.py to continue its checks.
+        # The Flask server will continue running in the background thread.
+    else:
+        # In debug mode or when Flask's reloader forks a new process,
+        # run normally (blocking) and handle KeyboardInterrupt.
+        try:
+            app.run(
+                host='127.0.0.1',
+                port=9090,
+                debug=debug_mode,
+                threaded=True
+            )
+        except KeyboardInterrupt:
+            print("\n👋 API Server shutdown requested")
+        except Exception as e:
+            print(f"❌ Server error: {e}")
 
 if __name__ == "__main__":
     main()

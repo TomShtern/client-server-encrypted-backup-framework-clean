@@ -22,6 +22,8 @@ import time
 import argparse
 import platform
 from pathlib import Path
+import shutil
+import webbrowser
 from typing import Optional, List
 
 class Colors:
@@ -58,19 +60,19 @@ class OneClickBuilder:
         
     def print_success(self, message: str) -> None:
         """Print success message"""
-        self.print_colored(f"✅ {message}", Colors.GREEN)
+        self.print_colored(f"[SUCCESS] {message}", Colors.GREEN)
         
     def print_error(self, message: str) -> None:
         """Print error message"""
-        self.print_colored(f"❌ {message}", Colors.RED)
+        self.print_colored(f"[ERROR] {message}", Colors.RED)
         
     def print_warning(self, message: str) -> None:
         """Print warning message"""
-        self.print_colored(f"⚠️  {message}", Colors.YELLOW)
+        self.print_colored(f"[WARNING] {message}", Colors.YELLOW)
         
     def print_info(self, message: str) -> None:
         """Print info message"""
-        self.print_colored(f"ℹ️  {message}", Colors.CYAN)
+        self.print_colored(f"[INFO] {message}", Colors.CYAN)
         
     def print_phase(self, phase: str, description: str) -> None:
         """Print phase header"""
@@ -183,6 +185,12 @@ class OneClickBuilder:
         if exe_path.exists():
             self.print_success("C++ client built successfully!")
             self.print_info(f"Location: {exe_path}")
+
+            # Copy the executable to the client directory
+            client_dir = self.script_dir / "client"
+            client_dir.mkdir(exist_ok=True) # Ensure client directory exists
+            shutil.copy(exe_path, client_dir / exe_name)
+            self.print_success(f"Copied {exe_name} to {client_dir}")
         else:
             self.print_error(f"{exe_name} was not created!")
             self.print_info(f"Expected location: {exe_path}")
@@ -267,39 +275,51 @@ class OneClickBuilder:
         self.print_info("Starting the complete CyberBackup 3.0 system...")
         print()
         self.print_info("Services that will be started:")
-        self.print_info("  • Backup Server (Port 1256)")
-        self.print_info("  • API Bridge Server (Port 9090)")
-        self.print_info("  • Web GUI (Browser interface)")
+        self.print_info("  Backup Server (Port 1256)")
+        self.print_info("  API Bridge Server (Port 9090)")
+        self.print_info("  Web GUI (Browser interface)")
         print()
-        
-        self.print_info("Calling launch_gui.py to start all services...")
-        
-        try:
-            # Use the existing launcher
-            result = self.run_command([sys.executable, "launch_gui.py"])
-            
-            # If we get here, the launcher completed
-            self.print_success_banner()
-            
-        except KeyboardInterrupt:
-            self.print_warning("Launch interrupted by user")
-        except Exception as e:
-            self.print_error(f"Failed to launch services: {e}")
-            raise
+
+        # Start the Python backup server
+        self.print_info("Starting Python Backup Server (server/server.py)...")
+        server_path = self.script_dir / "server" / "server.py"
+        self.server_process = subprocess.Popen(
+            [sys.executable, str(server_path)],
+            creationflags=subprocess.CREATE_NEW_CONSOLE if self.is_windows else 0
+        )
+        self.print_info(f"Python Backup Server started with PID: {self.server_process.pid}")
+        time.sleep(5) # Give server time to start
+
+        # Start the API Bridge Server
+        self.print_info("Starting API Bridge Server (cyberbackup_api_server.py)...")
+        api_server_path = self.script_dir / "cyberbackup_api_server.py"
+        self.api_server_process = subprocess.Popen(
+            [sys.executable, str(api_server_path)],
+            creationflags=subprocess.CREATE_NEW_CONSOLE if self.is_windows else 0
+        )
+        self.print_info(f"API Bridge Server started with PID: {self.api_server_process.pid}")
+        time.sleep(5) # Give API server time to start
+
+        # Open Web GUI in browser
+        gui_url = "http://127.0.0.1:9090/"
+        self.print_info(f"Opening Web GUI in browser: {gui_url}")
+        webbrowser.open(gui_url)
+
+        self.print_success_banner()
             
     def print_success_banner(self) -> None:
         """Print the success banner"""
         print()
         self.print_colored("=" * 72, Colors.GREEN)
-        self.print_colored("   🎉 ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!", Colors.GREEN)
+        self.print_colored("   ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!", Colors.GREEN)
         self.print_colored("=" * 72, Colors.GREEN)
         print()
         self.print_success("Your CyberBackup 3.0 system should now be running with:")
         print()
-        self.print_info("  📊 Web GUI:        http://localhost:9090")
-        self.print_info("  🖥️  Server GUI:     Started automatically")
-        self.print_info("  🔒 Backup Server:  Running on port 1256")
-        self.print_info("  🌐 API Server:     Running on port 9090")
+        self.print_info("  Web GUI:        http://localhost:9090")
+        self.print_info("  Server GUI:     Started automatically")
+        self.print_info("  Backup Server:  Running on port 1256")
+        self.print_info("  API Server:     Running on port 9090")
         print()
         self.print_info("Next steps:")
         self.print_info("  1. The web interface should have opened automatically")
@@ -310,16 +330,19 @@ class OneClickBuilder:
         self.print_info("To run tests: python scripts/master_test_suite.py")
         self.print_info("To stop services: Close the console windows or press Ctrl+C")
         print()
-        self.print_success("Have a great backup session! 🚀")
+        self.print_success("Have a great backup session!")
         self.print_colored("=" * 72, Colors.GREEN)
         
     def run(self) -> None:
         """Run the complete build and launch process"""
+        if self.is_windows:
+            # Set console encoding to UTF-8 for emoji support
+            os.system("chcp 65001 > nul")
         try:
             # Print header
             print()
             self.print_colored("=" * 72, Colors.CYAN)
-            self.print_colored("   🚀 ONE-CLICK BUILD AND RUN - CyberBackup 3.0", Colors.CYAN)
+            self.print_colored("   ONE-CLICK BUILD AND RUN - CyberBackup 3.0", Colors.CYAN)
             self.print_colored("=" * 72, Colors.CYAN)
             print()
             self.print_info("Starting complete build and deployment process...")
@@ -353,6 +376,24 @@ class OneClickBuilder:
             self.print_info("Please check the error message above and try again.")
             self.print_info("You can run with --verbose for more detailed error information.")
             sys.exit(1)
+        finally:
+            if hasattr(self, 'server_process') and self.server_process.poll() is None:
+                self.print_info("Terminating Python Backup Server...")
+                self.server_process.terminate()
+                self.server_process.wait(timeout=5)
+                if self.server_process.poll() is None:
+                    self.print_warning("Python Backup Server did not terminate gracefully, killing it...")
+                    self.server_process.kill()
+                self.print_info("Python Backup Server terminated.")
+            
+            if hasattr(self, 'api_server_process') and self.api_server_process.poll() is None:
+                self.print_info("Terminating API Bridge Server...")
+                self.api_server_process.terminate()
+                self.api_server_process.wait(timeout=5)
+                if self.api_server_process.poll() is None:
+                    self.print_warning("API Bridge Server did not terminate gracefully, killing it...")
+                    self.api_server_process.kill()
+                self.print_info("API Bridge Server terminated.")
 
 def main():
     """Main entry point"""
