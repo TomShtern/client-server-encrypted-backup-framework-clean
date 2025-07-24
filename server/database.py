@@ -116,10 +116,27 @@ class DatabaseManager:
                 FileName VARCHAR(255) NOT NULL,
                 PathName VARCHAR(255) NOT NULL, 
                 Verified BOOLEAN DEFAULT 0,
+                FileSize INTEGER,
+                ModificationDate TEXT,
+                CRC INTEGER,
                 PRIMARY KEY (ID, FileName), 
                 FOREIGN KEY (ID) REFERENCES clients(ID) ON DELETE CASCADE
             )
         ''', commit=True)
+        
+        # Add FileSize and ModificationDate to older tables if they don't exist
+        try:
+            self.execute("SELECT FileSize FROM files LIMIT 1", fetchone=True)
+        except sqlite3.OperationalError:
+            self.execute("ALTER TABLE files ADD COLUMN FileSize INTEGER", commit=True)
+        try:
+            self.execute("SELECT ModificationDate FROM files LIMIT 1", fetchone=True)
+        except sqlite3.OperationalError:
+            self.execute("ALTER TABLE files ADD COLUMN ModificationDate TEXT", commit=True)
+        try:
+            self.execute("SELECT CRC FROM files LIMIT 1", fetchone=True)
+        except sqlite3.OperationalError:
+            self.execute("ALTER TABLE files ADD COLUMN CRC INTEGER", commit=True)
         
         logger.info("Database schema initialization complete.")
 
@@ -167,7 +184,7 @@ class DatabaseManager:
         
         logger.debug(f"Client '{name}' data saved/updated in database (Recorded LastSeen: {current_wall_time_utc_iso}).")
 
-    def save_file_info_to_db(self, client_id: bytes, file_name: str, path_name: str, verified: bool):
+    def save_file_info_to_db(self, client_id: bytes, file_name: str, path_name: str, verified: bool, file_size: int, mod_date: str, crc: Optional[int] = None):
         """
         Saves or updates file information in the database.
         
@@ -176,13 +193,22 @@ class DatabaseManager:
             file_name: The original filename.
             path_name: The stored file path (relative or absolute).
             verified: Whether the file has been verified (checksum validated).
+            file_size: The size of the file in bytes.
+            mod_date: The modification date of the file as an ISO 8601 string.
+            crc: The CRC32 checksum of the file.
         """
         # Ensure path_name is stored consistently (e.g., relative to FILE_STORAGE_DIR or absolute)
         # Current implementation assumes path_name is the final, usable path.
-        self.execute('''
-            INSERT OR REPLACE INTO files (ID, FileName, PathName, Verified) 
-            VALUES (?, ?, ?, ?)
-        ''', (client_id, file_name, path_name, verified), commit=True)
+        if crc is not None:
+            self.execute('''
+                INSERT OR REPLACE INTO files (ID, FileName, PathName, Verified, FileSize, ModificationDate, CRC) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (client_id, file_name, path_name, verified, file_size, mod_date, crc), commit=True)
+        else:
+            self.execute('''
+                INSERT OR REPLACE INTO files (ID, FileName, PathName, Verified, FileSize, ModificationDate) 
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (client_id, file_name, path_name, verified, file_size, mod_date), commit=True)
         
         logger.debug(f"File info for '{file_name}' (Client ID: {client_id.hex()}) saved/updated in database. Verified status: {verified}.")
 
@@ -286,6 +312,32 @@ class DatabaseManager:
             logger.error(f"Error deleting file record '{file_name}' for client {client_id.hex()}: {e}")
             return False
 
+    def delete_file(self, client_id: str, filename: str) -> bool:
+        """Deletes a file from the filesystem and the database."""
+        try:
+            # First, get the file path from the database
+            file_info = self.execute("SELECT PathName FROM files WHERE ID = ? AND FileName = ?", 
+                                    (bytes.fromhex(client_id), filename), fetchone=True)
+            if not file_info:
+                logger.warning(f"File '{filename}' not found in database for client {client_id}")
+                return False
+
+            file_path = file_info[0]
+
+            # Delete the file from the filesystem
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                logger.info(f"Deleted file from filesystem: {file_path}")
+            else:
+                logger.warning(f"File not found on filesystem for deletion: {file_path}")
+
+            # Delete the file record from the database
+            return self.delete_file_record(bytes.fromhex(client_id), filename)
+
+        except Exception as e:
+            logger.error(f"Error deleting file '{filename}' for client {client_id}: {e}")
+            return False
+
     def get_database_stats(self) -> dict:
         """
         Retrieves basic statistics about the database.
@@ -324,6 +376,110 @@ class DatabaseManager:
             logger.error(f"Error retrieving database statistics: {e}")
         
         return stats
+
+    def get_all_clients(self) -> list:
+        """Retrieves all clients from the database."""
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT ID, Name, LastSeen FROM clients")
+                clients = cursor.fetchall()
+                return [{
+                    'id': row[0].hex(),
+                    'name': row[1],
+                    'last_seen': row[2]
+                } for row in clients]
+        except sqlite3.Error as e:
+            logger.error(f"Database error while getting all clients: {e}")
+            return []
+
+    def get_files_for_client(self, client_id: str) -> list:
+        """Retrieves all files for a given client."""
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT FileName, PathName, Verified FROM files WHERE ClientID=?", (bytes.fromhex(client_id),))
+                files = cursor.fetchall()
+                return [{
+                    'filename': row[0],
+                    'path': row[1],
+                    'verified': bool(row[2])
+                } for row in files]
+        except sqlite3.Error as e:
+            logger.error(f"Database error while getting files for client {client_id}: {e}")
+            return []
+
+    def get_all_files(self) -> list:
+        """Retrieves all files from the database."""
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT f.FileName, f.PathName, f.Verified, c.Name, f.FileSize, f.ModificationDate 
+                    FROM files f JOIN clients c ON f.ID = c.ID
+                """)
+                files = cursor.fetchall()
+                return [{
+                    'filename': row[0],
+                    'path': row[1],
+                    'verified': bool(row[2]),
+                    'client': row[3],
+                    'size': row[4],
+                    'date': row[5]
+                } for row in files]
+        except sqlite3.Error as e:
+            logger.error(f"Database error while getting all files: {e}")
+            return []
+
+    def get_file_info(self, client_id: str, filename: str) -> Optional[dict]:
+        """Retrieves all information for a single file."""
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT f.FileName, f.PathName, f.Verified, c.Name, f.FileSize, f.ModificationDate, f.CRC
+                    FROM files f JOIN clients c ON f.ID = c.ID
+                    WHERE f.ID = ? AND f.FileName = ?
+                """, (bytes.fromhex(client_id), filename))
+                row = cursor.fetchone()
+                if row:
+                    return {
+                        'filename': row[0],
+                        'path': row[1],
+                        'verified': bool(row[2]),
+                        'client': row[3],
+                        'size': row[4],
+                        'date': row[5],
+                        'crc': row[6]
+                    }
+                return None
+        except sqlite3.Error as e:
+            logger.error(f"Database error while getting file info for {client_id}/{filename}: {e}")
+            return None
+
+    def get_total_clients_count(self) -> int:
+        """Returns the total number of registered clients."""
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM clients")
+                count = cursor.fetchone()[0]
+                return count if count is not None else 0
+        except sqlite3.Error as e:
+            logger.error(f"Database error while getting total client count: {e}")
+            return 0
+
+    def get_total_bytes_transferred(self) -> int:
+        """Returns the total number of bytes transferred."""
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT SUM(FileSize) FROM files WHERE Verified = 1")
+                total_bytes = cursor.fetchone()[0]
+                return total_bytes if total_bytes is not None else 0
+        except sqlite3.Error as e:
+            logger.error(f"Database error while getting total bytes transferred: {e}")
+            return 0
 
     def check_startup_permissions(self):
         """

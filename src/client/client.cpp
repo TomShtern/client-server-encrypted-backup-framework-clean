@@ -30,7 +30,7 @@ static const uint32_t crc_table[256] = {
     0x6B93DDDB, 0x6F52C06C, 0x6211E6B5, 0x66D0FB02,
     0x5E9F46BF, 0x5A5E5B08, 0x571D7DD1, 0x53DC6066,
     0x4D9B3063, 0x495A2DD4, 0x44190B0D, 0x40D816BA,
-    0ACA5C697, 0xA864DB20, 0xA527FDF9, 0xA1E6E04E,
+    0xACA5C697, 0xA864DB20, 0xA527FDF9, 0xA1E6E04E,
     0xBFA1B04B, 0xBB60ADFC, 0xB6238B25, 0xB2E29692,
     0x8AAD2B2F, 0x8E6C3698, 0x832F1041, 0x87EE0DF6,
     0x99A95DF3, 0x9D684044, 0x902B669D, 0x94EA7B2A,
@@ -1302,8 +1302,10 @@ std::string Client::formatDuration(int seconds) {
 std::string Client::getCurrentTimestamp() {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_buf;
+    localtime_s(&tm_buf, &time_t);
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&time_t), "%H:%M:%S");
+    ss << std::put_time(&tm_buf, "%H:%M:%S");
     return ss.str();
 }
 

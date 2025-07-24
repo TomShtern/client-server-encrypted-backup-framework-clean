@@ -27,6 +27,15 @@
             --cyber-lime: #32CD32;
             --plasma-pink: #FF1493;
             
+            /* Glow Effects */
+            --glow-blue: 0 0 20px var(--neon-blue), 0 0 40px var(--neon-blue), 0 0 80px var(--neon-blue);
+            --glow-green: 0 0 20px var(--neon-green), 0 0 40px var(--neon-green), 0 0 80px var(--neon-green);
+            --glow-pink: 0 0 20px var(--neon-pink), 0 0 40px var(--neon-pink), 0 0 80px var(--neon-pink);
+            --glow-purple: 0 0 20px var(--neon-purple), 0 0 40px var(--neon-purple), 0 0 80px var(--neon-purple);
+            --glow-yellow: 0 0 20px var(--neon-yellow), 0 0 40px var(--neon-yellow), 0 0 80px var(--neon-yellow);
+            --glow-orange: 0 0 20px var(--neon-orange), 0 0 40px var(--neon-orange), 0 0 80px var(--neon-orange);
+            --glow-red: 0 0 20px var(--neon-red), 0 0 40px var(--neon-red), 0 0 80px var(--neon-red);
+            
             --bg-black: #000000;
             --bg-dark: #0A0A0A;
             --bg-medium: #1A1A2E;
@@ -63,6 +72,78 @@
             --radius-md: 0.5rem;
             --radius-lg: 0.75rem;
             --radius-xl: 1rem;
+            
+            /* Material Design Elevation System */
+            --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+            --elevation-2: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+            --elevation-4: 0 10px 20px rgba(0, 0, 0, 0.19), 0 6px 6px rgba(0, 0, 0, 0.23);
+            --elevation-8: 0 14px 28px rgba(0, 0, 0, 0.25), 0 10px 10px rgba(0, 0, 0, 0.22);
+            --elevation-16: 0 19px 38px rgba(0, 0, 0, 0.30), 0 15px 12px rgba(0, 0, 0, 0.22);
+            --elevation-24: 0 24px 48px rgba(0, 0, 0, 0.35), 0 20px 15px rgba(0, 0, 0, 0.22);
+            
+            /* Material Design with Cyberpunk Glow Elevations */
+            --md-elevation-1: var(--elevation-1), 0 0 4px rgba(0, 255, 255, 0.1);
+            --md-elevation-2: var(--elevation-2), 0 0 8px rgba(0, 255, 255, 0.15);
+            --md-elevation-4: var(--elevation-4), 0 0 12px rgba(0, 255, 255, 0.2);
+            --md-elevation-8: var(--elevation-8), 0 0 16px rgba(0, 255, 255, 0.25);
+            --md-elevation-16: var(--elevation-16), 0 0 20px rgba(0, 255, 255, 0.3);
+            --md-elevation-24: var(--elevation-24), 0 0 24px rgba(0, 255, 255, 0.35);
+            
+            /* Material Design Typography Scale */
+            --font-size-h1: 3.5rem;    /* 56px */
+            --font-size-h2: 2.125rem;  /* 34px */
+            --font-size-h3: 1.5rem;    /* 24px */
+            --font-size-h4: 1.25rem;   /* 20px */
+            --font-size-h5: 1.125rem;  /* 18px */
+            --font-size-h6: 1rem;      /* 16px */
+            --font-size-subtitle1: 1rem;
+            --font-size-subtitle2: 0.875rem;
+            --font-size-body1: 1rem;
+            --font-size-body2: 0.875rem;
+            --font-size-button: 0.875rem;
+            --font-size-caption: 0.75rem;
+            --font-size-overline: 0.625rem;
+            
+            /* Typography Line Heights */
+            --line-height-tight: 1.2;
+            --line-height-normal: 1.4;
+            --line-height-relaxed: 1.6;
+            --line-height-loose: 1.8;
+            
+            /* Typography Font Weights */
+            --font-weight-light: 300;
+            --font-weight-normal: 400;
+            --font-weight-medium: 500;
+            --font-weight-semibold: 600;
+            --font-weight-bold: 700;
+            --font-weight-black: 900;
+            
+            /* Enhanced Material Design 8px Grid Spacing */
+            --space-0: 0;
+            --space-1: 0.125rem;   /* 2px */
+            --space-2: 0.25rem;    /* 4px */
+            --space-3: 0.375rem;   /* 6px */
+            --space-4: 0.5rem;     /* 8px */
+            --space-5: 0.625rem;   /* 10px */
+            --space-6: 0.75rem;    /* 12px */
+            --space-8: 1rem;       /* 16px */
+            --space-10: 1.25rem;   /* 20px */
+            --space-12: 1.5rem;    /* 24px */
+            --space-16: 2rem;      /* 32px */
+            --space-20: 2.5rem;    /* 40px */
+            --space-24: 3rem;      /* 48px */
+            --space-32: 4rem;      /* 64px */
+            
+            /* Material Design Surface Colors with Cyberpunk Twist */
+            --surface-00: rgba(26, 26, 46, 0.95);  /* Default surface */
+            --surface-01: rgba(26, 26, 46, 0.97);  /* 1dp elevation */
+            --surface-02: rgba(30, 30, 50, 0.98);  /* 2dp elevation */
+            --surface-04: rgba(34, 34, 54, 0.99);  /* 4dp elevation */
+            --surface-06: rgba(38, 38, 58, 1.0);   /* 6dp elevation */
+            --surface-08: rgba(42, 42, 62, 1.0);   /* 8dp elevation */
+            --surface-12: rgba(46, 46, 66, 1.0);   /* 12dp elevation */
+            --surface-16: rgba(50, 50, 70, 1.0);   /* 16dp elevation */
+            --surface-24: rgba(54, 54, 74, 1.0);   /* 24dp elevation */
         }
 
         body {
@@ -158,11 +239,11 @@
         .container {
             max-width: 1800px;
             margin: 0 auto;
-            padding: var(--space-md) var(--space-md) var(--space-xl); /* FIX: Added bottom padding to prevent clipping */
+            padding: var(--space-16) var(--space-16) var(--space-24); /* Enhanced spacing with Material Design */
             display: grid;
             grid-template-columns: minmax(300px, 1fr) minmax(400px, 2fr) minmax(350px, 1fr);
             grid-template-rows: auto 1fr auto;
-            gap: var(--space-md);
+            gap: var(--space-16); /* Material Design grid spacing */
             min-height: 100vh;
             grid-template-areas: 
                 "header header header"
@@ -170,24 +251,20 @@
                 "debug debug debug";
         }
 
-        /* Enhanced Glass Card with RGB Border Animation and Drop Shadows */
+        /* Enhanced Glass Card with Material Design Elevation and Cyberpunk Aesthetics */
         .glass-card {
-            background: var(--bg-card);
-            -webkit-backdrop-filter: blur(20px);
+            background: var(--surface-02);
             -webkit-backdrop-filter: blur(20px);
             backdrop-filter: blur(20px);
             border: 2px solid transparent;
-            border-radius: var(--radius-xl);
-            padding: var(--space-md);
+            border-radius: 12px; /* Material Design rounded corners */
+            padding: var(--space-16);
             position: relative;
             overflow: hidden;
-            transition: var(--transition);
+            transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1); /* Material Design easing */
             background-clip: padding-box;
-            /* FIX: Enhanced depth with more pronounced drop shadows */
-            box-shadow: 
-                0 8px 24px rgba(0, 0, 0, 0.5),
-                0 2px 6px rgba(0, 255, 255, 0.1),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            /* Material Design elevation 2dp with cyberpunk glow */
+            box-shadow: var(--md-elevation-2);
         }
 
         .glass-card::before {
@@ -214,11 +291,30 @@
         }
 
         .glass-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 
-                0 8px 24px rgba(0, 0, 0, 0.5),
-                0 4px 12px rgba(0, 255, 255, 0.2),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            transform: translateY(-4px); /* Enhanced Material Design lift */
+            background: var(--surface-04);
+            /* Material Design elevation 8dp with enhanced cyberpunk glow */
+            box-shadow: var(--md-elevation-8);
+        }
+        
+        /* Material Design card variants */
+        .glass-card.elevated {
+            box-shadow: var(--md-elevation-4);
+        }
+        
+        .glass-card.elevated:hover {
+            box-shadow: var(--md-elevation-16);
+            transform: translateY(-6px);
+        }
+        
+        .glass-card.outlined {
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--md-elevation-1);
+        }
+        
+        .glass-card.outlined:hover {
+            border-color: var(--neon-blue);
+            box-shadow: var(--md-elevation-4);
         }
 
         @keyframes rgb-border-cycle {
@@ -323,12 +419,13 @@
         }
 
         .logo-text h1 {
-            font-size: 2rem;
-            font-weight: 900;
+            font-size: var(--font-size-h2);
+            font-weight: var(--font-weight-black);
+            line-height: var(--line-height-tight);
             color: var(--neon-pink);
             text-transform: uppercase;
             letter-spacing: 3px;
-            margin-bottom: var(--space-xs);
+            margin-bottom: var(--space-2);
             position: relative;
         }
 
@@ -468,8 +565,9 @@
         }
 
         .panel-title {
-            font-size: 1.25rem;
-            font-weight: 700;
+            font-size: var(--font-size-h4);
+            font-weight: var(--font-weight-bold);
+            line-height: var(--line-height-normal);
             color: var(--neon-blue);
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -573,28 +671,24 @@
         /* Enhanced File Drop Zone with Better Visual Feedback */
         .file-drop-zone {
             position: relative;
-            margin-bottom: var(--space-lg);
+            margin-bottom: var(--space-16);
             border: 2px dashed var(--glass-border);
-            border-radius: var(--radius-xl);
-            padding: var(--space-2xl);
+            border-radius: 12px;
+            padding: var(--space-24);
             text-align: center;
-            transition: var(--transition);
+            transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
             cursor: pointer;
-            background: var(--bg-glass);
-            box-shadow: 
-                inset 0 2px 6px rgba(0, 0, 0, 0.2),
-                0 2px 8px rgba(0, 0, 0, 0.1);
+            background: var(--surface-01);
+            box-shadow: var(--md-elevation-1);
         }
 
         .file-drop-zone:hover,
         .file-drop-zone.drag-over {
             border-color: var(--neon-blue);
-            background: rgba(0, 255, 255, 0.1);
-            box-shadow: 
-                var(--glow-blue),
-                inset 0 2px 6px rgba(0, 255, 255, 0.1),
-                0 4px 16px rgba(0, 255, 255, 0.2);
-            transform: scale(1.02);
+            background: color-mix(in srgb, var(--surface-02) 90%, var(--neon-blue));
+            background: rgba(0, 191, 255, 0.2); /* Fallback for older browsers */
+            box-shadow: var(--md-elevation-4);
+            transform: translateY(-2px);
         }
 
         .file-drop-zone.drag-over::before {
@@ -708,10 +802,11 @@
         }
 
         .progress-percentage {
-            font-size: 2.75rem;
-            font-weight: 900;
+            font-size: var(--font-size-h1);
+            font-weight: var(--font-weight-black);
+            line-height: var(--line-height-tight);
             color: var(--neon-blue);
-            margin-bottom: var(--space-sm);
+            margin-bottom: var(--space-4);
             text-shadow: var(--glow-blue);
         }
 
@@ -731,17 +826,17 @@
             justify-content: center;
         }
 
-        /* Unified Cyberpunk Button System - Enhanced */
+        /* Enhanced Cyberpunk Button System with Material Design Principles */
         .cyber-btn {
-            padding: var(--space-md) var(--space-lg);
+            padding: var(--space-8) var(--space-16);
             border: 2px solid;
             background: transparent;
-            border-radius: var(--radius-md);
-            font-size: 0.875rem;
-            font-weight: 700;
+            border-radius: 4px; /* Material Design button radius */
+            font-size: var(--font-size-button);
+            font-weight: var(--font-weight-medium);
             text-transform: uppercase;
             cursor: pointer;
-            transition: var(--transition);
+            transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1); /* Material Design fast easing */
             position: relative;
             overflow: hidden;
             letter-spacing: 1px;
@@ -749,8 +844,28 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: var(--space-sm);
-            min-height: 44px; /* Better touch targets */
+            gap: var(--space-4);
+            min-height: 48px; /* Material Design minimum touch target */
+            box-shadow: var(--elevation-2);
+        }
+        
+        /* Material Design Ripple Effect */
+        .cyber-btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+        
+        .cyber-btn:active::before {
+            width: 300px;
+            height: 300px;
         }
 
         .cyber-btn:focus {
@@ -764,52 +879,126 @@
             transform: none !important;
         }
 
+        /* Material Design Button Variants */
+        
+        /* Contained Button (Primary) */
         .cyber-btn.primary {
+            background: var(--neon-blue);
             border-color: var(--neon-blue);
-            color: var(--neon-blue);
+            color: var(--bg-black);
+            box-shadow: var(--md-elevation-2);
         }
 
         .cyber-btn.primary:hover:not(:disabled) {
-            background: var(--neon-blue);
-            color: var(--bg-black);
-            box-shadow: var(--glow-blue);
-            transform: translateY(-2px);
+            background: rgba(0, 191, 255, 0.85); /* Fallback for older browsers */
+            background: color-mix(in srgb, var(--neon-blue) 85%, white);
+            box-shadow: var(--md-elevation-4);
+            transform: translateY(-1px);
+        }
+        
+        .cyber-btn.primary:active:not(:disabled) {
+            box-shadow: var(--md-elevation-8);
+            transform: translateY(0);
+        }
+        
+        /* Outlined Button */
+        .cyber-btn.outlined {
+            border-color: var(--neon-blue);
+            color: var(--neon-blue);
+            background: transparent;
+            box-shadow: none;
+        }
+        
+        .cyber-btn.outlined:hover:not(:disabled) {
+            background: rgba(0, 255, 255, 0.08);
+            box-shadow: var(--md-elevation-1);
+        }
+        
+        /* Text Button */
+        .cyber-btn.text {
+            border: none;
+            color: var(--neon-blue);
+            background: transparent;
+            box-shadow: none;
+            padding: var(--space-6) var(--space-12);
+        }
+        
+        .cyber-btn.text:hover:not(:disabled) {
+            background: rgba(0, 255, 255, 0.08);
         }
 
         .cyber-btn.success {
+            background: var(--neon-green);
             border-color: var(--neon-green);
-            color: var(--neon-green);
+            color: var(--bg-black);
+            box-shadow: var(--md-elevation-2);
         }
 
         .cyber-btn.success:hover:not(:disabled) {
-            background: var(--neon-green);
-            color: var(--bg-black);
-            box-shadow: var(--glow-green);
-            transform: translateY(-2px);
+            background: rgba(0, 255, 0, 0.85); /* Fallback for older browsers */
+            background: color-mix(in srgb, var(--neon-green) 85%, white);
+            box-shadow: var(--md-elevation-4);
+            transform: translateY(-1px);
+        }
+        
+        .cyber-btn.success.outlined {
+            border-color: var(--neon-green);
+            color: var(--neon-green);
+            background: transparent;
+            box-shadow: none;
+        }
+        
+        .cyber-btn.success.outlined:hover:not(:disabled) {
+            background: rgba(0, 255, 0, 0.08);
         }
 
         .cyber-btn.danger {
+            background: var(--error);
             border-color: var(--error);
-            color: var(--error);
+            color: var(--bg-black);
+            box-shadow: var(--md-elevation-2);
         }
 
         .cyber-btn.danger:hover:not(:disabled) {
-            background: var(--error);
-            color: var(--bg-black);
-            box-shadow: 0 0 20px rgba(255, 0, 64, 0.6);
-            transform: translateY(-2px);
+            background: rgba(255, 0, 64, 0.85); /* Fallback for older browsers */
+            background: color-mix(in srgb, var(--error) 85%, white);
+            box-shadow: var(--md-elevation-4);
+            transform: translateY(-1px);
+        }
+        
+        .cyber-btn.danger.outlined {
+            border-color: var(--error);
+            color: var(--error);
+            background: transparent;
+            box-shadow: none;
+        }
+        
+        .cyber-btn.danger.outlined:hover:not(:disabled) {
+            background: rgba(255, 0, 64, 0.08);
         }
 
         .cyber-btn.secondary {
+            background: var(--neon-purple);
             border-color: var(--neon-purple);
-            color: var(--neon-purple);
+            color: var(--bg-black);
+            box-shadow: var(--md-elevation-2);
         }
 
         .cyber-btn.secondary:hover:not(:disabled) {
-            background: var(--neon-purple);
-            color: var(--bg-black);
-            box-shadow: var(--glow-purple);
-            transform: translateY(-2px);
+            background: color-mix(in srgb, var(--neon-purple) 85%, white);
+            box-shadow: var(--md-elevation-4);
+            transform: translateY(-1px);
+        }
+        
+        .cyber-btn.secondary.outlined {
+            border-color: var(--neon-purple);
+            color: var(--neon-purple);
+            background: transparent;
+            box-shadow: none;
+        }
+        
+        .cyber-btn.secondary.outlined:hover:not(:disabled) {
+            background: rgba(138, 43, 226, 0.08);
         }
 
         /* Large Control Buttons */
@@ -830,8 +1019,629 @@
             min-width: auto;
         }
 
-        .cyber-btn.control {
-            /* Extend cyber-btn for control buttons - Enhanced with better accessibility */
+
+        /* Loading Spinner System */
+        .cyber-btn.loading {
+            position: relative;
+            color: transparent !important;
+            pointer-events: none;
+            cursor: not-allowed;
+        }
+
+        .cyber-btn.loading::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            border: 2px solid transparent;
+            border-top-color: currentColor;
+            border-radius: 50%;
+            animation: cyber-spin 1s linear infinite;
+            color: var(--text-primary) !important;
+        }
+
+        .cyber-btn.loading.primary::after {
+            color: var(--bg-black);
+        }
+
+        .cyber-btn.loading.success::after {
+            color: var(--bg-black);
+        }
+
+        .cyber-btn.loading.danger::after {
+            color: var(--bg-black);
+        }
+
+        .cyber-btn.loading.secondary::after {
+            color: var(--bg-black);
+        }
+
+        .cyber-btn.loading.outlined::after,
+        .cyber-btn.loading.text::after {
+            color: currentColor;
+        }
+
+        .cyber-btn.large.loading::after {
+            width: 24px;
+            height: 24px;
+            border-width: 3px;
+        }
+
+        .cyber-btn.small.loading::after {
+            width: 16px;
+            height: 16px;
+            border-width: 2px;
+        }
+
+        @keyframes cyber-spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        /* Success Animation */
+        .cyber-btn.success-flash {
+            animation: success-flash 0.6s ease-out;
+        }
+
+        @keyframes success-flash {
+            0% { background-color: var(--neon-green); transform: scale(1); }
+            50% { 
+                background-color: rgba(0, 255, 128, 0.7); /* Fallback for older browsers */
+                transform: scale(1.05); 
+            }
+            100% { transform: scale(1); }
+        }
+
+        /* Error Animation */
+        .cyber-btn.error-shake {
+            animation: error-shake 0.5s ease-in-out;
+        }
+
+        @keyframes error-shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        /* Button State Indicators */
+        .cyber-btn.has-status {
+            position: relative;
+        }
+
+        .cyber-btn.has-status .status-indicator {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid var(--bg-card);
+            z-index: 1;
+        }
+
+        .cyber-btn.has-status .status-indicator.success {
+            background: var(--neon-green);
+            box-shadow: 0 0 8px rgba(0, 255, 0, 0.6);
+        }
+
+        .cyber-btn.has-status .status-indicator.error {
+            background: var(--error);
+            box-shadow: 0 0 8px rgba(255, 0, 64, 0.6);
+        }
+
+        /* Copy Button Styles */
+        .copy-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            margin-left: 8px;
+            padding: 0;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .copy-btn:hover {
+            border-color: var(--neon-blue);
+            color: var(--neon-blue);
+            background: rgba(0, 191, 255, 0.1);
+            box-shadow: 0 0 8px rgba(0, 191, 255, 0.3);
+        }
+
+        .copy-btn:active {
+            transform: scale(0.95);
+        }
+
+        .copy-btn.copied {
+            border-color: var(--success);
+            color: var(--success);
+            background: rgba(0, 255, 128, 0.1);
+            box-shadow: 0 0 8px rgba(0, 255, 128, 0.3);
+        }
+
+        .copy-btn.copied::after {
+            content: '✓';
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 255, 128, 0.1);
+            animation: copySuccess 0.3s ease;
+        }
+
+        @keyframes copySuccess {
+            0% { transform: scale(0) rotate(180deg); opacity: 0; }
+            50% { transform: scale(1.2) rotate(0deg); opacity: 1; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+
+        /* Copy container for positioning */
+        .copy-container {
+            display: inline-flex;
+            align-items: center;
+        }
+
+        /* Enhanced Status Indicators */
+        .status-indicator-enhanced {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            padding: 2px 8px;
+            border-radius: var(--radius-full);
+            font-size: var(--font-size-xs);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .status-indicator-enhanced::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 3px;
+            transition: all 0.3s ease;
+        }
+
+        .status-indicator-enhanced.connected {
+            background: rgba(0, 255, 128, 0.1);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+
+        .status-indicator-enhanced.connected::before {
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
+        }
+
+        .status-indicator-enhanced.disconnected {
+            background: rgba(255, 0, 64, 0.1);
+            color: var(--error);
+            border: 1px solid var(--error);
+        }
+
+        .status-indicator-enhanced.disconnected::before {
+            background: var(--error);
+            box-shadow: 0 0 8px var(--error);
+        }
+
+        .status-indicator-enhanced.running {
+            background: rgba(0, 191, 255, 0.1);
+            color: var(--neon-blue);
+            border: 1px solid var(--neon-blue);
+            animation: pulseBlue 2s ease-in-out infinite;
+        }
+
+        .status-indicator-enhanced.running::before {
+            background: var(--neon-blue);
+            box-shadow: 0 0 8px var(--neon-blue);
+        }
+
+        .status-indicator-enhanced.paused {
+            background: rgba(255, 255, 0, 0.1);
+            color: var(--warning);
+            border: 1px solid var(--warning);
+        }
+
+        .status-indicator-enhanced.paused::before {
+            background: var(--warning);
+            box-shadow: 0 0 8px var(--warning);
+        }
+
+        @keyframes pulseBlue {
+            0%, 100% { 
+                box-shadow: 0 0 5px rgba(0, 191, 255, 0.3);
+                transform: scale(1);
+            }
+            50% { 
+                box-shadow: 0 0 20px rgba(0, 191, 255, 0.6);
+                transform: scale(1.02);
+            }
+        }
+
+        /* Enhanced Toast Notifications */
+        .toast-enhanced {
+            position: relative;
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+            border-left: 4px solid transparent;
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        .toast-enhanced.success {
+            border-left-color: var(--success);
+            background: linear-gradient(135deg, rgba(0, 255, 128, 0.1), rgba(0, 255, 128, 0.05));
+        }
+
+        .toast-enhanced.error {
+            border-left-color: var(--error);
+            background: linear-gradient(135deg, rgba(255, 0, 64, 0.1), rgba(255, 0, 64, 0.05));
+        }
+
+        .toast-enhanced.warning {
+            border-left-color: var(--warning);
+            background: linear-gradient(135deg, rgba(255, 255, 0, 0.1), rgba(255, 255, 0, 0.05));
+        }
+
+        .toast-enhanced.info {
+            border-left-color: var(--neon-blue);
+            background: linear-gradient(135deg, rgba(0, 191, 255, 0.1), rgba(0, 191, 255, 0.05));
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Animation Polish */
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .slide-up {
+            animation: slideUp 0.4s ease-out;
+        }
+
+        .bounce-in {
+            animation: bounceIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from { 
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to { 
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes bounceIn {
+            0% {
+                transform: scale(0.3);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.05);
+            }
+            70% {
+                transform: scale(0.9);
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* Hover animations for interactive elements */
+        .cyber-btn, .copy-btn, .config-input {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .cyber-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 191, 255, 0.3);
+        }
+
+        .config-input:focus {
+            transform: translateY(-1px);
+            box-shadow: 0 0 0 3px rgba(0, 191, 255, 0.2);
+        }
+
+        /* Color Scheme Refinements */
+        :root {
+            /* Enhanced color palette */
+            --neon-orange: #ff8c00;
+            --neon-pink: #ff69b4;
+            --neon-cyan: #00ffff;
+            --neon-lime: #32ff32;
+            
+            /* Improved semantic colors */
+            --success-dark: #00cc66;
+            --warning-dark: #ff9900;
+            --error-dark: #cc0033;
+            --info-dark: #0099cc;
+            
+            /* Better contrast ratios */
+            --text-high-contrast: #ffffff;
+            --text-medium-contrast: #e0e0e0;
+            --text-low-contrast: #a0a0a0;
+        }
+
+        /* Accessibility Improvements */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        /* Focus indicators */
+        *:focus {
+            outline: 2px solid var(--neon-blue);
+            outline-offset: 2px;
+        }
+
+        .cyber-btn:focus,
+        .config-input:focus,
+        .copy-btn:focus {
+            outline: 3px solid var(--neon-blue);
+            outline-offset: 1px;
+        }
+
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+            :root {
+                --text-primary: var(--text-high-contrast);
+                --text-secondary: var(--text-medium-contrast);
+                --border: #ffffff;
+                --glass-border: #ffffff;
+            }
+            
+            .cyber-btn {
+                border-width: 2px;
+            }
+        }
+
+        /* CSS classes for removed inline styles */
+        .connection-health {
+            margin-left: var(--space-sm);
+            font-size: var(--font-size-xs);
+            color: var(--text-muted);
+            display: none;
+        }
+
+        .file-selection-container-positioned {
+            position: relative;
+        }
+
+        .recent-files-btn {
+            margin-top: var(--space-xs);
+            width: 100%;
+        }
+
+        /* Reduce motion for accessibility */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+            
+            .particle {
+                display: none;
+            }
+        }
+
+        /* Dark mode enhancements */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-black: #0a0a0a;
+                --bg-card: #111111;
+                --text-primary: #f0f0f0;
+            }
+        }
+
+        /* Print styles */
+        @media print {
+            .particle-container,
+            .toast-container,
+            .cyber-btn,
+            .copy-btn {
+                display: none !important;
+            }
+            
+            body {
+                background: white !important;
+                color: black !important;
+            }
+        }
+
+        /* Additional CSS Classes for inline style removal */
+        .connection-text-bold {
+            font-weight: 600;
+        }
+
+        .copy-btn-hidden {
+            display: none;
+        }
+
+        .file-preview-layout {
+            margin-top: var(--space-md);
+            text-align: center;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .panel-header-spaced {
+            margin-top: var(--space-xl);
+        }
+
+        /* SVG gradient stops */
+        .gradient-stop-blue {
+            stop-color: var(--neon-blue);
+            stop-opacity: 1;
+        }
+
+        .gradient-stop-purple {
+            stop-color: var(--neon-purple);
+            stop-opacity: 1;
+        }
+
+        .gradient-stop-pink {
+            stop-color: var(--neon-pink);
+            stop-opacity: 1;
+        }
+
+        .gradient-stop-green {
+            stop-color: var(--neon-green);
+            stop-opacity: 1;
+        }
+
+        .copy-container .copy-content {
+            flex: 1;
+            min-width: 0; /* Allow text truncation */
+        }
+
+        /* Form Validation Styling */
+        .config-input, .file-drop-zone {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .config-input.valid {
+            border-color: var(--success);
+            box-shadow: 0 0 0 2px rgba(0, 255, 128, 0.1);
+        }
+
+        .config-input.invalid {
+            border-color: var(--error);
+            box-shadow: 0 0 0 2px rgba(255, 0, 64, 0.1);
+            animation: shakeError 0.5s ease-in-out;
+        }
+
+        .config-input.warning {
+            border-color: var(--warning);
+            box-shadow: 0 0 0 2px rgba(255, 255, 0, 0.1);
+        }
+
+        /* Validation icons */
+        .validation-icon {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 14px;
+            z-index: 1;
+        }
+
+        .validation-icon.valid {
+            color: var(--success);
+        }
+
+        .validation-icon.invalid {
+            color: var(--error);
+        }
+
+        .validation-icon.warning {
+            color: var(--warning);
+        }
+
+        /* Validation helper text */
+        .validation-helper {
+            margin-top: 4px;
+            font-size: var(--font-size-sm);
+            line-height: 1.3;
+            opacity: 0;
+            transform: translateY(-4px);
+            transition: all 0.2s ease;
+        }
+
+        .validation-helper.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .validation-helper.valid {
+            color: var(--success);
+        }
+
+        .validation-helper.invalid {
+            color: var(--error);
+        }
+
+        .validation-helper.warning {
+            color: var(--warning);
+        }
+
+        /* Form field containers */
+        .form-field {
+            position: relative;
+            margin-bottom: var(--space-md);
+        }
+
+        .form-field.has-validation .config-input {
+            padding-right: 32px; /* Make room for validation icon */
+        }
+
+        /* File drop zone validation states */
+        .file-drop-zone.valid {
+            border-color: var(--success);
+            background: rgba(0, 255, 128, 0.05);
+        }
+
+        .file-drop-zone.invalid {
+            border-color: var(--error);
+            background: rgba(255, 0, 64, 0.05);
+            animation: shakeError 0.5s ease-in-out;
+        }
+
+        @keyframes shakeError {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
+
+        .cyber-btn.has-status .status-indicator.warning {
+            background: var(--warning);
+            box-shadow: 0 0 8px rgba(255, 255, 0, 0.6);
         }
 
         /* File preview container */
@@ -869,17 +1679,15 @@
         }
 
         .stat-card {
-            background: var(--bg-black);
+            background: var(--surface-02);
             border: 1px solid var(--glass-border);
-            border-radius: var(--radius-xl);
-            padding: var(--space-lg);
+            border-radius: 8px; /* Material Design card radius */
+            padding: var(--space-16);
             text-align: center;
-            transition: var(--transition);
+            transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
             position: relative;
             overflow: hidden;
-            box-shadow: 
-                0 3px 8px rgba(0, 0, 0, 0.3),
-                0 1px 4px rgba(0, 255, 255, 0.1);
+            box-shadow: var(--md-elevation-2);
         }
 
         .stat-card::before {
@@ -895,11 +1703,9 @@
 
         .stat-card:hover {
             border-color: var(--neon-blue);
-            box-shadow: 
-                0 6px 16px rgba(0, 0, 0, 0.4),
-                0 2px 8px rgba(0, 255, 255, 0.2),
-                var(--glow-blue);
-            transform: translateY(-8px) scale(1.02);
+            background: var(--surface-04);
+            box-shadow: var(--md-elevation-8);
+            transform: translateY(-4px);
         }
 
         .stat-card:hover::before {
@@ -944,25 +1750,28 @@
         }
 
         .security-badge {
-            padding: var(--space-lg);
-            background: var(--bg-black);
+            padding: var(--space-12);
+            background: var(--surface-02);
             border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
+            border-radius: 8px;
             display: flex;
             align-items: center;
-            gap: var(--space-md);
-            transition: var(--transition);
+            gap: var(--space-8);
+            transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
             position: relative;
-            box-shadow: 
-                0 2px 6px rgba(0, 0, 0, 0.3),
-                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            box-shadow: var(--md-elevation-1);
         }
 
         .security-badge.active {
             border-color: var(--success);
-            box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.2);
-            background: rgba(0, 255, 0, 0.05);
+            background: color-mix(in srgb, var(--surface-04) 95%, var(--success));
+            box-shadow: var(--md-elevation-4);
             animation: security-activation 0.6s ease-out;
+        }
+        
+        .security-badge:hover {
+            background: var(--surface-04);
+            box-shadow: var(--md-elevation-2);
         }
 
         @keyframes security-activation {
@@ -1140,18 +1949,16 @@
         }
 
         .toast {
-            background: var(--bg-card);
+            background: var(--surface-06);
             border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            padding: var(--space-lg) var(--space-xl);
+            border-radius: 8px;
+            padding: var(--space-12) var(--space-16);
             animation: toast-slide-in 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
             -webkit-backdrop-filter: blur(20px);
             backdrop-filter: blur(20px);
-            box-shadow: 
-                0 4px 12px rgba(0, 0, 0, 0.5),
-                0 2px 6px rgba(0, 0, 0, 0.3);
+            box-shadow: var(--md-elevation-8);
             min-width: 300px;
         }
 
@@ -1253,16 +2060,17 @@
         }
 
         .modal {
-            background: var(--bg-card);
-            border: 2px solid var(--glass-border);
-            border-radius: var(--radius-xl);
-            padding: var(--space-2xl);
+            background: var(--surface-08);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px; /* Material Design large radius for modals */
+            padding: var(--space-24);
             max-width: 500px;
             width: 90%;
             position: relative;
             animation: modal-slide-up 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             -webkit-backdrop-filter: blur(20px);
             backdrop-filter: blur(20px);
+            box-shadow: var(--md-elevation-24);
         }
 
         @keyframes modal-slide-up {
@@ -1554,7 +2362,11 @@
             </div>
             <div class="connection-status">
                 <div class="status-led" id="connectionLed" aria-label="Connection status"></div>
-                <span id="connectionText" style="font-weight: 600;">OFFLINE</span>
+                <span id="connectionText" class="connection-text-bold">OFFLINE</span>
+                <div class="connection-health" id="connectionHealth">
+                    <span id="healthIndicator">📶</span>
+                    <span id="pingDisplay">-- ms</span>
+                </div>
             </div>
         </header>
 
@@ -1565,8 +2377,11 @@
             </div>
             
             <div class="config-section">                <label class="config-label" for="serverInput">Server Address</label>
-                <input type="text" class="config-input" id="serverInput" 
-                       placeholder="127.0.0.1:1256" value="127.0.0.1:1256" aria-describedby="serverHelp">
+                <div class="copy-container">
+                    <input type="text" class="config-input copy-content" id="serverInput" 
+                           placeholder="127.0.0.1:1256" value="127.0.0.1:1256" aria-describedby="serverHelp">
+                    <button class="copy-btn" id="copyServerAddress" title="Copy Server Address" aria-label="Copy Server Address">📋</button>
+                </div>
                 <div id="serverHelp" class="sr-only">Enter server IP address and port</div>
             </div>
             
@@ -1579,31 +2394,43 @@
             
             <div class="config-section">
                 <label class="config-label">Target File</label>
-                <div class="file-drop-zone" id="fileDropZone">
-                    <input type="file" class="file-input" id="fileInput" 
-                           aria-describedby="fileHelp" accept="*/*" 
-                           title="Select a file to backup" 
-                           aria-label="File selection for backup">
-                    <div class="file-button">
-                        📁 Select File to Backup
-                        <span class="sr-only">or drag and drop a file here</span>
+                <div class="file-selection-container file-selection-container-positioned">
+                    <div class="file-drop-zone" id="fileDropZone">
+                        <input type="file" class="file-input" id="fileInput" 
+                               aria-describedby="fileHelp" accept="*/*" 
+                               title="Select a file to backup" 
+                               aria-label="File selection for backup">
+                        <div class="file-button">
+                            📁 Select File to Backup
+                            <span class="sr-only">or drag and drop a file here</span>
+                        </div>
                     </div>
-                </div>
+                    <button class="cyber-btn small secondary recent-files-btn" id="recentFilesBtn" 
+                            title="Show recent files" aria-label="Show recent files">
+                        📂 Recent Files
+                    </button>
+                </>
                 <div id="fileHelp" class="sr-only">Select a file for backup or drag and drop</div>
-                <div class="config-value" id="selectedFile">No file selected</div>
-                <div id="filePreview" class="file-preview-container" style="margin-top: var(--space-md); text-align: center; min-height: 60px; display: flex; align-items: center; justify-content: center;"></div>
+                <div class="copy-container">
+                    <div class="config-value copy-content" id="selectedFile">No file selected</div>
+                    <button class="copy-btn copy-btn-hidden" id="copyFileInfo" title="Copy File Info" aria-label="Copy File Info">📋</button>
+                </div>
+                <div id="filePreview" class="file-preview-container file-preview-layout"></div>
             </div>
             
             <div class="config-section">
                 <label class="config-label">Client ID</label>
-                <div class="config-value" id="clientId">Not connected</div>
+                <div class="copy-container">
+                    <div class="config-value copy-content" id="clientId">Not connected</div>
+                    <button class="copy-btn" id="copyClientId" title="Copy Client ID" aria-label="Copy Client ID">📋</button>
+                </div>
             </div>
 
             <div class="btn-group">
                 <button class="cyber-btn success" data-action="save-config">💾 Save Config</button>
             </div>
 
-            <div class="panel-header" style="margin-top: var(--space-xl);">
+            <div class="panel-header panel-header-spaced">
                 <h2 class="panel-title">Theme Selection</h2>
             </div>
             
@@ -1627,10 +2454,10 @@
                 <svg class="progress-ring" viewBox="0 0 300 300" role="img" aria-label="Transfer progress">
                     <defs>
                         <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" style="stop-color:var(--neon-blue);stop-opacity:1" />
-                            <stop offset="33%" style="stop-color:var(--neon-purple);stop-opacity:1" />
-                            <stop offset="66%" style="stop-color:var(--neon-pink);stop-opacity:1" />
-                            <stop offset="100%" style="stop-color:var(--neon-green);stop-opacity:1" />
+                            <stop offset="0%" class="gradient-stop-blue" />
+                            <stop offset="33%" class="gradient-stop-purple" />
+                            <stop offset="66%" class="gradient-stop-pink" />
+                            <stop offset="100%" class="gradient-stop-green" />
                         </linearGradient>
                     </defs>
                     <circle class="progress-bg" cx="150" cy="150" r="130" 
@@ -1729,7 +2556,6 @@
         </div>
     </div>    <script>
         // === IMMEDIATE TEST ===
-        alert('JavaScript is working! Script started loading...');
         console.log('JavaScript is working! Script started loading...');
         
         // === ENHANCED DEBUG LOGGING SYSTEM ===
@@ -1965,21 +2791,97 @@
         class IntervalManager {
             constructor() {
                 this.intervals = new Map();
+                this.timeouts = new Map();
+                
+                // Add cleanup on page unload
+                window.addEventListener('beforeunload', () => {
+                    this.cleanup();
+                });
             }
+            
             set(name, callback, delay) {
                 this.clear(name);
-                this.intervals.set(name, setInterval(callback, delay));
+                const intervalId = setInterval(() => {
+                    try {
+                        callback();
+                    } catch (error) {
+                        console.error(`[IntervalManager] Error in interval '${name}':`, error);
+                        // Don't clear the interval automatically to prevent infinite error loops
+                    }
+                }, delay);
+                this.intervals.set(name, intervalId);
+                debugLog(`Interval '${name}' set with ${delay}ms delay`, 'INTERVAL_MANAGER');
+                return intervalId;
             }
+            
+            setTimeout(name, callback, delay) {
+                this.clearTimeout(name);
+                const timeoutId = setTimeout(() => {
+                    try {
+                        callback();
+                    } catch (error) {
+                        console.error(`[IntervalManager] Error in timeout '${name}':`, error);
+                    } finally {
+                        this.timeouts.delete(name); // Auto-cleanup completed timeouts
+                    }
+                }, delay);
+                this.timeouts.set(name, timeoutId);
+                debugLog(`Timeout '${name}' set with ${delay}ms delay`, 'INTERVAL_MANAGER');
+                return timeoutId;
+            }
+            
             clear(name) {
                 if (this.intervals.has(name)) {
                     clearInterval(this.intervals.get(name));
                     this.intervals.delete(name);
+                    debugLog(`Interval '${name}' cleared`, 'INTERVAL_MANAGER');
+                    return true;
                 }
+                return false;
             }
+            
+            clearTimeout(name) {
+                if (this.timeouts.has(name)) {
+                    clearTimeout(this.timeouts.get(name));
+                    this.timeouts.delete(name);
+                    debugLog(`Timeout '${name}' cleared`, 'INTERVAL_MANAGER');
+                    return true;
+                }
+                return false;
+            }
+            
             clearAll() {
-                this.intervals.forEach(id => clearInterval(id));
+                this.intervals.forEach((id, name) => {
+                    clearInterval(id);
+                    debugLog(`Clearing interval '${name}'`, 'INTERVAL_MANAGER');
+                });
+                this.timeouts.forEach((id, name) => {
+                    clearTimeout(id);
+                    debugLog(`Clearing timeout '${name}'`, 'INTERVAL_MANAGER');
+                });
                 this.intervals.clear();
-            }        }
+                this.timeouts.clear();
+                debugLog('All intervals and timeouts cleared', 'INTERVAL_MANAGER');
+            }
+            
+            has(name) {
+                return this.intervals.has(name) || this.timeouts.has(name);
+            }
+            
+            getStats() {
+                return {
+                    intervalCount: this.intervals.size,
+                    timeoutCount: this.timeouts.size,
+                    intervalNames: Array.from(this.intervals.keys()),
+                    timeoutNames: Array.from(this.timeouts.keys())
+                };
+            }
+            
+            cleanup() {
+                debugLog('Performing cleanup...', 'INTERVAL_MANAGER');
+                this.clearAll();
+            }
+        }
         debugLog('IntervalManager class defined successfully');
 
         /**
@@ -1990,11 +2892,48 @@
         class ApiClient {
             constructor(baseUrl = 'http://127.0.0.1:9090') {
                 this.baseUrl = baseUrl;
+                this.defaultTimeout = 30000; // 30 seconds default
+                this.statusTimeout = 10000;  // 10 seconds for status checks
+                this.connectTimeout = 15000; // 15 seconds for connection attempts
+                this.uploadTimeout = 300000; // 5 minutes for file uploads
+            }
+
+            // Helper method to create fetch requests with timeout
+            async fetchWithTimeout(url, options = {}, timeoutMs = this.defaultTimeout) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => {
+                    controller.abort();
+                }, timeoutMs);
+
+                try {
+                    const startTime = performance.now();
+                    const response = await fetch(url, {
+                        ...options,
+                        signal: controller.signal
+                    });
+                    const endTime = performance.now();
+                    const responseTime = endTime - startTime;
+
+                    clearTimeout(timeoutId);
+                    
+                    // Store response time for debugging
+                    this.lastResponseTime = responseTime;
+                    debugLog(`API call to ${url} completed in ${responseTime.toFixed(0)}ms`, 'API_TIMING');
+
+                    return response;
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    
+                    if (error.name === 'AbortError') {
+                        throw new Error(`Request timeout after ${timeoutMs}ms`);
+                    }
+                    throw error;
+                }
             }
 
             async getStatus() {
                 debugLog('Fetching status...', 'API');
-                const response = await fetch(`${this.baseUrl}/api/status`);
+                const response = await this.fetchWithTimeout(`${this.baseUrl}/api/status`, {}, this.statusTimeout);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -2005,13 +2944,13 @@
 
             async connect(config) {
                 debugLog('Connecting to server...' + JSON.stringify(config), 'API');
-                const response = await fetch(`${this.baseUrl}/api/connect`, {
+                const response = await this.fetchWithTimeout(`${this.baseUrl}/api/connect`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(config),
-                });
+                }, this.connectTimeout);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -2028,10 +2967,10 @@
                 formData.append('server', config.serverIP);
                 formData.append('port', config.serverPort);
 
-                const response = await fetch(`${this.baseUrl}/api/start_backup`, {
+                const response = await this.fetchWithTimeout(`${this.baseUrl}/api/start_backup`, {
                     method: 'POST',
                     body: formData,
-                });
+                }, this.uploadTimeout);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -2042,7 +2981,7 @@
 
             async stopBackup() {
                 debugLog('Stopping backup...', 'API');
-                const response = await fetch(`${this.baseUrl}/api/stop`, { method: 'POST' });
+                const response = await this.fetchWithTimeout(`${this.baseUrl}/api/stop`, { method: 'POST' }, this.defaultTimeout);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -2053,7 +2992,7 @@
 
             async pauseBackup() {
                 debugLog('Pausing backup...', 'API');
-                const response = await fetch(`${this.baseUrl}/api/pause`, { method: 'POST' });
+                const response = await this.fetchWithTimeout(`${this.baseUrl}/api/pause`, { method: 'POST' }, this.defaultTimeout);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -2064,7 +3003,7 @@
 
             async resumeBackup() {
                 debugLog('Resuming backup...', 'API');
-                const response = await fetch(`${this.baseUrl}/api/resume`, { method: 'POST' });
+                const response = await this.fetchWithTimeout(`${this.baseUrl}/api/resume`, { method: 'POST' }, this.defaultTimeout);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -2075,7 +3014,7 @@
 
             async getServerInfo() {
                 debugLog('Fetching server info...', 'API');
-                const response = await fetch(`${this.baseUrl}/api/server_info`);
+                const response = await this.fetchWithTimeout(`${this.baseUrl}/api/server_info`, {}, this.defaultTimeout);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -2086,13 +3025,36 @@
 
             async getReceivedFiles() {
                 debugLog('Fetching received files...', 'API');
-                const response = await fetch(`${this.baseUrl}/api/received_files`);
+                const response = await this.fetchWithTimeout(`${this.baseUrl}/api/received_files`, {}, this.defaultTimeout);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
                 debugLog('Received files response:' + JSON.stringify(data), 'API');
                 return data;
+            }
+
+            // Get timing and performance information
+            getPerformanceInfo() {
+                return {
+                    lastResponseTime: this.lastResponseTime || 0,
+                    baseUrl: this.baseUrl,
+                    timeouts: {
+                        default: this.defaultTimeout,
+                        status: this.statusTimeout,
+                        connect: this.connectTimeout,
+                        upload: this.uploadTimeout
+                    }
+                };
+            }
+
+            // Update timeout settings
+            updateTimeouts(timeouts) {
+                if (timeouts.default) this.defaultTimeout = timeouts.default;
+                if (timeouts.status) this.statusTimeout = timeouts.status;
+                if (timeouts.connect) this.connectTimeout = timeouts.connect;
+                if (timeouts.upload) this.uploadTimeout = timeouts.upload;
+                debugLog('API timeouts updated', 'API');
             }
         }
         debugLog('ApiClient class defined successfully');
@@ -2106,6 +3068,115 @@
             constructor() {
                 this.supportsFileSystemAccess = 'showOpenFilePicker' in window;
                 debugLog(`File System Access API supported: ${this.supportsFileSystemAccess}`, 'FILE_MANAGER');
+                
+                // File validation settings
+                this.maxFileSize = 5 * 1024 * 1024 * 1024; // 5GB default
+                this.allowedTypes = new Set([
+                    // Documents
+                    'application/pdf', 'text/plain', 'text/csv', 'application/json',
+                    'application/xml', 'text/xml', 'application/rtf',
+                    
+                    // Microsoft Office
+                    'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                    
+                    // Images
+                    'image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/webp', 'image/svg+xml',
+                    'image/tiff', 'image/ico',
+                    
+                    // Audio
+                    'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp3', 'audio/flac', 'audio/aac',
+                    
+                    // Video
+                    'video/mp4', 'video/webm', 'video/ogg', 'video/avi', 'video/mov', 'video/wmv',
+                    'video/flv', 'video/mkv',
+                    
+                    // Archives
+                    'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
+                    'application/gzip', 'application/x-tar',
+                    
+                    // Code files
+                    'text/javascript', 'text/css', 'text/html', 'application/javascript',
+                    'text/x-python', 'text/x-java-source', 'text/x-c', 'text/x-c++',
+                    
+                    // Other common types
+                    'application/octet-stream' // Binary files (fallback)
+                ]);
+                
+                this.blockedExtensions = new Set([
+                    '.exe', '.msi', '.bat', '.cmd', '.scr', '.pif', '.com', '.vbs', '.js', '.jar',
+                    '.dll', '.sys', '.drv', '.ocx', '.cpl', '.reg', '.inf', '.ini'
+                ]);
+            }
+            
+            validateFile(file) {
+                const errors = [];
+                const warnings = [];
+                
+                // Check file size
+                if (file.size > this.maxFileSize) {
+                    errors.push(`File too large: ${this.formatFileSize(file.size)}. Maximum allowed: ${this.formatFileSize(this.maxFileSize)}`);
+                }
+                
+                if (file.size === 0) {
+                    errors.push('File is empty (0 bytes)');
+                }
+                
+                // Check file extension for security
+                const fileName = file.name.toLowerCase();
+                const hasBlockedExtension = Array.from(this.blockedExtensions).some(ext => fileName.endsWith(ext));
+                
+                if (hasBlockedExtension) {
+                    errors.push(`File type not allowed for security reasons: ${fileName.split('.').pop()}`);
+                }
+                
+                // Check MIME type if available
+                if (file.type) {
+                    if (!this.allowedTypes.has(file.type)) {
+                        // Don't block it entirely, but warn
+                        warnings.push(`File type '${file.type}' is not in the common allowed list. Upload may still work.`);
+                    }
+                } else {
+                    warnings.push('File type could not be determined. Proceed with caution.');
+                }
+                
+                // Large file warning
+                if (file.size > 100 * 1024 * 1024) { // 100MB
+                    warnings.push(`Large file detected (${this.formatFileSize(file.size)}). Upload may take a long time.`);
+                }
+                
+                return {
+                    isValid: errors.length === 0,
+                    errors,
+                    warnings,
+                    fileInfo: {
+                        name: file.name,
+                        size: file.size,
+                        type: file.type || 'unknown',
+                        lastModified: new Date(file.lastModified).toLocaleString()
+                    }
+                };
+            }
+            
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 B';
+                const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(1024));
+                return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+            }
+            
+            updateValidationSettings(settings) {
+                if (settings.maxFileSize) {
+                    this.maxFileSize = settings.maxFileSize;
+                }
+                if (settings.allowedTypes) {
+                    this.allowedTypes = new Set(settings.allowedTypes);
+                }
+                if (settings.blockedExtensions) {
+                    this.blockedExtensions = new Set(settings.blockedExtensions);
+                }
+                debugLog('File validation settings updated', 'FILE_MANAGER');
             }
 
             async selectFile() {
@@ -2397,6 +3468,13 @@
                 this.apiClient = new ApiClient();
                 this.system = new SystemManager();
                 this.intervals = new IntervalManager();
+                this.buttonStateManager = new ButtonStateManager();
+                this.errorMessageFormatter = new ErrorMessageFormatter();
+                this.copyManager = new CopyManager();
+                this.formValidator = new FormValidator();
+                this.fileMemoryManager = new FileMemoryManager();
+                this.backupHistoryManager = new BackupHistoryManager();
+                this.connectionHealthMonitor = new ConnectionHealthMonitor();
 
                 this.elements = {
                     connectionLed: document.getElementById('connectionLed'),
@@ -2405,9 +3483,13 @@
                     usernameInput: document.getElementById('usernameInput'),
                     fileDropZone: document.getElementById('fileDropZone'),
                     fileInput: document.getElementById('fileInput'),
+                    recentFilesBtn: document.getElementById('recentFilesBtn'),
                     selectedFileDisplay: document.getElementById('selectedFile'),
                     filePreview: document.getElementById('filePreview'),
                     clientIdDisplay: document.getElementById('clientId'),
+                    copyClientIdButton: document.getElementById('copyClientId'),
+                    copyServerAddressButton: document.getElementById('copyServerAddress'),
+                    copyFileInfoButton: document.getElementById('copyFileInfo'),
                     primaryActionButton: document.getElementById('primaryAction'),
                     pauseButton: document.getElementById('pauseBtn'),
                     stopButton: document.getElementById('stopBtn'),
@@ -2430,7 +3512,10 @@
                     confirmTitle: document.getElementById('confirmTitle'),
                     confirmMessage: document.getElementById('confirmMessage'),
                     confirmOkBtn: document.getElementById('confirmOkBtn'),
-                    cancelModalBtn: document.getElementById('cancelModalBtn')
+                    cancelModalBtn: document.getElementById('cancelModalBtn'),
+                    connectionHealth: document.getElementById('connectionHealth'),
+                    healthIndicator: document.getElementById('healthIndicator'),
+                    pingDisplay: document.getElementById('pingDisplay')
                 };
 
                 this.state = {
@@ -2477,6 +3562,9 @@
                 this.lazyComponents = new Map();
                 this.initializeLazyLoading();
 
+                // Setup cleanup handlers for memory leak prevention
+                this.setupPageUnloadHandler();
+
                 // Start adaptive status polling with intelligent frequency adjustment
                 this.startAdaptivePolling();
                 this.addLog('System Initialized', 'success', 'Ready to connect to C++ client.');
@@ -2484,12 +3572,51 @@
                 
                 // Request notification permission on startup
                 this.system.notifications.requestPermission();
+                
+                // Setup form validation
+                this.setupFormValidation();
+                
+                // Initialize connection health monitoring
+                this.setupConnectionHealthMonitoring();
+            }
+
+            /**
+             * Setup form validation rules and real-time validation
+             */
+            setupFormValidation() {
+                // Add validation rules
+                this.formValidator.addRule('serverInput', 'serverAddress', 'Please enter a valid server address (IP:PORT)');
+                this.formValidator.addRule('usernameInput', 'username', 'Username must be 2-32 characters (letters, numbers, _ -)');
+
+                // Setup real-time validation
+                this.formValidator.setupRealTimeValidation(this.elements.serverInput, 'serverInput');
+                this.formValidator.setupRealTimeValidation(this.elements.usernameInput, 'usernameInput');
+            }
+
+            /**
+             * Setup connection health monitoring system
+             */
+            setupConnectionHealthMonitoring() {
+                // Initialize the health monitor with the UI elements
+                this.connectionHealthMonitor.initialize(
+                    this.elements.connectionHealth,
+                    this.elements.healthIndicator,
+                    this.elements.pingDisplay
+                );
             }
 
             initEventListeners() {
                 this.elements.primaryActionButton.addEventListener('click', () => this.handlePrimaryAction());
                 this.elements.pauseButton.addEventListener('click', () => this.togglePause());
                 this.elements.stopButton.addEventListener('click', () => this.stopBackup());
+                
+                // Copy buttons
+                this.elements.copyClientIdButton.addEventListener('click', () => this.copyClientId());
+                this.elements.copyServerAddressButton.addEventListener('click', () => this.copyServerAddress());
+                this.elements.copyFileInfoButton.addEventListener('click', () => this.copyFileInfo());
+                
+                // Recent files button
+                this.elements.recentFilesBtn.addEventListener('click', () => this.showRecentFiles());
                 
                 // Config save button
                 document.querySelector('[data-action="save-config"]').addEventListener('click', () => this.saveConfig());
@@ -2556,8 +3683,20 @@
 
                     // Check for changes in connection status
                     if (this.state.isConnected !== status.isConnected) {
+                        const wasConnected = this.state.isConnected;
                         this.state.isConnected = status.isConnected;
                         stateChanged = true;
+                        
+                        // Handle connection health monitoring
+                        if (status.isConnected && !wasConnected) {
+                            // Connection established - start health monitoring
+                            this.connectionHealthMonitor.startMonitoring();
+                            this.elements.connectionHealth.style.display = 'flex';
+                        } else if (!status.isConnected && wasConnected) {
+                            // Connection lost - stop health monitoring
+                            this.connectionHealthMonitor.stopMonitoring();
+                            this.elements.connectionHealth.style.display = 'none';
+                        }
                     }
 
                     // Check for changes in running status
@@ -2574,8 +3713,17 @@
 
                     // Check for changes in phase
                     if (this.state.phase !== status.phase) {
+                        const oldPhase = this.state.phase;
                         this.state.phase = status.phase;
                         stateChanged = true;
+                        
+                        // Record backup completion to history
+                        if (status.phase === 'COMPLETED' && oldPhase !== 'COMPLETED') {
+                            this.recordBackupToHistory(status, true);
+                        } else if ((status.phase === 'FAILED' || status.phase === 'ERROR') && 
+                                   oldPhase !== 'FAILED' && oldPhase !== 'ERROR') {
+                            this.recordBackupToHistory(status, false);
+                        }
                     }
 
                     // Check for changes in progress percentage
@@ -2812,12 +3960,14 @@
                             </div>
                         `;
                         this.elements.selectedFileDisplay.classList.add('file-info');
+                        this.elements.copyFileInfoButton.style.display = 'inline-flex'; // Show copy button
                         this.elements.filePreview.innerHTML = ''; // Clear previous preview
                         this.elements.filePreview.style.display = 'flex';
                         this.renderFilePreview(this.state.selectedFile);
                     } else {
                         this.elements.selectedFileDisplay.textContent = 'No file selected';
                         this.elements.selectedFileDisplay.classList.remove('file-info');
+                        this.elements.copyFileInfoButton.style.display = 'none'; // Hide copy button
                         this.elements.filePreview.style.display = 'none';
                     }
 
@@ -2832,11 +3982,55 @@
                         this.elements.progressJsonViewer.textContent = JSON.stringify(this.state, null, 2);
                     }
 
+                    // Update browser tab title with progress
+                    this.updateTabTitle();
+
                 } catch (error) {
                     console.error('Error updating UI:', error);
                     debugLog('Error updating UI: ' + error.message, 'ERROR');
                 } finally {
                     this.stateManagement.isUpdatingUI = false;
+                }
+            }
+
+            /**
+             * Update browser tab title with progress information
+             */
+            updateTabTitle() {
+                try {
+                    const baseTitle = 'CyberBackup';
+                    let titleParts = [baseTitle];
+
+                    if (this.state.isRunning && this.state.progress !== undefined) {
+                        // Show progress percentage when backup is running
+                        const progressPercent = Math.round(this.state.progress);
+                        titleParts.unshift(`${progressPercent}%`);
+                        
+                        // Add operation status
+                        if (this.state.isPaused) {
+                            titleParts.push('(Paused)');
+                        } else if (this.state.phase === 'BACKING_UP') {
+                            titleParts.push('(Backing up)');
+                        } else if (this.state.phase === 'VERIFY') {
+                            titleParts.push('(Verifying)');
+                        }
+                    } else if (this.state.isConnected) {
+                        // Show connection status when connected but not running
+                        titleParts.push('(Connected)');
+                    } else if (this.state.phase === 'COMPLETED') {
+                        // Show completion status
+                        titleParts.unshift('✅ Complete');
+                    } else if (this.state.phase === 'FAILED' || this.state.phase === 'ERROR') {
+                        // Show error status
+                        titleParts.unshift('❌ Failed');
+                    }
+
+                    // Set the title
+                    document.title = titleParts.join(' ');
+                    
+                } catch (error) {
+                    console.error('Error updating tab title:', error);
+                    debugLog('Error updating tab title: ' + error.message, 'ERROR');
                 }
             }
 
@@ -2861,6 +4055,11 @@
             }
 
             async handlePrimaryAction() {
+                // Prevent multiple simultaneous actions
+                if (this.buttonStateManager.isLoading(this.elements.primaryActionButton)) {
+                    return;
+                }
+
                 if (!this.state.isConnected) {
                     // Connect to server
                     const serverAddress = this.elements.serverInput.value;
@@ -2869,11 +4068,15 @@
                     const serverPort = parseInt(serverPortStr);
 
                     if (!serverIP || isNaN(serverPort) || !username) {
+                        this.buttonStateManager.setError(this.elements.primaryActionButton, '❌ Invalid Input');
                         this.showToast('Please enter valid server address and username.', 'error');
                         this.addLog('Connection failed', 'error', 'Invalid server address or username.');
                         return;
                     }
 
+                    // Set loading state
+                    this.buttonStateManager.setLoading(this.elements.primaryActionButton, '🔄 Connecting...');
+                    
                     this.addLog(`Attempting to connect to ${serverIP}:${serverPort} as ${username}...`, 'info');
                     this.state.phase = 'CONNECT';
                     this.state.log = { operation: 'Connecting...', success: true, details: '' };
@@ -2882,6 +4085,7 @@
                     try {
                         const result = await this.apiClient.connect({ host: serverIP, port: serverPort, username: username });
                         if (result.success) {
+                            this.buttonStateManager.setSuccess(this.elements.primaryActionButton, '✅ Connected!');
                             this.showToast('Connected to server successfully!', 'success');
                             this.addLog('Connected to server', 'success', `Server: ${serverIP}:${serverPort}`);
                             this.state.isConnected = true;
@@ -2889,16 +4093,20 @@
                             this.state.log = { operation: 'Ready for backup', success: true, details: '' };
                             this.updateAllUI();
                         } else {
-                            this.showToast(`Connection failed: ${result.message}`, 'error');
-                            this.addLog('Connection failed', 'error', result.message);
+                            const errorInfo = this.errorMessageFormatter.formatError('connection', result.message);
+                            this.buttonStateManager.setError(this.elements.primaryActionButton, '❌ Failed');
+                            this.showToast(`${errorInfo.userMessage}. ${errorInfo.suggestion}`, 'error');
+                            this.addLog('Connection failed', 'error', `${errorInfo.userMessage} - ${errorInfo.technical}`);
                             this.state.isConnected = false;
                             this.state.phase = 'CONNECTION_FAILED';
                             this.state.log = { operation: 'Connection Failed', success: false, details: result.message };
                             this.updateAllUI();
                         }
                     } catch (error) {
-                        this.showToast(`API Error: ${error.message}`, 'error');
-                        this.addLog('API Error', 'error', error.message);
+                        const errorInfo = this.errorMessageFormatter.formatError('connection', error.message);
+                        this.buttonStateManager.setError(this.elements.primaryActionButton, '❌ Error');
+                        this.showToast(`${errorInfo.userMessage}. ${errorInfo.suggestion}`, 'error');
+                        this.addLog('Connection Error', 'error', `${errorInfo.userMessage} - ${errorInfo.technical}`);
                         this.state.isConnected = false;
                         this.state.phase = 'ERROR';
                         this.state.log = { operation: 'API Error', success: false, details: error.message };
@@ -2907,6 +4115,7 @@
                 } else if (this.state.isConnected && !this.state.isRunning) {
                     // Start backup
                     if (!this.state.selectedFile) {
+                        this.buttonStateManager.setError(this.elements.primaryActionButton, '❌ No File');
                         this.showToast('Please select a file to backup first.', 'warning');
                         this.addLog('Backup failed', 'warning', 'No file selected.');
                         return;
@@ -2918,6 +4127,9 @@
                     );
 
                     if (confirm) {
+                        // Set loading state
+                        this.buttonStateManager.setLoading(this.elements.primaryActionButton, '🚀 Starting...');
+                        
                         this.addLog(`Starting backup of ${this.state.selectedFile.name}...`, 'info');
                         this.state.isRunning = true;
                         this.state.phase = 'START';
@@ -2934,20 +4146,25 @@
                                 }
                             );
                             if (result.success) {
+                                this.buttonStateManager.setSuccess(this.elements.primaryActionButton, '✅ Started!');
                                 this.showToast('Backup process started!', 'success');
                                 this.addLog('Backup initiated', 'success', `File: ${result.filename}`);
                                 // Status polling will update the rest
                             } else {
-                                this.showToast(`Backup failed: ${result.message}`, 'error');
-                                this.addLog('Backup failed', 'error', result.message);
+                                const errorInfo = this.errorMessageFormatter.formatError('backup', result.message);
+                                this.buttonStateManager.setError(this.elements.primaryActionButton, '❌ Failed');
+                                this.showToast(`${errorInfo.userMessage}. ${errorInfo.suggestion}`, 'error');
+                                this.addLog('Backup failed', 'error', `${errorInfo.userMessage} - ${errorInfo.technical}`);
                                 this.state.isRunning = false;
                                 this.state.phase = 'FAILED';
                                 this.state.log = { operation: 'Backup Failed', success: false, details: result.message };
                                 this.updateAllUI();
                             }
                         } catch (error) {
-                            this.showToast(`API Error: ${error.message}`, 'error');
-                            this.addLog('API Error', 'error', error.message);
+                            const errorInfo = this.errorMessageFormatter.formatError('backup', error.message);
+                            this.buttonStateManager.setError(this.elements.primaryActionButton, '❌ Error');
+                            this.showToast(`${errorInfo.userMessage}. ${errorInfo.suggestion}`, 'error');
+                            this.addLog('Backup Error', 'error', `${errorInfo.userMessage} - ${errorInfo.technical}`);
                             this.state.isRunning = false;
                             this.state.phase = 'ERROR';
                             this.state.log = { operation: 'API Error', success: false, details: error.message };
@@ -2961,8 +4178,15 @@
             }
 
             async togglePause() {
+                // Prevent multiple simultaneous actions
+                if (this.buttonStateManager.isLoading(this.elements.pauseButton)) {
+                    return;
+                }
+
                 if (this.state.isRunning) {
                     if (this.state.isPaused) {
+                        // Resume
+                        this.buttonStateManager.setLoading(this.elements.pauseButton, '▶️ Resuming...');
                         this.addLog('Resuming backup...', 'info');
                         this.state.phase = 'RESUME';
                         this.state.log = { operation: 'Resuming backup', success: true, details: '' };
@@ -2970,6 +4194,7 @@
                         try {
                             const result = await this.apiClient.resumeBackup();
                             if (result.success) {
+                                this.buttonStateManager.setSuccess(this.elements.pauseButton, '✅ Resumed!');
                                 this.showToast('Backup resumed!', 'info');
                                 this.addLog('Backup resumed', 'success');
                                 this.state.isPaused = false;
@@ -2977,14 +4202,20 @@
                                 this.state.log = { operation: 'Backing up...', success: true, details: '' };
                                 this.updateAllUI();
                             } else {
-                                this.showToast(`Resume failed: ${result.message}`, 'error');
-                                this.addLog('Resume failed', 'error', result.message);
+                                const errorInfo = this.errorMessageFormatter.formatError('resume', result.message);
+                                this.buttonStateManager.setError(this.elements.pauseButton, '❌ Failed');
+                                this.showToast(`${errorInfo.userMessage}. ${errorInfo.suggestion}`, 'error');
+                                this.addLog('Resume failed', 'error', `${errorInfo.userMessage} - ${errorInfo.technical}`);
                             }
                         } catch (error) {
-                            this.showToast(`API Error: ${error.message}`, 'error');
-                            this.addLog('API Error', 'error', error.message);
+                            const errorInfo = this.errorMessageFormatter.formatError('resume', error.message);
+                            this.buttonStateManager.setError(this.elements.pauseButton, '❌ Error');
+                            this.showToast(`${errorInfo.userMessage}. ${errorInfo.suggestion}`, 'error');
+                            this.addLog('Resume Error', 'error', `${errorInfo.userMessage} - ${errorInfo.technical}`);
                         }
                     } else {
+                        // Pause
+                        this.buttonStateManager.setLoading(this.elements.pauseButton, '⏸️ Pausing...');
                         this.addLog('Pausing backup...', 'info');
                         this.state.phase = 'PAUSE';
                         this.state.log = { operation: 'Pausing backup', success: true, details: '' };
@@ -2992,6 +4223,7 @@
                         try {
                             const result = await this.apiClient.pauseBackup();
                             if (result.success) {
+                                this.buttonStateManager.setSuccess(this.elements.pauseButton, '⏸️ Paused!');
                                 this.showToast('Backup paused!', 'warning');
                                 this.addLog('Backup paused', 'warning');
                                 this.state.isPaused = true;
@@ -2999,18 +4231,27 @@
                                 this.state.log = { operation: 'Backup paused', success: true, details: '' };
                                 this.updateAllUI();
                             } else {
-                                this.showToast(`Pause failed: ${result.message}`, 'error');
-                                this.addLog('Pause failed', 'error', result.message);
+                                const errorInfo = this.errorMessageFormatter.formatError('pause', result.message);
+                                this.buttonStateManager.setError(this.elements.pauseButton, '❌ Failed');
+                                this.showToast(`${errorInfo.userMessage}. ${errorInfo.suggestion}`, 'error');
+                                this.addLog('Pause failed', 'error', `${errorInfo.userMessage} - ${errorInfo.technical}`);
                             }
                         } catch (error) {
-                            this.showToast(`API Error: ${error.message}`, 'error');
-                            this.addLog('API Error', 'error', error.message);
+                            const errorInfo = this.errorMessageFormatter.formatError('pause', error.message);
+                            this.buttonStateManager.setError(this.elements.pauseButton, '❌ Error');
+                            this.showToast(`${errorInfo.userMessage}. ${errorInfo.suggestion}`, 'error');
+                            this.addLog('Pause Error', 'error', `${errorInfo.userMessage} - ${errorInfo.technical}`);
                         }
                     }
                 }
             }
 
             async stopBackup() {
+                // Prevent multiple simultaneous actions
+                if (this.buttonStateManager.isLoading(this.elements.stopButton)) {
+                    return;
+                }
+
                 if (this.state.isRunning) {
                     const confirm = await this.system.confirmModal.confirm(
                         'Confirm Stop',
@@ -3018,6 +4259,7 @@
                     );
 
                     if (confirm) {
+                        this.buttonStateManager.setLoading(this.elements.stopButton, '🛑 Stopping...');
                         this.addLog('Stopping backup...', 'info');
                         this.state.phase = 'STOP';
                         this.state.log = { operation: 'Stopping backup', success: true, details: '' };
@@ -3025,6 +4267,7 @@
                         try {
                             const result = await this.apiClient.stopBackup();
                             if (result.success) {
+                                this.buttonStateManager.setSuccess(this.elements.stopButton, '✅ Stopped!');
                                 this.showToast('Backup stopped!', 'info');
                                 this.addLog('Backup stopped', 'info');
                                 this.state.isRunning = false;
@@ -3034,79 +4277,278 @@
                                 this.state.log = { operation: 'Backup stopped', success: true, details: '' };
                                 this.updateAllUI();
                             } else {
-                                this.showToast(`Stop failed: ${result.message}`, 'error');
-                                this.addLog('Stop failed', 'error', result.message);
+                                const errorInfo = this.errorMessageFormatter.formatError('stop', result.message);
+                                this.buttonStateManager.setError(this.elements.stopButton, '❌ Failed');
+                                this.showToast(`${errorInfo.userMessage}. ${errorInfo.suggestion}`, 'error');
+                                this.addLog('Stop failed', 'error', `${errorInfo.userMessage} - ${errorInfo.technical}`);
                             }
                         } catch (error) {
-                            this.showToast(`API Error: ${error.message}`, 'error');
-                            this.addLog('API Error', 'error', error.message);
+                            const errorInfo = this.errorMessageFormatter.formatError('stop', error.message);
+                            this.buttonStateManager.setError(this.elements.stopButton, '❌ Error');
+                            this.showToast(`${errorInfo.userMessage}. ${errorInfo.suggestion}`, 'error');
+                            this.addLog('Stop Error', 'error', `${errorInfo.userMessage} - ${errorInfo.technical}`);
                         }
+                    } else {
+                        this.addLog('Stop cancelled by user', 'info');
+                        this.showToast('Stop cancelled.', 'info');
                     }
                 } else {
-                    this.addLog('Stop cancelled by user', 'info');
-                    this.showToast('Stop cancelled.', 'info');
+                    this.buttonStateManager.setError(this.elements.stopButton, '❌ Not Running');
+                    this.showToast('No backup is currently running.', 'info');
                 }
             }
 
             handleFileSelection(file) {
                 debugLog('File selected:' + file.name, 'FILE_MANAGER');
+                
+                // Validate the file before accepting it
+                const validation = this.system.fileManager.validateFile(file);
+                
+                if (!validation.isValid) {
+                    // File has errors - reject it
+                    const errorInfo = this.errorMessageFormatter.formatFileValidationError(validation.errors);
+                    this.addLog(`File rejected: ${file.name}`, 'error', `${errorInfo.message} - ${validation.errors.join('; ')}`);
+                    this.showToast(`${errorInfo.message}. ${errorInfo.suggestion}`, 'error', 5000);
+                    
+                    // Show detailed error in a modal
+                    this.system.modal.show(
+                        'File Validation Failed',
+                        `The selected file cannot be used for backup:\n\n${validation.errors.join('\n\n')}`,
+                        () => {}
+                    );
+                    return;
+                }
+                
+                // File is valid - show warnings if any
+                if (validation.warnings.length > 0) {
+                    validation.warnings.forEach(warning => {
+                        this.addLog(`File warning: ${file.name}`, 'warning', warning);
+                        this.showToast(warning, 'warning', 4000);
+                    });
+                }
+                
+                // Accept the file
                 this.state.selectedFile = file;
+                
+                // Save file to memory for future quick access
+                this.fileMemoryManager.saveFileSelection(file);
+                
                 this.updateAllUI();
-                this.addLog(`File selected: ${file.name}`, 'info', `Size: ${this.formatBytes(file.size)}`);
+                this.addLog(`File selected: ${file.name}`, 'success', 
+                    `Size: ${this.formatBytes(file.size)}, Type: ${file.type || 'unknown'}`);
+                
+                // Show success with file details
+                this.showToast(
+                    `File selected: ${file.name} (${this.system.fileManager.formatFileSize(file.size)})`, 
+                    'success', 
+                    3000
+                );
             }
 
             renderFilePreview(file) {
                 const previewContainer = this.elements.filePreview;
                 previewContainer.innerHTML = '';
 
+                // Create enhanced preview with metadata
+                const previewWrapper = document.createElement('div');
+                previewWrapper.className = 'enhanced-file-preview';
+                previewWrapper.style.cssText = `
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: var(--space-sm);
+                    padding: var(--space-md);
+                    background: rgba(0, 0, 0, 0.2);
+                    border-radius: var(--radius-md);
+                    border: 1px solid var(--glass-border);
+                `;
+
+                const fileInfo = this.getFileTypeInfo(file);
+                
+                // File icon and type
+                const iconElement = document.createElement('div');
+                iconElement.className = 'file-preview-icon';
+                iconElement.style.cssText = `
+                    font-size: 2.5rem;
+                    color: ${fileInfo.color};
+                    text-shadow: 0 0 10px ${fileInfo.color}40;
+                    margin-bottom: var(--space-xs);
+                `;
+                iconElement.textContent = fileInfo.icon;
+                previewWrapper.appendChild(iconElement);
+
+                // File type label
+                const typeLabel = document.createElement('div');
+                typeLabel.className = 'file-type-label';
+                typeLabel.style.cssText = `
+                    font-size: var(--font-size-sm);
+                    color: var(--text-secondary);
+                    font-weight: 500;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                `;
+                typeLabel.textContent = fileInfo.typeLabel;
+                previewWrapper.appendChild(typeLabel);
+
+                // File metadata
+                const metadata = document.createElement('div');
+                metadata.className = 'file-metadata';
+                metadata.style.cssText = `
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2px;
+                    font-size: var(--font-size-xs);
+                    color: var(--text-muted);
+                    text-align: center;
+                `;
+                
+                const sizeInfo = document.createElement('div');
+                sizeInfo.textContent = `Size: ${this.formatBytes(file.size)}`;
+                metadata.appendChild(sizeInfo);
+                
+                const lastModified = document.createElement('div');
+                lastModified.textContent = `Modified: ${new Date(file.lastModified).toLocaleDateString()}`;
+                metadata.appendChild(lastModified);
+                
+                previewWrapper.appendChild(metadata);
+
+                // Content preview for specific file types
                 if (file.type.startsWith('image/')) {
-                    const img = document.createElement('img');
-                    img.src = URL.createObjectURL(file);
-                    img.style.maxWidth = '100px';
-                    img.style.maxHeight = '100px';
-                    img.style.borderRadius = 'var(--radius-sm)';
-                    img.style.border = '1px solid var(--glass-border)';
-                    previewContainer.appendChild(img);
+                    this.addImagePreview(previewWrapper, file);
+                } else if (file.type.startsWith('text/') || file.name.endsWith('.json') || file.name.endsWith('.xml')) {
+                    this.addTextPreview(previewWrapper, file);
                 } else if (file.type === 'application/pdf') {
-                    const icon = document.createElement('span');
-                    icon.className = 'file-icon-large neon-text purple';
-                    icon.textContent = '📄';
-                    const text = document.createElement('span');
-                    text.textContent = 'PDF Document';
-                    text.style.color = 'var(--text-secondary)';
-                    previewContainer.appendChild(icon);
-                    previewContainer.appendChild(text);
-                } else if (file.type.startsWith('text/')) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const content = e.target.result;
-                        const previewText = document.createElement('pre');
-                        previewText.textContent = content.substring(0, 100) + (content.length > 100 ? '...' : '');
-                        previewText.style.cssText = `
-                            font-family: 'Share Tech Mono', monospace;
-                            font-size: 0.75rem;
-                            color: var(--text-dim);
-                            background: var(--bg-black);
-                            padding: var(--space-sm);
-                            border-radius: var(--radius-sm);
-                            max-height: 80px;
-                            overflow: hidden;
-                            white-space: pre-wrap;
-                            word-break: break-all;
-                        `;
-                        previewContainer.appendChild(previewText);
-                    };
-                    reader.readAsText(file);
-                } else {
-                    const icon = document.createElement('span');
-                    icon.className = 'file-icon-large neon-text blue';
-                    icon.textContent = '🗄️';
-                    const text = document.createElement('span');
-                    text.textContent = 'Binary File';
-                    text.style.color = 'var(--text-secondary)';
-                    previewContainer.appendChild(icon);
-                    previewContainer.appendChild(text);
+                    this.addPdfPreview(previewWrapper, file);
                 }
+
+                previewContainer.appendChild(previewWrapper);
+            }
+
+            /**
+             * Get file type information with icon and color
+             */
+            getFileTypeInfo(file) {
+                const ext = file.name.split('.').pop().toLowerCase();
+                const type = file.type;
+
+                const fileTypes = {
+                    // Images
+                    'image/': { icon: '🖼️', color: 'var(--neon-blue)', typeLabel: 'Image File' },
+                    'jpg': { icon: '🖼️', color: 'var(--neon-blue)', typeLabel: 'JPEG Image' },
+                    'png': { icon: '🖼️', color: 'var(--neon-blue)', typeLabel: 'PNG Image' },
+                    'gif': { icon: '🎞️', color: 'var(--neon-purple)', typeLabel: 'GIF Animation' },
+                    'svg': { icon: '🎨', color: 'var(--neon-blue)', typeLabel: 'SVG Vector' },
+                    
+                    // Documents
+                    'application/pdf': { icon: '📄', color: 'var(--error)', typeLabel: 'PDF Document' },
+                    'txt': { icon: '📝', color: 'var(--text-primary)', typeLabel: 'Text File' },
+                    'md': { icon: '📋', color: 'var(--neon-blue)', typeLabel: 'Markdown' },
+                    'json': { icon: '🔧', color: 'var(--warning)', typeLabel: 'JSON Data' },
+                    'xml': { icon: '🏷️', color: 'var(--neon-green)', typeLabel: 'XML Data' },
+                    'csv': { icon: '📊', color: 'var(--success)', typeLabel: 'CSV Data' },
+                    
+                    // Code files
+                    'js': { icon: '⚡', color: 'var(--warning)', typeLabel: 'JavaScript' },
+                    'html': { icon: '🌐', color: 'var(--neon-orange)', typeLabel: 'HTML' },
+                    'css': { icon: '🎨', color: 'var(--neon-blue)', typeLabel: 'CSS' },
+                    'py': { icon: '🐍', color: 'var(--neon-green)', typeLabel: 'Python' },
+                    'cpp': { icon: '⚙️', color: 'var(--neon-blue)', typeLabel: 'C++' },
+                    'c': { icon: '⚙️', color: 'var(--neon-blue)', typeLabel: 'C' },
+                    
+                    // Archives
+                    'zip': { icon: '📦', color: 'var(--neon-purple)', typeLabel: 'ZIP Archive' },
+                    'rar': { icon: '📦', color: 'var(--neon-purple)', typeLabel: 'RAR Archive' },
+                    'tar': { icon: '📦', color: 'var(--neon-purple)', typeLabel: 'TAR Archive' },
+                    '7z': { icon: '📦', color: 'var(--neon-purple)', typeLabel: '7-Zip Archive' },
+                    
+                    // Media
+                    'mp3': { icon: '🎵', color: 'var(--neon-green)', typeLabel: 'MP3 Audio' },
+                    'mp4': { icon: '🎬', color: 'var(--neon-red)', typeLabel: 'MP4 Video' },
+                    'avi': { icon: '🎬', color: 'var(--neon-red)', typeLabel: 'AVI Video' },
+                    'wav': { icon: '🎵', color: 'var(--neon-green)', typeLabel: 'WAV Audio' },
+                    
+                    // Default
+                    'default': { icon: '📄', color: 'var(--text-secondary)', typeLabel: 'Unknown File' }
+                };
+
+                // Check by MIME type first
+                for (const [key, value] of Object.entries(fileTypes)) {
+                    if (type.startsWith(key)) {
+                        return value;
+                    }
+                }
+
+                // Check by extension
+                return fileTypes[ext] || fileTypes.default;
+            }
+
+            /**
+             * Add image preview
+             */
+            addImagePreview(container, file) {
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                img.style.cssText = `
+                    max-width: 120px;
+                    max-height: 80px;
+                    border-radius: var(--radius-sm);
+                    border: 1px solid var(--glass-border);
+                    margin-top: var(--space-sm);
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                `;
+                img.onerror = () => {
+                    img.style.display = 'none';
+                };
+                container.appendChild(img);
+            }
+
+            /**
+             * Add text file preview
+             */
+            addTextPreview(container, file) {
+                if (file.size > 50000) return; // Skip large files
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const content = e.target.result;
+                    const previewText = document.createElement('pre');
+                    previewText.textContent = content.substring(0, 150) + (content.length > 150 ? '...' : '');
+                    previewText.style.cssText = `
+                        font-family: 'Share Tech Mono', monospace;
+                        font-size: 0.7rem;
+                        color: var(--text-dim);
+                        background: var(--bg-black);
+                        padding: var(--space-sm);
+                        border-radius: var(--radius-sm);
+                        border: 1px solid var(--glass-border);
+                        margin-top: var(--space-sm);
+                        max-width: 200px;
+                        overflow: hidden;
+                        white-space: pre-wrap;
+                        line-height: 1.2;
+                    `;
+                    container.appendChild(previewText);
+                };
+                reader.readAsText(file);
+            }
+
+            /**
+             * Add PDF preview placeholder
+             */
+            addPdfPreview(container, file) {
+                const pdfInfo = document.createElement('div');
+                pdfInfo.style.cssText = `
+                    margin-top: var(--space-sm);
+                    padding: var(--space-sm);
+                    background: rgba(255, 0, 64, 0.1);
+                    border-radius: var(--radius-sm);
+                    border: 1px solid var(--error);
+                    font-size: var(--font-size-xs);
+                    color: var(--text-secondary);
+                    text-align: center;
+                `;
+                pdfInfo.textContent = 'PDF preview requires external viewer';
+                container.appendChild(pdfInfo);
             }
 
             addLog(message, type = 'info', details = '') {
@@ -3198,24 +4640,61 @@
 
             showToast(message, type = 'info', duration = 3000) {
                 const toast = document.createElement('div');
-                toast.className = `toast ${type}`;
+                toast.className = `toast toast-enhanced ${type} fade-in`;
+                toast.setAttribute('role', 'alert');
+                toast.setAttribute('aria-live', 'polite');
+                toast.setAttribute('tabindex', '-1');
+                
+                // Add type-specific icons
+                const icons = {
+                    success: '✅',
+                    error: '❌',
+                    warning: '⚠️',
+                    info: 'ℹ️'
+                };
+                
                 toast.innerHTML = `
                     <div class="toast-content">
+                        <span class="toast-icon" aria-hidden="true">${icons[type] || icons.info}</span>
                         <span class="toast-message">${message}</span>
-                        <button class="toast-close" aria-label="Close notification">&times;</button>
+                        <button class="toast-close" aria-label="Close notification" tabindex="0">&times;</button>
                     </div>
                 `;
+                
+                // Enhanced styling
+                toast.style.cssText += `
+                    position: relative;
+                    margin-bottom: var(--space-xs);
+                    border-radius: var(--radius-md);
+                    overflow: hidden;
+                `;
+                
                 this.elements.toastContainer.prepend(toast); // Add to top
 
-                toast.querySelector('.toast-close').addEventListener('click', () => {
-                    toast.style.animation = 'toast-slide-out 0.4s forwards';
-                    toast.addEventListener('animationend', () => toast.remove());
+                // Focus management for accessibility
+                if (type === 'error') {
+                    setTimeout(() => toast.focus(), 100);
+                }
+
+                const closeToast = () => {
+                    toast.style.animation = 'slideOutRight 0.4s forwards';
+                    toast.addEventListener('animationend', () => {
+                        if (toast.parentNode) toast.remove();
+                    });
+                };
+
+                toast.querySelector('.toast-close').addEventListener('click', closeToast);
+
+                // Keyboard accessibility
+                toast.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        closeToast();
+                    }
                 });
 
                 setTimeout(() => {
                     if (toast.parentNode) {
-                        toast.style.animation = 'toast-slide-out 0.4s forwards';
-                        toast.addEventListener('animationend', () => toast.remove());
+                        closeToast();
                     }
                 }, duration);
             }
@@ -3268,6 +4747,149 @@
                 }
             }
 
+            /**
+             * Copy client ID to clipboard
+             */
+            copyClientId() {
+                const clientId = this.state.clientId;
+                if (!clientId) {
+                    this.showToast('No client ID available to copy', 'warning');
+                    return;
+                }
+                
+                this.copyManager.copyToClipboard(
+                    clientId, 
+                    this.elements.copyClientIdButton,
+                    'Client ID copied to clipboard!'
+                );
+            }
+
+            /**
+             * Copy server address to clipboard
+             */
+            copyServerAddress() {
+                const serverAddress = this.elements.serverInput.value;
+                if (!serverAddress) {
+                    this.showToast('No server address to copy', 'warning');
+                    return;
+                }
+                
+                this.copyManager.copyToClipboard(
+                    serverAddress, 
+                    this.elements.copyServerAddressButton,
+                    'Server address copied to clipboard!'
+                );
+            }
+
+            /**
+             * Copy selected file information to clipboard
+             */
+            copyFileInfo() {
+                if (!this.state.selectedFile) {
+                    this.showToast('No file selected to copy', 'warning');
+                    return;
+                }
+                
+                const fileInfo = `File: ${this.state.selectedFile.name}\nSize: ${this.formatBytes(this.state.selectedFile.size)}\nType: ${this.state.selectedFile.type || 'Unknown'}`;
+                
+                this.copyManager.copyToClipboard(
+                    fileInfo, 
+                    null,
+                    'File information copied to clipboard!'
+                );
+            }
+
+            /**
+             * Show recent files dropdown
+             */
+            showRecentFiles() {
+                const container = this.elements.recentFilesBtn.parentElement;
+                
+                // Remove any existing dropdown
+                const existingDropdown = container.querySelector('.recent-files-dropdown');
+                if (existingDropdown) {
+                    existingDropdown.remove();
+                    return; // Toggle behavior
+                }
+                
+                // Create and show recent files dropdown
+                this.fileMemoryManager.createRecentFilesUI(container, (fileInfo) => {
+                    // Create a simulated file object from stored info
+                    const simulatedFile = {
+                        name: fileInfo.name,
+                        size: fileInfo.size,
+                        type: fileInfo.type,
+                        lastModified: fileInfo.lastModified
+                    };
+                    
+                    // Update state and UI as if user selected this file
+                    this.state.selectedFile = simulatedFile;
+                    this.addLog(`Recent file selected: ${fileInfo.name}`, 'info', 
+                        `Size: ${fileInfo.sizeFormatted}, Selected ${fileInfo.timeAgo}`);
+                    
+                    this.showToast(`Selected recent file: ${fileInfo.displayName}`, 'success', 2000);
+                    this.updateAllUI();
+                });
+                
+                // Update button text temporarily
+                const originalText = this.elements.recentFilesBtn.textContent;
+                this.elements.recentFilesBtn.textContent = '✨ Select from recent...';
+                
+                setTimeout(() => {
+                    this.elements.recentFilesBtn.textContent = originalText;
+                }, 3000);
+            }
+
+            /**
+             * Record a backup to history when it completes or fails
+             * @param {Object} status - Current backup status
+             * @param {boolean} success - Whether the backup was successful
+             */
+            recordBackupToHistory(status, success) {
+                try {
+                    const backupInfo = {
+                        status: success ? 'completed' : 'failed',
+                        filename: this.state.file_name || status.file_name || 'unknown',
+                        fileSize: this.state.file_size || status.file_size || 0,
+                        server: this.elements.serverInput?.value || 'unknown',
+                        username: this.elements.usernameInput?.value || 'unknown',
+                        duration: status.duration || 0,
+                        transferSpeed: this.state.speed || status.speed || 0,
+                        phase: status.phase,
+                        clientId: this.state.clientId,
+                        error: success ? null : (status.error || status.log?.operation || 'Unknown error')
+                    };
+
+                    const backupId = this.backupHistoryManager.addBackup(backupInfo);
+                    
+                    if (success) {
+                        this.addLog(`Backup recorded to history`, 'success', 
+                            `File: ${backupInfo.filename}, Size: ${this.formatBytes(backupInfo.fileSize)}`);
+                        this.showToast(`✅ Backup completed and saved to history`, 'success', 4000);
+                    } else {
+                        this.addLog(`Failed backup recorded to history`, 'warning', 
+                            `File: ${backupInfo.filename}, Error: ${backupInfo.error}`);
+                        this.showToast(`❌ Backup failed - recorded to history`, 'error', 4000);
+                    }
+                    
+                    debugLog(`Backup ${success ? 'completed' : 'failed'} - recorded to history with ID: ${backupId}`, 'BACKUP_HISTORY');
+                } catch (error) {
+                    console.warn('Failed to record backup to history:', error);
+                    debugLog('Failed to record backup to history: ' + error.message, 'ERROR');
+                }
+            }
+
+            /**
+             * Format bytes for display
+             */
+            formatBytes(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
             debounce(func, delay) {
                 let timeout;
                 return function(...args) {
@@ -3275,6 +4897,108 @@
                     clearTimeout(timeout);
                     timeout = setTimeout(() => func.apply(context, args), delay);
                 };
+            }
+
+            // Enhanced cleanup method to prevent memory leaks
+            cleanup() {
+                debugLog('Performing app cleanup...', 'APP_CLEANUP');
+                
+                try {
+                    // Clear all intervals and timeouts
+                    if (this.intervals) {
+                        this.intervals.clearAll();
+                    }
+
+                    // Clear state management intervals
+                    if (this.stateManagement && this.stateManagement.updateUIDebounced) {
+                        // Clear any pending debounced updates
+                        clearTimeout(this.stateManagement.updateUIDebounced);
+                    }
+
+                    // Cleanup file manager (remove any created elements)
+                    if (this.system && this.system.fileManager) {
+                        // Remove any temporary file inputs created by FileManager
+                        document.querySelectorAll('input[type="file"]').forEach(input => {
+                            if (input.style.display === 'none' && !input.id) {
+                                input.remove();
+                            }
+                        });
+                    }
+
+                    // Cleanup modals and overlays
+                    if (this.system && this.system.modal) {
+                        this.system.modal.hide();
+                    }
+                    if (this.system && this.system.confirmModal) {
+                        this.system.confirmModal.hide();
+                    }
+
+                    // Clear any pending toast notifications
+                    if (this.elements && this.elements.toastContainer) {
+                        this.elements.toastContainer.innerHTML = '';
+                    }
+
+                    // Clear large log entries to free memory
+                    if (this.elements && this.elements.logContainer) {
+                        const logContainer = this.elements.logContainer;
+                        while (logContainer.children.length > 10) {
+                            logContainer.removeChild(logContainer.lastChild);
+                        }
+                    }
+
+                    // Cleanup particle system
+                    if (this.particleSystem) {
+                        this.particleSystem.destroy();
+                    }
+
+                    // Cleanup error boundary
+                    if (this.errorBoundary) {
+                        this.errorBoundary.reset();
+                    }
+
+                    // Revoke any object URLs that might have been created for file previews
+                    document.querySelectorAll('img[src^="blob:"]').forEach(img => {
+                        URL.revokeObjectURL(img.src);
+                    });
+
+                    debugLog('App cleanup completed successfully', 'APP_CLEANUP');
+                } catch (error) {
+                    console.error('[App] Cleanup error:', error);
+                    debugLog('App cleanup failed: ' + error.message, 'APP_CLEANUP');
+                }
+            }
+
+            // Add page unload handler for cleanup
+            setupPageUnloadHandler() {
+                window.addEventListener('beforeunload', () => {
+                    this.cleanup();
+                });
+
+                // Also cleanup on page visibility change (when tab becomes hidden)
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden) {
+                        // Pause expensive operations when tab is hidden
+                        if (this.particleSystem) {
+                            this.particleSystem.toggle();
+                        }
+                        // Reduce polling frequency
+                        if (this.stateManagement) {
+                            this.stateManagement.adaptivePollInterval = Math.min(
+                                this.stateManagement.maxPollInterval,
+                                this.stateManagement.adaptivePollInterval * 2
+                            );
+                        }
+                    } else {
+                        // Resume normal operations when tab becomes visible
+                        if (this.particleSystem && !this.particleSystem.isEnabled) {
+                            this.particleSystem.toggle();
+                        }
+                        // Reset polling frequency
+                        if (this.stateManagement) {
+                            this.stateManagement.adaptivePollInterval = this.stateManagement.minPollInterval;
+                        }
+                    }
+                });
             }
         }
         debugLog('App class defined successfully');
@@ -3397,13 +5121,1703 @@
         }
         debugLog('ThemeManager class defined successfully');
 
+        /**
+         * NEW: ParticleSystem
+         * Creates floating particles for the cyberpunk aesthetic
+         */
+        debugLog('Defining ParticleSystem class...');
+        class ParticleSystem {
+            constructor() {
+                this.container = document.getElementById('particleContainer');
+                this.particles = [];
+                this.maxParticles = 50;
+                this.colors = ['#00FFFF', '#FF00FF', '#00FF00', '#FFFF00', '#FF0040'];
+                this.isEnabled = true;
+                this.animationId = null;
+                
+                // Performance optimization - reduce particles on smaller screens
+                if (window.innerWidth < 768) {
+                    this.maxParticles = 25;
+                } else if (window.innerWidth < 1200) {
+                    this.maxParticles = 35;
+                }
+            }
+
+            init() {
+                if (!this.container || !this.isEnabled) return;
+                
+                this.createInitialParticles();
+                this.startAnimation();
+                
+                // Handle window resize
+                window.addEventListener('resize', () => {
+                    this.handleResize();
+                });
+                
+                console.log('[ParticleSystem] Initialized with', this.maxParticles, 'max particles');
+            }
+
+            createInitialParticles() {
+                for (let i = 0; i < this.maxParticles * 0.3; i++) {
+                    this.createParticle();
+                }
+            }
+
+            createParticle() {
+                if (this.particles.length >= this.maxParticles) return null;
+
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                
+                const color = this.colors[Math.floor(Math.random() * this.colors.length)];
+                const size = Math.random() * 3 + 1;
+                const startX = Math.random() * window.innerWidth;
+                const speed = Math.random() * 2 + 0.5;
+                const drift = (Math.random() - 0.5) * 2;
+                
+                particle.style.cssText = `
+                    left: ${startX}px;
+                    top: ${window.innerHeight + 10}px;
+                    background: ${color};
+                    width: ${size}px;
+                    height: ${size}px;
+                    box-shadow: 0 0 ${size * 3}px ${color};
+                `;
+
+                const particleData = {
+                    element: particle,
+                    x: startX,
+                    y: window.innerHeight + 10,
+                    speed: speed,
+                    drift: drift,
+                    opacity: Math.random() * 0.5 + 0.5,
+                    fadeSpeed: Math.random() * 0.02 + 0.01
+                };
+
+                this.particles.push(particleData);
+                this.container.appendChild(particle);
+                
+                return particleData;
+            }
+
+            updateParticles() {
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const particle = this.particles[i];
+                    
+                    // Update position
+                    particle.y -= particle.speed;
+                    particle.x += particle.drift;
+                    
+                    // Update opacity for twinkling effect
+                    particle.opacity += (Math.random() - 0.5) * particle.fadeSpeed;
+                    particle.opacity = Math.max(0.1, Math.min(1, particle.opacity));
+                    
+                    // Apply changes
+                    particle.element.style.transform = `translate(${particle.x}px, ${particle.y}px)`;
+                    particle.element.style.opacity = particle.opacity;
+                    
+                    // Remove particles that are off-screen
+                    if (particle.y < -10 || particle.x < -10 || particle.x > window.innerWidth + 10) {
+                        particle.element.remove();
+                        this.particles.splice(i, 1);
+                    }
+                }
+                
+                // Randomly create new particles
+                if (Math.random() < 0.3 && this.particles.length < this.maxParticles) {
+                    this.createParticle();
+                }
+            }
+
+            startAnimation() {
+                const animate = () => {
+                    if (this.isEnabled) {
+                        this.updateParticles();
+                        this.animationId = requestAnimationFrame(animate);
+                    }
+                };
+                animate();
+            }
+
+            stopAnimation() {
+                if (this.animationId) {
+                    cancelAnimationFrame(this.animationId);
+                    this.animationId = null;
+                }
+            }
+
+            toggle() {
+                this.isEnabled = !this.isEnabled;
+                if (this.isEnabled) {
+                    this.startAnimation();
+                } else {
+                    this.stopAnimation();
+                }
+            }
+
+            destroy() {
+                this.stopAnimation();
+                this.particles.forEach(particle => particle.element.remove());
+                this.particles = [];
+            }
+
+            handleResize() {
+                // Adjust particle count based on screen size
+                const oldMax = this.maxParticles;
+                if (window.innerWidth < 768) {
+                    this.maxParticles = 25;
+                } else if (window.innerWidth < 1200) {
+                    this.maxParticles = 35;
+                } else {
+                    this.maxParticles = 50;
+                }
+                
+                // Remove excess particles if screen got smaller
+                if (this.maxParticles < oldMax) {
+                    while (this.particles.length > this.maxParticles) {
+                        const particle = this.particles.pop();
+                        particle.element.remove();
+                    }
+                }
+            }
+        }
+        debugLog('ParticleSystem class defined successfully');
+
+        /**
+         * NEW: ErrorBoundary
+         * Global error handling and recovery system
+         */
+        debugLog('Setting up ErrorBoundary...');
+        class ErrorBoundary {
+            constructor(app) {
+                this.app = app;
+                this.errorCount = 0;
+                this.lastErrors = [];
+                this.maxErrors = 10;
+                this.setupGlobalHandlers();
+            }
+
+            setupGlobalHandlers() {
+                // Handle uncaught JavaScript errors
+                window.addEventListener('error', (event) => {
+                    this.handleError('JavaScript Error', event.error, {
+                        filename: event.filename,
+                        lineno: event.lineno,
+                        colno: event.colno
+                    });
+                });
+
+                // Handle unhandled promise rejections
+                window.addEventListener('unhandledrejection', (event) => {
+                    this.handleError('Unhandled Promise Rejection', event.reason, {
+                        promise: event.promise
+                    });
+                    event.preventDefault(); // Prevent default browser behavior
+                });
+
+                // Handle API errors specifically
+                this.setupApiErrorHandling();
+            }
+
+            setupApiErrorHandling() {
+                // Wrap existing API calls with error boundaries
+                if (this.app && this.app.apiClient) {
+                    const originalMethods = ['getStatus', 'connect', 'startBackup', 'stopBackup', 'pauseBackup', 'resumeBackup'];
+                    
+                    originalMethods.forEach(methodName => {
+                        const original = this.app.apiClient[methodName];
+                        if (original) {
+                            this.app.apiClient[methodName] = async (...args) => {
+                                try {
+                                    return await original.apply(this.app.apiClient, args);
+                                } catch (error) {
+                                    this.handleError(`API Error: ${methodName}`, error, { method: methodName, args });
+                                    throw error; // Re-throw for upstream handling
+                                }
+                            };
+                        }
+                    });
+                }
+            }
+
+            handleError(type, error, context = {}) {
+                this.errorCount++;
+                const errorInfo = {
+                    type,
+                    message: error?.message || String(error),
+                    stack: error?.stack,
+                    context,
+                    timestamp: new Date().toISOString(),
+                    userAgent: navigator.userAgent,
+                    url: window.location.href
+                };
+
+                // Store error for debugging
+                this.lastErrors.push(errorInfo);
+                if (this.lastErrors.length > this.maxErrors) {
+                    this.lastErrors.shift();
+                }
+
+                // Log to console and debug system
+                console.error(`[ErrorBoundary] ${type}:`, error, context);
+                debugLogger.log('ERROR', 'ERROR_BOUNDARY', `${type}: ${errorInfo.message}`);
+
+                // Update UI with error information
+                this.updateErrorUI(errorInfo);
+
+                // Attempt recovery if possible
+                this.attemptRecovery(type, error);
+
+                // Show user-friendly notification
+                this.showErrorNotification(errorInfo);
+            }
+
+            updateErrorUI(errorInfo) {
+                try {
+                    if (this.app) {
+                        // Add to operation log
+                        this.app.addLog(`Error: ${errorInfo.type}`, 'error', errorInfo.message);
+                        
+                        // Update connection status if it's an API error
+                        if (errorInfo.type.includes('API')) {
+                            this.app.state.isConnected = false;
+                            this.app.state.phase = 'ERROR';
+                            this.app.updateAllUI();
+                        }
+                    }
+                } catch (uiError) {
+                    console.error('[ErrorBoundary] Failed to update UI:', uiError);
+                }
+            }
+
+            attemptRecovery(type, error) {
+                try {
+                    // Attempt different recovery strategies based on error type
+                    if (type.includes('API') && this.app) {
+                        // For API errors, reset connection state and try to recover
+                        this.app.state.isRunning = false;
+                        this.app.state.isPaused = false;
+                        
+                        // Clear any running intervals that might be causing issues
+                        if (this.app.intervals) {
+                            this.app.intervals.clearAll();
+                            // Restart adaptive polling
+                            setTimeout(() => {
+                                if (this.app.startAdaptivePolling) {
+                                    this.app.startAdaptivePolling();
+                                }
+                            }, 2000);
+                        }
+                    }
+
+                    // Memory cleanup
+                    if (type.includes('Memory') || type.includes('OutOfMemory')) {
+                        this.performMemoryCleanup();
+                    }
+
+                } catch (recoveryError) {
+                    console.error('[ErrorBoundary] Recovery attempt failed:', recoveryError);
+                }
+            }
+
+            performMemoryCleanup() {
+                try {
+                    // Clear any large data structures
+                    if (this.app) {
+                        // Limit log entries
+                        const logContainer = this.app.elements?.logContainer;
+                        if (logContainer && logContainer.children.length > 50) {
+                            while (logContainer.children.length > 25) {
+                                logContainer.removeChild(logContainer.lastChild);
+                            }
+                        }
+
+                        // Clear debug logger entries
+                        if (debugLogger && debugLogger.clearEntries) {
+                            debugLogger.clearEntries();
+                        }
+                    }
+
+                    // Force garbage collection if available
+                    if (window.gc) {
+                        window.gc();
+                    }
+                } catch (cleanupError) {
+                    console.error('[ErrorBoundary] Memory cleanup failed:', cleanupError);
+                }
+            }
+
+            showErrorNotification(errorInfo) {
+                try {
+                    let message = 'An unexpected error occurred';
+                    
+                    // Provide more specific messages for common errors
+                    if (errorInfo.type.includes('API')) {
+                        message = 'Connection error. Please check your network and try again.';
+                    } else if (errorInfo.message.includes('fetch')) {
+                        message = 'Network request failed. Please check your connection.';
+                    } else if (errorInfo.message.includes('timeout')) {
+                        message = 'Operation timed out. Please try again.';
+                    }
+
+                    if (this.app && this.app.showToast) {
+                        this.app.showToast(message, 'error', 5000);
+                    }
+                } catch (notificationError) {
+                    console.error('[ErrorBoundary] Failed to show notification:', notificationError);
+                }
+            }
+
+            getErrorStats() {
+                return {
+                    totalErrors: this.errorCount,
+                    recentErrors: this.lastErrors.slice(-5),
+                    errorTypes: this.lastErrors.reduce((acc, error) => {
+                        acc[error.type] = (acc[error.type] || 0) + 1;
+                        return acc;
+                    }, {})
+                };
+            }
+
+            reset() {
+                this.errorCount = 0;
+                this.lastErrors = [];
+            }
+        }
+        debugLog('ErrorBoundary defined successfully');
+
+        /**
+         * NEW: ButtonStateManager
+         * Manages loading states and visual feedback for buttons
+         */
+        debugLog('Defining ButtonStateManager class...');
+        class ButtonStateManager {
+            constructor() {
+                this.activeButtons = new Map();
+                this.originalStates = new Map();
+            }
+
+            setLoading(button, loadingText = null) {
+                if (!button) return;
+                
+                const buttonId = button.id || button.textContent.trim();
+                
+                // Store original state
+                if (!this.originalStates.has(buttonId)) {
+                    this.originalStates.set(buttonId, {
+                        text: button.textContent,
+                        disabled: button.disabled,
+                        classList: Array.from(button.classList)
+                    });
+                }
+
+                // Apply loading state
+                button.classList.add('loading');
+                button.disabled = true;
+                
+                if (loadingText) {
+                    button.textContent = loadingText;
+                }
+
+                this.activeButtons.set(buttonId, button);
+                debugLog(`Button ${buttonId} set to loading state`, 'BUTTON_STATE');
+            }
+
+            setSuccess(button, successText = null, duration = 2000) {
+                if (!button) return;
+                
+                const buttonId = button.id || this.originalStates.get(button.id)?.text || 'unknown';
+                
+                // Remove loading state
+                button.classList.remove('loading');
+                button.classList.add('success-flash');
+                
+                if (successText) {
+                    button.textContent = successText;
+                }
+
+                // Add status indicator
+                this.addStatusIndicator(button, 'success');
+
+                // Reset after duration
+                setTimeout(() => {
+                    this.reset(button);
+                }, duration);
+
+                debugLog(`Button ${buttonId} set to success state`, 'BUTTON_STATE');
+            }
+
+            setError(button, errorText = null, duration = 3000) {
+                if (!button) return;
+                
+                const buttonId = button.id || this.originalStates.get(button.id)?.text || 'unknown';
+                
+                // Remove loading state
+                button.classList.remove('loading');
+                button.classList.add('error-shake');
+                
+                if (errorText) {
+                    button.textContent = errorText;
+                }
+
+                // Add status indicator
+                this.addStatusIndicator(button, 'error');
+
+                // Reset after duration
+                setTimeout(() => {
+                    this.reset(button);
+                    button.classList.remove('error-shake');
+                }, duration);
+
+                debugLog(`Button ${buttonId} set to error state`, 'BUTTON_STATE');
+            }
+
+            reset(button) {
+                if (!button) return;
+                
+                const buttonId = button.id || button.textContent.trim();
+                const originalState = this.originalStates.get(buttonId);
+                
+                if (originalState) {
+                    // Restore original state
+                    button.textContent = originalState.text;
+                    button.disabled = originalState.disabled;
+                    button.className = originalState.classList.join(' ');
+                    
+                    // Remove any status indicators
+                    this.removeStatusIndicator(button);
+                    
+                    this.originalStates.delete(buttonId);
+                }
+                
+                this.activeButtons.delete(buttonId);
+                debugLog(`Button ${buttonId} reset to original state`, 'BUTTON_STATE');
+            }
+
+            addStatusIndicator(button, type) {
+                this.removeStatusIndicator(button); // Remove existing indicator
+                
+                const indicator = document.createElement('div');
+                indicator.className = `status-indicator ${type}`;
+                indicator.setAttribute('data-button-status', 'true');
+                
+                button.classList.add('has-status');
+                button.appendChild(indicator);
+            }
+
+            removeStatusIndicator(button) {
+                const existing = button.querySelector('[data-button-status]');
+                if (existing) {
+                    existing.remove();
+                }
+                button.classList.remove('has-status');
+            }
+
+            isLoading(button) {
+                return button && button.classList.contains('loading');
+            }
+
+            // Batch operations
+            setMultipleLoading(buttons, loadingText = null) {
+                buttons.forEach(button => this.setLoading(button, loadingText));
+            }
+
+            resetMultiple(buttons) {
+                buttons.forEach(button => this.reset(button));
+            }
+
+            // Clean up all states
+            resetAll() {
+                this.activeButtons.forEach(button => this.reset(button));
+                this.activeButtons.clear();
+                this.originalStates.clear();
+                debugLog('All button states reset', 'BUTTON_STATE');
+            }
+
+            // Get stats for debugging
+            getStats() {
+                return {
+                    activeButtons: this.activeButtons.size,
+                    storedStates: this.originalStates.size,
+                    buttonIds: Array.from(this.activeButtons.keys())
+                };
+            }
+        }
+        debugLog('ButtonStateManager class defined successfully');
+
+        /**
+         * NEW: ErrorMessageFormatter
+         * Provides user-friendly error messages with actionable suggestions
+         */
+        debugLog('Defining ErrorMessageFormatter class...');
+        class ErrorMessageFormatter {
+            constructor() {
+                this.commonErrorPatterns = {
+                    connection: {
+                        patterns: ['ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'connection refused', 'network error'],
+                        userMessage: 'Unable to connect to the backup server',
+                        suggestion: 'Check server address, port, and network connection. Ensure the backup server is running.'
+                    },
+                    authentication: {
+                        patterns: ['authentication failed', 'invalid credentials', 'unauthorized', 'login failed'],
+                        userMessage: 'Authentication failed',
+                        suggestion: 'Verify your username and ensure your client keys are properly configured.'
+                    },
+                    fileAccess: {
+                        patterns: ['ENOENT', 'EACCES', 'permission denied', 'file not found', 'access denied'],
+                        userMessage: 'File access problem',
+                        suggestion: 'Check file permissions and ensure the file exists and is accessible.'
+                    },
+                    serverError: {
+                        patterns: ['server error', '500', 'internal server error'],
+                        userMessage: 'Server encountered an error',
+                        suggestion: 'The backup server experienced an issue. Try again in a few moments.'
+                    },
+                    timeout: {
+                        patterns: ['timeout', 'request timed out', 'operation timed out'],
+                        userMessage: 'Operation timed out',
+                        suggestion: 'The operation took too long. Check network speed and server load, then try again.'
+                    },
+                    encryption: {
+                        patterns: ['encryption failed', 'decryption failed', 'key error', 'crypto error'],
+                        userMessage: 'Encryption/decryption error',
+                        suggestion: 'Verify RSA keys are properly configured and compatible with the server.'
+                    },
+                    diskSpace: {
+                        patterns: ['no space', 'disk full', 'insufficient space', 'ENOSPC'],
+                        userMessage: 'Insufficient storage space',
+                        suggestion: 'Free up disk space on the server or select a smaller file to backup.'
+                    },
+                    fileSize: {
+                        patterns: ['file too large', 'size limit', 'maximum size exceeded'],
+                        userMessage: 'File is too large',
+                        suggestion: 'Select a smaller file or check server file size limits.'
+                    }
+                };
+
+                this.operationSpecificMessages = {
+                    connection: {
+                        success: 'Successfully connected to backup server',
+                        failure: 'Failed to establish connection'
+                    },
+                    backup: {
+                        success: 'Backup completed successfully',
+                        failure: 'Backup operation failed'
+                    },
+                    pause: {
+                        success: 'Backup paused successfully',
+                        failure: 'Failed to pause backup'
+                    },
+                    resume: {
+                        success: 'Backup resumed successfully',
+                        failure: 'Failed to resume backup'
+                    },
+                    stop: {
+                        success: 'Backup stopped successfully',
+                        failure: 'Failed to stop backup'
+                    }
+                };
+            }
+
+            /**
+             * Format an error message to be more user-friendly
+             * @param {string} operation - The operation that failed (e.g., 'connection', 'backup')
+             * @param {string} rawError - The raw error message from the system
+             * @param {Object} context - Additional context (optional)
+             * @returns {Object} Formatted error with userMessage and suggestion
+             */
+            formatError(operation, rawError, context = {}) {
+                const lowerError = rawError.toLowerCase();
+                
+                // Find matching error pattern
+                for (const [category, config] of Object.entries(this.commonErrorPatterns)) {
+                    if (config.patterns.some(pattern => lowerError.includes(pattern))) {
+                        return {
+                            userMessage: this.getOperationMessage(operation, 'failure') || config.userMessage,
+                            suggestion: config.suggestion,
+                            category: category,
+                            technical: rawError
+                        };
+                    }
+                }
+
+                // If no pattern matches, provide a generic but helpful message
+                return {
+                    userMessage: this.getOperationMessage(operation, 'failure') || 'An unexpected error occurred',
+                    suggestion: this.getGenericSuggestion(operation),
+                    category: 'unknown',
+                    technical: rawError
+                };
+            }
+
+            /**
+             * Get operation-specific message
+             */
+            getOperationMessage(operation, type) {
+                return this.operationSpecificMessages[operation]?.[type];
+            }
+
+            /**
+             * Get generic suggestion based on operation
+             */
+            getGenericSuggestion(operation) {
+                const suggestions = {
+                    connection: 'Verify server address and port, then try again.',
+                    backup: 'Check file selection and server connection, then retry.',
+                    pause: 'Ensure backup is running before attempting to pause.',
+                    resume: 'Ensure backup is paused before attempting to resume.',
+                    stop: 'Ensure backup is running before attempting to stop.',
+                    default: 'Check your connection and settings, then try again.'
+                };
+                return suggestions[operation] || suggestions.default;
+            }
+
+            /**
+             * Format a success message
+             */
+            formatSuccess(operation, details = '') {
+                const message = this.getOperationMessage(operation, 'success') || 'Operation completed successfully';
+                return {
+                    userMessage: message,
+                    details: details
+                };
+            }
+
+            /**
+             * Get user-friendly file validation error
+             */
+            formatFileValidationError(errors) {
+                const errorMap = {
+                    'File size exceeds maximum limit': {
+                        message: 'File is too large for backup',
+                        suggestion: 'Select a smaller file or compress it before backup.'
+                    },
+                    'Invalid file type': {
+                        message: 'File type not supported',
+                        suggestion: 'Select a different file type or check server configuration.'
+                    },
+                    'File is empty': {
+                        message: 'Cannot backup empty file',
+                        suggestion: 'Select a file with content to backup.'
+                    },
+                    'Special characters in filename': {
+                        message: 'Filename contains unsupported characters',
+                        suggestion: 'Rename the file to remove special characters, then try again.'
+                    }
+                };
+
+                const firstError = errors[0];
+                const errorInfo = Object.entries(errorMap).find(([key]) => 
+                    firstError.includes(key)
+                );
+
+                if (errorInfo) {
+                    return errorInfo[1];
+                } else {
+                    return {
+                        message: 'File validation failed',
+                        suggestion: 'Check file properties and try selecting a different file.'
+                    };
+                }
+            }
+        }
+        debugLog('ErrorMessageFormatter class defined successfully');
+
+        /**
+         * NEW: CopyManager
+         * Handles copy-to-clipboard functionality with visual feedback
+         */
+        debugLog('Defining CopyManager class...');
+        class CopyManager {
+            constructor() {
+                this.copyTimeout = null;
+            }
+
+            /**
+             * Copy text to clipboard with visual feedback
+             * @param {string} text - Text to copy
+             * @param {HTMLElement} button - Button element for visual feedback
+             * @param {string} successMessage - Toast message on success
+             */
+            async copyToClipboard(text, button = null, successMessage = 'Copied to clipboard!') {
+                try {
+                    // Use modern clipboard API if available
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(text);
+                    } else {
+                        // Fallback for older browsers or non-secure contexts
+                        this.fallbackCopyToClipboard(text);
+                    }
+
+                    // Visual feedback on button
+                    if (button) {
+                        this.showCopyFeedback(button);
+                    }
+
+                    // Show success toast
+                    if (window.app && window.app.showToast) {
+                        window.app.showToast(successMessage, 'success', 2000);
+                    }
+
+                    return true;
+                } catch (error) {
+                    console.error('Copy failed:', error);
+                    
+                    // Show error toast
+                    if (window.app && window.app.showToast) {
+                        window.app.showToast('Failed to copy to clipboard', 'error', 3000);
+                    }
+                    
+                    return false;
+                }
+            }
+
+            /**
+             * Fallback copy method for older browsers
+             */
+            fallbackCopyToClipboard(text) {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                
+                try {
+                    document.execCommand('copy');
+                } finally {
+                    document.body.removeChild(textArea);
+                }
+            }
+
+            /**
+             * Show visual feedback on copy button
+             */
+            showCopyFeedback(button) {
+                if (!button) return;
+
+                // Clear any existing timeout
+                if (this.copyTimeout) {
+                    clearTimeout(this.copyTimeout);
+                }
+
+                // Add copied class for animation
+                button.classList.add('copied');
+
+                // Remove class after animation
+                this.copyTimeout = setTimeout(() => {
+                    button.classList.remove('copied');
+                }, 1500);
+            }
+
+            /**
+             * Create a copy button element
+             * @param {string} text - Text to copy when clicked
+             * @param {string} tooltip - Tooltip text
+             * @returns {HTMLElement} Copy button element
+             */
+            createCopyButton(text, tooltip = 'Copy to clipboard') {
+                const button = document.createElement('button');
+                button.className = 'copy-btn';
+                button.innerHTML = '📋';
+                button.title = tooltip;
+                button.setAttribute('aria-label', tooltip);
+                
+                button.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    await this.copyToClipboard(text, button);
+                });
+
+                return button;
+            }
+
+            /**
+             * Add copy functionality to an existing element
+             * @param {HTMLElement} element - Element to make copyable
+             * @param {string} text - Text to copy (optional, uses element text if not provided)
+             * @param {string} position - Where to place the copy button ('after', 'before', 'inside')
+             */
+            makeCopyable(element, text = null, position = 'after') {
+                if (!element) return null;
+
+                const textToCopy = text || element.textContent.trim();
+                const copyButton = this.createCopyButton(textToCopy);
+
+                switch (position) {
+                    case 'before':
+                        element.parentNode.insertBefore(copyButton, element);
+                        break;
+                    case 'inside':
+                        element.appendChild(copyButton);
+                        break;
+                    case 'after':
+                    default:
+                        element.parentNode.insertBefore(copyButton, element.nextSibling);
+                        break;
+                }
+
+                return copyButton;
+            }
+
+            /**
+             * Create a copy container with text and copy button
+             * @param {string} text - Text to display and copy
+             * @param {string} className - Additional CSS class for the container
+             */
+            createCopyContainer(text, className = '') {
+                const container = document.createElement('div');
+                container.className = `copy-container ${className}`.trim();
+
+                const content = document.createElement('span');
+                content.className = 'copy-content';
+                content.textContent = text;
+
+                const copyButton = this.createCopyButton(text);
+
+                container.appendChild(content);
+                container.appendChild(copyButton);
+
+                return container;
+            }
+        }
+        debugLog('CopyManager class defined successfully');
+
+        /**
+         * NEW: FormValidator
+         * Handles real-time form validation with visual feedback
+         */
+        debugLog('Defining FormValidator class...');
+        class FormValidator {
+            constructor() {
+                this.rules = new Map();
+                this.validators = {
+                    required: (value) => value && value.trim().length > 0,
+                    serverAddress: (value) => {
+                        if (!value) return false;
+                        const parts = value.split(':');
+                        if (parts.length !== 2) return false;
+                        const [ip, port] = parts;
+                        const portNum = parseInt(port);
+                        return ip.length > 0 && portNum > 0 && portNum <= 65535;
+                    },
+                    username: (value) => {
+                        if (!value) return false;
+                        return /^[a-zA-Z0-9_-]{2,32}$/.test(value);
+                    }
+                };
+            }
+
+            /**
+             * Add validation rule to a field
+             */
+            addRule(fieldId, validatorName, message, required = true) {
+                if (!this.rules.has(fieldId)) {
+                    this.rules.set(fieldId, []);
+                }
+                this.rules.get(fieldId).push({
+                    validator: validatorName,
+                    message: message,
+                    required: required
+                });
+            }
+
+            /**
+             * Validate a single field
+             */
+            validateField(fieldId, value) {
+                const rules = this.rules.get(fieldId);
+                if (!rules) return { isValid: true, message: '' };
+
+                for (const rule of rules) {
+                    const validator = this.validators[rule.validator];
+                    if (validator && !validator(value)) {
+                        return { 
+                            isValid: false, 
+                            message: rule.message,
+                            level: rule.required ? 'invalid' : 'warning'
+                        };
+                    }
+                }
+
+                return { isValid: true, message: 'Valid input', level: 'valid' };
+            }
+
+            /**
+             * Apply visual validation state to field
+             */
+            applyValidationState(fieldElement, state) {
+                if (!fieldElement) return;
+
+                // Remove existing states
+                fieldElement.classList.remove('valid', 'invalid', 'warning');
+                
+                // Add new state
+                if (state.level) {
+                    fieldElement.classList.add(state.level);
+                }
+
+                // Update validation icon and helper text
+                this.updateValidationUI(fieldElement, state);
+            }
+
+            /**
+             * Update validation UI elements
+             */
+            updateValidationUI(fieldElement, state) {
+                const container = fieldElement.closest('.form-field') || fieldElement.parentElement;
+                if (!container) return;
+
+                // Update or create validation icon
+                let icon = container.querySelector('.validation-icon');
+                if (!icon && state.level !== 'valid') {
+                    icon = document.createElement('span');
+                    icon.className = 'validation-icon';
+                    container.appendChild(icon);
+                }
+
+                if (icon) {
+                    icon.className = `validation-icon ${state.level}`;
+                    icon.textContent = this.getValidationIcon(state.level);
+                    icon.style.display = state.level === 'valid' ? 'none' : 'block';
+                }
+
+                // Update or create helper text
+                let helper = container.querySelector('.validation-helper');
+                if (!helper && state.message) {
+                    helper = document.createElement('div');
+                    helper.className = 'validation-helper';
+                    container.appendChild(helper);
+                }
+
+                if (helper && state.message) {
+                    helper.className = `validation-helper ${state.level} show`;
+                    helper.textContent = state.message;
+                } else if (helper) {
+                    helper.classList.remove('show');
+                }
+            }
+
+            /**
+             * Get validation icon for state
+             */
+            getValidationIcon(level) {
+                const icons = {
+                    valid: '✓',
+                    invalid: '✗',
+                    warning: '⚠'
+                };
+                return icons[level] || '';
+            }
+
+            /**
+             * Setup real-time validation for a field
+             */
+            setupRealTimeValidation(fieldElement, fieldId) {
+                if (!fieldElement) return;
+
+                const validateAndUpdate = () => {
+                    const value = fieldElement.value;
+                    const state = this.validateField(fieldId, value);
+                    this.applyValidationState(fieldElement, state);
+                };
+
+                // Validate on input (real-time)
+                fieldElement.addEventListener('input', validateAndUpdate);
+                
+                // Validate on blur
+                fieldElement.addEventListener('blur', validateAndUpdate);
+
+                // Initial validation
+                validateAndUpdate();
+            }
+        }
+        debugLog('FormValidator class defined successfully');
+
+        /**
+         * NEW: FileMemoryManager
+         * Remembers file selection history and provides file path suggestions
+         */
+        debugLog('Defining FileMemoryManager class...');
+        class FileMemoryManager {
+            constructor() {
+                this.storageKey = 'cyberbackup_file_memory';
+                this.maxHistorySize = 10;
+            }
+
+            /**
+             * Save file information to memory
+             * @param {File} file - The selected file
+             */
+            saveFileSelection(file) {
+                try {
+                    const fileInfo = {
+                        name: file.name,
+                        size: file.size,
+                        type: file.type,
+                        lastModified: file.lastModified,
+                        timestamp: Date.now(),
+                        // Note: webkitRelativePath available for directory selection
+                        path: file.webkitRelativePath || file.name
+                    };
+
+                    // Get existing history
+                    const history = this.getFileHistory();
+                    
+                    // Remove duplicate entries (same name and size)
+                    const filteredHistory = history.filter(item => 
+                        !(item.name === fileInfo.name && item.size === fileInfo.size)
+                    );
+                    
+                    // Add new entry at the beginning
+                    filteredHistory.unshift(fileInfo);
+                    
+                    // Limit history size
+                    const trimmedHistory = filteredHistory.slice(0, this.maxHistorySize);
+                    
+                    // Save to localStorage
+                    localStorage.setItem(this.storageKey, JSON.stringify(trimmedHistory));
+                    
+                    debugLog(`File selection saved to memory: ${file.name}`, 'FILE_MEMORY');
+                } catch (error) {
+                    console.warn('Failed to save file selection to memory:', error);
+                }
+            }
+
+            /**
+             * Get file selection history
+             * @returns {Array} Array of file info objects
+             */
+            getFileHistory() {
+                try {
+                    const stored = localStorage.getItem(this.storageKey);
+                    return stored ? JSON.parse(stored) : [];
+                } catch (error) {
+                    console.warn('Failed to load file history:', error);
+                    return [];
+                }
+            }
+
+            /**
+             * Get the most recently selected file info
+             * @returns {Object|null} Last file info or null
+             */
+            getLastFile() {
+                const history = this.getFileHistory();
+                return history.length > 0 ? history[0] : null;
+            }
+
+            /**
+             * Clear file selection history
+             */
+            clearHistory() {
+                localStorage.removeItem(this.storageKey);
+                debugLog('File selection history cleared', 'FILE_MEMORY');
+            }
+
+            /**
+             * Get file suggestions for UI display
+             * @returns {Array} Array of recent files with formatted info
+             */
+            getFileSuggestions() {
+                const history = this.getFileHistory();
+                return history.map(file => ({
+                    ...file,
+                    sizeFormatted: this.formatBytes(file.size),
+                    timeAgo: this.formatTimeAgo(file.timestamp),
+                    displayName: file.name.length > 30 ? 
+                        file.name.substring(0, 27) + '...' : file.name
+                }));
+            }
+
+            /**
+             * Format bytes for display
+             */
+            formatBytes(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            /**
+             * Format time ago for display
+             */
+            formatTimeAgo(timestamp) {
+                const now = Date.now();
+                const diff = now - timestamp;
+                const minutes = Math.floor(diff / 60000);
+                const hours = Math.floor(diff / 3600000);
+                const days = Math.floor(diff / 86400000);
+
+                if (minutes < 1) return 'Just now';
+                if (minutes < 60) return `${minutes}m ago`;
+                if (hours < 24) return `${hours}h ago`;
+                return `${days}d ago`;
+            }
+
+            /**
+             * Create recent files dropdown UI
+             * @param {HTMLElement} container - Container to add the dropdown to
+             * @param {Function} onFileSelect - Callback when file is selected from history
+             */
+            createRecentFilesUI(container, onFileSelect) {
+                const suggestions = this.getFileSuggestions();
+                if (suggestions.length === 0) return;
+
+                const dropdown = document.createElement('div');
+                dropdown.className = 'recent-files-dropdown fade-in';
+                dropdown.style.cssText = `
+                    position: absolute;
+                    top: 100%;
+                    left: 0;
+                    right: 0;
+                    background: var(--bg-card);
+                    border: 1px solid var(--glass-border);
+                    border-radius: var(--radius-md);
+                    padding: var(--space-sm);
+                    z-index: 1000;
+                    max-height: 200px;
+                    overflow-y: auto;
+                    margin-top: 4px;
+                `;
+
+                const title = document.createElement('div');
+                title.textContent = 'Recent Files';
+                title.style.cssText = `
+                    font-size: var(--font-size-xs);
+                    color: var(--text-secondary);
+                    margin-bottom: var(--space-xs);
+                    text-transform: uppercase;
+                    font-weight: 600;
+                `;
+                dropdown.appendChild(title);
+
+                suggestions.slice(0, 5).forEach(file => {
+                    const item = document.createElement('div');
+                    item.className = 'recent-file-item';
+                    item.style.cssText = `
+                        padding: var(--space-xs);
+                        border-radius: var(--radius-sm);
+                        cursor: pointer;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        transition: background 0.2s ease;
+                    `;
+
+                    item.innerHTML = `
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-size: var(--font-size-sm); color: var(--text-primary); truncate;">
+                                ${file.displayName}
+                            </div>
+                            <div style="font-size: var(--font-size-xs); color: var(--text-muted);">
+                                ${file.sizeFormatted} • ${file.timeAgo}
+                            </div>
+                        </div>
+                    `;
+
+                    item.addEventListener('mouseenter', () => {
+                        item.style.background = 'rgba(0, 191, 255, 0.1)';
+                    });
+
+                    item.addEventListener('mouseleave', () => {
+                        item.style.background = 'transparent';
+                    });
+
+                    item.addEventListener('click', () => {
+                        onFileSelect(file);
+                        dropdown.remove();
+                    });
+
+                    dropdown.appendChild(item);
+                });
+
+                container.appendChild(dropdown);
+
+                // Remove dropdown when clicking outside
+                setTimeout(() => {
+                    const clickOutside = (e) => {
+                        if (!dropdown.contains(e.target)) {
+                            dropdown.remove();
+                            document.removeEventListener('click', clickOutside);
+                        }
+                    };
+                    document.addEventListener('click', clickOutside);
+                }, 100);
+            }
+        }
+        debugLog('FileMemoryManager class defined successfully');
+
+        /**
+         * NEW: BackupHistoryManager
+         * Tracks and manages backup history with localStorage persistence
+         */
+        debugLog('Defining BackupHistoryManager class...');
+        
+        class BackupHistoryManager {
+            constructor() {
+                this.storageKey = 'cyberbackup_history';
+                this.maxHistorySize = 50;
+            }
+
+            /**
+             * Add a completed backup to history
+             * @param {Object} backupInfo - Backup details
+             */
+            addBackup(backupInfo) {
+                try {
+                    const backup = {
+                        id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                        timestamp: Date.now(),
+                        status: backupInfo.status || 'completed',
+                        filename: backupInfo.filename || 'unknown',
+                        fileSize: backupInfo.fileSize || 0,
+                        server: backupInfo.server || 'unknown',
+                        username: backupInfo.username || 'unknown',
+                        duration: backupInfo.duration || 0,
+                        transferSpeed: backupInfo.transferSpeed || 0,
+                        phase: backupInfo.phase || 'completed',
+                        clientId: backupInfo.clientId || null,
+                        error: backupInfo.error || null
+                    };
+
+                    const history = this.getHistory();
+                    history.unshift(backup);
+                    
+                    // Limit history size
+                    const trimmedHistory = history.slice(0, this.maxHistorySize);
+                    localStorage.setItem(this.storageKey, JSON.stringify(trimmedHistory));
+                    
+                    debugLog(`Backup added to history: ${backup.filename}`, 'BACKUP_HISTORY');
+                    return backup.id;
+                } catch (error) {
+                    console.warn('Failed to add backup to history:', error);
+                    return null;
+                }
+            }
+
+            /**
+             * Get backup history
+             * @returns {Array} Array of backup records
+             */
+            getHistory() {
+                try {
+                    const stored = localStorage.getItem(this.storageKey);
+                    return stored ? JSON.parse(stored) : [];
+                } catch (error) {
+                    console.warn('Failed to load backup history:', error);
+                    return [];
+                }
+            }
+
+            /**
+             * Get formatted history for UI display
+             * @returns {Array} Array of formatted backup records
+             */
+            getFormattedHistory() {
+                const history = this.getHistory();
+                return history.map(backup => ({
+                    ...backup,
+                    dateFormatted: this.formatDate(backup.timestamp),
+                    timeAgo: this.formatTimeAgo(backup.timestamp),
+                    sizeFormatted: this.formatBytes(backup.fileSize),
+                    durationFormatted: this.formatDuration(backup.duration),
+                    speedFormatted: this.formatSpeed(backup.transferSpeed),
+                    statusIcon: this.getStatusIcon(backup.status),
+                    statusColor: this.getStatusColor(backup.status)
+                }));
+            }
+
+            /**
+             * Get successful backups only
+             * @returns {Array} Array of successful backup records
+             */
+            getSuccessfulBackups() {
+                return this.getHistory().filter(backup => backup.status === 'completed');
+            }
+
+            /**
+             * Get failed backups only
+             * @returns {Array} Array of failed backup records
+             */
+            getFailedBackups() {
+                return this.getHistory().filter(backup => backup.status === 'failed' || backup.error);
+            }
+
+            /**
+             * Get backup statistics
+             * @returns {Object} Statistics object
+             */
+            getStatistics() {
+                const history = this.getHistory();
+                const successful = this.getSuccessfulBackups();
+                const failed = this.getFailedBackups();
+                
+                const totalSize = successful.reduce((sum, backup) => sum + (backup.fileSize || 0), 0);
+                const totalDuration = successful.reduce((sum, backup) => sum + (backup.duration || 0), 0);
+                const averageSpeed = successful.length > 0 ? 
+                    successful.reduce((sum, backup) => sum + (backup.transferSpeed || 0), 0) / successful.length : 0;
+
+                return {
+                    totalBackups: history.length,
+                    successfulBackups: successful.length,
+                    failedBackups: failed.length,
+                    successRate: history.length > 0 ? ((successful.length / history.length) * 100).toFixed(1) : '0',
+                    totalSizeTransferred: totalSize,
+                    totalSizeFormatted: this.formatBytes(totalSize),
+                    averageSpeed,
+                    averageSpeedFormatted: this.formatSpeed(averageSpeed),
+                    totalDuration,
+                    totalDurationFormatted: this.formatDuration(totalDuration)
+                };
+            }
+
+            /**
+             * Clear backup history
+             */
+            clearHistory() {
+                localStorage.removeItem(this.storageKey);
+                debugLog('Backup history cleared', 'BACKUP_HISTORY');
+            }
+
+            /**
+             * Remove a specific backup from history
+             * @param {string} backupId - ID of backup to remove
+             */
+            removeBackup(backupId) {
+                try {
+                    const history = this.getHistory();
+                    const filteredHistory = history.filter(backup => backup.id !== backupId);
+                    localStorage.setItem(this.storageKey, JSON.stringify(filteredHistory));
+                    debugLog(`Backup removed from history: ${backupId}`, 'BACKUP_HISTORY');
+                } catch (error) {
+                    console.warn('Failed to remove backup from history:', error);
+                }
+            }
+
+            // Helper methods for formatting
+            formatDate(timestamp) {
+                const date = new Date(timestamp);
+                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+            }
+
+            formatTimeAgo(timestamp) {
+                const now = Date.now();
+                const diff = now - timestamp;
+                const minutes = Math.floor(diff / 60000);
+                const hours = Math.floor(diff / 3600000);
+                const days = Math.floor(diff / 86400000);
+
+                if (minutes < 1) return 'Just now';
+                if (minutes < 60) return `${minutes}m ago`;
+                if (hours < 24) return `${hours}h ago`;
+                return `${days}d ago`;
+            }
+
+            formatBytes(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            formatDuration(seconds) {
+                if (seconds < 60) return `${seconds.toFixed(1)}s`;
+                const minutes = Math.floor(seconds / 60);
+                const remainingSeconds = seconds % 60;
+                return `${minutes}m ${remainingSeconds.toFixed(0)}s`;
+            }
+
+            formatSpeed(bytesPerSecond) {
+                if (bytesPerSecond === 0) return '0 B/s';
+                const k = 1024;
+                const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+                const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k));
+                return parseFloat((bytesPerSecond / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            getStatusIcon(status) {
+                const icons = {
+                    'completed': '✅',
+                    'failed': '❌',
+                    'cancelled': '⏹️',
+                    'in_progress': '⏳'
+                };
+                return icons[status] || '❓';
+            }
+
+            getStatusColor(status) {
+                const colors = {
+                    'completed': 'var(--success)',
+                    'failed': 'var(--error)',
+                    'cancelled': 'var(--warning)',
+                    'in_progress': 'var(--primary)'
+                };
+                return colors[status] || 'var(--text-muted)';
+            }
+        }
+        debugLog('BackupHistoryManager class defined successfully');
+
+        /**
+         * NEW: ConnectionHealthMonitor
+         * Monitors connection health with ping/latency measurements
+         */
+        debugLog('Defining ConnectionHealthMonitor class...');
+        class ConnectionHealthMonitor {
+            constructor() {
+                this.isMonitoring = false;
+                this.pingInterval = null;
+                this.currentLatency = null;
+                this.lastPingTime = null;
+                this.connectionQuality = 'unknown';
+                this.healthHistory = [];
+                this.maxHistorySize = 10;
+                
+                // UI elements will be set by the app
+                this.healthIndicatorElement = null;
+                this.pingDisplayElement = null;
+                this.healthContainerElement = null;
+            }
+
+            /**
+             * Initialize health monitor with UI elements
+             * @param {HTMLElement} healthContainer - Container element
+             * @param {HTMLElement} healthIndicator - Health icon element  
+             * @param {HTMLElement} pingDisplay - Ping display element
+             */
+            initialize(healthContainer, healthIndicator, pingDisplay) {
+                this.healthContainerElement = healthContainer;
+                this.healthIndicatorElement = healthIndicator;
+                this.pingDisplayElement = pingDisplay;
+            }
+
+            /**
+             * Start monitoring connection health
+             * @param {string} serverAddress - Server address to ping (e.g., "127.0.0.1:1256")
+             */
+            startMonitoring(serverAddress) {
+                if (this.isMonitoring) {
+                    this.stopMonitoring();
+                }
+
+                this.serverAddress = serverAddress;
+                this.isMonitoring = true;
+                
+                // Show the health indicator
+                if (this.healthContainerElement) {
+                    this.healthContainerElement.style.display = 'flex';
+                    this.healthContainerElement.style.alignItems = 'center';
+                    this.healthContainerElement.style.gap = 'var(--space-xs)';
+                }
+
+                // Initial ping
+                this.performHealthCheck();
+
+                // Start periodic health checks (every 30 seconds)
+                this.pingInterval = setInterval(() => {
+                    this.performHealthCheck();
+                }, 30000);
+
+                debugLog(`Started health monitoring for ${serverAddress}`, 'HEALTH_MONITOR');
+            }
+
+            /**
+             * Stop monitoring connection health
+             */
+            stopMonitoring() {
+                this.isMonitoring = false;
+                
+                if (this.pingInterval) {
+                    clearInterval(this.pingInterval);
+                    this.pingInterval = null;
+                }
+
+                // Hide the health indicator
+                if (this.healthContainerElement) {
+                    this.healthContainerElement.style.display = 'none';
+                }
+
+                // Reset state
+                this.currentLatency = null;
+                this.connectionQuality = 'unknown';
+                this.healthHistory = [];
+
+                debugLog('Stopped health monitoring', 'HEALTH_MONITOR');
+            }
+
+            /**
+             * Perform a health check (ping simulation using API call)
+             */
+            async performHealthCheck() {
+                if (!this.isMonitoring || !this.serverAddress) return;
+
+                try {
+                    const startTime = performance.now();
+                    
+                    // Use a lightweight API call to measure response time
+                    // We'll use the status endpoint which should be fast
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+                    const response = await fetch('http://localhost:9090/status', {
+                        method: 'GET',
+                        signal: controller.signal,
+                        cache: 'no-cache'
+                    });
+
+                    clearTimeout(timeoutId);
+                    const endTime = performance.now();
+                    const latency = Math.round(endTime - startTime);
+
+                    this.updateHealthMetrics(latency, true);
+                    
+                } catch (error) {
+                    // Connection failed or timed out
+                    this.updateHealthMetrics(null, false);
+                    console.warn('Health check failed:', error.message);
+                }
+            }
+
+            /**
+             * Update health metrics and UI
+             * @param {number|null} latency - Measured latency in ms (null if failed)
+             * @param {boolean} isConnected - Whether connection succeeded
+             */
+            updateHealthMetrics(latency, isConnected) {
+                this.lastPingTime = Date.now();
+                this.currentLatency = latency;
+
+                // Add to history
+                this.healthHistory.unshift({
+                    timestamp: this.lastPingTime,
+                    latency: latency,
+                    isConnected: isConnected
+                });
+
+                // Trim history
+                if (this.healthHistory.length > this.maxHistorySize) {
+                    this.healthHistory = this.healthHistory.slice(0, this.maxHistorySize);
+                }
+
+                // Determine connection quality
+                this.connectionQuality = this.calculateConnectionQuality(latency, isConnected);
+
+                // Update UI
+                this.updateHealthUI();
+
+                debugLog(`Health check: ${latency}ms, Quality: ${this.connectionQuality}`, 'HEALTH_MONITOR');
+            }
+
+            /**
+             * Calculate connection quality based on latency
+             * @param {number|null} latency - Latency in ms
+             * @param {boolean} isConnected - Connection status
+             * @returns {string} Quality rating
+             */
+            calculateConnectionQuality(latency, isConnected) {
+                if (!isConnected || latency === null) return 'offline';
+                if (latency < 50) return 'excellent';
+                if (latency < 150) return 'good';
+                if (latency < 300) return 'fair';
+                if (latency < 1000) return 'poor';
+                return 'very_poor';
+            }
+
+            /**
+             * Update health indicator UI
+             */
+            updateHealthUI() {
+                if (!this.healthIndicatorElement || !this.pingDisplayElement) return;
+
+                // Update ping display
+                if (this.currentLatency !== null) {
+                    this.pingDisplayElement.textContent = `${this.currentLatency}ms`;
+                } else {
+                    this.pingDisplayElement.textContent = 'timeout';
+                }
+
+                // Update health indicator icon and color
+                const qualityConfig = {
+                    offline: { icon: '📵', color: 'var(--error)', title: 'Connection failed' },
+                    excellent: { icon: '📶', color: 'var(--success)', title: 'Excellent connection' },
+                    good: { icon: '📶', color: 'var(--neon-green)', title: 'Good connection' },
+                    fair: { icon: '📶', color: 'var(--warning)', title: 'Fair connection' },
+                    poor: { icon: '📶', color: 'var(--neon-orange)', title: 'Poor connection' },
+                    very_poor: { icon: '📶', color: 'var(--error)', title: 'Very poor connection' }
+                };
+
+                const config = qualityConfig[this.connectionQuality] || qualityConfig.offline;
+
+                this.healthIndicatorElement.textContent = config.icon;
+                this.healthIndicatorElement.style.color = config.color;
+                this.healthIndicatorElement.title = `${config.title} (${this.currentLatency || '--'}ms)`;
+                this.pingDisplayElement.style.color = config.color;
+
+                // Add subtle animation for poor connections
+                if (this.connectionQuality === 'poor' || this.connectionQuality === 'very_poor') {
+                    this.healthIndicatorElement.style.animation = 'pulse 2s infinite';
+                } else {
+                    this.healthIndicatorElement.style.animation = 'none';
+                }
+            }
+
+            /**
+             * Get current health status for external use
+             * @returns {Object} Health status object
+             */
+            getHealthStatus() {
+                return {
+                    isMonitoring: this.isMonitoring,
+                    latency: this.currentLatency,
+                    quality: this.connectionQuality,
+                    lastCheck: this.lastPingTime,
+                    averageLatency: this.getAverageLatency(),
+                    recentHistory: this.healthHistory.slice(0, 5)
+                };
+            }
+
+            /**
+             * Calculate average latency from recent history
+             * @returns {number|null} Average latency or null
+             */
+            getAverageLatency() {
+                const validPings = this.healthHistory.filter(h => h.latency !== null);
+                if (validPings.length === 0) return null;
+                
+                const sum = validPings.reduce((acc, h) => acc + h.latency, 0);
+                return Math.round(sum / validPings.length);
+            }
+        }
+        debugLog('ConnectionHealthMonitor class defined successfully');
+
         // Initialize the main application
         debugLog('Initializing App instance...');
         const app = new App();
+        window.app = app; // Make globally accessible for CopyManager
         debugLog('App instance initialized.');
+
+        // Initialize error boundary system
+        debugLog('Initializing ErrorBoundary...');
+        const errorBoundary = new ErrorBoundary(app);
+        app.errorBoundary = errorBoundary;
+        debugLog('ErrorBoundary initialized.');
+
+        // Initialize particle system
+        debugLog('Initializing ParticleSystem...');
+        const particleSystem = new ParticleSystem();
+        particleSystem.init();
+        debugLog('ParticleSystem initialized.');
 
         // Initial UI update
         app.updateAllUI();
+
+        // Make systems accessible from app for potential controls
+        app.particleSystem = particleSystem;
 
         debugLog('=== SCRIPT LOADING COMPLETE ===');
     </script>

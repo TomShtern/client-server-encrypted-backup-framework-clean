@@ -46,8 +46,8 @@ class GUIManager:
         def init_gui():
             try:
                 with self.gui_lock:
-                    self.gui = self.ServerGUI(self.server_instance)
-                    # The initialize method now returns True/False
+                    # Pass the server_instance to the GUI
+                    self.gui = self.ServerGUI(server_instance=self.server_instance)
                     gui_initialized = self.gui.initialize()
                 
                 if gui_initialized:
@@ -113,6 +113,24 @@ class GUIManager:
     def show_success(self, success_message: str):
         if self.is_gui_ready():
             self._execute_gui_action(self.gui.show_success, success_message)
+
+    def queue_update(self, update_type: str, data: Any):
+        """Queue an update for the GUI to process safely."""
+        if not self.is_gui_ready():
+            return
+        
+        with self.gui_lock:
+            if self.gui:
+                self.gui.update_queue.put((update_type, data))
+
+    def is_gui_running(self) -> bool:
+        """Check if the GUI is currently running."""
+        if not self.gui:
+            return False
+        # Check if the GUI thread is alive, or if the root window exists
+        gui_thread_alive = self.gui.gui_thread and self.gui.gui_thread.is_alive()
+        root_window_exists = self.gui.root and self.gui.root.winfo_exists()
+        return gui_thread_alive or root_window_exists
 
     def shutdown(self):
         """Shutdown the GUI gracefully."""

@@ -45,6 +45,11 @@ class NetworkServer:
         self.server_socket: Optional[socket.socket] = None
         self.running = False
         self.client_connection_semaphore = threading.Semaphore(MAX_CONCURRENT_CLIENTS)
+        self.active_connections: Dict[bytes, socket.socket] = {}
+        self.connections_lock = threading.Lock()
+        self.host = '0.0.0.0' # Default host
+        self.start_time = time.time() # Server start time
+        self.last_error: Optional[str] = None # Last error encountered by the server
         
         # Setup signal handlers for graceful shutdown
         self._setup_signal_handlers()
@@ -59,6 +64,21 @@ class NetworkServer:
         if hasattr(signal, 'SIGTERM'):
             signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGINT, signal_handler)
+
+    def disconnect_client(self, client_id: bytes) -> bool:
+        """Forcefully disconnects a client by their ID."""
+        with self.connections_lock:
+            if client_id in self.active_connections:
+                sock = self.active_connections.pop(client_id)
+                try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                    sock.close()
+                    logger.info(f"Forcefully disconnected client {client_id.hex()}")
+                    return True
+                except OSError as e:
+                    logger.error(f"Error while disconnecting client {client_id.hex()}: {e}")
+                    return False
+        return False
     
     def start(self) -> bool:
         """
@@ -188,6 +208,13 @@ class NetworkServer:
             logger.info("All client connections closed successfully.")
         
         logger.info("Network server shutdown completed.")
+
+    def get_connection_stats(self) -> Dict[str, int]:
+        """Returns current connection statistics."""
+        with self.connections_lock:
+            return {
+                'active_connections': len(self.active_connections)
+            }
     
     def _read_exact(self, sock: socket.socket, num_bytes: int) -> bytes:
         """
@@ -337,6 +364,10 @@ class NetworkServer:
                     # Update client last seen and log identifier
                     active_client_obj.update_last_seen()
                     log_client_identifier = f"{client_ip}:{client_port} (Name:'{active_client_obj.name}', ID:{current_log_id_str})"
+                    
+                    # Add to active connections
+                    with self.connections_lock:
+                        self.active_connections[client_id_from_header] = client_conn
                 
                 # Process the Request
                 self.request_handler(
@@ -364,6 +395,12 @@ class NetworkServer:
                 except Exception as send_error_exception:
                     logger.error(f"Failed to send error response to {log_client_identifier} after an unexpected error: {send_error_exception}")
         finally:
+            # Remove from active connections
+            if active_client_obj:
+                with self.connections_lock:
+                    if active_client_obj.id in self.active_connections:
+                        del self.active_connections[active_client_obj.id]
+
             if client_conn:
                 client_conn.close()
             conn_semaphore.release()

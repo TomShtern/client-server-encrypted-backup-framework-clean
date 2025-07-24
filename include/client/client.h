@@ -239,6 +239,7 @@ private:
     void displayConnectionInfo();
     void displayError(const std::string& message, ErrorType type = ErrorType::NONE);
     void displaySeparator();
+    void displayPhase(const std::string& phase);
     void displaySummary();
 };
 

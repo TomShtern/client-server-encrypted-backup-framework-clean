@@ -240,9 +240,6 @@ class BackupServer:
 
     def __init__(self):
         """Initializes the BackupServer instance."""
-        # Ensure single server instance
-        self.singleton_manager = ensure_single_server_instance("BackupServer", DEFAULT_PORT)
-        
         self.clients: Dict[bytes, Client] = {} # In-memory store: client_id_bytes -> Client object
         self.clients_by_name: Dict[str, bytes] = {} # In-memory store: client_name_str -> client_id_bytes
         self.clients_lock: threading.Lock = threading.Lock() # Protects access to clients and clients_by_name
@@ -302,7 +299,7 @@ class BackupServer:
 
     def _update_gui_success(self, message: str):
         """Delegates logging a success message to the GUI."""
-        self.gui_manager.log_success(message)
+        self.gui_manager.queue_update("log", message)
 
     def _parse_string_from_payload(self, payload_bytes: bytes, field_len: int, max_actual_len: int, field_name: str = "String") -> str:
         """
@@ -361,9 +358,9 @@ class BackupServer:
         self.db_manager.save_client_to_db(client.id, client.name, client.public_key_bytes, client.get_aes_key())
 
 
-    def _save_file_info_to_db(self, client_id: bytes, file_name: str, path_name: str, verified: bool):
+    def _save_file_info_to_db(self, client_id: bytes, file_name: str, path_name: str, verified: bool, file_size: int, mod_date: str, crc: Optional[int] = None):
         """Saves or updates file information in the database."""
-        self.db_manager.save_file_info_to_db(client_id, file_name, path_name, verified)
+        self.db_manager.save_file_info_to_db(client_id, file_name, path_name, verified, file_size, mod_date, crc)
 
 
     # Port configuration is now handled by NetworkServer
@@ -371,88 +368,64 @@ class BackupServer:
 
     def _periodic_maintenance_job(self):
         """
-        Runs periodically to perform maintenance tasks:
-        - Cleans up inactive client sessions from memory.
-        - Cleans up stale partial file transfer data for active clients.
-        - Logs server status to console.
-        
-        Note: This method is now called by NetworkServer's maintenance thread.
+        Runs periodically to perform maintenance and send status updates to the GUI.
         """
         try:
-            # --- Inactive client session cleanup (from memory, not DB) ---
+            # --- Maintenance Tasks ---
+            # (Existing cleanup logic remains the same)
             inactive_clients_removed_count = 0
-            with self.clients_lock: # Ensure thread-safe access to shared client dictionaries
+            with self.clients_lock:
                 current_monotonic_time = time.monotonic()
-                # Identify client IDs that have been inactive longer than CLIENT_SESSION_TIMEOUT
                 inactive_client_ids_to_remove = [
                     cid for cid, client_obj in self.clients.items()
                     if (current_monotonic_time - client_obj.last_seen) > CLIENT_SESSION_TIMEOUT
                 ]
-                # Remove identified inactive clients
                 for cid in inactive_client_ids_to_remove:
-                    client_obj = self.clients.pop(cid, None) # Safely remove from dict by ID
-                    if client_obj: # If client was found and removed
-                        self.clients_by_name.pop(client_obj.name, None) # Also remove from dict by name
+                    client_obj = self.clients.pop(cid, None)
+                    if client_obj:
+                        self.clients_by_name.pop(client_obj.name, None)
                         inactive_clients_removed_count += 1
-                        logger.info(f"Client '{client_obj.name}' (ID: {cid.hex()}) session timed out due to inactivity. Removed from active memory pool.")
-            
-            # --- Stale partial file transfer data cleanup (for currently active clients) ---
-            with self.clients_lock: # Get a list of current clients to iterate over (snapshot)
-                active_clients_list = list(self.clients.values()) 
-            
+                        logger.info(f"Client '{client_obj.name}' session timed out.")
+
+            with self.clients_lock:
+                active_clients_list = list(self.clients.values())
             stale_partial_files_cleaned_count = sum(
                 client_obj.cleanup_stale_partial_files() for client_obj in active_clients_list
             )
 
-            # --- Console Status Update (Basic UI Element) ---
-            with self.clients_lock: # Get current count of active clients in memory
-                active_clients_in_memory = len(self.clients)
-            
-            # Query database for overall stats (handle potential DB errors gracefully for status reporting)
-            try:
-                db_total_clients_row = self.db_manager.execute("SELECT COUNT(*) FROM clients", fetchone=True)
-                db_total_clients_count = db_total_clients_row[0] if db_total_clients_row else "N/A (DB Error)"
-                db_total_files_row = self.db_manager.execute("SELECT COUNT(*) FROM files", fetchone=True)
-                db_total_files_count = db_total_files_row[0] if db_total_files_row else "N/A (DB Error)"
-                db_verified_files_row = self.db_manager.execute("SELECT COUNT(*) FROM files WHERE Verified = 1", fetchone=True)
-                db_verified_files_count = db_verified_files_row[0] if db_verified_files_row else "N/A (DB Error)"
-            except ServerError: # If db_manager.execute raises ServerError due to DB issues
-                db_total_clients_count, db_total_files_count, db_verified_files_count = "DB_Error", "DB_Error", "DB_Error"
+            # --- GUI Status Update ---
+            if self.gui_manager.is_gui_ready():
+                # 1. Gather all status information into dictionaries
+                status_data = {
+                    'running': self.running,
+                    'address': self.network_server.host,
+                    'port': self.port,
+                    'uptime': time.time() - self.network_server.start_time if self.running else 0,
+                    'error_message': self.network_server.last_error or ''
+                }
 
-            # Get network server connection stats
-            network_stats = self.network_server.get_connection_stats()
+                client_stats_data = {
+                    'connected': self.network_server.get_connection_stats()['active_connections'],
+                    'total': self.db_manager.get_total_clients_count(),
+                    'active_transfers': 0 # Placeholder, needs real logic
+                }
 
-            # Construct a more structured status message for the console
-            current_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            status_header = f"[Server Status @ {current_time_str}]"
-            status_lines = [
-                f"{status_header:<80}",
-                f"{'Active Client Sessions (In-Memory):':<40} {active_clients_in_memory:<10}",
-                f"{'Active Network Connections:':<40} {network_stats['active_connections']:<10}",
-                f"{'Total Registered Clients (DB):':<40} {db_total_clients_count:<10}",
-                f"{'Total Files Stored (DB):':<40} {db_total_files_count:<10}",
-                f"{'Verified Files (DB):':<40} {db_verified_files_count:<10}",
-                f"{'Cleaned Inactive Sessions (This Cycle):':<40} {inactive_clients_removed_count:<10}",
-                f"{'Cleaned Stale Partial Files (This Cycle):':<40} {stale_partial_files_cleaned_count:<10}",
-                f"{'-' * 80}"
-            ]
-            logger.info("\n" + "\n".join(status_lines))
-            
-            # Update GUI with current stats
-            if isinstance(db_total_clients_count, int):
-                self.gui_manager.update_client_stats(connected=active_clients_in_memory, total=db_total_clients_count)
-            else:
-                self.gui_manager.update_client_stats(connected=active_clients_in_memory)
-            
-            # Update GUI with maintenance stats
-            self.gui_manager.update_maintenance_stats(
-                files_cleaned=0,  # Could track file cleanup if implemented
-                partial_files_cleaned=stale_partial_files_cleaned_count,
-                clients_cleaned=inactive_clients_removed_count
-            )
+                maintenance_stats_data = {
+                    'files_cleaned': 0, # Placeholder
+                    'partial_files_cleaned': stale_partial_files_cleaned_count,
+                    'clients_cleaned': inactive_clients_removed_count,
+                    'last_cleanup': datetime.now().isoformat()
+                }
+                
+                # 2. Put the gathered data into the GUI's queue
+                self.gui_manager.queue_update("status", status_data)
+                self.gui_manager.queue_update("client_stats", client_stats_data)
+                self.gui_manager.queue_update("maintenance_stats", maintenance_stats_data)
 
-        except Exception as e: # Catch-all for any unexpected errors within the maintenance function
-            logger.critical(f"Critical error in server's periodic maintenance job: {e}", exc_info=True)
+        except Exception as e:
+            logger.critical(f"Critical error in periodic maintenance job: {e}", exc_info=True)
+            if self.gui_manager.is_gui_ready():
+                self.gui_manager.queue_update("log", f"ERROR: Maintenance job failed: {e}")
 
 
     def start(self):
@@ -491,7 +464,6 @@ class BackupServer:
         logger.warning("Server shutdown sequence initiated...")
         self.gui_manager.shutdown()
         self.network_server.stop()
-        self.singleton_manager.cleanup()
         self.running = False
         logger.info("Server has been stopped.")
 
@@ -519,27 +491,40 @@ if __name__ == "__main__":
         sys.exit(1) # Exit if essential crypto library is missing/broken
 
     # Instantiate the server
-    server_instance = BackupServer()
+    server_instance = None
     try:
-        server_instance.start() # This method now contains the main accept loop
-        
-        # The main thread (this __main__ block) will now primarily wait for the server
-        # to be shut down (e.g., by a signal). The server's accept loop and client handling
-        # occur in other threads.
-        while server_instance.running and not server_instance.shutdown_event.is_set():
-            time.sleep(1) # Keep the main thread alive, periodically checking server status
+        # Instantiate the server
+        server_instance = BackupServer()
 
-    except KeyboardInterrupt: # This should now be primarily handled by the SIGINT signal handler
-        logger.info("KeyboardInterrupt detected in main execution block. Server stop should have been triggered by signal handler.")
-    except SystemExit as e_sys_exit: # If startup checks (e.g., _load_clients_from_db, _perform_startup_checks) decided to exit
-         logger.critical(f"Server startup process was aborted: {e_sys_exit}")
-    except Exception as e_main_fatal: # Catch-all for any other unexpected fatal errors during server setup or main loop
+        # The GUIManager was initialized in the BackupServer constructor.
+        # The GUI is running in a separate thread, started by the GUIManager.
+        # The main thread can now wait for a shutdown signal or simply keep alive.
+        # The GUI's mainloop will handle user interaction and application lifetime.
+        
+        # We wait for the GUI to signal it's ready before we proceed.
+        if server_instance.gui_manager.is_gui_ready():
+            logger.info("GUI is ready. Main thread is now idle, application is driven by GUI and server threads.")
+            # Keep the main thread alive. The application will exit when the GUI is closed.
+            while server_instance.gui_manager.is_gui_running():
+                time.sleep(1)
+        else:
+            # Fallback for console-only mode if GUI fails
+            logger.warning("GUI did not become ready. Running in console-only mode.")
+            logger.info("Starting server in console mode...")
+            server_instance.start()
+            while server_instance.running and not server_instance.shutdown_event.is_set():
+                time.sleep(1)
+
+    except KeyboardInterrupt:
+        logger.info("KeyboardInterrupt detected in main execution block. Initiating shutdown.")
+    except SystemExit as e_sys_exit:
+        logger.critical(f"Server startup process was aborted: {e_sys_exit}")
+    except Exception as e_main_fatal:
         logger.critical(f"Server encountered a fatal unhandled exception in main execution: {e_main_fatal}", exc_info=True)
     finally:
-        # Ensure server stop sequence is robustly called, even if start() failed or loop exited unexpectedly
-        if server_instance.running or not server_instance.shutdown_event.is_set(): # If not already fully stopped
+        if server_instance:
             logger.info("Ensuring server shutdown is called from __main__ 'finally' block...")
-            server_instance.stop() # Attempt to stop the server if it's still considered running
+            server_instance.stop()
         
         logger.info("Server application has completed its full termination sequence.")
         print("Server shutdown process complete. Exiting.")

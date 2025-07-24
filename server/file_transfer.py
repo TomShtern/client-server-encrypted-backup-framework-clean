@@ -358,10 +358,10 @@ class FileTransferManager:
                 crc_value = self._calculate_crc(decrypted_data)
                 
                 # Save file to storage
-                final_path = self._save_file_to_storage(filename, decrypted_data)
+                final_path, mod_date = self._save_file_to_storage(filename, decrypted_data)
                 
                 # Update database
-                self.server._save_file_info_to_db(client.id, filename, final_path, False)
+                self.server.db_manager.save_file_info_to_db(client.id, filename, final_path, False, len(decrypted_data), mod_date, crc_value)
                 
                 # Update GUI statistics
                 self._update_gui_stats(filename, client.name, len(decrypted_data))
@@ -427,7 +427,7 @@ class FileTransferManager:
         except (ValueError, KeyError) as e:
             raise FileError(f"File decryption failed: {e}") from e
     
-    def _save_file_to_storage(self, filename: str, data: bytes) -> str:
+    def _save_file_to_storage(self, filename: str, data: bytes) -> Tuple[str, str]:
         """
         Atomically saves file data to storage.
         
@@ -436,7 +436,7 @@ class FileTransferManager:
             data: File content to save
             
         Returns:
-            Final file path
+            A tuple containing the final file path and the modification date as an ISO 8601 string.
             
         Raises:
             FileError: If file save fails
@@ -460,7 +460,10 @@ class FileTransferManager:
             os.rename(temp_path, final_path)
             logger.info(f"File '{filename}' saved to storage: '{final_path}'")
             
-            return final_path
+            mod_time = os.path.getmtime(final_path)
+            mod_date = datetime.fromtimestamp(mod_time).isoformat()
+
+            return final_path, mod_date
             
         except OSError as e:
             # Cleanup temporary file on error
