@@ -57,10 +57,12 @@ class GUIManager:
                     logger.warning("Server GUI initialization failed, continuing without GUI")
                     with self.gui_lock:
                         self.gui = None
+                    self.gui_ready.set() # Signal completion even if GUI failed
             except Exception as e:
                 logger.warning(f"Failed to initialize server GUI: {e}, continuing without GUI")
                 with self.gui_lock:
                     self.gui = None
+                self.gui_ready.set() # Signal completion even if GUI failed with exception
         
         try:
             gui_thread = threading.Thread(target=init_gui, daemon=True, name="GUIInitializer")
@@ -94,9 +96,11 @@ class GUIManager:
         if self.is_gui_ready():
             self._execute_gui_action(self.gui.update_server_status, running, address, port)
 
-    def update_client_stats(self, connected: int = 0, total: int = 0, active_transfers: int = 0):
+    def update_client_stats(self, stats_data: dict = None):
         if self.is_gui_ready():
-            self._execute_gui_action(self.gui.update_client_stats, connected, total, active_transfers)
+            if stats_data is None:
+                stats_data = {'connected': 0, 'total': 0, 'active_transfers': 0}
+            self._execute_gui_action(self.gui.update_client_stats, stats_data)
 
     def update_transfer_stats(self, bytes_transferred: int = 0, last_activity: str = ""):
         if self.is_gui_ready():

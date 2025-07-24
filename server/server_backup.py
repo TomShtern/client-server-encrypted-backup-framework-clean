@@ -409,13 +409,13 @@ class BackupServer:
                 
                 # Query database for overall stats (handle potential DB errors gracefully for status reporting)
                 try:
-                    db_total_clients_row = self._db_execute("SELECT COUNT(*) FROM clients", fetchone=True)
+                    db_total_clients_row = self.db_manager.execute("SELECT COUNT(*) FROM clients", fetchone=True)
                     db_total_clients_count = db_total_clients_row[0] if db_total_clients_row else "N/A (DB Error)"
-                    db_total_files_row = self._db_execute("SELECT COUNT(*) FROM files", fetchone=True)
+                    db_total_files_row = self.db_manager.execute("SELECT COUNT(*) FROM files", fetchone=True)
                     db_total_files_count = db_total_files_row[0] if db_total_files_row else "N/A (DB Error)"
-                    db_verified_files_row = self._db_execute("SELECT COUNT(*) FROM files WHERE Verified = 1", fetchone=True)
+                    db_verified_files_row = self.db_manager.execute("SELECT COUNT(*) FROM files WHERE Verified = 1", fetchone=True)
                     db_verified_files_count = db_verified_files_row[0] if db_verified_files_row else "N/A (DB Error)"
-                except ServerError: # If _db_execute raises ServerError due to DB issues
+                except ServerError: # If db_manager.execute raises ServerError due to DB issues
                     db_total_clients_count, db_total_files_count, db_verified_files_count = "DB_Error", "DB_Error", "DB_Error"
 
                 # Construct a more structured status message for the console
@@ -513,7 +513,8 @@ class BackupServer:
             with self.clients_lock:
                 active_clients = len(self.clients)
             try:
-                db_total_clients = self._db_execute("SELECT COUNT(*) FROM clients")[0][0]
+                db_total_clients_row = self.db_manager.execute("SELECT COUNT(*) FROM clients", fetchone=True)
+                db_total_clients = db_total_clients_row[0] if db_total_clients_row else 0
                 self._update_gui_client_count(connected=active_clients, total=db_total_clients)
             except:
                 self._update_gui_client_count(connected=active_clients)

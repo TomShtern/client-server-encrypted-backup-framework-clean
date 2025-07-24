@@ -1040,8 +1040,7 @@ class ServerGUI:
         self.transfer_chart = None
         self.client_chart = None
         
-        # Server reference (will be set if needed)
-        self.server = None
+        # Server reference is already set in __init__ - don't overwrite it!
         
         # Settings - Load from file or use defaults
         self.settings = self._load_settings_from_file()
@@ -1187,9 +1186,9 @@ class ServerGUI:
                     
         except Exception as e:
             print(f"Error during shutdown: {e}")
-        
+
         print("GUI shutdown completed")
-    
+
     def _gui_main_loop(self):
         """Main GUI thread loop"""
         try:
@@ -1960,7 +1959,8 @@ class ServerGUI:
                 self.toast_system.show_toast("Server is already running.", "warning")
         else:
             if self.toast_system:
-                self.toast_system.show_toast("Server instance not available.", "error")
+                self.toast_system.show_toast("Server instance not available. Please start the server using 'python server.py'", "error")
+            self._add_activity_log("❌ Server instance not available. Use 'python server.py' to start properly.")
 
     def _stop_server(self):
         """Stop the backup server."""
@@ -2519,6 +2519,69 @@ class ServerGUI:
             last_cleanup = datetime.fromisoformat(last_cleanup).strftime('%Y-%m-%d %H:%M:%S')
         if 'last_cleanup' in self.status_labels:
             self.status_labels['last_cleanup'].config(text=last_cleanup)
+
+    def update_server_status(self, running: bool, address: str, port: int):
+        """Update server status display"""
+        print(f"[DEBUG] update_server_status called: running={running}, address={address}, port={port}")
+
+        if not self.gui_enabled:
+            print("[DEBUG] GUI not enabled, returning")
+            return
+
+        # Update the status object
+        self.status.running = running
+        self.status.server_address = address
+        self.status.port = port
+
+        # Update status labels
+        if running:
+            status_text = "🟢 Running"
+            status_color = ModernTheme.SUCCESS
+            header_text = "Server Online"
+            indicator_status = "online"
+        else:
+            status_text = "🛑 Stopped"
+            status_color = ModernTheme.ERROR
+            header_text = "Server Offline"
+            indicator_status = "offline"
+
+        print(f"[DEBUG] Status text: {status_text}, Available status_labels keys: {list(self.status_labels.keys())}")
+
+        # Update main status label
+        if 'status' in self.status_labels:
+            print("[DEBUG] Updating main status label")
+            self.status_labels['status'].config(text=status_text, fg=status_color)
+        else:
+            print("[DEBUG] 'status' key not found in status_labels")
+
+        # Update header status label
+        if hasattr(self, 'header_status_label'):
+            print("[DEBUG] Updating header status label")
+            self.header_status_label.config(text=header_text)
+        else:
+            print("[DEBUG] header_status_label not found")
+
+        # Update header status indicator
+        if hasattr(self, 'header_status_indicator'):
+            print("[DEBUG] Updating header status indicator")
+            self.header_status_indicator.set_status(indicator_status)
+        else:
+            print("[DEBUG] header_status_indicator not found")
+
+        # Update address and port labels if they exist
+        if 'address' in self.status_labels:
+            self.status_labels['address'].config(text=address)
+        if 'port' in self.status_labels:
+            self.status_labels['port'].config(text=str(port))
+
+        # Update uptime display
+        if 'uptime' in self.status_labels:
+            if running:
+                self.status_labels['uptime'].config(text="Just started")
+            else:
+                self.status_labels['uptime'].config(text="0:00:00")
+
+        print("[DEBUG] update_server_status completed")
 
     # --- Missing Method Implementations (Stubs) ---
     

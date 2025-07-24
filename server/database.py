@@ -127,15 +127,18 @@ class DatabaseManager:
         # Add FileSize and ModificationDate to older tables if they don't exist
         try:
             self.execute("SELECT FileSize FROM files LIMIT 1", fetchone=True)
-        except sqlite3.OperationalError:
+        except (sqlite3.OperationalError, ServerError):
+            logger.info("Adding FileSize column to files table")
             self.execute("ALTER TABLE files ADD COLUMN FileSize INTEGER", commit=True)
         try:
             self.execute("SELECT ModificationDate FROM files LIMIT 1", fetchone=True)
-        except sqlite3.OperationalError:
+        except (sqlite3.OperationalError, ServerError):
+            logger.info("Adding ModificationDate column to files table")
             self.execute("ALTER TABLE files ADD COLUMN ModificationDate TEXT", commit=True)
         try:
             self.execute("SELECT CRC FROM files LIMIT 1", fetchone=True)
-        except sqlite3.OperationalError:
+        except (sqlite3.OperationalError, ServerError):
+            logger.info("Adding CRC column to files table")
             self.execute("ALTER TABLE files ADD COLUMN CRC INTEGER", commit=True)
         
         logger.info("Database schema initialization complete.")

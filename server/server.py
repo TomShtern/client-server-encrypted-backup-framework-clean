@@ -295,7 +295,11 @@ class BackupServer:
         # You might need to pass more specific data to the GUI manager.
         with self.clients_lock:
             total_clients = len(self.clients)
-        self.gui_manager.update_client_stats(total=total_clients)
+        self.gui_manager.update_client_stats({
+            'connected': total_clients,
+            'total': total_clients,
+            'active_transfers': 0
+        })
 
     def _update_gui_success(self, message: str):
         """Delegates logging a success message to the GUI."""
@@ -445,14 +449,20 @@ class BackupServer:
             self.shutdown_event.set()
             return
 
-        # Start the network server
-        self.network_server.start()
+        # Start the network server in a separate thread
+        import threading
+        self.network_thread = threading.Thread(target=self.network_server.start, daemon=True)
+        self.network_thread.start()
 
         logger.info(f"Encrypted Backup Server Version {SERVER_VERSION} started successfully on port {self.port}.")
-        
+
         # Update GUI with server status
         self.gui_manager.update_server_status(True, "0.0.0.0", self.port)
-        self.gui_manager.update_client_stats()
+        self.gui_manager.update_client_stats({
+            'connected': 0,
+            'total': 0,
+            'active_transfers': 0
+        })
 
 
     def stop(self):
@@ -490,6 +500,9 @@ if __name__ == "__main__":
         print("Please ensure PyCryptodome is properly installed (e.g., via 'pip install pycryptodomex'). Server cannot start.", file=sys.stderr)
         sys.exit(1) # Exit if essential crypto library is missing/broken
 
+    # Ensure only one server instance runs at a time
+    # ensure_single_server_instance("BackupServer", 1256)  # Temporarily disabled for testing
+
     # Instantiate the server
     server_instance = None
     try:
@@ -501,15 +514,25 @@ if __name__ == "__main__":
         # The main thread can now wait for a shutdown signal or simply keep alive.
         # The GUI's mainloop will handle user interaction and application lifetime.
         
-        # We wait for the GUI to signal it's ready before we proceed.
-        if server_instance.gui_manager.is_gui_ready():
+        # Wait for the GUI to signal it's ready before we proceed (with timeout)
+        print("DEBUG: Waiting for GUI to initialize...")
+        logger.info("Waiting for GUI to initialize...")
+        gui_ready = server_instance.gui_manager.gui_ready.wait(timeout=10.0)  # Wait up to 10 seconds
+        print(f"DEBUG: GUI ready result: {gui_ready}")
+
+        if gui_ready and server_instance.gui_manager.is_gui_ready():
+            print("DEBUG: GUI is ready, starting server...")
             logger.info("GUI is ready. Main thread is now idle, application is driven by GUI and server threads.")
+            # Start the server
+            server_instance.start()
+            print("DEBUG: Server started, entering main loop...")
             # Keep the main thread alive. The application will exit when the GUI is closed.
             while server_instance.gui_manager.is_gui_running():
                 time.sleep(1)
         else:
             # Fallback for console-only mode if GUI fails
-            logger.warning("GUI did not become ready. Running in console-only mode.")
+            print("DEBUG: GUI failed or timed out, running console-only mode...")
+            logger.warning("GUI did not become ready within timeout. Running in console-only mode.")
             logger.info("Starting server in console mode...")
             server_instance.start()
             while server_instance.running and not server_instance.shutdown_event.is_set():
