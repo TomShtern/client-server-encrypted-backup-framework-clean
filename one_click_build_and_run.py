@@ -250,21 +250,13 @@ class OneClickBuilder:
         else:
             self.print_warning("RSA public key missing - may need key generation")
             
-        # Check transfer.info
+        # Check transfer.info (but don't create a default one with hardcoded username)
         transfer_info_path = data_dir / "transfer.info"
         if transfer_info_path.exists():
             self.print_success("transfer.info configuration found")
         else:
-            self.print_warning("Creating default transfer.info...")
-            try:
-                data_dir.mkdir(exist_ok=True)
-                with open(transfer_info_path, 'w') as f:
-                    f.write("127.0.0.1:1256\n")
-                    f.write("testuser\n")
-                    f.write("test_file.txt\n")
-                self.print_success("Default transfer.info created")
-            except Exception as e:
-                self.print_warning(f"Failed to create transfer.info: {e}")
+            self.print_info("transfer.info will be created dynamically when user connects via GUI")
+            self.print_info("Users can enter any username they want through the client GUI")
                 
         self.print_success("Configuration verification completed!")
         
@@ -280,7 +272,7 @@ class OneClickBuilder:
         self.print_info("  Web GUI (Browser interface)")
         print()
 
-        # Start the Python backup server
+        # Start the Python backup server (GUI version)
         self.print_info("Starting Python Backup Server (server/server.py)...")
         server_path = self.script_dir / "server" / "server.py"
         self.server_process = subprocess.Popen(
@@ -306,6 +298,14 @@ class OneClickBuilder:
         webbrowser.open(gui_url)
 
         self.print_success_banner()
+
+        # Keep the script running to maintain the servers
+        self.print_info("Servers are now running. Press Ctrl+C to stop all services.")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            self.print_info("Shutdown signal received. Stopping services...")
             
     def print_success_banner(self) -> None:
         """Print the success banner"""
@@ -328,7 +328,7 @@ class OneClickBuilder:
         self.print_info("  4. Check logs in the console windows for debugging")
         print()
         self.print_info("To run tests: python scripts/master_test_suite.py")
-        self.print_info("To stop services: Close the console windows or press Ctrl+C")
+        self.print_info("To stop services: Press Ctrl+C in this window")
         print()
         self.print_success("Have a great backup session!")
         self.print_colored("=" * 72, Colors.GREEN)

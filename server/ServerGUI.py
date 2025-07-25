@@ -2600,10 +2600,65 @@ class ServerGUI:
     
     def _schedule_updates(self):
         """Schedule periodic GUI updates."""
-        # Schedule periodic updates for real-time data
+        try:
+            # Process queued updates
+            self._process_update_queue()
+
+            # Update real-time elements
+            self._update_clock()
+            self._update_performance_metrics()
+
+            # Update uptime if server is running
+            if self.status.running:
+                current_time = time.time()
+                self.status.uptime_seconds = int(current_time - self.start_time)
+                if 'uptime' in self.status_labels:
+                    uptime_str = self._format_uptime(self.status.uptime_seconds)
+                    self.status_labels['uptime'].config(text=uptime_str)
+
+        except Exception as e:
+            print(f"[DEBUG] Error in _schedule_updates: {e}")
+
+        # Schedule next update
         if self.root:
             self.root.after(1000, self._schedule_updates)  # Update every second
-    
+
+    def _process_update_queue(self):
+        """Process all pending updates from the queue."""
+        try:
+            while not self.update_queue.empty():
+                update_type, data = self.update_queue.get_nowait()
+
+                if update_type == "status":
+                    # Update server status
+                    self.update_server_status(
+                        data.get('running', False),
+                        data.get('address', ''),
+                        data.get('port', 0)
+                    )
+                elif update_type == "client_stats":
+                    # Update client statistics
+                    self.update_client_stats(data)
+                elif update_type == "transfer_stats":
+                    # Update transfer statistics
+                    self.update_transfer_stats(data)
+                elif update_type == "maintenance_stats":
+                    # Update maintenance statistics
+                    self.update_maintenance_stats(data)
+                elif update_type == "log":
+                    # Add log entry
+                    if hasattr(self, 'activity_log'):
+                        self.activity_log.append({
+                            'timestamp': datetime.now().isoformat(),
+                            'message': str(data)
+                        })
+                        # Keep only last 100 log entries
+                        if len(self.activity_log) > 100:
+                            self.activity_log = self.activity_log[-100:]
+
+        except Exception as e:
+            print(f"[DEBUG] Error processing update queue: {e}")
+
     def _on_window_close(self):
         """Handle window close event."""
         # Graceful shutdown when window is closed

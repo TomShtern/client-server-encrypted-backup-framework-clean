@@ -33,7 +33,7 @@ class DatabaseManager:
     Handles client persistence, file record management, and SQLite operations.
     """
     
-    def __init__(self, db_name: str = None):
+    def __init__(self, db_name: Optional[str] = None):
         """
         Initialize the DatabaseManager.
         
@@ -112,15 +112,15 @@ class DatabaseManager:
         # ON DELETE CASCADE ensures that if a client is deleted, their file records are also removed.
         self.execute('''
             CREATE TABLE IF NOT EXISTS files (
-                ID BLOB(16) NOT NULL, 
+                ID BLOB(16) PRIMARY KEY,
                 FileName VARCHAR(255) NOT NULL,
-                PathName VARCHAR(255) NOT NULL, 
+                PathName VARCHAR(255) NOT NULL,
                 Verified BOOLEAN DEFAULT 0,
                 FileSize INTEGER,
                 ModificationDate TEXT,
                 CRC INTEGER,
-                PRIMARY KEY (ID, FileName), 
-                FOREIGN KEY (ID) REFERENCES clients(ID) ON DELETE CASCADE
+                ClientID BLOB(16) NOT NULL,
+                FOREIGN KEY (ClientID) REFERENCES clients(ID) ON DELETE CASCADE
             )
         ''', commit=True)
         
@@ -140,8 +140,40 @@ class DatabaseManager:
         except (sqlite3.OperationalError, ServerError):
             logger.info("Adding CRC column to files table")
             self.execute("ALTER TABLE files ADD COLUMN CRC INTEGER", commit=True)
+
+        # Add ClientID column for proper foreign key relationship
+        try:
+            self.execute("SELECT ClientID FROM files LIMIT 1", fetchone=True)
+        except (sqlite3.OperationalError, ServerError):
+            logger.info("Adding ClientID column to files table and migrating data")
+            self.execute("ALTER TABLE files ADD COLUMN ClientID BLOB(16)", commit=True)
+            # Migrate existing data: move ID to ClientID and generate new unique IDs
+            self._migrate_files_to_clientid_schema()
         
         logger.info("Database schema initialization complete.")
+
+    def _migrate_files_to_clientid_schema(self):
+        """Migrate existing files table to use ClientID foreign key"""
+        import uuid
+        try:
+            # Get all existing files
+            existing_files = self.execute("SELECT ID, FileName FROM files WHERE ClientID IS NULL", fetchall=True)
+
+            for file_id, filename in existing_files:
+                # The current ID is actually the client ID, so move it to ClientID
+                new_file_id = uuid.uuid4().bytes  # Generate new unique file ID
+
+                self.execute("""
+                    UPDATE files
+                    SET ClientID = ?, ID = ?
+                    WHERE ID = ? AND FileName = ? AND ClientID IS NULL
+                """, (file_id, new_file_id, file_id, filename), commit=True)
+
+            logger.info(f"Migrated {len(existing_files)} file records to use ClientID schema")
+
+        except Exception as e:
+            logger.error(f"Failed to migrate files to ClientID schema: {e}")
+            raise
 
     def load_clients_from_db(self) -> List[Tuple[bytes, str, Optional[bytes], str]]:
         """
@@ -190,7 +222,7 @@ class DatabaseManager:
     def save_file_info_to_db(self, client_id: bytes, file_name: str, path_name: str, verified: bool, file_size: int, mod_date: str, crc: Optional[int] = None):
         """
         Saves or updates file information in the database.
-        
+
         Args:
             client_id: The unique UUID (bytes) of the client who uploaded the file.
             file_name: The original filename.
@@ -200,18 +232,23 @@ class DatabaseManager:
             mod_date: The modification date of the file as an ISO 8601 string.
             crc: The CRC32 checksum of the file.
         """
+        import uuid
+
+        # Generate unique file ID
+        file_id = uuid.uuid4().bytes
+
         # Ensure path_name is stored consistently (e.g., relative to FILE_STORAGE_DIR or absolute)
         # Current implementation assumes path_name is the final, usable path.
         if crc is not None:
             self.execute('''
-                INSERT OR REPLACE INTO files (ID, FileName, PathName, Verified, FileSize, ModificationDate, CRC) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (client_id, file_name, path_name, verified, file_size, mod_date, crc), commit=True)
+                INSERT OR REPLACE INTO files (ID, FileName, PathName, Verified, FileSize, ModificationDate, CRC, ClientID)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (file_id, file_name, path_name, verified, file_size, mod_date, crc, client_id), commit=True)
         else:
             self.execute('''
-                INSERT OR REPLACE INTO files (ID, FileName, PathName, Verified, FileSize, ModificationDate) 
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (client_id, file_name, path_name, verified, file_size, mod_date), commit=True)
+                INSERT OR REPLACE INTO files (ID, FileName, PathName, Verified, FileSize, ModificationDate, ClientID)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (file_id, file_name, path_name, verified, file_size, mod_date, client_id), commit=True)
         
         logger.debug(f"File info for '{file_name}' (Client ID: {client_id.hex()}) saved/updated in database. Verified status: {verified}.")
 
@@ -383,45 +420,42 @@ class DatabaseManager:
     def get_all_clients(self) -> list:
         """Retrieves all clients from the database."""
         try:
-            with self.get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT ID, Name, LastSeen FROM clients")
-                clients = cursor.fetchall()
+            clients = self.execute("SELECT ID, Name, LastSeen FROM clients", fetchall=True)
+            if clients:
                 return [{
                     'id': row[0].hex(),
                     'name': row[1],
                     'last_seen': row[2]
                 } for row in clients]
-        except sqlite3.Error as e:
+            return []
+        except Exception as e:
             logger.error(f"Database error while getting all clients: {e}")
             return []
 
     def get_files_for_client(self, client_id: str) -> list:
         """Retrieves all files for a given client."""
         try:
-            with self.get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT FileName, PathName, Verified FROM files WHERE ClientID=?", (bytes.fromhex(client_id),))
-                files = cursor.fetchall()
+            files = self.execute("SELECT FileName, PathName, Verified FROM files WHERE ClientID=?",
+                               (bytes.fromhex(client_id),), fetchall=True)
+            if files:
                 return [{
                     'filename': row[0],
                     'path': row[1],
                     'verified': bool(row[2])
                 } for row in files]
-        except sqlite3.Error as e:
+            return []
+        except Exception as e:
             logger.error(f"Database error while getting files for client {client_id}: {e}")
             return []
 
     def get_all_files(self) -> list:
         """Retrieves all files from the database."""
         try:
-            with self.get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT f.FileName, f.PathName, f.Verified, c.Name, f.FileSize, f.ModificationDate 
-                    FROM files f JOIN clients c ON f.ID = c.ID
-                """)
-                files = cursor.fetchall()
+            files = self.execute("""
+                SELECT f.FileName, f.PathName, f.Verified, c.Name, f.FileSize, f.ModificationDate
+                FROM files f JOIN clients c ON f.ClientID = c.ID
+            """, fetchall=True)
+            if files:
                 return [{
                     'filename': row[0],
                     'path': row[1],
@@ -430,57 +464,53 @@ class DatabaseManager:
                     'size': row[4],
                     'date': row[5]
                 } for row in files]
-        except sqlite3.Error as e:
+            return []
+        except Exception as e:
             logger.error(f"Database error while getting all files: {e}")
             return []
 
     def get_file_info(self, client_id: str, filename: str) -> Optional[dict]:
         """Retrieves all information for a single file."""
         try:
-            with self.get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT f.FileName, f.PathName, f.Verified, c.Name, f.FileSize, f.ModificationDate, f.CRC
-                    FROM files f JOIN clients c ON f.ID = c.ID
-                    WHERE f.ID = ? AND f.FileName = ?
-                """, (bytes.fromhex(client_id), filename))
-                row = cursor.fetchone()
-                if row:
-                    return {
-                        'filename': row[0],
-                        'path': row[1],
-                        'verified': bool(row[2]),
-                        'client': row[3],
-                        'size': row[4],
-                        'date': row[5],
-                        'crc': row[6]
-                    }
-                return None
-        except sqlite3.Error as e:
+            row = self.execute("""
+                SELECT f.FileName, f.PathName, f.Verified, c.Name, f.FileSize, f.ModificationDate, f.CRC
+                FROM files f JOIN clients c ON f.ClientID = c.ID
+                WHERE f.ClientID = ? AND f.FileName = ?
+            """, (bytes.fromhex(client_id), filename), fetchone=True)
+            if row:
+                return {
+                    'filename': row[0],
+                    'path': row[1],
+                    'verified': bool(row[2]),
+                    'client': row[3],
+                    'size': row[4],
+                    'date': row[5],
+                    'crc': row[6]
+                }
+            return None
+        except Exception as e:
             logger.error(f"Database error while getting file info for {client_id}/{filename}: {e}")
             return None
 
     def get_total_clients_count(self) -> int:
         """Returns the total number of registered clients."""
         try:
-            with self.get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT COUNT(*) FROM clients")
-                count = cursor.fetchone()[0]
-                return count if count is not None else 0
-        except sqlite3.Error as e:
+            result = self.execute("SELECT COUNT(*) FROM clients", fetchone=True)
+            if result:
+                return result[0] if result[0] is not None else 0
+            return 0
+        except Exception as e:
             logger.error(f"Database error while getting total client count: {e}")
             return 0
 
     def get_total_bytes_transferred(self) -> int:
         """Returns the total number of bytes transferred."""
         try:
-            with self.get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT SUM(FileSize) FROM files WHERE Verified = 1")
-                total_bytes = cursor.fetchone()[0]
-                return total_bytes if total_bytes is not None else 0
-        except sqlite3.Error as e:
+            result = self.execute("SELECT SUM(FileSize) FROM files WHERE Verified = 1", fetchone=True)
+            if result:
+                return result[0] if result[0] is not None else 0
+            return 0
+        except Exception as e:
             logger.error(f"Database error while getting total bytes transferred: {e}")
             return 0
 
@@ -522,7 +552,7 @@ class DatabaseManager:
 
 
 # Module-level convenience functions for backward compatibility
-def get_database_manager(db_name: str = None) -> DatabaseManager:
+def get_database_manager(db_name: Optional[str] = None) -> DatabaseManager:
     """
     Factory function to get a DatabaseManager instance.
     
@@ -535,7 +565,7 @@ def get_database_manager(db_name: str = None) -> DatabaseManager:
     return DatabaseManager(db_name)
 
 
-def init_database(db_name: str = None):
+def init_database(db_name: Optional[str] = None):
     """
     Initialize the database schema.
     

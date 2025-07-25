@@ -2387,8 +2387,8 @@
             
             <div class="config-section">
                 <label class="config-label" for="usernameInput">Username</label>
-                <input type="text" class="config-input" id="usernameInput" 
-                       placeholder="Enter username" value="testuser" maxlength="100" aria-describedby="usernameHelp">
+                <input type="text" class="config-input" id="usernameInput"
+                       placeholder="Enter your username" value="" maxlength="100" aria-describedby="usernameHelp">
                 <div id="usernameHelp" class="sr-only">Username for authentication (max 100 characters)</div>
             </div>
             
@@ -2550,7 +2550,7 @@
             <h3 class="modal-title" id="confirmTitle">Confirm Action</h3>
             <p class="modal-message" id="confirmMessage">Are you sure?</p>
             <div class="modal-buttons">
-                <button class="cyber-btn secondary" data-action="cancel-modal">Cancel</button>
+                <button class="cyber-btn secondary" id="cancelModalBtn" data-action="cancel-modal">Cancel</button>
                 <button type="button" class="cyber-btn danger" id="confirmOkBtn">Confirm</button>
             </div>
         </div>
@@ -2569,7 +2569,7 @@
                     TRACE: { value: 4, color: '#888888', prefix: 'TRACE' }
                 };
                 
-                this.currentLevel = this.levels.DEBUG; // Default level
+                this.currentLevel = this.levels.ERROR; // Only show errors to reduce spam
                 this.filters = new Set(); // Category filters
                 this.debugDiv = null;
                 this.isEnabled = true;
@@ -2918,7 +2918,7 @@
                     
                     // Store response time for debugging
                     this.lastResponseTime = responseTime;
-                    debugLog(`API call to ${url} completed in ${responseTime.toFixed(0)}ms`, 'API_TIMING');
+                    // debugLog(`API call to ${url} completed in ${responseTime.toFixed(0)}ms`, 'API_TIMING');
 
                     return response;
                 } catch (error) {
@@ -2938,7 +2938,7 @@
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
-                debugLog('Status response:' + JSON.stringify(data), 'API');
+                // debugLog('Status response:' + JSON.stringify(data), 'API');
                 return data;
             }
 
@@ -3183,7 +3183,7 @@
                 // First try modern File System Access API
                 if (this.supportsFileSystemAccess) {
                     try {
-                        console.log('[FileManager] Attempting modern file picker...');
+                        // console.log('[FileManager] Attempting modern file picker...');
                         const [fileHandle] = await window.showOpenFilePicker({
                             types: [{
                                 description: 'All files',
@@ -3195,7 +3195,7 @@
                         });
                         
                         const file = await fileHandle.getFile();
-                        console.log('[FileManager] Modern file picker succeeded:', file.name);
+                        // console.log('[FileManager] Modern file picker succeeded:', file.name);
                         return file;
                     } catch (error) {
                         if (error.name !== 'AbortError') {
@@ -3323,6 +3323,32 @@
                 this.modal = new ModalManager();
                 this.confirmModal = new ConfirmModalManager();
                 this.fileManager = new FileManager();
+            }
+
+            announce(message) {
+                // Announce to screen readers for accessibility
+                if ('speechSynthesis' in window) {
+                    // Use speech synthesis if available (optional)
+                    // speechSynthesis.speak(new SpeechSynthesisUtterance(message));
+                }
+                // Create a live region for screen readers
+                const liveRegion = document.createElement('div');
+                liveRegion.setAttribute('aria-live', 'polite');
+                liveRegion.setAttribute('aria-atomic', 'true');
+                liveRegion.style.position = 'absolute';
+                liveRegion.style.left = '-10000px';
+                liveRegion.style.width = '1px';
+                liveRegion.style.height = '1px';
+                liveRegion.style.overflow = 'hidden';
+                liveRegion.textContent = message;
+                document.body.appendChild(liveRegion);
+
+                // Remove after announcement
+                setTimeout(() => {
+                    if (liveRegion.parentNode) {
+                        liveRegion.parentNode.removeChild(liveRegion);
+                    }
+                }, 1000);
             }
 
             setupKeyboardShortcuts(appInstance) {
@@ -3540,10 +3566,10 @@
                     isPolling: false,
                     isUpdatingUI: false,
                     lastPollTime: 0,
-                    pollCooldown: 500, // Minimum time between polls in ms
-                    adaptivePollInterval: 1000, // Dynamic interval that adapts based on activity
-                    maxPollInterval: 5000, // Maximum interval when idle
-                    minPollInterval: 500, // Minimum interval when active
+                    pollCooldown: 2000, // Minimum time between polls in ms (increased from 500ms to 2s)
+                    adaptivePollInterval: 3000, // Dynamic interval that adapts based on activity (increased from 1s to 3s)
+                    maxPollInterval: 10000, // Maximum interval when idle (increased from 5s to 10s)
+                    minPollInterval: 2000, // Minimum interval when active (increased from 500ms to 2s)
                     consecutiveNoChangeCount: 0, // Track periods of no activity
                     uiUpdateQueue: [],
                     updateUIDebounced: this.debounce(() => this._updateAllUI(), 150) // Slightly increased debounce
@@ -3677,7 +3703,8 @@
 
                 try {
                     const status = await this.apiClient.getStatus();
-                    debugLog('Raw API Status:' + JSON.stringify(status), 'POLL');
+                    // Reduced verbosity: only log API status on state changes
+                    // debugLog('Raw API Status:' + JSON.stringify(status), 'POLL');
 
                     let stateChanged = false;
 
@@ -3757,7 +3784,10 @@
                         }
                     }
 
-                    debugLog('POLL: State updated - connected: ' + this.state.isConnected + ', changed: ' + stateChanged + ', nextInterval: ' + this.stateManagement.adaptivePollInterval + 'ms');
+                    // Only log when state actually changes to reduce console spam
+                    if (stateChanged) {
+                        debugLog('POLL: State updated - connected: ' + this.state.isConnected + ', changed: ' + stateChanged + ', nextInterval: ' + this.stateManagement.adaptivePollInterval + 'ms');
+                    }
 
                     // Handle additional data
                     if (status.progress) this.updateProgress(status.progress);
@@ -3882,7 +3912,7 @@
                 
                 // Start the adaptive polling
                 scheduleNextPoll();
-                console.log('[Polling] Adaptive polling started with initial interval:', this.stateManagement.adaptivePollInterval + 'ms');
+                // console.log('[Polling] Adaptive polling started with initial interval:', this.stateManagement.adaptivePollInterval + 'ms');
             }
 
             // Public UI Update Function (uses debouncing)
@@ -4083,7 +4113,13 @@
                     this.updateAllUI();
 
                     try {
-                        const result = await this.apiClient.connect({ host: serverIP, port: serverPort, username: username });
+                        // Include filepath in connect call if file is selected
+                        const connectConfig = { host: serverIP, port: serverPort, username: username };
+                        if (this.state.selectedFile) {
+                            connectConfig.filepath = this.state.selectedFile.name;
+                        }
+
+                        const result = await this.apiClient.connect(connectConfig);
                         if (result.success) {
                             this.buttonStateManager.setSuccess(this.elements.primaryActionButton, '✅ Connected!');
                             this.showToast('Connected to server successfully!', 'success');
@@ -4738,7 +4774,7 @@
                     if (savedConfig) {
                         const config = JSON.parse(savedConfig);
                         this.elements.serverInput.value = config.serverAddress || '127.0.0.1:1256';
-                        this.elements.usernameInput.value = config.username || 'testuser';
+                        this.elements.usernameInput.value = config.username || '';  // No default username - let user enter their own
                         this.addLog('Loaded saved configuration', 'info');
                     }
                 } catch (error) {

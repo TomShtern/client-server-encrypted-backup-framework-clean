@@ -121,34 +121,39 @@ Client::Client() : socket(nullptr), connected(false), rsaPrivate(nullptr),
                    keepAliveEnabled(false), lastError(ErrorType::NONE) {
     std::fill(clientID.begin(), clientID.end(), 0);
 
-    // Initialize HTTP API server for HTML GUI
-    try {
-        webServer = std::make_unique<WebServerBackend>();
-        
-        // Set both callback types for maximum compatibility
-        // Legacy callback for backward compatibility
-        webServer->setBackupCallback([this]() { return this->runBackupOperation(); });
-        
-        // New config-based callback that eliminates transfer.info dependency
-        webServer->setBackupCallbackWithConfig([this](const WebServerBackend::BackupConfig& config) {
-            // Convert WebServerBackend::BackupConfig to Client::BackupConfig
-            Client::BackupConfig clientConfig;
-            clientConfig.serverIP = config.serverIP;
-            clientConfig.serverPort = config.serverPort;
-            clientConfig.username = config.username;
-            clientConfig.filepath = config.filepath;
-            
-            return this->runBackupOperation(clientConfig);
-        });
-        
-        if (webServer->start("127.0.0.1", 9090)) {
-            std::cout << "[GUI] HTTP API server started on port 9090" << std::endl;
-            std::cout << "[GUI] New configuration-based backup system enabled" << std::endl;
-        } else {
-            std::cout << "[ERROR] Failed to start HTTP API server" << std::endl;
+    // Initialize HTTP API server for HTML GUI (only in interactive mode)
+    extern bool g_batchMode;
+    if (!g_batchMode) {
+        try {
+            webServer = std::make_unique<WebServerBackend>();
+
+            // Set both callback types for maximum compatibility
+            // Legacy callback for backward compatibility
+            webServer->setBackupCallback([this]() { return this->runBackupOperation(); });
+
+            // New config-based callback that eliminates transfer.info dependency
+            webServer->setBackupCallbackWithConfig([this](const WebServerBackend::BackupConfig& config) {
+                // Convert WebServerBackend::BackupConfig to Client::BackupConfig
+                Client::BackupConfig clientConfig;
+                clientConfig.serverIP = config.serverIP;
+                clientConfig.serverPort = config.serverPort;
+                clientConfig.username = config.username;
+                clientConfig.filepath = config.filepath;
+
+                return this->runBackupOperation(clientConfig);
+            });
+
+            if (webServer->start("127.0.0.1", 9090)) {
+                std::cout << "[GUI] HTTP API server started on port 9090" << std::endl;
+                std::cout << "[GUI] New configuration-based backup system enabled" << std::endl;
+            } else {
+                std::cout << "[ERROR] Failed to start HTTP API server" << std::endl;
+            }
+        } catch (const std::exception& e) {
+            std::cout << "[ERROR] Failed to start HTTP API server: " << e.what() << std::endl;
         }
-    } catch (const std::exception& e) {
-        std::cout << "[ERROR] Failed to start HTTP API server: " << e.what() << std::endl;
+    } else {
+        std::cout << "[BATCH] HTTP API server disabled in batch mode" << std::endl;
     }
 
 #ifdef _WIN32
@@ -779,30 +784,87 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
     }
     
     try {
-        // Receive header
-        boost::asio::read(*socket, boost::asio::buffer(&header, sizeof(header)));
-        
+        // Set up timeout for receive operations
+        boost::asio::steady_timer timer(ioContext);
+        timer.expires_after(std::chrono::seconds(30)); // 30 second timeout
+
+        bool operationCompleted = false;
+        std::string errorMessage;
+
+        // Receive header with timeout
+        timer.async_wait([&](const boost::system::error_code& ec) {
+            if (!operationCompleted && !ec) {
+                socket->cancel();
+                errorMessage = "Timeout waiting for server response";
+            }
+        });
+
+        boost::asio::async_read(*socket, boost::asio::buffer(&header, sizeof(header)),
+            [&](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+                operationCompleted = true;
+                timer.cancel();
+                if (ec) {
+                    errorMessage = "Failed to receive header: " + ec.message();
+                }
+            });
+
+        ioContext.run();
+        ioContext.restart();
+
+        if (!errorMessage.empty()) {
+            displayError(errorMessage, ErrorType::NETWORK);
+            return false;
+        }
+
         // Check version
         if (header.version != SERVER_VERSION) {
             displayError("Invalid server version: " + std::to_string(header.version), ErrorType::PROTOCOL);
             return false;
         }
-        
+
         // Check for error response
         if (header.code == RESP_ERROR) {
             displayError("Server returned general error", ErrorType::SERVER_ERROR);
             return false;
         }
-        
+
         // Receive payload if any
         payload.clear();
         if (header.payload_size > 0) {
             payload.resize(header.payload_size);
-            boost::asio::read(*socket, boost::asio::buffer(payload));
+
+            // Reset for payload receive with timeout
+            operationCompleted = false;
+            errorMessage.clear();
+
+            timer.expires_after(std::chrono::seconds(30));
+            timer.async_wait([&](const boost::system::error_code& ec) {
+                if (!operationCompleted && !ec) {
+                    socket->cancel();
+                    errorMessage = "Timeout waiting for payload data";
+                }
+            });
+
+            boost::asio::async_read(*socket, boost::asio::buffer(payload),
+                [&](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+                    operationCompleted = true;
+                    timer.cancel();
+                    if (ec) {
+                        errorMessage = "Failed to receive payload: " + ec.message();
+                    }
+                });
+
+            ioContext.run();
+            ioContext.restart();
+
+            if (!errorMessage.empty()) {
+                displayError(errorMessage, ErrorType::NETWORK);
+                return false;
+            }
         }
-        
+
         return true;
-        
+
     } catch (const std::exception& e) {
         displayError("Failed to receive response: " + std::string(e.what()), ErrorType::NETWORK);
         return false;

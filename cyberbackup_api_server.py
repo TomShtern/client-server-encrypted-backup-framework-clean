@@ -75,6 +75,12 @@ def update_backup_status(phase, message, progress=None):
 
 # API Endpoints for CyberBackup 3.0
 
+@app.route('/api/test', methods=['POST'])
+def api_test():
+    """Simple test endpoint to debug POST requests"""
+    print("[DEBUG] Test POST endpoint called!")
+    return jsonify({'success': True, 'message': 'POST test successful'})
+
 @app.route('/api/status')
 def api_status():
     """Get current backup client status"""
@@ -114,73 +120,37 @@ def api_status():
 def api_connect():
     """Connect to backup server with configuration using real backup protocol"""
     global server_config, backup_status, backup_executor
-    
+
+    print(f"[DEBUG] /api/connect endpoint called")
+    print(f"[DEBUG] Request method: {request.method}")
+    print(f"[DEBUG] Request content type: {request.content_type}")
+    print(f"[DEBUG] Request data: {request.get_data()}")
+
     try:
         config = request.json
         if config:
             server_config.update(config)
         
         update_backup_status('CONNECT', f'Testing connection to {server_config["host"]}:{server_config["port"]}...')
-        
-        # Create a small test file for connection verification
-        test_file_path = "test_connection.txt"
-        with open(test_file_path, 'w') as f:
-            f.write("Connection test file - " + datetime.now().isoformat())
-        
-        try:
-            # Use the real backup executor to test the connection
-            result = backup_executor.execute_real_backup(
-                username=server_config['username'],
-                file_path=test_file_path,
-                server_ip=server_config['host'],
-                server_port=int(server_config['port']),
-                timeout=10  # Short timeout for connection test
-            )
-            
-            connected = result.get('success', False)
-            
-            # Clean up test file
-            try:
-                os.remove(test_file_path)
-            except:
-                pass
-            
-            backup_status['connected'] = connected
-            if connected:
-                backup_status['status'] = 'connected'
-                backup_status['message'] = f'Successfully connected to backup server'
-                update_backup_status('CONNECT', f'Connection verified with backup server at {server_config["host"]}:{server_config["port"]}')
-            else:
-                backup_status['status'] = 'connection_failed'
-                error_msg = result.get('message', 'Connection test failed')
-                backup_status['message'] = f'Connection failed: {error_msg}'
-                update_backup_status('ERROR', f'Connection test failed: {error_msg}')
-            
-            return jsonify({
-                'success': connected,
-                'message': backup_status['message'],
-                'config': server_config,
-                'details': result
-            })
-            
-        except Exception as e:
-            error_msg = f"Connection test error: {str(e)}"
-            backup_status['status'] = 'error'
-            backup_status['message'] = error_msg
-            backup_status['connected'] = False
-            update_backup_status('ERROR', error_msg)
-            
-            # Clean up test file
-            try:
-                os.remove(test_file_path)
-            except:
-                pass
-            
-            return jsonify({
-                'success': False, 
-                'message': error_msg,
-                'config': server_config
-            })
+
+        # Simplified connection test - just check if backup server is listening
+        connected = check_backup_server_status()
+
+        backup_status['connected'] = connected
+        if connected:
+            backup_status['status'] = 'connected'
+            backup_status['message'] = f'Successfully connected to backup server'
+            update_backup_status('CONNECT', f'Connection verified with backup server at {server_config["host"]}:{server_config["port"]}')
+        else:
+            backup_status['status'] = 'connection_failed'
+            backup_status['message'] = f'Connection failed: Backup server not responding'
+            update_backup_status('ERROR', f'Connection test failed: Backup server not responding')
+
+        return jsonify({
+            'success': connected,
+            'message': backup_status['message'],
+            'config': server_config
+        })
         
     except Exception as e:
         error_msg = f"Connection error: {str(e)}"

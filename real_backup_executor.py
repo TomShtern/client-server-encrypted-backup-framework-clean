@@ -79,6 +79,44 @@ class RealBackupExecutor:
             
         self._log_status("CONFIG", f"Generated transfer.info: {server_ip}:{server_port}, {username}, {absolute_file_path}")
         return transfer_info_path
+
+    def _clear_cached_credentials_if_username_changed(self, new_username: str):
+        """Clear cached credentials if the username has changed to allow fresh registration"""
+        try:
+            # Check if me.info exists and has a different username
+            me_info_paths = ["me.info", "data/me.info", "build/Release/me.info"]
+            credentials_cleared = False
+
+            for me_info_path in me_info_paths:
+                if os.path.exists(me_info_path):
+                    try:
+                        with open(me_info_path, 'r') as f:
+                            cached_username = f.readline().strip()
+
+                        if cached_username and cached_username != new_username:
+                            os.remove(me_info_path)
+                            self._log_status("CLEANUP", f"Removed cached credentials for '{cached_username}' (switching to '{new_username}')")
+                            credentials_cleared = True
+                    except Exception as e:
+                        self._log_status("WARNING", f"Could not check {me_info_path}: {e}")
+
+            # Also clear private key files if credentials were cleared
+            if credentials_cleared:
+                priv_key_paths = ["priv.key", "build/Release/priv.key"]
+                for priv_key_path in priv_key_paths:
+                    if os.path.exists(priv_key_path):
+                        try:
+                            os.remove(priv_key_path)
+                            self._log_status("CLEANUP", f"Removed cached private key: {priv_key_path}")
+                        except Exception as e:
+                            self._log_status("WARNING", f"Could not remove {priv_key_path}: {e}")
+
+                self._log_status("INFO", f"Client will register fresh with username: {new_username}")
+            else:
+                self._log_status("INFO", f"Using username: {new_username}")
+
+        except Exception as e:
+            self._log_status("WARNING", f"Error checking cached credentials: {e}")
     
     def _calculate_file_hash(self, file_path: str) -> str:
         """Calculate SHA256 hash of file for verification"""
@@ -246,29 +284,52 @@ class RealBackupExecutor:
             # Pre-flight checks
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"Source file does not exist: {file_path}")
-            
+
             if not self.client_exe or not os.path.exists(self.client_exe):
                 raise FileNotFoundError(f"Client executable not found: {self.client_exe}")
-            
+
+            # Clear cached credentials if username has changed
+            self._clear_cached_credentials_if_username_changed(username)
+
             # Generate transfer.info
             transfer_info = self._generate_transfer_info(server_ip, server_port, username, file_path)
-              # Copy transfer.info to client directory
-            client_transfer_info = "transfer.info"
+
+            # Copy transfer.info to BOTH the client executable directory AND the working directory
+            # The client looks for transfer.info in the current working directory, not the executable directory
+            client_dir = os.path.dirname(self.client_exe)
+            client_transfer_info = os.path.join(client_dir, "transfer.info")
+            working_dir_transfer_info = "transfer.info"  # Current working directory
+
+            # Copy to client directory (for reference)
             with open(transfer_info, 'r') as src, open(client_transfer_info, 'w') as dst:
                 dst.write(src.read())
+
+            # Copy to working directory (where client actually looks)
+            with open(transfer_info, 'r') as src, open(working_dir_transfer_info, 'w') as dst:
+                dst.write(src.read())
+
+            self._log_status("CONFIG", f"Copied transfer.info to client directory: {client_transfer_info}")
+            self._log_status("CONFIG", f"Copied transfer.info to working directory: {working_dir_transfer_info}")
             
             self._log_status("LAUNCH", f"Launching {self.client_exe}")
             # Launch client process with automated input handling and BATCH MODE
             if not self.client_exe:
                 raise RuntimeError("Client executable path is not set")
-                
+
+            # Use the current working directory (where we copied transfer.info) instead of client directory
+            # This ensures the client finds transfer.info in the current working directory
+            current_working_dir = os.getcwd()
+            self._log_status("DEBUG", f"Client executable: {os.path.abspath(self.client_exe)}")
+            self._log_status("DEBUG", f"Client working directory: {current_working_dir}")
+            self._log_status("DEBUG", f"Transfer.info location: {os.path.join(current_working_dir, 'transfer.info')}")
+
             self.backup_process = subprocess.Popen(
-                [self.client_exe, "--batch"],  # Use batch mode to prevent hanging
+                [self.client_exe, "--batch"],  # Use batch mode to disable web GUI and prevent port conflicts
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                cwd=os.path.dirname(os.path.abspath(self.client_exe)) or '.'
+                cwd=current_working_dir  # Use current working directory where transfer.info is located
             )
             
             # Start log monitoring in separate thread
@@ -279,10 +340,10 @@ class RealBackupExecutor:
             )
             log_monitor_thread.daemon = True
             log_monitor_thread.start()
-            # Monitor process - no need for manual input in batch mode
+            # Monitor process with shorter timeout for connection test
             self._log_status("PROCESS", "Monitoring backup process...")
-            
-            timeout = 300  # 5 minute timeout
+
+            timeout = 30  # 30 second timeout for connection test
             poll_interval = 2
             elapsed = 0
             
@@ -317,13 +378,14 @@ class RealBackupExecutor:
             result['verification'] = verification
             
             # Determine overall success based on concrete evidence
-            if verification['transferred'] and result['process_exit_code'] == 0:
+            # Prioritize file transfer verification over process exit code
+            if verification['transferred']:
                 result['success'] = True
-                self._log_status("SUCCESS", "REAL backup completed and verified!")
-            elif verification['transferred']:
-                result['success'] = True
-                result['error'] = f"File transferred but process exit code was {result['process_exit_code']}"
-                self._log_status("WARNING", result['error'])
+                if result['process_exit_code'] == 0:
+                    self._log_status("SUCCESS", "REAL backup completed and verified!")
+                else:
+                    result['error'] = f"File transferred successfully but process exit code was {result['process_exit_code']}"
+                    self._log_status("SUCCESS", f"REAL backup completed and verified! (Process was killed but transfer succeeded)")
             else:
                 result['error'] = "No file transfer detected - backup may have failed"
                 self._log_status("FAILURE", result['error'])
@@ -335,12 +397,16 @@ class RealBackupExecutor:
         finally:
             result['duration'] = time.time() - start_time
             
-            # Cleanup
+            # Cleanup - remove transfer.info from client directory
             try:
-                if os.path.exists("transfer.info"):
-                    os.remove("transfer.info")
-            except:
-                pass
+                if self.client_exe:
+                    client_dir = os.path.dirname(self.client_exe)
+                    client_transfer_info = os.path.join(client_dir, "transfer.info")
+                    if os.path.exists(client_transfer_info):
+                        os.remove(client_transfer_info)
+                        self._log_status("CLEANUP", f"Removed transfer.info from {client_transfer_info}")
+            except Exception as e:
+                self._log_status("WARNING", f"Failed to cleanup transfer.info: {e}")
         
         return result
 

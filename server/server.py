@@ -501,7 +501,7 @@ if __name__ == "__main__":
         sys.exit(1) # Exit if essential crypto library is missing/broken
 
     # Ensure only one server instance runs at a time
-    # ensure_single_server_instance("BackupServer", 1256)  # Temporarily disabled for testing
+    ensure_single_server_instance("BackupServer", 1256)
 
     # Instantiate the server
     server_instance = None

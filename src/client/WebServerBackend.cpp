@@ -250,7 +250,7 @@ handle_request(http::request<Body, http::basic_fields<Allocator>>&& req) {
                 std::string body = req.body();
                 std::string server = "127.0.0.1:1256"; // default
                 std::string username = "user"; // default
-                std::string filepath = "test_file.txt"; // default
+                std::string filepath = ""; // No default file - will be set during backup
 
                 // Simple JSON parsing - look for server, port, username, filepath
                 size_t server_pos = body.find("\"server\":\"");
@@ -304,7 +304,12 @@ handle_request(http::request<Body, http::basic_fields<Allocator>>&& req) {
                     if (file.is_open()) {
                         file << server << std::endl;
                         file << username << std::endl;
-                        file << filepath << std::endl;
+                        // Only write filepath if one was provided, otherwise leave empty for later
+                        if (!filepath.empty()) {
+                            file << filepath << std::endl;
+                        } else {
+                            file << "PLACEHOLDER_FOR_UPLOADED_FILE" << std::endl;
+                        }
                         file.close();
 
                         g_state.setConnected(true);
@@ -426,7 +431,20 @@ handle_request(http::request<Body, http::basic_fields<Allocator>>&& req) {
 
                             // Set the filepath in configuration
                             config.filepath = filename;
-                            
+
+                            // Update transfer.info with the uploaded file path
+                            try {
+                                std::ofstream transfer_file("transfer.info");
+                                if (transfer_file.is_open()) {
+                                    transfer_file << config.serverIP << ":" << config.serverPort << std::endl;
+                                    transfer_file << config.username << std::endl;
+                                    transfer_file << filename << std::endl;
+                                    transfer_file.close();
+                                }
+                            } catch (const std::exception& e) {
+                                std::cerr << "Warning: Failed to update transfer.info: " << e.what() << std::endl;
+                            }
+
                             g_state.setPhase("BACKUP_IN_PROGRESS");
                             g_state.setStatus("Starting backup...");
                             g_state.setProgress(0);
