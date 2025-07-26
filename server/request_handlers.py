@@ -8,24 +8,25 @@ import uuid
 import os
 import logging
 import re
+from datetime import datetime
 from typing import Dict, Optional, Any, Callable
 
 # Import crypto components through compatibility layer
-from crypto_compat import AES, RSA, PKCS1_OAEP, pad, unpad, get_random_bytes, SHA256
+from .crypto_compat import AES, RSA, PKCS1_OAEP, pad, unpad, get_random_bytes, SHA256
 
 # Import custom exceptions
-from exceptions import ServerError, ProtocolError, ClientError, FileError
+from .exceptions import ServerError, ProtocolError, ClientError, FileError
 
 # Import configuration constants
-from config import (
-    SERVER_VERSION, FILE_STORAGE_DIR, MAX_CLIENT_NAME_LENGTH, 
-    MAX_FILENAME_FIELD_SIZE, MAX_ACTUAL_FILENAME_LENGTH, 
+from .config import (
+    SERVER_VERSION, FILE_STORAGE_DIR, MAX_CLIENT_NAME_LENGTH,
+    MAX_FILENAME_FIELD_SIZE, MAX_ACTUAL_FILENAME_LENGTH,
     RSA_PUBLIC_KEY_SIZE, AES_KEY_SIZE_BYTES, MAX_PAYLOAD_READ_LIMIT,
     MAX_ORIGINAL_FILE_SIZE
 )
 
 # Import protocol constants
-from protocol import (
+from .protocol import (
     REQ_REGISTER, REQ_SEND_PUBLIC_KEY, REQ_RECONNECT, REQ_SEND_FILE,
     REQ_CRC_OK, REQ_CRC_INVALID_RETRY, REQ_CRC_FAILED_ABORT,
     RESP_REG_OK, RESP_REG_FAIL, RESP_PUBKEY_AES_SENT, RESP_FILE_CRC,
@@ -56,7 +57,7 @@ class RequestHandler:
         self.server = server_instance
         
         # Initialize file transfer manager
-        from file_transfer import FileTransferManager
+        from .file_transfer import FileTransferManager
         self.file_transfer_manager = FileTransferManager(server_instance)
         
         # Request handler mapping - dispatches requests to appropriate handlers

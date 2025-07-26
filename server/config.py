@@ -8,6 +8,15 @@ import sys
 # --- Server Configuration Constants ---
 SERVER_VERSION = 3
 DEFAULT_PORT = 1256
+
+# --- Protocol Version Compatibility Configuration ---
+# Define version compatibility matrix for flexible client-server communication
+# This fixes the rigid version checking that prevents client-server communication
+MIN_SUPPORTED_CLIENT_VERSION = 3  # Minimum client version supported
+MAX_SUPPORTED_CLIENT_VERSION = 3  # Maximum client version supported  
+COMPATIBLE_VERSIONS = [3]  # List of explicitly compatible versions
+ALLOW_BACKWARD_COMPATIBILITY = True  # Allow clients with older compatible versions
+VERSION_TOLERANCE_ENABLED = True  # Enable flexible version checking
 PORT_CONFIG_FILE = "port.info"
 DATABASE_NAME = "defensive.db"
 FILE_STORAGE_DIR = "received_files"  # Directory to store received files

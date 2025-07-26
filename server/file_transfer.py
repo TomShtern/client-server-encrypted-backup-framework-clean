@@ -67,19 +67,19 @@ from datetime import datetime
 from typing import Dict, Optional, Any, Tuple
 
 # Import crypto components through compatibility layer
-from crypto_compat import AES, pad, unpad
+from .crypto_compat import AES, pad, unpad
 
 # Import custom exceptions
-from exceptions import ServerError, ProtocolError, ClientError, FileError
+from .exceptions import ServerError, ProtocolError, ClientError, FileError
 
 # Import configuration constants
-from config import (
+from .config import (
     FILE_STORAGE_DIR, MAX_FILENAME_FIELD_SIZE, MAX_ACTUAL_FILENAME_LENGTH,
     AES_KEY_SIZE_BYTES, MAX_PAYLOAD_READ_LIMIT, MAX_ORIGINAL_FILE_SIZE
 )
 
 # Import protocol constants
-from protocol import RESP_FILE_CRC, RESP_GENERIC_SERVER_ERROR
+from .protocol import RESP_FILE_CRC, RESP_GENERIC_SERVER_ERROR
 
 logger = logging.getLogger(__name__)
 
@@ -595,7 +595,7 @@ class FileTransferManager:
             self.server._send_response(sock, code, payload)
         else:
             # Fallback implementation
-            from protocol import construct_response
+            from .protocol import construct_response
             try:
                 response_data = construct_response(code, payload)
                 sock.sendall(response_data)

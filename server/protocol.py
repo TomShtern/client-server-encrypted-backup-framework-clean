@@ -118,13 +118,46 @@ def validate_protocol_version(version: int) -> bool:
     """
     from .config import SERVER_VERSION
     
-    # For now, require exact version match
-    is_compatible = version == SERVER_VERSION
+    # Flexible version compatibility checking (fixes rigid version issue from CLAUDE.md)
+    from .config import (
+        SERVER_VERSION, MIN_SUPPORTED_CLIENT_VERSION, MAX_SUPPORTED_CLIENT_VERSION,
+        COMPATIBLE_VERSIONS, ALLOW_BACKWARD_COMPATIBILITY, VERSION_TOLERANCE_ENABLED
+    )
     
-    if not is_compatible:
-        logger.warning(f"Protocol version mismatch: client version {version}, server version {SERVER_VERSION}")
+    # If version tolerance is disabled, fall back to exact match
+    if not VERSION_TOLERANCE_ENABLED:
+        is_compatible = version == SERVER_VERSION
+        if not is_compatible:
+            logger.warning(f"Protocol version mismatch (strict mode): client version {version}, server version {SERVER_VERSION}")
+        return is_compatible
     
-    return is_compatible
+    # Check if version is in explicitly compatible versions list
+    if version in COMPATIBLE_VERSIONS:
+        logger.debug(f"Client version {version} found in compatible versions list")
+        return True
+    
+    # Check if version is within supported range
+    if MIN_SUPPORTED_CLIENT_VERSION <= version <= MAX_SUPPORTED_CLIENT_VERSION:
+        logger.debug(f"Client version {version} within supported range [{MIN_SUPPORTED_CLIENT_VERSION}-{MAX_SUPPORTED_CLIENT_VERSION}]")
+        return True
+    
+    # Check backward compatibility
+    if ALLOW_BACKWARD_COMPATIBILITY and version < SERVER_VERSION:
+        # Allow clients that are at most 1 version behind for backward compatibility
+        if version >= (SERVER_VERSION - 1) and version >= MIN_SUPPORTED_CLIENT_VERSION:
+            logger.info(f"Allowing backward compatible client version {version} (server version {SERVER_VERSION})")
+            return True
+    
+    # Check forward compatibility (allowing newer clients)
+    if version > SERVER_VERSION and version <= MAX_SUPPORTED_CLIENT_VERSION:
+        logger.info(f"Allowing forward compatible client version {version} (server version {SERVER_VERSION})")
+        return True
+    
+    # Version not compatible
+    logger.warning(f"Protocol version incompatible: client version {version}, server version {SERVER_VERSION}")
+    logger.warning(f"Supported range: [{MIN_SUPPORTED_CLIENT_VERSION}-{MAX_SUPPORTED_CLIENT_VERSION}], Compatible versions: {COMPATIBLE_VERSIONS}")
+    
+    return False
 
 def validate_request_code(code: int) -> bool:
     """

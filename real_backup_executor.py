@@ -14,9 +14,18 @@ import threading
 import tempfile
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any, Callable, List
 
 import psutil
+from utils.file_lifecycle import SynchronizedFileManager
+from utils.error_handler import (
+    get_error_handler, handle_subprocess_error, handle_file_transfer_error,
+    ErrorSeverity, ErrorCategory, ErrorCode
+)
+from utils.process_monitor import (
+    get_process_registry, register_process, start_process, stop_process,
+    ProcessState, get_process_metrics
+)
 
 class RealBackupExecutor:
     """
@@ -49,11 +58,12 @@ class RealBackupExecutor:
         self.temp_dir = tempfile.mkdtemp()
         self.backup_process = None
         self.status_callback = None
+        self.file_manager = SynchronizedFileManager(self.temp_dir)
         
         # Ensure directories exist
         os.makedirs(self.server_received_files, exist_ok=True)
         
-    def set_status_callback(self, callback: Callable[[str, str], None]):
+    def set_status_callback(self, callback: Callable[[str, Any], None]):
         """Set callback function for real-time status updates"""
         self.status_callback = callback
         
@@ -62,23 +72,27 @@ class RealBackupExecutor:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"[{timestamp}] {phase}: {message}")
         if self.status_callback:
-            self.status_callback(phase, message)
+            # For simple string messages, wrap in a dict for consistency
+            if isinstance(message, str):
+                self.status_callback(phase, {'message': message})
+            else:
+                self.status_callback(phase, message)
     
     def _generate_transfer_info(self, server_ip: str, server_port: int, 
-                              username: str, file_path: str) -> str:
-        """Generate transfer.info file for the C++ client"""
+                              username: str, file_path: str) -> tuple:
+        """Generate managed transfer.info file for the C++ client"""
         # Convert to absolute path to ensure client finds the correct file
         absolute_file_path = os.path.abspath(file_path)
         
-        transfer_info_path = os.path.join(self.temp_dir, "transfer.info")
+        # Create transfer.info content
+        content = f"{server_ip}:{server_port}\n{username}\n{absolute_file_path}\n"
         
-        with open(transfer_info_path, 'w') as f:
-            f.write(f"{server_ip}:{server_port}\n")
-            f.write(f"{username}\n")
-            f.write(f"{absolute_file_path}\n")
-            
-        self._log_status("CONFIG", f"Generated transfer.info: {server_ip}:{server_port}, {username}, {absolute_file_path}")
-        return transfer_info_path
+        # Create managed file
+        transfer_info_path = self.file_manager.create_managed_file("transfer.info", content)
+        file_id = list(self.file_manager.managed_files.keys())[-1]
+        
+        self._log_status("CONFIG", f"Generated managed transfer.info: {server_ip}:{server_port}, {username}, {absolute_file_path}")
+        return file_id, transfer_info_path
 
     def _clear_cached_credentials_if_username_changed(self, new_username: str):
         """Clear cached credentials if the username has changed to allow fresh registration"""
@@ -230,6 +244,189 @@ class RealBackupExecutor:
             
         return verification
     
+    def _monitor_process_health(self, process: subprocess.Popen) -> Dict[str, Any]:
+        """Comprehensive process health monitoring with psutil"""
+        try:
+            proc = psutil.Process(process.pid)
+            health_data = {
+                'pid': process.pid,
+                'cpu_percent': proc.cpu_percent(interval=0.1),
+                'memory_mb': proc.memory_info().rss / 1024 / 1024,
+                'status': proc.status(),
+                'num_threads': proc.num_threads(),
+                'open_files': len(proc.open_files()),
+                'connections': len(proc.connections()),
+                'create_time': proc.create_time(),
+                'is_running': proc.is_running()
+            }
+            
+            # Detect potential issues
+            health_data['is_responsive'] = self._check_process_responsiveness(health_data)
+            health_data['warnings'] = self._detect_health_warnings(health_data)
+            
+            return health_data
+            
+        except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+            self._log_status("WARNING", f"Process monitoring failed: {e}")
+            return {'error': 'Process monitoring failed', 'exception': str(e)}
+    
+    def _check_process_responsiveness(self, health_data: Dict[str, Any]) -> bool:
+        """Check if process appears responsive based on health metrics"""
+        # High CPU usage might indicate heavy processing (normal)
+        # but combined with no threads might indicate hanging
+        cpu_percent = health_data.get('cpu_percent', 0)
+        num_threads = health_data.get('num_threads', 0)
+        
+        if cpu_percent > 95 and num_threads <= 1:
+            return False  # Potentially hung
+        
+        return True
+    
+    def _detect_health_warnings(self, health_data: Dict[str, Any]) -> List[str]:
+        """Detect warning conditions from health metrics"""
+        warnings = []
+        
+        cpu_percent = health_data.get('cpu_percent', 0)
+        memory_mb = health_data.get('memory_mb', 0)
+        open_files = health_data.get('open_files', 0)
+        
+        if cpu_percent > 90:
+            warnings.append(f"High CPU usage: {cpu_percent:.1f}%")
+        
+        if memory_mb > 500:  # 500MB seems high for the client
+            warnings.append(f"High memory usage: {memory_mb:.1f}MB")
+        
+        if open_files > 50:
+            warnings.append(f"Many open files: {open_files}")
+        
+        return warnings
+    
+    def _detect_execution_phase(self, log_content: str) -> str:
+        """Detect current execution phase from log content"""
+        if not log_content:
+            return "unknown"
+        
+        # Define phase detection patterns
+        phase_patterns = {
+            'initialization': ['starting', 'initializing', 'loading', 'begin'],
+            'connection': ['connecting', 'handshake', 'protocol', 'socket'],
+            'authentication': ['registering', 'login', 'credentials', 'auth'],
+            'encryption': ['encrypting', 'key generation', 'crypto', 'aes', 'rsa'],
+            'transfer': ['uploading', 'sending', 'transfer', 'progress', 'chunk'],
+            'verification': ['verifying', 'checksum', 'validation', 'crc'],
+            'completion': ['completed', 'finished', 'success', 'done']
+        }
+        
+        # Check most recent content first
+        recent_content = log_content.lower()
+        
+        # Reverse order to get the latest phase
+        for phase, keywords in reversed(phase_patterns.items()):
+            if any(keyword in recent_content for keyword in keywords):
+                return phase
+        
+        return "unknown"
+    
+    def _read_stderr_nonblocking(self) -> str:
+        """Read stderr from subprocess without blocking"""
+        if not self.backup_process or not self.backup_process.stderr:
+            return ""
+        
+        try:
+            # Use select on Unix or similar approach
+            import select
+            import sys
+            
+            if sys.platform == "win32":
+                # Windows doesn't support select on pipes, use peek approach
+                return ""  # Simplified for Windows
+            else:
+                ready, _, _ = select.select([self.backup_process.stderr], [], [], 0)
+                if ready:
+                    return self.backup_process.stderr.read(1024)
+        except Exception as e:
+            self._log_status("DEBUG", f"stderr read failed: {e}")
+        
+        return ""
+    
+    def _correlate_subprocess_errors(self, stderr_line: str, health_data: Dict[str, Any]) -> None:
+        """Correlate subprocess errors with system state and report to error framework"""
+        if not stderr_line and not health_data.get('warnings'):
+            return
+
+        # High resource usage errors
+        warnings = health_data.get('warnings', [])
+        if warnings:
+            warning_msg = "; ".join(warnings)
+            handle_subprocess_error(
+                message="Subprocess resource warning detected",
+                details=f"Health warnings: {warning_msg}",
+                component="subprocess_monitoring",
+                severity=ErrorSeverity.MEDIUM
+            )
+
+        # stderr content errors
+        if stderr_line and any(keyword in stderr_line.lower() for keyword in ['error', 'failed', 'exception']):
+            handle_subprocess_error(
+                message="Subprocess error detected in stderr",
+                details=f"stderr: {stderr_line.strip()}",
+                component="subprocess_stderr",
+                severity=ErrorSeverity.HIGH
+            )
+
+        # Unresponsive process
+        if not health_data.get('is_responsive', True):
+            handle_subprocess_error(
+                message="Subprocess appears unresponsive",
+                details=f"Health data: {health_data}",
+                component="subprocess_health",
+                severity=ErrorSeverity.HIGH
+            )
+
+    def get_enhanced_process_metrics(self) -> Optional[Dict[str, Any]]:
+        """Get enhanced process metrics from the monitoring system"""
+        if not hasattr(self, 'process_id'):
+            return None
+
+        registry = get_process_registry()
+        process_info = registry.get_process_info(self.process_id)
+
+        if not process_info:
+            return None
+
+        # Get latest metrics
+        metrics_history = list(process_info.metrics_history)
+        if not metrics_history:
+            return None
+
+        latest_metrics = metrics_history[-1]
+
+        return {
+            'process_id': self.process_id,
+            'process_name': process_info.name,
+            'state': process_info.state.value,
+            'pid': process_info.pid,
+            'start_time': process_info.start_time.isoformat(),
+            'restart_count': process_info.restart_count,
+            'error_count': process_info.error_count,
+            'last_error': process_info.last_error,
+            'latest_metrics': {
+                'timestamp': latest_metrics.timestamp.isoformat(),
+                'cpu_percent': latest_metrics.cpu_percent,
+                'memory_mb': latest_metrics.memory_mb,
+                'memory_percent': latest_metrics.memory_percent,
+                'num_threads': latest_metrics.num_threads,
+                'open_files': latest_metrics.open_files,
+                'connections': latest_metrics.connections,
+                'io_read_bytes': latest_metrics.io_read_bytes,
+                'io_write_bytes': latest_metrics.io_write_bytes,
+                'status': latest_metrics.status,
+                'is_responsive': latest_metrics.is_responsive,
+                'warnings': latest_metrics.warnings
+            },
+            'metrics_count': len(metrics_history)
+        }
+    
     def _check_network_activity(self, server_port: int) -> bool:
         """Check for active network connections to server port"""
         try:
@@ -281,18 +478,30 @@ class RealBackupExecutor:
         start_time = time.time()
         
         try:
-            # Pre-flight checks
+            # Pre-flight checks with structured error handling
             if not os.path.exists(file_path):
+                error_info = handle_file_transfer_error(
+                    message="Source file not found for backup",
+                    details=f"File path: {file_path}",
+                    component="pre_flight_check",
+                    severity=ErrorSeverity.HIGH
+                )
                 raise FileNotFoundError(f"Source file does not exist: {file_path}")
 
             if not self.client_exe or not os.path.exists(self.client_exe):
+                error_info = handle_subprocess_error(
+                    message="Client executable not found",
+                    details=f"Expected path: {self.client_exe}",
+                    component="pre_flight_check",
+                    severity=ErrorSeverity.CRITICAL
+                )
                 raise FileNotFoundError(f"Client executable not found: {self.client_exe}")
 
             # Clear cached credentials if username has changed
             self._clear_cached_credentials_if_username_changed(username)
 
-            # Generate transfer.info
-            transfer_info = self._generate_transfer_info(server_ip, server_port, username, file_path)
+            # Generate managed transfer.info
+            transfer_file_id, transfer_info_path = self._generate_transfer_info(server_ip, server_port, username, file_path)
 
             # Copy transfer.info to BOTH the client executable directory AND the working directory
             # The client looks for transfer.info in the current working directory, not the executable directory
@@ -300,22 +509,20 @@ class RealBackupExecutor:
             client_transfer_info = os.path.join(client_dir, "transfer.info")
             working_dir_transfer_info = "transfer.info"  # Current working directory
 
-            # Copy to client directory (for reference)
-            with open(transfer_info, 'r') as src, open(client_transfer_info, 'w') as dst:
-                dst.write(src.read())
+            # Use synchronized file manager to copy to required locations
+            target_locations = [client_transfer_info, working_dir_transfer_info]
+            copy_locations = self.file_manager.copy_to_locations(transfer_file_id, target_locations)
 
-            # Copy to working directory (where client actually looks)
-            with open(transfer_info, 'r') as src, open(working_dir_transfer_info, 'w') as dst:
-                dst.write(src.read())
-
-            self._log_status("CONFIG", f"Copied transfer.info to client directory: {client_transfer_info}")
-            self._log_status("CONFIG", f"Copied transfer.info to working directory: {working_dir_transfer_info}")
+            self._log_status("CONFIG", f"Copied transfer.info to {len(copy_locations)} locations: {copy_locations}")
             
             self._log_status("LAUNCH", f"Launching {self.client_exe}")
             # Launch client process with automated input handling and BATCH MODE
             if not self.client_exe:
                 raise RuntimeError("Client executable path is not set")
 
+            # Mark file as in use by subprocess to prevent premature cleanup
+            self.file_manager.mark_in_subprocess_use(transfer_file_id)
+            
             # Use the current working directory (where we copied transfer.info) instead of client directory
             # This ensures the client finds transfer.info in the current working directory
             current_working_dir = os.getcwd()
@@ -323,14 +530,33 @@ class RealBackupExecutor:
             self._log_status("DEBUG", f"Client working directory: {current_working_dir}")
             self._log_status("DEBUG", f"Transfer.info location: {os.path.join(current_working_dir, 'transfer.info')}")
 
-            self.backup_process = subprocess.Popen(
-                [self.client_exe, "--batch"],  # Use batch mode to disable web GUI and prevent port conflicts
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                cwd=current_working_dir  # Use current working directory where transfer.info is located
+            # Register process with enhanced monitoring system
+            process_id = f"backup_client_{int(time.time())}"
+            command = [self.client_exe, "--batch"]  # Use batch mode to disable web GUI and prevent port conflicts
+
+            registry = get_process_registry()
+            process_info = register_process(
+                process_id=process_id,
+                name="EncryptedBackupClient",
+                command=command,
+                cwd=current_working_dir,
+                auto_restart=False,  # Don't auto-restart backup processes
+                max_restarts=0
             )
+
+            # Start process with enhanced monitoring
+            if not start_process(process_id,
+                               stdin=subprocess.PIPE,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE,
+                               text=True):
+                raise RuntimeError(f"Failed to start backup process {process_id}")
+
+            # Get the subprocess handle for compatibility
+            self.backup_process = registry.subprocess_handles[process_id]
+            self.process_id = process_id
+
+            self._log_status("PROCESS", f"Started backup client with enhanced monitoring (ID: {process_id}, PID: {self.backup_process.pid})")
             
             # Start log monitoring in separate thread
             log_file = "client_debug.log"
@@ -340,12 +566,14 @@ class RealBackupExecutor:
             )
             log_monitor_thread.daemon = True
             log_monitor_thread.start()
-            # Monitor process with shorter timeout for connection test
-            self._log_status("PROCESS", "Monitoring backup process...")
+            # Enhanced subprocess monitoring with health checks and phase detection
+            self._log_status("PROCESS", "Starting enhanced backup process monitoring...")
 
             timeout = 30  # 30 second timeout for connection test
             poll_interval = 2
             elapsed = 0
+            latest_log_content = ""
+            current_phase = "initialization"
             
             while elapsed < timeout:
                 # Check if process is still running
@@ -356,21 +584,78 @@ class RealBackupExecutor:
                     self._log_status("PROCESS", f"Client process finished with exit code: {poll_result}")
                     break
                 
+                # Enhanced monitoring with health metrics
+                health_data = self._monitor_process_health(self.backup_process)
+                result['health_data'] = health_data
+                
+                # Monitor stderr for real-time errors
+                stderr_data = self._read_stderr_nonblocking()
+                
+                # Read latest log content for phase detection
+                try:
+                    if os.path.exists(log_file):
+                        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+                            latest_log_content = f.read()[-1000:]  # Last 1000 chars
+                            current_phase = self._detect_execution_phase(latest_log_content)
+                except Exception as e:
+                    self._log_status("DEBUG", f"Log read for phase detection failed: {e}")
+                
+                # Correlate subprocess errors with health and stderr
+                self._correlate_subprocess_errors(stderr_data, health_data)
+                
+                # Progress estimation based on phase
+                progress_phases = ['initialization', 'connection', 'authentication', 'encryption', 'transfer', 'verification', 'completion']
+                try:
+                    phase_index = progress_phases.index(current_phase)
+                    progress_percent = (phase_index / len(progress_phases)) * 100
+                except ValueError:
+                    progress_percent = 0
+                
+                result['current_phase'] = current_phase
+                result['progress_percent'] = progress_percent
+                
+                # Enhanced status callback with enriched data
+                if self.status_callback:
+                    status_data = {
+                        'progress': progress_percent,
+                        'health': health_data,
+                        'network_active': self._check_network_activity(server_port),
+                        'elapsed_time': elapsed,
+                        'warnings': health_data.get('warnings', [])
+                    }
+                    self.status_callback(current_phase, status_data)
+                
                 # Check for network activity periodically
                 if self._check_network_activity(server_port):
                     result['network_activity'] = True
                 
+                # Log enhanced monitoring data
+                warnings_str = ", ".join(health_data.get('warnings', [])) or "none"
+                self._log_status("MONITOR", 
+                    f"Phase: {current_phase}, Progress: {progress_percent:.0f}%, "
+                    f"CPU: {health_data.get('cpu_percent', 0):.1f}%, "
+                    f"Memory: {health_data.get('memory_mb', 0):.1f}MB, "
+                    f"Warnings: {warnings_str}")
+                
                 time.sleep(poll_interval)
                 elapsed += poll_interval
                 
-            # If process is still running, terminate it
+            # If process is still running, terminate it using enhanced monitoring
             if self.backup_process.poll() is None:
                 self._log_status("TIMEOUT", "Terminating backup process due to timeout")
-                self.backup_process.terminate()
-                time.sleep(2)
-                if self.backup_process.poll() is None:
-                    self.backup_process.kill()
+                if hasattr(self, 'process_id'):
+                    # Use enhanced monitoring to stop process gracefully
+                    stop_process(self.process_id, timeout=5.0)
+                else:
+                    # Fallback to direct termination
+                    self.backup_process.terminate()
+                    time.sleep(2)
+                    if self.backup_process.poll() is None:
+                        self.backup_process.kill()
                 result['process_exit_code'] = -1
+            
+            # Release subprocess reference to allow safe cleanup
+            self.file_manager.release_subprocess_use(transfer_file_id)
             
             # Verify actual file transfer
             self._log_status("VERIFY", "Verifying actual file transfer...")
@@ -397,16 +682,18 @@ class RealBackupExecutor:
         finally:
             result['duration'] = time.time() - start_time
             
-            # Cleanup - remove transfer.info from client directory
+            # Safe cleanup using SynchronizedFileManager
             try:
-                if self.client_exe:
-                    client_dir = os.path.dirname(self.client_exe)
-                    client_transfer_info = os.path.join(client_dir, "transfer.info")
-                    if os.path.exists(client_transfer_info):
-                        os.remove(client_transfer_info)
-                        self._log_status("CLEANUP", f"Removed transfer.info from {client_transfer_info}")
+                if 'transfer_file_id' in locals():
+                    self._log_status("CLEANUP", "Starting safe cleanup of transfer.info files")
+                    # Wait for subprocess completion before cleanup
+                    cleanup_success = self.file_manager.safe_cleanup(transfer_file_id, wait_timeout=10.0)
+                    if cleanup_success:
+                        self._log_status("CLEANUP", "Successfully cleaned up transfer.info files")
+                    else:
+                        self._log_status("WARNING", "Some files may not have been cleaned up properly")
             except Exception as e:
-                self._log_status("WARNING", f"Failed to cleanup transfer.info: {e}")
+                self._log_status("WARNING", f"Error during safe cleanup: {e}")
         
         return result
 
@@ -422,8 +709,18 @@ def main():
     
     executor = RealBackupExecutor()
     
-    def status_update(phase, message):
-        print(f"STATUS: {phase} - {message}")
+    def status_update(phase, data):
+        if isinstance(data, dict):
+            if 'message' in data:
+                print(f"STATUS: {phase} - {data['message']}")
+            else:
+                # Handle rich status data
+                progress = data.get('progress', 0)
+                warnings = data.get('warnings', [])
+                warnings_str = f" (Warnings: {', '.join(warnings)})" if warnings else ""
+                print(f"STATUS: {phase} - Progress: {progress:.0f}%{warnings_str}")
+        else:
+            print(f"STATUS: {phase} - {data}")
     
     executor.set_status_callback(status_update)
     

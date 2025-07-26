@@ -10,12 +10,12 @@ import logging
 import time
 from typing import Tuple, Optional, Callable, Any, Dict
 
-from config import (
+from .config import (
     CLIENT_SOCKET_TIMEOUT, MAX_PAYLOAD_READ_LIMIT, MAX_CONCURRENT_CLIENTS,
     SERVER_VERSION
 )
-from exceptions import ProtocolError
-from protocol import (
+from .exceptions import ProtocolError
+from .protocol import (
     REQ_REGISTER, REQ_RECONNECT, RESP_GENERIC_SERVER_ERROR, RESP_RECONNECT_FAIL
 )
 
@@ -131,6 +131,11 @@ class NetworkServer:
         
         while self.running and not self.shutdown_event.is_set():
             try:
+                # Check if server socket is still valid before using it
+                if not self.server_socket:
+                    logger.error("Server socket is None, cannot continue server loop")
+                    break
+                
                 # Set a short timeout for accept() to check shutdown status periodically
                 self.server_socket.settimeout(1.0)
                 
@@ -214,7 +219,10 @@ class NetworkServer:
         """Returns current connection statistics."""
         with self.connections_lock:
             return {
-                'active_connections': len(self.active_connections)
+                'active_connections': len(self.active_connections),
+                'max_connections': MAX_CONCURRENT_CLIENTS,
+                'available_slots': self.client_connection_semaphore._value,
+                'uptime_seconds': int(time.time() - self.start_time)
             }
     
     def _read_exact(self, sock: socket.socket, num_bytes: int) -> bytes:
@@ -341,11 +349,15 @@ class NetworkServer:
                 
                 logger.info(f"Request received from {log_client_identifier}: Version={version_from_header}, Code={code_from_header}, PayloadSize={payload_size_from_header}")
                 
-                # Protocol Version Check
-                if version_from_header != SERVER_VERSION:
-                    logger.warning(f"Invalid client protocol version {version_from_header} received from {log_client_identifier}. Expected version {SERVER_VERSION}. Closing connection.")
+                # Protocol Version Check (flexible compatibility)
+                from protocol import validate_protocol_version
+                
+                if not validate_protocol_version(version_from_header):
+                    logger.warning(f"Incompatible client protocol version {version_from_header} received from {log_client_identifier}. Closing connection.")
                     self._send_response(client_conn, RESP_GENERIC_SERVER_ERROR)
                     break
+                else:
+                    logger.debug(f"Accepted client protocol version {version_from_header} from {log_client_identifier}")
                 
                 # Read Request Payload
                 payload_bytes = self._read_exact(client_conn, payload_size_from_header)
@@ -406,12 +418,3 @@ class NetworkServer:
                 client_conn.close()
             conn_semaphore.release()
             logger.info(f"Connection with {log_client_identifier} has been closed and semaphore released.")
-
-    def get_connection_stats(self) -> dict:
-        """Get current connection statistics for monitoring"""
-        with self.connections_lock:
-            return {
-                'active_connections': len(self.active_connections),
-                'max_connections': self.max_connections,
-                'total_connections_handled': getattr(self, 'total_connections_handled', 0)
-            }

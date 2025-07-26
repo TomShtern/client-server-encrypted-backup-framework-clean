@@ -23,7 +23,7 @@ class GUIManager:
         
         # Try to import GUI components
         try:
-            from ServerGUI import ServerGUI
+            from .ServerGUI import ServerGUI
             self.ServerGUI = ServerGUI
             self.gui_available = True
             logger.info("GUI components available for initialization")
@@ -39,7 +39,7 @@ class GUIManager:
         Returns:
             True if GUI initialization started successfully, False otherwise
         """
-        if not self.gui_available:
+        if not self.gui_available or self.ServerGUI is None:
             logger.info("GUI components not available, running in console mode")
             self.gui_ready.set()  # Signal ready immediately for console mode
             return False
@@ -47,9 +47,14 @@ class GUIManager:
         def init_gui():
             try:
                 with self.gui_lock:
-                    # Pass the server_instance to the GUI
-                    self.gui = self.ServerGUI(server_instance=self.server_instance)
-                    gui_initialized = self.gui.initialize()
+                    # Only proceed if ServerGUI is available
+                    if self.ServerGUI is not None:
+                        # Pass the server_instance to the GUI
+                        self.gui = self.ServerGUI(server_instance=self.server_instance)
+                        gui_initialized = self.gui.initialize()
+                    else:
+                        logger.warning("ServerGUI is None, cannot initialize GUI")
+                        gui_initialized = False
                 
                 if gui_initialized:
                     logger.info("Server GUI initialized successfully")
@@ -84,7 +89,7 @@ class GUIManager:
         if not self.is_gui_ready():
             return False
         with self.gui_lock:
-            if self.gui:
+            if self.gui is not None:
                 try:
                     action(*args, **kwargs)
                     return True
@@ -94,29 +99,29 @@ class GUIManager:
         return False
 
     def update_server_status(self, running: bool, address: str, port: int):
-        if self.is_gui_ready():
+        if self.is_gui_ready() and self.gui is not None:
             self._execute_gui_action(self.gui.update_server_status, running, address, port)
 
-    def update_client_stats(self, stats_data: dict = None):
-        if self.is_gui_ready():
+    def update_client_stats(self, stats_data: Optional[dict] = None):
+        if self.is_gui_ready() and self.gui is not None:
             if stats_data is None:
                 stats_data = {'connected': 0, 'total': 0, 'active_transfers': 0}
             self._execute_gui_action(self.gui.update_client_stats, stats_data)
 
     def update_transfer_stats(self, bytes_transferred: int = 0, last_activity: str = ""):
-        if self.is_gui_ready():
+        if self.is_gui_ready() and self.gui is not None:
             self._execute_gui_action(self.gui.update_transfer_stats, bytes_transferred, last_activity)
 
     def update_maintenance_stats(self, stats: Dict[str, Any]):
-        if self.is_gui_ready():
+        if self.is_gui_ready() and self.gui is not None:
             self._execute_gui_action(self.gui.update_maintenance_stats, stats)
 
     def show_error(self, error_message: str):
-        if self.is_gui_ready():
+        if self.is_gui_ready() and self.gui is not None:
             self._execute_gui_action(self.gui.show_error, error_message)
 
     def show_success(self, success_message: str):
-        if self.is_gui_ready():
+        if self.is_gui_ready() and self.gui is not None:
             self._execute_gui_action(self.gui.show_success, success_message)
 
     def queue_update(self, update_type: str, data: Any):
@@ -125,12 +130,12 @@ class GUIManager:
             return
         
         with self.gui_lock:
-            if self.gui:
+            if self.gui is not None:
                 self.gui.update_queue.put((update_type, data))
 
     def is_gui_running(self) -> bool:
         """Check if the GUI is currently running."""
-        if not self.gui:
+        if self.gui is None:
             return False
         # Check if the GUI thread is alive, or if the root window exists
         gui_thread_alive = self.gui.gui_thread and self.gui.gui_thread.is_alive()
@@ -144,7 +149,14 @@ class GUIManager:
             return
 
         logger.info("Shutting down GUI...")
-        self._execute_gui_action(self.gui.shutdown)
+        
+        # Check if GUI exists before attempting to call shutdown
+        with self.gui_lock:
+            if self.gui is not None and hasattr(self.gui, 'shutdown'):
+                self._execute_gui_action(self.gui.shutdown)
+            else:
+                logger.info("GUI object is None or doesn't have shutdown method")
+        
         with self.gui_lock:
             self.gui = None
         self.gui_ready.clear()

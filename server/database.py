@@ -20,8 +20,8 @@ import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Optional, List, Tuple
-from config import DATABASE_NAME, FILE_STORAGE_DIR
-from exceptions import ServerError
+from .config import DATABASE_NAME, FILE_STORAGE_DIR
+from .exceptions import ServerError
 
 # Setup module logger
 logger = logging.getLogger(__name__)

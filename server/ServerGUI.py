@@ -22,7 +22,7 @@ import socket
 
 # Import server components for real server control
 try:
-    from server import BackupServer # type: ignore
+    from .server import BackupServer # type: ignore
     SERVER_CONTROL_AVAILABLE = True
 except ImportError:
     BackupServer = None
@@ -30,16 +30,30 @@ except ImportError:
     print("Warning: Server control not available - server start/stop disabled")
 
 # Import singleton manager
-from server_singleton import ensure_single_server_instance
+from .server_singleton import ensure_single_server_instance
 
 # Import system tray functionality based on platform
 try:
     import pystray
-    from PIL import Image, ImageDraw
-    TRAY_AVAILABLE = True
-except ImportError:
+    try:
+        from PIL import Image, ImageDraw
+        TRAY_AVAILABLE = True
+        print("✅ System tray functionality available (pystray and PIL installed)")
+    except ImportError as pil_error:
+        print(f"⚠️  PIL/Pillow not available: {pil_error}")
+        print("💡 System tray will be disabled. To enable: pip install pillow")
+        TRAY_AVAILABLE = False
+        # Create dummy classes to prevent AttributeError
+        Image = None
+        ImageDraw = None
+except ImportError as pystray_error:
+    print(f"⚠️  pystray not available: {pystray_error}")
+    print("💡 To enable system tray: pip install pystray pillow")
     TRAY_AVAILABLE = False
-    print("Warning: pystray not available - system tray disabled")
+    # Create dummy classes to prevent AttributeError
+    pystray = None
+    Image = None
+    ImageDraw = None
 
 # Import advanced features
 try:
@@ -50,9 +64,16 @@ try:
     import matplotlib.dates as mdates
     plt.style.use('dark_background')  # Dark theme for charts
     CHARTS_AVAILABLE = True
-except ImportError:
+    print("✅ Advanced charts available (matplotlib installed)")
+except ImportError as e:
     CHARTS_AVAILABLE = False
-    print("Warning: matplotlib not available - advanced charts disabled")
+    plt = None
+    FigureCanvasTkAgg = None
+    Figure = None
+    animation = None
+    mdates = None
+    print(f"⚠️  matplotlib not available: {e}")
+    print("💡 To enable advanced charts: pip install matplotlib")
 
 try:
     import psutil  # For real system monitoring
@@ -60,6 +81,17 @@ try:
 except ImportError:
     SYSTEM_MONITOR_AVAILABLE = False
     print("Warning: psutil not available - real system monitoring disabled, using simulated data")
+
+# Import enhanced process monitoring
+try:
+    from utils.process_monitor_gui import ProcessMonitorWidget, create_process_monitor_tab
+    PROCESS_MONITOR_AVAILABLE = True
+    print("✅ Enhanced process monitoring available")
+except ImportError as e:
+    PROCESS_MONITOR_AVAILABLE = False
+    ProcessMonitorWidget = None
+    create_process_monitor_tab = None
+    print(f"⚠️  Enhanced process monitoring not available: {e}")
 
 # --- ULTRA MODERN UI CONSTANTS ---
 class ModernTheme:
@@ -854,7 +886,7 @@ class SettingsDialog:
                 
         except Exception as e:
             messagebox.showerror("Settings Error", f"Failed to save settings: {str(e)}", 
-                               parent=self.dialog if self.dialog else None)
+                               parent=self.dialog if self.dialog else self.parent)
 
     def _persist_settings_to_file(self):
         """Persist settings to configuration file"""
@@ -898,7 +930,7 @@ class ModernChart(tk.Frame):
 
     def _create_chart(self):
         """Create the chart"""
-        if not CHARTS_AVAILABLE:
+        if not CHARTS_AVAILABLE or not Figure:
             label = tk.Label(self, text="Charts not available\n(matplotlib not installed)",
                            bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_SECONDARY,
                            font=(ModernTheme.FONT_FAMILY, 12))
@@ -918,15 +950,17 @@ class ModernChart(tk.Frame):
         self.ax.tick_params(colors=ModernTheme.TEXT_SECONDARY)
         self.ax.xaxis.label.set_color(ModernTheme.TEXT_PRIMARY)
         self.ax.yaxis.label.set_color(ModernTheme.TEXT_PRIMARY)
-        self.ax.title.set_color(ModernTheme.TEXT_PRIMARY)
+        # Fix: Use set_title with color parameter instead of accessing title attribute
+        self.ax.set_title('', color=ModernTheme.TEXT_PRIMARY)
 
         # Create canvas
-        self.canvas = FigureCanvasTkAgg(self.figure, self)
-        self.canvas.get_tk_widget().pack(fill="both", expand=True)
+        if FigureCanvasTkAgg:
+            self.canvas = FigureCanvasTkAgg(self.figure, self)
+            self.canvas.get_tk_widget().pack(fill="both", expand=True)
 
     def update_data(self, data, title="", xlabel="", ylabel=""):
         """Update chart data"""
-        if not CHARTS_AVAILABLE or not self.ax:
+        if not CHARTS_AVAILABLE or not self.ax or not Figure:
             return
 
         self.data = data
@@ -1213,7 +1247,7 @@ class ServerGUI:
                 # Force window to front and make it visible
                 self.root.lift()
                 self.root.attributes('-topmost', True)
-                self.root.after(100, lambda: self.root.attributes('-topmost', False))
+                self.root.after(100, lambda: self.root.attributes('-topmost', False) if self.root else None)
                 self.root.focus_force()
                 self.root.deiconify()  # Ensure window is not minimized
                 self.root.state('normal')  # Ensure window is in normal state
@@ -1383,6 +1417,10 @@ class ServerGUI:
             ("analytics", "📈 Analytics")
         ]
 
+        # Add process monitoring tab if available
+        if PROCESS_MONITOR_AVAILABLE:
+            tabs.append(("processes", "🔍 Processes"))
+
         for tab_id, tab_label in tabs:
             btn = tk.Button(tab_frame, text=tab_label, 
                            command=lambda t=tab_id: self._switch_tab(t),
@@ -1402,6 +1440,10 @@ class ServerGUI:
         self._create_clients_tab()
         self._create_files_tab()
         self._create_analytics_tab()
+
+        # Create process monitoring tab if available
+        if PROCESS_MONITOR_AVAILABLE:
+            self._create_process_monitor_tab()
 
         # Show dashboard by default
         self._switch_tab("dashboard")
@@ -1647,6 +1689,59 @@ class ServerGUI:
             value_label.pack(side="right")
             self.stats_labels[stat_id] = value_label
 
+    def _create_process_monitor_tab(self):
+        """Create process monitoring tab content"""
+        if not PROCESS_MONITOR_AVAILABLE:
+            return
+
+        process_tab = tk.Frame(self.content_area, bg=ModernTheme.PRIMARY_BG)
+        self.tab_contents["processes"] = process_tab
+
+        # Create main container with padding
+        main_container = tk.Frame(process_tab, bg=ModernTheme.PRIMARY_BG)
+        main_container.pack(fill="both", expand=True, padx=20, pady=20)
+
+        # Title
+        title_label = tk.Label(
+            main_container,
+            text="🔍 Process Monitoring",
+            font=("Segoe UI", 16, "bold"),
+            bg=ModernTheme.PRIMARY_BG,
+            fg=ModernTheme.TEXT_PRIMARY
+        )
+        title_label.pack(anchor="w", pady=(0, 20))
+
+        # Create process monitor widget - Fixed availability check
+        try:
+            if PROCESS_MONITOR_AVAILABLE and ProcessMonitorWidget is not None:
+                self.process_monitor_widget = ProcessMonitorWidget(
+                    main_container,
+                    title="Active Backup Processes",
+                    update_interval=3.0
+                )
+                self.process_monitor_widget.pack(fill="both", expand=True)
+            else:
+                # Fallback when process monitor is not available
+                error_label = tk.Label(
+                    main_container,
+                    text="Process monitoring not available\n(ProcessMonitorWidget not installed)",
+                    font=("Segoe UI", 12),
+                    bg=ModernTheme.PRIMARY_BG,
+                    fg=ModernTheme.TEXT_SECONDARY
+                )
+                error_label.pack(pady=50)
+
+        except Exception as e:
+            # Fallback if process monitor widget fails
+            error_label = tk.Label(
+                main_container,
+                text=f"Process monitoring unavailable: {e}",
+                font=("Segoe UI", 12),
+                bg=ModernTheme.PRIMARY_BG,
+                fg=ModernTheme.TEXT_SECONDARY
+            )
+            error_label.pack(pady=50)
+
     def _create_compact_two_column_layout(self, parent):
         """Create a compact two-column layout for dashboard"""
         # Main container with two columns
@@ -1708,7 +1803,7 @@ class ServerGUI:
         uptime_frame = tk.Frame(card.content_frame, bg=ModernTheme.GLASS_BG)
         uptime_frame.pack(fill="x", padx=10, pady=(2, 8))
         tk.Label(uptime_frame, text="Uptime:", bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_SECONDARY,
-                font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
+                font=(ModernTheme.FONT_FAMILY,  9)).pack(side="left")
         self.status_labels['uptime'] = tk.Label(uptime_frame, text="⏱️ 00:00:00",
                                               bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_PRIMARY,
                                               font=(ModernTheme.FONT_FAMILY, 9))
@@ -1744,7 +1839,6 @@ class ServerGUI:
                 font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
         self.status_labels['active_transfers'] = tk.Label(trans_frame, text="0", bg=ModernTheme.GLASS_BG,
                                                          fg=ModernTheme.ACCENT_GREEN, font=(ModernTheme.FONT_FAMILY, 9, 'bold'))
-        self.status_labels['active_transfers'].pack(side="right")
 
     def _create_compact_transfer_stats_card(self, parent):
         """Create compact transfer statistics card with glass morphism"""
@@ -1752,29 +1846,29 @@ class ServerGUI:
         card.pack(fill="x", pady=(0, 8), padx=3)
 
         # Bytes transferred
-        bytes_frame = tk.Frame(card.content_frame, bg=ModernTheme.GLASS_BG)
+        bytes_frame = tk.Frame(card.content_frame, bg=ModernTheme.CARD_BG)
         bytes_frame.pack(fill="x", padx=10, pady=5)
-        tk.Label(bytes_frame, text="Bytes Transferred:", bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_SECONDARY,
+        tk.Label(bytes_frame, text="Bytes Transferred:", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_SECONDARY,
                 font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
-        self.status_labels['bytes'] = tk.Label(bytes_frame, text="0 B", bg=ModernTheme.GLASS_BG,
+        self.status_labels['bytes'] = tk.Label(bytes_frame, text="0 B", bg=ModernTheme.CARD_BG,
                                               fg=ModernTheme.ACCENT_PURPLE, font=(ModernTheme.FONT_FAMILY, 9, 'bold'))
         self.status_labels['bytes'].pack(side="right")
 
         # Transfer rate
-        rate_frame = tk.Frame(card.content_frame, bg=ModernTheme.GLASS_BG)
+        rate_frame = tk.Frame(card.content_frame, bg=ModernTheme.CARD_BG)
         rate_frame.pack(fill="x", padx=10, pady=2)
-        tk.Label(rate_frame, text="Transfer Rate:", bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_SECONDARY,
+        tk.Label(rate_frame, text="Transfer Rate:", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_SECONDARY,
                 font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
-        self.status_labels['transfer_rate'] = tk.Label(rate_frame, text="0 KB/s", bg=ModernTheme.GLASS_BG,
+        self.status_labels['transfer_rate'] = tk.Label(rate_frame, text="0 KB/s", bg=ModernTheme.CARD_BG,
                                                       fg=ModernTheme.ACCENT_ORANGE, font=(ModernTheme.FONT_FAMILY, 9, 'bold'))
         self.status_labels['transfer_rate'].pack(side="right")
 
         # Last activity
-        activity_frame = tk.Frame(card.content_frame, bg=ModernTheme.GLASS_BG)
+        activity_frame = tk.Frame(card.content_frame, bg=ModernTheme.CARD_BG)
         activity_frame.pack(fill="x", padx=10, pady=(2, 8))
-        tk.Label(activity_frame, text="Last Activity:", bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_SECONDARY,
+        tk.Label(activity_frame, text="Last Activity:", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_SECONDARY,
                 font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
-        self.status_labels['activity'] = tk.Label(activity_frame, text="None", bg=ModernTheme.GLASS_BG,
+        self.status_labels['activity'] = tk.Label(activity_frame, text="None", bg=ModernTheme.CARD_BG,
                                                  fg=ModernTheme.TEXT_PRIMARY, font=(ModernTheme.FONT_FAMILY, 9))
         self.status_labels['activity'].pack(side="right")
 
@@ -1968,7 +2062,7 @@ class ServerGUI:
 
     def _start_server(self):
         """Start the backup server."""
-        from server import BackupServer # Local import to avoid circular dependency # type: ignore
+        from .server import BackupServer # Local import to avoid circular dependency # type: ignore
         if self.server and not self.server.running:
             try:
                 # The server's start method is already designed to run in threads
@@ -2691,4 +2785,4 @@ class ServerGUI:
         # Graceful shutdown when window is closed
         if self.root:
             self.root.destroy()
-    
+

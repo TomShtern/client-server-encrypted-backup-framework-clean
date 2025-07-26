@@ -12,25 +12,25 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, Any, Tuple
 
 # Import singleton manager
-from server_singleton import ensure_single_server_instance
+from .server_singleton import ensure_single_server_instance
 
 # Import crypto components through compatibility layer
-from crypto_compat import AES, RSA, PKCS1_OAEP, pad, unpad, get_random_bytes
+from .crypto_compat import AES, RSA, PKCS1_OAEP, pad, unpad, get_random_bytes
 
 # Import custom exceptions
-from exceptions import ServerError, ProtocolError, ClientError, FileError
+from .exceptions import ServerError, ProtocolError, ClientError, FileError
 
 # Import database module
-from database import DatabaseManager
+from .database import DatabaseManager
 
 # Import request handler module
-from request_handlers import RequestHandler
+from .request_handlers import RequestHandler
 
 # Import network server module
-from network_server import NetworkServer
+from .network_server import NetworkServer
 
 # GUI Integration
-from gui_integration import GUIManager
+from .gui_integration import GUIManager
 
 # --- Server Configuration Constants ---
 SERVER_VERSION = 3
