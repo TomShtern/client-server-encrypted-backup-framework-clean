@@ -480,6 +480,7 @@ class BackupServer:
 
 # --- Main Execution Guard ---
 if __name__ == "__main__":
+    server_instance = None  # Initialize to ensure it's always bound
     try:
         # Display a startup banner for the server console
         print("=====================================================================")
@@ -507,7 +508,6 @@ if __name__ == "__main__":
         ensure_single_server_instance("BackupServer", 1256)
 
         # Instantiate the server
-        server_instance = None
         print("DEBUG: Creating BackupServer instance...")
         # Instantiate the server
         server_instance = BackupServer()
