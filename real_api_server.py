@@ -337,14 +337,24 @@ def api_start_backup():
                 print(f"[ERROR] Backup thread error: {str(e)}")
             finally:
                 backup_status['backing_up'] = False
-                # Clean up temp file
-                try:
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
-                    if os.path.exists(temp_dir):
-                        os.rmdir(temp_dir)
-                except Exception as e:
-                    print(f"[WARNING] Cleanup error: {e}")
+                # Delay cleanup to allow C++ client to read the file
+                def delayed_cleanup():
+                    import time
+                    time.sleep(10)  # Wait 10 seconds before cleanup
+                    try:
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                            print(f"[DEBUG] Delayed cleanup: removed {file_path}")
+                        if os.path.exists(temp_dir):
+                            os.rmdir(temp_dir)
+                            print(f"[DEBUG] Delayed cleanup: removed {temp_dir}")
+                    except Exception as e:
+                        print(f"[WARNING] Delayed cleanup error: {e}")
+
+                # Start cleanup in background thread
+                cleanup_thread = threading.Thread(target=delayed_cleanup)
+                cleanup_thread.daemon = True
+                cleanup_thread.start()
 
         # Start backup thread
         backup_thread = threading.Thread(target=run_backup)
