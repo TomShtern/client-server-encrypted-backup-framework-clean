@@ -1123,7 +1123,7 @@ class ServerGUI:
         """Initialize GUI system"""
         try:
             self.running = True
-            self.gui_thread = threading.Thread(target=self._gui_main_loop, daemon=True)
+            self.gui_thread = threading.Thread(target=self._gui_main_loop, daemon=False)
             self.gui_thread.start()
 
             # Wait for GUI to initialize
@@ -1193,23 +1193,50 @@ class ServerGUI:
         """Main GUI thread loop"""
         try:
             print("Starting enhanced ultra modern GUI main loop...")
-            # Initialize tkinter
-            self.root = tk.Tk()
-            print("Tkinter root created")
+            # Initialize tkinter with error handling
+            try:
+                self.root = tk.Tk()
+                print("Tkinter root created")
+            except Exception as e:
+                print(f"Failed to create Tkinter root: {e}")
+                print("GUI will not be available - continuing in console mode")
+                return
 
             # Configure the root window
-            self.root.title("🚀 ULTRA MODERN Encrypted Backup Server - Enhanced")
-            self.root.geometry("1200x800")
-            self.root.minsize(1000, 700)
-            self.root.configure(bg=ModernTheme.PRIMARY_BG)
-            self.root.protocol("WM_DELETE_WINDOW", self._on_window_close)
-            print("Root window configured with modern theme")
+            try:
+                self.root.title("🚀 ULTRA MODERN Encrypted Backup Server - Enhanced")
+                self.root.geometry("1200x800")
+                self.root.minsize(1000, 700)
+                self.root.configure(bg=ModernTheme.PRIMARY_BG)
+                self.root.protocol("WM_DELETE_WINDOW", self._on_window_close)
+
+                # Force window to front and make it visible
+                self.root.lift()
+                self.root.attributes('-topmost', True)
+                self.root.after(100, lambda: self.root.attributes('-topmost', False))
+                self.root.focus_force()
+                self.root.deiconify()  # Ensure window is not minimized
+                self.root.state('normal')  # Ensure window is in normal state
+
+                print("Root window configured with modern theme")
+            except Exception as e:
+                print(f"Failed to configure root window: {e}")
+                if self.root:
+                    self.root.destroy()
+                return
 
             # Create modern GUI components
-            self._create_main_window()
-            print("Modern main window created")
-            self._create_system_tray()
-            print("System tray created")
+            try:
+                print("Creating enhanced ultra modern main window...")
+                self._create_main_window()
+                print("Creating enhanced ultra modern main window...")
+                self._create_system_tray()
+                print("System tray created")
+            except Exception as e:
+                print(f"Failed to create GUI components: {e}")
+                if self.root:
+                    self.root.destroy()
+                return
 
             # Mark GUI as enabled
             self.gui_enabled = True

@@ -35,12 +35,13 @@ class GUIManager:
     def initialize_gui(self) -> bool:
         """
         Initialize the GUI in a separate thread to avoid blocking server startup.
-        
+
         Returns:
             True if GUI initialization started successfully, False otherwise
         """
         if not self.gui_available:
             logger.info("GUI components not available, running in console mode")
+            self.gui_ready.set()  # Signal ready immediately for console mode
             return False
         
         def init_gui():

@@ -225,8 +225,12 @@ htmlcov/
 .coverage.*
 coverage.xml
 codeviz_report_*.md
-*_REPORT.md
-*_SUMMARY.md
+
+# Documentation organization - ignore generated reports in docs/
+docs/reports/*_REPORT.md
+docs/reports/*_SUMMARY.md
+docs/archive/*_REPORT.md
+docs/archive/*_SUMMARY.md
 
 # Temporary & Backup files
 *.bak

@@ -2893,7 +2893,7 @@
             constructor(baseUrl = 'http://127.0.0.1:9090') {
                 this.baseUrl = baseUrl;
                 this.defaultTimeout = 30000; // 30 seconds default
-                this.statusTimeout = 10000;  // 10 seconds for status checks
+                this.statusTimeout = 5000;   // 5 seconds for status checks (reduced from 10s)
                 this.connectTimeout = 15000; // 15 seconds for connection attempts
                 this.uploadTimeout = 300000; // 5 minutes for file uploads
             }
@@ -3760,7 +3760,7 @@
                     }
 
                     // Check for changes in log message (operation)
-                    if (this.state.log.operation !== status.log.operation) {
+                    if (status.log && this.state.log && this.state.log.operation !== status.log.operation) {
                         this.state.log.operation = status.log.operation;
                         stateChanged = true;
                     }
@@ -3790,7 +3790,7 @@
                     }
 
                     // Handle additional data
-                    if (status.progress) this.updateProgress(status.progress);
+                    if (status.progress) this.updateProgressData(status.progress);
                     if (status.clientId) this.state.clientId = status.clientId;
                     if (status.log) this.addLog(status.log.operation, status.log.success ? 'info' : 'error', status.log.details);
 
@@ -3936,17 +3936,17 @@
 
                     // Update primary action button
                     if (this.state.isConnected && !this.state.isRunning) {
-                        this.elements.primaryActionButton.textContent = '🚀 START BACKUP';
+                        this.updateButtonContent(this.elements.primaryActionButton, '🚀', 'START BACKUP');
                         this.elements.primaryActionButton.classList.remove('primary');
                         this.elements.primaryActionButton.classList.add('success');
                         this.elements.primaryActionButton.disabled = false;
                     } else if (this.state.isRunning) {
-                        this.elements.primaryActionButton.textContent = '🔄 BACKING UP...';
+                        this.updateButtonContent(this.elements.primaryActionButton, '🔄', 'BACKING UP...');
                         this.elements.primaryActionButton.classList.remove('success');
                         this.elements.primaryActionButton.classList.add('primary');
                         this.elements.primaryActionButton.disabled = true;
                     } else {
-                        this.elements.primaryActionButton.textContent = '🚀 CONNECT';
+                        this.updateButtonContent(this.elements.primaryActionButton, '🚀', 'CONNECT');
                         this.elements.primaryActionButton.classList.remove('success');
                         this.elements.primaryActionButton.classList.add('primary');
                         this.elements.primaryActionButton.disabled = false;
@@ -4081,6 +4081,40 @@
                     case 'CONNECTION_FAILED': return 'red';
                     case 'SERVER_OFFLINE': return 'red';
                     default: return 'purple';
+                }
+            }
+
+            updateProgressData(progressData) {
+                // Update progress information from API status
+                if (progressData) {
+                    if (progressData.progress !== undefined) {
+                        this.state.progress = progressData.progress;
+                    }
+                    if (progressData.transferred !== undefined) {
+                        this.state.transferred = progressData.transferred;
+                    }
+                    if (progressData.speed !== undefined) {
+                        this.state.speed = progressData.speed;
+                    }
+                    if (progressData.eta !== undefined) {
+                        this.state.eta = progressData.eta;
+                    }
+                }
+            }
+
+            updateButtonContent(button, icon, text) {
+                // Safely update button content while preserving span structure
+                if (!button) return;
+
+                const iconSpan = button.querySelector('.btn-icon');
+                const textSpan = button.querySelector('.btn-text');
+
+                if (iconSpan && textSpan) {
+                    iconSpan.textContent = icon;
+                    textSpan.textContent = text;
+                } else {
+                    // Fallback: recreate the structure if spans are missing
+                    button.innerHTML = `<span class="btn-icon">${icon}</span><span class="btn-text">${text}</span>`;
                 }
             }
 
@@ -5540,8 +5574,11 @@
                 
                 // Store original state
                 if (!this.originalStates.has(buttonId)) {
+                    const iconSpan = button.querySelector('.btn-icon');
+                    const textSpan = button.querySelector('.btn-text');
                     this.originalStates.set(buttonId, {
-                        text: button.textContent,
+                        icon: iconSpan ? iconSpan.textContent : '',
+                        text: textSpan ? textSpan.textContent : button.textContent,
                         disabled: button.disabled,
                         classList: Array.from(button.classList)
                     });
@@ -5550,9 +5587,9 @@
                 // Apply loading state
                 button.classList.add('loading');
                 button.disabled = true;
-                
+
                 if (loadingText) {
-                    button.textContent = loadingText;
+                    this.updateButtonText(button, loadingText);
                 }
 
                 this.activeButtons.set(buttonId, button);
@@ -5569,7 +5606,7 @@
                 button.classList.add('success-flash');
                 
                 if (successText) {
-                    button.textContent = successText;
+                    this.updateButtonText(button, successText);
                 }
 
                 // Add status indicator
@@ -5593,7 +5630,7 @@
                 button.classList.add('error-shake');
                 
                 if (errorText) {
-                    button.textContent = errorText;
+                    this.updateButtonText(button, errorText);
                 }
 
                 // Add status indicator
@@ -5616,18 +5653,43 @@
                 
                 if (originalState) {
                     // Restore original state
-                    button.textContent = originalState.text;
+                    const iconSpan = button.querySelector('.btn-icon');
+                    const textSpan = button.querySelector('.btn-text');
+
+                    if (iconSpan && textSpan) {
+                        iconSpan.textContent = originalState.icon;
+                        textSpan.textContent = originalState.text;
+                    } else {
+                        // Fallback: recreate structure or use plain text
+                        if (originalState.icon) {
+                            button.innerHTML = `<span class="btn-icon">${originalState.icon}</span><span class="btn-text">${originalState.text}</span>`;
+                        } else {
+                            button.textContent = originalState.text;
+                        }
+                    }
+
                     button.disabled = originalState.disabled;
                     button.className = originalState.classList.join(' ');
-                    
+
                     // Remove any status indicators
                     this.removeStatusIndicator(button);
-                    
+
                     this.originalStates.delete(buttonId);
                 }
                 
                 this.activeButtons.delete(buttonId);
                 debugLog(`Button ${buttonId} reset to original state`, 'BUTTON_STATE');
+            }
+
+            updateButtonText(button, text) {
+                // Safely update button text while preserving span structure
+                const textSpan = button.querySelector('.btn-text');
+                if (textSpan) {
+                    textSpan.textContent = text;
+                } else {
+                    // Fallback for buttons without span structure
+                    button.textContent = text;
+                }
             }
 
             addStatusIndicator(button, type) {
@@ -6700,7 +6762,7 @@
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-                    const response = await fetch('http://localhost:9090/status', {
+                    const response = await fetch('http://localhost:9090/api/status', {
                         method: 'GET',
                         signal: controller.signal,
                         cache: 'no-cache'

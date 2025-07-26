@@ -43,9 +43,9 @@ def start_api_server():
     try:
         # Start the API server
         server_process = subprocess.Popen([
-            sys.executable, 
-            'cyberbackup_api_server.py'
-        ], 
+            sys.executable,
+            'real_api_server.py'
+        ],
         # Redirect stdout and stderr to the parent process's stdout/stderr
         # This makes API server output visible in the console for debugging
         stdout=sys.stdout, 

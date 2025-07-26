@@ -480,34 +480,38 @@ class BackupServer:
 
 # --- Main Execution Guard ---
 if __name__ == "__main__":
-    # Display a startup banner for the server console
-    print("=====================================================================")
-    print(f"      Secure Encrypted File Backup Server - Version {SERVER_VERSION}      ")
-    print(f"      Process ID: {os.getpid()}                                     ")
-    print("=====================================================================")
-    
-    # Perform basic pre-flight checks before attempting to start the server
-    if sys.version_info < (3, 7): # PyCryptodome generally works better with Python 3.7+
-        print("Warning: Python 3.7 or newer is recommended for optimal server performance and security library compatibility.", file=sys.stderr)
-
     try:
+        # Display a startup banner for the server console
+        print("=====================================================================")
+        print(f"      Secure Encrypted File Backup Server - Version {SERVER_VERSION}      ")
+        print(f"      Process ID: {os.getpid()}                                     ")
+        print("=====================================================================")
+
+        # Perform basic pre-flight checks before attempting to start the server
+        if sys.version_info < (3, 7): # PyCryptodome generally works better with Python 3.7+
+            print("Warning: Python 3.7 or newer is recommended for optimal server performance and security library compatibility.", file=sys.stderr)
+
         # Quick check to ensure PyCryptodome is available and basic operations work
-        _ = RSA.generate(1024, randfunc=get_random_bytes) # Test RSA key generation
-        _ = AES.new(get_random_bytes(AES_KEY_SIZE_BYTES), AES.MODE_CBC, iv=get_random_bytes(16)) # Test AES cipher creation
-        logger.info("PyCryptodome library check passed: Basic crypto operations are available.")
-    except Exception as e_crypto_check:
-        print(f"CRITICAL FAILURE: PyCryptodome library is not installed correctly or is non-functional: {e_crypto_check}", file=sys.stderr)
-        print("Please ensure PyCryptodome is properly installed (e.g., via 'pip install pycryptodomex'). Server cannot start.", file=sys.stderr)
-        sys.exit(1) # Exit if essential crypto library is missing/broken
+        try:
+            _ = RSA.generate(1024, randfunc=get_random_bytes) # Test RSA key generation
+            _ = AES.new(get_random_bytes(AES_KEY_SIZE_BYTES), AES.MODE_CBC, iv=get_random_bytes(16)) # Test AES cipher creation
+            logger.info("PyCryptodome library check passed: Basic crypto operations are available.")
+        except Exception as e_crypto_check:
+            print(f"CRITICAL FAILURE: PyCryptodome library is not installed correctly or is non-functional: {e_crypto_check}", file=sys.stderr)
+            print("Please ensure PyCryptodome is properly installed (e.g., via 'pip install pycryptodomex'). Server cannot start.", file=sys.stderr)
+            sys.exit(1) # Exit if essential crypto library is missing/broken
 
-    # Ensure only one server instance runs at a time
-    ensure_single_server_instance("BackupServer", 1256)
+        print("DEBUG: Checking crypto library...")
+        # Ensure only one server instance runs at a time
+        print("DEBUG: Ensuring single server instance...")
+        ensure_single_server_instance("BackupServer", 1256)
 
-    # Instantiate the server
-    server_instance = None
-    try:
+        # Instantiate the server
+        server_instance = None
+        print("DEBUG: Creating BackupServer instance...")
         # Instantiate the server
         server_instance = BackupServer()
+        print("DEBUG: BackupServer created successfully!")
 
         # The GUIManager was initialized in the BackupServer constructor.
         # The GUI is running in a separate thread, started by the GUIManager.
@@ -517,24 +521,25 @@ if __name__ == "__main__":
         # Wait for the GUI to signal it's ready before we proceed (with timeout)
         print("DEBUG: Waiting for GUI to initialize...")
         logger.info("Waiting for GUI to initialize...")
-        gui_ready = server_instance.gui_manager.gui_ready.wait(timeout=10.0)  # Wait up to 10 seconds
+        gui_ready = server_instance.gui_manager.gui_ready.wait(timeout=5.0)  # Reduced timeout
         print(f"DEBUG: GUI ready result: {gui_ready}")
 
-        if gui_ready and server_instance.gui_manager.is_gui_ready():
-            print("DEBUG: GUI is ready, starting server...")
+        # Start the server regardless of GUI status
+        print("DEBUG: Starting backup server...")
+        logger.info("Starting backup server on port 1256...")
+        server_instance.start()
+        print("DEBUG: Backup server started successfully!")
+
+        if gui_ready and hasattr(server_instance.gui_manager, 'is_gui_running') and server_instance.gui_manager.is_gui_running():
+            print("DEBUG: GUI is running, entering GUI mode...")
             logger.info("GUI is ready. Main thread is now idle, application is driven by GUI and server threads.")
-            # Start the server
-            server_instance.start()
-            print("DEBUG: Server started, entering main loop...")
             # Keep the main thread alive. The application will exit when the GUI is closed.
             while server_instance.gui_manager.is_gui_running():
                 time.sleep(1)
         else:
-            # Fallback for console-only mode if GUI fails
-            print("DEBUG: GUI failed or timed out, running console-only mode...")
-            logger.warning("GUI did not become ready within timeout. Running in console-only mode.")
-            logger.info("Starting server in console mode...")
-            server_instance.start()
+            # Console-only mode
+            print("DEBUG: Running in console-only mode...")
+            logger.info("Running in console-only mode. Press Ctrl+C to stop.")
             while server_instance.running and not server_instance.shutdown_event.is_set():
                 time.sleep(1)
 

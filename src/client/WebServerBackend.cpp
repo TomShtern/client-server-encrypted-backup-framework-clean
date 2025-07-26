@@ -450,8 +450,7 @@ handle_request(http::request<Body, http::basic_fields<Allocator>>&& req) {
                             g_state.setProgress(0);
                             g_state.addLog("Backup operation started for " + filename);
                             
-                            // Start progress simulation for this backup
-                            start_progress_simulation();
+                            // REMOVED: Progress simulation - using real progress only
 
                             // Start backup in a separate thread with configuration
                             std::thread backup_thread([config]() {
@@ -536,8 +535,7 @@ handle_request(http::request<Body, http::basic_fields<Allocator>>&& req) {
                     g_state.setProgress(0);
                     g_state.addLog("Backup operation started");
 
-                    // Start progress simulation for this backup
-                    start_progress_simulation();
+                    // REMOVED: Progress simulation - using real progress only
 
                     // Start backup in a separate thread to avoid blocking the HTTP response
                     std::thread backup_thread([&]() {
@@ -727,38 +725,8 @@ private:
     }
 };
 
-// Optimized progress simulation thread - only active when needed
-std::atomic<bool> g_progress_thread_running(false);
-
-void progress_simulator() {
-    while (g_progress_thread_running.load()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000)); // Reduced frequency
-        
-        std::string current_phase = g_state.getPhase();
-        if (current_phase == "BACKUP_IN_PROGRESS") {
-            int current = g_state.getProgress();
-            if (current < 100) {
-                g_state.setProgress(current + 10);
-                g_state.setStatus("Backing up... " + std::to_string(g_state.getProgress()) + "%");
-            } else if (current_phase == "COMPLETED" || current_phase == "FAILED" || current_phase == "STOPPED") {
-                // Stop the progress thread when operation is complete
-                break;
-            }
-        }
-    }
-    g_progress_thread_running.store(false);
-}
-
-void start_progress_simulation() {
-    if (!g_progress_thread_running.load()) {
-        g_progress_thread_running.store(true);
-        std::thread(progress_simulator).detach();
-    }
-}
-
-void stop_progress_simulation() {
-    g_progress_thread_running.store(false);
-}
+// REMOVED: Progress simulation functions - these created fake progress
+// Real progress should come from actual backup operations, not simulation
 
 // Function pointers for backup operations
 std::function<bool()> g_backup_callback = nullptr;  // Legacy callback
@@ -834,8 +802,7 @@ public:
             server_thread_.join();
         }
 
-        // Stop any running progress simulation
-        stop_progress_simulation();
+        // REMOVED: Progress simulation stop call
 
         std::cout << "WebServer stopped" << std::endl;
     }

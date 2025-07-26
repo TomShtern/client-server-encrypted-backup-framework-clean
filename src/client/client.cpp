@@ -121,37 +121,13 @@ Client::Client() : socket(nullptr), connected(false), rsaPrivate(nullptr),
                    keepAliveEnabled(false), lastError(ErrorType::NONE) {
     std::fill(clientID.begin(), clientID.end(), 0);
 
-    // Initialize HTTP API server for HTML GUI (only in interactive mode)
+    // DISABLED: HTTP API server to prevent port conflicts and simulation mode
+    // The real API integration is handled by cyberbackup_api_server.py (Flask)
+    // This C++ client should only run in --batch mode via real_backup_executor.py
     extern bool g_batchMode;
     if (!g_batchMode) {
-        try {
-            webServer = std::make_unique<WebServerBackend>();
-
-            // Set both callback types for maximum compatibility
-            // Legacy callback for backward compatibility
-            webServer->setBackupCallback([this]() { return this->runBackupOperation(); });
-
-            // New config-based callback that eliminates transfer.info dependency
-            webServer->setBackupCallbackWithConfig([this](const WebServerBackend::BackupConfig& config) {
-                // Convert WebServerBackend::BackupConfig to Client::BackupConfig
-                Client::BackupConfig clientConfig;
-                clientConfig.serverIP = config.serverIP;
-                clientConfig.serverPort = config.serverPort;
-                clientConfig.username = config.username;
-                clientConfig.filepath = config.filepath;
-
-                return this->runBackupOperation(clientConfig);
-            });
-
-            if (webServer->start("127.0.0.1", 9090)) {
-                std::cout << "[GUI] HTTP API server started on port 9090" << std::endl;
-                std::cout << "[GUI] New configuration-based backup system enabled" << std::endl;
-            } else {
-                std::cout << "[ERROR] Failed to start HTTP API server" << std::endl;
-            }
-        } catch (const std::exception& e) {
-            std::cout << "[ERROR] Failed to start HTTP API server: " << e.what() << std::endl;
-        }
+        std::cout << "[INFO] Web server disabled - use cyberbackup_api_server.py for web interface" << std::endl;
+        std::cout << "[INFO] This client should be launched via real_backup_executor.py in --batch mode" << std::endl;
     } else {
         std::cout << "[BATCH] HTTP API server disabled in batch mode" << std::endl;
     }

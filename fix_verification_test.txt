@@ -1,4 +1,0 @@
-TEST FILE FOR CORRUPTION FIX VERIFICATION - 07/22/2025 23:20:51
-Unique content to verify the fix works correctly.
-This file should transfer with exact content matching.
-Timestamp: 2025-07-22 23:20:51

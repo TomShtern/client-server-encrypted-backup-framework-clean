@@ -406,3 +406,12 @@ class NetworkServer:
                 client_conn.close()
             conn_semaphore.release()
             logger.info(f"Connection with {log_client_identifier} has been closed and semaphore released.")
+
+    def get_connection_stats(self) -> dict:
+        """Get current connection statistics for monitoring"""
+        with self.connections_lock:
+            return {
+                'active_connections': len(self.active_connections),
+                'max_connections': self.max_connections,
+                'total_connections_handled': getattr(self, 'total_connections_handled', 0)
+            }

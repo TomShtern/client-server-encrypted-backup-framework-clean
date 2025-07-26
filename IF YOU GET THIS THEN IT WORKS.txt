@@ -1,5 +1,0 @@
-the text in this file represents how great TOM SHTERN is at coding.
-what a marvelous guy!
-if you can read everything so far, then that means the file transfer worked and the data is not corrupted and life is good.
-LIFE IS GREAT!
-[EOF]
