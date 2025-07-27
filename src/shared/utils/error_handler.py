@@ -60,6 +60,7 @@ class ErrorCode(Enum):
     CONNECTION_REFUSED = 1102
     SOCKET_ERROR = 1103
     PORT_IN_USE = 1104
+    NETWORK_ERROR = 1105  # General network error for backward compatibility
     
     # Protocol errors (1200-1299)
     INVALID_PROTOCOL_VERSION = 1200
@@ -153,6 +154,12 @@ class ErrorHandler:
         with self.lock:
             self.error_callbacks.append(callback)
             logger.debug(f"Registered error callback: {callback.__name__}")
+    
+    def remove_callback(self, callback: Callable[[ErrorInfo], None]):
+        """Remove an error callback."""
+        with self.lock:
+            if callback in self.error_callbacks:
+                self.error_callbacks.remove(callback)
     
     def create_error(self, code: ErrorCode, message: str, 
                     category: ErrorCategory = ErrorCategory.UNKNOWN,

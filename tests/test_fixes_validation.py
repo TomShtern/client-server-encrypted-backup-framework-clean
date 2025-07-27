@@ -28,14 +28,14 @@ from unittest.mock import Mock, patch, MagicMock
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import the components we're testing
-from utils.file_lifecycle import SynchronizedFileManager, create_transfer_info_managed
-from utils.error_handler import (
+from src.shared.utils.file_lifecycle import SynchronizedFileManager, create_transfer_info_managed
+from src.shared.utils.error_handler import (
     get_error_handler, ErrorCode, ErrorCategory, ErrorSeverity,
     handle_subprocess_error, handle_protocol_error
 )
-from utils.unified_config import UnifiedConfigurationManager
-from server.protocol import validate_protocol_version
-from server.config import VERSION_TOLERANCE_ENABLED, COMPATIBLE_VERSIONS
+from src.shared.utils.unified_config import UnifiedConfigurationManager
+from src.server.protocol import validate_protocol_version
+from src.server.config import VERSION_TOLERANCE_ENABLED, COMPATIBLE_VERSIONS
 
 class TestSynchronizedFileManager(unittest.TestCase):
     """Test the SynchronizedFileManager race condition fixes."""
@@ -215,13 +215,13 @@ class TestProtocolFlexibility(unittest.TestCase):
     def setUp(self):
         """Set up test environment."""
         # Ensure version tolerance is enabled for testing
-        import server.config as config
+        import src.server.config as config
         self.original_tolerance = getattr(config, 'VERSION_TOLERANCE_ENABLED', True)
         config.VERSION_TOLERANCE_ENABLED = True
     
     def tearDown(self):
         """Restore original configuration."""
-        import server.config as config
+        import src.server.config as config
         config.VERSION_TOLERANCE_ENABLED = self.original_tolerance
     
     def test_exact_version_match(self):
@@ -263,13 +263,13 @@ class TestProtocolFlexibility(unittest.TestCase):
     
     def test_version_tolerance_disable(self):
         """Test that version tolerance can be disabled for strict mode."""
-        import server.config as config
+        import src.server.config as config
         
         # Disable version tolerance
         config.VERSION_TOLERANCE_ENABLED = False
         
         # Only exact server version should be accepted
-        from server.config import SERVER_VERSION
+        from src.server.config import SERVER_VERSION
         self.assertTrue(validate_protocol_version(SERVER_VERSION))
         
         # Other versions should fail
@@ -381,7 +381,7 @@ class TestErrorPropagationFramework(unittest.TestCase):
         self.assertEqual(self.error_callback_data.error_id, error_info.error_id)
         
         # Remove callback
-        self.error_handler.remove_watcher(error_callback)
+        self.error_handler.remove_callback(error_callback)
     
     def test_error_filtering_and_statistics(self):
         """Test error filtering and statistics functionality."""

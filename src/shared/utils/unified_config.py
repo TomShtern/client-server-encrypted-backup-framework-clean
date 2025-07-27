@@ -22,7 +22,7 @@ import configparser
 import re
 
 # Import the existing ConfigurationManager
-from config_manager import ConfigurationManager
+from src.shared.config_manager import ConfigurationManager
 
 logger = logging.getLogger(__name__)
 

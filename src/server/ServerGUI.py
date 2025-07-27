@@ -2272,33 +2272,94 @@ class ServerGUI:
     def _update_performance_metrics(self, performance_data: Optional[dict] = None):
         """Update performance metrics on the dashboard."""
         if not SYSTEM_MONITOR_AVAILABLE:
+            # Disable performance monitoring entirely when psutil is not available
+            if 'cpu_usage' in self.status_labels:
+                self.status_labels['cpu_usage'].config(text="N/A")
+            if 'memory_usage' in self.status_labels:
+                self.status_labels['memory_usage'].config(text="N/A")
+            if 'disk_usage' in self.status_labels:
+                self.status_labels['disk_usage'].config(text="N/A")
+            if 'network_activity' in self.status_labels:
+                self.status_labels['network_activity'].config(text="Disabled")
+
+            # Disable progress bars
+            for key in ['cpu', 'memory', 'disk']:
+                if key in self.advanced_progress_bars:
+                    self.advanced_progress_bars[key].set_progress(0, animated=False)
             return
 
-        # Get real system stats
-        cpu_percent = psutil.cpu_percent()
-        mem_percent = psutil.virtual_memory().percent
-        
-        # Find the disk usage for the drive where the script is running
-        script_path = os.path.abspath(sys.argv[0])
-        disk_usage_percent = psutil.disk_usage(os.path.splitdrive(script_path)[0]).percent
+        try:
+            # Get real system stats with comprehensive error handling
+            cpu_percent = psutil.cpu_percent(interval=None)  # Non-blocking call
+            memory_info = psutil.virtual_memory()
+            mem_percent = memory_info.percent
+            
+            # Find the disk usage for the drive where the script is running
+            try:
+                script_path = os.path.abspath(sys.argv[0])
+                disk_path = os.path.splitdrive(script_path)[0]
+                if not disk_path:  # Unix-like systems
+                    disk_path = '/'
+                disk_usage = psutil.disk_usage(disk_path)
+                disk_usage_percent = disk_usage.percent
+            except Exception as disk_error:
+                print(f"Warning: Failed to get disk usage: {disk_error}")
+                disk_usage_percent = None
 
-        # Update labels
+            # Network activity monitoring
+            try:
+                # Add proper bounds checking for psutil
+                if SYSTEM_MONITOR_AVAILABLE and 'psutil' in globals():
+                    network_stats = psutil.net_io_counters()
+                    if hasattr(self, 'last_network_bytes'):
+                        bytes_diff = (network_stats.bytes_sent + network_stats.bytes_recv) - self.last_network_bytes
+                        if bytes_diff > 1024:  # More than 1KB activity
+                            network_status = f"Active ({bytes_diff//1024}KB/s)"
+                        else:
+                            network_status = "Idle"
+                    else:
+                        network_status = "Monitoring..."
+                    self.last_network_bytes = network_stats.bytes_sent + network_stats.bytes_recv
+                else:
+                    network_status = "N/A"
+            except Exception as net_error:
+                print(f"Warning: Failed to get network stats: {net_error}")
+                network_status = "N/A"
+
+        except Exception as e:
+            print(f"Critical error getting system metrics: {e}")
+            # If psutil fails completely, disable monitoring
+            if 'cpu_usage' in self.status_labels:
+                self.status_labels['cpu_usage'].config(text="Error")
+            if 'memory_usage' in self.status_labels:
+                self.status_labels['memory_usage'].config(text="Error")
+            if 'disk_usage' in self.status_labels:
+                self.status_labels['disk_usage'].config(text="Error")
+            if 'network_activity' in self.status_labels:
+                self.status_labels['network_activity'].config(text="Error")
+            return
+
+        # Update labels with real data only
         if 'cpu_usage' in self.status_labels:
             self.status_labels['cpu_usage'].config(text=f"{cpu_percent:.1f}%")
         if 'memory_usage' in self.status_labels:
             self.status_labels['memory_usage'].config(text=f"{mem_percent:.1f}%")
-        if 'disk_usage' in self.status_labels:
+        if 'disk_usage' in self.status_labels and disk_usage_percent is not None:
             self.status_labels['disk_usage'].config(text=f"{disk_usage_percent:.1f}%")
+        elif 'disk_usage' in self.status_labels:
+            self.status_labels['disk_usage'].config(text="N/A")
+        if 'network_activity' in self.status_labels:
+            self.status_labels['network_activity'].config(text=network_status)
 
-        # Update progress bars
+        # Update progress bars with real data only
         if 'cpu' in self.advanced_progress_bars:
             self.advanced_progress_bars['cpu'].set_progress(cpu_percent)
         if 'memory' in self.advanced_progress_bars:
             self.advanced_progress_bars['memory'].set_progress(mem_percent)
-        if 'disk' in self.advanced_progress_bars:
+        if 'disk' in self.advanced_progress_bars and disk_usage_percent is not None:
             self.advanced_progress_bars['disk'].set_progress(disk_usage_percent)
 
-        # Update performance data for charts
+        # Update performance data for charts with real data only
         now = datetime.now()
         self.performance_data['timestamps'].append(now)
         self.performance_data['cpu_usage'].append(cpu_percent)

@@ -17,12 +17,12 @@ from datetime import datetime
 from typing import Optional, Dict, Any, Callable, List
 
 import psutil
-from src.shared.utils.file_lifecycle import SynchronizedFileManager
-from src.shared.utils.error_handler import (
+from utils.file_lifecycle import SynchronizedFileManager
+from utils.error_handler import (
     get_error_handler, handle_subprocess_error, handle_file_transfer_error,
     ErrorSeverity, ErrorCategory, ErrorCode
 )
-from src.shared.utils.process_monitor import (
+from utils.process_monitor import (
     get_process_registry, register_process, start_process, stop_process,
     ProcessState, get_process_metrics
 )
