@@ -38,17 +38,17 @@ try:
     try:
         from PIL import Image, ImageDraw
         TRAY_AVAILABLE = True
-        print("✅ System tray functionality available (pystray and PIL installed)")
+        print("[OK] System tray functionality available (pystray and PIL installed)")
     except ImportError as pil_error:
-        print(f"⚠️  PIL/Pillow not available: {pil_error}")
-        print("💡 System tray will be disabled. To enable: pip install pillow")
+        print(f"[WARNING] PIL/Pillow not available: {pil_error}")
+        print("[INFO] System tray will be disabled. To enable: pip install pillow")
         TRAY_AVAILABLE = False
         # Create dummy classes to prevent AttributeError
         Image = None
         ImageDraw = None
 except ImportError as pystray_error:
-    print(f"⚠️  pystray not available: {pystray_error}")
-    print("💡 To enable system tray: pip install pystray pillow")
+    print(f"[WARNING] pystray not available: {pystray_error}")
+    print("[INFO] To enable system tray: pip install pystray pillow")
     TRAY_AVAILABLE = False
     # Create dummy classes to prevent AttributeError
     pystray = None
@@ -64,7 +64,7 @@ try:
     import matplotlib.dates as mdates
     plt.style.use('dark_background')  # Dark theme for charts
     CHARTS_AVAILABLE = True
-    print("✅ Advanced charts available (matplotlib installed)")
+    print("[OK] Advanced charts available (matplotlib installed)")
 except ImportError as e:
     CHARTS_AVAILABLE = False
     plt = None
@@ -72,8 +72,8 @@ except ImportError as e:
     Figure = None
     animation = None
     mdates = None
-    print(f"⚠️  matplotlib not available: {e}")
-    print("💡 To enable advanced charts: pip install matplotlib")
+    print(f"[WARNING] matplotlib not available: {e}")
+    print("[INFO] To enable advanced charts: pip install matplotlib")
 
 try:
     import psutil  # For real system monitoring
@@ -86,12 +86,12 @@ except ImportError:
 try:
     from utils.process_monitor_gui import ProcessMonitorWidget, create_process_monitor_tab
     PROCESS_MONITOR_AVAILABLE = True
-    print("✅ Enhanced process monitoring available")
+    print("[OK] Enhanced process monitoring available")
 except ImportError as e:
     PROCESS_MONITOR_AVAILABLE = False
     ProcessMonitorWidget = None
     create_process_monitor_tab = None
-    print(f"⚠️  Enhanced process monitoring not available: {e}")
+    print(f"[WARNING] Enhanced process monitoring not available: {e}")
 
 # --- ULTRA MODERN UI CONSTANTS ---
 class ModernTheme:
@@ -634,7 +634,7 @@ class SettingsDialog:
     def show(self):
         """Show the settings dialog"""
         self.dialog = tk.Toplevel(self.parent)
-        self.dialog.title("⚙️ Server Settings")
+        self.dialog.title("Server Settings")
         self.dialog.geometry("500x600")
         self.dialog.configure(bg=ModernTheme.PRIMARY_BG)
         self.dialog.transient(self.parent)
@@ -1168,7 +1168,7 @@ class ServerGUI:
                 wait_count += 1
 
             if self.gui_enabled:
-                print("✅ Enhanced Modern GUI initialized successfully!")
+                print("[OK] Enhanced Modern GUI initialized successfully!")
                 return True
             else:
                 print("❌ Modern GUI initialization timed out")
@@ -1197,7 +1197,7 @@ class ServerGUI:
             if self.tray_icon:
                 try:
                     self.tray_icon.stop()
-                    print("✅ System tray stopped")
+                    print("[OK] System tray stopped")
                 except Exception as e:
                     print(f"Warning: Failed to stop tray icon: {e}")
             
@@ -1205,7 +1205,7 @@ class ServerGUI:
             if self.root:
                 try:
                     self.root.quit()
-                    print("✅ GUI root window closed")
+                    print("[OK] GUI root window closed")
                 except Exception as e:
                     print(f"Warning: Failed to quit GUI root window: {e}")
             
@@ -1216,7 +1216,7 @@ class ServerGUI:
                 if self.gui_thread.is_alive():
                     print("Warning: GUI thread did not complete within timeout")
                 else:
-                    print("✅ GUI thread completed successfully")
+                    print("[OK] GUI thread completed successfully")
                     
         except Exception as e:
             print(f"Error during shutdown: {e}")
@@ -1347,10 +1347,10 @@ class ServerGUI:
                              fg=ModernTheme.TEXT_PRIMARY,
                              activebackground=ModernTheme.ACCENT_BLUE)
         menubar.add_cascade(label="Server", menu=server_menu)
-        server_menu.add_command(label="⚙️ Settings...", command=self._show_settings)
+        server_menu.add_command(label="Settings...", command=self._show_settings)
         server_menu.add_command(label="🔄 Restart Server", command=self._restart_server)
         server_menu.add_separator()
-        server_menu.add_command(label="🗑️ Clear Activity Log", command=self._clear_activity_log)
+        server_menu.add_command(label="Clear Activity Log", command=self._clear_activity_log)
 
         # View menu
         view_menu = tk.Menu(menubar, tearoff=0, bg=ModernTheme.CARD_BG,
@@ -1368,7 +1368,7 @@ class ServerGUI:
                            activebackground=ModernTheme.ACCENT_BLUE)
         menubar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="📖 Documentation", command=self._show_documentation)
-        help_menu.add_command(label="ℹ️ About", command=self._show_about)
+        help_menu.add_command(label="About", command=self._show_about)
 
     def _create_header(self, parent):
         """Create header with title and clock"""
@@ -1585,21 +1585,21 @@ class ServerGUI:
                               relief="flat", bd=0, padx=15, pady=5)
         details_btn.pack(side="left", padx=5)
 
-        view_content_btn = tk.Button(control_frame, text="👁️ View Content",
+        view_content_btn = tk.Button(control_frame, text="View Content",
                                    command=self._view_file_content,
                                    bg=ModernTheme.ACCENT_PURPLE, fg=ModernTheme.TEXT_PRIMARY,
                                    font=(ModernTheme.FONT_FAMILY, ModernTheme.FONT_SIZE_SMALL),
                                    relief="flat", bd=0, padx=15, pady=5)
         view_content_btn.pack(side="left", padx=2)
 
-        verify_btn = tk.Button(control_frame, text="✅ Verify",
+        verify_btn = tk.Button(control_frame, text="Verify",
                              command=self._verify_file,
                              bg=ModernTheme.SUCCESS, fg=ModernTheme.TEXT_PRIMARY,
                              font=(ModernTheme.FONT_FAMILY, 10, 'bold'),
                              relief="flat", bd=0, padx=15, pady=5)
         verify_btn.pack(side="left", padx=5)
 
-        delete_btn = tk.Button(control_frame, text="🗑️ Delete",
+        delete_btn = tk.Button(control_frame, text="Delete",
                              command=self._delete_file,
                              bg=ModernTheme.ERROR, fg=ModernTheme.TEXT_PRIMARY,
                              font=(ModernTheme.FONT_FAMILY, 10, 'bold'),
@@ -1671,7 +1671,7 @@ class ServerGUI:
             ('total_files', '📁 Total Files:', '0'),
             ('total_size', '💾 Total Size:', '0 MB'),
             ('avg_file_size', '📊 Avg File Size:', '0 MB'),
-            ('success_rate', '✅ Success Rate:', '100%'),
+            ('success_rate', 'Success Rate:', '100%'),
             ('peak_clients', '👥 Peak Clients:', '0'),
             ('uptime_days', '⏰ Uptime:', '0 days')
         ]
@@ -1775,7 +1775,7 @@ class ServerGUI:
 
     def _create_compact_server_status_card(self, parent):
         """Create compact server status card with glass morphism"""
-        card = GlassMorphismCard(parent, title="🖥️ Server Status")
+        card = GlassMorphismCard(parent, title="Server Status")
         card.pack(fill="x", pady=(0, 8), padx=3)
 
         # Status display
@@ -1804,7 +1804,7 @@ class ServerGUI:
         uptime_frame.pack(fill="x", padx=10, pady=(2, 8))
         tk.Label(uptime_frame, text="Uptime:", bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_SECONDARY,
                 font=(ModernTheme.FONT_FAMILY,  9)).pack(side="left")
-        self.status_labels['uptime'] = tk.Label(uptime_frame, text="⏱️ 00:00:00",
+        self.status_labels['uptime'] = tk.Label(uptime_frame, text="Uptime: 00:00:00",
                                               bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_PRIMARY,
                                               font=(ModernTheme.FONT_FAMILY, 9))
         self.status_labels['uptime'].pack(side="right")
@@ -1924,7 +1924,7 @@ class ServerGUI:
 
     def _create_compact_maintenance_card(self, parent):
         """Create compact maintenance statistics card"""
-        card = ModernCard(parent, title="⚙️ Maintenance") # Changed to ModernCard
+        card = ModernCard(parent, title="Maintenance") # Changed to ModernCard
         card.pack(fill="x", pady=(0, 8), padx=3)
 
         # Files cleaned
@@ -1976,7 +1976,7 @@ class ServerGUI:
         title.pack(side="left")
 
         # Clear log button (smaller)
-        clear_btn = tk.Button(title_frame, text="🗑️", command=self._clear_activity_log,
+        clear_btn = tk.Button(title_frame, text="Clear", command=self._clear_activity_log,
                              bg=ModernTheme.WARNING, fg=ModernTheme.TEXT_PRIMARY,
                              font=(ModernTheme.FONT_FAMILY, 8, 'bold'), relief="flat", bd=0, padx=5, pady=2)
         clear_btn.pack(side="right")

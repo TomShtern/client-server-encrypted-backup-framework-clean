@@ -6,5 +6,8 @@
         "-DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake"
     ],
     "cmake.buildDirectory": "${workspaceFolder}/build",
-    "cmake.generator": "Visual Studio 17 2022"
+    "cmake.generator": "Visual Studio 17 2022",
+    "augment.nextEdit.enableGlobalBackgroundSuggestions": true,
+    "augment.nextEdit.showDiffInHover": true,
+    "augment.nextEdit.highlightSuggestionsInTheEditor": true
 }
