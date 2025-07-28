@@ -92,6 +92,31 @@ except ImportError as e:
     ProcessMonitorWidget = None
     create_process_monitor_tab = None
     print(f"[WARNING] Enhanced process monitoring not available: {e}")
+    
+    
+    #SENTRY
+    import sentry_sdk
+
+sentry_sdk.init(
+    dsn="https://094a0bee5d42a7f7e8ec8a78a37c8819@o4509746411470848.ingest.us.sentry.io/4509747877773312",
+    # Add data like request headers and IP for users,
+    # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+    send_default_pii=True,
+)
+    
+    division_by_zero = 1 / 0
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
 # --- ULTRA MODERN UI CONSTANTS ---
 class ModernTheme:
