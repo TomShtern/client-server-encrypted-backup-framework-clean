@@ -350,7 +350,7 @@ class NetworkServer:
                 logger.info(f"Request received from {log_client_identifier}: Version={version_from_header}, Code={code_from_header}, PayloadSize={payload_size_from_header}")
                 
                 # Protocol Version Check (flexible compatibility)
-                from protocol import validate_protocol_version
+                from .protocol import validate_protocol_version
                 
                 if not validate_protocol_version(version_from_header):
                     logger.warning(f"Incompatible client protocol version {version_from_header} received from {log_client_identifier}. Closing connection.")

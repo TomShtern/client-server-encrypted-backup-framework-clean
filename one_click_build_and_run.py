@@ -100,14 +100,12 @@ def main():
     # Check CMake
     exists, version = check_command_exists("cmake")
     if not exists:
-        print("[ERROR] CMake is not installed or not in PATH")
-        print("Please install CMake 3.15+ and add it to your PATH")
-        try:
-            input("Press Enter to exit...")
-        except EOFError:
-            pass
-        sys.exit(1)
-    print(f"[OK] CMake found: {version.split()[2] if 'version' in version else version}")
+        print("[WARNING] CMake is not installed or not in PATH")
+        print("Skipping C++ build phases - will run existing components only")
+        skip_build = True
+    else:
+        print(f"[OK] CMake found: {version.split()[2] if 'version' in version else version}")
+        skip_build = False
     
     # Check Git (optional)
     exists, version = check_command_exists("git")
@@ -120,62 +118,84 @@ def main():
     print("Prerequisites check completed successfully!")
     print()
     
-    # ========================================================================
-    # PHASE 2: CMAKE CONFIGURATION AND VCPKG SETUP
-    # ========================================================================
-    print_phase(2, 6, "Configuring Build System")
-    
-    print("Calling scripts\\build\\configure_cmake.bat for CMake + vcpkg setup...")
-    print()
-    
-    if not run_command("call scripts\\build\\configure_cmake.bat"):
+    if not skip_build:
+        # ========================================================================
+        # PHASE 2: CMAKE CONFIGURATION AND VCPKG SETUP
+        # ========================================================================
+        print_phase(2, 6, "Configuring Build System")
+        
+        print("Calling scripts\\build\\configure_cmake.bat for CMake + vcpkg setup...")
         print()
-        print("[ERROR] CMake configuration failed!")
-        print("Check the output above for details.")
-        try:
-            input("Press Enter to exit...")
-        except EOFError:
-            pass
-        sys.exit(1)
-    
-    print()
-    print("[OK] CMake configuration completed successfully!")
-    print()
-    
-    # ========================================================================
-    # PHASE 3: BUILD C++ CLIENT
-    # ========================================================================
-    print_phase(3, 6, "Building C++ Client")
-    
-    print("Building EncryptedBackupClient.exe with CMake...")
-    print("Command: cmake --build build --config Release")
-    print()
-    
-    if not run_command("cmake --build build --config Release"):
+        
+        if not run_command("call scripts\\build\\configure_cmake.bat"):
+            print()
+            print("[ERROR] CMake configuration failed!")
+            print("Check the output above for details.")
+            try:
+                input("Press Enter to exit...")
+            except EOFError:
+                pass
+            sys.exit(1)
+        
         print()
-        print("[ERROR] C++ client build failed!")
-        print("Check the compiler output above for details.")
-        try:
-            input("Press Enter to exit...")
-        except EOFError:
-            pass
-        sys.exit(1)
-    
-    # Verify the executable was created
-    exe_path = Path("build/Release/EncryptedBackupClient.exe")
-    if not exe_path.exists():
-        print("[ERROR] EncryptedBackupClient.exe was not created!")
-        print(f"Expected location: {exe_path}")
-        try:
-            input("Press Enter to exit...")
-        except EOFError:
-            pass
-        sys.exit(1)
-    
-    print()
-    print("[OK] C++ client built successfully!")
-    print(f"   Location: {exe_path}")
-    print()
+        print("[OK] CMake configuration completed successfully!")
+        print()
+        
+        # ========================================================================
+        # PHASE 3: BUILD C++ CLIENT
+        # ========================================================================
+        print_phase(3, 6, "Building C++ Client")
+        
+        print("Building EncryptedBackupClient.exe with CMake...")
+        print("Command: cmake --build build --config Release")
+        print()
+        
+        if not run_command("cmake --build build --config Release"):
+            print()
+            print("[ERROR] C++ client build failed!")
+            print("Check the compiler output above for details.")
+            try:
+                input("Press Enter to exit...")
+            except EOFError:
+                pass
+            sys.exit(1)
+        
+        # Verify the executable was created
+        exe_path = Path("build/Release/EncryptedBackupClient.exe")
+        if not exe_path.exists():
+            print("[ERROR] EncryptedBackupClient.exe was not created!")
+            print(f"Expected location: {exe_path}")
+            try:
+                input("Press Enter to exit...")
+            except EOFError:
+                pass
+            sys.exit(1)
+        
+        print()
+        print("[OK] C++ client built successfully!")
+        print(f"   Location: {exe_path}")
+        print()
+    else:
+        print()
+        print_phase(2, 6, "Skipping Build System Configuration")
+        print("[INFO] CMake not available - skipping build phases")
+        print("Will use existing C++ client if available")
+        print()
+        
+        print_phase(3, 6, "Checking Existing C++ Client")
+        exe_path = Path("build/Release/EncryptedBackupClient.exe")
+        if exe_path.exists():
+            print(f"[OK] Found existing C++ client: {exe_path}")
+        else:
+            alt_path = Path("client/EncryptedBackupClient.exe")
+            if alt_path.exists():
+                print(f"[OK] Found existing C++ client: {alt_path}")
+            else:
+                print("[WARNING] No C++ client found - web uploads may not work")
+                print("Available locations checked:")
+                print(f"  - {exe_path}")
+                print(f"  - {alt_path}")
+        print()
     
     # ========================================================================
     # PHASE 4: PYTHON ENVIRONMENT SETUP
@@ -198,6 +218,10 @@ def main():
         print("[WARNING] requirements.txt not found")
         print("Installing basic dependencies manually...")
         run_command("pip install cryptography pycryptodome psutil flask", check_exit=False)
+    
+    # Install additional GUI dependencies
+    print("Installing GUI-specific dependencies...")
+    run_command("pip install sentry-sdk flask-cors", check_exit=False)
     
     print()
     

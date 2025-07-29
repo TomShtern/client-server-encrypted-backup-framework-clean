@@ -36,9 +36,9 @@ class RealBackupExecutor:
         # Try different possible locations for the client executable
         if not client_exe_path:
             possible_paths = [
+                r"client\EncryptedBackupClient.exe",
                 r"build\Release\EncryptedBackupClient.exe",
                 r"client\EncryptedBackupClient_backup.exe",
-                r"client\EncryptedBackupClient.exe",
                 r"EncryptedBackupClient.exe"
             ]
             
@@ -523,12 +523,18 @@ class RealBackupExecutor:
             # Mark file as in use by subprocess to prevent premature cleanup
             self.file_manager.mark_in_subprocess_use(transfer_file_id)
             
-            # Use the current working directory (where we copied transfer.info) instead of client directory
-            # This ensures the client finds transfer.info in the current working directory
-            current_working_dir = os.getcwd()
+            # Determine best working directory - use client directory if executable is there
+            if "client" in self.client_exe.lower():
+                client_working_dir = "client"
+                # Copy transfer.info to client directory too
+                client_transfer_info = os.path.join(client_working_dir, "transfer.info")
+                self.file_manager.copy_to_locations(transfer_file_id, [client_transfer_info])
+            else:
+                client_working_dir = os.getcwd()
+                
             self._log_status("DEBUG", f"Client executable: {os.path.abspath(self.client_exe)}")
-            self._log_status("DEBUG", f"Client working directory: {current_working_dir}")
-            self._log_status("DEBUG", f"Transfer.info location: {os.path.join(current_working_dir, 'transfer.info')}")
+            self._log_status("DEBUG", f"Client working directory: {client_working_dir}")
+            self._log_status("DEBUG", f"Transfer.info location: {os.path.join(client_working_dir, 'transfer.info')}")
 
             # Register process with enhanced monitoring system
             process_id = f"backup_client_{int(time.time())}"
@@ -539,7 +545,7 @@ class RealBackupExecutor:
                 process_id=process_id,
                 name="EncryptedBackupClient",
                 command=command,
-                cwd=current_working_dir,
+                cwd=client_working_dir,
                 auto_restart=False,  # Don't auto-restart backup processes
                 max_restarts=0
             )

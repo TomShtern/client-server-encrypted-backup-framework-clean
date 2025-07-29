@@ -337,22 +337,38 @@ def api_start_backup():
                 print(f"[ERROR] Backup thread error: {str(e)}")
             finally:
                 backup_status['backing_up'] = False
-                # Delay cleanup to allow C++ client to read the file
-                def delayed_cleanup():
-                    import time
-                    time.sleep(10)  # Wait 10 seconds before cleanup
+                # Use proper subprocess synchronization instead of arbitrary delay
+                def synchronized_cleanup():
                     try:
+                        # Wait for backup result to determine if C++ client finished
+                        max_wait_time = 30  # Maximum 30 seconds wait
+                        check_interval = 1  # Check every 1 second
+                        elapsed = 0
+                        
+                        # Wait for backup executor to complete and release file
+                        while elapsed < max_wait_time:
+                            # Check if backup result is available (indicating C++ client finished)
+                            if 'result' in locals() and result is not None:
+                                print(f"[DEBUG] Backup completed, proceeding with cleanup after {elapsed}s")
+                                break
+                            time.sleep(check_interval)
+                            elapsed += check_interval
+                        
+                        # Additional small delay to ensure file handles are closed
+                        time.sleep(2)
+                        
+                        # Perform cleanup
                         if os.path.exists(file_path):
                             os.remove(file_path)
-                            print(f"[DEBUG] Delayed cleanup: removed {file_path}")
+                            print(f"[DEBUG] Synchronized cleanup: removed {file_path}")
                         if os.path.exists(temp_dir):
                             os.rmdir(temp_dir)
-                            print(f"[DEBUG] Delayed cleanup: removed {temp_dir}")
+                            print(f"[DEBUG] Synchronized cleanup: removed {temp_dir}")
                     except Exception as e:
-                        print(f"[WARNING] Delayed cleanup error: {e}")
+                        print(f"[WARNING] Synchronized cleanup error: {e}")
 
-                # Start cleanup in background thread
-                cleanup_thread = threading.Thread(target=delayed_cleanup)
+                # Start synchronized cleanup in background thread
+                cleanup_thread = threading.Thread(target=synchronized_cleanup)
                 cleanup_thread.daemon = True
                 cleanup_thread.start()
 

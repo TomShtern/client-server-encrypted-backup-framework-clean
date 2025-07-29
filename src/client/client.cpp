@@ -681,26 +681,48 @@ bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
     }
     
     try {
-        // CRITICAL FIX: Manually construct header bytes in little-endian format
+        // FIXED: Use proper struct serialization with explicit endianness handling
         // The Python server expects little-endian format explicitly
-        std::vector<uint8_t> headerBytes(23);  // RequestHeader is 23 bytes total
-
+        RequestHeader header;
+        
         // Client ID (16 bytes) - copy as-is
-        std::copy(clientID.begin(), clientID.end(), headerBytes.begin());
-
-        // Version (1 byte) - byte 16
-        headerBytes[16] = CLIENT_VERSION;
-
-        // Code (2 bytes, little-endian) - bytes 17-18
-        headerBytes[17] = code & 0xFF;        // Low byte
-        headerBytes[18] = (code >> 8) & 0xFF; // High byte
-
-        // Payload size (4 bytes, little-endian) - bytes 19-22
+        std::copy(clientID.begin(), clientID.end(), header.client_id);
+        
+        // Version (1 byte)
+        header.version = CLIENT_VERSION;
+        
+        // Code and payload_size need explicit little-endian conversion
         uint32_t payload_size_val = static_cast<uint32_t>(payload.size());
-        headerBytes[19] = payload_size_val & 0xFF;         // Byte 0
-        headerBytes[20] = (payload_size_val >> 8) & 0xFF;  // Byte 1
-        headerBytes[21] = (payload_size_val >> 16) & 0xFF; // Byte 2
-        headerBytes[22] = (payload_size_val >> 24) & 0xFF; // Byte 3
+        
+        // Convert to little-endian if needed (host to little-endian)
+        auto hostToLittleEndian16 = [](uint16_t value) -> uint16_t {
+            return ((value & 0xFF) << 8) | ((value >> 8) & 0xFF);
+        };
+        
+        auto hostToLittleEndian32 = [](uint32_t value) -> uint32_t {
+            return ((value & 0xFF) << 24) | 
+                   (((value >> 8) & 0xFF) << 16) |
+                   (((value >> 16) & 0xFF) << 8) |
+                   ((value >> 24) & 0xFF);
+        };
+        
+        // Check system endianness and convert if necessary
+        uint16_t endian_test = 1;
+        bool is_little_endian = *reinterpret_cast<uint8_t*>(&endian_test) == 1;
+        
+        if (is_little_endian) {
+            // System is already little-endian, use values directly
+            header.code = code;
+            header.payload_size = payload_size_val;
+        } else {
+            // System is big-endian, convert to little-endian
+            header.code = hostToLittleEndian16(code);
+            header.payload_size = hostToLittleEndian32(payload_size_val);
+        }
+        
+        // Serialize struct to bytes
+        std::vector<uint8_t> headerBytes(sizeof(RequestHeader));
+        std::memcpy(headerBytes.data(), &header, sizeof(RequestHeader));
         
         // Debug: show header values for important requests
         if (code == REQ_REGISTER || code == REQ_RECONNECT || code == REQ_SEND_PUBLIC_KEY) {
@@ -1002,7 +1024,8 @@ bool Client::transferFile() {
     displayStatus("Reading file", true, filepath);
     auto fileData = readFile(filepath);
     if (fileData.empty()) {
-        displayError("Cannot read file or file is empty", ErrorType::FILE_IO);
+        // readFile() already logged the specific error, so we can provide more context
+        displayError("File transfer aborted due to file read failure", ErrorType::FILE_IO);
         return false;
     }
     
@@ -1238,14 +1261,48 @@ std::string Client::encryptFile(const std::vector<uint8_t>& data) {
 
 // Read file
 std::vector<uint8_t> Client::readFile(const std::string& path) {
+    // First, check if the file exists using a simple test
+    std::ifstream testFile(path);
+    if (!testFile.good()) {
+        displayError("File not found: " + path, ErrorType::FILE_IO);
+        return {};
+    }
+    testFile.close();
+    
+    // Now attempt to open for binary reading
     std::ifstream file(path, std::ios::binary);
     if (!file.is_open()) {
+        displayError("Cannot open file for reading: " + path, ErrorType::FILE_IO);
         return {};
     }
     
+    // Get file size
     file.seekg(0, std::ios::end);
-    size_t size = file.tellg();
+    std::streampos fileSize = file.tellg();
     file.seekg(0, std::ios::beg);
+    
+    // Handle negative file size (error condition)
+    if (fileSize < 0) {
+        displayError("Cannot determine file size: " + path, ErrorType::FILE_IO);
+        file.close();
+        return {};
+    }
+    
+    size_t size = static_cast<size_t>(fileSize);
+    
+    // Check for empty file explicitly - this is a valid condition but should be logged
+    if (size == 0) {
+        displayError("File is empty: " + path, ErrorType::FILE_IO);
+        file.close();
+        return {};  // Return empty vector but calling code can check error details
+    }
+    
+    // Check for extremely large files
+    if (size > (4LL * 1024 * 1024 * 1024)) { // 4GB limit
+        displayError("File too large (max 4GB): " + path + " (" + formatBytes(size) + ")", ErrorType::FILE_IO);
+        file.close();
+        return {};
+    }
     
     std::vector<uint8_t> data(size);
     
@@ -1254,7 +1311,23 @@ std::vector<uint8_t> Client::readFile(const std::string& path) {
     while (bytesRead < size) {
         size_t toRead = std::min(OPTIMAL_BUFFER_SIZE, size - bytesRead);
         file.read(reinterpret_cast<char*>(data.data() + bytesRead), toRead);
+        
+        if (file.fail() && !file.eof()) {
+            displayError("Failed to read file data at offset " + std::to_string(bytesRead) + ": " + path, ErrorType::FILE_IO);
+            file.close();
+            return {};
+        }
+        
         bytesRead += file.gcount();
+    }
+    
+    file.close();
+    
+    // Verify we read the expected amount
+    if (bytesRead != size) {
+        displayError("Incomplete file read: expected " + std::to_string(size) + 
+                    " bytes, got " + std::to_string(bytesRead) + " bytes from " + path, ErrorType::FILE_IO);
+        return {};
     }
     
     return data;

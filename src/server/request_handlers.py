@@ -438,7 +438,7 @@ class RequestHandler:
             return self.server._send_response(sock, code, payload)
         else:
             # Fallback implementation using protocol module
-            from protocol import construct_response
+            from .protocol import construct_response
             
             try:
                 response_data = construct_response(code, payload)

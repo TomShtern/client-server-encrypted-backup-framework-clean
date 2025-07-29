@@ -84,7 +84,7 @@ except ImportError:
 
 # Import enhanced process monitoring
 try:
-    from utils.process_monitor_gui import ProcessMonitorWidget, create_process_monitor_tab
+    from ..shared.utils.process_monitor_gui import ProcessMonitorWidget, create_process_monitor_tab
     PROCESS_MONITOR_AVAILABLE = True
     print("[OK] Enhanced process monitoring available")
 except ImportError as e:
@@ -94,17 +94,23 @@ except ImportError as e:
     print(f"[WARNING] Enhanced process monitoring not available: {e}")
     
     
-    #SENTRY
+# SENTRY - Initialize error tracking
+try:
     import sentry_sdk
+    sentry_sdk.init(
+        dsn="https://094a0bee5d42a7f7e8ec8a78a37c8819@o4509746411470848.ingest.us.sentry.io/4509747877773312",
+        # Add data like request headers and IP for users,
+        # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+        send_default_pii=True,
+    )
+    print("[OK] Sentry error tracking initialized")
+except ImportError:
+    print("[WARNING] Sentry not available - error tracking disabled")
+except Exception as e:
+    print(f"[WARNING] Sentry initialization failed: {e}")
 
-sentry_sdk.init(
-    dsn="https://094a0bee5d42a7f7e8ec8a78a37c8819@o4509746411470848.ingest.us.sentry.io/4509747877773312",
-    # Add data like request headers and IP for users,
-    # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
-    send_default_pii=True,
-)
-    
-    division_by_zero = 1 / 0
+# Sentry test - uncomment to test error reporting
+# division_by_zero = 1 / 0
     
     
     
@@ -1272,10 +1278,16 @@ class ServerGUI:
                 # Force window to front and make it visible
                 self.root.lift()
                 self.root.attributes('-topmost', True)
-                self.root.after(100, lambda: self.root.attributes('-topmost', False) if self.root else None)
+                self.root.after(1000, lambda: self.root.attributes('-topmost', False) if self.root else None)
                 self.root.focus_force()
                 self.root.deiconify()  # Ensure window is not minimized
                 self.root.state('normal')  # Ensure window is in normal state
+                
+                # Additional visibility fixes
+                self.root.wm_state('normal')
+                self.root.tkraise()
+                self.root.grab_set()  # Keep focus initially
+                self.root.after(2000, lambda: self.root.grab_release() if self.root else None)
 
                 print("Root window configured with modern theme")
             except Exception as e:
@@ -2814,6 +2826,18 @@ class ServerGUI:
             # Update real-time elements
             self._update_clock()
             self._update_performance_metrics()
+            
+            # Auto-refresh file table every 5 seconds when server is running
+            # This ensures new files appear automatically without manual refresh
+            if self.status.running and hasattr(self, '_last_file_refresh_time'):
+                current_time = time.time()
+                if current_time - self._last_file_refresh_time >= 5.0:  # 5 second interval
+                    if hasattr(self, 'current_tab') and self.current_tab == 'files':
+                        self._refresh_file_table()
+                    self._last_file_refresh_time = current_time
+            elif self.status.running and not hasattr(self, '_last_file_refresh_time'):
+                # Initialize refresh timer
+                self._last_file_refresh_time = time.time()
 
             # Update uptime if server is running
             if self.status.running:
