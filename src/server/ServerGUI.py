@@ -79,6 +79,7 @@ try:
     import psutil  # For real system monitoring
     SYSTEM_MONITOR_AVAILABLE = True
 except ImportError:
+    psutil = None  # Explicitly set to None when not available
     SYSTEM_MONITOR_AVAILABLE = False
     print("Warning: psutil not available - real system monitoring disabled, using simulated data")
 
@@ -2327,26 +2328,33 @@ class ServerGUI:
 
         try:
             # Get real system stats with comprehensive error handling
-            cpu_percent = psutil.cpu_percent(interval=None)  # Non-blocking call
-            memory_info = psutil.virtual_memory()
-            mem_percent = memory_info.percent
-            
-            # Find the disk usage for the drive where the script is running
-            try:
-                script_path = os.path.abspath(sys.argv[0])
-                disk_path = os.path.splitdrive(script_path)[0]
-                if not disk_path:  # Unix-like systems
-                    disk_path = '/'
-                disk_usage = psutil.disk_usage(disk_path)
-                disk_usage_percent = disk_usage.percent
-            except Exception as disk_error:
-                print(f"Warning: Failed to get disk usage: {disk_error}")
+            if not SYSTEM_MONITOR_AVAILABLE or psutil is None:
+                # Fallback when psutil is not available
+                cpu_percent = 0
+                mem_percent = 0
                 disk_usage_percent = None
+                network_status = "N/A"
+            else:
+                cpu_percent = psutil.cpu_percent(interval=None)  # Non-blocking call
+                memory_info = psutil.virtual_memory()
+                mem_percent = memory_info.percent
+
+                # Find the disk usage for the drive where the script is running
+                try:
+                    script_path = os.path.abspath(sys.argv[0])
+                    disk_path = os.path.splitdrive(script_path)[0]
+                    if not disk_path:  # Unix-like systems
+                        disk_path = '/'
+                    disk_usage = psutil.disk_usage(disk_path)
+                    disk_usage_percent = disk_usage.percent
+                except Exception as disk_error:
+                    print(f"Warning: Failed to get disk usage: {disk_error}")
+                    disk_usage_percent = None
 
             # Network activity monitoring
             try:
                 # Add proper bounds checking for psutil
-                if SYSTEM_MONITOR_AVAILABLE and 'psutil' in globals():
+                if SYSTEM_MONITOR_AVAILABLE and psutil is not None:
                     network_stats = psutil.net_io_counters()
                     if hasattr(self, 'last_network_bytes'):
                         bytes_diff = (network_stats.bytes_sent + network_stats.bytes_recv) - self.last_network_bytes

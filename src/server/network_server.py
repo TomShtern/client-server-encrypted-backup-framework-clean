@@ -337,6 +337,11 @@ class NetworkServer:
         try:
             client_conn.settimeout(CLIENT_SOCKET_TIMEOUT)
             
+            # Send initial server version greeting to establish protocol compatibility
+            # Client expects ResponseHeader: version(1) + code(2) + payload_size(4) = 7 bytes
+            version_greeting = struct.pack("<BHI", SERVER_VERSION, 0, 0)  # version=3, code=0, payload_size=0
+            client_conn.sendall(version_greeting)
+            
             # Main loop for handling requests from this client
             while not self.shutdown_event.is_set():
                 # Read Request Header (23 bytes)

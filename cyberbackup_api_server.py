@@ -24,6 +24,9 @@ import psutil
 # Import our real backup executor
 from src.api.real_backup_executor import RealBackupExecutor
 
+# Import singleton manager to prevent multiple API server instances
+from src.server.server_singleton import ensure_single_server_instance
+
 app = Flask(__name__)
 CORS(app)  # Enable CORS for local development
 
@@ -426,6 +429,11 @@ if __name__ == "__main__":
 
     print()
     print("[ROCKET] Starting Flask API server...")
+    
+    # Ensure only one API server instance runs at a time
+    print("Ensuring single API server instance...")
+    ensure_single_server_instance("APIServer", 9090)
+    print("Singleton lock acquired for API server")
 
     try:
         app.run(

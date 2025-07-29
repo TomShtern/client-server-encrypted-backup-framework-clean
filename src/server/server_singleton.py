@@ -90,8 +90,21 @@ class ServerSingletonManager:
 
         except Exception as e:
             logger.error(f"Failed to terminate process {pid}: {e}", exc_info=True)
-            # This is critical, if we can't kill the old process, the new one shouldn't start.
-            raise RuntimeError(f"Could not terminate existing process {pid}.") from e
+            # Force kill using system command as last resort
+            try:
+                import subprocess
+                if os.name == 'nt':  # Windows
+                    subprocess.run(['taskkill', '/F', '/PID', str(pid)], capture_output=True)
+                    logger.warning(f"Used taskkill to force terminate PID {pid}")
+                    time.sleep(2)
+                else:  # Unix-like
+                    subprocess.run(['kill', '-9', str(pid)], capture_output=True)
+                    logger.warning(f"Used kill -9 to force terminate PID {pid}")
+                    time.sleep(2)
+            except Exception as force_kill_error:
+                logger.critical(f"CRITICAL: Even force kill failed for PID {pid}: {force_kill_error}")
+                # This is critical, if we can't kill the old process, the new one shouldn't start.
+                raise RuntimeError(f"Could not terminate existing process {pid} - system may be in inconsistent state.") from e
 
     def acquire_lock(self) -> bool:
         """
@@ -165,10 +178,12 @@ def ensure_single_server_instance(server_name: str = "BackupServer", port: int =
     singleton = ServerSingletonManager(server_name, port)
     
     if not singleton.acquire_lock():
-        print(f"\n❌ ERROR: Could not acquire singleton lock for {server_name} on port {port}.")
+        print(f"\n❌ CRITICAL ERROR: Could not acquire singleton lock for {server_name} on port {port}.")
         print("   Another instance may be running and could not be terminated,")
         print("   or the port might be in use by another application.")
-        sys.exit(1)
+        print("   This is a FATAL error - process will terminate immediately.")
+        logger.critical(f"FATAL: Singleton lock acquisition failed for {server_name}:{port}")
+        os._exit(1)  # Force immediate exit, bypassing any exception handlers
     
     return singleton
 
