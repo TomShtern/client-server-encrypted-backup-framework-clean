@@ -45,12 +45,12 @@ def print_phase(phase_num, total_phases, title):
     print(f"[PHASE {phase_num}/{total_phases}] {title}...")
     print("-" * 40)
 
-def run_command(command, shell=True, check_exit=True):
+def run_command(command, shell=True, check_exit=True, cwd=None):
     """Run a command and handle errors"""
     print(f"Running: {command}")
     print()
     
-    result = subprocess.run(command, shell=shell)
+    result = subprocess.run(command, shell=shell, cwd=cwd)
     
     if check_exit and result.returncode != 0:
         print()
@@ -338,14 +338,14 @@ def main():
         print("[OK] RSA private key found")
     else:
         print("[WARNING] RSA private key missing - generating keys...")
-        run_command("python scripts\\create_working_keys.py", check_exit=False)
+        run_command("python scripts\\security\\key-generation\\create_working_keys.py", check_exit=False)
     
     public_key = data_dir / "valid_public_key.der"
     if public_key.exists():
         print("[OK] RSA public key found")
     else:
         print("[WARNING] RSA public key missing - generating keys...")
-        run_command("python scripts\\create_working_keys.py", check_exit=False)
+        run_command("python scripts\\security\\key-generation\\create_working_keys.py", check_exit=False)
     
     # Check if transfer.info exists
     transfer_info = data_dir / "transfer.info"
@@ -537,15 +537,15 @@ def main():
     api_server_running = check_api_server_status()
     
     try:
-        print(f"   🔒 Backup Server:  {'✅ Running on port 1256' if backup_server_running else '❌ Not responding on port 1256'}")
-        print(f"   🌐 API Server:     {'✅ Running on port 9090' if api_server_running else '❌ Not responding on port 9090'}")
-        print(f"   📊 Web GUI:        {'✅ http://localhost:9090' if api_server_running else '❌ Not available (API server down)'}")
-        print(f"   🖥️  Server GUI:     {'✅ Started automatically' if backup_server_running else '❌ Check server console'}")
+        print(f"   [SERVER] Backup Server:  {'[OK] Running on port 1256' if backup_server_running else '[ERROR] Not responding on port 1256'}")
+        print(f"   [API] API Server:     {'[OK] Running on port 9090' if api_server_running else '[ERROR] Not responding on port 9090'}")
+        print(f"   [GUI] Web GUI:        {'[OK] http://localhost:9090' if api_server_running else '[ERROR] Not available (API server down)'}")
+        print(f"   [GUI] Server GUI:     {'[OK] Started automatically' if backup_server_running else '[ERROR] Check server console'}")
     except UnicodeEncodeError:
-        print(f"   Backup Server:  {'Running on port 1256' if backup_server_running else 'Not responding on port 1256'}")
-        print(f"   API Server:     {'Running on port 9090' if api_server_running else 'Not responding on port 9090'}")
-        print(f"   Web GUI:        {'http://localhost:9090' if api_server_running else 'Not available (API server down)'}")
-        print(f"   Server GUI:     {'Started automatically' if backup_server_running else 'Check server console'}")
+        print(f"   [SERVER] Backup Server:  {'Running on port 1256' if backup_server_running else 'Not responding on port 1256'}")
+        print(f"   [API] API Server:     {'Running on port 9090' if api_server_running else 'Not responding on port 9090'}")
+        print(f"   [GUI] Web GUI:        {'http://localhost:9090' if api_server_running else 'Not available (API server down)'}")
+        print(f"   [GUI] Server GUI:     {'Started automatically' if backup_server_running else 'Check server console'}")
     print()
     if server_started_successfully and api_server_running:
         print("Next steps:")

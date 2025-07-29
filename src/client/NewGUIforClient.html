@@ -4704,7 +4704,7 @@
                     debugPanel.style.maxHeight = debugPanel.scrollHeight + 'px'; // Set to actual height
                     debugContent.classList.add('show');
                     this.elements.debugToggle.setAttribute('aria-expanded', 'true');
-                    this.system.loadLazyComponent('debugConsole'); // Lazy load debug console content
+                    this.loadLazyComponent('debugConsole'); // Lazy load debug console content
                 }
             }
 

@@ -54,7 +54,7 @@ class RealBackupExecutor:
         else:
             self.client_exe = client_exe_path
         
-        self.server_received_files = r"server\received_files"
+        self.server_received_files = r"src\server\received_files"
         self.temp_dir = tempfile.mkdtemp()
         self.backup_process = None
         self.status_callback = None
@@ -84,8 +84,8 @@ class RealBackupExecutor:
         # Convert to absolute path to ensure client finds the correct file
         absolute_file_path = os.path.abspath(file_path)
         
-        # Create transfer.info content
-        content = f"{server_ip}:{server_port}\n{username}\n{absolute_file_path}\n"
+        content = f"{server_ip}:{server_port}\n{username}\n{file_path}\n"
+        self._log_status("CONFIG", f"transfer.info content:\n---\n{content}---")
         
         # Create managed file
         transfer_info_path = self.file_manager.create_managed_file("transfer.info", content)
@@ -555,7 +555,9 @@ class RealBackupExecutor:
                                stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE,
-                               text=True):
+                               text=True,
+                               encoding='utf-8',
+                               errors='ignore'):
                 raise RuntimeError(f"Failed to start backup process {process_id}")
 
             # Get the subprocess handle for compatibility
@@ -564,100 +566,25 @@ class RealBackupExecutor:
 
             self._log_status("PROCESS", f"Started backup client with enhanced monitoring (ID: {process_id}, PID: {self.backup_process.pid})")
             
-            # Start log monitoring in separate thread
-            log_file = "client_debug.log"
-            log_monitor_thread = threading.Thread(
-                target=self._monitor_client_log, 
-                args=(log_file, 180)  # 3 minute timeout
-            )
-            log_monitor_thread.daemon = True
-            log_monitor_thread.start()
-            # Enhanced subprocess monitoring with health checks and phase detection
-            self._log_status("PROCESS", "Starting enhanced backup process monitoring...")
-
-            timeout = 30  # 30 second timeout for connection test
-            poll_interval = 2
-            elapsed = 0
-            latest_log_content = ""
-            current_phase = "initialization"
-            
-            while elapsed < timeout:
-                # Check if process is still running
-                poll_result = self.backup_process.poll()
-                if poll_result is not None:
-                    # Process finished
-                    result['process_exit_code'] = poll_result
-                    self._log_status("PROCESS", f"Client process finished with exit code: {poll_result}")
-                    break
-                
-                # Enhanced monitoring with health metrics
-                health_data = self._monitor_process_health(self.backup_process)
-                result['health_data'] = health_data
-                
-                # Monitor stderr for real-time errors
-                stderr_data = self._read_stderr_nonblocking()
-                
-                # Read latest log content for phase detection
-                try:
-                    if os.path.exists(log_file):
-                        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-                            latest_log_content = f.read()[-1000:]  # Last 1000 chars
-                            current_phase = self._detect_execution_phase(latest_log_content)
-                except Exception as e:
-                    self._log_status("DEBUG", f"Log read for phase detection failed: {e}")
-                
-                # Correlate subprocess errors with health and stderr
-                self._correlate_subprocess_errors(stderr_data, health_data)
-                
-                # Progress estimation based on phase
-                progress_phases = ['initialization', 'connection', 'authentication', 'encryption', 'transfer', 'verification', 'completion']
-                try:
-                    phase_index = progress_phases.index(current_phase)
-                    progress_percent = (phase_index / len(progress_phases)) * 100
-                except ValueError:
-                    progress_percent = 0
-                
-                result['current_phase'] = current_phase
-                result['progress_percent'] = progress_percent
-                
-                # Enhanced status callback with enriched data
-                if self.status_callback:
-                    status_data = {
-                        'progress': progress_percent,
-                        'health': health_data,
-                        'network_active': self._check_network_activity(server_port),
-                        'elapsed_time': elapsed,
-                        'warnings': health_data.get('warnings', [])
-                    }
-                    self.status_callback(current_phase, status_data)
-                
-                # Check for network activity periodically
-                if self._check_network_activity(server_port):
-                    result['network_activity'] = True
-                
-                # Log enhanced monitoring data
-                warnings_str = ", ".join(health_data.get('warnings', [])) or "none"
-                self._log_status("MONITOR", 
-                    f"Phase: {current_phase}, Progress: {progress_percent:.0f}%, "
-                    f"CPU: {health_data.get('cpu_percent', 0):.1f}%, "
-                    f"Memory: {health_data.get('memory_mb', 0):.1f}MB, "
-                    f"Warnings: {warnings_str}")
-                
-                time.sleep(poll_interval)
-                elapsed += poll_interval
-                
-            # If process is still running, terminate it using enhanced monitoring
-            if self.backup_process.poll() is None:
+            # Capture and log stdout/stderr
+            try:
+                stdout, stderr = self.backup_process.communicate(timeout=timeout)
+                result['process_exit_code'] = self.backup_process.returncode
+                self._log_status("PROCESS", f"Client process finished with exit code: {result['process_exit_code']}")
+                if stdout:
+                    self._log_status("CLIENT_STDOUT", stdout)
+                if stderr:
+                    self._log_status("CLIENT_STDERR", stderr)
+                    result['error'] = stderr
+            except subprocess.TimeoutExpired:
                 self._log_status("TIMEOUT", "Terminating backup process due to timeout")
-                if hasattr(self, 'process_id'):
-                    # Use enhanced monitoring to stop process gracefully
-                    stop_process(self.process_id, timeout=5.0)
-                else:
-                    # Fallback to direct termination
-                    self.backup_process.terminate()
-                    time.sleep(2)
-                    if self.backup_process.poll() is None:
-                        self.backup_process.kill()
+                self.backup_process.kill()
+                stdout, stderr = self.backup_process.communicate()
+                if stdout:
+                    self._log_status("CLIENT_STDOUT", stdout)
+                if stderr:
+                    self._log_status("CLIENT_STDERR", stderr)
+                result['error'] = "Process timed out"
                 result['process_exit_code'] = -1
             
             # Release subprocess reference to allow safe cleanup
@@ -730,7 +657,7 @@ def main():
     
     executor.set_status_callback(status_update)
     
-    print("🔒 Real Backup Executor - Testing Mode")
+    print("[SECURE] Real Backup Executor - Testing Mode")
     print(f"Username: {username}")
     print(f"File: {file_path}")
     print()

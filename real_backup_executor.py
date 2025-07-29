@@ -54,7 +54,7 @@ class RealBackupExecutor:
         else:
             self.client_exe = client_exe_path
         
-        self.server_received_files = r"server\received_files"
+        self.server_received_files = r"src\server\received_files"
         self.temp_dir = tempfile.mkdtemp()
         self.backup_process = None
         self.status_callback = None
@@ -476,6 +476,7 @@ class RealBackupExecutor:
         }
         
         start_time = time.time()
+        transfer_file_id = None  # Initialize to prevent unbound variable error
         
         try:
             # Pre-flight checks with structured error handling
@@ -684,7 +685,7 @@ class RealBackupExecutor:
             
             # Safe cleanup using SynchronizedFileManager
             try:
-                if 'transfer_file_id' in locals():
+                if transfer_file_id is not None:
                     self._log_status("CLEANUP", "Starting safe cleanup of transfer.info files")
                     # Wait for subprocess completion before cleanup
                     cleanup_success = self.file_manager.safe_cleanup(transfer_file_id, wait_timeout=10.0)

@@ -344,74 +344,79 @@ class NetworkServer:
             
             # Main loop for handling requests from this client
             while not self.shutdown_event.is_set():
-                # Read Request Header (23 bytes)
-                header_bytes = self._read_exact(client_conn, 16 + 1 + 2 + 4)
-                client_id_from_header, version_from_header, code_from_header, payload_size_from_header = self._parse_request_header(header_bytes)
-                
-                # Update log identifier with Client ID
-                current_log_id_str = client_id_from_header.hex() if any(client_id_from_header) else "REGISTRATION_ATTEMPT"
-                log_client_identifier = f"{client_ip}:{client_port} (ID:{current_log_id_str})"
-                
-                logger.info(f"Request received from {log_client_identifier}: Version={version_from_header}, Code={code_from_header}, PayloadSize={payload_size_from_header}")
-                
-                # Protocol Version Check (flexible compatibility)
-                from .protocol import validate_protocol_version
-                
-                if not validate_protocol_version(version_from_header):
-                    logger.warning(f"Incompatible client protocol version {version_from_header} received from {log_client_identifier}. Closing connection.")
-                    self._send_response(client_conn, RESP_GENERIC_SERVER_ERROR)
-                    break
-                else:
-                    logger.debug(f"Accepted client protocol version {version_from_header} from {log_client_identifier}")
-                
-                # Read Request Payload
-                payload_bytes = self._read_exact(client_conn, payload_size_from_header)
-                
-                # Resolve Client Object for non-registration requests
-                if code_from_header != REQ_REGISTER:
-                    active_client_obj = self.client_resolver(client_id_from_header)
+                try:
+                    # Read Request Header (23 bytes)
+                    header_bytes = self._read_exact(client_conn, 16 + 1 + 2 + 4)
+                    client_id_from_header, version_from_header, code_from_header, payload_size_from_header = self._parse_request_header(header_bytes)
                     
-                    if not active_client_obj:
-                        logger.warning(f"Request (Code:{code_from_header}) received from an unknown or previously timed-out client ID: {current_log_id_str}. Denying request.")
-                        if code_from_header == REQ_RECONNECT:
-                            self._send_response(client_conn, RESP_RECONNECT_FAIL, client_id_from_header)
-                        else:
-                            self._send_response(client_conn, RESP_GENERIC_SERVER_ERROR)
+                    # Update log identifier with Client ID
+                    current_log_id_str = client_id_from_header.hex() if any(client_id_from_header) else "REGISTRATION_ATTEMPT"
+                    log_client_identifier = f"{client_ip}:{client_port} (ID:{current_log_id_str})"
+                    
+                    logger.info(f"Request received from {log_client_identifier}: Version={version_from_header}, Code={code_from_header}, PayloadSize={payload_size_from_header}")
+                    
+                    # Protocol Version Check (flexible compatibility)
+                    from .protocol import validate_protocol_version
+                    
+                    if not validate_protocol_version(version_from_header):
+                        logger.warning(f"Incompatible client protocol version {version_from_header} received from {log_client_identifier}. Closing connection.")
+                        self._send_response(client_conn, RESP_GENERIC_SERVER_ERROR)
                         break
+                    else:
+                        logger.debug(f"Accepted client protocol version {version_from_header} from {log_client_identifier}")
                     
-                    # Update client last seen and log identifier
-                    active_client_obj.update_last_seen()
-                    log_client_identifier = f"{client_ip}:{client_port} (Name:'{active_client_obj.name}', ID:{current_log_id_str})"
+                    # Read Request Payload
+                    payload_bytes = self._read_exact(client_conn, payload_size_from_header)
                     
-                    # Add to active connections
-                    with self.connections_lock:
-                        self.active_connections[client_id_from_header] = client_conn
-                
-                # Process the Request
-                self.request_handler(
-                    sock=client_conn,
-                    client_id_from_header=client_id_from_header,
-                    client=active_client_obj,
-                    code=code_from_header,
-                    payload=payload_bytes
-                )
-                
-        except (TimeoutError, ConnectionError) as e:
-            logger.warning(f"Connection issue with {log_client_identifier}: {e}. Closing connection.")
-        except ProtocolError as e:
-            logger.error(f"Protocol error encountered with {log_client_identifier}: {e}. Sending generic error and closing connection.")
-            if client_conn.fileno() != -1:
-                try:
-                    self._send_response(client_conn, RESP_GENERIC_SERVER_ERROR)
-                except Exception as send_error_exception:
-                    logger.error(f"Failed to send error response to {log_client_identifier} after a protocol error occurred: {send_error_exception}")
+                    # Resolve Client Object for non-registration requests
+                    if code_from_header != REQ_REGISTER:
+                        active_client_obj = self.client_resolver(client_id_from_header)
+                        
+                        if not active_client_obj:
+                            logger.warning(f"Request (Code:{code_from_header}) received from an unknown or previously timed-out client ID: {current_log_id_str}. Denying request.")
+                            if code_from_header == REQ_RECONNECT:
+                                self._send_response(client_conn, RESP_RECONNECT_FAIL, client_id_from_header)
+                            else:
+                                self._send_response(client_conn, RESP_GENERIC_SERVER_ERROR)
+                            break
+                        
+                        # Update client last seen and log identifier
+                        active_client_obj.update_last_seen()
+                        log_client_identifier = f"{client_ip}:{client_port} (Name:'{active_client_obj.name}', ID:{current_log_id_str})"
+                        
+                        # Add to active connections
+                        with self.connections_lock:
+                            self.active_connections[client_id_from_header] = client_conn
+                    
+                    # Process the Request
+                    self.request_handler(
+                        sock=client_conn,
+                        client_id_from_header=client_id_from_header,
+                        client=active_client_obj,
+                        code=code_from_header,
+                        payload=payload_bytes
+                    )
+                except (TimeoutError, ConnectionError) as e:
+                    logger.warning(f"Connection issue with {log_client_identifier}: {e}. Closing connection.")
+                    break
+                except ProtocolError as e:
+                    logger.error(f"Protocol error encountered with {log_client_identifier}: {e}. Sending generic error and closing connection.")
+                    if client_conn.fileno() != -1:
+                        try:
+                            self._send_response(client_conn, RESP_GENERIC_SERVER_ERROR)
+                        except Exception as send_error_exception:
+                            logger.error(f"Failed to send error response to {log_client_identifier} after a protocol error occurred: {send_error_exception}")
+                    break
+                except Exception as e:
+                    logger.critical(f"Unexpected critical error occurred while handling client {log_client_identifier}: {e}", exc_info=True)
+                    if client_conn.fileno() != -1:
+                        try:
+                            self._send_response(client_conn, RESP_GENERIC_SERVER_ERROR)
+                        except Exception as send_error_exception:
+                            logger.error(f"Failed to send error response to {log_client_identifier} after an unexpected error: {send_error_exception}")
+                    break
         except Exception as e:
-            logger.critical(f"Unexpected critical error occurred while handling client {log_client_identifier}: {e}", exc_info=True)
-            if client_conn.fileno() != -1:
-                try:
-                    self._send_response(client_conn, RESP_GENERIC_SERVER_ERROR)
-                except Exception as send_error_exception:
-                    logger.error(f"Failed to send error response to {log_client_identifier} after an unexpected error: {send_error_exception}")
+            logger.critical(f"Unhandled exception in client handler for {log_client_identifier}: {e}", exc_info=True)
         finally:
             # Remove from active connections
             if active_client_obj:

@@ -7,53 +7,37 @@ import os
 import subprocess
 import sys
 
-def create_openssl_keys():
-    """Create RSA keys using OpenSSL which should be compatible with Crypto++"""
-    print("Creating RSA keys using OpenSSL...")
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Hash import SHA256
+from Crypto.Random import get_random_bytes
+import shutil
+
+def create_pycryptodome_keys():
+    """Create RSA keys using PyCryptodome"""
+    print("Creating RSA keys using PyCryptodome...")
     
     try:
-        # Generate private key in DER format
-        print("Generating 1024-bit RSA private key...")
-        result = subprocess.run([
-            'openssl', 'genpkey', 
-            '-algorithm', 'RSA', 
-            '-pkcs8',
-            '-outform', 'DER',
-            '-out', 'priv.key',
-            '-pkeyopt', 'rsa_keygen_bits:1024'
-        ], capture_output=True, text=True, timeout=30)
-        
-        if result.returncode != 0:
-            print(f"Private key generation failed: {result.stderr}")
-            return False
-            
-        print(f"Private key saved to priv.key")
-        
-        # Generate public key in DER format
-        print("Extracting public key...")
-        result = subprocess.run([
-            'openssl', 'pkey',
-            '-in', 'priv.key',
-            '-inform', 'DER',
-            '-pubout',
-            '-outform', 'DER',
-            '-out', 'pub.key'
-        ], capture_output=True, text=True, timeout=30)
-        
-        if result.returncode != 0:
-            print(f"Public key extraction failed: {result.stderr}")
-            return False
-            
-        print(f"Public key saved to pub.key")
+        # Generate RSA key pair
+        print("Generating 1024-bit RSA key pair...")
+        key = RSA.generate(1024, randfunc=get_random_bytes)
+
+        # Export private key in DER PKCS#8 format
+        private_key_der = key.export_key(format='DER', pkcs=8)
+        with open('priv.key', 'wb') as f:
+            f.write(private_key_der)
+        print("Private key saved to priv.key")
+
+        # Export public key in DER X.509 format
+        public_key_der = key.public_key().export_key(format='DER', pkcs=8) # PKCS#8 for public key is also X.509 compatible
+        with open('pub.key', 'wb') as f:
+            f.write(public_key_der)
+        print("Public key saved to pub.key")
         
         # Copy to data directory
         os.makedirs('data', exist_ok=True)
-        
-        # Copy files
-        import shutil
         shutil.copy2('priv.key', 'data/priv.key')
         shutil.copy2('pub.key', 'data/pub.key')
-        
         print("Keys copied to data/ directory")
         
         # Check file sizes
@@ -65,14 +49,42 @@ def create_openssl_keys():
         
         return True
         
-    except subprocess.TimeoutExpired:
-        print("OpenSSL command timed out")
-        return False
-    except FileNotFoundError:
-        print("OpenSSL not found. Please install OpenSSL.")
-        return False
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error creating keys with PyCryptodome: {e}")
+        return False
+
+def test_pycryptodome_keys():
+    """Test the generated keys using PyCryptodome"""
+    print("\nTesting generated keys with PyCryptodome...")
+    
+    try:
+        with open('pub.key', 'rb') as f:
+            public_key = RSA.import_key(f.read())
+        with open('priv.key', 'rb') as f:
+            private_key = RSA.import_key(f.read())
+
+        test_message = b"Hello, RSA test!"
+        
+        # Encrypt with public key
+        cipher_rsa = PKCS1_OAEP.new(public_key, hashAlgo=SHA256)
+        encrypted_data = cipher_rsa.encrypt(test_message)
+        print(f"Encryption successful: {len(encrypted_data)} bytes")
+        
+        # Decrypt with private key
+        cipher_rsa = PKCS1_OAEP.new(private_key, hashAlgo=SHA256)
+        decrypted_message = cipher_rsa.decrypt(encrypted_data)
+        
+        print(f"Decryption successful: '{decrypted_message.decode()}'")
+        
+        if decrypted_message == test_message:
+            print("[OK] RSA key test passed!")
+            return True
+        else:
+            print(f"[X] RSA key test failed: expected '{test_message.decode()}', got '{decrypted_message.decode()}'")
+            return False
+            
+    except Exception as e:
+        print(f"Test error with PyCryptodome: {e}")
         return False
 
 def test_keys():
@@ -117,10 +129,10 @@ def test_keys():
         print(f"Decryption successful: '{decrypted_message}'")
         
         if decrypted_message == test_message:
-            print("✓ RSA key test passed!")
+            print("[OK] RSA key test passed!")
             return True
         else:
-            print(f"✗ RSA key test failed: expected '{test_message}', got '{decrypted_message}'")
+            print(f"[X] RSA key test failed: expected '{test_message}', got '{decrypted_message}'")
             return False
             
     except Exception as e:
@@ -131,12 +143,12 @@ if __name__ == "__main__":
     print("RSA Key Generator for Crypto++ Compatibility")
     print("=" * 50)
     
-    if create_openssl_keys():
-        if test_keys():
-            print("\n✓ RSA keys created and tested successfully!")
+    if create_pycryptodome_keys():
+        if test_pycryptodome_keys():
+            print("\n[OK] RSA keys created and tested successfully!")
             print("The client should now be able to load these keys.")
         else:
-            print("\n✗ Key test failed, but keys were created.")
+            print("\n[X] Key test failed, but keys were created.")
     else:
-        print("\n✗ Failed to create RSA keys.")
+        print("\n[X] Failed to create RSA keys.")
         sys.exit(1)

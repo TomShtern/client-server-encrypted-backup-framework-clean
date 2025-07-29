@@ -7,19 +7,12 @@ NO SIMULATION - REAL INTEGRATION ONLY
 """
 
 import os
-import sys
-import json
 import time
 import threading
 import tempfile
-import subprocess
-import hashlib
-import shutil
-from pathlib import Path
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
-import psutil
 
 # Import our real backup executor
 from src.api.real_backup_executor import RealBackupExecutor
@@ -301,7 +294,9 @@ def api_start_backup():
 
         # Save uploaded file to temporary location
         temp_dir = tempfile.mkdtemp()
-        file_path = os.path.join(temp_dir, file.filename)
+        # Handle case where file.filename might be None
+        filename = file.filename or f"backup_file_{int(time.time())}"
+        file_path = os.path.join(temp_dir, filename)
         file.save(file_path)
 
         print(f"[DEBUG] File saved to: {file_path}")
@@ -311,8 +306,8 @@ def api_start_backup():
         # Update status
         backup_status['backing_up'] = True
         backup_status['phase'] = 'BACKUP_IN_PROGRESS'
-        backup_status['progress']['current_file'] = file.filename
-        update_backup_status('BACKUP_IN_PROGRESS', f'Starting backup of {file.filename}...')
+        backup_status['progress']['current_file'] = filename
+        update_backup_status('BACKUP_IN_PROGRESS', f'Starting backup of {filename}...')
 
         # Start backup in background thread
         def run_backup():
@@ -343,23 +338,23 @@ def api_start_backup():
                 # Use proper subprocess synchronization instead of arbitrary delay
                 def synchronized_cleanup():
                     try:
-                        # Wait for backup result to determine if C++ client finished
+                        # Wait for backup to complete by checking backup status
                         max_wait_time = 30  # Maximum 30 seconds wait
                         check_interval = 1  # Check every 1 second
                         elapsed = 0
-                        
+
                         # Wait for backup executor to complete and release file
                         while elapsed < max_wait_time:
-                            # Check if backup result is available (indicating C++ client finished)
-                            if 'result' in locals() and result is not None:
+                            # Check if backup phase indicates completion (either success or failure)
+                            if backup_status['phase'] in ['COMPLETED', 'FAILED']:
                                 print(f"[DEBUG] Backup completed, proceeding with cleanup after {elapsed}s")
                                 break
                             time.sleep(check_interval)
                             elapsed += check_interval
-                        
+
                         # Additional small delay to ensure file handles are closed
                         time.sleep(2)
-                        
+
                         # Perform cleanup
                         if os.path.exists(file_path):
                             os.remove(file_path)
@@ -382,8 +377,8 @@ def api_start_backup():
 
         return jsonify({
             'success': True,
-            'message': f'Backup started for {file.filename}',
-            'filename': file.filename,
+            'message': f'Backup started for {filename}',
+            'filename': filename,
             'username': username
         })
 
