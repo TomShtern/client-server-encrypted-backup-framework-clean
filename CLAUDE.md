@@ -116,6 +116,56 @@ python scripts/testing/validate_server_gui.py
 - **Cross-Package Imports**: Fixed imports between `src/api/`, `src/shared/utils/`, and `src/server/`
 - **Server Module Execution**: Use `python -m src.server.server` for proper module execution
 
+## Critical Debugging Insights (2025-07-29)
+
+### Windows-Specific Issues Discovered
+
+#### **Windows Socket TIME_WAIT Problem**
+- **Issue**: API server crashes on restart due to Windows holding port 9090 in TIME_WAIT state (30-240 seconds)
+- **Symptoms**: "Connection refused" in browser, only backup server running (port 1256), API server missing (port 9090)
+- **Root Cause**: `server_singleton.py` immediately called `os._exit(1)` when port binding failed
+- **Solution**: Added retry logic with exponential backoff (up to 60 seconds) and `SO_REUSEADDR` socket option
+- **Files Modified**: `src/server/server_singleton.py` lines 133-155
+
+#### **Unicode Encoding Crashes**
+- **Issue**: Server crashes with `UnicodeEncodeError: 'charmap' codec can't encode character '\u274c'`  
+- **Symptoms**: Server starts briefly then terminates, Unicode emojis incompatible with Windows console cp1255 encoding
+- **Root Cause**: Emoji characters (❌) in error messages cannot be displayed in Windows console
+- **Solution**: Replace Unicode emojis with ASCII text equivalents
+- **Files Modified**: `src/server/server_singleton.py` line 181
+
+#### **Port Configuration Mismatches**
+- **Issue**: Flask API server configured for different port than expected by client components
+- **Symptoms**: Browser opens but shows "connection refused", port binding conflicts
+- **Root Cause**: Inconsistent port configurations across components (9090 vs 9091)
+- **Solution**: Ensure all components use consistent port 9090 throughout
+- **Files Affected**: `cyberbackup_api_server.py`, `one_click_build_and_run.py`
+
+### Debugging Methodology Lessons
+
+#### **False Success Indicators**
+- **Health check passes but server crashes**: Initial connectivity tests can succeed while server fails later due to encoding errors
+- **Subprocess isolation**: Errors in separate console windows are invisible to main script
+- **Process count deception**: Multiple Python processes can indicate partial failures rather than success
+
+#### **Windows vs Cross-Platform Assumptions**
+- **Socket behavior**: Windows socket TIME_WAIT handling is more aggressive than Unix-like systems
+- **Console encoding**: Windows console encoding (cp1255) differs significantly from UTF-8 environments
+- **Process lifecycle**: Windows subprocess creation and termination behavior requires special handling
+
+#### **Systematic Debugging Requirements**
+- **Verify actual port listeners**: Use `netstat -an | findstr :9090` to confirm services are actually listening
+- **Check all component states**: Both backup server (1256) AND API server (9090) must be running
+- **Test real user workflow**: Debug from actual user's system state, not developer's clean environment
+- **Subprocess error capture**: Monitor separate console windows for hidden error messages
+
+### Current Status (Partial Progress)
+- ✅ **Both GUIs Launch**: Server GUI and Web GUI both display successfully  
+- ✅ **No "Connection Refused"**: Web interface loads at http://127.0.0.1:9090/
+- ✅ **Windows Compatibility**: Socket TIME_WAIT and Unicode issues resolved
+- ⚠️ **Project Still Fails**: While GUIs work, underlying backup functionality may still have issues
+- ⚠️ **Integration Testing Needed**: Complete 4-layer data flow requires further validation
+
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.

@@ -130,14 +130,29 @@ class ServerSingletonManager:
                 except OSError:
                     pass # May already be gone
 
-        # 2. Check if the port is in use (it shouldn't be, but this is a safety check)
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(("127.0.0.1", self.port))
-        except socket.error as e:
-            logger.error(f"Port {self.port} is still in use, even after termination attempt. Error: {e}")
-            logger.error("This may be due to another application using the port, or the OS being slow to release it.")
-            return False
+        # 2. Check if the port is in use with retry logic for Windows TIME_WAIT 
+        max_retries = 12  # Up to 60 seconds total wait
+        retry_delay = 1   # Start with 1 second delay
+        
+        for attempt in range(max_retries):
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    # Enable socket reuse for faster recovery
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    s.bind(("127.0.0.1", self.port))
+                # Port is available, break out of retry loop
+                break
+            except socket.error as e:
+                if attempt < max_retries - 1:  # Not the last attempt
+                    logger.warning(f"Port {self.port} still in use (attempt {attempt + 1}/{max_retries}). "
+                                 f"Waiting {retry_delay} seconds... Error: {e}")
+                    time.sleep(retry_delay)
+                    retry_delay = min(retry_delay * 1.5, 10)  # Exponential backoff, max 10 seconds
+                else:  # Last attempt failed
+                    logger.error(f"Port {self.port} is still in use after {max_retries} attempts. Error: {e}")
+                    logger.error("This may be due to another application using the port, or Windows TIME_WAIT state.")
+                    logger.error("Try waiting a few minutes or use a different port.")
+                    return False
 
         # 3. We are clear to start. Create our own PID file.
         try:
@@ -178,7 +193,7 @@ def ensure_single_server_instance(server_name: str = "BackupServer", port: int =
     singleton = ServerSingletonManager(server_name, port)
     
     if not singleton.acquire_lock():
-        print(f"\n❌ CRITICAL ERROR: Could not acquire singleton lock for {server_name} on port {port}.")
+        print(f"\n[CRITICAL ERROR] Could not acquire singleton lock for {server_name} on port {port}.")
         print("   Another instance may be running and could not be terminated,")
         print("   or the port might be in use by another application.")
         print("   This is a FATAL error - process will terminate immediately.")
@@ -203,8 +218,8 @@ if __name__ == "__main__":
         if pid_file.exists():
             try:
                 pid_file.unlink()
-                print(f"✅ Stale lock file removed: {pid_file}")
+                print(f"[OK] Stale lock file removed: {pid_file}")
             except OSError as e:
-                print(f"❌ Failed to remove lock file: {e}")
+                print(f"[ERROR] Failed to remove lock file: {e}")
         else:
-            print("ℹ️ No lock file found to clean up.")
+            print("[INFO] No lock file found to clean up.")
