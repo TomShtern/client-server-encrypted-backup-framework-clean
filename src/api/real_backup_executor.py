@@ -572,18 +572,26 @@ class RealBackupExecutor:
                 result['process_exit_code'] = self.backup_process.returncode
                 self._log_status("PROCESS", f"Client process finished with exit code: {result['process_exit_code']}")
                 if stdout:
-                    self._log_status("CLIENT_STDOUT", stdout)
+                    # Handle Unicode encoding for Windows console compatibility
+                    stdout_safe = stdout.decode('utf-8', errors='replace').encode('ascii', errors='replace').decode('ascii') if isinstance(stdout, bytes) else str(stdout).encode('ascii', errors='replace').decode('ascii')
+                    self._log_status("CLIENT_STDOUT", stdout_safe)
                 if stderr:
-                    self._log_status("CLIENT_STDERR", stderr)
-                    result['error'] = stderr
+                    # Handle Unicode encoding for Windows console compatibility
+                    stderr_safe = stderr.decode('utf-8', errors='replace').encode('ascii', errors='replace').decode('ascii') if isinstance(stderr, bytes) else str(stderr).encode('ascii', errors='replace').decode('ascii')
+                    self._log_status("CLIENT_STDERR", stderr_safe)
+                    result['error'] = stderr_safe
             except subprocess.TimeoutExpired:
                 self._log_status("TIMEOUT", "Terminating backup process due to timeout")
                 self.backup_process.kill()
                 stdout, stderr = self.backup_process.communicate()
                 if stdout:
-                    self._log_status("CLIENT_STDOUT", stdout)
+                    # Handle Unicode encoding for Windows console compatibility
+                    stdout_safe = stdout.decode('utf-8', errors='replace').encode('ascii', errors='replace').decode('ascii') if isinstance(stdout, bytes) else str(stdout).encode('ascii', errors='replace').decode('ascii')
+                    self._log_status("CLIENT_STDOUT", stdout_safe)
                 if stderr:
-                    self._log_status("CLIENT_STDERR", stderr)
+                    # Handle Unicode encoding for Windows console compatibility
+                    stderr_safe = stderr.decode('utf-8', errors='replace').encode('ascii', errors='replace').decode('ascii') if isinstance(stderr, bytes) else str(stderr).encode('ascii', errors='replace').decode('ascii')
+                    self._log_status("CLIENT_STDERR", stderr_safe)
                 result['error'] = "Process timed out"
                 result['process_exit_code'] = -1
             

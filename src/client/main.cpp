@@ -45,9 +45,9 @@ int main(int argc, char* argv[]) {
     try {
         // Initialize console output
         if (g_batchMode) {
-            std::cout << "🔒 Encrypted Backup Client v3.0 - BATCH MODE" << std::endl;
+            std::cout << "[SECURE] Encrypted Backup Client v3.0 - BATCH MODE" << std::endl;
         } else {
-            std::cout << "🔒 Encrypted Backup Client v3.0 - Production Ready" << std::endl;
+            std::cout << "[SECURE] Encrypted Backup Client v3.0 - Production Ready" << std::endl;
         }
         std::cout << "Starting client initialization..." << std::endl;
 
@@ -67,29 +67,29 @@ int main(int argc, char* argv[]) {
         Client client;
 
         if (!client.initialize()) {
-            std::cout << "❌ Client initialization failed!" << std::endl;
+            std::cout << "[ERROR] Client initialization failed!" << std::endl;
             return 1;
         }
 
-        std::cout << "✅ Client initialized successfully!" << std::endl;
+        std::cout << "[SUCCESS] Client initialized successfully!" << std::endl;
 
         if (g_batchMode) {
             // Batch mode: perform single backup operation and exit
-            std::cout << "🔄 Starting backup operation..." << std::endl;
+            std::cout << "[INFO] Starting backup operation..." << std::endl;
             
             bool backupSuccess = client.runBackupOperation();
             
             if (backupSuccess) {
-                std::cout << "✅ Backup completed successfully!" << std::endl;
+                std::cout << "[SUCCESS] Backup completed successfully!" << std::endl;
                 exitCode = 0;
             } else {
-                std::cout << "❌ Backup operation failed!" << std::endl;
+                std::cout << "[ERROR] Backup operation failed!" << std::endl;
                 exitCode = 1;
             }
         } else {
             // Interactive mode: run web GUI server
-            std::cout << "🌐 Web GUI available at: http://127.0.0.1:9090" << std::endl;
-            std::cout << "📁 Ready for backup operations..." << std::endl;
+            std::cout << "[INFO] Web GUI available at: http://127.0.0.1:9090" << std::endl;
+            std::cout << "[INFO] Ready for backup operations..." << std::endl;
             std::cout << "Press Ctrl+C to exit" << std::endl;
 
             // Keep the client alive and GUI server running
@@ -98,18 +98,18 @@ int main(int argc, char* argv[]) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             }
 
-            std::cout << "✅ Shutdown requested, cleaning up..." << std::endl;
+            std::cout << "[INFO] Shutdown requested, cleaning up..." << std::endl;
             exitCode = 0;
         }
         
     } catch (const std::bad_alloc& e) {
-        std::cerr << "❌ Memory allocation failed: " << e.what() << std::endl;
+        std::cerr << "[ERROR] Memory allocation failed: " << e.what() << std::endl;
         exitCode = 2;
     } catch (const std::exception& e) {
-        std::cerr << "❌ Fatal error: " << e.what() << std::endl;
+        std::cerr << "[ERROR] Fatal error: " << e.what() << std::endl;
         exitCode = 3;
     } catch (...) {
-        std::cerr << "❌ Unknown fatal error occurred!" << std::endl;
+        std::cerr << "[ERROR] Unknown fatal error occurred!" << std::endl;
         exitCode = 4;
     }
 

@@ -1,10 +1,1 @@
-TEST FILE FOR ENCRYPTED BACKUP SYSTEM
-
-This file is used to test the 4-layer client-server encrypted backup framework:
-1. Web UI → 2. Flask API → 3. C++ Client → 4. Python Server
-
-If you can see this file in the server's received_files/ directory, 
-then the complete backup chain is working correctly!
-
-File created: 2025-07-29
-Test content: 🔒 ENCRYPTED BACKUP SUCCESSFUL! 🔒
+test file content

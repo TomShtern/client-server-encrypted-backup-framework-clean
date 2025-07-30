@@ -725,7 +725,7 @@ def main():
     
     executor.set_status_callback(status_update)
     
-    print("🔒 Real Backup Executor - Testing Mode")
+    print("[SECURE] Real Backup Executor - Testing Mode")
     print(f"Username: {username}")
     print(f"File: {file_path}")
     print()

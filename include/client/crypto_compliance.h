@@ -120,9 +120,9 @@ public:
         }
         
         if (allPassed) {
-            std::cout << "[CRYPTO COMPLIANCE] ✅ ALL CHECKS PASSED - FULLY SPEC COMPLIANT" << std::endl;
+            std::cout << "[CRYPTO COMPLIANCE] [OK] ALL CHECKS PASSED - FULLY SPEC COMPLIANT" << std::endl;
         } else {
-            std::cout << "[CRYPTO COMPLIANCE] ❌ COMPLIANCE FAILURES DETECTED" << std::endl;
+            std::cout << "[CRYPTO COMPLIANCE] [ERROR] COMPLIANCE FAILURES DETECTED" << std::endl;
         }
         
         return allPassed;

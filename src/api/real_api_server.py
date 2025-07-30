@@ -377,11 +377,11 @@ def api_start_backup():
 
 if __name__ == "__main__":
     print("=" * 70)
-    print("🚀 CyberBackup 3.0 API Server - REAL Integration")
+    print("[START] CyberBackup 3.0 API Server - REAL Integration")
     print("=" * 70)
-    print(f"🌐 API Server: http://localhost:9090")
-    print(f"🎨 Client GUI: http://localhost:9090/")
-    print(f"📡 Health Check: http://localhost:9090/health")
+    print(f"[NET] API Server: http://localhost:9090")
+    print(f"[UI] Client GUI: http://localhost:9090/")
+    print(f"[SIGNAL] Health Check: http://localhost:9090/health")
     print()
 
     # Check components
@@ -390,26 +390,26 @@ if __name__ == "__main__":
     # Check HTML client
     client_html = "src/client/NewGUIforClient.html"
     if os.path.exists(client_html):
-        print(f"✅ HTML Client: {client_html}")
+        print(f"[OK] HTML Client: {client_html}")
     else:
-        print(f"❌ HTML Client: {client_html} NOT FOUND")
+        print(f"[ERROR] HTML Client: {client_html} NOT FOUND")
 
     # Check C++ client
     client_exe = "build/Release/EncryptedBackupClient.exe"
     if os.path.exists(client_exe):
-        print(f"✅ C++ Client: {client_exe}")
+        print(f"[OK] C++ Client: {client_exe}")
     else:
-        print(f"❌ C++ Client: {client_exe} NOT FOUND")
+        print(f"[ERROR] C++ Client: {client_exe} NOT FOUND")
 
     # Check backup server
     server_running = check_backup_server_status()
     if server_running:
-        print(f"✅ Backup Server: Running on port 1256")
+        print(f"[OK] Backup Server: Running on port 1256")
     else:
-        print(f"⚠️  Backup Server: Not running on port 1256")
+        print(f"[WARN] Backup Server: Not running on port 1256")
 
     print()
-    print("🚀 Starting Flask API server...")
+    print("[START] Starting Flask API server...")
 
     try:
         app.run(
@@ -419,6 +419,6 @@ if __name__ == "__main__":
             threaded=True
         )
     except KeyboardInterrupt:
-        print("\n👋 API Server shutdown requested")
+        print("\n[HELLO] API Server shutdown requested")
     except Exception as e:
-        print(f"❌ Server error: {e}")
+        print(f"[ERROR] Server error: {e}")

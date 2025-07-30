@@ -1203,7 +1203,7 @@ class ServerGUI:
                 print("[OK] Enhanced Modern GUI initialized successfully!")
                 return True
             else:
-                print("❌ Modern GUI initialization timed out")
+                print("[ERROR] Modern GUI initialization timed out")
                 return False
 
         except Exception as e:
@@ -1270,7 +1270,7 @@ class ServerGUI:
 
             # Configure the root window
             try:
-                self.root.title("🚀 ULTRA MODERN Encrypted Backup Server - Enhanced")
+                self.root.title("[SECURE] ULTRA MODERN Encrypted Backup Server - Enhanced")
                 self.root.geometry("1200x800")
                 self.root.minsize(1000, 700)
                 self.root.configure(bg=ModernTheme.PRIMARY_BG)
@@ -1353,7 +1353,7 @@ class ServerGUI:
         if self.root and self.toast_system:
             def show_welcome():
                 if self.toast_system:  # Double-check it's still available
-                    self.toast_system.show_toast("🚀 Enhanced Ultra Modern GUI Ready", "success", 3000)
+                    self.toast_system.show_toast("[READY] Enhanced Ultra Modern GUI Ready", "success", 3000)
             self.root.after(1000, show_welcome)
 
         print("Enhanced ultra modern main window created successfully!")
@@ -1415,7 +1415,7 @@ class ServerGUI:
         header_frame.pack_propagate(False)
 
         # Title
-        title_label = tk.Label(header_frame, text="🚀 Encrypted Backup Server",
+        title_label = tk.Label(header_frame, text="[SECURE] Encrypted Backup Server",
                               bg=ModernTheme.PRIMARY_BG, fg=ModernTheme.TEXT_PRIMARY,
                               font=(ModernTheme.FONT_FAMILY, 22, 'bold'))
         title_label.pack(side="left", padx=10, pady=10)
@@ -2032,7 +2032,7 @@ class ServerGUI:
         self.activity_log_text.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=self.activity_log_text.yview)
 
-        self._add_activity_log("🚀 Enhanced Ultra Modern GUI System Initialized")
+        self._add_activity_log("[SYSTEM] Enhanced Ultra Modern GUI System Initialized")
 
     def _create_compact_status_message_card(self, parent):
         """Create compact status message card"""

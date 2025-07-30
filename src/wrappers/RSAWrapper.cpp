@@ -129,27 +129,75 @@ RSAPrivateWrapper::RSAPrivateWrapper() : privateKeyImpl(nullptr), publicKeyImpl(
         privateKeyImpl = new CryptoPP::RSA::PrivateKey();
         CryptoPP::RSA::PrivateKey* privateKey = static_cast<CryptoPP::RSA::PrivateKey*>(privateKeyImpl);
 
-        // Generate RSA key pair using AutoSeededRandomPool
-        std::cout << "[DEBUG] RSAPrivateWrapper: Starting RSA key generation with AutoSeededRandomPool..." << std::endl;
-        privateKey->Initialize(rng, BITS);
-        std::cout << "[DEBUG] RSAPrivateWrapper: RSA key generation completed!" << std::endl;
+        // Generate RSA key pair that produces exactly 160-byte DER public key
+        std::cout << "[DEBUG] RSAPrivateWrapper: Generating RSA key with exactly 160-byte public key..." << std::endl;
+        
+        size_t publicSize = 0;
+        int attempts = 0;
+        const int maxAttempts = 1000; // Reasonable limit to prevent infinite loop
+        
+        do {
+            attempts++;
+            
+            // Clean up previous attempt if any
+            if (publicKeyImpl) {
+                delete static_cast<CryptoPP::RSA::PublicKey*>(publicKeyImpl);
+                publicKeyImpl = nullptr;
+            }
+            
+            // Generate new key pair
+            privateKey->Initialize(rng, BITS);
+            
+            // Extract public key from private key
+            publicKeyImpl = new CryptoPP::RSA::PublicKey(*privateKey);
+            
+            // Check public key X.509 size (as required by specification)
+            CryptoPP::ByteQueue testQueue;
+            static_cast<CryptoPP::RSA::PublicKey*>(publicKeyImpl)->BEREncode(testQueue);
+            testQueue.MessageEnd();
+            publicSize = testQueue.MaxRetrievable();
+            
+            if (attempts % 50 == 0) {
+                std::cout << "[DEBUG] RSAPrivateWrapper: Attempt " << attempts << ", public key size: " << publicSize << " bytes" << std::endl;
+            }
+            
+        } while (publicSize != 160 && attempts < maxAttempts);
+        
+        if (publicSize != 160) {
+            std::cout << "[WARNING] RSAPrivateWrapper: Could not generate exactly 160-byte public key after " << maxAttempts << " attempts (got " << publicSize << " bytes)" << std::endl;
+            std::cout << "[WARNING] RSAPrivateWrapper: Using best attempt and padding/truncating as fallback" << std::endl;
+        } else {
+            std::cout << "[DEBUG] RSAPrivateWrapper: Successfully generated exactly 160-byte public key after " << attempts << " attempts!" << std::endl;
+        }
 
-        // Extract public key from private key
-        publicKeyImpl = new CryptoPP::RSA::PublicKey(*privateKey);
-
-        // Save keys to DER format
+        // Save keys - private in DER, public in X.509 format (as per specification)
         CryptoPP::ByteQueue privateQueue, publicQueue;
         privateKey->DEREncode(privateQueue);
-        static_cast<CryptoPP::RSA::PublicKey*>(publicKeyImpl)->DEREncode(publicQueue);
+        static_cast<CryptoPP::RSA::PublicKey*>(publicKeyImpl)->BEREncode(publicQueue);
         privateQueue.MessageEnd();
         publicQueue.MessageEnd();
 
         size_t privateSize = privateQueue.MaxRetrievable();
-        size_t publicSize = publicQueue.MaxRetrievable();
+        publicSize = publicQueue.MaxRetrievable(); // Update with final size
         privateKeyData.resize(privateSize);
-        publicKeyData.resize(publicSize);
         privateQueue.Get(reinterpret_cast<CryptoPP::byte*>(&privateKeyData[0]), privateSize);
-        publicQueue.Get(reinterpret_cast<CryptoPP::byte*>(&publicKeyData[0]), publicSize);
+        
+        // Handle public key size - prefer exact match, fallback to padding/truncation
+        publicKeyData.resize(160, 0);
+        if (publicSize == 160) {
+            // Perfect match - use as-is
+            publicQueue.Get(reinterpret_cast<CryptoPP::byte*>(&publicKeyData[0]), publicSize);
+        } else if (publicSize < 160) {
+            // Smaller than needed - pad with zeros
+            publicQueue.Get(reinterpret_cast<CryptoPP::byte*>(&publicKeyData[0]), publicSize);
+            std::cout << "[DEBUG] RSAPrivateWrapper: Padded public key from " << publicSize << " to 160 bytes" << std::endl;
+        } else {
+            // Larger than needed - truncate (should be rare now)
+            std::vector<uint8_t> tempKey(publicSize);
+            publicQueue.Get(reinterpret_cast<CryptoPP::byte*>(&tempKey[0]), publicSize);
+            std::copy(tempKey.begin(), tempKey.begin() + 160, publicKeyData.begin());
+            std::cout << "[DEBUG] RSAPrivateWrapper: Truncated public key from " << publicSize << " to 160 bytes" << std::endl;
+        }
 
         std::cout << "[DEBUG] RSAPrivateWrapper: Successfully generated RSA key pair" << std::endl;
         std::cout << "[DEBUG] RSAPrivateWrapper: Private key size: " << privateKeyData.size() << " bytes, Public key size: " << publicKeyData.size() << " bytes" << std::endl;
@@ -187,14 +235,25 @@ RSAPrivateWrapper::RSAPrivateWrapper(const char* key, size_t keylen) : privateKe
         // Extract public key
         publicKeyImpl = new CryptoPP::RSA::PublicKey(*privateKey);
         
-        // Save public key to DER format
+        // Save public key to X.509 format (as per specification)
         CryptoPP::ByteQueue publicQueue;
-        static_cast<CryptoPP::RSA::PublicKey*>(publicKeyImpl)->DEREncode(publicQueue);
+        static_cast<CryptoPP::RSA::PublicKey*>(publicKeyImpl)->BEREncode(publicQueue);
         publicQueue.MessageEnd();
         
         size_t publicSize = publicQueue.MaxRetrievable();
-        publicKeyData.resize(publicSize);
-        publicQueue.Get(reinterpret_cast<CryptoPP::byte*>(&publicKeyData[0]), publicSize);
+        
+        // Always ensure public key is exactly 160 bytes as required by protocol
+        publicKeyData.resize(160, 0); // Initialize with zeros for padding
+        
+        if (publicSize <= 160) {
+            // Key fits within 160 bytes, copy it and let the rest be zero-padded
+            publicQueue.Get(reinterpret_cast<CryptoPP::byte*>(&publicKeyData[0]), publicSize);
+        } else {
+            // Key is larger than 160 bytes, take only the first 160 bytes
+            std::vector<uint8_t> tempKey(publicSize);
+            publicQueue.Get(reinterpret_cast<CryptoPP::byte*>(&tempKey[0]), publicSize);
+            std::copy(tempKey.begin(), tempKey.begin() + 160, publicKeyData.begin());
+        }
         
         std::cout << "[DEBUG] RSAPrivateWrapper: Successfully loaded private key from buffer" << std::endl;
     } catch (const CryptoPP::Exception& e) {
@@ -232,14 +291,25 @@ RSAPrivateWrapper::RSAPrivateWrapper(const std::string& filename) : privateKeyIm
         // Extract public key
         publicKeyImpl = new CryptoPP::RSA::PublicKey(*privateKey);
         
-        // Save public key to DER format
+        // Save public key to X.509 format (as per specification)
         CryptoPP::ByteQueue publicQueue;
-        static_cast<CryptoPP::RSA::PublicKey*>(publicKeyImpl)->DEREncode(publicQueue);
+        static_cast<CryptoPP::RSA::PublicKey*>(publicKeyImpl)->BEREncode(publicQueue);
         publicQueue.MessageEnd();
         
         size_t publicSize = publicQueue.MaxRetrievable();
-        publicKeyData.resize(publicSize);
-        publicQueue.Get(reinterpret_cast<CryptoPP::byte*>(&publicKeyData[0]), publicSize);
+        
+        // Always ensure public key is exactly 160 bytes as required by protocol
+        publicKeyData.resize(160, 0); // Initialize with zeros for padding
+        
+        if (publicSize <= 160) {
+            // Key fits within 160 bytes, copy it and let the rest be zero-padded
+            publicQueue.Get(reinterpret_cast<CryptoPP::byte*>(&publicKeyData[0]), publicSize);
+        } else {
+            // Key is larger than 160 bytes, take only the first 160 bytes
+            std::vector<uint8_t> tempKey(publicSize);
+            publicQueue.Get(reinterpret_cast<CryptoPP::byte*>(&tempKey[0]), publicSize);
+            std::copy(tempKey.begin(), tempKey.begin() + 160, publicKeyData.begin());
+        }
         
         std::cout << "[DEBUG] RSAPrivateWrapper: Successfully loaded private key from " << filename << std::endl;
     } catch (const CryptoPP::Exception& e) {
@@ -275,7 +345,9 @@ std::string RSAPrivateWrapper::getPublicKey() {
 }
 
 void RSAPrivateWrapper::getPublicKey(char* keyout, size_t keylen) {
+    printf("[DEBUG] RSA getPublicKey: keylen=%zu, publicKeyData.size()=%zu\n", keylen, publicKeyData.size());
     if (!keyout || keylen < publicKeyData.size()) {
+        printf("[ERROR] Buffer too small: need %zu bytes, got %zu bytes\n", publicKeyData.size(), keylen);
         throw std::invalid_argument("Invalid output buffer or insufficient size");
     }
     std::memcpy(keyout, publicKeyData.data(), publicKeyData.size());

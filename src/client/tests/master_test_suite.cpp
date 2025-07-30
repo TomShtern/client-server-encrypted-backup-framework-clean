@@ -100,9 +100,9 @@ public:
         std::cout << "Pass Rate: " << (totalTests > 0 ? (passedTests * 100.0 / totalTests) : 0) << "%" << std::endl;
         
         if (failedTests == 0) {
-            std::cout << "\n🎉 ALL TESTS PASSED! 🎉" << std::endl;
+            std::cout << "\n[SUCCESS] ALL TESTS PASSED!" << std::endl;
         } else {
-            std::cout << "\n❌ " << failedTests << " test(s) failed." << std::endl;
+            std::cout << "\n[ERROR] " << failedTests << " test(s) failed." << std::endl;
         }
     }
     

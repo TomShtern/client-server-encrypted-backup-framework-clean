@@ -257,9 +257,12 @@ bool Client::run() {
             return false;
         }
         
+        displayStatus("DEBUG: About to call sendPublicKey()", true, "Starting key exchange phase");
         if (!sendPublicKey()) {
+            displayError("DEBUG: sendPublicKey() failed", ErrorType::CRYPTO);
             return false;
         }
+        displayStatus("DEBUG: sendPublicKey() completed successfully", true, "Key exchange phase done");
     }
     
     displayPhase("File Transfer");
@@ -774,7 +777,7 @@ bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
     }
 }
 
-// Receive response from server (synchronous version to fix race condition)
+// Receive response from server with timeout to prevent subprocess hanging
 bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& payload) {
     if (!connected || !socket || !socket->is_open()) {
         displayError("Not connected to server", ErrorType::NETWORK);
@@ -784,10 +787,45 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
     try {
         boost::system::error_code ec;
         
-        // Synchronously receive header
+        // Set socket receive timeout to 25 seconds (less than 30s Python subprocess timeout)
+        // This prevents the subprocess from hanging and getting killed
+        
+        // Windows socket timeout
+        #ifdef _WIN32
+            DWORD timeout = 25000; // 25 seconds in milliseconds
+            if (setsockopt(socket->native_handle(), SOL_SOCKET, SO_RCVTIMEO, 
+                          (const char*)&timeout, sizeof(timeout)) != 0) {
+                displayStatus("Socket timeout", false, "Could not set receive timeout");
+            } else {
+                displayStatus("Socket timeout", true, "25s receive timeout set");
+            }
+        #else
+            struct timeval tv;
+            tv.tv_sec = 25;
+            tv.tv_usec = 0;
+            if (setsockopt(socket->native_handle(), SOL_SOCKET, SO_RCVTIMEO, 
+                          (const char*)&tv, sizeof(tv)) != 0) {
+                displayStatus("Socket timeout", false, "Could not set receive timeout");
+            } else {
+                displayStatus("Socket timeout", true, "25s receive timeout set");
+            }
+        #endif
+        
+        // Synchronously receive header with timeout
+        displayStatus("Waiting for server response", true, "Max wait: 25 seconds");
         std::size_t headerBytes = boost::asio::read(*socket, boost::asio::buffer(&header, sizeof(header)), ec);
-        if (ec || headerBytes != sizeof(header)) {
-            displayError("Failed to receive header: " + (ec ? ec.message() : "incomplete data"), ErrorType::NETWORK);
+        
+        if (ec) {
+            if (ec == boost::asio::error::timed_out || ec == boost::asio::error::operation_aborted) {
+                displayError("Timeout waiting for server response - this prevents subprocess kill", ErrorType::NETWORK);
+            } else {
+                displayError("Failed to receive header: " + ec.message(), ErrorType::NETWORK);
+            }
+            return false;
+        }
+        
+        if (headerBytes != sizeof(header)) {
+            displayError("Failed to receive complete header: got " + std::to_string(headerBytes) + " bytes, expected " + std::to_string(sizeof(header)), ErrorType::NETWORK);
             return false;
         }
         
@@ -1116,7 +1154,7 @@ bool Client::verifyCRC(uint32_t serverCRC, const std::vector<uint8_t>& originalD
     std::copy(filename.begin(), filename.end(), payload.begin());
     
     if (serverCRC == clientCRC) {
-        displayStatus("CRC verification", true, "✓ Checksums match - file integrity confirmed");
+        displayStatus("CRC verification", true, "[OK] Checksums match - file integrity confirmed");
         sendRequest(REQ_CRC_OK, payload);
         
         // Wait for ACK
@@ -1438,10 +1476,10 @@ void Client::displayProgress(const std::string& operation, size_t current, size_
     int pos = (barWidth * current) / total;
     
     SetConsoleTextAttribute(hConsole, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-    for (int i = 0; i < pos; i++) std::cout << "█";
+    for (int i = 0; i < pos; i++) std::cout << "#";
     
     SetConsoleTextAttribute(hConsole, FOREGROUND_GREEN);
-    for (int i = pos; i < barWidth; i++) std::cout << "░";
+    for (int i = pos; i < barWidth; i++) std::cout << ".";
     
     SetConsoleTextAttribute(hConsole, savedAttributes);
     std::cout << "] " << std::setw(3) << percentage << "% (" 
@@ -1577,7 +1615,7 @@ void Client::displayPhase(const std::string& phase) {
 #ifdef _WIN32
     std::cout << "\n";
     SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-    std::cout << "▶ " << phase << std::endl;
+    std::cout << "> " << phase << std::endl;
     SetConsoleTextAttribute(hConsole, savedAttributes);
     displaySeparator();
 #else
@@ -1593,10 +1631,10 @@ void Client::displaySummary() {
     displaySeparator();
 #ifdef _WIN32
     SetConsoleTextAttribute(hConsole, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-    std::cout << "✓ BACKUP COMPLETED SUCCESSFULLY\n";
+    std::cout << "[SUCCESS] BACKUP COMPLETED SUCCESSFULLY\n";
     SetConsoleTextAttribute(hConsole, savedAttributes);
 #else
-    std::cout << "✓ BACKUP COMPLETED SUCCESSFULLY\n";
+    std::cout << "[SUCCESS] BACKUP COMPLETED SUCCESSFULLY\n";
 #endif
     
     std::cout << "\nTransfer Summary:\n";

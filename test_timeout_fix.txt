@@ -1,0 +1,4 @@
+This file is used to test the C++ client socket timeout fix.
+The previous issue was that receiveResponse() hung indefinitely, 
+causing the Python subprocess to kill the C++ client after 30 seconds.
+Now we have a 25-second socket timeout to prevent this.
