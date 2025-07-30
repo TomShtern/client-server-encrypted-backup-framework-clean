@@ -312,7 +312,8 @@ class NetworkServer:
         
         try:
             sock.sendall(full_response_bytes)
-            logger.debug(f"Successfully sent response: Code={code}, TotalSizeSent={len(full_response_bytes)} (Header:{len(header_bytes)}, Payload:{len(payload)})")
+            logger.info(f"[DEBUG] Successfully sent response: Code={code}, TotalSizeSent={len(full_response_bytes)} (Header:{len(header_bytes)}, Payload:{len(payload)})")
+            print(f"[DEBUG] Response sent - Code: {code}, Raw bytes: {full_response_bytes.hex()}")
         except socket.timeout:
             logger.error(f"Socket timeout occurred while attempting to send response (Code: {code}). Client may not have received it.")
             raise
@@ -337,10 +338,8 @@ class NetworkServer:
         try:
             client_conn.settimeout(CLIENT_SOCKET_TIMEOUT)
             
-            # Send initial server version greeting to establish protocol compatibility
-            # Client expects ResponseHeader: version(1) + code(2) + payload_size(4) = 7 bytes
-            version_greeting = struct.pack("<BHI", SERVER_VERSION, 0, 0)  # version=3, code=0, payload_size=0
-            client_conn.sendall(version_greeting)
+            # Removed version greeting that was causing protocol confusion
+            # Client was interpreting greeting as response to registration request
             
             # Main loop for handling requests from this client
             while not self.shutdown_event.is_set():

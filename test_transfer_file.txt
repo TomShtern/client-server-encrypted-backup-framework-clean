@@ -1,0 +1,4 @@
+Test file for debugging file transfer issues.
+This file should be transferred from client to server.
+Created at: 2025-07-30 for debugging purposes.
+If you see this in the received_files directory, the transfer worked!

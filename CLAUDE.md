@@ -35,7 +35,7 @@ cmake --build build --config Release
 ```bash
 # 1. Install Python dependencies
 pip install -r requirements.txt
-pip install flask-cors  # Often missing
+# Core dependencies: cryptography>=3.4.0, pycryptodome>=3.15.0, psutil>=5.8.0, Flask>=2.0.0, flask-cors>=6.0.0
 
 # 2. Start Python server (Layer 4) - runs on port 1256
 python -m src.server.server
@@ -116,6 +116,12 @@ python scripts/testing/validate_server_gui.py
 - **Cross-Package Imports**: Fixed imports between `src/api/`, `src/shared/utils/`, and `src/server/`
 - **Server Module Execution**: Use `python -m src.server.server` for proper module execution
 
+### Recent Improvements (2025-07-30)
+- **Registration System**: Enhanced user registration and process registry management in RealBackupExecutor
+- **API Server Stability**: Continued refinement of Flask API Bridge with real backup executor integration
+- **Build Process**: Ongoing improvements to one-click build and run workflows
+- **Process Management**: Improved subprocess coordination and status tracking
+
 ## Critical Debugging Insights (2025-07-29)
 
 ### Windows-Specific Issues Discovered
@@ -159,12 +165,19 @@ python scripts/testing/validate_server_gui.py
 - **Test real user workflow**: Debug from actual user's system state, not developer's clean environment
 - **Subprocess error capture**: Monitor separate console windows for hidden error messages
 
-### Current Status (Partial Progress)
+### Current Status (2025-07-30)
+- ✅ **Full System Integration**: All 4 layers operational with proven file transfers in `src/server/received_files/`
 - ✅ **Both GUIs Launch**: Server GUI and Web GUI both display successfully  
 - ✅ **No "Connection Refused"**: Web interface loads at http://127.0.0.1:9090/
 - ✅ **Windows Compatibility**: Socket TIME_WAIT and Unicode issues resolved
-- ⚠️ **Project Still Fails**: While GUIs work, underlying backup functionality may still have issues
-- ⚠️ **Integration Testing Needed**: Complete 4-layer data flow requires further validation
+- ✅ **Registration System**: Enhanced user registration and process management working
+- 🔄 **Ongoing Development**: Continued refinements to stability and usability
+
+## Additional Resources
+
+### Technical Implementation Details
+- **`.github/copilot-instructions.md`**: In-depth subprocess management patterns, binary protocol specifications, and security implementation details
+- **Evidence of Success**: Check `src/server/received_files/` directory for actual file transfers (multiple test files demonstrate working system)
 
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.

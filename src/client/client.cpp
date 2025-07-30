@@ -774,7 +774,7 @@ bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
     }
 }
 
-// Receive response from server
+// Receive response from server (synchronous version to fix race condition)
 bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& payload) {
     if (!connected || !socket || !socket->is_open()) {
         displayError("Not connected to server", ErrorType::NETWORK);
@@ -782,37 +782,28 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
     }
     
     try {
-        // Set up timeout for receive operations
-        boost::asio::steady_timer timer(ioContext);
-        timer.expires_after(std::chrono::seconds(30)); // 30 second timeout
-
-        bool operationCompleted = false;
-        std::string errorMessage;
-
-        // Receive header with timeout
-        timer.async_wait([&](const boost::system::error_code& ec) {
-            if (!operationCompleted && !ec) {
-                socket->cancel();
-                errorMessage = "Timeout waiting for server response";
-            }
-        });
-
-        boost::asio::async_read(*socket, boost::asio::buffer(&header, sizeof(header)),
-            [&](const boost::system::error_code& ec, std::size_t bytes_transferred) {
-                operationCompleted = true;
-                timer.cancel();
-                if (ec) {
-                    errorMessage = "Failed to receive header: " + ec.message();
-                }
-            });
-
-        ioContext.run();
-        ioContext.restart();
-
-        if (!errorMessage.empty()) {
-            displayError(errorMessage, ErrorType::NETWORK);
+        boost::system::error_code ec;
+        
+        // Synchronously receive header
+        std::size_t headerBytes = boost::asio::read(*socket, boost::asio::buffer(&header, sizeof(header)), ec);
+        if (ec || headerBytes != sizeof(header)) {
+            displayError("Failed to receive header: " + (ec ? ec.message() : "incomplete data"), ErrorType::NETWORK);
             return false;
         }
+        
+        // Debug: show raw header bytes received
+        uint8_t* rawBytes = reinterpret_cast<uint8_t*>(&header);
+        std::stringstream hexStream;
+        for (size_t i = 0; i < sizeof(header); i++) {
+            hexStream << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(rawBytes[i]) << " ";
+        }
+        displayStatus("Debug: Raw header bytes", true, hexStream.str());
+        
+        // Debug: show interpreted header values
+        displayStatus("Debug: Response received", true, 
+                     "Version=" + std::to_string(header.version) + 
+                     ", Code=" + std::to_string(header.code) + 
+                     ", PayloadSize=" + std::to_string(header.payload_size));
 
         // Check version
         if (header.version != SERVER_VERSION) {
@@ -830,33 +821,10 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
         payload.clear();
         if (header.payload_size > 0) {
             payload.resize(header.payload_size);
-
-            // Reset for payload receive with timeout
-            operationCompleted = false;
-            errorMessage.clear();
-
-            timer.expires_after(std::chrono::seconds(30));
-            timer.async_wait([&](const boost::system::error_code& ec) {
-                if (!operationCompleted && !ec) {
-                    socket->cancel();
-                    errorMessage = "Timeout waiting for payload data";
-                }
-            });
-
-            boost::asio::async_read(*socket, boost::asio::buffer(payload),
-                [&](const boost::system::error_code& ec, std::size_t bytes_transferred) {
-                    operationCompleted = true;
-                    timer.cancel();
-                    if (ec) {
-                        errorMessage = "Failed to receive payload: " + ec.message();
-                    }
-                });
-
-            ioContext.run();
-            ioContext.restart();
-
-            if (!errorMessage.empty()) {
-                displayError(errorMessage, ErrorType::NETWORK);
+            
+            std::size_t payloadBytes = boost::asio::read(*socket, boost::asio::buffer(payload), ec);
+            if (ec || payloadBytes != header.payload_size) {
+                displayError("Failed to receive payload: " + (ec ? ec.message() : "incomplete data"), ErrorType::NETWORK);
                 return false;
             }
         }
@@ -893,6 +861,9 @@ bool Client::performRegistration() {
     if (!sendRequest(REQ_REGISTER, payload)) {
         return false;
     }
+    
+    // Add small delay to ensure server processes request
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     
     // Receive response
     ResponseHeader header;
