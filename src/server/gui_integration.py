@@ -110,7 +110,11 @@ class GUIManager:
 
     def update_transfer_stats(self, bytes_transferred: int = 0, last_activity: str = ""):
         if self.is_gui_ready() and self.gui is not None:
-            self._execute_gui_action(self.gui.update_transfer_stats, bytes_transferred, last_activity)
+            stats_data = {
+                'bytes_transferred': bytes_transferred,
+                'last_activity': last_activity
+            }
+            self._execute_gui_action(self.gui.update_transfer_stats, stats_data)
 
     def update_maintenance_stats(self, stats: Dict[str, Any]):
         if self.is_gui_ready() and self.gui is not None:

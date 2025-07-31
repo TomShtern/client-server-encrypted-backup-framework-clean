@@ -291,12 +291,20 @@ class BackupServer:
 
     def _update_gui_client_count(self):
         """Delegates updating the client count on the GUI."""
-        # This is a placeholder implementation.
-        # You might need to pass more specific data to the GUI manager.
         with self.clients_lock:
-            total_clients = len(self.clients)
+            connected_clients = len(self.clients)
+            # Get total clients from database if available
+            total_clients = connected_clients
+            if hasattr(self, 'db_manager') and self.db_manager:
+                try:
+                    total_from_db = len(self.db_manager.get_all_clients())
+                    total_clients = max(total_from_db, connected_clients)
+                except Exception:
+                    # Fall back to connected clients count on database error
+                    pass
+
         self.gui_manager.update_client_stats({
-            'connected': total_clients,
+            'connected': connected_clients,
             'total': total_clients,
             'active_transfers': 0
         })
@@ -304,6 +312,10 @@ class BackupServer:
     def _update_gui_success(self, message: str):
         """Delegates logging a success message to the GUI."""
         self.gui_manager.queue_update("log", message)
+
+    def _update_gui_transfer_stats(self, bytes_transferred: int = 0, last_activity: str = ""):
+        """Delegates updating transfer statistics to the GUI."""
+        self.gui_manager.update_transfer_stats(bytes_transferred, last_activity)
 
     def _parse_string_from_payload(self, payload_bytes: bytes, field_len: int, max_actual_len: int, field_name: str = "String") -> str:
         """
