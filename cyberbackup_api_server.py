@@ -20,23 +20,28 @@ from src.api.real_backup_executor import RealBackupExecutor
 # Import singleton manager to prevent multiple API server instances
 from src.server.server_singleton import ensure_single_server_instance
 
+import uuid
+
 app = Flask(__name__)
 CORS(app)  # Enable CORS for local development
 
-# Global state
+# --- New Job-Based Status Management ---
 backup_executor = RealBackupExecutor()
-current_backup_process = None
-connection_established = False  # Track if connection was explicitly established
-connection_timestamp = None     # When connection was established
-backup_status = {
-    'connected': False,
-    'backing_up': False,
-    'phase': 'READY',
-    'progress': {'percentage': 0, 'current_file': '', 'bytes_transferred': 0, 'total_bytes': 0},
-    'status': 'ready',
-    'message': 'Ready for backup',
-    'last_updated': datetime.now().isoformat()
-}
+active_backup_jobs = {}
+
+def get_default_status():
+    return {
+        'connected': False,
+        'backing_up': False,
+        'phase': 'READY',
+        'progress': {'percentage': 0, 'current_file': '', 'bytes_transferred': 0, 'total_bytes': 0},
+        'status': 'ready',
+        'message': 'Ready for backup',
+        'events': [],
+        'last_updated': datetime.now().isoformat()
+    }
+
+last_known_status = get_default_status() # For providing a consistent default
 
 # Server configuration
 server_config = {
@@ -98,45 +103,24 @@ def api_test():
 @app.route('/api/status')
 def api_status():
     """Get current backup status with proper connection state management"""
-    global backup_status, connection_established, connection_timestamp
+    global last_known_status, active_backup_jobs
 
-    print(f"[DEBUG] /api/status called at {datetime.now().isoformat()}")
+    job_id = request.args.get('job_id')
+    status = active_backup_jobs.get(job_id, last_known_status)
 
-    try:
-        # Check if server is reachable
-        server_is_reachable = check_backup_server_status()
-        print(f"[DEBUG] Backup server reachable: {server_is_reachable}")
-        print(f"[DEBUG] Connection established: {connection_established}")
+    # Always provide the latest connection status
+    status['connected'] = check_backup_server_status() and connection_established
+    status['isConnected'] = status['connected']
 
-        # Connection is valid only if:
-        # 1. Server is reachable AND
-        # 2. Connection was explicitly established via /api/connect
-        is_connected = server_is_reachable and connection_established
+    # Clear events after reading them
+    events_to_send = status.get('events', [])
+    if job_id and job_id in active_backup_jobs:
+        active_backup_jobs[job_id]['events'] = []
 
-        # Update connection status based on actual connection state
-        backup_status['connected'] = is_connected
-        backup_status['isConnected'] = is_connected  # Frontend expects this field
+    response = status.copy()
+    response['events'] = events_to_send
 
-        # Update status message based on connection state
-        if is_connected:
-            backup_status['status'] = 'connected'
-            if backup_status['phase'] == 'READY':
-                backup_status['message'] = f'Connected to backup server at {server_config["host"]}:{server_config["port"]}'
-        elif server_is_reachable and not connection_established:
-            backup_status['status'] = 'disconnected'
-            backup_status['message'] = 'Server available - click CONNECT to establish connection'
-            backup_status['phase'] = 'READY'
-        else:
-            backup_status['status'] = 'disconnected'
-            backup_status['message'] = 'Backup server not responding'
-            backup_status['phase'] = 'DISCONNECTED'
-            # Reset connection state if server is not reachable
-            connection_established = False
-
-        backup_status['last_updated'] = datetime.now().isoformat()
-
-        print(f"[DEBUG] Returning status: connected={backup_status['connected']}, isConnected={backup_status['isConnected']}")
-        return jsonify(backup_status)
+    return jsonify(response)
 
     except Exception as e:
         print(f"[ERROR] Exception in api_status: {str(e)}")
@@ -267,7 +251,27 @@ def api_disconnect():
 @app.route('/api/start_backup', methods=['POST'])
 def api_start_backup():
     """Start backup using REAL backup executor"""
-    global backup_status, backup_executor, current_backup_process
+    global active_backup_jobs, backup_executor
+
+    job_id = str(uuid.uuid4())
+    active_backup_jobs[job_id] = get_default_status()
+    active_backup_jobs[job_id]['backing_up'] = True
+
+    def status_handler(phase, data):
+        if job_id in active_backup_jobs:
+            active_backup_jobs[job_id]['events'].append({'phase': phase, 'data': data})
+            active_backup_jobs[job_id]['phase'] = phase
+            if isinstance(data, dict):
+                active_backup_jobs[job_id]['message'] = data.get('message', phase)
+                if 'progress' in data:
+                    active_backup_jobs[job_id]['progress']['percentage'] = data['progress']
+            else:
+                active_backup_jobs[job_id]['message'] = data
+
+    backup_executor.set_status_callback(status_handler)
+
+    # ... (rest of the function remains the same)
+
 
     print(f"[DEBUG] /api/start_backup endpoint called")
     print(f"[DEBUG] Request method: {request.method}")

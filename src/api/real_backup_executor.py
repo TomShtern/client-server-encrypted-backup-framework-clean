@@ -85,6 +85,7 @@ class RealBackupExecutor:
         
         content = f"{server_ip}:{server_port}\n{username}\n{file_path}\n"
         self._log_status("CONFIG", f"transfer.info content:\n---\n{content}---")
+        self._log_status("PROGRESS", {"progress": 10, "message": "Configuration generated"})
         
         # Create managed file
         transfer_info_path = self.file_manager.create_managed_file("transfer.info", content)
@@ -515,6 +516,7 @@ class RealBackupExecutor:
             self._log_status("CONFIG", f"Copied transfer.info to {len(copy_locations)} locations: {copy_locations}")
             
             self._log_status("LAUNCH", f"Launching {self.client_exe}")
+            self._log_status("PROGRESS", {"progress": 20, "message": "C++ client process starting"})
             # Launch client process with automated input handling and BATCH MODE
             if not self.client_exe:
                 raise RuntimeError("Client executable path is not set")
@@ -566,10 +568,13 @@ class RealBackupExecutor:
             self._log_status("PROCESS", f"Started backup client with enhanced monitoring (ID: {process_id}, PID: {self.backup_process.pid})")
             
             # Capture and log stdout/stderr
+            # For now, we simulate progress during the timeout
+            self._log_status("PROGRESS", {"progress": 50, "message": "File transfer in progress..."})
             try:
                 stdout, stderr = self.backup_process.communicate(timeout=timeout)
                 result['process_exit_code'] = self.backup_process.returncode
                 self._log_status("PROCESS", f"Client process finished with exit code: {result['process_exit_code']}")
+                self._log_status("PROGRESS", {"progress": 80, "message": "Finalizing transfer..."})
                 if stdout:
                     # Handle Unicode encoding for Windows console compatibility
                     stdout_safe = stdout.decode('utf-8', errors='replace').encode('ascii', errors='replace').decode('ascii') if isinstance(stdout, bytes) else str(stdout).encode('ascii', errors='replace').decode('ascii')
@@ -606,6 +611,7 @@ class RealBackupExecutor:
             # Prioritize file transfer verification over process exit code
             if verification['transferred']:
                 result['success'] = True
+                self._log_status("COMPLETED", {"progress": 100, "message": "Backup verified and complete!"})
                 if result['process_exit_code'] == 0:
                     self._log_status("SUCCESS", "REAL backup completed and verified!")
                 else:
@@ -613,6 +619,7 @@ class RealBackupExecutor:
                     self._log_status("SUCCESS", f"REAL backup completed and verified! (Process was killed but transfer succeeded)")
             else:
                 result['error'] = "No file transfer detected - backup may have failed"
+                self._log_status("FAILED", {"progress": 0, "message": "Verification failed!"})
                 self._log_status("FAILURE", result['error'])
             
         except Exception as e:
