@@ -732,7 +732,7 @@ class SettingsDialog:
                            relief="flat", bd=0, padx=20, pady=8)
         save_btn.pack(side="right", padx=(10, 0))
 
-        cancel_btn = tk.Button(button_frame, text="❌ Cancel", command=self._cancel,
+        cancel_btn = tk.Button(button_frame, text="[CANCEL] Cancel", command=self._cancel,
                              bg=ModernTheme.ERROR, fg=ModernTheme.TEXT_PRIMARY,
                              font=(ModernTheme.FONT_FAMILY, 11, 'bold'),
                              relief="flat", bd=0, padx=20, pady=8)
@@ -1378,7 +1378,7 @@ class ServerGUI:
         file_menu.add_separator()
         file_menu.add_command(label="🔄 Backup Database", command=self._backup_database)
         file_menu.add_separator()
-        file_menu.add_command(label="❌ Exit", command=self._exit_server)
+        file_menu.add_command(label="[EXIT] Exit", command=self._exit_server)
 
         # Server menu
         server_menu = tk.Menu(menubar, tearoff=0, bg=ModernTheme.CARD_BG,
@@ -2043,7 +2043,7 @@ class ServerGUI:
                         fg=ModernTheme.TEXT_PRIMARY, font=(ModernTheme.FONT_FAMILY, 12, 'bold'))
         title.pack(anchor="w", padx=10, pady=(8, 5))
 
-        self.status_labels['error'] = tk.Label(card.content_frame, text="✅ Ready", bg=ModernTheme.CARD_BG, # Changed to card.content_frame
+        self.status_labels['error'] = tk.Label(card.content_frame, text="[READY] Ready", bg=ModernTheme.CARD_BG, # Changed to card.content_frame
                                               fg=ModernTheme.SUCCESS, font=(ModernTheme.FONT_FAMILY, 9))
         self.status_labels['error'].pack(padx=10, pady=(5, 8), anchor="w")
 
@@ -2086,7 +2086,7 @@ class ServerGUI:
         analytics_btn.grid(row=2, column=0, sticky="nsew", padx=(0, 5), pady=(5,0))
         ModernTooltip(analytics_btn, "View performance and usage analytics")
 
-        exit_btn = self._create_modern_button(button_frame, "❌ Exit Application", self._exit_server, ModernTheme.TEXT_SECONDARY)
+        exit_btn = self._create_modern_button(button_frame, "[EXIT] Exit Application", self._exit_server, ModernTheme.TEXT_SECONDARY)
         exit_btn.grid(row=2, column=1, sticky="nsew", padx=(5, 0), pady=(5,0))
         ModernTooltip(exit_btn, "Exit the GUI application")
 
@@ -2119,7 +2119,7 @@ class ServerGUI:
         else:
             if self.toast_system:
                 self.toast_system.show_toast("Server instance not available. Please start the server using 'python server.py'", "error")
-            self._add_activity_log("❌ Server instance not available. Use 'python server.py' to start properly.")
+            self._add_activity_log("[ERROR] Server instance not available. Use 'python server.py' to start properly.")
 
     def _stop_server(self):
         """Stop the backup server."""
@@ -2540,7 +2540,7 @@ class ServerGUI:
                         'client': f['client'],
                         'size': f"{size_in_mb:.2f} MB" if f.get('size') is not None else 'N/A',
                         'date': f.get('date', 'N/A'),
-                        'verified': "✅ Yes" if f['verified'] else "❌ No",
+                        'verified': "[OK] Yes" if f['verified'] else "[NO] No",
                         'path': f['path']
                     })
                 

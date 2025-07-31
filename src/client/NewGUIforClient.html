@@ -2961,20 +2961,32 @@
 
             async startBackup(file, config) {
                 debugLog('Starting backup...', 'API');
+                console.log('[DEBUG] startBackup called with:', {file: file.name, config});
+                console.log('[DEBUG] API URL:', `${this.baseUrl}/api/start_backup`);
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('username', config.username);
                 formData.append('server', config.serverIP);
                 formData.append('port', config.serverPort);
+                console.log('[DEBUG] FormData prepared:', {
+                    file: file.name,
+                    username: config.username,
+                    server: config.serverIP,
+                    port: config.serverPort
+                });
 
+                console.log('[DEBUG] Sending POST request to Flask API...');
                 const response = await this.fetchWithTimeout(`${this.baseUrl}/api/start_backup`, {
                     method: 'POST',
                     body: formData,
                 }, this.uploadTimeout);
+                console.log('[DEBUG] Response received:', response.status, response.statusText);
                 if (!response.ok) {
+                    console.log('[ERROR] HTTP error in startBackup:', response.status, response.statusText);
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
+                console.log('[DEBUG] Start backup response data:', data);
                 debugLog('Start backup response:' + JSON.stringify(data), 'API');
                 return data;
             }

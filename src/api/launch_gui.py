@@ -67,7 +67,7 @@ def open_gui():
         print(f"GUI opened in browser: {gui_url}")
         return True
     except Exception as e:
-        print(f"❌ Failed to open GUI: {e}")
+        print(f"[ERROR] Failed to open GUI: {e}")
         return False
 
 def main():
@@ -90,7 +90,7 @@ def main():
             else:
                 print("API server may not be fully ready, but continuing...")
         else:
-            print("❌ Failed to start API server")
+            print("[ERROR] Failed to start API server")
             return 1
     
     print("Opening GUI in browser...")

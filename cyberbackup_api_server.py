@@ -273,6 +273,11 @@ def api_start_backup():
     print(f"[DEBUG] Request method: {request.method}")
     print(f"[DEBUG] Request files: {list(request.files.keys())}")
     print(f"[DEBUG] Request form: {dict(request.form)}")
+    print(f"[DEBUG] Content-Type: {request.content_type}")
+    print(f"[DEBUG] Request headers: {dict(request.headers)}")
+    print(f"[DEBUG] Current working directory: {os.getcwd()}")
+    print(f"[DEBUG] Client executable path: {backup_executor.client_exe}")
+    print(f"[DEBUG] Client executable exists: {os.path.exists(backup_executor.client_exe) if backup_executor.client_exe else 'N/A'}")
 
     try:
         # Check if already backing up

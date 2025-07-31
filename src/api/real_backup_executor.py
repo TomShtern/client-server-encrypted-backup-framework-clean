@@ -34,12 +34,11 @@ class RealBackupExecutor:
     """
     def __init__(self, client_exe_path: Optional[str] = None):
         # Try different possible locations for the client executable
+        # IMPORTANT: Only use the build/Release version which has our latest fixes
         if not client_exe_path:
             possible_paths = [
-                r"client\EncryptedBackupClient.exe",
-                r"build\Release\EncryptedBackupClient.exe",
-                r"client\EncryptedBackupClient_backup.exe",
-                r"EncryptedBackupClient.exe"
+                r"build\Release\EncryptedBackupClient.exe",  # Latest version with fixes - REQUIRED
+                r"EncryptedBackupClient.exe"                 # Root directory fallback
             ]
             
             self.client_exe = None
