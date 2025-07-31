@@ -4,10 +4,10 @@
 ## Architecture Overview
 This is a **sophisticated 4-layer encrypted backup system** with unique hybrid web-to-native architecture:
 
-1. **Web UI Layer** (`src/client/NewGUIforClient.html`) - Cyberpunk-themed browser interface
+1. **Web UI Layer** (`src/client/NewGUIforClient.html`) - Cyberpunk-themed SPA with 15+ JavaScript classes
 2. **Flask API Bridge** (`cyberbackup_api_server.py` + `real_backup_executor.py`) - **Critical integration layer**
-3. **C++ Client Engine** (`src/client/client.cpp` + `src/client/main.cpp`) - High-performance encryption engine
-4. **Python Server** (`server/server.py`) - Multi-threaded backup storage with custom binary protocol
+3. **C++ Client Engine** (`src/client/client.cpp` + `src/client/main.cpp`) - High-performance encryption engine (1700+ lines)
+4. **Python Server** (`src/server/server.py`) - Multi-threaded backup storage with custom binary protocol
 
 **Critical Understanding**: The Flask API Bridge is the coordination hub that manages subprocess lifecycles, file uploads, and status aggregation. Web UI communicates ONLY with Flask API, never directly with C++ client or Python server.
 
@@ -18,6 +18,11 @@ HTTP POST    RealBackupExecutor    --batch mode           Custom Binary
 requests     process management    + transfer.info        TCP Protocol
 ```
 
+**Key Client Components**:
+- **Web Client**: Single 8000+ line HTML file with modular JavaScript classes (ApiClient, FileManager, App, ThemeManager, ParticleSystem, etc.)
+- **C++ Client**: Production-ready executable with RSA/AES encryption, CRC verification, and --batch mode for subprocess integration
+- **Both clients** connect to the same Python server but through different pathways (web→Flask→C++→server vs direct C++→server)
+
 ## Essential Development Workflows
 
 ### Quick System Startup
@@ -25,6 +30,7 @@ requests     process management    + transfer.info        TCP Protocol
 # Single command to start entire system (RECOMMENDED)
 python launch_gui.py
 # Starts Flask API server + opens browser to http://localhost:9090/
+# Automatically handles port checking and server readiness
 ```
 
 ### Build System (CMake + vcpkg)
@@ -38,7 +44,7 @@ cmake --build build --config Release
 ### Manual Service Management
 ```bash
 # 1. Start Python backup server (must start FIRST)
-python server/server.py    # Port 1256
+python src/server/server.py    # Port 1256
 
 # 2. Start Flask API bridge  
 python cyberbackup_api_server.py    # Port 9090
@@ -50,12 +56,12 @@ cmake --build build --config Release
 ### Testing & Verification
 ```bash
 # Integration tests (test complete web→API→C++→server chain)
-python tests/test_gui_upload.py      # Full integration test
+python tests/test_gui_upload.py      # Full integration test via GUI API
 python tests/test_upload.py          # Direct server test
 python tests/test_client.py          # C++ client validation
 
 # Verify real file transfers (CRITICAL verification pattern)
-# Check: server/received_files/ for actual transferred files
+# Check: server/received_files/ OR received_files/ for actual transferred files
 # Pattern: {username}_{timestamp}_{filename}
 ```
 
@@ -86,6 +92,31 @@ def _generate_transfer_info(self, server_ip, server_port, username, file_path):
         f.write(f"{server_ip}:{server_port}\n")  # Line 1: server endpoint
         f.write(f"{username}\n")                 # Line 2: username  
         f.write(f"{file_path}\n")                # Line 3: absolute file path
+```
+
+### Web Client Architecture Pattern (CRITICAL)
+The HTML file contains a complete modular JavaScript application:
+
+```javascript
+// Class hierarchy for 8000+ line single-file SPA
+class App {
+    constructor() {
+        this.apiClient = new ApiClient();           // Flask API communication
+        this.system = new SystemManager();          // Core system management
+        this.buttonStateManager = new ButtonStateManager();  // UI state
+        this.particleSystem = new ParticleSystem(); // Visual effects
+        this.errorBoundary = new ErrorBoundary(this); // Error handling
+        // + 10 more manager classes
+    }
+}
+
+// Key JavaScript Classes:
+// - ApiClient: HTTP communication with Flask bridge
+// - FileManager: File validation, preview, drag-drop
+// - ThemeManager: Cyberpunk/Matrix/Dark theme switching
+// - ParticleSystem: Performance-optimized visual effects
+// - ErrorBoundary: Global error handling and recovery
+// - ButtonStateManager: Loading/success/error button states
 ```
 
 ### File Verification Pattern (CRITICAL)
@@ -195,8 +226,7 @@ taskkill /f /im python.exe               # Kill Python processes
 taskkill /f /im EncryptedBackupClient.exe # Kill C++ client
 
 # Verify file transfers  
-dir "server
-eceived_files"              # Check received files
+dir "server\received_files"              # Check received files
 python -c "import hashlib; print(hashlib.sha256(open('file.txt','rb').read()).hexdigest())"
 ```
 

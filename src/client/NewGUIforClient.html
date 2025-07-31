@@ -146,6 +146,25 @@
             --surface-24: rgba(54, 54, 74, 1.0);   /* 24dp elevation */
         }
 
+        /* Performance Utility Classes - Replace direct style manipulation */
+        .u-hidden { display: none !important; }
+        .u-visible { display: block !important; }
+        .u-flex { display: flex !important; }
+        .u-inline-flex { display: inline-flex !important; }
+        
+        /* Screen reader only utility */
+        .u-sr-only {
+            position: absolute !important;
+            left: -10000px !important;
+            width: 1px !important;
+            height: 1px !important;
+            overflow: hidden !important;
+        }
+        
+        /* Debug entry color classes */
+        .u-text-gray { color: #666 !important; }
+        .u-text-light-gray { color: #ccc !important; }
+
         body {
             font-family: 'Orbitron', 'Share Tech Mono', monospace;
             background: var(--bg-black);
@@ -178,17 +197,16 @@
                 100px 100px,
                 100px 100px;
             opacity: 0.1;
+            will-change: transform;
             animation: cyber-grid-flow 30s linear infinite;
         }
 
         @keyframes cyber-grid-flow {
             0% { 
-                transform: translate(0, 0) rotate(0deg);
-                background-position: 0 0, 0 0, 0 0, 0 0, 0 0;
+                transform: translate3d(0, 0, 0) rotate(0deg);
             }
             100% { 
-                transform: translate(100px, 100px) rotate(0.5deg);
-                background-position: 100px 100px, -50px 50px, 150px -100px, 100px 100px, 100px 100px;
+                transform: translate3d(100px, 100px, 0) rotate(0.5deg);
             }
         }
 
@@ -197,6 +215,7 @@
             position: relative;
             color: var(--text-primary);
             text-shadow: var(--glow-blue);
+            will-change: opacity;
             animation: neon-flicker 3s ease-in-out infinite alternate;
         }
 
@@ -218,11 +237,9 @@
         @keyframes neon-flicker {
             0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
                 opacity: 1;
-                text-shadow: var(--glow-blue);
             }
             20%, 24%, 55% {        
                 opacity: 0.4;
-                text-shadow: none;
             }
         }
 
@@ -318,8 +335,8 @@
         }
 
         @keyframes rgb-border-cycle {
-            0%, 100% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
+            0%, 100% { transform: translateX(0%); }
+            50% { transform: translateX(100%); }
         }
 
         /* Particle Effect Container */
@@ -344,7 +361,7 @@
 
         @keyframes particle-float {
             0% {
-                transform: translateY(100vh) scale(0);
+                transform: translate3d(0, 100vh, 0) scale(0);
                 opacity: 0;
             }
             10% {
@@ -354,7 +371,7 @@
                 opacity: 1;
             }
             100% {
-                transform: translateY(-10vh) scale(1);
+                transform: translate3d(0, -10vh, 0) scale(1);
                 opacity: 0;
             }
         }
@@ -401,19 +418,19 @@
 
         @keyframes logo-pulse {
             0%, 100% { 
-                transform: scale(1);
+                transform: scale3d(1, 1, 1);
                 color: var(--neon-pink);
             }
             25% { 
-                transform: scale(1.05);
+                transform: scale3d(1.05, 1.05, 1);
                 color: var(--neon-blue);
             }
             50% { 
-                transform: scale(1.1);
+                transform: scale3d(1.1, 1.1, 1);
                 color: var(--neon-purple);
             }
             75% { 
-                transform: scale(1.05);
+                transform: scale3d(1.05, 1.05, 1);
                 color: var(--neon-green);
             }
         }
@@ -508,49 +525,34 @@
 
         @keyframes pulse-success {
             0%, 100% { 
-                box-shadow: 
-                    var(--glow-green),
-                    0 0 15px rgba(0, 255, 0, 0.4);
-                transform: scale(1);
+                transform: scale3d(1, 1, 1);
+                opacity: 0.8;
             }
             50% { 
-                box-shadow: 
-                    0 0 30px var(--neon-green), 
-                    0 0 60px var(--neon-green),
-                    0 0 25px rgba(0, 255, 0, 0.6);
-                transform: scale(1.05);
+                transform: scale3d(1.05, 1.05, 1);
+                opacity: 1;
             }
         }
 
         @keyframes pulse-error {
             0%, 100% { 
-                box-shadow: 
-                    0 0 10px rgba(255, 0, 64, 0.4),
-                    0 0 20px rgba(255, 0, 64, 0.2);
-                transform: scale(1);
+                transform: scale3d(1, 1, 1);
+                opacity: 0.8;
             }
             50% { 
-                box-shadow: 
-                    0 0 20px var(--error), 
-                    0 0 40px var(--error),
-                    0 0 30px rgba(255, 0, 64, 0.4);
-                transform: scale(1.05);
+                transform: scale3d(1.05, 1.05, 1);
+                opacity: 1;
             }
         }
 
         @keyframes pulse-warning {
             0%, 100% { 
-                box-shadow: 
-                    0 0 10px rgba(255, 255, 0, 0.4),
-                    0 0 20px rgba(255, 255, 0, 0.2);
-                transform: scale(1);
+                transform: scale3d(1, 1, 1);
+                opacity: 0.8;
             }
             50% { 
-                box-shadow: 
-                    0 0 20px var(--warning), 
-                    0 0 40px var(--warning),
-                    0 0 30px rgba(255, 255, 0, 0.4);
-                transform: scale(1.05);
+                transform: scale3d(1.05, 1.05, 1);
+                opacity: 1;
             }
         }
 
@@ -663,9 +665,9 @@
         }
 
         @keyframes input-shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            75% { transform: translateX(5px); }
+            0%, 100% { transform: translate3d(0, 0, 0); }
+            25% { transform: translate3d(-5px, 0, 0); }
+            75% { transform: translate3d(5px, 0, 0); }
         }
 
         /* Enhanced File Drop Zone with Better Visual Feedback */
@@ -706,8 +708,8 @@
         }
 
         @keyframes pulse-glow {
-            0% { opacity: 0.8; transform: translate(-50%, -50%) scale(1); }
-            100% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+            0% { opacity: 0.8; transform: translate3d(-50%, -50%, 0) scale3d(1, 1, 1); }
+            100% { opacity: 1; transform: translate3d(-50%, -50%, 0) scale3d(1.05, 1.05, 1); }
         }
 
         .file-input {
@@ -2380,7 +2382,7 @@
                 <div class="copy-container">
                     <input type="text" class="config-input copy-content" id="serverInput" 
                            placeholder="127.0.0.1:1256" value="127.0.0.1:1256" aria-describedby="serverHelp">
-                    <button class="copy-btn" id="copyServerAddress" title="Copy Server Address" aria-label="Copy Server Address">📋</button>
+                    <button type="button" class="copy-btn" id="copyServerAddress" title="Copy Server Address" aria-label="Copy Server Address">📋</button>
                 </div>
                 <div id="serverHelp" class="sr-only">Enter server IP address and port</div>
             </div>
@@ -2405,7 +2407,7 @@
                             <span class="sr-only">or drag and drop a file here</span>
                         </div>
                     </div>
-                    <button class="cyber-btn small secondary recent-files-btn" id="recentFilesBtn" 
+                    <button type="button" class="cyber-btn small secondary recent-files-btn" id="recentFilesBtn" 
                             title="Show recent files" aria-label="Show recent files">
                         📂 Recent Files
                     </button>
@@ -2413,7 +2415,7 @@
                 <div id="fileHelp" class="sr-only">Select a file for backup or drag and drop</div>
                 <div class="copy-container">
                     <div class="config-value copy-content" id="selectedFile">No file selected</div>
-                    <button class="copy-btn copy-btn-hidden" id="copyFileInfo" title="Copy File Info" aria-label="Copy File Info">📋</button>
+                    <button type="button" class="copy-btn copy-btn-hidden" id="copyFileInfo" title="Copy File Info" aria-label="Copy File Info">📋</button>
                 </div>
                 <div id="filePreview" class="file-preview-container file-preview-layout"></div>
             </div>
@@ -2422,12 +2424,12 @@
                 <label class="config-label">Client ID</label>
                 <div class="copy-container">
                     <div class="config-value copy-content" id="clientId">Not connected</div>
-                    <button class="copy-btn" id="copyClientId" title="Copy Client ID" aria-label="Copy Client ID">📋</button>
+                    <button type="button" class="copy-btn" id="copyClientId" title="Copy Client ID" aria-label="Copy Client ID">📋</button>
                 </div>
             </div>
 
             <div class="btn-group">
-                <button class="cyber-btn success" data-action="save-config">💾 Save Config</button>
+                <button type="button" class="cyber-btn success" data-action="save-config">💾 Save Config</button>
             </div>
 
             <div class="panel-header panel-header-spaced">
@@ -2435,11 +2437,11 @@
             </div>
             
             <div class="theme-selector">
-                <button class="theme-btn cyberpunk active" 
+                <button type="button" class="theme-btn cyberpunk active" 
                         aria-label="Cyberpunk theme" title="Cyberpunk Theme"></button>
-                <button class="theme-btn dark" 
+                <button type="button" class="theme-btn dark" 
                         aria-label="Dark theme" title="Dark Theme"></button>
-                <button class="theme-btn matrix" 
+                <button type="button" class="theme-btn matrix" 
                         aria-label="Matrix theme" title="Matrix Theme"></button>
             </div>
         </aside>
@@ -2508,8 +2510,8 @@
             <div class="panel-header">
                 <h2 class="panel-title">Operation Log</h2>
                 <div class="btn-group">
-                    <button class="cyber-btn success small" data-action="export-log">📥 Export</button>
-                    <button class="cyber-btn danger small" data-action="clear-log">🗑️ Clear</button>
+                    <button type="button" class="cyber-btn success small" data-action="export-log">📥 Export</button>
+                    <button type="button" class="cyber-btn danger small" data-action="clear-log">🗑️ Clear</button>
                     <button type="button" class="cyber-btn primary small" id="autoScrollBtn">
                         📜 Auto-scroll: ON
                     </button>
@@ -2550,7 +2552,7 @@
             <h3 class="modal-title" id="confirmTitle">Confirm Action</h3>
             <p class="modal-message" id="confirmMessage">Are you sure?</p>
             <div class="modal-buttons">
-                <button class="cyber-btn secondary" id="cancelModalBtn" data-action="cancel-modal">Cancel</button>
+                <button type="button" class="cyber-btn secondary" id="cancelModalBtn" data-action="cancel-modal">Cancel</button>
                 <button type="button" class="cyber-btn danger" id="confirmOkBtn">Confirm</button>
             </div>
         </div>
@@ -2609,7 +2611,7 @@
             toggle() {
                 this.isEnabled = !this.isEnabled;
                 if (this.debugDiv) {
-                    this.debugDiv.style.display = this.isEnabled ? 'block' : 'none';
+                    this.debugDiv.classList.toggle('u-hidden', !this.isEnabled);
                 }
                 this.savePreferences();
             }
@@ -2653,7 +2655,29 @@
 
                 const entryDiv = document.createElement('div');
                 entryDiv.style.cssText = `color: ${entry.levelObj.color}; margin-bottom: 2px; font-size: 11px; line-height: 1.2;`;
-                entryDiv.innerHTML = `<span style="color: #666;">[${entry.timestamp}]</span> <span style="color: ${entry.levelObj.color}; font-weight: bold;">[${entry.levelObj.prefix}]</span> <span style="color: #ccc;">[${entry.category}]</span> ${entry.message}`;
+                
+                // Create safe DOM elements instead of innerHTML to prevent XSS
+                const timestampSpan = document.createElement('span');
+                timestampSpan.className = 'u-text-gray';
+                timestampSpan.textContent = `[${entry.timestamp}]`;
+                
+                const levelSpan = document.createElement('span');
+                levelSpan.style.cssText = `color: ${entry.levelObj.color}; font-weight: bold;`;
+                levelSpan.textContent = `[${entry.levelObj.prefix}]`;
+                
+                const categorySpan = document.createElement('span');
+                categorySpan.className = 'u-text-light-gray';
+                categorySpan.textContent = `[${entry.category}]`;
+                
+                const messageSpan = document.createElement('span');
+                messageSpan.textContent = ` ${entry.message}`;
+                
+                entryDiv.appendChild(timestampSpan);
+                entryDiv.appendChild(document.createTextNode(' '));
+                entryDiv.appendChild(levelSpan);
+                entryDiv.appendChild(document.createTextNode(' '));
+                entryDiv.appendChild(categorySpan);
+                entryDiv.appendChild(messageSpan);
                 
                 this.debugDiv.appendChild(entryDiv);
                 
@@ -2696,8 +2720,8 @@
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="color: #00ffff; font-weight: bold;">Debug Console</span>
                         <div>
-                            <button onclick="debugLogger.clearEntries()" style="background: none; border: 1px solid #00ffff; color: #00ffff; padding: 2px 6px; font-size: 10px; cursor: pointer;">Clear</button>
-                            <button onclick="debugLogger.toggle()" style="background: none; border: 1px solid #ff0040; color: #ff0040; padding: 2px 6px; font-size: 10px; cursor: pointer;">×</button>
+                            <button type="button" onclick="debugLogger.clearEntries()" style="background: none; border: 1px solid #00ffff; color: #00ffff; padding: 2px 6px; font-size: 10px; cursor: pointer;">Clear</button>
+                            <button type="button" onclick="debugLogger.toggle()" style="background: none; border: 1px solid #ff0040; color: #ff0040; padding: 2px 6px; font-size: 10px; cursor: pointer;">×</button>
                         </div>
                     </div>
                 `;
@@ -2712,7 +2736,7 @@
                 if (this.debugDiv) {
                     // Keep only the header
                     const header = this.debugDiv.firstChild;
-                    this.debugDiv.innerHTML = '';
+                    this.debugDiv.textContent = ''; // Clear safely
                     this.debugDiv.appendChild(header);
                 }
             }
@@ -2883,6 +2907,92 @@
             }
         }
         debugLog('IntervalManager class defined successfully');
+
+        // Event Listener Manager to prevent memory leaks
+        debugLog('Defining EventListenerManager class...');
+        class EventListenerManager {
+            constructor() {
+                this.listeners = new Map(); // Map<string, {element, event, handler, options}>
+                
+                // Add cleanup on page unload
+                window.addEventListener('beforeunload', () => {
+                    this.cleanup();
+                });
+            }
+            
+            add(name, element, event, handler, options = false) {
+                // Validate element exists
+                if (!element) {
+                    console.error(`[EventListenerManager] Cannot add listener '${name}': element is null/undefined`);
+                    return null;
+                }
+                
+                if (typeof element.addEventListener !== 'function') {
+                    console.error(`[EventListenerManager] Cannot add listener '${name}': element does not support addEventListener`);
+                    return null;
+                }
+                
+                // Remove existing listener with the same name
+                this.remove(name);
+                
+                try {
+                    // Add the new listener
+                    element.addEventListener(event, handler, options);
+                    
+                    // Store for cleanup
+                    this.listeners.set(name, {
+                        element,
+                        event,
+                        handler,
+                        options
+                    });
+                    
+                    debugLog(`Event listener '${name}' added for ${event} on ${element.tagName || 'object'}`, 'EVENT_MANAGER');
+                    return handler;
+                } catch (error) {
+                    console.error(`[EventListenerManager] Failed to add listener '${name}':`, error);
+                    return null;
+                }
+            }
+            
+            remove(name) {
+                if (this.listeners.has(name)) {
+                    const {element, event, handler, options} = this.listeners.get(name);
+                    element.removeEventListener(event, handler, options);
+                    this.listeners.delete(name);
+                    debugLog(`Event listener '${name}' removed`, 'EVENT_MANAGER');
+                    return true;
+                }
+                return false;
+            }
+            
+            has(name) {
+                return this.listeners.has(name);
+            }
+            
+            cleanup() {
+                debugLog('Cleaning up event listeners...', 'EVENT_MANAGER');
+                this.listeners.forEach((listener, name) => {
+                    const {element, event, handler, options} = listener;
+                    try {
+                        element.removeEventListener(event, handler, options);
+                        debugLog(`Cleaned up event listener '${name}'`, 'EVENT_MANAGER');
+                    } catch (error) {
+                        console.warn(`Failed to clean up event listener '${name}':`, error);
+                    }
+                });
+                this.listeners.clear();
+                debugLog('All event listeners cleaned up', 'EVENT_MANAGER');
+            }
+            
+            getStats() {
+                return {
+                    listenerCount: this.listeners.size,
+                    listenerNames: Array.from(this.listeners.keys())
+                };
+            }
+        }
+        debugLog('EventListenerManager class defined successfully');
 
         /**
          * NEW: ApiClient
@@ -3332,9 +3442,9 @@
         class SystemManager {
             constructor() {
                 this.notifications = new NotificationManager();
+                this.fileManager = new FileManager();
                 this.modal = new ModalManager();
                 this.confirmModal = new ConfirmModalManager();
-                this.fileManager = new FileManager();
             }
 
             announce(message) {
@@ -3347,11 +3457,7 @@
                 const liveRegion = document.createElement('div');
                 liveRegion.setAttribute('aria-live', 'polite');
                 liveRegion.setAttribute('aria-atomic', 'true');
-                liveRegion.style.position = 'absolute';
-                liveRegion.style.left = '-10000px';
-                liveRegion.style.width = '1px';
-                liveRegion.style.height = '1px';
-                liveRegion.style.overflow = 'hidden';
+                liveRegion.className = 'u-sr-only';
                 liveRegion.textContent = message;
                 document.body.appendChild(liveRegion);
 
@@ -3432,21 +3538,26 @@
         debugLog('Defining ModalManager class...');
         class ModalManager {
             constructor() {
-                this.modalOverlay = document.getElementById('confirmModal'); // Reusing for simplicity
+                // Get elements directly from DOM - no circular dependency
+                this.modalOverlay = document.getElementById('confirmModal');
                 this.modalTitle = document.getElementById('confirmTitle');
                 this.modalMessage = document.getElementById('confirmMessage');
                 this.confirmOkBtn = document.getElementById('confirmOkBtn');
-                this.cancelBtn = this.modalOverlay.querySelector('[data-action="cancel-modal"]');
+                this.cancelBtn = document.getElementById('cancelModalBtn');
 
                 this.resolve = null;
                 this.reject = null;
 
-                this.cancelBtn.addEventListener('click', () => this.hide());
-                this.modalOverlay.addEventListener('click', (e) => {
-                    if (e.target === this.modalOverlay) {
-                        this.hide();
-                    }
-                });
+                if (this.cancelBtn) {
+                    this.cancelBtn.addEventListener('click', () => this.hide());
+                }
+                if (this.modalOverlay) {
+                    this.modalOverlay.addEventListener('click', (e) => {
+                        if (e.target === this.modalOverlay) {
+                            this.hide();
+                        }
+                    });
+                }
             }
 
             show(title, message, onConfirm) {
@@ -3473,16 +3584,21 @@
         class ConfirmModalManager extends ModalManager {
             constructor() {
                 super();
-                this.confirmOkBtn.removeEventListener('click', this.confirmOkBtn.onclick); // Remove old listener
-                this.confirmOkBtn.addEventListener('click', () => {
-                    if (this.resolve) this.resolve(true);
-                    this.hide();
-                });
-                this.cancelBtn.removeEventListener('click', this.cancelBtn.onclick); // Remove old listener
-                this.cancelBtn.addEventListener('click', () => {
-                    if (this.resolve) this.resolve(false);
-                    this.hide();
-                });
+                // Override the parent event listeners for promise-based flow
+                if (this.confirmOkBtn) {
+                    this.confirmOkBtn.onclick = null; // Clear any existing onclick
+                    this.confirmOkBtn.addEventListener('click', () => {
+                        if (this.resolve) this.resolve(true);
+                        this.hide();
+                    });
+                }
+                if (this.cancelBtn) {
+                    this.cancelBtn.onclick = null; // Clear any existing onclick
+                    this.cancelBtn.addEventListener('click', () => {
+                        if (this.resolve) this.resolve(false);
+                        this.hide();
+                    });
+                }
             }
 
             async confirm(title, message) {
@@ -3498,6 +3614,46 @@
         debugLog('ConfirmModalManager class defined successfully');
 
         /**
+         * ThemeManager - Handles theme switching
+         */
+        debugLog('Defining ThemeManager class...');
+        class ThemeManager {
+            constructor() {
+                this.currentTheme = 'cyberpunk';
+                this.themes = {
+                    cyberpunk: 'cyberpunk',
+                    dark: 'dark', 
+                    matrix: 'matrix'
+                };
+            }
+            
+            loadSavedTheme() {
+                try {
+                    const savedTheme = localStorage.getItem('cyberbackup_theme');
+                    if (savedTheme && this.themes[savedTheme]) {
+                        this.setTheme(savedTheme);
+                    }
+                } catch (error) {
+                    console.warn('Failed to load saved theme:', error);
+                }
+            }
+            
+            setTheme(theme) {
+                if (this.themes[theme]) {
+                    this.currentTheme = theme;
+                    document.body.className = theme;
+                    try {
+                        localStorage.setItem('cyberbackup_theme', theme);
+                    } catch (error) {
+                        console.warn('Failed to save theme:', error);
+                    }
+                    console.log('Theme set to:', theme);
+                }
+            }
+        }
+        debugLog('ThemeManager class defined successfully');
+
+        /**
          * Main Application Logic (App class)
          */
         debugLog('Defining App class...');
@@ -3506,6 +3662,7 @@
                 this.apiClient = new ApiClient();
                 this.system = new SystemManager();
                 this.intervals = new IntervalManager();
+                this.eventListeners = new EventListenerManager();
                 this.buttonStateManager = new ButtonStateManager();
                 this.errorMessageFormatter = new ErrorMessageFormatter();
                 this.copyManager = new CopyManager();
@@ -3553,8 +3710,21 @@
                     cancelModalBtn: document.getElementById('cancelModalBtn'),
                     connectionHealth: document.getElementById('connectionHealth'),
                     healthIndicator: document.getElementById('healthIndicator'),
-                    pingDisplay: document.getElementById('pingDisplay')
+                    pingDisplay: document.getElementById('pingDisplay'),
+                    // Additional frequently accessed elements
+                    saveConfigBtn: document.querySelector('[data-action="save-config"]'),
+                    exportLogBtn: document.querySelector('[data-action="export-log"]'),
+                    clearLogBtn: document.querySelector('[data-action="clear-log"]'),
+                    advancedSettings: document.querySelector('.advanced-settings'),
+                    debugPanel: document.querySelector('.debug-panel'),
+                    particleContainer: document.getElementById('particleContainer'),
+                    // Cached NodeLists for bulk operations
+                    themeButtons: document.querySelectorAll('.theme-btn'),
+                    lazyComponents: document.querySelectorAll('[data-lazy-component]')
                 };
+
+                // Verify critical DOM elements exist
+                this.verifyDOMElements();
 
                 this.state = {
                     isConnected: false,
@@ -3584,13 +3754,25 @@
                     minPollInterval: 2000, // Minimum interval when active (increased from 500ms to 2s)
                     consecutiveNoChangeCount: 0, // Track periods of no activity
                     uiUpdateQueue: [],
-                    updateUIDebounced: this.debounce(() => this._updateAllUI(), 150) // Slightly increased debounce
+                    updateUIDebounced: null // Will be set after debounce method is defined
                 };
                 
                 this.pendingConfirmAction = null;
                 this.autoScrollLog = true;
                 this.themeManager = new ThemeManager();
 
+                // Modal managers are already initialized in SystemManager constructor
+                
+                // Set up debounced UI update after methods are defined
+                this.stateManagement.updateUIDebounced = this.debounce(() => this._updateAllUI(), 150);
+
+                // Verify critical DOM elements exist before initialization
+                if (!this.verifyDOMElements()) {
+                    console.error('[DOM_VERIFICATION] CRITICAL: Missing DOM elements - buttons will not work');
+                    alert('Error: Critical UI elements are missing. Please refresh the page.');
+                    return;
+                }
+                
                 this.initEventListeners();
                 this.loadSavedConfig();
                 this.themeManager.loadSavedTheme();
@@ -3643,21 +3825,63 @@
                 );
             }
 
-            initEventListeners() {
-                this.elements.primaryActionButton.addEventListener('click', () => this.handlePrimaryAction());
-                this.elements.pauseButton.addEventListener('click', () => this.togglePause());
-                this.elements.stopButton.addEventListener('click', () => this.stopBackup());
+            verifyDOMElements() {
+                const criticalElements = [
+                    'primaryActionButton',
+                    'serverInput',
+                    'usernameInput',
+                    'fileDropZone',
+                    'logContainer',
+                    'saveConfigBtn',
+                    'exportLogBtn',
+                    'clearLogBtn'
+                ];
+
+                const missingElements = [];
+                for (const elementName of criticalElements) {
+                    if (!this.elements[elementName]) {
+                        missingElements.push(elementName);
+                        console.error(`[DOM_VERIFICATION] Critical element missing: ${elementName}`);
+                    }
+                }
+
+                if (missingElements.length > 0) {
+                    const errorMsg = `Missing DOM elements: ${missingElements.join(', ')}`;
+                    console.error('[DOM_VERIFICATION] CRITICAL:', errorMsg);
+                    
+                    // Try to show user-friendly error
+                    try {
+                        alert(`GUI Error: Some interface elements are missing. Please refresh the page.\n\nMissing: ${missingElements.join(', ')}`);
+                    } catch (e) {
+                        console.error('[DOM_VERIFICATION] Could not show alert:', e);
+                    }
+                    
+                    throw new Error(errorMsg);
+                }
                 
-                // Copy buttons
-                this.elements.copyClientIdButton.addEventListener('click', () => this.copyClientId());
-                this.elements.copyServerAddressButton.addEventListener('click', () => this.copyServerAddress());
-                this.elements.copyFileInfoButton.addEventListener('click', () => this.copyFileInfo());
+                console.log('[DOM_VERIFICATION] All critical elements found successfully');
+            }
+
+            initEventListeners() {
+                console.log('[EVENT_DEBUG] Initializing event listeners...');
+                console.log('[EVENT_DEBUG] Primary action button element:', this.elements.primaryActionButton);
+                
+                // Main action buttons - using managed event listeners for cleanup
+                const primaryResult = this.eventListeners.add('primary-action', this.elements.primaryActionButton, 'click', () => this.handlePrimaryAction());
+                console.log('[EVENT_DEBUG] Primary action listener result:', primaryResult);
+                this.eventListeners.add('pause-action', this.elements.pauseButton, 'click', () => this.togglePause());
+                this.eventListeners.add('stop-action', this.elements.stopButton, 'click', () => this.stopBackup());
+                
+                // Copy buttons - using managed event listeners
+                this.eventListeners.add('copy-client-id', this.elements.copyClientIdButton, 'click', () => this.copyClientId());
+                this.eventListeners.add('copy-server-addr', this.elements.copyServerAddressButton, 'click', () => this.copyServerAddress());
+                this.eventListeners.add('copy-file-info', this.elements.copyFileInfoButton, 'click', () => this.copyFileInfo());
                 
                 // Recent files button
                 this.elements.recentFilesBtn.addEventListener('click', () => this.showRecentFiles());
                 
                 // Config save button
-                document.querySelector('[data-action="save-config"]').addEventListener('click', () => this.saveConfig());
+                this.elements.saveConfigBtn.addEventListener('click', () => this.saveConfig());
 
                 // File drop zone
                 this.system.fileManager.setupDragAndDrop(
@@ -3666,16 +3890,16 @@
                 );
 
                 // Log controls
-                document.querySelector('[data-action="export-log"]').addEventListener('click', () => this.exportLog());
-                document.querySelector('[data-action="clear-log"]').addEventListener('click', () => this.clearLog());
+                this.elements.exportLogBtn.addEventListener('click', () => this.exportLog());
+                this.elements.clearLogBtn.addEventListener('click', () => this.clearLog());
                 this.elements.autoScrollBtn.addEventListener('click', () => this.toggleAutoScroll());
 
                 // Debug toggle
                 this.elements.debugToggle.addEventListener('click', () => this.toggleDebugConsole());
 
-                // Theme buttons
-                document.querySelectorAll('.theme-btn').forEach(btn => {
-                    btn.addEventListener('click', (e) => {
+                // Theme buttons - using managed event listeners to prevent memory leaks
+                this.elements.themeButtons.forEach((btn, index) => {
+                    this.eventListeners.add(`theme-btn-${index}`, btn, 'click', (e) => {
                         const theme = e.target.classList[1]; // e.g., 'cyberpunk', 'dark', 'matrix'
                         this.themeManager.setTheme(theme);
                     });
@@ -3730,11 +3954,12 @@
                         if (status.isConnected && !wasConnected) {
                             // Connection established - start health monitoring
                             this.connectionHealthMonitor.startMonitoring();
-                            this.elements.connectionHealth.style.display = 'flex';
+                            this.elements.connectionHealth.classList.remove('u-hidden');
+                            this.elements.connectionHealth.classList.add('u-flex');
                         } else if (!status.isConnected && wasConnected) {
                             // Connection lost - stop health monitoring
                             this.connectionHealthMonitor.stopMonitoring();
-                            this.elements.connectionHealth.style.display = 'none';
+                            this.elements.connectionHealth.classList.add('u-hidden');
                         }
                     }
 
@@ -3810,14 +4035,69 @@
                     this.updateAllUI();
 
                 } catch (error) {
+                    // Enhanced error handling with different strategies for different error types
+                    const isHttpError = error.message && error.message.includes('HTTP error! status:');
+                    const is500Error = error.message && error.message.includes('status: 500');
+                    const isNetworkError = error.message && (
+                        error.message.includes('Failed to fetch') || 
+                        error.message.includes('NetworkError') ||
+                        error.message.includes('Connection refused')
+                    );
+                    
+                    // Initialize polling error tracking if not exists
+                    if (!this.stateManagement.pollingErrorCount) {
+                        this.stateManagement.pollingErrorCount = 0;
+                        this.stateManagement.lastPollingErrorTime = 0;
+                        this.stateManagement.pollingBackoffMultiplier = 1;
+                    }
+                    
+                    this.stateManagement.pollingErrorCount++;
+                    this.stateManagement.lastPollingErrorTime = Date.now();
+                    
+                    // Apply exponential backoff for server errors (500s)
+                    if (is500Error) {
+                        this.stateManagement.pollingBackoffMultiplier = Math.min(8, this.stateManagement.pollingBackoffMultiplier * 2);
+                        this.stateManagement.pollCooldown = Math.min(30000, 2000 * this.stateManagement.pollingBackoffMultiplier);
+                        console.warn(`[API] Server error (500), applying backoff: ${this.stateManagement.pollCooldown}ms`);
+                    } else if (isNetworkError) {
+                        this.stateManagement.pollingBackoffMultiplier = Math.min(4, this.stateManagement.pollingBackoffMultiplier * 1.5);
+                        this.stateManagement.pollCooldown = Math.min(15000, 2000 * this.stateManagement.pollingBackoffMultiplier);
+                        console.warn(`[API] Network error, applying backoff: ${this.stateManagement.pollCooldown}ms`);
+                    }
+                    
+                    // Only log to console, avoid addLog to prevent error cascade
                     console.error('Error polling status:', error);
-                    debugLog('Error polling status: ' + error.message, 'ERROR');
+                    debugLog(`POLL ERROR [${this.stateManagement.pollingErrorCount}]: ${error.message}`, 'ERROR');
+                    
+                    // Update state conservatively
                     this.state.isConnected = false;
                     this.state.isRunning = false;
                     this.state.isPaused = false;
-                    this.state.phase = 'ERROR';
-                    this.state.log = { operation: 'API Error', success: false, details: error.message };
+                    
+                    // Don't set phase to ERROR immediately for temporary network issues
+                    if (isNetworkError && this.stateManagement.pollingErrorCount < 3) {
+                        // Keep current phase for first few network errors
+                        this.state.log = { operation: 'Connection Issue', success: false, details: 'Retrying...' };
+                    } else {
+                        this.state.phase = 'ERROR';
+                        this.state.log = { operation: 'API Error', success: false, details: error.message };
+                    }
+                    
                     this.updateAllUI();
+                    
+                    // Reset backoff on successful connection later
+                    if (this.stateManagement.pollingErrorCount === 1) {
+                        // Schedule a reset check for backoff
+                        setTimeout(() => {
+                            if (this.state.isConnected) {
+                                this.stateManagement.pollingBackoffMultiplier = 1;
+                                this.stateManagement.pollCooldown = 2000; // Reset to default
+                                this.stateManagement.pollingErrorCount = 0;
+                                console.info('[API] Polling backoff reset - connection restored');
+                            }
+                        }, 60000); // Check after 1 minute
+                    }
+                    
                 } finally {
                     this.stateManagement.isPolling = false;
                 }
@@ -3859,7 +4139,7 @@
                 }, { threshold: 0.1 });
 
                 // Observe elements marked for lazy loading
-                document.querySelectorAll('[data-lazy-component]').forEach(el => {
+                this.elements.lazyComponents.forEach(el => {
                     observer.observe(el);
                 });
             }
@@ -3880,7 +4160,7 @@
 
             initializeDebugConsole() {
                 // Initialize debug console only when needed
-                const debugContent = document.getElementById('debugContent');
+                const debugContent = this.elements.debugContent;
                 if (debugContent && !debugContent.getAttribute('data-initialized')) {
                     debugContent.setAttribute('data-initialized', 'true');
                     // Additional heavy debug console initialization can go here
@@ -3890,7 +4170,7 @@
 
             initializeAdvancedSettings() {
                 // Initialize advanced settings panel only when accessed
-                const advancedSettings = document.querySelector('.advanced-settings');
+                const advancedSettings = this.elements.advancedSettings;
                 if (advancedSettings && !advancedSettings.getAttribute('data-initialized')) {
                     advancedSettings.setAttribute('data-initialized', 'true');
                     // Additional heavy settings initialization can go here  
@@ -3911,8 +4191,8 @@
                             });
                         }, this.stateManagement.adaptivePollInterval);
                     } else {
-                        // Fallback if intervals system not ready
-                        setTimeout(() => {
+                        // Fallback using managed timeout to prevent leaks
+                        this.intervals.setTimeout('statusPollFallback', () => {
                             this.pollStatus().then(() => {
                                 scheduleNextPoll();
                             }).catch(() => {
@@ -3994,23 +4274,39 @@
 
                     // Update selected file display
                     if (this.state.selectedFile) {
-                        this.elements.selectedFileDisplay.innerHTML = `
-                            <span class="file-icon neon-text blue">📄</span>
-                            <div class="file-details">
-                                <div class="file-name">${this.state.selectedFile.name}</div>
-                                <div class="file-size">${this.formatBytes(this.state.selectedFile.size)}</div>
-                            </div>
-                        `;
+                        // Create safe DOM elements instead of innerHTML to prevent XSS
+                        const fileIcon = document.createElement('span');
+                        fileIcon.className = 'file-icon neon-text blue';
+                        fileIcon.textContent = '📄';
+                        
+                        const fileDetails = document.createElement('div');
+                        fileDetails.className = 'file-details';
+                        
+                        const fileName = document.createElement('div');
+                        fileName.className = 'file-name';
+                        fileName.textContent = this.state.selectedFile.name;
+                        
+                        const fileSize = document.createElement('div');
+                        fileSize.className = 'file-size';
+                        fileSize.textContent = this.formatBytes(this.state.selectedFile.size);
+                        
+                        fileDetails.appendChild(fileName);
+                        fileDetails.appendChild(fileSize);
+                        
+                        this.elements.selectedFileDisplay.textContent = '';
+                        this.elements.selectedFileDisplay.appendChild(fileIcon);
+                        this.elements.selectedFileDisplay.appendChild(fileDetails);
                         this.elements.selectedFileDisplay.classList.add('file-info');
-                        this.elements.copyFileInfoButton.style.display = 'inline-flex'; // Show copy button
-                        this.elements.filePreview.innerHTML = ''; // Clear previous preview
+                        this.elements.copyFileInfoButton.classList.remove('u-hidden');
+                        this.elements.copyFileInfoButton.classList.add('u-inline-flex'); // Show copy button
+                        this.elements.filePreview.textContent = ''; // Clear previous preview safely
                         this.elements.filePreview.style.display = 'flex';
                         this.renderFilePreview(this.state.selectedFile);
                     } else {
                         this.elements.selectedFileDisplay.textContent = 'No file selected';
                         this.elements.selectedFileDisplay.classList.remove('file-info');
-                        this.elements.copyFileInfoButton.style.display = 'none'; // Hide copy button
-                        this.elements.filePreview.style.display = 'none';
+                        this.elements.copyFileInfoButton.classList.add('u-hidden'); // Hide copy button
+                        this.elements.filePreview.classList.add('u-hidden');
                     }
 
                     // Update client ID
@@ -4131,8 +4427,11 @@
             }
 
             async handlePrimaryAction() {
+                console.log('[BUTTON_DEBUG] handlePrimaryAction called!');
+                
                 // Prevent multiple simultaneous actions
                 if (this.buttonStateManager.isLoading(this.elements.primaryActionButton)) {
+                    console.log('[BUTTON_DEBUG] Button is loading, skipping action');
                     return;
                 }
 
@@ -4429,7 +4728,7 @@
 
             renderFilePreview(file) {
                 const previewContainer = this.elements.filePreview;
-                previewContainer.innerHTML = '';
+                previewContainer.textContent = ''; // Clear safely
 
                 // Create enhanced preview with metadata
                 const previewWrapper = document.createElement('div');
@@ -4484,13 +4783,18 @@
                     text-align: center;
                 `;
                 
+                // Batch metadata elements using DocumentFragment to reduce reflows
+                const metadataFragment = document.createDocumentFragment();
+                
                 const sizeInfo = document.createElement('div');
                 sizeInfo.textContent = `Size: ${this.formatBytes(file.size)}`;
-                metadata.appendChild(sizeInfo);
+                metadataFragment.appendChild(sizeInfo);
                 
                 const lastModified = document.createElement('div');
                 lastModified.textContent = `Modified: ${new Date(file.lastModified).toLocaleDateString()}`;
-                metadata.appendChild(lastModified);
+                metadataFragment.appendChild(lastModified);
+                
+                metadata.appendChild(metadataFragment);
                 
                 previewWrapper.appendChild(metadata);
 
@@ -4634,30 +4938,91 @@
             }
 
             addLog(message, type = 'info', details = '') {
-                const logEntry = document.createElement('div');
-                logEntry.className = `log-entry ${type}`;
-                logEntry.setAttribute('tabindex', '0'); // Make it focusable
-                logEntry.innerHTML = `
-                    <span class="log-timestamp">${new Date().toLocaleTimeString()}</span>
-                    <span class="log-icon ${type}">${this.getLogIcon(type)}</span>
-                    <div class="log-content">
-                        <div class="log-message">${message}</div>
-                        ${details ? `<div class="log-details">${details}</div>` : ''}
-                    </div>
-                `;
-                this.elements.logContainer.prepend(logEntry); // Add to top
+                // Store log entry for potential batching
+                this._pendingLogs = this._pendingLogs || [];
+                this._pendingLogs.push({ message, type, details, timestamp: new Date() });
+                
+                // Debounce DOM updates but show critical logs immediately
+                if (!this._logUpdateDebounced) {
+                    this._logUpdateDebounced = this.debounce(() => this._flushPendingLogs(), 50);
+                }
+                
+                // Show critical errors immediately
+                if (type === 'error') {
+                    this._flushPendingLogs();
+                } else {
+                    this._logUpdateDebounced();
+                }
+            }
 
-                // Limit log entries
-                while (this.elements.logContainer.children.length > 200) {
-                    this.elements.logContainer.removeChild(this.elements.logContainer.lastChild);
+            _flushPendingLogs() {
+                if (!this._pendingLogs || this._pendingLogs.length === 0) return;
+
+                // Process all pending logs
+                const fragment = document.createDocumentFragment();
+                
+                this._pendingLogs.forEach(logData => {
+                    const logEntry = document.createElement('div');
+                    logEntry.className = `log-entry ${logData.type}`;
+                    logEntry.setAttribute('tabindex', '0');
+                    
+                    // Create safe DOM elements instead of innerHTML
+                    const timestamp = document.createElement('span');
+                    timestamp.className = 'log-timestamp';
+                    timestamp.textContent = logData.timestamp.toLocaleTimeString();
+                    
+                    const icon = document.createElement('span');
+                    icon.className = `log-icon ${logData.type}`;
+                    icon.textContent = this.getLogIcon(logData.type);
+                    
+                    const content = document.createElement('div');
+                    content.className = 'log-content';
+                    
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'log-message';
+                    messageDiv.textContent = logData.message;
+                    content.appendChild(messageDiv);
+                    
+                    if (logData.details) {
+                        const detailsDiv = document.createElement('div');
+                        detailsDiv.className = 'log-details';
+                        detailsDiv.textContent = logData.details;
+                        content.appendChild(detailsDiv);
+                    }
+                    
+                    logEntry.appendChild(timestamp);
+                    logEntry.appendChild(icon);
+                    logEntry.appendChild(content);
+                    
+                    fragment.appendChild(logEntry);
+                });
+                
+                // Add all entries at once to reduce reflows
+                this.elements.logContainer.prepend(fragment);
+                
+                // Clear pending logs
+                this._pendingLogs = [];
+
+                // Debounce cleanup operations to avoid excessive DOM manipulation
+                if (!this._logCleanupDebounced) {
+                    this._logCleanupDebounced = this.debounce(() => this._cleanupLogEntries(), 1000);
+                }
+                this._logCleanupDebounced();
+            }
+
+            _cleanupLogEntries() {
+                // Limit log entries - batch removal for better performance
+                const logContainer = this.elements.logContainer;
+                const childrenToRemove = logContainer.children.length - 200;
+                if (childrenToRemove > 0) {
+                    // Remove excess children in batch to reduce reflows
+                    const elementsToRemove = Array.from(logContainer.children).slice(-childrenToRemove);
+                    elementsToRemove.forEach(element => logContainer.removeChild(element));
                 }
 
                 if (this.autoScrollLog) {
                     this.elements.logContainer.scrollTop = 0; // Scroll to top for prepend
                 }
-
-                // Announce to screen readers
-                this.system.announce(`${type} log: ${message}. ${details}`);
             }
 
             getLogIcon(type) {
@@ -4704,7 +5069,7 @@
             }
 
             toggleDebugConsole() {
-                const debugPanel = document.querySelector('.debug-panel');
+                const debugPanel = this.elements.debugPanel;
                 const debugContent = this.elements.debugContent;
                 const isExpanded = this.elements.debugToggle.getAttribute('aria-expanded') === 'true';
 
@@ -4739,7 +5104,7 @@
                     <div class="toast-content">
                         <span class="toast-icon" aria-hidden="true">${icons[type] || icons.info}</span>
                         <span class="toast-message">${message}</span>
-                        <button class="toast-close" aria-label="Close notification" tabindex="0">&times;</button>
+                        <button type="button" class="toast-close" aria-label="Close notification" tabindex="0">&times;</button>
                     </div>
                 `;
                 
@@ -4774,7 +5139,9 @@
                     }
                 });
 
-                setTimeout(() => {
+                // Use managed timeout to prevent memory leaks
+                const toastId = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                this.intervals.setTimeout(toastId, () => {
                     if (toast.parentNode) {
                         closeToast();
                     }
@@ -4802,6 +5169,48 @@
                 const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
                 const s = Math.floor(seconds % 60).toString().padStart(2, '0');
                 return `${h}:${m}:${s}`;
+            }
+
+            debounce(func, delay) {
+                let timeoutId;
+                return function (...args) {
+                    clearTimeout(timeoutId);
+                    timeoutId = setTimeout(() => func.apply(this, args), delay);
+                };
+            }
+
+            verifyDOMElements() {
+                console.log('[DOM_VERIFICATION] Verifying critical DOM elements...');
+                const criticalElements = [
+                    'primaryActionButton',
+                    'pauseButton', 
+                    'stopButton',
+                    'serverInput',
+                    'usernameInput',
+                    'fileDropZone',
+                    'saveConfigBtn',
+                    'confirmModal'
+                ];
+                
+                const missingElements = [];
+                
+                for (const elementKey of criticalElements) {
+                    const element = this.elements[elementKey];
+                    if (!element) {
+                        missingElements.push(elementKey);
+                        console.error(`[DOM_VERIFICATION] Critical element missing: ${elementKey}`);
+                    } else {
+                        console.log(`[DOM_VERIFICATION] ✓ Found: ${elementKey}`);
+                    }
+                }
+                
+                if (missingElements.length > 0) {
+                    console.error('[DOM_VERIFICATION] CRITICAL: Missing DOM elements:', missingElements);
+                    return false;
+                }
+                
+                console.log('[DOM_VERIFICATION] All critical elements found successfully');
+                return true;
             }
 
             saveConfig() {
@@ -4972,15 +5381,6 @@
                 return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
             }
 
-            debounce(func, delay) {
-                let timeout;
-                return function(...args) {
-                    const context = this;
-                    clearTimeout(timeout);
-                    timeout = setTimeout(() => func.apply(context, args), delay);
-                };
-            }
-
             // Enhanced cleanup method to prevent memory leaks
             cleanup() {
                 debugLog('Performing app cleanup...', 'APP_CLEANUP');
@@ -5000,7 +5400,8 @@
                     // Cleanup file manager (remove any created elements)
                     if (this.system && this.system.fileManager) {
                         // Remove any temporary file inputs created by FileManager
-                        document.querySelectorAll('input[type="file"]').forEach(input => {
+                        const tempFileInputs = document.querySelectorAll('input[type="file"]');
+                        tempFileInputs.forEach(input => {
                             if (input.style.display === 'none' && !input.id) {
                                 input.remove();
                             }
@@ -5017,14 +5418,17 @@
 
                     // Clear any pending toast notifications
                     if (this.elements && this.elements.toastContainer) {
-                        this.elements.toastContainer.innerHTML = '';
+                        this.elements.toastContainer.textContent = ''; // Clear safely
                     }
 
                     // Clear large log entries to free memory
                     if (this.elements && this.elements.logContainer) {
                         const logContainer = this.elements.logContainer;
-                        while (logContainer.children.length > 10) {
-                            logContainer.removeChild(logContainer.lastChild);
+                        const childrenToRemove = logContainer.children.length - 10;
+                        if (childrenToRemove > 0) {
+                            // Batch remove for better performance
+                            const elementsToRemove = Array.from(logContainer.children).slice(-childrenToRemove);
+                            elementsToRemove.forEach(element => logContainer.removeChild(element));
                         }
                     }
 
@@ -5032,6 +5436,7 @@
                     if (this.particleSystem) {
                         this.particleSystem.destroy();
                     }
+                
 
                     // Cleanup error boundary
                     if (this.errorBoundary) {
@@ -5085,123 +5490,6 @@
         }
         debugLog('App class defined successfully');
 
-        /**
-         * NEW: ThemeManager
-         * Handles dynamic theme switching.
-         */
-        debugLog('Defining ThemeManager class...');
-        class ThemeManager {
-            constructor() {
-                this.themes = {
-                    cyberpunk: {
-                        '--neon-pink': '#FF00FF',
-                        '--neon-blue': '#00FFFF',
-                        '--neon-purple': '#8A2BE2',
-                        '--neon-green': '#00FF00',
-                        '--neon-yellow': '#FFFF00',
-                        '--neon-orange': '#FF4500',
-                        '--neon-red': '#FF0040',
-                        '--electric-blue': '#0080FF',
-                        '--cyber-lime': '#32CD32',
-                        '--plasma-pink': '#FF1493',
-                        '--bg-black': '#000000',
-                        '--bg-dark': '#0A0A0A',
-                        '--bg-medium': '#1A1A2E',
-                        '--bg-light': '#16213E',
-                        '--bg-card': 'rgba(26, 26, 46, 0.95)',
-                        '--bg-glass': 'rgba(255, 255, 255, 0.05)',
-                        '--text-primary': '#FFFFFF',
-                        '--text-secondary': '#E0E0E0',
-                        '--text-dim': '#888888',
-                        '--text-contrast': 'rgba(0, 0, 0, 0.8)',
-                        '--glass-border': 'rgba(255, 255, 255, 0.2)',
-                        '--glass-border-active': 'rgba(0, 255, 255, 0.6)',
-                    },
-                    dark: {
-                        '--neon-pink': '#FF69B4',
-                        '--neon-blue': '#6495ED',
-                        '--neon-purple': '#9370DB',
-                        '--neon-green': '#3CB371',
-                        '--neon-yellow': '#FFD700',
-                        '--neon-orange': '#FF8C00',
-                        '--neon-red': '#DC143C',
-                        '--electric-blue': '#4169E1',
-                        '--cyber-lime': '#6B8E23',
-                        '--plasma-pink': '#FF6347',
-                        '--bg-black': '#121212',
-                        '--bg-dark': '#1E1E1E',
-                        '--bg-medium': '#2C2C2C',
-                        '--bg-light': '#3A3A3A',
-                        '--bg-card': 'rgba(44, 44, 44, 0.95)',
-                        '--bg-glass': 'rgba(255, 255, 255, 0.03)',
-                        '--text-primary': '#E0E0E0',
-                        '--text-secondary': '#B0B0B0',
-                        '--text-dim': '#777777',
-                        '--text-contrast': 'rgba(0, 0, 0, 0.7)',
-                        '--glass-border': 'rgba(255, 255, 255, 0.1)',
-                        '--glass-border-active': 'rgba(100, 149, 237, 0.6)',
-                    },
-                    matrix: {
-                        '--neon-pink': '#00FF41', /* Green */
-                        '--neon-blue': '#00FF41', /* Green */
-                        '--neon-purple': '#00FF41', /* Green */
-                        '--neon-green': '#00FF41', /* Green */
-                        '--neon-yellow': '#00FF41', /* Green */
-                        '--neon-orange': '#00FF41', /* Green */
-                        '--neon-red': '#00FF41', /* Green */
-                        '--electric-blue': '#00FF41', /* Green */
-                        '--cyber-lime': '#00FF41', /* Green */
-                        '--plasma-pink': '#00FF41', /* Green */
-                        '--bg-black': '#000000',
-                        '--bg-dark': '#000000',
-                        '--bg-medium': '#000000',
-                        '--bg-light': '#000000',
-                        '--bg-card': 'rgba(0, 0, 0, 0.9)',
-                        '--bg-glass': 'rgba(0, 255, 0, 0.05)',
-                        '--text-primary': '#00FF41',
-                        '--text-secondary': '#00AA00',
-                        '--text-dim': '#006600',
-                        '--text-contrast': 'rgba(0, 0, 0, 0.9)',
-                        '--glass-border': 'rgba(0, 255, 0, 0.2)',
-                        '--glass-border-active': 'rgba(0, 255, 0, 0.6)',
-                    }
-                };
-                this.currentTheme = 'cyberpunk';
-            }
-
-            setTheme(themeName) {
-                if (this.themes[themeName]) {
-                    const theme = this.themes[themeName];
-                    for (const [prop, value] of Object.entries(theme)) {
-                        document.documentElement.style.setProperty(prop, value);
-                    }
-                    this.currentTheme = themeName;
-                    this.updateActiveThemeButton();
-                    localStorage.setItem('cyberbackup_theme', themeName);
-                    debugLog(`Theme set to: ${themeName}`, 'THEME');
-                }
-            }
-
-            loadSavedTheme() {
-                const savedTheme = localStorage.getItem('cyberbackup_theme');
-                if (savedTheme && this.themes[savedTheme]) {
-                    this.setTheme(savedTheme);
-                } else {
-                    this.setTheme(this.currentTheme); // Apply default if no saved theme or invalid
-                }
-            }
-
-            updateActiveThemeButton() {
-                document.querySelectorAll('.theme-btn').forEach(btn => {
-                    if (btn.classList.contains(this.currentTheme)) {
-                        btn.classList.add('active');
-                    } else {
-                        btn.classList.remove('active');
-                    }
-                });
-            }
-        }
-        debugLog('ThemeManager class defined successfully');
 
         /**
          * NEW: ParticleSystem
@@ -5209,8 +5497,8 @@
          */
         debugLog('Defining ParticleSystem class...');
         class ParticleSystem {
-            constructor() {
-                this.container = document.getElementById('particleContainer');
+            constructor(app) {
+                this.container = app.elements.particleContainer;
                 this.particles = [];
                 this.maxParticles = 50;
                 this.colors = ['#00FFFF', '#FF00FF', '#00FF00', '#FFFF00', '#FF0040'];
@@ -5356,9 +5644,11 @@
                 
                 // Remove excess particles if screen got smaller
                 if (this.maxParticles < oldMax) {
-                    while (this.particles.length > this.maxParticles) {
-                        const particle = this.particles.pop();
-                        particle.element.remove();
+                    // Batch remove excess particles for better performance
+                    const particlesToRemove = this.particles.length - this.maxParticles;
+                    if (particlesToRemove > 0) {
+                        const removedParticles = this.particles.splice(-particlesToRemove);
+                        removedParticles.forEach(particle => particle.element.remove());
                     }
                 }
             }
@@ -5376,6 +5666,15 @@
                 this.errorCount = 0;
                 this.lastErrors = [];
                 this.maxErrors = 10;
+                
+                // Error loop prevention safeguards
+                this.isProcessingError = false;
+                this.errorTimestamps = [];
+                this.maxErrorsPerWindow = 10;
+                this.errorTimeWindow = 5000; // 5 seconds
+                this.circuitBreakerOpen = false;
+                this.circuitBreakerResetTime = 30000; // 30 seconds
+                
                 this.setupGlobalHandlers();
             }
 
@@ -5423,35 +5722,83 @@
             }
 
             handleError(type, error, context = {}) {
-                this.errorCount++;
-                const errorInfo = {
-                    type,
-                    message: error?.message || String(error),
-                    stack: error?.stack,
-                    context,
-                    timestamp: new Date().toISOString(),
-                    userAgent: navigator.userAgent,
-                    url: window.location.href
-                };
-
-                // Store error for debugging
-                this.lastErrors.push(errorInfo);
-                if (this.lastErrors.length > this.maxErrors) {
-                    this.lastErrors.shift();
+                // SAFEGUARD 1: Prevent recursive error processing
+                if (this.isProcessingError) {
+                    console.warn('[ErrorBoundary] Recursive error detected, ignoring:', type);
+                    return;
                 }
+                
+                // SAFEGUARD 2: Circuit breaker - stop processing if too many errors
+                if (this.circuitBreakerOpen) {
+                    const now = Date.now();
+                    if (now - this.circuitBreakerOpenTime < this.circuitBreakerResetTime) {
+                        console.warn('[ErrorBoundary] Circuit breaker open, ignoring error:', type);
+                        return;
+                    } else {
+                        // Reset circuit breaker
+                        this.circuitBreakerOpen = false;
+                        console.info('[ErrorBoundary] Circuit breaker reset');
+                    }
+                }
+                
+                // SAFEGUARD 3: Rate limiting - prevent error spam
+                const now = Date.now();
+                this.errorTimestamps = this.errorTimestamps.filter(timestamp => 
+                    now - timestamp < this.errorTimeWindow
+                );
+                
+                if (this.errorTimestamps.length >= this.maxErrorsPerWindow) {
+                    console.warn('[ErrorBoundary] Too many errors, opening circuit breaker');
+                    this.circuitBreakerOpen = true;
+                    this.circuitBreakerOpenTime = now;
+                    return;
+                }
+                
+                this.errorTimestamps.push(now);
+                this.isProcessingError = true;
+                
+                try {
+                    this.errorCount++;
+                    const errorInfo = {
+                        type,
+                        message: error?.message || String(error),
+                        stack: error?.stack,
+                        context,
+                        timestamp: new Date().toISOString(),
+                        userAgent: navigator.userAgent,
+                        url: window.location.href
+                    };
 
-                // Log to console and debug system
-                console.error(`[ErrorBoundary] ${type}:`, error, context);
-                debugLogger.log('ERROR', 'ERROR_BOUNDARY', `${type}: ${errorInfo.message}`);
+                    // Store error for debugging
+                    this.lastErrors.push(errorInfo);
+                    if (this.lastErrors.length > this.maxErrors) {
+                        this.lastErrors.shift();
+                    }
 
-                // Update UI with error information
-                this.updateErrorUI(errorInfo);
+                    // Log to console and debug system
+                    console.error(`[ErrorBoundary] ${type}:`, error, context);
+                    debugLogger.log('ERROR', 'ERROR_BOUNDARY', `${type}: ${errorInfo.message}`);
 
-                // Attempt recovery if possible
-                this.attemptRecovery(type, error);
+                    // Update UI with error information - wrapped in additional safety
+                    try {
+                        this.updateErrorUI(errorInfo);
+                    } catch (uiError) {
+                        console.error('[ErrorBoundary] Failed to update UI during error handling:', uiError);
+                    }
 
-                // Show user-friendly notification
-                this.showErrorNotification(errorInfo);
+                    // Attempt recovery if possible
+                    this.attemptRecovery(type, error);
+
+                    // Show user-friendly notification
+                    this.showErrorNotification(errorInfo);
+                    
+                } catch (processingError) {
+                    // If error processing itself fails, log to console only
+                    console.error('[ErrorBoundary] Error processing failed:', processingError);
+                } finally {
+                    // Always reset the processing flag
+                    this.isProcessingError = false;
+                }
             }
 
             updateErrorUI(errorInfo) {
@@ -5509,9 +5856,10 @@
                         // Limit log entries
                         const logContainer = this.app.elements?.logContainer;
                         if (logContainer && logContainer.children.length > 50) {
-                            while (logContainer.children.length > 25) {
-                                logContainer.removeChild(logContainer.lastChild);
-                            }
+                            // Batch remove for better performance  
+                            const childrenToRemove = logContainer.children.length - 25;
+                            const elementsToRemove = Array.from(logContainer.children).slice(-childrenToRemove);
+                            elementsToRemove.forEach(element => logContainer.removeChild(element));
                         }
 
                         // Clear debug logger entries
@@ -6406,6 +6754,9 @@
                 `;
                 dropdown.appendChild(title);
 
+                // Batch dropdown items using DocumentFragment to reduce reflows
+                const dropdownFragment = document.createDocumentFragment();
+                
                 suggestions.slice(0, 5).forEach(file => {
                     const item = document.createElement('div');
                     item.className = 'recent-file-item';
@@ -6443,8 +6794,10 @@
                         dropdown.remove();
                     });
 
-                    dropdown.appendChild(item);
+                    dropdownFragment.appendChild(item);
                 });
+                
+                dropdown.appendChild(dropdownFragment);
 
                 container.appendChild(dropdown);
 
@@ -6919,7 +7272,7 @@
 
         // Initialize particle system
         debugLog('Initializing ParticleSystem...');
-        const particleSystem = new ParticleSystem();
+        const particleSystem = new ParticleSystem(app);
         particleSystem.init();
         debugLog('ParticleSystem initialized.');
 

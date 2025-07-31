@@ -2438,7 +2438,7 @@ class ServerGUI:
             system_status = "🟡 Monitoring"
             system_color = ModernTheme.WARNING
             
-            if SYSTEM_MONITOR_AVAILABLE:
+            if SYSTEM_MONITOR_AVAILABLE and psutil is not None:
                 try:
                     cpu_percent = psutil.cpu_percent(interval=0.1)
                     memory = psutil.virtual_memory()
@@ -2799,7 +2799,7 @@ class ServerGUI:
             
             # System Resources Component
             sys_status = {"status": "🟡 Monitoring", "color": ModernTheme.WARNING, "details": [], "suggestions": []}
-            if SYSTEM_MONITOR_AVAILABLE:
+            if SYSTEM_MONITOR_AVAILABLE and psutil is not None:
                 try:
                     cpu_percent = psutil.cpu_percent(interval=0.1)
                     memory = psutil.virtual_memory()
@@ -2905,7 +2905,7 @@ class ServerGUI:
             
             # Test 3: System Resources
             diagnostics_results.append("🔍 Testing System Resources...")
-            if SYSTEM_MONITOR_AVAILABLE:
+            if SYSTEM_MONITOR_AVAILABLE and psutil is not None:
                 try:
                     cpu_percent = psutil.cpu_percent(interval=1)
                     memory = psutil.virtual_memory()
@@ -3030,9 +3030,10 @@ class ServerGUI:
             report_text += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
             report_text += "\n".join(results)
             
-            self.root.clipboard_clear()
-            self.root.clipboard_append(report_text)
-            self.root.update()  # Required for clipboard update
+            if self.root:
+                self.root.clipboard_clear()
+                self.root.clipboard_append(report_text)
+                self.root.update()  # Required for clipboard update
             
             if hasattr(self, 'toast_system') and self.toast_system:
                 self.toast_system.show_toast("Diagnostics copied to clipboard", "success")
@@ -3365,9 +3366,9 @@ class ServerGUI:
                         'files': 'N/A' # Placeholder
                     })
                 
-                self.client_table.set_data(table_data)
-                self._add_activity_log("Client table refreshed.")
-            except Exception as e:
+            self.client_table.set_data(table_data)
+            self._add_activity_log("Client table refreshed.")
+        except Exception as e:
                 error_msg = f"Database error refreshing client table: {str(e)}"
                 self._add_activity_log(f"❌ {error_msg}")
                 
@@ -3471,9 +3472,9 @@ class ServerGUI:
                         'path': f['path']
                     })
                 
-                self.file_table.set_data(table_data)
-                self._add_activity_log("File table refreshed.")
-            except Exception as e:
+            self.file_table.set_data(table_data)
+            self._add_activity_log("File table refreshed.")
+        except Exception as e:
                 error_msg = f"Database error refreshing file table: {str(e)}"
                 self._add_activity_log(f"❌ {error_msg}")
                 
