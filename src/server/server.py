@@ -472,9 +472,12 @@ class BackupServer:
         self.gui_manager.update_server_status(True, "0.0.0.0", self.port)
         self.gui_manager.update_client_stats({
             'connected': 0,
-            'total': 0,
+            'total': len(self.clients),
             'active_transfers': 0
         })
+
+        # Signal to the GUI that the initial data load is complete
+        self.gui_manager.signal_data_loaded()
 
 
     def stop(self):

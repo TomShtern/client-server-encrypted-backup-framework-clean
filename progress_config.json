@@ -1,0 +1,76 @@
+{
+  "phases": {
+    "CONNECTING": {
+      "weight": 0.10,
+      "avg_duration_ms": 450,
+      "description": "Connecting to backup server...",
+      "progress_range": [0, 10]
+    },
+    "AUTHENTICATING": {
+      "weight": 0.15,
+      "avg_duration_ms": 650,
+      "description": "Authenticating user credentials...",
+      "progress_range": [10, 25]
+    },
+    "ENCRYPTING": {
+      "weight": 0.30,
+      "avg_duration_ms": 1200,
+      "description": "Encrypting file with AES-256...",
+      "progress_range": [25, 55]
+    },
+    "TRANSFERRING": {
+      "weight": 0.35,
+      "avg_duration_ms": 1500,
+      "description": "Transferring encrypted data...",
+      "progress_range": [55, 90]
+    },
+    "VERIFYING": {
+      "weight": 0.10,
+      "avg_duration_ms": 400,
+      "description": "Verifying transfer integrity...",
+      "progress_range": [90, 100]
+    },
+    "COMPLETED": {
+      "weight": 0.00,
+      "avg_duration_ms": 0,
+      "description": "Backup completed successfully!",
+      "progress_range": [100, 100]
+    }
+  },
+  "calibration_info": {
+    "basis": "Initial estimates for portfolio demo - to be calibrated with real measurements",
+    "recommended_calibration": "Run 20-50 transfers with different file sizes and update weights",
+    "total_avg_duration_ms": 4200,
+    "avg_file_size_mb": 2.5,
+    "created_date": "2025-08-01",
+    "version": "1.0.0"
+  },
+  "usage_notes": {
+    "weight_calculation": "Weights represent relative time spent in each phase (sum = 1.0)",
+    "progress_range": "Visual progress bar percentage range for each phase",
+    "duration_estimates": "Average milliseconds spent in each phase (for ETA calculations)",
+    "phase_descriptions": "User-friendly messages shown during each phase",
+    "adaptive_scaling": "Durations scale based on file size and network conditions"
+  },
+  "demo_scenarios": {
+    "small_file_1mb": {
+      "scale_factor": 0.7,
+      "description": "Small files complete faster due to less encryption/transfer time"
+    },
+    "medium_file_5mb": {
+      "scale_factor": 1.0,
+      "description": "Baseline scenario for calibration"
+    },
+    "large_file_50mb": {
+      "scale_factor": 2.8,
+      "description": "Large files take proportionally longer in encryption and transfer phases"
+    }
+  },
+  "real_time_features": {
+    "websocket_enabled": true,
+    "timestamp_logging": true,
+    "phase_transitions": "Logged with high-resolution timestamps from C++ client",
+    "ui_debounce_ms": 50,
+    "progress_smoothing": "Debounced updates prevent UI flooding during rapid progress changes"
+  }
+}

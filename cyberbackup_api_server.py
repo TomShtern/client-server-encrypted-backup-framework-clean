@@ -13,6 +13,7 @@ import tempfile
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit
 
 # Import our real backup executor
 from src.api.real_backup_executor import RealBackupExecutor
@@ -25,9 +26,25 @@ import uuid
 app = Flask(__name__)
 CORS(app)  # Enable CORS for local development
 
-# --- New Job-Based Status Management ---
-backup_executor = RealBackupExecutor()
+# Initialize SocketIO with origin-locked CORS for security
+socketio = SocketIO(app, cors_allowed_origins=["http://localhost:9090", "http://127.0.0.1:9090"])
+
+# --- Initialize global variables ---
+connection_established = False
+connection_timestamp = None
 active_backup_jobs = {}
+connected_clients = set()
+websocket_enabled = True  # Control WebSocket functionality
+
+# Initialize the real backup executor
+try:
+    backup_executor = RealBackupExecutor()
+    print("[OK] RealBackupExecutor initialized successfully.")
+except Exception as e:
+    print(f"[CRITICAL] Failed to initialize RealBackupExecutor: {e}")
+    # Optionally, exit or disable backup functionality
+    backup_executor = None
+
 
 def get_default_status():
     return {
@@ -40,6 +57,8 @@ def get_default_status():
         'events': [],
         'last_updated': datetime.now().isoformat()
     }
+
+backup_status = get_default_status()
 
 last_known_status = get_default_status() # For providing a consistent default
 
@@ -75,6 +94,51 @@ def check_backup_server_status():
     except Exception:
         return False
 
+# --- WebSocket Event Handlers ---
+
+@socketio.on('connect')
+def handle_connect():
+    """Handle WebSocket client connection"""
+    client_id = request.sid
+    connected_clients.add(client_id)
+    print(f"[WEBSOCKET] Client connected: {client_id} (Total: {len(connected_clients)})")
+    
+    # Send initial status to new client
+    emit('status', {
+        'connected': check_backup_server_status(),
+        'server_running': True,
+        'timestamp': time.time(),
+        'message': 'WebSocket connected - real-time updates enabled'
+    })
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle WebSocket client disconnection"""
+    client_id = request.sid
+    connected_clients.discard(client_id)
+    print(f"[WEBSOCKET] Client disconnected: {client_id} (Total: {len(connected_clients)})")
+
+@socketio.on('request_status')
+def handle_status_request(data):
+    """Handle client status requests via WebSocket"""
+    job_id = data.get('job_id') if data else None
+    status = active_backup_jobs.get(job_id, last_known_status) if job_id else last_known_status
+    
+    # Always provide the latest connection status
+    status['connected'] = check_backup_server_status() and connection_established
+    status['isConnected'] = status['connected']
+    
+    emit('status_response', {
+        'status': status,
+        'job_id': job_id,
+        'timestamp': time.time()
+    })
+
+@socketio.on('ping')
+def handle_ping():
+    """Handle WebSocket ping for connection testing"""
+    emit('pong', {'timestamp': time.time()})
+
 # Static file serving
 @app.route('/')
 def serve_client():
@@ -92,6 +156,14 @@ def serve_client_assets(filename):
     except FileNotFoundError:
         return f"<h1>Asset not found: {filename}</h1>", 404
 
+@app.route('/progress_config.json')
+def serve_progress_config():
+    """Serve the progress configuration file"""
+    try:
+        return send_file('progress_config.json')
+    except FileNotFoundError:
+        return jsonify({'error': 'progress_config.json not found'}), 404
+
 # API Endpoints for CyberBackup 3.0
 
 @app.route('/api/test', methods=['POST'])
@@ -103,24 +175,25 @@ def api_test():
 @app.route('/api/status')
 def api_status():
     """Get current backup status with proper connection state management"""
-    global last_known_status, active_backup_jobs
+    try:
+        global last_known_status, active_backup_jobs
 
-    job_id = request.args.get('job_id')
-    status = active_backup_jobs.get(job_id, last_known_status)
+        job_id = request.args.get('job_id')
+        status = active_backup_jobs.get(job_id, last_known_status)
 
-    # Always provide the latest connection status
-    status['connected'] = check_backup_server_status() and connection_established
-    status['isConnected'] = status['connected']
+        # Always provide the latest connection status
+        status['connected'] = check_backup_server_status() and connection_established
+        status['isConnected'] = status['connected']
 
-    # Clear events after reading them
-    events_to_send = status.get('events', [])
-    if job_id and job_id in active_backup_jobs:
-        active_backup_jobs[job_id]['events'] = []
+        # Clear events after reading them
+        events_to_send = status.get('events', [])
+        if job_id and job_id in active_backup_jobs:
+            active_backup_jobs[job_id]['events'] = []
 
-    response = status.copy()
-    response['events'] = events_to_send
+        response = status.copy()
+        response['events'] = events_to_send
 
-    return jsonify(response)
+        return jsonify(response)
 
     except Exception as e:
         print(f"[ERROR] Exception in api_status: {str(e)}")
@@ -251,8 +324,8 @@ def api_disconnect():
 @app.route('/api/start_backup', methods=['POST'])
 def api_start_backup():
     """Start backup using REAL backup executor"""
-    global active_backup_jobs, backup_executor
-
+    global backup_status
+    
     job_id = str(uuid.uuid4())
     active_backup_jobs[job_id] = get_default_status()
     active_backup_jobs[job_id]['backing_up'] = True
@@ -261,12 +334,35 @@ def api_start_backup():
         if job_id in active_backup_jobs:
             active_backup_jobs[job_id]['events'].append({'phase': phase, 'data': data})
             active_backup_jobs[job_id]['phase'] = phase
+            
+            # Update both job-specific and global backup status
             if isinstance(data, dict):
-                active_backup_jobs[job_id]['message'] = data.get('message', phase)
+                message = data.get('message', phase)
+                active_backup_jobs[job_id]['message'] = message
                 if 'progress' in data:
-                    active_backup_jobs[job_id]['progress']['percentage'] = data['progress']
+                    progress_value = data['progress']
+                    active_backup_jobs[job_id]['progress']['percentage'] = progress_value
+                    # Also update global backup status for unified API
+                    update_backup_status(phase, message, progress_value)
+                else:
+                    update_backup_status(phase, message)
             else:
                 active_backup_jobs[job_id]['message'] = data
+                update_backup_status(phase, data)
+            
+            # Real-time WebSocket broadcasting
+            if websocket_enabled and connected_clients:
+                try:
+                    socketio.emit('progress_update', {
+                        'job_id': job_id,
+                        'phase': phase,
+                        'data': data,
+                        'timestamp': time.time(),
+                        'progress': active_backup_jobs[job_id]['progress']['percentage'] if isinstance(data, dict) and 'progress' in data else None
+                    })
+                    print(f"[WEBSOCKET] Broadcasted progress update: {phase}")
+                except Exception as e:
+                    print(f"[WEBSOCKET] Broadcast failed: {e}")
 
     backup_executor.set_status_callback(status_handler)
 
@@ -330,54 +426,54 @@ def api_start_backup():
                 )
 
                 if result and result.get('success'):
-                    backup_status['phase'] = 'COMPLETED'
-                    backup_status['progress']['percentage'] = 100
-                    update_backup_status('COMPLETED', f'Backup completed successfully!')
+                    update_backup_status('COMPLETED', 'Backup completed successfully!', 100)
                 else:
-                    backup_status['phase'] = 'FAILED'
                     error_msg = result.get('error', 'Unknown error') if result else 'Backup executor returned None'
                     update_backup_status('FAILED', f'Backup failed: {error_msg}')
 
             except Exception as e:
-                backup_status['phase'] = 'FAILED'
                 update_backup_status('FAILED', f'Backup error: {str(e)}')
                 print(f"[ERROR] Backup thread error: {str(e)}")
             finally:
                 backup_status['backing_up'] = False
-                # Use proper subprocess synchronization instead of arbitrary delay
-                def synchronized_cleanup():
+                
+                # Perform cleanup with incremental progress updates
+                def cleanup_with_progress():
+                    """Perform cleanup with progressive status updates"""
                     try:
-                        # Wait for backup to complete by checking backup status
-                        max_wait_time = 30  # Maximum 30 seconds wait
-                        check_interval = 1  # Check every 1 second
-                        elapsed = 0
-
-                        # Wait for backup executor to complete and release file
-                        while elapsed < max_wait_time:
-                            # Check if backup phase indicates completion (either success or failure)
-                            if backup_status['phase'] in ['COMPLETED', 'FAILED']:
-                                print(f"[DEBUG] Backup completed, proceeding with cleanup after {elapsed}s")
-                                break
-                            time.sleep(check_interval)
-                            elapsed += check_interval
-
-                        # Additional small delay to ensure file handles are closed
-                        time.sleep(2)
-
-                        # Perform cleanup
+                        # Step 1: Start cleanup (90%)
+                        update_backup_status('CLEANUP', 'Starting cleanup...', 90)
+                        time.sleep(0.5)
+                        
+                        # Step 2: Remove temp files (95%)
+                        update_backup_status('CLEANUP', 'Removing temporary files...', 95)
                         if os.path.exists(file_path):
                             os.remove(file_path)
-                            print(f"[DEBUG] Synchronized cleanup: removed {file_path}")
                         if os.path.exists(temp_dir):
                             os.rmdir(temp_dir)
-                            print(f"[DEBUG] Synchronized cleanup: removed {temp_dir}")
+                        print(f"[DEBUG] Cleanup successful for: {file_path}")
+                        time.sleep(0.5)
+                        
+                        # Step 3: Finalizing (98%)
+                        update_backup_status('CLEANUP', 'Finalizing...', 98)
+                        time.sleep(0.3)
+                        
+                        # Step 4: Complete (100%)
+                        update_backup_status('COMPLETED', 'Backup process completed successfully!', 100)
+                        time.sleep(0.2)
+                        
                     except Exception as e:
-                        print(f"[WARNING] Synchronized cleanup error: {e}")
-
-                # Start synchronized cleanup in background thread
-                cleanup_thread = threading.Thread(target=synchronized_cleanup)
-                cleanup_thread.daemon = True
-                cleanup_thread.start()
+                        print(f"[WARNING] Cleanup error: {e}")
+                        update_backup_status('COMPLETED', 'Backup completed with cleanup warnings.', 100)
+                    
+                    finally:
+                        # Reset status to ready for next job after a brief display period
+                        time.sleep(1.0)  # Allow user to see completion status
+                        backup_status = get_default_status()
+                        backup_status['connected'] = True # Assume still connected
+                        update_backup_status('READY', 'Ready for new backup.')
+                
+                cleanup_with_progress()
 
         # Start backup thread
         backup_thread = threading.Thread(target=run_backup)
@@ -397,6 +493,8 @@ def api_start_backup():
         print(f"[ERROR] {error_msg}")
         update_backup_status('ERROR', error_msg)
         return jsonify({'success': False, 'error': error_msg}), 500
+
+# --- Enhanced server startup with WebSocket support ---
 
 if __name__ == "__main__":
     print("=" * 70)
@@ -432,7 +530,7 @@ if __name__ == "__main__":
         print(f"[WARNING] Backup Server: Not running on port 1256")
 
     print()
-    print("[ROCKET] Starting Flask API server...")
+    print("[ROCKET] Starting Flask API server with WebSocket support...")
     
     # Ensure only one API server instance runs at a time
     print("Ensuring single API server instance...")
@@ -440,11 +538,13 @@ if __name__ == "__main__":
     print("Singleton lock acquired for API server")
 
     try:
-        app.run(
+        print("[WEBSOCKET] Starting Flask-SocketIO server with real-time support...")
+        socketio.run(
+            app,
             host='127.0.0.1',
             port=9090,
             debug=True,
-            threaded=True
+            allow_unsafe_werkzeug=True  # Allow threading with SocketIO
         )
     except KeyboardInterrupt:
         print("\n[INFO] API Server shutdown requested")

@@ -2556,7 +2556,12 @@
                 <button type="button" class="cyber-btn danger" id="confirmOkBtn">Confirm</button>
             </div>
         </div>
-    </div>    <script>
+    </div>
+    
+    <!-- Socket.IO Client Library for Real-Time Communication -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+    
+    <script>
         // === IMMEDIATE TEST ===
         console.log('JavaScript is working! Script started loading...');
         
@@ -3670,6 +3675,11 @@
                 this.fileMemoryManager = new FileMemoryManager();
                 this.backupHistoryManager = new BackupHistoryManager();
                 this.connectionHealthMonitor = new ConnectionHealthMonitor();
+                
+                // Initialize WebSocket connection for real-time updates
+                this.socket = null;
+                this.socketConnected = false;
+                this.initializeWebSocket();
 
                 this.elements = {
                     connectionLed: document.getElementById('connectionLed'),
@@ -3785,9 +3795,13 @@
                 // Setup cleanup handlers for memory leak prevention
                 this.setupPageUnloadHandler();
 
-                // Start adaptive status polling with intelligent frequency adjustment
-                this.startAdaptivePolling();
-                this.addLog('System Initialized', 'success', 'Ready to connect to C++ client.');
+                // Initialize real-time WebSocket communication (replaces polling)
+                this.uiUpdateTimeout = null; // For debounced UI updates
+                this.progressConfig = null; // Progress configuration for rich UX
+                this.phaseStartTime = null; // For ETA calculations
+                this.loadProgressConfiguration();
+                this.connectWebSocket();
+                this.addLog('System Initialized', 'success', 'Real-time communication enabled.');
                 this.system.notifications.show('CyberBackup Pro', 'Application ready', { type: 'info', silent: true });
                 
                 // Request notification permission on startup
@@ -3798,6 +3812,536 @@
                 
                 // Initialize connection health monitoring
                 this.setupConnectionHealthMonitoring();
+            }
+
+            /**
+             * Initialize WebSocket connection for real-time progress updates
+             */
+            initializeWebSocket() {
+                debugLog('Initializing WebSocket connection...', 'WEBSOCKET');
+                this.socket = io();
+                this.setupWebSocketEventHandlers();
+            }
+
+            /**
+             * Setup WebSocket event handlers for real-time communication
+             */
+            setupWebSocketEventHandlers() {
+                // Connection events
+                this.socket.on('connect', () => {
+                    this.socketConnected = true;
+                    debugLog('WebSocket connected successfully', 'WEBSOCKET');
+                    this.addLog('Real-time connection', 'success', 'WebSocket connected - live updates enabled');
+                    this.updateConnectionStatus(true);
+                });
+
+                this.socket.on('disconnect', () => {
+                    this.socketConnected = false;
+                    debugLog('WebSocket disconnected', 'WEBSOCKET');
+                    this.addLog('Connection lost', 'warning', 'WebSocket disconnected - falling back to polling');
+                    this.updateConnectionStatus(false);
+                    // Fallback to polling if WebSocket fails
+                    this.startPollingFallback();
+                });
+
+                // Real-time progress updates
+                this.socket.on('progress_update', (data) => {
+                    debugLog('Received progress update via WebSocket:', data, 'WEBSOCKET');
+                    this.handleRealTimeProgressUpdate(data);
+                });
+
+                // Status updates
+                this.socket.on('status', (data) => {
+                    debugLog('Received status update via WebSocket:', data, 'WEBSOCKET');
+                    this.state.isConnected = data.connected;
+                    this.updateAllUI();
+                });
+
+                // Pong response for connection testing
+                this.socket.on('pong', (data) => {
+                    debugLog('WebSocket ping response received', 'WEBSOCKET');
+                });
+
+                // Error handling for backup failures
+                this.socket.on('backup_error', (data) => {
+                    debugLog('Backup error received via WebSocket:', data, 'ERROR');
+                    this.handleBackupError(data);
+                });
+
+                // Connection error handling
+                this.socket.on('connect_error', (error) => {
+                    debugLog('WebSocket connection error:', error, 'ERROR');
+                    this.handleConnectionError(error);
+                });
+            }
+
+            /**
+             * Connect to WebSocket server
+             */
+            connectWebSocket() {
+                if (this.socket && this.socketConnected) {
+                    debugLog('WebSocket already connected', 'WEBSOCKET');
+                    return;
+                }
+
+                try {
+                    debugLog('Attempting WebSocket connection...', 'WEBSOCKET');
+                    this.initializeWebSocket();
+                } catch (error) {
+                    console.error('WebSocket connection failed:', error);
+                    this.addLog('WebSocket error', 'error', 'Failed to connect - using polling fallback');
+                    this.startPollingFallback();
+                }
+            }
+
+            /**
+             * Handle real-time progress updates from WebSocket with rich context
+             */
+            handleRealTimeProgressUpdate(data) {
+                const { job_id, phase, data: progressData, timestamp, progress } = data;
+                
+                // Only process updates for current job
+                if (job_id && this.state.jobId && job_id !== this.state.jobId) {
+                    debugLog('Ignoring progress update for different job', 'WEBSOCKET');
+                    return;
+                }
+
+                // Track phase transitions for ETA calculations
+                if (phase && phase !== this.state.phase) {
+                    this.phaseStartTime = Date.now();
+                    debugLog(`Phase transition: ${this.state.phase} → ${phase}`, 'PROGRESS');
+                }
+
+                // Update state with real-time data
+                if (phase) {
+                    this.state.phase = phase;
+                    // Use rich phase description from configuration
+                    this.state.phaseDescription = this.getPhaseDescription(phase);
+                }
+                
+                if (progress !== null && progress !== undefined) {
+                    this.state.progress = progress;
+                }
+
+                // Process the progress data with enhanced context
+                if (progressData) {
+                    if (typeof progressData === 'object') {
+                        const message = progressData.message || this.state.phaseDescription;
+                        this.state.log = { operation: phase, success: true, details: message };
+                        
+                        if (progressData.progress !== undefined) {
+                            this.state.progress = progressData.progress;
+                        }
+                    } else {
+                        const message = progressData || this.state.phaseDescription;
+                        this.state.log = { operation: phase, success: true, details: message };
+                    }
+                }
+
+                // Calculate and update ETA
+                if (this.phaseStartTime && phase) {
+                    const elapsedMs = Date.now() - this.phaseStartTime;
+                    const etaSeconds = this.calculateETA(phase, elapsedMs);
+                    if (etaSeconds !== null) {
+                        this.state.eta = this.formatETA(etaSeconds);
+                        this.state.etaSeconds = etaSeconds;
+                    }
+                }
+
+                // Debounced UI update for smooth performance (50ms debounce)
+                this.debouncedUIUpdate();
+                
+                // Add timestamped log entry with rich context
+                const timestampStr = new Date(timestamp * 1000).toLocaleTimeString();
+                const phaseDesc = this.state.phaseDescription || phase;
+                const etaInfo = this.state.eta ? ` (ETA: ${this.state.eta})` : '';
+                debugLog(`Real-time update [${timestampStr}]: ${phaseDesc} - ${progress}%${etaInfo}`, 'PROGRESS');
+                
+                // Show phase transition notifications for important phases
+                if (phase && ['CONNECTING', 'AUTHENTICATING', 'ENCRYPTING', 'TRANSFERRING', 'VERIFYING', 'COMPLETED'].includes(phase)) {
+                    this.showPhaseTransitionNotification(phase, this.state.phaseDescription);
+                }
+            }
+
+            /**
+             * Show subtle notification for phase transitions
+             */
+            showPhaseTransitionNotification(phase, description) {
+                // Only show notifications for significant phase changes, not every progress update
+                if (this.lastNotificationPhase === phase) return;
+                
+                this.lastNotificationPhase = phase;
+                
+                // Use the existing toast system for phase notifications
+                if (phase === 'COMPLETED') {
+                    this.showToast(description, 'success', 3000);
+                } else if (phase === 'TRANSFERRING') {
+                    this.showToast(description, 'info', 2000);
+                } else {
+                    // Subtle notifications for other phases
+                    debugLog(`Phase: ${description}`, 'PHASE');
+                }
+            }
+
+            /**
+             * Handle backup errors with restart option
+             */
+            handleBackupError(errorData) {
+                const { message, phase, job_id } = errorData;
+                
+                // Update state to reflect error
+                this.state.phase = 'ERROR';
+                this.state.isRunning = false;
+                this.state.hasError = true;
+                this.state.errorMessage = message || 'Backup failed unexpectedly';
+                this.state.errorPhase = phase || 'UNKNOWN';
+                
+                // Clear progress and ETA
+                this.state.progress = 0;
+                this.state.eta = null;
+                this.state.etaSeconds = 0;
+                
+                // Add error log entry
+                this.addLog('Backup failed', 'error', this.state.errorMessage);
+                
+                // Show error toast with restart option
+                this.showErrorWithRestart(this.state.errorMessage);
+                
+                // Update UI to show error state
+                this.updateAllUI();
+                
+                debugLog(`Backup error in phase ${this.state.errorPhase}: ${this.state.errorMessage}`, 'ERROR');
+            }
+
+            /**
+             * Handle WebSocket connection errors
+             */
+            handleConnectionError(error) {
+                debugLog('WebSocket connection error, falling back to polling', 'ERROR');
+                this.addLog('Connection error', 'warning', 'WebSocket failed, using polling fallback');
+                this.startPollingFallback();
+            }
+
+            /**
+             * Show error message with restart button
+             */
+            showErrorWithRestart(errorMessage) {
+                // Create error notification with restart button
+                const errorHtml = `
+                    <div class="error-restart-container">
+                        <div class="error-message">❌ ${errorMessage}</div>
+                        <button id="restartBackupBtn" class="restart-btn" 
+                                onclick="window.app.restartBackup()" 
+                                style="margin-top: 10px; padding: 8px 16px; background: var(--neon-blue); color: var(--bg-dark); border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                            🔄 Restart Backup
+                        </button>
+                    </div>
+                `;
+                
+                // Show persistent error toast
+                this.showToast(errorHtml, 'error', 0); // 0 = persistent (won't auto-hide)
+                
+                // Also update any error display elements in the UI
+                this.updateErrorDisplay();
+            }
+
+            /**
+             * Update error display elements in the UI
+             */
+            updateErrorDisplay() {
+                // Find error display elements and update them
+                const errorElements = document.querySelectorAll('.error-display, .backup-error');
+                errorElements.forEach(element => {
+                    if (this.state.hasError) {
+                        element.innerHTML = `
+                            <div class="error-content">
+                                <div class="error-text">❌ ${this.state.errorMessage}</div>
+                                <button class="restart-btn" onclick="window.app.restartBackup()">
+                                    🔄 Restart Backup
+                                </button>
+                            </div>
+                        `;
+                        element.style.display = 'block';
+                    } else {
+                        element.style.display = 'none';
+                    }
+                });
+            }
+
+            /**
+             * Restart backup operation (called by restart button)
+             */
+            restartBackup() {
+                debugLog('Manual backup restart requested', 'RESTART');
+                
+                // Clear error state
+                this.clearErrorState();
+                
+                // Reset progress state
+                this.resetProgressState();
+                
+                // Close any error toasts
+                this.clearErrorToasts();
+                
+                // Start fresh backup with current settings
+                this.startBackup();
+                
+                this.addLog('Backup restarted', 'info', 'Manual restart initiated');
+                this.showToast('Backup restarted - attempting fresh upload', 'info', 3000);
+            }
+
+            /**
+             * Clear error state
+             */
+            clearErrorState() {
+                this.state.hasError = false;
+                this.state.errorMessage = null;
+                this.state.errorPhase = null;
+                this.state.phase = 'READY';
+                this.lastNotificationPhase = null;
+                
+                // Update error display elements
+                this.updateErrorDisplay();
+            }
+
+            /**
+             * Reset progress state for fresh start
+             */
+            resetProgressState() {
+                this.state.progress = 0;
+                this.state.eta = null;
+                this.state.etaSeconds = 0;
+                this.state.isRunning = false;
+                this.state.phaseDescription = null;
+                this.phaseStartTime = null;
+            }
+
+            /**
+             * Clear error toast notifications
+             */
+            clearErrorToasts() {
+                // Find and remove error toasts
+                const errorToasts = document.querySelectorAll('.toast.error');
+                errorToasts.forEach(toast => {
+                    toast.remove();
+                });
+            }
+
+            /**
+             * Enhanced error detection for backup failures
+             */
+            detectBackupFailure(statusData) {
+                // Detect failure conditions from status data
+                if (statusData.status === 'error' || statusData.phase === 'FAILED') {
+                    const errorMessage = statusData.message || 'Backup operation failed';
+                    this.handleBackupError({
+                        message: errorMessage,
+                        phase: statusData.phase || 'UNKNOWN',
+                        job_id: this.state.jobId
+                    });
+                    return true;
+                }
+                
+                // Detect timeout conditions
+                if (this.state.isRunning && this.state.progress === 0) {
+                    const elapsedTime = Date.now() - (this.backupStartTime || Date.now());
+                    if (elapsedTime > 60000) { // 60 seconds with no progress
+                        this.handleBackupError({
+                            message: 'Backup appears to be stuck - no progress after 60 seconds',
+                            phase: this.state.phase || 'TIMEOUT',
+                            job_id: this.state.jobId
+                        });
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
+
+            /**
+             * Debounced UI update for smooth real-time progress
+             */
+            debouncedUIUpdate() {
+                if (this.uiUpdateTimeout) {
+                    clearTimeout(this.uiUpdateTimeout);
+                }
+                
+                this.uiUpdateTimeout = setTimeout(() => {
+                    requestAnimationFrame(() => {
+                        this.updateAllUI();
+                    });
+                }, 50); // 50ms debounce for smooth UI updates
+            }
+
+            /**
+             * Start polling fallback when WebSocket fails
+             */
+            startPollingFallback() {
+                if (this.socketConnected) {
+                    debugLog('WebSocket connected, skipping polling fallback', 'WEBSOCKET');
+                    return;
+                }
+
+                debugLog('Starting polling fallback...', 'POLL');
+                this.startAdaptivePolling();
+            }
+
+            /**
+             * Load progress configuration for rich UX
+             */
+            async loadProgressConfiguration() {
+                try {
+                    const response = await fetch('/progress_config.json');
+                    if (response.ok) {
+                        this.progressConfig = await response.json();
+                        debugLog('Progress configuration loaded successfully', 'CONFIG');
+                        this.addLog('Progress system', 'success', 'Rich progress context enabled');
+                    } else {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                } catch (error) {
+                    console.warn('Could not load progress configuration:', error);
+                    this.addLog('Progress config', 'warning', 'Using default progress display');
+                    // Use fallback configuration
+                    this.progressConfig = this.getDefaultProgressConfig();
+                }
+            }
+
+            /**
+             * Get default progress configuration if file loading fails
+             */
+            getDefaultProgressConfig() {
+                return {
+                    phases: {
+                        "CONNECTING": { weight: 0.10, description: "Connecting to server...", progress_range: [0, 10] },
+                        "AUTHENTICATING": { weight: 0.15, description: "Authenticating...", progress_range: [10, 25] },
+                        "ENCRYPTING": { weight: 0.30, description: "Encrypting file...", progress_range: [25, 55] },
+                        "TRANSFERRING": { weight: 0.35, description: "Transferring data...", progress_range: [55, 90] },
+                        "VERIFYING": { weight: 0.10, description: "Verifying integrity...", progress_range: [90, 100] },
+                        "COMPLETED": { weight: 0.00, description: "Backup completed!", progress_range: [100, 100] }
+                    },
+                    calibration_info: { total_avg_duration_ms: 4200 }
+                };
+            }
+
+            /**
+             * Calculate ETA based on current phase and elapsed time
+             */
+            calculateETA(currentPhase, elapsedMs) {
+                if (!this.progressConfig || !currentPhase) return null;
+
+                const phaseConfig = this.progressConfig.phases[currentPhase];
+                if (!phaseConfig) return null;
+
+                // Calculate total expected duration
+                const totalExpectedMs = this.progressConfig.calibration_info.total_avg_duration_ms || 4200;
+                
+                // Calculate progress through current phase
+                const phaseProgress = this.getPhaseProgress(currentPhase);
+                
+                // Estimate remaining time
+                const completedWeight = this.getCompletedWeight(currentPhase, phaseProgress);
+                const remainingWeight = 1.0 - completedWeight;
+                const estimatedRemainingMs = remainingWeight * totalExpectedMs;
+
+                return Math.max(0, Math.round(estimatedRemainingMs / 1000)); // Return seconds
+            }
+
+            /**
+             * Get progress within current phase (0.0 to 1.0)
+             */
+            getPhaseProgress(currentPhase) {
+                if (!this.progressConfig || !currentPhase) return 0;
+                
+                const phaseConfig = this.progressConfig.phases[currentPhase];
+                if (!phaseConfig || !phaseConfig.progress_range) return 0;
+                
+                const [rangeStart, rangeEnd] = phaseConfig.progress_range;
+                const rangeSize = rangeEnd - rangeStart;
+                
+                if (rangeSize <= 0) return 1.0;
+                
+                // Calculate progress within this phase based on current overall progress
+                const currentProgress = this.state.progress || 0;
+                const progressInRange = Math.max(0, Math.min(currentProgress - rangeStart, rangeSize));
+                
+                return progressInRange / rangeSize;
+            }
+
+            /**
+             * Get total completed weight across all phases
+             */
+            getCompletedWeight(currentPhase, phaseProgress) {
+                if (!this.progressConfig) return 0;
+                
+                let completedWeight = 0;
+                const phases = Object.keys(this.progressConfig.phases);
+                const currentPhaseIndex = phases.indexOf(currentPhase);
+                
+                // Add weight from completed phases
+                for (let i = 0; i < currentPhaseIndex; i++) {
+                    const phase = phases[i];
+                    completedWeight += this.progressConfig.phases[phase].weight || 0;
+                }
+                
+                // Add partial weight from current phase
+                if (currentPhaseIndex >= 0) {
+                    const currentPhaseWeight = this.progressConfig.phases[currentPhase].weight || 0;
+                    completedWeight += currentPhaseWeight * phaseProgress;
+                }
+                
+                return Math.min(1.0, completedWeight);
+            }
+
+            /**
+             * Get rich phase description from configuration
+             */
+            getPhaseDescription(phase) {
+                if (!this.progressConfig || !phase) return phase;
+                
+                const phaseConfig = this.progressConfig.phases[phase];
+                return phaseConfig ? phaseConfig.description : phase;
+            }
+
+            /**
+             * Format ETA for display
+             */
+            formatETA(seconds) {
+                if (!seconds || seconds <= 0) return 'Calculating...';
+                
+                if (seconds < 60) {
+                    return `${seconds}s remaining`;
+                } else if (seconds < 3600) {
+                    const minutes = Math.floor(seconds / 60);
+                    const secs = seconds % 60;
+                    return `${minutes}m ${secs}s remaining`;
+                } else {
+                    const hours = Math.floor(seconds / 3600);
+                    const minutes = Math.floor((seconds % 3600) / 60);
+                    return `${hours}h ${minutes}m remaining`;
+                }
+            }
+
+            /**
+             * Test WebSocket connection
+             */
+            testWebSocketConnection() {
+                if (this.socketConnected) {
+                    this.socket.emit('ping');
+                    debugLog('WebSocket ping sent', 'WEBSOCKET');
+                    return true;
+                }
+                return false;
+            }
+
+            /**
+             * Update connection status in UI
+             */
+            updateConnectionStatus(connected) {
+                // This method can be enhanced to show WebSocket connection status
+                // in addition to server connection status
+                this.state.websocketConnected = connected;
+                // The existing updateAllUI() will handle the visual updates
             }
 
             /**
@@ -3956,7 +4500,7 @@
                 } finally {
                     this.stateManagement.isPolling = false;
                 }
-            },
+            }
 
             processStatusQueue(events) {
                 if (this.stateManagement.isProcessingQueue) {
@@ -3991,7 +4535,7 @@
                 };
 
                 processNextEvent();
-            },
+            }
 
             processStatusQueue(events) {
                 if (this.stateManagement.isProcessingQueue) {

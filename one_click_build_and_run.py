@@ -122,24 +122,47 @@ def check_python_dependencies():
     
     return missing_modules
 
-def wait_for_server_startup(host='127.0.0.1', port=9090, max_wait=30, check_interval=1):
-    """Wait for server to start with progress feedback"""
+def wait_for_server_startup(host='127.0.0.1', port=9090, max_wait=30, check_interval=1, process=None):
+    """Wait for server to start with progress feedback and process health monitoring"""
     print(f"Waiting for API server to start on {host}:{port}...")
     elapsed = 0
     
     while elapsed < max_wait:
+        # Check if process crashed
+        if process and process.poll() is not None:
+            print(f"[ERROR] API server process crashed with exit code: {process.returncode}")
+            print("This usually indicates:")
+            print("  - Import errors (missing dependencies)")
+            print("  - Syntax errors in the API server code")
+            print("  - Python environment issues")
+            print("Try running manually: python cyberbackup_api_server.py")
+            return False
+            
+        # Check if server is responsive
         if check_api_server_status(host, port):
             print(f"[OK] API server is responsive after {elapsed}s")
             return True
         
         # Show progress every 5 seconds
         if elapsed % 5 == 0 and elapsed > 0:
-            print(f"[INFO] Still waiting... ({elapsed}s/{max_wait}s)")
+            if process:
+                status = "running" if process.poll() is None else f"crashed (exit code: {process.returncode})"
+                print(f"[INFO] Still waiting... ({elapsed}s/{max_wait}s) - Process: {status}")
+            else:
+                print(f"[INFO] Still waiting... ({elapsed}s/{max_wait}s)")
         
         time.sleep(check_interval)
         elapsed += check_interval
     
-    print(f"[ERROR] API server failed to start within {max_wait} seconds")
+    # Timeout reached - provide specific diagnosis
+    if process and process.poll() is not None:
+        print(f"[ERROR] API server process crashed during startup (exit code: {process.returncode})")
+    else:
+        print(f"[ERROR] API server failed to respond within {max_wait} seconds")
+        print("Possible causes:")
+        print("  - Port 9090 blocked by firewall/antivirus")
+        print("  - Server started but taking longer than expected")
+        print("  - Network connectivity issues")
     return False
 
 def check_backup_server_status():
@@ -460,18 +483,17 @@ def main():
         print(f"\nStarting API Bridge Server: {api_server_path}")
         
         try:
-            # Start API server and capture output for error detection
+            # Start API server with direct console output for visibility
+            
+            # Start API server with direct console output (no capture to prevent pipe blocking)
             api_process = subprocess.Popen(
                 [sys.executable, str(api_server_path)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
                 creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
             )
             print(f"API Bridge Server started with PID: {api_process.pid}")
             
-            # Step 4: Wait for server to become responsive
-            server_started_successfully = wait_for_server_startup()
+            # Step 4: Wait for server to become responsive with process monitoring
+            server_started_successfully = wait_for_server_startup(process=api_process)
             
             if server_started_successfully:
                 print("[OK] API Bridge Server is running and responsive!")

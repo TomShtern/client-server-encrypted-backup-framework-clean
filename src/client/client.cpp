@@ -3,6 +3,8 @@
 // Fully compliant with project specifications
 
 #include "../../include/client/client.h"
+#include <chrono>
+#include <iomanip>
 
 // CRC table for polynomial 0x04C11DB7 (used by Linux cksum)
 static const uint32_t crc_table[256] = {
@@ -109,6 +111,22 @@ void TransferStats::update(size_t newBytes) {
 
     lastUpdateTime = now;
     lastTransferredBytes = transferredBytes;
+}
+
+// ============================================================================
+// TIMESTAMP LOGGING FOR PROGRESS TRACKING
+// ============================================================================
+
+// Log phase with high-resolution timestamp for progress calibration
+void log_phase_with_timestamp(const std::string& phase) {
+    auto now = std::chrono::high_resolution_clock::now();
+    auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now.time_since_epoch()).count();
+    
+    // Output format: [PHASE:timestamp] phase_name
+    // This format is parsed by RealBackupExecutor for progress tracking
+    std::cout << "[PHASE:" << timestamp << "] " << phase << std::endl;
+    std::cout.flush(); // Ensure immediate output for subprocess monitoring
 }
 
 // ============================================================================
@@ -291,6 +309,7 @@ bool Client::run() {
     }
     
     displayPhase("Transfer Complete");
+    log_phase_with_timestamp("COMPLETED");
     displaySummary();
     
     return true;
@@ -1064,6 +1083,7 @@ bool Client::transferFile() {
     uint16_t totalPackets = static_cast<uint16_t>((encryptedSize + MAX_PACKET_SIZE - 1) / MAX_PACKET_SIZE);
     
     displayStatus("Transfer preparation", true, "Splitting into " + std::to_string(totalPackets) + " packets");
+    log_phase_with_timestamp("TRANSFERRING");
     displaySeparator();
     
     // Send packets
@@ -1088,6 +1108,7 @@ bool Client::transferFile() {
     displaySeparator();
     displayStatus("Transfer complete", true, "All packets sent successfully");
     displayStatus("Waiting for server", true, "Server calculating CRC...");
+    log_phase_with_timestamp("VERIFYING");
     
     // Receive CRC response
     ResponseHeader header;

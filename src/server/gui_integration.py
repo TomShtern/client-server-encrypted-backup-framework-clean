@@ -19,6 +19,7 @@ class GUIManager:
         self.server_instance = server_instance
         self.gui = None
         self.gui_ready = threading.Event() # Event to signal GUI is fully initialized
+        self.data_loaded = threading.Event() # Event to signal that initial data is loaded
         self.gui_lock = threading.Lock()
         
         # Try to import GUI components
@@ -84,6 +85,10 @@ class GUIManager:
         """Check if GUI is fully initialized and ready for interaction."""
         return self.gui_ready.is_set()
 
+    def signal_data_loaded(self):
+        """Signal that the initial data from the server has been loaded."""
+        self.data_loaded.set()
+
     def _execute_gui_action(self, action, *args, **kwargs):
         """A helper to safely execute actions on the GUI thread."""
         if not self.is_gui_ready():
@@ -104,6 +109,7 @@ class GUIManager:
 
     def update_client_stats(self, stats_data: Optional[dict] = None):
         if self.is_gui_ready() and self.gui is not None:
+            self.data_loaded.wait(timeout=5.0)  # Wait for data to be loaded
             if stats_data is None:
                 stats_data = {'connected': 0, 'total': 0, 'active_transfers': 0}
             self._execute_gui_action(self.gui.update_client_stats, stats_data)

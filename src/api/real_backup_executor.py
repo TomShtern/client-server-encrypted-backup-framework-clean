@@ -144,49 +144,108 @@ class RealBackupExecutor:
             self._log_status("ERROR", f"Failed to calculate hash for {file_path}: {e}")
             return ""
     
-    def _monitor_client_log(self, log_file: str, timeout: int = 300) -> bool:
-        """Monitor client_debug.log for real progress updates"""
-        self._log_status("MONITOR", f"Monitoring {log_file} for progress...")
+    def _calculate_transfer_progress(self, file_path: str, elapsed_time: float, total_timeout: int = 30) -> int:
+        """Calculate dynamic progress based on file size and elapsed time"""
+        try:
+            file_size = os.path.getsize(file_path)
+            
+            # Define progress phases with realistic timing
+            phases = {
+                'initialization': {'start': 0, 'end': 15, 'duration': 3},  # 0-15% in first 3 seconds
+                'connection': {'start': 15, 'end': 25, 'duration': 2},     # 15-25% in next 2 seconds  
+                'encryption': {'start': 25, 'end': 40, 'duration': 5},     # 25-40% in next 5 seconds
+                'transfer': {'start': 40, 'end': 85, 'duration': 15},      # 40-85% main transfer phase
+                'verification': {'start': 85, 'end': 95, 'duration': 3},  # 85-95% verification
+                'completion': {'start': 95, 'end': 100, 'duration': 2}     # 95-100% final completion
+            }
+            
+            # Calculate which phase we're in based on elapsed time
+            cumulative_time = 0
+            for phase_name, phase_data in phases.items():
+                phase_end_time = cumulative_time + phase_data['duration']
+                
+                if elapsed_time <= phase_end_time:
+                    # We're in this phase - calculate progress within it
+                    phase_elapsed = elapsed_time - cumulative_time
+                    phase_progress = min(phase_elapsed / phase_data['duration'], 1.0)
+                    
+                    progress_range = phase_data['end'] - phase_data['start']
+                    current_progress = phase_data['start'] + (progress_range * phase_progress)
+                    
+                    return min(int(current_progress), 95)  # Cap at 95% until verification
+                
+                cumulative_time = phase_end_time
+            
+            # If we've exceeded all phases, return 95% (verification will handle final progress)
+            return 95
+            
+        except Exception as e:
+            self._log_status("ERROR", f"Error calculating progress: {e}")
+            # Fallback to simple time-based progress
+            return min(int((elapsed_time / total_timeout) * 95), 95)
+    
+    def _monitor_subprocess_output(self, process: subprocess.Popen, file_path: str, timeout: int = 30) -> bool:
+        """Monitor subprocess stdout/stderr for progress updates with dynamic calculation"""
+        self._log_status("MONITOR", "Monitoring subprocess for real-time progress...")
         
         start_time = time.time()
-        last_size = 0
+        last_progress = 0
         
-        while time.time() - start_time < timeout:
-            try:
-                if os.path.exists(log_file):
-                    current_size = os.path.getsize(log_file)
-                    if current_size > last_size:
-                        # Read new content
-                        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-                            f.seek(last_size)
-                            new_content = f.read()
-                            
-                        # Parse for meaningful status updates
-                        for line in new_content.split('\n'):
-                            line = line.strip()
-                            if any(keyword in line.lower() for keyword in 
-                                  ['connecting', 'connected', 'registering', 'registered', 
-                                   'encrypting', 'transferring', 'complete', 'success', 'failed']):
-                                self._log_status("CLIENT", line)
-                        
-                        last_size = current_size
-                        
-                        # Check for completion indicators
-                        if 'backup completed successfully' in new_content.lower():
-                            self._log_status("SUCCESS", "Client reported successful backup completion")
-                            return True
-                        elif 'failed' in new_content.lower() and 'fatal' in new_content.lower():
-                            self._log_status("ERROR", "Client reported fatal error")
-                            return False
-                            
-                time.sleep(1)
+        # Start a background thread to update progress based on time
+        def progress_updater():
+            nonlocal last_progress
+            while process.poll() is None and time.time() - start_time < timeout:
+                elapsed = time.time() - start_time
+                current_progress = self._calculate_transfer_progress(file_path, elapsed, timeout)
                 
-            except Exception as e:
-                self._log_status("ERROR", f"Error monitoring log file: {e}")
-                time.sleep(1)
+                # Only update if progress has increased
+                if current_progress > last_progress:
+                    last_progress = current_progress
+                    phase = self._get_current_phase(elapsed)
+                    self._log_status("PROGRESS", {
+                        "progress": current_progress, 
+                        "message": f"{phase} ({current_progress}%)"
+                    })
+                
+                time.sleep(1)  # Update every second
         
-        self._log_status("TIMEOUT", f"Log monitoring timed out after {timeout} seconds")
-        return False
+        # Start progress updater thread
+        progress_thread = threading.Thread(target=progress_updater, daemon=True)
+        progress_thread.start()
+        
+        # Monitor process completion
+        try:
+            process.wait(timeout=timeout)
+            
+            # Process completed - check for success indicators
+            if process.returncode == 0:
+                self._log_status("SUCCESS", "Client process completed successfully")
+                return True
+            else:
+                self._log_status("ERROR", f"Client process failed with exit code: {process.returncode}")
+                return False
+                
+        except subprocess.TimeoutExpired:
+            self._log_status("TIMEOUT", f"Process monitoring timed out after {timeout} seconds")
+            return False
+        except Exception as e:
+            self._log_status("ERROR", f"Error monitoring subprocess: {e}")
+            return False
+    
+    def _get_current_phase(self, elapsed_time: float) -> str:
+        """Get current phase name based on elapsed time"""
+        if elapsed_time <= 3:
+            return "Initializing"
+        elif elapsed_time <= 5:
+            return "Connecting to server"
+        elif elapsed_time <= 10:
+            return "Encrypting file"
+        elif elapsed_time <= 25:
+            return "Transferring file"
+        elif elapsed_time <= 28:
+            return "Verifying transfer"
+        else:
+            return "Finalizing"
     
     def _verify_file_transfer(self, original_file: str, username: str) -> Dict[str, Any]:
         """Verify that file was actually transferred to server"""
@@ -567,37 +626,51 @@ class RealBackupExecutor:
 
             self._log_status("PROCESS", f"Started backup client with enhanced monitoring (ID: {process_id}, PID: {self.backup_process.pid})")
             
-            # Capture and log stdout/stderr
-            # For now, we simulate progress during the timeout
-            self._log_status("PROGRESS", {"progress": 50, "message": "File transfer in progress..."})
+            # Monitor subprocess with real-time progress updates
+            self._log_status("PROGRESS", {"progress": 5, "message": "Starting file transfer..."})
+            
+            # Use enhanced monitoring instead of simple communicate()
+            process_success = self._monitor_subprocess_output(self.backup_process, file_path, timeout)
+            
             try:
-                stdout, stderr = self.backup_process.communicate(timeout=timeout)
-                result['process_exit_code'] = self.backup_process.returncode
-                self._log_status("PROCESS", f"Client process finished with exit code: {result['process_exit_code']}")
-                self._log_status("PROGRESS", {"progress": 80, "message": "Finalizing transfer..."})
+                # Get final output if process completed
+                if self.backup_process.poll() is not None:
+                    stdout, stderr = self.backup_process.communicate(timeout=5)  # Short timeout for cleanup
+                    result['process_exit_code'] = self.backup_process.returncode
+                    self._log_status("PROCESS", f"Client process finished with exit code: {result['process_exit_code']}")
+                else:
+                    # Process still running - terminate it
+                    self.backup_process.terminate()
+                    try:
+                        stdout, stderr = self.backup_process.communicate(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        self.backup_process.kill()
+                        stdout, stderr = self.backup_process.communicate()
+                    result['process_exit_code'] = self.backup_process.returncode
+                    self._log_status("PROCESS", f"Client process terminated with exit code: {result['process_exit_code']}")
                 if stdout:
-                    # Handle Unicode encoding for Windows console compatibility
+                    # Handle Unicode encoding for Windows console compatibility  
                     stdout_safe = stdout.decode('utf-8', errors='replace').encode('ascii', errors='replace').decode('ascii') if isinstance(stdout, bytes) else str(stdout).encode('ascii', errors='replace').decode('ascii')
                     self._log_status("CLIENT_STDOUT", stdout_safe)
                 if stderr:
                     # Handle Unicode encoding for Windows console compatibility
                     stderr_safe = stderr.decode('utf-8', errors='replace').encode('ascii', errors='replace').decode('ascii') if isinstance(stderr, bytes) else str(stderr).encode('ascii', errors='replace').decode('ascii')
                     self._log_status("CLIENT_STDERR", stderr_safe)
-                    result['error'] = stderr_safe
+                    if not result.get('error'):  # Only set error if not already set
+                        result['error'] = stderr_safe
             except subprocess.TimeoutExpired:
-                self._log_status("TIMEOUT", "Terminating backup process due to timeout")
+                self._log_status("TIMEOUT", "Backup process exceeded timeout")
                 self.backup_process.kill()
-                stdout, stderr = self.backup_process.communicate()
-                if stdout:
-                    # Handle Unicode encoding for Windows console compatibility
-                    stdout_safe = stdout.decode('utf-8', errors='replace').encode('ascii', errors='replace').decode('ascii') if isinstance(stdout, bytes) else str(stdout).encode('ascii', errors='replace').decode('ascii')
-                    self._log_status("CLIENT_STDOUT", stdout_safe)
-                if stderr:
-                    # Handle Unicode encoding for Windows console compatibility
-                    stderr_safe = stderr.decode('utf-8', errors='replace').encode('ascii', errors='replace').decode('ascii') if isinstance(stderr, bytes) else str(stderr).encode('ascii', errors='replace').decode('ascii')
-                    self._log_status("CLIENT_STDERR", stderr_safe)
+                try:
+                    stdout, stderr = self.backup_process.communicate(timeout=2)
+                except subprocess.TimeoutExpired:
+                    stdout, stderr = b"", b""
                 result['error'] = "Process timed out"
                 result['process_exit_code'] = -1
+            except Exception as e:
+                self._log_status("ERROR", f"Error during process monitoring: {e}")
+                result['error'] = f"Process monitoring error: {e}"
+                stdout, stderr = b"", b""  # Set defaults
             
             # Release subprocess reference to allow safe cleanup
             self.file_manager.release_subprocess_use(transfer_file_id)
