@@ -11,7 +11,7 @@ import time
 import threading
 import tempfile
 from datetime import datetime
-from flask import Flask, request, jsonify, send_from_directory, send_file
+from flask import Flask, request, jsonify, send_from_directory, send_file, session
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 
@@ -99,7 +99,9 @@ def check_backup_server_status():
 @socketio.on('connect')
 def handle_connect():
     """Handle WebSocket client connection"""
-    client_id = request.sid
+    # Generate a unique client ID and store it in the session
+    client_id = str(uuid.uuid4())
+    session['client_id'] = client_id
     connected_clients.add(client_id)
     print(f"[WEBSOCKET] Client connected: {client_id} (Total: {len(connected_clients)})")
     
@@ -114,9 +116,10 @@ def handle_connect():
 @socketio.on('disconnect')
 def handle_disconnect():
     """Handle WebSocket client disconnection"""
-    client_id = request.sid
-    connected_clients.discard(client_id)
-    print(f"[WEBSOCKET] Client disconnected: {client_id} (Total: {len(connected_clients)})")
+    client_id = session.get('client_id')
+    if client_id:
+        connected_clients.discard(client_id)
+        print(f"[WEBSOCKET] Client disconnected: {client_id} (Total: {len(connected_clients)})")
 
 @socketio.on('request_status')
 def handle_status_request(data):
@@ -326,6 +329,13 @@ def api_start_backup():
     """Start backup using REAL backup executor"""
     global backup_status
     
+    # Check if backup executor is available
+    if backup_executor is None:
+        return jsonify({
+            'success': False, 
+            'error': 'Backup executor not available. Please restart the API server.'
+        }), 500
+    
     job_id = str(uuid.uuid4())
     active_backup_jobs[job_id] = get_default_status()
     active_backup_jobs[job_id]['backing_up'] = True
@@ -364,7 +374,14 @@ def api_start_backup():
                 except Exception as e:
                     print(f"[WEBSOCKET] Broadcast failed: {e}")
 
-    backup_executor.set_status_callback(status_handler)
+    # Add null check before setting status callback
+    if backup_executor is not None:
+        backup_executor.set_status_callback(status_handler)
+    else:
+        return jsonify({
+            'success': False, 
+            'error': 'Backup executor is not initialized. Cannot start backup.'
+        }), 500
 
     # ... (rest of the function remains the same)
 
@@ -418,6 +435,11 @@ def api_start_backup():
         def run_backup():
             try:
                 print(f"[DEBUG] Starting real backup executor...")
+                # Add additional null check before calling execute_real_backup
+                if backup_executor is None:
+                    update_backup_status('FAILED', 'Backup executor not available')
+                    return
+                    
                 result = backup_executor.execute_real_backup(
                     username=username,
                     file_path=file_path,
@@ -468,7 +490,7 @@ def api_start_backup():
                     
                     finally:
                         # Reset status to ready for next job after a brief display period
-                        time.sleep(1.0)  # Allow user to see completion status
+                        time.sleep(1.0) # Allow user to see completion status
                         backup_status = get_default_status()
                         backup_status['connected'] = True # Assume still connected
                         update_backup_status('READY', 'Ready for new backup.')
