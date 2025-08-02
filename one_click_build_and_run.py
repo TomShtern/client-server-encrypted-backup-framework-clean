@@ -38,7 +38,6 @@ import sys
 import subprocess
 import time
 from pathlib import Path
-import atexit
 
 def print_phase(phase_num, total_phases, title):
     """Print phase header"""
@@ -123,45 +122,24 @@ def check_python_dependencies():
     
     return missing_modules
 
-def wait_for_server_startup(host='127.0.0.1', port=9090, max_wait=30, check_interval=1, process=None):
+def wait_for_server_startup(host='127.0.0.1', port=9090, max_wait=30, check_interval=1):
+    """Wait for server to start with progress feedback"""
+    print(f"Waiting for API server to start on {host}:{port}...")
     elapsed = 0
     
     while elapsed < max_wait:
-        # Check if process crashed
-        if process and process.poll() is not None:
-            print(f"[ERROR] API server process crashed with exit code: {process.returncode}")
-            print("This usually indicates:")
-            print("  - Import errors (missing dependencies)")
-            print("  - Syntax errors in the API server code")
-            print("  - Python environment issues")
-            print("Try running manually: python cyberbackup_api_server.py")
-            return False
-            
-        # Check if server is responsive
         if check_api_server_status(host, port):
             print(f"[OK] API server is responsive after {elapsed}s")
             return True
         
         # Show progress every 5 seconds
         if elapsed % 5 == 0 and elapsed > 0:
-            if process:
-                status = "running" if process.poll() is None else f"crashed (exit code: {process.returncode})"
-                print(f"[INFO] Still waiting... ({elapsed}s/{max_wait}s) - Process: {status}")
-            else:
-                print(f"[INFO] Still waiting... ({elapsed}s/{max_wait}s)")
+            print(f"[INFO] Still waiting... ({elapsed}s/{max_wait}s)")
         
         time.sleep(check_interval)
         elapsed += check_interval
     
-    # Timeout reached - provide specific diagnosis
-    if process and process.poll() is not None:
-        print(f"[ERROR] API server process crashed during startup (exit code: {process.returncode})")
-    else:
-        print(f"[ERROR] API server failed to respond within {max_wait} seconds")
-        print("Possible causes:")
-        print("  - Port 9090 blocked by firewall/antivirus")
-        print("  - Server started but taking longer than expected")
-        print("  - Network connectivity issues")
+    print(f"[ERROR] API server failed to start within {max_wait} seconds")
     return False
 
 def check_backup_server_status():
@@ -169,69 +147,12 @@ def check_backup_server_status():
     try:
         import socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)  # Shorter timeout
+        sock.settimeout(2)
         result = sock.connect_ex(('127.0.0.1', 1256))
         sock.close()
-        # Port 1256 is listening (connection successful or refused means server is running)
         return result == 0
     except Exception:
         return False
-
-def wait_for_backup_server_startup(host='127.0.0.1', port=1256, max_wait=15, check_interval=2, process=None):
-    """Wait for backup server to start up - simplified approach"""
-    elapsed = 0
-    
-    while elapsed < max_wait:
-        # Check if process crashed
-        if process and process.poll() is not None:
-            print(f"[ERROR] Backup server process crashed with exit code: {process.returncode}")
-            print("This usually indicates:")
-            print("  - Import errors (missing dependencies)")
-            print("  - Syntax errors in the server code")
-            print("  - Python environment issues")
-            print("Try running manually: python -m src.server.server")
-            return False
-        
-        # After initial delay, if process is still running, assume success
-        if elapsed >= 5:  # Give it 5 seconds minimum
-            if process and process.poll() is None:
-                print(f"[OK] Backup server process still running after {elapsed}s - assuming success")
-                print("[INFO] Server GUI should be initializing...")
-                return True
-        
-        # Show progress every 3 seconds  
-        if elapsed % 3 == 0 and elapsed > 0:
-            if process:
-                status = "running" if process.poll() is None else f"crashed (exit code: {process.returncode})"
-                print(f"[INFO] Waiting for server initialization... ({elapsed}s/{max_wait}s) - Process: {status}")
-        
-        time.sleep(check_interval)
-        elapsed += check_interval
-    
-    # Final check - if process is still alive, consider it successful
-    if process and process.poll() is None:
-        print("[OK] Backup server process is running - startup successful")
-        return True
-    else:
-        print(f"[ERROR] Backup server startup failed or timed out after {max_wait}s")
-        return False
-
-running_processes = []
-
-def cleanup_processes():
-    print("\nShutting down server processes...")
-    for p in running_processes:
-        if p.poll() is None: # Check if the process is still running
-            print(f"Terminating process {p.pid}...")
-            p.terminate()
-            try:
-                p.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                print(f"Process {p.pid} did not terminate gracefully. Killing...")
-                p.kill()
-    print("All server processes shut down.")
-
-atexit.register(cleanup_processes)
 
 def main():
     # Set UTF-8 encoding for emoji support
@@ -239,7 +160,6 @@ def main():
         os.system("chcp 65001 > nul")
     except:
         pass
-
     
     print()
     print("=" * 72)
@@ -443,64 +363,156 @@ def main():
     print()
     
     # ========================================================================
-    # PHASE 6: LAUNCH SERVICES (SEQUENTIAL & VERIFIED)
+    # PHASE 6: LAUNCH SERVICES
     # ========================================================================
     print_phase(6, 6, "Launching Services")
-
-    # --- Step 1: Launch and Verify Main Backup Server ---
-    print("\nStarting Python Backup Server with GUI (port 1256)...")
+    
+    print("Starting the complete CyberBackup 3.0 system...")
+    print()
+    print("Services that will be started:")
+    print("   - Backup Server (Port 1256)")
+    print("   - API Bridge Server (Port 9090)")
+    print("   - Web GUI (Browser interface)")
+    print()
+    
+    print("Starting Python Backup Server (src.server.server module)...")
     server_path = Path("src/server/server.py")
-    server_process = None
     if server_path.exists():
-        server_command = [sys.executable, "-m", "src.server.server"]
-        # Restore CREATE_NEW_CONSOLE for server to provide process isolation and console logs
+        # Check if AppMap is available for recording
+        appmap_available = check_appmap_available()
+        
+        if appmap_available:
+            print("[INFO] AppMap detected - enabling execution recording")
+            # Start backup server with AppMap recording
+            server_command = [
+                "appmap-python", "--record", "process", 
+                "python", "-m", "src.server.server"
+            ]
+            print("Command: appmap-python --record process python -m src.server.server")
+        else:
+            print("[INFO] AppMap not available - starting server normally")
+            # Start backup server normally
+            server_command = [sys.executable, "-m", "src.server.server"]
+            print(f"Command: {sys.executable} -m src.server.server")
+        
+        # Start backup server as a module from project root in new console window
         server_process = subprocess.Popen(
             server_command,
             creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
         )
-        running_processes.append(server_process)
-        print(f"Main Backup Server process started with PID: {server_process.pid}")
-        print("[INFO] Server console window and GUI should appear in a few seconds...")
+        print(f"Python Backup Server started with PID: {server_process.pid}")
+        
+        if appmap_available:
+            print("[INFO] AppMap recording active - execution traces will be generated")
+            print("       AppMap data will be saved when the server stops")
+        
+        time.sleep(3)  # Give server time to start
     else:
-        print(f"[ERROR] Server file not found: {server_path}")
-        sys.exit(1)
-
-    print("Verifying Main Backup Server...")
-    print("[INFO] Giving server time to initialize GUI and network components...")
-    time.sleep(3)  # Give server time to initialize GUI and network
-    if not wait_for_backup_server_startup(port=1256, process=server_process):
-        print("[FATAL] Main Backup Server failed to start. Aborting.")
-        sys.exit(1)
-    print("[OK] Main Backup Server is running and responsive!")
-    print("[OK] Server GUI should now be visible on your desktop")
-
-    # --- Step 2: Launch and Verify API Server ---
-    print("\nStarting API Bridge Server (port 9090)...")
+        print(f"[WARNING] Server file not found: {server_path}")
+    
+    # ========================================================================
+    # ENHANCED API SERVER STARTUP WITH ROBUST VERIFICATION
+    # ========================================================================
+    
+    print("Preparing API Bridge Server (cyberbackup_api_server.py)...")
+    
+    # Step 1: Check Python dependencies
+    print("\nChecking Python dependencies...")
+    missing_deps = check_python_dependencies()
+    if missing_deps:
+        print(f"[ERROR] Missing required Python modules: {', '.join(missing_deps)}")
+        print("Please install missing dependencies:")
+        for dep in missing_deps:
+            if dep == 'flask_cors':
+                print(f"  pip install flask-cors")
+            else:
+                print(f"  pip install {dep}")
+        print()
+        try:
+            input("Press Enter to continue anyway (may cause startup failure)...")
+        except EOFError:
+            pass
+    else:
+        print("[OK] All required Python dependencies are available")
+    
+    # Step 2: Check port availability
+    print("\nChecking port availability...")
+    if not check_port_available(9090):
+        print("[WARNING] Port 9090 appears to be in use")
+        print("This may cause the API server to fail to start.")
+        print("You can:")
+        print("  1. Close other applications using port 9090")
+        print("  2. Continue anyway (server may fail to start)")
+        print()
+        try:
+            input("Press Enter to continue...")
+        except EOFError:
+            pass
+    else:
+        print("[OK] Port 9090 is available")
+    
+    # Step 3: Start API server with enhanced error handling
     api_server_path = Path("cyberbackup_api_server.py")
     api_process = None
+    server_started_successfully = False
+    
     if api_server_path.exists():
-        api_command = [sys.executable, str(api_server_path)]
-        api_process = subprocess.Popen(
-            api_command,
-            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
-        )
-        running_processes.append(api_process)
-        print(f"API Bridge Server process started with PID: {api_process.pid}")
+        print(f"\nStarting API Bridge Server: {api_server_path}")
+        
+        try:
+            # Start API server and capture output for error detection
+            api_process = subprocess.Popen(
+                [sys.executable, str(api_server_path)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
+            )
+            print(f"API Bridge Server started with PID: {api_process.pid}")
+            
+            # Step 4: Wait for server to become responsive
+            server_started_successfully = wait_for_server_startup()
+            
+            if server_started_successfully:
+                print("[OK] API Bridge Server is running and responsive!")
+            else:
+                print("[ERROR] API Bridge Server failed to start properly")
+                print("\nTroubleshooting steps:")
+                print("1. Check if port 9090 is being used by another application")
+                print("2. Verify Flask and flask-cors are installed: pip install flask flask-cors")
+                print("3. Try running manually: python cyberbackup_api_server.py")
+                print("4. Check console windows for error messages")
+                
+        except Exception as e:
+            print(f"[ERROR] Failed to start API server: {str(e)}")
+            server_started_successfully = False
     else:
         print(f"[ERROR] API server file not found: {api_server_path}")
-        sys.exit(1)
-
-    print("Verifying API Bridge Server...")
-    server_started_successfully = wait_for_server_startup(port=9090, process=api_process)
-
-    # --- Step 3: Launch Web GUI ---
+        server_started_successfully = False
+    
+    # Step 5: Open Web GUI only if server started successfully
     if server_started_successfully:
         import webbrowser
         gui_url = "http://127.0.0.1:9090/"
         print(f"\nOpening Web GUI in browser: {gui_url}")
         webbrowser.open(gui_url)
     else:
-        print("\n[ERROR] API Bridge Server failed to start properly. Web GUI not launched.")
+        print("\n[FALLBACK] Manual startup instructions:")
+        print("Since automatic startup failed, you can try:")
+        print("1. Open a new terminal/command prompt")
+        print("2. Navigate to this directory")
+        print("3. Run: python cyberbackup_api_server.py")
+        print("4. Wait for server to start, then open: http://127.0.0.1:9090/")
+        print()
+        try:
+            choice = input("Would you like to try opening the browser anyway? (y/N): ").strip().lower()
+            if choice in ['y', 'yes']:
+                import webbrowser
+                gui_url = "http://127.0.0.1:9090/"
+                print(f"Opening Web GUI in browser: {gui_url}")
+                webbrowser.open(gui_url)
+        except EOFError:
+            pass
     
     # Enhanced success/status message
     print()
@@ -528,12 +540,12 @@ def main():
         print(f"   [SERVER] Backup Server:  {'[OK] Running on port 1256' if backup_server_running else '[ERROR] Not responding on port 1256'}")
         print(f"   [API] API Server:     {'[OK] Running on port 9090' if api_server_running else '[ERROR] Not responding on port 9090'}")
         print(f"   [GUI] Web GUI:        {'[OK] http://localhost:9090' if api_server_running else '[ERROR] Not available (API server down)'}")
-        print(f"   [GUI] Server GUI:     {'[OK] Visible on desktop' if backup_server_running else '[ERROR] Check for GUI window on desktop'}")
+        print(f"   [GUI] Server GUI:     {'[OK] Started automatically' if backup_server_running else '[ERROR] Check server console'}")
     except UnicodeEncodeError:
         print(f"   [SERVER] Backup Server:  {'Running on port 1256' if backup_server_running else 'Not responding on port 1256'}")
         print(f"   [API] API Server:     {'Running on port 9090' if api_server_running else 'Not responding on port 9090'}")
         print(f"   [GUI] Web GUI:        {'http://localhost:9090' if api_server_running else 'Not available (API server down)'}")
-        print(f"   [GUI] Server GUI:     {'Visible on desktop' if backup_server_running else 'Check for GUI window on desktop'}")
+        print(f"   [GUI] Server GUI:     {'Started automatically' if backup_server_running else 'Check server console'}")
     print()
     if server_started_successfully and api_server_running:
         print("Next steps:")
@@ -568,21 +580,6 @@ def main():
         except UnicodeEncodeError:
             print("Please check the troubleshooting steps above")
     print("=" * 72)
-    
-    # Keep script running to maintain server processes
-    print("\n" + "=" * 72)
-    print("   🚀 SERVERS ARE NOW RUNNING")
-    print("=" * 72) 
-    print("Press Ctrl+C to stop all servers and exit...")
-    print("Do NOT close this window - it keeps the servers alive!")
-    print()
-    
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("\n\n[INFO] Shutdown requested by user...")
-        print("Cleanup will run automatically...")
 
 if __name__ == "__main__":
     try:
