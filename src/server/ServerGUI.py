@@ -642,8 +642,19 @@ class ModernTable(tk.Frame):
                 self.selection_callback(self.filtered_data[index])
 
     def set_selection_callback(self, callback):
-        """Set callback for selection changes"""
+        """Set callback for when an item is selected"""
         self.selection_callback = callback
+
+    def select_item_by_id(self, id_column, value):
+        """Select an item in the table based on a unique ID in a given column."""
+        for iid in self.tree.get_children():
+            item_values = self.tree.item(iid, 'values')
+            if item_values and self.columns[id_column]['text'] in self.tree["columns"]:
+                col_index = self.tree["columns"].index(self.columns[id_column]['text'])
+                if item_values[col_index] == value:
+                    self.tree.selection_set(iid)
+                    self.tree.focus(iid)
+                    return
 
     def get_selected_items(self):
         """Get currently selected items"""
@@ -738,6 +749,8 @@ class SettingsDialog:
                              font=(ModernTheme.FONT_FAMILY, 11, 'bold'),
                              relief="flat", bd=0, padx=20, pady=8)
         cancel_btn.pack(side="right")
+
+        self.gui_initialized = True
 
     def _create_general_settings(self, parent):
         """Create general settings"""
@@ -1074,6 +1087,7 @@ class ServerGUI:
         self.running = False
         self.gui_thread = None
         self.start_time = time.time()
+        self.gui_initialized = False
 
         # GUI update lock
         self.lock = threading.Lock()
@@ -3440,10 +3454,16 @@ class ServerGUI:
 
     def _refresh_file_table(self):
         """Refresh the file table with data from the database."""
+        if not self.gui_initialized:
+            return
         if not self.file_table:
             if self.toast_system:
                 self.toast_system.show_toast("File table not initialized.", "error")
             return
+
+        selected_id = None
+        if self.file_table.get_selected_items():
+            selected_id = self.file_table.get_selected_items()[0].get('filename')
         
         if not self.server:
             if self.toast_system:
@@ -3473,6 +3493,8 @@ class ServerGUI:
                     })
                 
             self.file_table.set_data(table_data)
+            if selected_id:
+                self.file_table.select_item_by_id('filename', selected_id)
             self._add_activity_log("File table refreshed.")
         except Exception as e:
                 error_msg = f"Database error refreshing file table: {str(e)}"
@@ -3508,7 +3530,7 @@ class ServerGUI:
                     self._add_activity_log("🔄 Attempting database recovery in 5 seconds...")
                     # Schedule retry after delay
                     if self.root:
-                        self.root.after(5000, self._refresh_file_table)
+                        self.root.after(15000, self._refresh_file_table)
         else:
             if self.toast_system:
                 self.toast_system.show_toast("File table not initialized.", "error")

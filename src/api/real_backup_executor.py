@@ -188,36 +188,15 @@ class RealBackupExecutor:
         """Monitor subprocess stdout/stderr for progress updates with dynamic calculation"""
         self._log_status("MONITOR", "Monitoring subprocess for real-time progress...")
         
-        start_time = time.time()
-        last_progress = 0
-        
-        # Start a background thread to update progress based on time
-        def progress_updater():
-            nonlocal last_progress
-            while process.poll() is None and time.time() - start_time < timeout:
-                elapsed = time.time() - start_time
-                current_progress = self._calculate_transfer_progress(file_path, elapsed, timeout)
-                
-                # Only update if progress has increased
-                if current_progress > last_progress:
-                    last_progress = current_progress
-                    phase = self._get_current_phase(elapsed)
-                    self._log_status("PROGRESS", {
-                        "progress": current_progress, 
-                        "message": f"{phase} ({current_progress}%)"
-                    })
-                
-                time.sleep(1)  # Update every second
-        
-        # Start progress updater thread
-        progress_thread = threading.Thread(target=progress_updater, daemon=True)
-        progress_thread.start()
-        
-        # Monitor process completion
         try:
-            process.wait(timeout=timeout)
+            # Using communicate() is the safest way to avoid deadlocks from full pipes.
+            stdout, stderr = process.communicate(timeout=timeout)
             
-            # Process completed - check for success indicators
+            if stdout:
+                self._log_status("CLIENT_STDOUT", stdout)
+            if stderr:
+                self._log_status("CLIENT_STDERR", stderr)
+
             if process.returncode == 0:
                 self._log_status("SUCCESS", "Client process completed successfully")
                 return True
@@ -227,6 +206,8 @@ class RealBackupExecutor:
                 
         except subprocess.TimeoutExpired:
             self._log_status("TIMEOUT", f"Process monitoring timed out after {timeout} seconds")
+            process.kill()
+            stdout, stderr = process.communicate()
             return False
         except Exception as e:
             self._log_status("ERROR", f"Error monitoring subprocess: {e}")
@@ -620,17 +601,65 @@ class RealBackupExecutor:
                                errors='ignore'):
                 raise RuntimeError(f"Failed to start backup process {process_id}")
 
-            # Get the subprocess handle for compatibility
             self.backup_process = registry.subprocess_handles[process_id]
             self.process_id = process_id
 
-            self._log_status("PROCESS", f"Started backup client with enhanced monitoring (ID: {process_id}, PID: {self.backup_process.pid})")
-            
-            # Monitor subprocess with real-time progress updates
-            self._log_status("PROGRESS", {"progress": 5, "message": "Starting file transfer..."})
-            
-            # Use enhanced monitoring instead of simple communicate()
-            process_success = self._monitor_subprocess_output(self.backup_process, file_path, timeout)
+            # Professional-grade non-blocking read of subprocess output
+            self._log_status("MONITOR", f"Monitoring process {self.backup_process.pid}...")
+            process_success = False
+            try:
+                stdout_lines = []
+                stderr_lines = []
+                start_time = time.time()
+
+                # Non-blocking read loop
+                while True:
+                    # Check for timeout
+                    if time.time() - start_time > timeout:
+                        self._log_status("TIMEOUT", "Process timed out")
+                        self.backup_process.kill()
+                        break
+
+                    # Read stdout
+                    if self.backup_process.stdout and not self.backup_process.stdout.closed:
+                        try:
+                            for line in iter(self.backup_process.stdout.readline, ''):
+                                if not line:
+                                    break
+                                stdout_lines.append(line)
+                                self._log_status("CLIENT_STDOUT", line.strip())
+                                # TODO: Parse line for progress info
+                        except IOError:
+                            pass # Stream closed
+
+                    # Read stderr
+                    if self.backup_process.stderr and not self.backup_process.stderr.closed:
+                        try:
+                            for line in iter(self.backup_process.stderr.readline, ''):
+                                if not line:
+                                    break
+                                stderr_lines.append(line)
+                                self._log_status("CLIENT_STDERR", line.strip())
+                        except IOError:
+                            pass # Stream closed
+
+                    # Check if process has exited
+                    if self.backup_process.poll() is not None:
+                        break
+
+                    time.sleep(0.1) # Prevent busy-waiting
+
+                # Process has finished
+                result['process_exit_code'] = self.backup_process.returncode
+                if self.backup_process.returncode == 0:
+                    self._log_status("SUCCESS", "Client process completed successfully.")
+                    process_success = True
+                else:
+                    self._log_status("ERROR", f"Client process failed with exit code {self.backup_process.returncode}")
+
+            except Exception as e:
+                self._log_status("ERROR", f"Error during subprocess monitoring: {e}")
+                self.backup_process.kill()
             
             try:
                 # Get final output if process completed
