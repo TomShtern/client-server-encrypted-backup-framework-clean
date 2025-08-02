@@ -460,12 +460,9 @@ def main():
         print(f"\nStarting API Bridge Server: {api_server_path}")
         
         try:
-            # Start API server and capture output for error detection
+            # Start API server in new console window with visible output
             api_process = subprocess.Popen(
                 [sys.executable, str(api_server_path)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
                 creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
             )
             print(f"API Bridge Server started with PID: {api_process.pid}")
