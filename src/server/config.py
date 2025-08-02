@@ -21,10 +21,10 @@ PORT_CONFIG_FILE = "port.info"
 DATABASE_NAME = "defensive.db"
 FILE_STORAGE_DIR = "received_files"  # Directory to store received files
 
-# Behavior Configuration
+# Session and timeout configuration
 CLIENT_SOCKET_TIMEOUT = 60.0  # Timeout for individual socket operations with a client
-CLIENT_SESSION_TIMEOUT = 10 * 60  # Overall inactivity timeout for a client session (10 minutes)
-PARTIAL_FILE_TIMEOUT = 15 * 60  # Timeout for incomplete multi-packet file transfers (15 minutes)
+CLIENT_SESSION_TIMEOUT = 300  # 5 minutes - Time in seconds before a client session expires due to inactivity
+PARTIAL_FILE_TIMEOUT = 600    # 10 minutes - Time in seconds before partial file transfer data is cleaned up
 MAINTENANCE_INTERVAL = 60.0  # How often to run maintenance tasks (seconds)
 MAX_PAYLOAD_READ_LIMIT = (16 * 1024 * 1024) + 1024  # Max size for a single payload read (16MB chunk + headers)
 MAX_ORIGINAL_FILE_SIZE = 4 * 1024 * 1024 * 1024  # Max original file size (e.g., 4GB) - for sanity checking

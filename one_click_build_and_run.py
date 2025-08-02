@@ -37,6 +37,7 @@ import os
 import sys
 import subprocess
 import time
+import psutil
 from pathlib import Path
 
 def print_phase(phase_num, total_phases, title):
@@ -154,6 +155,107 @@ def check_backup_server_status():
     except Exception:
         return False
 
+def cleanup_existing_processes():
+    """Clean up existing CyberBackup processes before starting new ones"""
+    print("Cleaning up existing CyberBackup processes...")
+    print()
+    
+    terminated_processes = []
+    
+    try:
+        # Get list of all running processes
+        for process in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmdline = process.info['cmdline']
+                if not cmdline:
+                    continue
+                
+                cmdline_str = ' '.join(cmdline).lower()
+                should_terminate = False
+                process_type = ""
+                
+                # Check for CyberBackup related processes
+                if 'cyberbackup_api_server.py' in cmdline_str:
+                    should_terminate = True
+                    process_type = "API Server"
+                elif 'src.server.server' in cmdline_str or 'src\\server\\server' in cmdline_str:
+                    should_terminate = True
+                    process_type = "Backup Server"
+                elif 'encryptedbackupclient.exe' in cmdline_str:
+                    should_terminate = True
+                    process_type = "C++ Client"
+                elif any(port_check in cmdline_str for port_check in ['port 9090', 'port 1256', ':9090', ':1256']):
+                    # Additional check for processes using our ports
+                    if 'python' in cmdline_str and ('flask' in cmdline_str or 'server' in cmdline_str):
+                        should_terminate = True
+                        process_type = "Port-bound Server"
+                
+                if should_terminate:
+                    print(f"Terminating {process_type} (PID: {process.info['pid']})")
+                    try:
+                        # Try graceful termination first
+                        process.terminate()
+                        process.wait(timeout=3)
+                        terminated_processes.append(f"{process_type} (PID: {process.info['pid']})")
+                    except psutil.TimeoutExpired:
+                        # Force kill if graceful termination fails
+                        print(f"  Force killing PID {process.info['pid']} (timeout)")
+                        process.kill()
+                        terminated_processes.append(f"{process_type} (PID: {process.info['pid']}) - Force killed")
+                    except psutil.NoSuchProcess:
+                        # Process already terminated
+                        terminated_processes.append(f"{process_type} (PID: {process.info['pid']}) - Already terminated")
+                        
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                # Process may have disappeared or we don't have access
+                continue
+                
+    except Exception as e:
+        print(f"[WARNING] Error during process cleanup: {e}")
+    
+    if terminated_processes:
+        print()
+        print("Terminated processes:")
+        for proc in terminated_processes:
+            print(f"  - {proc}")
+        print()
+        print("Waiting for processes to fully terminate...")
+        time.sleep(2)  # Give processes time to clean up
+    else:
+        print("[INFO] No existing CyberBackup processes found")
+        print()
+    
+    # Additional port cleanup - kill any processes still using our ports
+    ports_to_clean = [9090, 1256]
+    for port in ports_to_clean:
+        try:
+            for conn in psutil.net_connections():
+                # Handle both tuple and named attribute formats for laddr
+                conn_port = None
+                if hasattr(conn, 'laddr') and conn.laddr:
+                    if hasattr(conn.laddr, 'port'):
+                        # Named attribute format (newer psutil versions)
+                        conn_port = conn.laddr.port
+                    elif isinstance(conn.laddr, tuple) and len(conn.laddr) >= 2:
+                        # Tuple format (host, port) - older psutil versions
+                        conn_port = conn.laddr[1]
+                
+                if conn_port == port and conn.status == psutil.CONN_LISTEN:
+                    try:
+                        process = psutil.Process(conn.pid)
+                        print(f"Killing process using port {port}: {process.name()} (PID: {conn.pid})")
+                        process.terminate()
+                        time.sleep(1)
+                        if process.is_running():
+                            process.kill()
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+        except Exception as e:
+            print(f"[WARNING] Error cleaning port {port}: {e}")
+    
+    print("[OK] Process cleanup completed!")
+    print()
+
 def main():
     # Set UTF-8 encoding for emoji support
     try:
@@ -180,9 +282,15 @@ def main():
     print()
     
     # ========================================================================
+    # PHASE 0: CLEANUP EXISTING PROCESSES
+    # ========================================================================
+    print_phase(0, 7, "Cleaning Up Existing Processes")
+    cleanup_existing_processes()
+    
+    # ========================================================================
     # PHASE 1: PREREQUISITES CHECK
     # ========================================================================
-    print_phase(1, 6, "Checking Prerequisites")
+    print_phase(1, 7, "Checking Prerequisites")
     
     # Check Python
     exists, version = check_command_exists("python")
@@ -221,7 +329,7 @@ def main():
         # ========================================================================
         # PHASE 2: CMAKE CONFIGURATION AND VCPKG SETUP
         # ========================================================================
-        print_phase(2, 6, "Configuring Build System")
+        print_phase(2, 7, "Configuring Build System")
         
         print("Calling scripts\\build\\configure_cmake.bat for CMake + vcpkg setup...")
         print()
@@ -243,7 +351,7 @@ def main():
         # ========================================================================
         # PHASE 3: BUILD C++ CLIENT
         # ========================================================================
-        print_phase(3, 6, "Building C++ Client")
+        print_phase(3, 7, "Building C++ Client")
         
         print("Building EncryptedBackupClient.exe with CMake...")
         print("Command: cmake --build build --config Release")
@@ -276,12 +384,12 @@ def main():
         print()
     else:
         print()
-        print_phase(2, 6, "Skipping Build System Configuration")
+        print_phase(2, 7, "Skipping Build System Configuration")
         print("[INFO] CMake not available - skipping build phases")
         print("Will use existing C++ client if available")
         print()
         
-        print_phase(3, 6, "Checking Existing C++ Client")
+        print_phase(3, 7, "Checking Existing C++ Client")
         exe_path = Path("build/Release/EncryptedBackupClient.exe")
         if exe_path.exists():
             print(f"[OK] Found existing C++ client: {exe_path}")
@@ -299,7 +407,7 @@ def main():
     # ========================================================================
     # PHASE 4: PYTHON ENVIRONMENT SETUP
     # ========================================================================
-    print_phase(4, 6, "Setting up Python Environment")
+    print_phase(4, 7, "Setting up Python Environment")
     
     print("Installing Python dependencies from requirements.txt...")
     print()
@@ -327,7 +435,7 @@ def main():
     # ========================================================================
     # PHASE 5: CONFIGURATION VERIFICATION
     # ========================================================================
-    print_phase(5, 6, "Verifying Configuration")
+    print_phase(5, 7, "Verifying Configuration")
     
     # Check if RSA keys exist
     data_dir = Path("data")
@@ -365,7 +473,7 @@ def main():
     # ========================================================================
     # PHASE 6: LAUNCH SERVICES
     # ========================================================================
-    print_phase(6, 6, "Launching Services")
+    print_phase(6, 7, "Launching Services")
     
     print("Starting the complete CyberBackup 3.0 system...")
     print()

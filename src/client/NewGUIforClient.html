@@ -3799,6 +3799,7 @@
                 this.uiUpdateTimeout = null; // For debounced UI updates
                 this.progressConfig = null; // Progress configuration for rich UX
                 this.phaseStartTime = null; // For ETA calculations
+                this.fileReceiptPollingInterval = null; // For file receipt polling fallback
                 this.loadProgressConfiguration();
                 this.connectWebSocket();
                 this.addLog('System Initialized', 'success', 'Real-time communication enabled.');
@@ -3866,6 +3867,12 @@
                 this.socket.on('backup_error', (data) => {
                     debugLog('Backup error received via WebSocket:', data, 'ERROR');
                     this.handleBackupError(data);
+                });
+
+                // File receipt notifications (definitive completion detection)
+                this.socket.on('file_receipt', (data) => {
+                    debugLog('File receipt notification received via WebSocket:', data, 'FILE_RECEIPT');
+                    this.handleFileReceiptNotification(data);
                 });
 
                 // Connection error handling
@@ -4125,6 +4132,166 @@
                 errorToasts.forEach(toast => {
                     toast.remove();
                 });
+            }
+
+            /**
+             * Handle file receipt notifications (definitive completion detection)
+             */
+            handleFileReceiptNotification(data) {
+                const { event_type, data: receiptData, timestamp } = data;
+                
+                debugLog(`File receipt event: ${event_type}`, receiptData, 'FILE_RECEIPT');
+                
+                switch (event_type) {
+                    case 'file_received':
+                        this.handleFileReceived(receiptData);
+                        break;
+                    case 'transfer_completed':
+                        this.handleTransferCompleted(receiptData);
+                        break;
+                    default:
+                        debugLog(`Unknown file receipt event: ${event_type}`, 'FILE_RECEIPT');
+                }
+            }
+
+            /**
+             * Handle file received notification
+             */
+            handleFileReceived(data) {
+                const { filename, status, timestamp } = data;
+                
+                debugLog(`File received on server: ${filename}`, 'FILE_RECEIPT');
+                this.addLog('File received', 'success', `Server detected file: ${filename}`);
+                
+                // Update progress to show file was received (but not yet verified)
+                this.state.progress = Math.max(this.state.progress, 85);
+                this.state.phase = 'FILE_RECEIVED';
+                this.state.message = 'File received on server - verifying...';
+                
+                this.updateAllUI();
+                
+                // Show quick notification
+                this.showToast(`📄 File received: ${filename}`, 'info', 2000);
+            }
+
+            /**
+             * Handle transfer completed notification (definitive success)
+             */
+            handleTransferCompleted(data) {
+                const { filename, status, size, hash, duration, timestamp } = data;
+                
+                debugLog(`Transfer completed: ${filename}`, data, 'FILE_RECEIPT');
+                
+                // OVERRIDE ANY PREVIOUS FAILURE STATUS - FILE RECEIPT IS DEFINITIVE
+                this.state.phase = 'COMPLETED';
+                this.state.progress = 100;
+                this.state.isRunning = false;
+                this.state.hasError = false; // Clear any error state
+                this.state.errorMessage = null;
+                
+                // Update with success information
+                const sizeFormatted = this.formatBytes(size || 0);
+                const durationFormatted = duration ? `${duration.toFixed(1)}s` : 'unknown';
+                
+                this.state.message = `✅ Transfer completed successfully! (${sizeFormatted} in ${durationFormatted})`;
+                this.addLog('Transfer completed', 'success', `File: ${filename}, Size: ${sizeFormatted}, Duration: ${durationFormatted}`);
+                
+                // Show celebration notification
+                this.showToast(`🎉 Backup completed successfully!\n${filename} (${sizeFormatted})`, 'success', 5000);
+                
+                // Update title and UI
+                this.updateAllUI();
+                this.updateTabTitle();
+                
+                // Stop file receipt polling since we have definitive confirmation
+                this.stopFileReceiptPolling();
+                
+                debugLog(`DEFINITIVE SUCCESS: ${filename} received and verified on server`, 'FILE_RECEIPT');
+            }
+
+            /**
+             * Multi-channel file receipt verification (HTTP fallback)
+             */
+            async checkFileReceiptHTTP(filename) {
+                try {
+                    debugLog(`Checking file receipt via HTTP: ${filename}`, 'FILE_RECEIPT');
+                    
+                    const response = await fetch(`/api/check_receipt/${encodeURIComponent(filename)}`);
+                    const result = await response.json();
+                    
+                    if (result.success && result.received) {
+                        debugLog(`HTTP confirmed file receipt: ${filename}`, result, 'FILE_RECEIPT');
+                        
+                        // Simulate transfer completed event
+                        this.handleTransferCompleted({
+                            filename: result.filename,
+                            status: 'completed',
+                            size: result.size,
+                            hash: result.hash,
+                            duration: 0,
+                            timestamp: Date.now() / 1000
+                        });
+                        
+                        return true;
+                    } else {
+                        debugLog(`HTTP file receipt check failed: ${filename}`, result, 'FILE_RECEIPT');
+                        return false;
+                    }
+                } catch (error) {
+                    debugLog(`HTTP file receipt check error: ${error.message}`, 'ERROR');
+                    return false;
+                }
+            }
+
+            /**
+             * Start periodic file receipt checking (fallback mechanism)
+             */
+            startFileReceiptPolling(filename) {
+                // Only start if not already polling
+                if (this.fileReceiptPollingInterval) {
+                    return;
+                }
+                
+                debugLog(`Starting file receipt polling for: ${filename}`, 'FILE_RECEIPT');
+                
+                this.fileReceiptPollingInterval = setInterval(async () => {
+                    const received = await this.checkFileReceiptHTTP(filename);
+                    
+                    if (received) {
+                        // File found - stop polling
+                        this.stopFileReceiptPolling();
+                    }
+                }, 2000); // Check every 2 seconds
+                
+                // Auto-stop polling after 60 seconds
+                setTimeout(() => {
+                    if (this.fileReceiptPollingInterval) {
+                        debugLog('File receipt polling timeout - stopping', 'FILE_RECEIPT');
+                        this.stopFileReceiptPolling();
+                    }
+                }, 60000);
+            }
+
+            /**
+             * Stop file receipt polling
+             */
+            stopFileReceiptPolling() {
+                if (this.fileReceiptPollingInterval) {
+                    clearInterval(this.fileReceiptPollingInterval);
+                    this.fileReceiptPollingInterval = null;
+                    debugLog('File receipt polling stopped', 'FILE_RECEIPT');
+                }
+            }
+
+            /**
+             * Format bytes in human readable format
+             */
+            formatBytes(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
             }
 
             /**
@@ -4995,6 +5162,11 @@
                                 this.buttonStateManager.setSuccess(this.elements.primaryActionButton, '✅ Started!');
                                 this.showToast('Backup process started!', 'success');
                                 this.addLog('Backup initiated', 'success', `File: ${result.filename}`);
+                                
+                                // Start file receipt polling as fallback mechanism
+                                const filename = result.filename || this.state.selectedFile.name;
+                                this.startFileReceiptPolling(filename);
+                                
                                 // Status polling will update the rest
                             } else {
                                 const errorInfo = this.errorMessageFormatter.formatError('backup', result.message);

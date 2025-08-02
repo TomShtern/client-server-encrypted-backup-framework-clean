@@ -15,6 +15,8 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any, Callable, List
+import statistics
+from abc import ABC, abstractmethod
 
 import psutil
 from src.shared.utils.file_lifecycle import SynchronizedFileManager
@@ -26,6 +28,808 @@ from src.shared.utils.process_monitor import (
     get_process_registry, register_process, start_process, stop_process,
     ProcessState, get_process_metrics
 )
+
+class ProgressTracker(ABC):
+    """Abstract base class for progress tracking strategies"""
+    
+    @abstractmethod
+    def get_progress(self) -> Dict[str, Any]:
+        """Get current progress information"""
+        pass
+    
+    @abstractmethod
+    def start_monitoring(self, context: Dict[str, Any]):
+        """Start monitoring with given context"""
+        pass
+    
+    @abstractmethod
+    def stop_monitoring(self):
+        """Stop monitoring"""
+        pass
+    
+    @abstractmethod
+    def is_available(self) -> bool:
+        """Check if this tracker can be used"""
+        pass
+
+
+class StatisticalProgressTracker(ProgressTracker):
+    """Advanced progress tracker using statistical timing models"""
+    
+    def __init__(self, timing_data_file: str = "backup_timing_data.json"):
+        self.timing_data_file = timing_data_file
+        self.timing_data = self._load_timing_data()
+        self.start_time = None
+        self.current_phase = "INITIALIZATION"
+        self.progress = 0
+        self.monitoring_active = False
+        
+        # Phase definitions with default timing
+        self.phases = {
+            "INITIALIZATION": {"weight": 0.10, "description": "Initializing backup...", "progress_range": [0, 10]},
+            "CONNECTION": {"weight": 0.15, "description": "Connecting to server...", "progress_range": [10, 25]},
+            "ENCRYPTION": {"weight": 0.30, "description": "Encrypting file...", "progress_range": [25, 55]},
+            "TRANSFER": {"weight": 0.35, "description": "Transferring data...", "progress_range": [55, 90]},
+            "VERIFICATION": {"weight": 0.10, "description": "Verifying integrity...", "progress_range": [90, 100]}
+        }
+    
+    def _load_timing_data(self) -> Dict[str, Any]:
+        """Load statistical timing data from previous runs"""
+        try:
+            if os.path.exists(self.timing_data_file):
+                with open(self.timing_data_file, 'r') as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"[STATS] Could not load timing data: {e}")
+        
+        # Default timing data structure
+        return {
+            "runs": [],
+            "statistics": {},
+            "last_updated": time.time()
+        }
+    
+    def _save_timing_data(self):
+        """Save timing data to file"""
+        try:
+            with open(self.timing_data_file, 'w') as f:
+                json.dump(self.timing_data, f, indent=2)
+        except Exception as e:
+            print(f"[STATS] Could not save timing data: {e}")
+    
+    def _predict_phase_duration(self, phase: str, file_size: int) -> float:
+        """Predict phase duration based on statistical data"""
+        if phase not in self.timing_data.get("statistics", {}):
+            # Use default estimates based on file size
+            base_times = {
+                "INITIALIZATION": 1.0,
+                "CONNECTION": 2.0, 
+                "ENCRYPTION": max(2.0, file_size / 1024 / 1024 * 0.5),  # 0.5s per MB
+                "TRANSFER": max(1.0, file_size / 1024 / 512),  # ~512 KB/s
+                "VERIFICATION": 1.0
+            }
+            return base_times.get(phase, 2.0)
+        
+        stats = self.timing_data["statistics"][phase]
+        # Use median + file size correlation if available
+        base_duration = stats.get("median", 2.0)
+        
+        # Scale based on file size if we have size correlation data
+        if "size_correlation" in stats and file_size > 0:
+            size_factor = stats["size_correlation"].get("slope", 0) * file_size
+            return max(0.5, base_duration + size_factor)
+        
+        return base_duration
+    
+    def _calculate_current_progress(self, elapsed_time: float, file_size: int) -> Dict[str, Any]:
+        """Calculate current progress based on elapsed time and statistical models"""
+        total_predicted_time = sum(
+            self._predict_phase_duration(phase, file_size) 
+            for phase in self.phases.keys()
+        )
+        
+        # Determine current phase based on elapsed time
+        cumulative_time = 0
+        current_phase = "INITIALIZATION"
+        phase_elapsed = elapsed_time
+        
+        for phase, config in self.phases.items():
+            phase_duration = self._predict_phase_duration(phase, file_size)
+            if elapsed_time <= cumulative_time + phase_duration:
+                current_phase = phase
+                phase_elapsed = elapsed_time - cumulative_time
+                break
+            cumulative_time += phase_duration
+        
+        # Calculate progress within current phase
+        phase_config = self.phases[current_phase]
+        progress_start, progress_end = phase_config["progress_range"]
+        
+        phase_duration = self._predict_phase_duration(current_phase, file_size)
+        phase_progress = min(1.0, phase_elapsed / phase_duration) if phase_duration > 0 else 1.0
+        
+        overall_progress = progress_start + (progress_end - progress_start) * phase_progress
+        overall_progress = min(95, max(0, overall_progress))  # Cap at 95% until verification
+        
+        # Calculate ETA
+        if overall_progress > 0:
+            eta_seconds = (total_predicted_time - elapsed_time) if elapsed_time < total_predicted_time else 0
+        else:
+            eta_seconds = total_predicted_time
+        
+        self.current_phase = current_phase
+        self.progress = overall_progress
+        
+        return {
+            "progress": overall_progress,
+            "message": f"{phase_config['description']} ({overall_progress:.0f}%)",
+            "phase": current_phase,
+            "eta_seconds": max(0, eta_seconds),
+            "confidence": "high" if len(self.timing_data.get("runs", [])) >= 5 else "medium"
+        }
+    
+    def start_monitoring(self, context: Dict[str, Any]):
+        """Start statistical progress monitoring"""
+        self.start_time = time.perf_counter()
+        self.monitoring_active = True
+        self.file_size = context.get("file_size", 0)
+        print(f"[STATS] Started statistical progress tracking for {self.file_size} byte file")
+    
+    def stop_monitoring(self):
+        """Stop monitoring and save timing data"""
+        if self.monitoring_active:
+            self.monitoring_active = False
+            if self.start_time:
+                total_duration = time.perf_counter() - self.start_time
+                self._record_timing_data(total_duration)
+    
+    def _record_timing_data(self, total_duration: float):
+        """Record timing data for future statistical analysis"""
+        run_data = {
+            "timestamp": time.time(),
+            "total_duration": total_duration,
+            "file_size": getattr(self, "file_size", 0),
+            "phases": {
+                "total": total_duration
+            }
+        }
+        
+        self.timing_data["runs"].append(run_data)
+        self.timing_data["last_updated"] = time.time()
+        
+        # Keep only last 50 runs to prevent file bloat
+        if len(self.timing_data["runs"]) > 50:
+            self.timing_data["runs"] = self.timing_data["runs"][-50:]
+        
+        self._update_statistics()
+        self._save_timing_data()
+        print(f"[STATS] Recorded timing data: {total_duration:.2f}s total")
+    
+    def _update_statistics(self):
+        """Update statistical models from collected timing data"""
+        runs = self.timing_data["runs"]
+        if len(runs) < 3:
+            return
+        
+        # Calculate basic statistics
+        durations = [run["total_duration"] for run in runs]
+        file_sizes = [run["file_size"] for run in runs if run["file_size"] > 0]
+        
+        self.timing_data["statistics"] = {
+            "total": {
+                "mean": statistics.mean(durations),
+                "median": statistics.median(durations),
+                "stdev": statistics.stdev(durations) if len(durations) > 1 else 0,
+                "samples": len(durations)
+            }
+        }
+        
+        # Calculate file size correlation if we have size data
+        if len(file_sizes) >= 3:
+            try:
+                # Simple linear correlation between file size and duration
+                size_duration_pairs = [(run["file_size"], run["total_duration"]) 
+                                     for run in runs if run["file_size"] > 0]
+                if len(size_duration_pairs) >= 3:
+                    sizes, durations = zip(*size_duration_pairs)
+                    # Calculate correlation coefficient
+                    n = len(sizes)
+                    sum_xy = sum(x * y for x, y in size_duration_pairs)
+                    sum_x = sum(sizes)
+                    sum_y = sum(durations)
+                    sum_x2 = sum(x * x for x in sizes)
+                    
+                    slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x) if (n * sum_x2 - sum_x * sum_x) != 0 else 0
+                    
+                    self.timing_data["statistics"]["size_correlation"] = {
+                        "slope": slope,
+                        "samples": n
+                    }
+            except Exception as e:
+                print(f"[STATS] Could not calculate size correlation: {e}")
+    
+    def get_progress(self) -> Dict[str, Any]:
+        """Get current progress based on statistical models"""
+        if not self.monitoring_active or not self.start_time:
+            return {"progress": 0, "message": "Statistical tracking not active", "phase": "INACTIVE"}
+        
+        elapsed_time = time.perf_counter() - self.start_time
+        return self._calculate_current_progress(elapsed_time, getattr(self, "file_size", 0))
+    
+    def is_available(self) -> bool:
+        """Check if statistical tracking is available"""
+        # Available if we have some timing data or if we can create the data file
+        try:
+            if not os.path.exists(self.timing_data_file):
+                # Test if we can create the file
+                with open(self.timing_data_file, 'w') as f:
+                    json.dump({"runs": [], "statistics": {}}, f)
+            return True
+        except Exception:
+            return False
+
+
+class TimeBasedEstimator(ProgressTracker):
+    """Simple time-based progress estimation fallback"""
+    
+    def __init__(self, estimated_duration: float = 30.0):
+        self.estimated_duration = estimated_duration
+        self.start_time = None
+        self.monitoring_active = False
+    
+    def start_monitoring(self, context: Dict[str, Any]):
+        self.start_time = time.perf_counter()
+        self.monitoring_active = True
+        # Adjust estimate based on file size
+        file_size = context.get("file_size", 0)
+        if file_size > 0:
+            # Rough estimate: 1MB per 2 seconds + 10 second base
+            self.estimated_duration = 10 + (file_size / 1024 / 1024) * 2
+        print(f"[TIME] Started time-based estimation ({self.estimated_duration:.1f}s estimated)")
+    
+    def stop_monitoring(self):
+        self.monitoring_active = False
+    
+    def get_progress(self) -> Dict[str, Any]:
+        if not self.monitoring_active or not self.start_time:
+            return {"progress": 0, "message": "Time estimation not active", "phase": "INACTIVE"}
+        
+        elapsed = time.perf_counter() - self.start_time
+        progress = min(95, (elapsed / self.estimated_duration) * 100)
+        remaining = max(0, self.estimated_duration - elapsed)
+        
+        return {
+            "progress": progress,
+            "message": f"Processing backup... ({progress:.0f}%)",
+            "phase": "PROCESSING",
+            "eta_seconds": remaining,
+            "confidence": "low"
+        }
+    
+    def is_available(self) -> bool:
+        return True
+
+
+class BasicProcessingIndicator(ProgressTracker):
+    """Indeterminate progress indicator fallback"""
+    
+    def __init__(self):
+        self.monitoring_active = False
+        self.start_time = None
+    
+    def start_monitoring(self, context: Dict[str, Any]):
+        self.start_time = time.perf_counter()
+        self.monitoring_active = True
+        print(f"[BASIC] Started basic processing indicator")
+    
+    def stop_monitoring(self):
+        self.monitoring_active = False
+    
+    def get_progress(self) -> Dict[str, Any]:
+        if not self.monitoring_active:
+            return {"progress": 0, "message": "Processing indicator not active", "phase": "INACTIVE"}
+        
+        return {
+            "progress": -1,  # Indeterminate
+            "message": "Processing backup - please wait...",
+            "phase": "PROCESSING",
+            "eta_seconds": 0,
+            "confidence": "none"
+        }
+    
+    def is_available(self) -> bool:
+        return True
+
+
+class DirectFilePoller(ProgressTracker):
+    """Direct file system polling fallback"""
+    
+    def __init__(self, destination_dir: str):
+        self.destination_dir = Path(destination_dir)
+        self.monitoring_active = False
+        self.start_time = None
+        self.original_filename = None
+        self.poll_thread = None
+        self.file_detected = False
+    
+    def start_monitoring(self, context: Dict[str, Any]):
+        self.start_time = time.perf_counter()
+        self.monitoring_active = True
+        self.original_filename = context.get("original_filename")
+        self.file_detected = False
+        
+        # Start polling thread
+        self.poll_thread = threading.Thread(
+            target=self._poll_for_file,
+            daemon=True,
+            name="FilePoller"
+        )
+        self.poll_thread.start()
+        print(f"[POLLER] Started file polling for {self.original_filename}")
+    
+    def stop_monitoring(self):
+        self.monitoring_active = False
+        if self.poll_thread:
+            self.poll_thread.join(timeout=1.0)
+    
+    def _poll_for_file(self):
+        """Poll destination directory for file appearance"""
+        while self.monitoring_active:
+            try:
+                if self.destination_dir.exists():
+                    for file_path in self.destination_dir.iterdir():
+                        if file_path.is_file():
+                            self.file_detected = True
+                            print(f"[POLLER] File detected: {file_path.name}")
+                            return
+                time.sleep(0.5)  # Poll every 500ms
+            except Exception as e:
+                print(f"[POLLER] Error during polling: {e}")
+                time.sleep(1.0)
+    
+    def get_progress(self) -> Dict[str, Any]:
+        if not self.monitoring_active:
+            return {"progress": 0, "message": "File polling not active", "phase": "INACTIVE"}
+        
+        if self.file_detected:
+            return {
+                "progress": 95,
+                "message": "File detected on server - verifying...",
+                "phase": "FILE_DETECTED",
+                "eta_seconds": 5,
+                "confidence": "high"
+            }
+        
+        elapsed = time.perf_counter() - self.start_time if self.start_time else 0
+        return {
+            "progress": min(80, elapsed * 2),  # Slow progress increase
+            "message": "Monitoring for file receipt...",
+            "phase": "MONITORING",
+            "eta_seconds": 0,
+            "confidence": "low"
+        }
+    
+    def is_available(self) -> bool:
+        return self.destination_dir.exists() or self.destination_dir.parent.exists()
+
+
+class RobustProgressMonitor:
+    """Multi-layer progress monitoring with automatic fallback"""
+    
+    def __init__(self, destination_dir: str):
+        self.destination_dir = destination_dir
+        self.progress_layers = [
+            StatisticalProgressTracker(),
+            TimeBasedEstimator(),
+            BasicProcessingIndicator(),
+            DirectFilePoller(destination_dir)
+        ]
+        self.active_layer = 0
+        self.monitoring_active = False
+        self.status_callback = None
+        self.fallback_count = 0
+        
+    def set_status_callback(self, callback: Callable[[str, Any], None]):
+        """Set callback for progress updates"""
+        self.status_callback = callback
+    
+    def start_monitoring(self, context: Dict[str, Any]):
+        """Start monitoring with the best available tracker"""
+        self.monitoring_active = True
+        
+        # Find first available tracker
+        for i, tracker in enumerate(self.progress_layers):
+            if tracker.is_available():
+                self.active_layer = i
+                break
+        
+        # Start the active tracker
+        active_tracker = self.progress_layers[self.active_layer]
+        active_tracker.start_monitoring(context)
+        
+        tracker_name = active_tracker.__class__.__name__
+        print(f"[ROBUST] Started monitoring with {tracker_name} (layer {self.active_layer})")
+        
+        if self.status_callback:
+            self.status_callback("MONITOR", {
+                "message": f"Progress monitoring active ({tracker_name})",
+                "tracker": tracker_name,
+                "layer": self.active_layer
+            })
+    
+    def stop_monitoring(self):
+        """Stop all monitoring"""
+        self.monitoring_active = False
+        for tracker in self.progress_layers:
+            try:
+                tracker.stop_monitoring()
+            except Exception as e:
+                print(f"[ROBUST] Error stopping tracker: {e}")
+    
+    def get_progress(self) -> Dict[str, Any]:
+        """Get progress with automatic fallback handling"""
+        if not self.monitoring_active:
+            return {"progress": 0, "message": "Monitoring not active", "phase": "INACTIVE"}
+        
+        try:
+            active_tracker = self.progress_layers[self.active_layer]
+            progress_data = active_tracker.get_progress()
+            
+            # Add metadata about current tracking method
+            progress_data["tracker"] = active_tracker.__class__.__name__
+            progress_data["layer"] = self.active_layer
+            progress_data["fallback_count"] = self.fallback_count
+            
+            return progress_data
+            
+        except Exception as e:
+            print(f"[ROBUST] Error in layer {self.active_layer}: {e}")
+            return self._fallback_to_next_layer()
+    
+    def _fallback_to_next_layer(self) -> Dict[str, Any]:
+        """Fallback to next available tracker"""
+        self.fallback_count += 1
+        old_layer = self.active_layer
+        
+        # Find next available tracker
+        for i in range(self.active_layer + 1, len(self.progress_layers)):
+            if self.progress_layers[i].is_available():
+                # Stop current tracker
+                try:
+                    self.progress_layers[self.active_layer].stop_monitoring()
+                except Exception:
+                    pass
+                
+                # Start new tracker
+                self.active_layer = i
+                context = getattr(self, '_last_context', {})
+                self.progress_layers[i].start_monitoring(context)
+                
+                tracker_name = self.progress_layers[i].__class__.__name__
+                print(f"[ROBUST] Fallback {old_layer}→{i}: Now using {tracker_name}")
+                
+                if self.status_callback:
+                    self.status_callback("FALLBACK", {
+                        "message": f"Progress tracking degraded - using {tracker_name}",
+                        "old_layer": old_layer,
+                        "new_layer": i,
+                        "tracker": tracker_name
+                    })
+                
+                return self.get_progress()
+        
+        # No more fallbacks available
+        return {
+            "progress": -1,
+            "message": "All progress tracking methods failed",
+            "phase": "ERROR",
+            "tracker": "None",
+            "layer": -1,
+            "fallback_count": self.fallback_count
+        }
+    
+    def finalize_progress(self, process_success: bool, verification_success: bool):
+        """Finalize progress based on actual results"""
+        if verification_success:
+            final_progress = {
+                "progress": 100,
+                "message": "Transfer completed and verified successfully!",
+                "phase": "COMPLETED",
+                "confidence": "confirmed"
+            }
+        elif process_success:
+            final_progress = {
+                "progress": 95,
+                "message": "Process completed - verification pending",
+                "phase": "VERIFICATION_PENDING",
+                "confidence": "high"
+            }
+        else:
+            final_progress = {
+                "progress": 0,
+                "message": "Transfer failed",
+                "phase": "FAILED",
+                "confidence": "confirmed"
+            }
+        
+        if self.status_callback:
+            self.status_callback("PROGRESS", final_progress)
+        
+        self.stop_monitoring()
+        print(f"[ROBUST] Progress finalized: {final_progress['message']}")
+
+
+# Legacy FileTransferMonitor for compatibility (deprecated)
+class FileTransferMonitor:
+    """Legacy file transfer monitor - use RobustProgressMonitor instead"""
+    def __init__(self, original_file_path: str, destination_dir: str, status_callback: Callable):
+        self.original_file_path = Path(original_file_path)
+        self.original_size = self.original_file_path.stat().st_size
+        self.destination_dir = Path(destination_dir)
+        self.status_callback = status_callback
+        self.monitoring_active = False
+        self.transfer_start_time = None
+        self._last_update_time = 0
+        self._initial_progress_sent = False
+        self.current_progress = 5  # Start at 5%
+        self.process_output_buffer = ""
+        self.last_phase_detected = None
+        
+    def start_monitoring(self, process):
+        """Start process-based monitoring in background thread"""
+        self.monitoring_active = True
+        self.transfer_start_time = time.time()
+        
+        self._log_status("MONITOR", "Starting process-based progress monitoring")
+        
+        # Send initial progress immediately
+        self._emit_initial_progress()
+        
+        # Start monitoring thread
+        monitor_thread = threading.Thread(
+            target=self._monitor_process_output, 
+            args=(process,), 
+            daemon=True,
+            name="ProcessProgressMonitor"
+        )
+        monitor_thread.start()
+        
+    def stop_monitoring(self):
+        """Stop monitoring gracefully"""
+        self.monitoring_active = False
+        self._log_status("MONITOR", "Stopped process-based progress monitoring")
+    
+    def finalize_progress(self, process_success: bool, verification_success: bool):
+        """Set final progress based on process and verification results"""
+        if verification_success:
+            # Transfer completed and verified successfully
+            final_progress = {
+                "progress": 100,
+                "message": f"Transfer completed successfully - {self._format_bytes(self.original_size)}",
+                "speed": 0,
+                "eta": 0,
+                "bytes_transferred": self.original_size,
+                "total_bytes": self.original_size,
+                "phase": "COMPLETED"
+            }
+            self.status_callback("PROGRESS", final_progress)
+            self._log_status("MONITOR", "Progress finalized: 100% - Transfer verified")
+        elif process_success:
+            # Process completed but verification failed
+            final_progress = {
+                "progress": 90,
+                "message": "Process completed - verification pending",
+                "speed": 0,
+                "eta": 0,
+                "bytes_transferred": int(0.9 * self.original_size),
+                "total_bytes": self.original_size,
+                "phase": "VERIFICATION_PENDING"
+            }
+            self.status_callback("PROGRESS", final_progress)
+            self._log_status("MONITOR", "Progress finalized: 90% - Process completed, verification failed")
+        else:
+            # Process failed
+            final_progress = {
+                "progress": 0,
+                "message": "Transfer failed - process error",
+                "speed": 0,
+                "eta": 0,
+                "bytes_transferred": 0,
+                "total_bytes": self.original_size,
+                "phase": "FAILED"
+            }
+            self.status_callback("PROGRESS", final_progress)
+            self._log_status("MONITOR", "Progress finalized: 0% - Process failed")
+        
+    def _monitor_process_output(self, process):
+        """Monitor C++ client process output for progress phases"""
+        consecutive_errors = 0
+        max_errors = 10
+        
+        while self.monitoring_active and process.poll() is None:
+            try:
+                # Read process output in real-time
+                output_chunk = self._read_process_output_chunk(process)
+                if output_chunk:
+                    self.process_output_buffer += output_chunk
+                    
+                    # Parse for progress phases
+                    new_progress = self._parse_progress_from_output(self.process_output_buffer)
+                    
+                    # Only update if progress has advanced
+                    if new_progress > self.current_progress:
+                        self.current_progress = new_progress
+                        progress_info = self._create_progress_info(new_progress)
+                        self._emit_progress(progress_info)
+                        consecutive_errors = 0
+                
+                # Fast polling for responsive progress updates
+                time.sleep(0.1)  # 100ms for very responsive progress
+                
+            except Exception as e:
+                consecutive_errors += 1
+                if consecutive_errors >= max_errors:
+                    self._log_status("ERROR", f"Process monitoring failed after {max_errors} consecutive errors: {e}")
+                    break
+                
+                # Brief pause before retry
+                time.sleep(0.5)
+    
+    def _read_process_output_chunk(self, process) -> str:
+        """Read a chunk of process output without blocking"""
+        try:
+            if process.stdout and hasattr(process.stdout, 'readable') and process.stdout.readable():
+                # Try to read available output
+                import select
+                import sys
+                
+                if sys.platform != "win32":
+                    # Unix-like systems: use select
+                    ready, _, _ = select.select([process.stdout], [], [], 0)
+                    if ready:
+                        return process.stdout.read(1024).decode('utf-8', errors='ignore')
+                else:
+                    # Windows: try peek approach (simplified)
+                    return ""  # Fallback for Windows - will rely on final output parsing
+            return ""
+        except Exception as e:
+            self._log_status("DEBUG", f"Output reading error: {e}")
+            return ""
+    
+    def _parse_progress_from_output(self, output: str) -> int:
+        """Parse C++ client output for progress phases"""
+        try:
+            output_lower = output.lower()
+            
+            # Progress phase mapping based on C++ client output
+            progress_phases = [
+                ("system initialization", 15, "System starting up"),
+                ("configuration loaded", 25, "Configuration loaded"),
+                ("validating configuration", 35, "Validating settings"),
+                ("checking parameters", 40, "Parameter validation"),
+                ("connecting", 50, "Establishing connection"),
+                ("handshake", 55, "Server handshake"),
+                ("encryption", 65, "File encryption"),
+                ("uploading", 75, "File transfer"),
+                ("transfer", 75, "Data transfer"),
+                ("sending", 75, "Sending data"),
+                ("verification", 85, "Verifying transfer"),
+                ("backup completed", 95, "Transfer complete"),
+                ("success", 95, "Operation successful")
+            ]
+            
+            # Find the highest progress phase that matches
+            max_progress = self.current_progress
+            current_phase = "Processing"
+            
+            for keyword, progress, phase_name in progress_phases:
+                if keyword in output_lower and progress > max_progress:
+                    max_progress = progress
+                    current_phase = phase_name
+                    
+            # Debug logging for phase detection
+            elapsed = time.time() - self.transfer_start_time
+            if max_progress > self.current_progress:
+                print(f"[PROGRESS_PHASE] t={elapsed:.1f}s: Detected '{current_phase}' → {max_progress}%")
+                self.last_phase_detected = current_phase
+            
+            return max_progress
+            
+        except Exception as e:
+            self._log_status("DEBUG", f"Progress parsing error: {e}")
+            return self.current_progress
+    
+    def _create_progress_info(self, progress_pct: int) -> Dict[str, Any]:
+        """Create progress info dict from percentage"""
+        elapsed = time.time() - self.transfer_start_time
+        
+        # Estimate transfer metrics
+        estimated_bytes = int((progress_pct / 100.0) * self.original_size)
+        estimated_speed = estimated_bytes / elapsed if elapsed > 0 else 0
+        
+        # Estimate ETA
+        remaining_pct = 100 - progress_pct
+        eta_seconds = (remaining_pct / 100.0) * (elapsed / (progress_pct / 100.0)) if progress_pct > 0 else 0
+        
+        phase_message = self.last_phase_detected or "Processing"
+        message = f"{phase_message} - {self._format_bytes(estimated_bytes)}/{self._format_bytes(self.original_size)}"
+        
+        if estimated_speed > 0:
+            message += f" at {self._format_bytes_per_second(estimated_speed)}"
+        
+        return {
+            "progress": progress_pct,
+            "message": message,
+            "speed": estimated_speed,
+            "eta": eta_seconds,
+            "bytes_transferred": estimated_bytes,
+            "total_bytes": self.original_size,
+            "phase": "TRANSFERRING"
+        }
+    
+    # Removed _get_adaptive_interval - no longer needed for process monitoring
+    
+    def _emit_progress(self, progress_info: Dict[str, Any]):
+        """Emit progress with rate limiting for process-based monitoring"""
+        current_time = time.time()
+        
+        # Rate limiting: up to 10 updates per second for responsive process monitoring
+        if current_time - self._last_update_time < 0.1:
+            return
+        
+        self._last_update_time = current_time
+        
+        # Debug logging for progress flow tracking
+        progress_pct = progress_info.get('progress', 0)
+        message = progress_info.get('message', 'Unknown')
+        
+        print(f"[PROGRESS_DEBUG] Process-based progress: {progress_pct:.1f}% - {message}")
+        
+        self.status_callback("PROGRESS", progress_info)
+    
+    def _format_bytes(self, bytes_val: int) -> str:
+        """Format bytes in human-readable format"""
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if bytes_val < 1024:
+                return f"{bytes_val:.1f}{unit}"
+            bytes_val /= 1024
+        return f"{bytes_val:.1f}TB"
+    
+    def _format_bytes_per_second(self, bytes_per_sec: float) -> str:
+        """Format transfer speed"""
+        return f"{self._format_bytes(bytes_per_sec)}/s"
+    
+    def _format_time(self, seconds: float) -> str:
+        """Format time duration"""
+        if seconds < 60:
+            return f"{int(seconds)}s"
+        elif seconds < 3600:
+            return f"{int(seconds // 60)}m {int(seconds % 60)}s"
+        else:
+            return f"{int(seconds // 3600)}h {int((seconds % 3600) // 60)}m"
+    
+    # Removed directory monitoring methods - no longer needed for process-based monitoring
+    
+    def _emit_initial_progress(self):
+        """Send initial progress update to provide immediate feedback"""
+        if not self._initial_progress_sent:
+            initial_progress = {
+                "progress": 5,
+                "message": "Process starting - monitoring client output",
+                "speed": 0,
+                "eta": 0,
+                "bytes_transferred": 0,
+                "total_bytes": self.original_size,
+                "phase": "STARTING"
+            }
+            self.status_callback("PROGRESS", initial_progress)
+            self._initial_progress_sent = True
+    
+    def _log_status(self, phase: str, message: str):
+        """Log status updates"""
+        if hasattr(self.status_callback, '__call__'):
+            # Simple string messages for logging
+            self.status_callback(phase, message)
 
 class RealBackupExecutor:
     """
@@ -85,7 +889,7 @@ class RealBackupExecutor:
         
         content = f"{server_ip}:{server_port}\n{username}\n{file_path}\n"
         self._log_status("CONFIG", f"transfer.info content:\n---\n{content}---")
-        self._log_status("PROGRESS", {"progress": 10, "message": "Configuration generated"})
+        self._log_status("CONFIG", "Configuration generated - ready for transfer")
         
         # Create managed file
         transfer_info_path = self.file_manager.create_managed_file("transfer.info", content)
@@ -144,49 +948,40 @@ class RealBackupExecutor:
             self._log_status("ERROR", f"Failed to calculate hash for {file_path}: {e}")
             return ""
     
-    def _monitor_client_log(self, log_file: str, timeout: int = 300) -> bool:
-        """Monitor client_debug.log for real progress updates"""
-        self._log_status("MONITOR", f"Monitoring {log_file} for progress...")
+    def _parse_final_status_from_output(self, stdout: str) -> Dict[str, Any]:
+        """Parse final completion status from C++ client output (not for ongoing progress)"""
+        if not stdout:
+            # Don't provide progress here - let FileTransferMonitor handle it
+            return {"message": "Process completed"}
         
-        start_time = time.time()
-        last_size = 0
+        stdout_text = stdout.lower() if isinstance(stdout, str) else str(stdout).lower()
+        message = "Transfer process completed"
         
-        while time.time() - start_time < timeout:
-            try:
-                if os.path.exists(log_file):
-                    current_size = os.path.getsize(log_file)
-                    if current_size > last_size:
-                        # Read new content
-                        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-                            f.seek(last_size)
-                            new_content = f.read()
-                            
-                        # Parse for meaningful status updates
-                        for line in new_content.split('\n'):
-                            line = line.strip()
-                            if any(keyword in line.lower() for keyword in 
-                                  ['connecting', 'connected', 'registering', 'registered', 
-                                   'encrypting', 'transferring', 'complete', 'success', 'failed']):
-                                self._log_status("CLIENT", line)
-                        
-                        last_size = current_size
-                        
-                        # Check for completion indicators
-                        if 'backup completed successfully' in new_content.lower():
-                            self._log_status("SUCCESS", "Client reported successful backup completion")
-                            return True
-                        elif 'failed' in new_content.lower() and 'fatal' in new_content.lower():
-                            self._log_status("ERROR", "Client reported fatal error")
-                            return False
-                            
-                time.sleep(1)
+        try:
+            # Only look for final completion indicators
+            if any(phrase in stdout_text for phrase in ['backup completed successfully', 'transfer complete', 'file uploaded successfully']):
+                message = "Backup completed successfully"
+            elif 'verification' in stdout_text and ('success' in stdout_text or 'passed' in stdout_text):
+                message = "File verified successfully"
+            elif any(phrase in stdout_text for phrase in ['error', 'failed', 'unable', 'could not']):
+                message = "Transfer encountered issues - check logs"
+            elif 'timeout' in stdout_text:
+                message = "Connection timeout occurred"
+            else:
+                # Look for any indication of what happened
+                if 'transfer' in stdout_text or 'upload' in stdout_text:
+                    message = "File transfer process completed"
+                elif 'encrypt' in stdout_text:
+                    message = "File encryption completed"
+                elif 'connect' in stdout_text:
+                    message = "Connection process completed"
                 
-            except Exception as e:
-                self._log_status("ERROR", f"Error monitoring log file: {e}")
-                time.sleep(1)
+        except Exception as e:
+            self._log_status("DEBUG", f"Output parsing error: {e}")
+            message = "Process completed (output analysis error)"
         
-        self._log_status("TIMEOUT", f"Log monitoring timed out after {timeout} seconds")
-        return False
+        # Return only message, no progress - FileTransferMonitor handles progress
+        return {"message": message}
     
     def _verify_file_transfer(self, original_file: str, username: str) -> Dict[str, Any]:
         """Verify that file was actually transferred to server"""
@@ -383,6 +1178,51 @@ class RealBackupExecutor:
                 severity=ErrorSeverity.HIGH
             )
 
+    def _parse_complete_output_for_progress(self, stdout: str, monitor):
+        """Parse complete stdout for progress phases when real-time parsing is limited"""
+        try:
+            self._log_status("DEBUG", "Parsing complete output for progress phases")
+            
+            # Simulate progress based on detected phases in complete output
+            phases_found = []
+            output_str = stdout if isinstance(stdout, str) else stdout.decode('utf-8', errors='ignore')
+            output_lower = output_str.lower()
+            
+            # Check for key progress phases in order
+            progress_milestones = [
+                ("system initialization", 15, "System initialized"),
+                ("configuration loaded", 25, "Configuration loaded"),
+                ("validating configuration", 35, "Configuration validated"),
+                ("checking parameters", 40, "Parameters checked"),
+                ("connection", 50, "Connection established"),
+                ("encrypt", 65, "File encrypted"),
+                ("upload", 75, "File uploaded"),
+                ("transfer", 75, "Transfer completed"),
+                ("verification", 85, "Transfer verified"),
+                ("backup completed", 90, "Backup completed"),
+                ("success", 90, "Process successful")
+            ]
+            
+            max_progress = monitor.current_progress
+            for keyword, progress, phase_name in progress_milestones:
+                if keyword in output_lower and progress > max_progress:
+                    max_progress = progress
+                    phases_found.append((phase_name, progress))
+            
+            # Emit progress updates for significant phases found
+            for phase_name, progress in phases_found[-3:]:  # Show last 3 major phases
+                if progress > monitor.current_progress:
+                    progress_info = monitor._create_progress_info(progress)
+                    progress_info['message'] = f"{phase_name} - {progress_info['message']}"
+                    monitor._emit_progress(progress_info)
+                    monitor.current_progress = progress
+                    time.sleep(0.2)  # Brief delay between updates for visual effect
+            
+            self._log_status("DEBUG", f"Complete output parsing found {len(phases_found)} phases, max progress: {max_progress}%")
+            
+        except Exception as e:
+            self._log_status("DEBUG", f"Complete output parsing error: {e}")
+
     def get_enhanced_process_metrics(self) -> Optional[Dict[str, Any]]:
         """Get enhanced process metrics from the monitoring system"""
         if not hasattr(self, 'process_id'):
@@ -516,7 +1356,7 @@ class RealBackupExecutor:
             self._log_status("CONFIG", f"Copied transfer.info to {len(copy_locations)} locations: {copy_locations}")
             
             self._log_status("LAUNCH", f"Launching {self.client_exe}")
-            self._log_status("PROGRESS", {"progress": 20, "message": "C++ client process starting"})
+            self._log_status("STARTUP", "C++ client process starting - monitoring will begin shortly")
             # Launch client process with automated input handling and BATCH MODE
             if not self.client_exe:
                 raise RuntimeError("Client executable path is not set")
@@ -567,14 +1407,32 @@ class RealBackupExecutor:
 
             self._log_status("PROCESS", f"Started backup client with enhanced monitoring (ID: {process_id}, PID: {self.backup_process.pid})")
             
-            # Capture and log stdout/stderr
-            # For now, we simulate progress during the timeout
-            self._log_status("PROGRESS", {"progress": 50, "message": "File transfer in progress..."})
+            # Initialize robust progress monitoring with multiple fallback layers
+            monitor = RobustProgressMonitor(self.server_received_files)
+            monitor.set_status_callback(self.status_callback or self._log_status)
+            
+            # Start monitoring with context information
+            file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+            monitor_context = {
+                "file_size": file_size,
+                "original_filename": os.path.basename(file_path),
+                "process": self.backup_process
+            }
+            monitor.start_monitoring(monitor_context)
+            
+            # Monitor process with working communicate() pattern  
             try:
                 stdout, stderr = self.backup_process.communicate(timeout=timeout)
                 result['process_exit_code'] = self.backup_process.returncode
                 self._log_status("PROCESS", f"Client process finished with exit code: {result['process_exit_code']}")
-                self._log_status("PROGRESS", {"progress": 80, "message": "Finalizing transfer..."})
+                
+                # Parse final status from output for completion verification
+                status_info = self._parse_final_status_from_output(stdout)
+                self._log_status("FINAL_STATUS", status_info["message"])
+                
+                # The new RobustProgressMonitor handles progress automatically
+                # No need for manual output parsing
+                
                 if stdout:
                     # Handle Unicode encoding for Windows console compatibility
                     stdout_safe = stdout.decode('utf-8', errors='replace').encode('ascii', errors='replace').decode('ascii') if isinstance(stdout, bytes) else str(stdout).encode('ascii', errors='replace').decode('ascii')
@@ -598,20 +1456,33 @@ class RealBackupExecutor:
                     self._log_status("CLIENT_STDERR", stderr_safe)
                 result['error'] = "Process timed out"
                 result['process_exit_code'] = -1
+                
+                # Stop monitoring and finalize progress for timeout case
+                monitor.stop_monitoring()
+                monitor.finalize_progress(False, False)  # Timeout = failed
             
             # Release subprocess reference to allow safe cleanup
             self.file_manager.release_subprocess_use(transfer_file_id)
+            
+            # Stop monitoring gracefully before verification
+            monitor.stop_monitoring()
             
             # Verify actual file transfer
             self._log_status("VERIFY", "Verifying actual file transfer...")
             verification = self._verify_file_transfer(file_path, username)
             result['verification'] = verification
             
-            # Determine overall success based on concrete evidence
+            # Determine overall success and finalize progress based on results
+            process_success = result.get('process_exit_code') == 0
+            verification_success = verification['transferred']
+            
+            # Finalize progress based on combined results
+            monitor.finalize_progress(process_success, verification_success)
+            
             # Prioritize file transfer verification over process exit code
             if verification['transferred']:
                 result['success'] = True
-                self._log_status("COMPLETED", {"progress": 100, "message": "Backup verified and complete!"})
+                self._log_status("COMPLETED", "Backup verified and complete!")
                 if result['process_exit_code'] == 0:
                     self._log_status("SUCCESS", "REAL backup completed and verified!")
                 else:
@@ -619,12 +1490,20 @@ class RealBackupExecutor:
                     self._log_status("SUCCESS", f"REAL backup completed and verified! (Process was killed but transfer succeeded)")
             else:
                 result['error'] = "No file transfer detected - backup may have failed"
-                self._log_status("FAILED", {"progress": 0, "message": "Verification failed!"})
+                self._log_status("FAILED", "Verification failed - no file transfer detected")
                 self._log_status("FAILURE", result['error'])
             
         except Exception as e:
             result['error'] = str(e)
             self._log_status("ERROR", f"Backup execution failed: {e}")
+            
+            # Ensure monitoring is stopped and finalized even on exceptions
+            try:
+                if 'monitor' in locals():
+                    monitor.stop_monitoring()
+                    monitor.finalize_progress(False, False)  # Exception = failed
+            except Exception as monitor_error:
+                self._log_status("WARNING", f"Error stopping monitor: {monitor_error}")
         
         finally:
             result['duration'] = time.time() - start_time

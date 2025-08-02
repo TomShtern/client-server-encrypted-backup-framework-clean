@@ -21,6 +21,9 @@ from src.api.real_backup_executor import RealBackupExecutor
 # Import singleton manager to prevent multiple API server instances
 from src.server.server_singleton import ensure_single_server_instance
 
+# Import file receipt monitoring
+from src.server.file_receipt_monitor import initialize_file_receipt_monitor, get_file_receipt_monitor, stop_file_receipt_monitor
+
 import uuid
 
 app = Flask(__name__)
@@ -44,6 +47,22 @@ except Exception as e:
     print(f"[CRITICAL] Failed to initialize RealBackupExecutor: {e}")
     # Optionally, exit or disable backup functionality
     backup_executor = None
+
+# File receipt monitor will be initialized after SocketIO setup
+file_receipt_monitor = None
+
+def broadcast_file_receipt(event_type: str, data: dict):
+    """Broadcast file receipt events to all connected clients"""
+    try:
+        if websocket_enabled and connected_clients:
+            socketio.emit('file_receipt', {
+                'event_type': event_type,
+                'data': data,
+                'timestamp': time.time()
+            })
+            print(f"[WEBSOCKET] Broadcasted file receipt event: {event_type}")
+    except Exception as e:
+        print(f"[WEBSOCKET] Error broadcasting file receipt: {e}")
 
 
 def get_default_status():
@@ -340,50 +359,9 @@ def api_start_backup():
     active_backup_jobs[job_id] = get_default_status()
     active_backup_jobs[job_id]['backing_up'] = True
 
+    # Initialize status handler as a no-op function instead of None
     def status_handler(phase, data):
-        if job_id in active_backup_jobs:
-            active_backup_jobs[job_id]['events'].append({'phase': phase, 'data': data})
-            active_backup_jobs[job_id]['phase'] = phase
-            
-            # Update both job-specific and global backup status
-            if isinstance(data, dict):
-                message = data.get('message', phase)
-                active_backup_jobs[job_id]['message'] = message
-                if 'progress' in data:
-                    progress_value = data['progress']
-                    active_backup_jobs[job_id]['progress']['percentage'] = progress_value
-                    # Also update global backup status for unified API
-                    update_backup_status(phase, message, progress_value)
-                else:
-                    update_backup_status(phase, message)
-            else:
-                active_backup_jobs[job_id]['message'] = data
-                update_backup_status(phase, data)
-            
-            # Real-time WebSocket broadcasting
-            if websocket_enabled and connected_clients:
-                try:
-                    socketio.emit('progress_update', {
-                        'job_id': job_id,
-                        'phase': phase,
-                        'data': data,
-                        'timestamp': time.time(),
-                        'progress': active_backup_jobs[job_id]['progress']['percentage'] if isinstance(data, dict) and 'progress' in data else None
-                    })
-                    print(f"[WEBSOCKET] Broadcasted progress update: {phase}")
-                except Exception as e:
-                    print(f"[WEBSOCKET] Broadcast failed: {e}")
-
-    # Add null check before setting status callback
-    if backup_executor is not None:
-        backup_executor.set_status_callback(status_handler)
-    else:
-        return jsonify({
-            'success': False, 
-            'error': 'Backup executor is not initialized. Cannot start backup.'
-        }), 500
-
-    # ... (rest of the function remains the same)
+        pass  # Will be redefined after we have the filename
 
 
     print(f"[DEBUG] /api/start_backup endpoint called")
@@ -424,6 +402,74 @@ def api_start_backup():
         print(f"[DEBUG] File saved to: {file_path}")
         print(f"[DEBUG] Username: {username}")
         print(f"[DEBUG] Server: {server_ip}:{server_port}")
+
+        # Define status handler now that we have the filename
+        def status_handler(phase, data):
+            if job_id in active_backup_jobs:
+                active_backup_jobs[job_id]['events'].append({'phase': phase, 'data': data})
+                active_backup_jobs[job_id]['phase'] = phase
+                
+                # Debug logging for API server progress handling
+                if isinstance(data, dict) and 'progress' in data:
+                    print(f"[API_DEBUG] Received progress update: {phase} - {data['progress']:.1f}% - {data.get('message', 'No message')}")
+                
+                # Update both job-specific and global backup status
+                if isinstance(data, dict):
+                    message = data.get('message', phase)
+                    active_backup_jobs[job_id]['message'] = message
+                    if 'progress' in data:
+                        progress_value = data['progress']
+                        active_backup_jobs[job_id]['progress']['percentage'] = progress_value
+                        # Also update global backup status for unified API
+                        update_backup_status(phase, message, progress_value)
+                        print(f"[API_DEBUG] Updated job progress to {progress_value:.1f}%")
+                    else:
+                        update_backup_status(phase, message)
+                else:
+                    active_backup_jobs[job_id]['message'] = data
+                    update_backup_status(phase, data)
+                
+                # Enhanced completion logic with file receipt verification
+                if phase in ['COMPLETED', 'FAILED', 'ERROR']:
+                    # Check actual file receipt regardless of reported status
+                    monitor = get_file_receipt_monitor()
+                    if monitor and filename:
+                        file_filename = os.path.basename(filename)
+                        receipt_check = monitor.check_file_receipt(file_filename)
+                        if receipt_check.get('received', False):
+                            # File actually received - override any failure status
+                            if phase in ['FAILED', 'ERROR']:
+                                print(f"[OVERRIDE] Process reported {phase} but file was received - marking as SUCCESS")
+                                phase = 'COMPLETED'
+                                active_backup_jobs[job_id]['phase'] = 'COMPLETED'
+                                active_backup_jobs[job_id]['message'] = 'File successfully received and verified!'
+                                update_backup_status('COMPLETED', 'File transfer verified - backup successful!', 100)
+                        else:
+                            # File not received - ensure we report failure even if process claims success
+                            if phase == 'COMPLETED':
+                                print(f"[OVERRIDE] Process reported COMPLETED but file not received - marking as FAILED")
+                                phase = 'FAILED'
+                                active_backup_jobs[job_id]['phase'] = 'FAILED'
+                                active_backup_jobs[job_id]['message'] = 'Process completed but file not received on server'
+                                update_backup_status('FAILED', 'File transfer failed - no file received', 0)
+                
+                # Real-time WebSocket broadcasting
+                if websocket_enabled and connected_clients:
+                    try:
+                        socketio.emit('progress_update', {
+                            'job_id': job_id,
+                            'phase': phase,
+                            'data': data,
+                            'timestamp': time.time(),
+                            'progress': active_backup_jobs[job_id]['progress']['percentage'] if isinstance(data, dict) and 'progress' in data else None
+                        })
+                        print(f"[WEBSOCKET] Broadcasted progress update: {phase}")
+                    except Exception as e:
+                        print(f"[WEBSOCKET] Broadcast failed: {e}")
+
+        # Set the status callback for the backup executor
+        if backup_executor is not None:
+            backup_executor.set_status_callback(status_handler)
 
         # Update status
         backup_status['backing_up'] = True
@@ -516,6 +562,79 @@ def api_start_backup():
         update_backup_status('ERROR', error_msg)
         return jsonify({'success': False, 'error': error_msg}), 500
 
+@app.route('/api/check_receipt/<filename>')
+def api_check_file_receipt(filename):
+    """Check if a specific file has been received by the server"""
+    try:
+        monitor = get_file_receipt_monitor()
+        if not monitor:
+            return jsonify({
+                'success': False,
+                'error': 'File receipt monitoring not available',
+                'received': False
+            }), 503
+        
+        receipt_info = monitor.check_file_receipt(filename)
+        
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            **receipt_info
+        })
+        
+    except Exception as e:
+        error_msg = f"Error checking file receipt: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        return jsonify({
+            'success': False,
+            'error': error_msg,
+            'received': False
+        }), 500
+
+@app.route('/api/received_files')
+def api_list_received_files():
+    """List all files that have been received by the server"""
+    try:
+        monitor = get_file_receipt_monitor()
+        if not monitor:
+            return jsonify({
+                'success': False,
+                'error': 'File receipt monitoring not available'
+            }), 503
+        
+        files_info = monitor.list_received_files()
+        return jsonify(files_info)
+        
+    except Exception as e:
+        error_msg = f"Error listing received files: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        return jsonify({
+            'success': False,
+            'error': error_msg
+        }), 500
+
+@app.route('/api/monitor_status')
+def api_monitor_status():
+    """Get file receipt monitoring status"""
+    try:
+        monitor = get_file_receipt_monitor()
+        if not monitor:
+            return jsonify({
+                'monitoring_active': False,
+                'error': 'File receipt monitoring not initialized'
+            })
+        
+        status = monitor.get_monitoring_status()
+        return jsonify(status)
+        
+    except Exception as e:
+        error_msg = f"Error getting monitor status: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        return jsonify({
+            'monitoring_active': False,
+            'error': error_msg
+        }), 500
+
 # --- Enhanced server startup with WebSocket support ---
 
 if __name__ == "__main__":
@@ -554,6 +673,14 @@ if __name__ == "__main__":
     print()
     print("[ROCKET] Starting Flask API server with WebSocket support...")
     
+    # Initialize file receipt monitoring
+    try:
+        received_files_dir = os.path.join("src", "server", "received_files")  # Windows-compatible path
+        file_receipt_monitor = initialize_file_receipt_monitor(received_files_dir, broadcast_file_receipt)
+        print(f"[OK] File Receipt Monitor: Watching {received_files_dir}")
+    except Exception as e:
+        print(f"[WARNING] File Receipt Monitor: Failed to initialize - {e}")
+    
     # Ensure only one API server instance runs at a time
     print("Ensuring single API server instance...")
     ensure_single_server_instance("APIServer", 9090)
@@ -572,3 +699,10 @@ if __name__ == "__main__":
         print("\n[INFO] API Server shutdown requested")
     except Exception as e:
         print(f"[MISSING] Server error: {e}")
+    finally:
+        # Cleanup file receipt monitor
+        try:
+            stop_file_receipt_monitor()
+            print("[INFO] File receipt monitor stopped")
+        except Exception as e:
+            print(f"[WARNING] Error stopping file receipt monitor: {e}")

@@ -5,21 +5,23 @@
 import threading
 import time
 import logging
-from typing import Dict, Optional, Any, List, Tuple
+from typing import Dict, Optional, Any, List
 from datetime import datetime, timezone
 
 # Import crypto components through compatibility layer
-from crypto_compat import RSA
+from .crypto_compat import RSA
 
 # Import custom exceptions and configuration
-from exceptions import ServerError, ProtocolError, ClientError
-from config import (
+from .exceptions import ServerError, ProtocolError, ClientError
+from .config import (
     CLIENT_SESSION_TIMEOUT, 
     PARTIAL_FILE_TIMEOUT,
     RSA_PUBLIC_KEY_SIZE,
-    AES_KEY_SIZE_BYTES
+    AES_KEY_SIZE_BYTES,
+    MAX_CLIENT_NAME_LENGTH,
+    MAX_FILENAME_FIELD_SIZE
 )
-from database import DatabaseManager
+from .database import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +44,7 @@ class Client:
         self.id: bytes = client_id
         self.name: str = name
         self.public_key_bytes: Optional[bytes] = public_key_bytes
-        self.public_key_obj: Optional[RSA.RsaKey] = None  # PyCryptodome RSA key object
+        self.public_key_obj: Optional[Any] = None  # Use flexible type for compatibility layer
         self.aes_key: Optional[bytes] = None  # Current session AES key
         self.last_seen: float = time.monotonic()  # Monotonic time for session timeout
         self.partial_files: Dict[str, Dict[str, Any]] = {}  # For reassembling multi-packet files
