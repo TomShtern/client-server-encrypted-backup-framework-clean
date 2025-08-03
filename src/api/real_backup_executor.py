@@ -498,12 +498,34 @@ class FileReceiptProgressTracker(ProgressTracker):
             
         print(f"[RECEIPT] Starting file receipt monitoring for: {self.target_filename}")
         print(f"[RECEIPT] Monitoring directory: {self.destination_dir}")
+        print(f"[RECEIPT] Directory exists: {self.destination_dir.exists()}")
+        print(f"[RECEIPT] Watchdog available: {WATCHDOG_AVAILABLE}")
         
-        # Start file system monitoring with fallback
+        # IMMEDIATE CHECK: See if file already exists (for replacement scenarios)
+        if self.destination_dir.exists():
+            print(f"[RECEIPT] 🔍 CHECKING EXISTING FILES in {self.destination_dir}")
+            existing_files = list(self.destination_dir.iterdir())
+            print(f"[RECEIPT] Found {len(existing_files)} existing files: {[f.name for f in existing_files if f.is_file()]}")
+            
+            for existing_file in existing_files:
+                if existing_file.is_file():
+                    match_result = self._check_file_match(existing_file.name, self.target_filename)
+                    print(f"[RECEIPT] Comparing '{existing_file.name}' vs '{self.target_filename}' = {match_result}")
+                    if match_result:
+                        print(f"[RECEIPT] ✅ FILE ALREADY EXISTS: {existing_file.name} matches {self.target_filename}")
+                        self._trigger_file_received(existing_file.name)
+                        return  # File already exists, no need to monitor
+        else:
+            print(f"[RECEIPT] ❌ Destination directory does not exist: {self.destination_dir}")
+        
+        # Start file system monitoring with DUAL approach (watchdog + polling backup)
         if WATCHDOG_AVAILABLE:
             self._start_watchdog_monitoring()
+            # ALWAYS start polling as backup even with watchdog (Windows file events can be unreliable)
+            self._start_polling_monitoring()
+            print(f"[RECEIPT] Started DUAL monitoring: Watchdog + Polling backup")
         else:
-            print(f"[RECEIPT] Watchdog not available, using polling fallback")
+            print(f"[RECEIPT] Watchdog not available, using polling only")
             self._start_polling_monitoring()
     
     def _start_watchdog_monitoring(self):
@@ -548,23 +570,33 @@ class FileReceiptProgressTracker(ProgressTracker):
             
         file_name = os.path.basename(file_path)
         
-        # Case-insensitive filename matching for Windows
-        if file_name.lower() == self.target_filename.lower():
+        # Use enhanced filename matching for server timestamp prefix pattern
+        if self._check_file_match(file_name, self.target_filename):
             print(f"[RECEIPT] File event detected: {event_type} - {file_name}")
             self._trigger_stability_check(file_path)
     
     def _poll_for_file(self):
         """Polling fallback for file detection"""
+        poll_count = 0
         while self.monitoring_active and not self.file_received:
             try:
+                poll_count += 1
+                if poll_count % 10 == 1:  # Log every 5 seconds (10 * 0.5s)
+                    print(f"[RECEIPT] 🔄 Polling for '{self.target_filename}' (attempt {poll_count})")
+                
                 if self.destination_dir.exists():
-                    for file_path in self.destination_dir.iterdir():
+                    files = list(self.destination_dir.iterdir())
+                    for file_path in files:
                         if file_path.is_file():
-                            # Case-insensitive matching
-                            if file_path.name.lower() == self.target_filename.lower():
-                                print(f"[RECEIPT] File found via polling: {file_path.name}")
+                            # Use enhanced filename matching for server timestamp prefix pattern
+                            if self._check_file_match(file_path.name, self.target_filename):
+                                print(f"[RECEIPT] 🎯 File found via polling: {file_path.name}")
                                 self._trigger_stability_check(str(file_path))
                                 return
+                    
+                    if poll_count % 10 == 1:  # Log current files every 5 seconds
+                        file_names = [f.name for f in files if f.is_file()]
+                        print(f"[RECEIPT] Current files in directory: {file_names}")
                 
                 time.sleep(0.5)  # Poll every 500ms
                 
@@ -589,6 +621,33 @@ class FileReceiptProgressTracker(ProgressTracker):
         )
         self.stability_timer.start()
         print(f"[RECEIPT] Starting stability check for: {os.path.basename(file_path)}")
+    
+    def _check_file_match(self, existing_filename: str, target_filename: str) -> bool:
+        """Check if existing file matches target file (handles server timestamp prefix pattern)"""
+        existing_lower = existing_filename.lower()
+        target_lower = target_filename.lower()
+        
+        # First try exact match
+        if existing_lower == target_lower:
+            return True
+        
+        # Handle server timestamp prefix pattern: username_YYYYMMDD_HHMMSS_filename.ext
+        # Check if existing filename ends with the target filename
+        if existing_lower.endswith(target_lower):
+            return True
+        
+        # Alternative pattern: check if target filename is contained with underscore separator
+        if f"_{target_lower}" in existing_lower:
+            return True
+            
+        return False
+    
+    def _trigger_file_received(self, filename: str):
+        """Trigger immediate file received state"""
+        self.file_received = True
+        self.progress_override = True
+        print(f"[RECEIPT] ✅ FILE ALREADY RECEIVED! {filename}")
+        print(f"[RECEIPT] ⚡ OVERRIDING PROGRESS TO 100% - FILE CONFIRMED ON SERVER")
     
     def _confirm_file_receipt(self, file_path: str):
         """Confirm file is completely received and stable"""
@@ -741,6 +800,7 @@ class RobustProgressMonitor:
     def __init__(self, destination_dir: str):
         self.destination_dir = destination_dir
         self.progress_layers = [
+            FileReceiptProgressTracker(destination_dir),  # HIGHEST PRIORITY: Ground truth file receipt
             OutputProgressTracker(),  # Primary: real C++ output parsing
             StatisticalProgressTracker(),
             TimeBasedEstimator(),
@@ -751,6 +811,36 @@ class RobustProgressMonitor:
         self.monitoring_active = False
         self.status_callback = None
         self.fallback_count = 0
+        self.override_active = False # NEW: Flag to block other updates
+        self.file_receipt_started = False  # Prevent multiple starts
+
+    def force_completion(self):
+        """Force progress to 100% on verified completion."""
+        logger.info("FORCE_COMPLETION triggered. Overriding all other progress.")
+        self.override_active = True
+        self.monitoring_active = False # Stop further monitoring
+        if self.status_callback:
+            self.status_callback("COMPLETED_VERIFIED", {
+                "progress": 100,
+                "message": "Backup complete and cryptographically verified.",
+                "phase": "COMPLETED_VERIFIED",
+                "confidence": "absolute",
+                "override": True
+            })
+
+    def force_failure(self, reason: str):
+        """Force progress to a failed state on verification failure."""
+        logger.error(f"FORCE_FAILURE triggered: {reason}. Overriding all other progress.")
+        self.override_active = True
+        self.monitoring_active = False # Stop further monitoring
+        if self.status_callback:
+            self.status_callback("VERIFICATION_FAILED", {
+                "progress": 0, # Or keep last known good?
+                "message": f"CRITICAL: {reason}",
+                "phase": "VERIFICATION_FAILED",
+                "confidence": "absolute",
+                "override": True
+            })
         
     def set_status_callback(self, callback: Callable[[str, Any], None]):
         """Set callback for progress updates"""
@@ -759,23 +849,32 @@ class RobustProgressMonitor:
     def start_monitoring(self, context: Dict[str, Any]):
         """Start monitoring with the best available tracker"""
         self.monitoring_active = True
+        self._last_context = context  # Store context for fallback
         
-        # Find first available tracker
+        # CRITICAL: ALWAYS start FileReceiptProgressTracker (layer 0) regardless of active layer
+        file_receipt_tracker = self.progress_layers[0]
+        if isinstance(file_receipt_tracker, FileReceiptProgressTracker) and not self.file_receipt_started:
+            file_receipt_tracker.start_monitoring(context)
+            self.file_receipt_started = True
+            print(f"[ROBUST] ✅ ALWAYS STARTED: FileReceiptProgressTracker for ground truth file detection")
+        
+        # Find first available tracker for primary monitoring
         for i, tracker in enumerate(self.progress_layers):
             if tracker.is_available():
                 self.active_layer = i
                 break
         
-        # Start the active tracker
+        # Start the active tracker (if it's not already started)
         active_tracker = self.progress_layers[self.active_layer]
-        active_tracker.start_monitoring(context)
+        if not isinstance(active_tracker, FileReceiptProgressTracker):
+            active_tracker.start_monitoring(context)
         
         tracker_name = active_tracker.__class__.__name__
-        print(f"[ROBUST] Started monitoring with {tracker_name} (layer {self.active_layer})")
+        print(f"[ROBUST] Started primary monitoring with {tracker_name} (layer {self.active_layer})")
         
         if self.status_callback:
             self.status_callback("MONITOR", {
-                "message": f"Progress monitoring active ({tracker_name})",
+                "message": f"Progress monitoring active ({tracker_name}) + FileReceiptProgressTracker",
                 "tracker": tracker_name,
                 "layer": self.active_layer
             })
@@ -812,10 +911,32 @@ class RobustProgressMonitor:
     
     def get_progress(self) -> Dict[str, Any]:
         """Get progress with automatic fallback handling"""
+        if self.override_active:
+            logger.debug("Progress override is active. No new progress will be calculated.")
+            return {"progress": 100, "message": "Awaiting final verification...", "phase": "FINALIZING"}
+
         if not self.monitoring_active:
             return {"progress": 0, "message": "Monitoring not active", "phase": "INACTIVE"}
         
         try:
+            # CRITICAL: Check FileReceiptProgressTracker first for ground truth override
+            file_receipt_tracker = self.progress_layers[0]  # FileReceiptProgressTracker is first
+            if isinstance(file_receipt_tracker, FileReceiptProgressTracker):
+                receipt_progress = file_receipt_tracker.get_progress()
+                if receipt_progress.get("override", False):
+                    # GROUND TRUTH: File is on server = 100% complete!
+                    print("[ROBUST] ✅ FILE RECEIPT OVERRIDE: File detected on server, forcing 100% completion!")
+                    receipt_progress["tracker"] = "FileReceiptProgressTracker"
+                    receipt_progress["layer"] = 0
+                    receipt_progress["fallback_count"] = self.fallback_count
+                    
+                    # Trigger callback with completion signal
+                    if self.status_callback:
+                        self.status_callback("FILE_RECEIVED", receipt_progress)
+                    
+                    return receipt_progress
+            
+            # Normal progress flow - use active layer
             active_tracker = self.progress_layers[self.active_layer]
             progress_data = active_tracker.get_progress()
             
@@ -1201,7 +1322,7 @@ class RealBackupExecutor:
         else:
             self.client_exe = client_exe_path
         
-        self.server_received_files = r"src\server\received_files"
+        self.server_received_files = "received_files"  # Server saves files to project root/received_files
         self.temp_dir = tempfile.mkdtemp()
         self.backup_process = None
         self.status_callback = None
@@ -1214,6 +1335,103 @@ class RealBackupExecutor:
         """Set callback function for real-time status updates"""
         self.status_callback = callback
         
+    def _monitor_with_active_polling(self, monitor, timeout: int):
+        """Monitor backup process with active progress polling"""
+        import threading
+        import queue
+        
+        # Use queues to communicate between threads
+        stdout_chunks = []
+        stderr_chunks = []
+        
+        def progress_polling_loop():
+            """Continuously poll monitor for progress updates"""
+            print("[POLLING] Starting active progress polling loop")
+            last_progress = -1
+            
+            while self.backup_process.poll() is None:  # While process is running
+                try:
+                    # Get current progress from monitor
+                    progress_data = monitor.get_progress()
+                    current_progress = progress_data.get("progress", 0)
+                    
+                    # Only emit if progress changed significantly or has special flags
+                    if (abs(current_progress - last_progress) >= 1.0 or 
+                        progress_data.get("override", False) or
+                        progress_data.get("phase") in ["COMPLETED", "FILE_RECEIVED"]):
+                        
+                        print(f"[POLLING] Progress update: {current_progress:.1f}% - {progress_data.get('message', 'Processing...')}")
+                        
+                        # Emit progress via status callback
+                        if self.status_callback:
+                            self.status_callback("PROGRESS", progress_data)
+                        
+                        last_progress = current_progress
+                        
+                        # If file receipt override detected, we can continue monitoring
+                        if progress_data.get("override", False):
+                            print(f"[POLLING] 🚀 FILE RECEIPT OVERRIDE DETECTED! Progress set to 100%")
+                    
+                    time.sleep(0.2)  # Poll every 200ms for highly responsive updates
+                    
+                except Exception as e:
+                    print(f"[POLLING] Error in progress polling: {e}")
+                    time.sleep(1.0)  # Longer sleep on error
+            
+            print("[POLLING] Progress polling loop ended")
+        
+        def stdout_reader():
+            """Read stdout in background to prevent blocking"""
+            try:
+                if self.backup_process.stdout:
+                    for line in iter(self.backup_process.stdout.readline, b''):
+                        stdout_chunks.append(line)
+            except Exception as e:
+                print(f"[STDOUT] Error reading stdout: {e}")
+        
+        def stderr_reader():
+            """Read stderr in background to prevent blocking"""
+            try:
+                if self.backup_process.stderr:
+                    for line in iter(self.backup_process.stderr.readline, b''):
+                        stderr_chunks.append(line)
+            except Exception as e:
+                print(f"[STDERR] Error reading stderr: {e}")
+        
+        # Start background threads for progress polling and output reading
+        polling_thread = threading.Thread(target=progress_polling_loop, daemon=True)
+        stdout_thread = threading.Thread(target=stdout_reader, daemon=True) if self.backup_process.stdout else None
+        stderr_thread = threading.Thread(target=stderr_reader, daemon=True) if self.backup_process.stderr else None
+        
+        polling_thread.start()
+        if stdout_thread:
+            stdout_thread.start()
+        if stderr_thread:
+            stderr_thread.start()
+        
+        # Wait for process to complete with timeout
+        try:
+            self.backup_process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            print("[POLLING] Process timeout - terminating")
+            self.backup_process.terminate()
+            time.sleep(2)
+            if self.backup_process.poll() is None:
+                self.backup_process.kill()
+        
+        # Wait for threads to complete (brief timeout to avoid hanging)
+        polling_thread.join(timeout=2.0)
+        if stdout_thread:
+            stdout_thread.join(timeout=1.0)
+        if stderr_thread:
+            stderr_thread.join(timeout=1.0)
+        
+        # Combine output chunks
+        stdout = b''.join(stdout_chunks) if stdout_chunks else b''
+        stderr = b''.join(stderr_chunks) if stderr_chunks else b''
+        
+        return stdout, stderr
+
     def _log_status(self, phase: str, message: str):
         """Log status updates"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1644,7 +1862,7 @@ class RealBackupExecutor:
     
     def execute_real_backup(self, username: str, file_path: str, 
                            server_ip: str = "127.0.0.1", server_port: int = 1256, 
-                           timeout: int = 30) -> Dict[str, Any]:
+                           timeout: int = 120) -> Dict[str, Any]:
         """
         Execute REAL backup using the existing C++ client with full verification
         """
@@ -1752,21 +1970,25 @@ class RealBackupExecutor:
             self._log_status("PROCESS", f"Started backup client with enhanced monitoring (ID: {process_id}, PID: {self.backup_process.pid})")
             
             # Initialize robust progress monitoring with multiple fallback layers
+            print(f"[MONITOR] Initializing RobustProgressMonitor with destination: {self.server_received_files}")
             monitor = RobustProgressMonitor(self.server_received_files)
             monitor.set_status_callback(self.status_callback or self._log_status)
             
             # Start monitoring with context information
             file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+            filename = os.path.basename(file_path)
             monitor_context = {
                 "file_size": file_size,
-                "original_filename": os.path.basename(file_path),
+                "original_filename": filename,
                 "process": self.backup_process
             }
+            print(f"[MONITOR] Starting monitoring for file: {filename} (size: {file_size} bytes)")
             monitor.start_monitoring(monitor_context)
             
-            # Monitor process with working communicate() pattern  
+            # Monitor process with ACTIVE PROGRESS POLLING (instead of blocking communicate)
             try:
-                stdout, stderr = self.backup_process.communicate(timeout=timeout)
+                # Start active progress polling in parallel with backup execution
+                stdout, stderr = self._monitor_with_active_polling(monitor, timeout)
                 result['process_exit_code'] = self.backup_process.returncode
                 self._log_status("PROCESS", f"Client process finished with exit code: {result['process_exit_code']}")
                 

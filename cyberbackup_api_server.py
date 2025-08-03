@@ -10,8 +10,14 @@ import os
 import time
 import threading
 import tempfile
+import logging
+import hashlib
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, send_file, session
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 
@@ -456,21 +462,17 @@ def api_start_backup():
         if file.filename == '':
             return jsonify({'success': False, 'error': 'No file selected'}), 400
 
+        # --- CORRECTED LOGIC ---
+        # Define filename in the main thread's scope
+        filename = file.filename or f"backup_file_{int(time.time())}"
+        # Read file data to be passed to the background thread
+        file_data = file.read()
+        # --- END CORRECTED LOGC ---
+
         # Get form data
         username = request.form.get('username', server_config.get('username', 'default_user'))
         server_ip = request.form.get('server', server_config.get('host', '127.0.0.1'))
         server_port = request.form.get('port', server_config.get('port', 1256))
-
-        # Save uploaded file to temporary location
-        temp_dir = tempfile.mkdtemp()
-        # Handle case where file.filename might be None
-        filename = file.filename or f"backup_file_{int(time.time())}"
-        file_path = os.path.join(temp_dir, filename)
-        file.save(file_path)
-
-        print(f"[DEBUG] File saved to: {file_path}")
-        print(f"[DEBUG] Username: {username}")
-        print(f"[DEBUG] Server: {server_ip}:{server_port}")
 
         # Define status handler now that we have the filename
         def status_handler(phase, data):
@@ -498,30 +500,6 @@ def api_start_backup():
                     active_backup_jobs[job_id]['message'] = data
                     update_backup_status(phase, data)
                 
-                # Enhanced completion logic with file receipt verification
-                if phase in ['COMPLETED', 'FAILED', 'ERROR']:
-                    # Check actual file receipt regardless of reported status
-                    monitor = get_file_receipt_monitor()
-                    if monitor and filename:
-                        file_filename = os.path.basename(filename)
-                        receipt_check = monitor.check_file_receipt(file_filename)
-                        if receipt_check.get('received', False):
-                            # File actually received - override any failure status
-                            if phase in ['FAILED', 'ERROR']:
-                                print(f"[OVERRIDE] Process reported {phase} but file was received - marking as SUCCESS")
-                                phase = 'COMPLETED'
-                                active_backup_jobs[job_id]['phase'] = 'COMPLETED'
-                                active_backup_jobs[job_id]['message'] = 'File successfully received and verified!'
-                                update_backup_status('COMPLETED', 'File transfer verified - backup successful!', 100)
-                        else:
-                            # File not received - ensure we report failure even if process claims success
-                            if phase == 'COMPLETED':
-                                print(f"[OVERRIDE] Process reported COMPLETED but file not received - marking as FAILED")
-                                phase = 'FAILED'
-                                active_backup_jobs[job_id]['phase'] = 'FAILED'
-                                active_backup_jobs[job_id]['message'] = 'Process completed but file not received on server'
-                                update_backup_status('FAILED', 'File transfer failed - no file received', 0)
-                
                 # Real-time WebSocket broadcasting
                 if websocket_enabled and connected_clients:
                     try:
@@ -547,10 +525,50 @@ def api_start_backup():
         update_backup_status('BACKUP_IN_PROGRESS', f'Starting backup of {filename}...')
 
         # Start backup in background thread
-        def run_backup():
+        def run_backup(file_data_for_thread, filename_for_thread):
+            global backup_status  # Add this line
+            temp_dir = tempfile.mkdtemp()
+            file_path = os.path.join(temp_dir, filename_for_thread)
+            with open(file_path, 'wb') as f:
+                f.write(file_data_for_thread)
+
             try:
+                # --- NEW: Multi-Factor Verification Setup ---
+                expected_size = os.path.getsize(file_path)
+                with open(file_path, 'rb') as f:
+                    expected_hash = hashlib.sha256(f.read()).hexdigest()
+                logger.info(f"[Job {job_id}] Calculated verification data: Size={expected_size}, Hash={expected_hash[:8]}...")
+
+                # --- NEW: Define completion and failure callbacks for this job ---
+                def on_completion():
+                    logger.info(f"[Job {job_id}] Received VERIFIED COMPLETION signal for '{filename_for_thread}'. Forcing 100%.")
+                    if job_id in active_backup_jobs and backup_executor:
+                        active_backup_jobs[job_id]['phase'] = 'COMPLETED_VERIFIED'
+                        active_backup_jobs[job_id]['message'] = 'Backup complete and cryptographically verified.'
+                        active_backup_jobs[job_id]['progress']['percentage'] = 100
+
+                def on_failure(reason: str):
+                    logger.error(f"[Job {job_id}] Received VERIFICATION FAILED signal for '{filename_for_thread}': {reason}")
+                    if job_id in active_backup_jobs and backup_executor:
+                        active_backup_jobs[job_id]['phase'] = 'VERIFICATION_FAILED'
+                        active_backup_jobs[job_id]['message'] = f'CRITICAL: {reason}'
+                        active_backup_jobs[job_id]['progress']['percentage'] = 0
+
+                # --- NEW: Register the job with the file receipt monitor ---
+                monitor = get_file_receipt_monitor()
+                if monitor:
+                    monitor.register_job(
+                        filename=filename_for_thread,
+                        job_id=job_id,
+                        expected_size=expected_size,
+                        expected_hash=expected_hash,
+                        completion_callback=on_completion,
+                        failure_callback=on_failure
+                    )
+                else:
+                    logger.warning(f"[Job {job_id}] File receipt monitor not available. Verification will be skipped.")
+
                 print(f"[DEBUG] Starting real backup executor...")
-                # Add additional null check before calling execute_real_backup
                 if backup_executor is None:
                     update_backup_status('FAILED', 'Backup executor not available')
                     return
@@ -573,54 +591,25 @@ def api_start_backup():
                 print(f"[ERROR] Backup thread error: {str(e)}")
             finally:
                 backup_status['backing_up'] = False
-                
-                # Explicit handler cleanup to prevent memory leaks
                 if 'job_id' in locals() and callback_multiplexer:
                     with callback_multiplexer.lock:
                         if job_id in callback_multiplexer.handlers:
                             del callback_multiplexer.handlers[job_id]
                             print(f"[CLEANUP] Removed handler for job {job_id}")
                 
-                # Perform cleanup with incremental progress updates
-                def cleanup_with_progress():
-                    """Perform cleanup with progressive status updates"""
-                    try:
-                        # Step 1: Start cleanup (90%)
-                        update_backup_status('CLEANUP', 'Starting cleanup...', 90)
-                        time.sleep(0.5)
-                        
-                        # Step 2: Remove temp files (95%)
-                        update_backup_status('CLEANUP', 'Removing temporary files...', 95)
-                        if os.path.exists(file_path):
-                            os.remove(file_path)
-                        if os.path.exists(temp_dir):
-                            os.rmdir(temp_dir)
-                        print(f"[DEBUG] Cleanup successful for: {file_path}")
-                        time.sleep(0.5)
-                        
-                        # Step 3: Finalizing (98%)
-                        update_backup_status('CLEANUP', 'Finalizing...', 98)
-                        time.sleep(0.3)
-                        
-                        # Step 4: Complete (100%)
-                        update_backup_status('COMPLETED', 'Backup process completed successfully!', 100)
-                        time.sleep(0.2)
-                        
-                    except Exception as e:
-                        print(f"[WARNING] Cleanup error: {e}")
-                        update_backup_status('COMPLETED', 'Backup completed with cleanup warnings.', 100)
-                    
-                    finally:
-                        # Reset status to ready for next job after a brief display period
-                        time.sleep(1.0) # Allow user to see completion status
-                        backup_status = get_default_status()
-                        backup_status['connected'] = True # Assume still connected
-                        update_backup_status('READY', 'Ready for new backup.')
-                
-                cleanup_with_progress()
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                if os.path.exists(temp_dir):
+                    os.rmdir(temp_dir)
+                print(f"[DEBUG] Cleanup successful for: {file_path}")
+
+                time.sleep(1.0)
+                backup_status = get_default_status()
+                backup_status['connected'] = True
+                update_backup_status('READY', 'Ready for new backup.')
 
         # Start backup thread
-        backup_thread = threading.Thread(target=run_backup)
+        backup_thread = threading.Thread(target=run_backup, args=(file_data, filename))
         backup_thread.daemon = True
         backup_thread.start()
 

@@ -5,23 +5,60 @@ Monitors the received_files directory for new file arrivals and broadcasts
 notifications to connected clients via WebSocket.
 """
 
+import logging
 import os
 import time
 import threading
 import hashlib
 from pathlib import Path
-from typing import Callable, Dict, Any, Optional
+from typing import Callable, Dict, Any, Optional, Tuple
+
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileModifiedEvent
 
+# Configure logging for this module
+logger = logging.getLogger(__name__)
+
 
 class FileReceiptEventHandler(FileSystemEventHandler):
-    """Handle filesystem events for file receipt monitoring"""
+    """Handle filesystem events for file receipt monitoring with job-specific awareness"""
     
     def __init__(self, broadcast_callback: Callable[[str, Dict[str, Any]], None]):
         self.broadcast_callback = broadcast_callback
         self.file_states = {}  # Track file states to detect completion
+        
+        # --- NEW: Job-specific tracking ---
+        self.jobs: Dict[str, Dict[str, Any]] = {}
+        self.jobs_lock = threading.Lock()
+        # --- END NEW ---
+        
         self.monitoring_lock = threading.Lock()
+
+    def register_job(self, filename: str, job_id: str, expected_size: int, expected_hash: str, completion_callback: Callable, failure_callback: Callable):
+        """Register a new file transfer job to be monitored."""
+        with self.jobs_lock:
+            self.jobs[filename] = {
+                "job_id": job_id,
+                "expected_size": expected_size,
+                "expected_hash": expected_hash.lower(),
+                "completion_callback": completion_callback,
+                "failure_callback": failure_callback,
+                "start_time": time.time()
+            }
+        logger.info(f"Job '{job_id}' registered for file '{filename}' (Size: {expected_size}, Hash: {expected_hash[:8]}...).")
+
+    def _get_job_by_filepath(self, file_path: Path) -> Optional[Dict[str, Any]]:
+        """Safely retrieve job details by filename."""
+        with self.jobs_lock:
+            return self.jobs.get(file_path.name)
+
+    def _cleanup_job(self, filename: str):
+        """Remove a job from the tracking dictionary."""
+        with self.jobs_lock:
+            if filename in self.jobs:
+                del self.jobs[filename]
+                logger.info(f"Job for file '{filename}' cleaned up.")
+
         
     def on_created(self, event):
         """Handle file creation events"""
@@ -57,70 +94,82 @@ class FileReceiptEventHandler(FileSystemEventHandler):
         )
         stability_thread.start()
     
-    def on_modified(self, event):
-        """Handle file modification events"""
-        if event.is_directory:
-            return
-            
-        file_path = Path(str(event.src_path))
-        
-        # Update file state
-        with self.monitoring_lock:
-            if str(file_path) in self.file_states:
-                state = self.file_states[str(file_path)]
-                state["last_modified"] = time.time()
-                state["stable_count"] = 0  # Reset stability counter
-                
-                try:
-                    current_size = file_path.stat().st_size
-                    state["last_size"] = current_size
-                except Exception:
-                    pass
-    
     def _monitor_file_stability(self, file_path: Path, stability_threshold: float = 2.0):
-        """Monitor file for stability (no changes for threshold seconds)"""
-        file_key = str(file_path)
+        """Monitor a file for completion using multi-factor verification (size, stability, hash)."""
+        job = self._get_job_by_filepath(file_path)
+        if not job:
+            logger.debug(f"No job registered for '{file_path.name}', ignoring.")
+            return
+
+        job_id = job['job_id']
+        expected_size = job['expected_size']
+        logger.info(f"[Job {job_id}] Starting verification for '{file_path.name}'. Expecting {expected_size} bytes.")
+
+        last_size = -1
+        last_modified = -1
         
-        while file_key in self.file_states:
+        while True:
             try:
-                with self.monitoring_lock:
-                    if file_key not in self.file_states:
-                        break
-                        
-                    state = self.file_states[file_key]
-                    current_time = time.time()
-                    time_since_modified = current_time - state["last_modified"]
-                    
-                    if time_since_modified >= stability_threshold:
-                        # File appears stable
-                        if not state["notified_complete"] and file_path.exists():
-                            # Calculate hash and broadcast completion
-                            file_size = file_path.stat().st_size
-                            file_hash = self._calculate_file_hash(file_path)
-                            
-                            self._broadcast_file_event("transfer_completed", file_path, {
-                                "status": "completed",
-                                "size": file_size,
-                                "hash": file_hash,
-                                "duration": current_time - state["created_time"],
-                                "timestamp": current_time
-                            })
-                            
-                            state["notified_complete"] = True
-                            
-                            # Clean up state after notification
-                            del self.file_states[file_key]
-                            break
+                if not file_path.exists():
+                    logger.warning(f"[Job {job_id}] File '{file_path.name}' disappeared during monitoring.")
+                    job['failure_callback']("File disappeared during transfer.")
+                    self._cleanup_job(file_path.name)
+                    return
+
+                current_size = file_path.stat().st_size
+
+                # 1. Size Check
+                if current_size > expected_size:
+                    logger.error(f"[Job {job_id}] FAILED: File '{file_path.name}' exceeded expected size ({current_size} > {expected_size}).")
+                    job['failure_callback']("File size exceeded expected value.")
+                    self._cleanup_job(file_path.name)
+                    return
+
+                if current_size < expected_size:
+                    if current_size != last_size:
+                        logger.debug(f"[Job {job_id}] Progress for '{file_path.name}': {current_size} / {expected_size} bytes.")
+                        last_size = current_size
+                    time.sleep(0.25) # Wait for more data
+                    continue
                 
-                time.sleep(0.5)  # Check every 500ms
+                # At this point, current_size == expected_size
+                logger.info(f"[Job {job_id}] Size match for '{file_path.name}' ({expected_size} bytes). Now checking for stability.")
+
+                # 2. Stability Check
+                if last_modified == -1:
+                    last_modified = file_path.stat().st_mtime
                 
+                time.sleep(stability_threshold)
+
+                current_modified = file_path.stat().st_mtime
+                if current_modified != last_modified:
+                    logger.debug(f"[Job {job_id}] File '{file_path.name}' is still being modified. Resetting stability check.")
+                    last_modified = current_modified
+                    continue
+
+                logger.info(f"[Job {job_id}] File '{file_path.name}' is stable. Proceeding to hash verification.")
+
+                # 3. Hash Verification
+                calculated_hash = self._calculate_file_hash(file_path)
+                expected_hash = job['expected_hash']
+                logger.info(f"[Job {job_id}] Expected hash: {expected_hash}, Calculated hash: {calculated_hash}")
+
+                if calculated_hash == expected_hash:
+                    logger.info(f"[Job {job_id}] SUCCESS: Hash verification passed for '{file_path.name}'.")
+                    job['completion_callback']()
+                else:
+                    logger.error(f"[Job {job_id}] FAILED: Hash mismatch for '{file_path.name}'.")
+                    job['failure_callback']("File content is corrupt (hash mismatch).")
+                
+                # Finalize and clean up
+                self._cleanup_job(file_path.name)
+                return
+
             except Exception as e:
-                print(f"[FILE_RECEIPT] Error monitoring {file_path.name}: {e}")
-                # Clean up on error
-                with self.monitoring_lock:
-                    if file_key in self.file_states:
-                        del self.file_states[file_key]
-                break
+                logger.error(f"[Job {job_id}] Error monitoring {file_path.name}: {e}", exc_info=True)
+                job['failure_callback'](f"An unexpected error occurred during file verification: {e}")
+                self._cleanup_job(file_path.name)
+                return
     
     def _calculate_file_hash(self, file_path: Path) -> str:
         """Calculate SHA256 hash of file"""
@@ -161,12 +210,19 @@ class FileReceiptMonitor:
         self.watched_directory = Path(watched_directory)
         self.broadcast_callback = broadcast_callback
         self.observer = None
-        self.event_handler = None
+        self.event_handler: Optional[FileReceiptEventHandler] = None
         self.monitoring_active = False
         
         # Ensure watched directory exists
         self.watched_directory.mkdir(parents=True, exist_ok=True)
-        
+
+    def register_job(self, filename: str, job_id: str, expected_size: int, expected_hash: str, completion_callback: Callable, failure_callback: Callable):
+        """Public method to register a new file transfer job."""
+        if self.event_handler:
+            self.event_handler.register_job(filename, job_id, expected_size, expected_hash, completion_callback, failure_callback)
+        else:
+            logger.error("Cannot register job: monitoring is not active.")
+
     def start_monitoring(self):
         """Start monitoring the received files directory"""
         if self.monitoring_active:
