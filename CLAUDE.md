@@ -147,8 +147,9 @@ python scripts/testing/validate_server_gui.py
 ## Current System Status (2025-08-03)
 
 **✅ FULLY OPERATIONAL** - File transfer, registration, and progress reporting working
-**🔧 RECENTLY FIXED**: Critical race condition in progress callbacks resolved with CallbackMultiplexer
+**🔧 RECENTLY FIXED**: Critical directory mismatch in FileReceiptProgressTracker resolved - progress monitoring now shows 100% completion when file arrives on server
 **🆕 NEW FEATURE**: File receipt override system provides ground truth progress completion
+**⚠️ MINOR ISSUE**: Post-completion cleanup errors (non-blocking, system remains functional)
 
 ### Key Achievements
 - **Complete Integration**: Web UI → Flask API → C++ Client → Python Server chain working
@@ -207,10 +208,10 @@ python one_click_build_and_run.py
 
 #### Progress Updates Not Working (RESOLVED 2025-08-03)
 - **Issue**: Web GUI progress ring stays at 0%, no real-time updates (known issue since commit 262d224)
-- **Root Cause**: **CRITICAL RACE CONDITION** - Global singleton backup executor causes concurrent requests to overwrite each other's status callbacks
-- **Fix Applied**: CallbackMultiplexer implemented to route progress callbacks to correct job handlers
-- **Additional Enhancement**: FileReceiptProgressTracker provides ground truth completion signal when file appears on server
-- **Status**: ✅ **RESOLVED** - Progress updates now work correctly with file receipt override as failsafe
+- **Root Cause**: **CRITICAL DIRECTORY MISMATCH** - FileReceiptProgressTracker monitoring `src\server\received_files` while server saves files to project root `received_files`
+- **Fix Applied**: Changed monitoring directory from `src\server\received_files` to `received_files` to match actual server file storage location
+- **Additional Features**: CallbackMultiplexer routes progress callbacks correctly, FileReceiptProgressTracker provides ground truth completion signal
+- **Status**: ✅ **RESOLVED** - Progress monitoring now correctly shows 100% when file arrives on server
 
 #### Build Failures
 - **vcpkg required**: Must use `cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"`
@@ -295,9 +296,18 @@ The **FileReceiptProgressTracker** provides ground truth progress completion by 
 ### How It Works
 
 ```
-File Transfer → File Appears in src/server/received_files/ → FileReceiptProgressTracker detects file → 
+File Transfer → File Appears in received_files/ → FileReceiptProgressTracker detects file → 
 Verifies file stability → Triggers override signal → RobustProgressMonitor forces 100% completion → 
 Web GUI immediately shows "✅ File received on server - Backup complete!"
+```
+
+### Critical Fix (2025-08-03)
+
+**Issue**: FileReceiptProgressTracker was monitoring wrong directory (`src\server\received_files`) while server saves files to project root (`received_files`), causing progress to never reach 100%.
+
+**Solution**: Updated monitoring path to match server's actual file storage location:
+```python
+self.server_received_files = "received_files"  # Server saves files to project root/received_files
 ```
 
 ### Technical Implementation

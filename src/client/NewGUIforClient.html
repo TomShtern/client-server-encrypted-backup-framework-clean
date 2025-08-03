@@ -3968,6 +3968,9 @@
                 if (phase && ['CONNECTING', 'AUTHENTICATING', 'ENCRYPTING', 'TRANSFERRING', 'VERIFYING', 'COMPLETED'].includes(phase)) {
                     this.showPhaseTransitionNotification(phase, this.state.phaseDescription);
                 }
+                
+                // Check for completion and schedule auto-reset
+                this.checkForCompletionAndScheduleReset(phase, progress);
             }
 
             /**
@@ -4081,6 +4084,9 @@
             restartBackup() {
                 debugLog('Manual backup restart requested', 'RESTART');
                 
+                // Cancel any pending auto-reset when user manually restarts
+                this.cancelAutoReset();
+                
                 // Clear error state
                 this.clearErrorState();
                 
@@ -4132,6 +4138,141 @@
                 errorToasts.forEach(toast => {
                     toast.remove();
                 });
+            }
+            /**
+             * Complete application reset to initial state
+             */
+            resetToInitialState() {
+                debugLog('Performing complete application reset', 'RESET');
+                
+                // Clear any pending timeouts/intervals
+                if (this.intervals) {
+                    this.intervals.clear('autoReset');
+                    this.intervals.clear('resetCountdown');
+                }
+                
+                // Reset all state to initial values
+                this.state = {
+                    isConnected: false,
+                    isRunning: false,
+                    isPaused: false,
+                    phase: 'SYSTEM_READY',
+                    progress: 0,
+                    eta: null,
+                    etaSeconds: 0,
+                    message: null,
+                    phaseDescription: null,
+                    selectedFile: null,
+                    jobId: null,
+                    hasError: false,
+                    errorMessage: null,
+                    errorPhase: null,
+                    websocketConnected: false
+                };
+                
+                // Reset phase timing
+                this.phaseStartTime = null;
+                this.backupStartTime = null;
+                this.lastNotificationPhase = null;
+                
+                // Clear file input
+                if (this.elements.fileInput) {
+                    this.elements.fileInput.value = '';
+                }
+                
+                // Clear selected file display
+                if (this.elements.selectedFileDisplay) {
+                    this.elements.selectedFileDisplay.textContent = 'No file selected';
+                    this.elements.selectedFileDisplay.classList.remove('file-info');
+                }
+                
+                // Hide file copy button
+                if (this.elements.copyFileInfoButton) {
+                    this.elements.copyFileInfoButton.classList.add('u-hidden');
+                    this.elements.copyFileInfoButton.classList.remove('u-inline-flex');
+                }
+                
+                // Clear and hide file preview
+                if (this.elements.filePreview) {
+                    this.elements.filePreview.textContent = '';
+                    this.elements.filePreview.innerHTML = '';
+                    this.elements.filePreview.style.display = 'none';
+                    this.elements.filePreview.classList.add('u-hidden');
+                }
+                
+                // Clear progress display
+                if (this.elements.progressPercentage) {
+                    this.elements.progressPercentage.textContent = '0%';
+                }
+                if (this.elements.progressStatus) {
+                    this.elements.progressStatus.textContent = 'READY';
+                }
+                if (this.elements.progressCircle) {
+                    this.elements.progressCircle.style.strokeDashoffset = '';
+                    this.elements.progressCircle.classList.remove('active');
+                }
+                
+                // Clear any file preview blob URLs to prevent memory leaks
+                document.querySelectorAll('img[src^="blob:"]').forEach(img => {
+                    URL.revokeObjectURL(img.src);
+                    img.remove();
+                });
+                
+                // Clear any lingering file-related elements
+                const filePreviewElements = document.querySelectorAll('.file-preview, .file-preview-container, .enhanced-file-preview');
+                filePreviewElements.forEach(element => {
+                    element.style.display = 'none';
+                    element.innerHTML = '';
+                });
+                
+                // Reset button states
+                if (this.buttonStateManager) {
+                    this.buttonStateManager.resetAll();
+                }
+                
+                // Explicitly reset primary action button to initial state
+                if (this.elements.primaryActionButton) {
+                    this.updateButtonContent(this.elements.primaryActionButton, '🚀', 'CONNECT');
+                    this.elements.primaryActionButton.classList.remove('success', 'error', 'loading');
+                    this.elements.primaryActionButton.classList.add('primary');
+                    this.elements.primaryActionButton.disabled = false;
+                }
+                
+                // Clear any success/error toasts
+                this.clearErrorToasts();
+                const successToasts = document.querySelectorAll('.toast.success, .toast.info');
+                successToasts.forEach(toast => {
+                    toast.remove();
+                });
+                
+                // Stop any active polling/monitoring
+                this.stopFileReceiptPolling();
+                if (this.stateManagement) {
+                    this.stateManagement.isProcessingQueue = false;
+                    this.stateManagement.eventQueue = [];
+                }
+                
+                // Clear client ID display if present
+                if (this.elements.clientIdDisplay) {
+                    this.elements.clientIdDisplay.textContent = 'Not connected';
+                }
+                
+                // Reset connection status
+                if (this.elements.connectionLed) {
+                    this.elements.connectionLed.classList.remove('connected', 'connecting');
+                }
+                if (this.elements.connectionText) {
+                    this.elements.connectionText.textContent = 'OFFLINE';
+                }
+                
+                // Force UI update to reflect reset state
+                this.updateAllUI();
+                this.updateTabTitle();
+                
+                // Add log entry
+                this.addLog('System reset', 'info', 'Application reset to initial state - ready for next backup');
+                
+                debugLog('Application reset completed successfully', 'RESET');
             }
 
             /**
@@ -4207,6 +4348,130 @@
                 this.stopFileReceiptPolling();
                 
                 debugLog(`DEFINITIVE SUCCESS: ${filename} received and verified on server`, 'FILE_RECEIPT');
+                
+                // Schedule auto-reset after success (7 seconds delay)
+                this.scheduleAutoReset(7000);
+            }
+
+            /**
+             * Schedule automatic reset after successful completion
+             */
+            scheduleAutoReset(delayMs = 7000) {
+                debugLog(`Scheduling auto-reset in ${delayMs}ms`, 'AUTO_RESET');
+                
+                // Clear any existing reset timers
+                if (this.intervals) {
+                    this.intervals.clear('autoReset');
+                    this.intervals.clear('resetCountdown');
+                }
+                
+                let remainingSeconds = Math.ceil(delayMs / 1000);
+                
+                // Show initial reset notification
+                this.showToast(`🔄 Auto-reset in ${remainingSeconds} seconds...`, 'info', remainingSeconds * 1000 + 500);
+                
+                // Start countdown timer
+                this.intervals.set('resetCountdown', () => {
+                    remainingSeconds--;
+                    
+                    if (remainingSeconds > 0) {
+                        // Update countdown message
+                        this.state.message = `✅ Transfer completed! Auto-reset in ${remainingSeconds}s...`;
+                        this.updateAllUI();
+                        
+                        // Show countdown toast for last 3 seconds
+                        if (remainingSeconds <= 3) {
+                            this.showToast(`🔄 Resetting in ${remainingSeconds}...`, 'info', 1000);
+                        }
+                    } else {
+                        // Clear the countdown interval
+                        this.intervals.clear('resetCountdown');
+                        
+                        // Perform the reset
+                        this.performAutoReset();
+                    }
+                }, 1000);
+                
+                // Set the main reset timer as backup
+                this.intervals.setTimeout('autoReset', () => {
+                    this.performAutoReset();
+                }, delayMs);
+            }
+
+            /**
+             * Perform the actual auto-reset
+             */
+            performAutoReset() {
+                debugLog('Performing scheduled auto-reset', 'AUTO_RESET');
+                
+                // Clear any remaining timers
+                if (this.intervals) {
+                    this.intervals.clear('autoReset');
+                    this.intervals.clear('resetCountdown');
+                }
+                
+                // Show reset notification
+                this.showToast('🔄 Resetting for next backup...', 'info', 2000);
+                
+                // Small delay to show the reset message
+                setTimeout(() => {
+                    this.resetToInitialState();
+                    this.showToast('✨ Ready for next backup!', 'success', 3000);
+                }, 500);
+            }
+
+            /**
+             * Check if backup is completed and schedule auto-reset if needed
+             */
+            checkForCompletionAndScheduleReset(phase, progress) {
+                // Avoid scheduling multiple resets
+                if (this.intervals && (this.intervals.has('autoReset') || this.intervals.has('resetCountdown'))) {
+                    return;
+                }
+                
+                // Check for various completion scenarios
+                const isCompleted = (
+                    // Phase-based completion
+                    (phase === 'COMPLETED') ||
+                    (phase === 'CLEANUP' && progress >= 100) ||
+                    // Progress-based completion (100% in certain phases)
+                    (progress >= 100 && ['VERIFYING', 'COMPLETED', 'CLEANUP', 'SUCCESS'].includes(phase)) ||
+                    // State-based completion
+                    (!this.state.isRunning && this.state.progress >= 100 && ['COMPLETED', 'SUCCESS'].includes(this.state.phase))
+                );
+                
+                if (isCompleted) {
+                    debugLog(`Completion detected: phase=${phase}, progress=${progress}`, 'AUTO_RESET');
+                    
+                    // Add a small delay to let the UI show the completion state
+                    setTimeout(() => {
+                        // Double-check we're still in a completed state
+                        if (this.state.progress >= 100 && !this.state.hasError) {
+                            this.scheduleAutoReset(7000);
+                        }
+                    }, 1000);
+                }
+            }
+
+            /**
+             * Cancel auto-reset (called when user interacts with interface)
+             */
+            cancelAutoReset() {
+                if (this.intervals && (this.intervals.has('autoReset') || this.intervals.has('resetCountdown'))) {
+                    debugLog('Auto-reset cancelled due to user interaction', 'AUTO_RESET');
+                    this.intervals.clear('autoReset');
+                    this.intervals.clear('resetCountdown');
+                    
+                    // Update message to show reset was cancelled
+                    if (this.state.phase === 'COMPLETED' && this.state.message && this.state.message.includes('Auto-reset')) {
+                        this.state.message = this.state.message.replace(/Auto-reset in \d+s\.\.\./, 'Auto-reset cancelled');
+                        this.updateAllUI();
+                    }
+                    
+                    this.showToast('Auto-reset cancelled', 'info', 2000);
+                    return true;
+                }
+                return false;
             }
 
             /**
@@ -5061,6 +5326,9 @@
             async handlePrimaryAction() {
                 console.log('[BUTTON_DEBUG] handlePrimaryAction called!');
                 
+                // Cancel any pending auto-reset when user interacts
+                this.cancelAutoReset();
+                
                 // Prevent multiple simultaneous actions
                 if (this.buttonStateManager.isLoading(this.elements.primaryActionButton)) {
                     console.log('[BUTTON_DEBUG] Button is loading, skipping action');
@@ -5196,6 +5464,9 @@
             }
 
             async togglePause() {
+                // Cancel any pending auto-reset when user interacts
+                this.cancelAutoReset();
+                
                 // Prevent multiple simultaneous actions
                 if (this.buttonStateManager.isLoading(this.elements.pauseButton)) {
                     return;
@@ -5265,6 +5536,9 @@
             }
 
             async stopBackup() {
+                // Cancel any pending auto-reset when user interacts
+                this.cancelAutoReset();
+                
                 // Prevent multiple simultaneous actions
                 if (this.buttonStateManager.isLoading(this.elements.stopButton)) {
                     return;
@@ -5318,6 +5592,9 @@
 
             handleFileSelection(file) {
                 debugLog('File selected:' + file.name, 'FILE_MANAGER');
+                
+                // Cancel any pending auto-reset when user selects a new file
+                this.cancelAutoReset();
                 
                 // Validate the file before accepting it
                 const validation = this.system.fileManager.validateFile(file);

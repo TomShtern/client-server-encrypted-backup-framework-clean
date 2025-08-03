@@ -294,7 +294,10 @@ class TimeBasedEstimator(ProgressTracker):
         print(f"[TIME] Started time-based estimation ({self.estimated_duration:.1f}s estimated)")
     
     def stop_monitoring(self):
-        self.monitoring_active = False
+        """Stop monitoring (idempotent)"""
+        if not hasattr(self, '_stopped') or not self._stopped:
+            self._stopped = True
+            self.monitoring_active = False
     
     def get_progress(self) -> Dict[str, Any]:
         if not self.monitoring_active or not self.start_time:
@@ -329,7 +332,10 @@ class BasicProcessingIndicator(ProgressTracker):
         print(f"[BASIC] Started basic processing indicator")
     
     def stop_monitoring(self):
-        self.monitoring_active = False
+        """Stop monitoring (idempotent)"""
+        if not hasattr(self, '_stopped') or not self._stopped:
+            self._stopped = True
+            self.monitoring_active = False
     
     def get_progress(self) -> Dict[str, Any]:
         if not self.monitoring_active:
@@ -678,21 +684,34 @@ class FileReceiptProgressTracker(ProgressTracker):
             print(f"[RECEIPT] Error confirming file receipt: {e}")
     
     def stop_monitoring(self):
-        """Stop all monitoring"""
-        self.monitoring_active = False
-        
-        if self.stability_timer:
-            self.stability_timer.cancel()
+        """Stop all monitoring (idempotent)"""
+        if not hasattr(self, '_stopped') or not self._stopped:
+            self._stopped = True
+            self.monitoring_active = False
             
-        if self.observer:
-            try:
-                self.observer.stop()
-                self.observer.join(timeout=1.0)
-            except Exception as e:
-                print(f"[RECEIPT] Error stopping observer: {e}")
+            if self.stability_timer:
+                self.stability_timer.cancel()
+                
+            if self.observer:
+                try:
+                    self.observer.stop()
+                    self.observer.join(timeout=2.0)  # Increased timeout
+                    if self.observer.is_alive():
+                        print(f"[RECEIPT] Warning: Observer thread did not stop within timeout")
+                except Exception as e:
+                    print(f"[RECEIPT] Error stopping observer: {e}")
+                finally:
+                    self.observer = None
         
-        if self.monitor_thread:
-            self.monitor_thread.join(timeout=1.0)
+            if self.monitor_thread:
+                try:
+                    self.monitor_thread.join(timeout=2.0)  # Increased timeout
+                    if self.monitor_thread.is_alive():
+                        print(f"[RECEIPT] Warning: Monitor thread did not stop within timeout")
+                except Exception as e:
+                    print(f"[RECEIPT] Error stopping monitor thread: {e}")
+                finally:
+                    self.monitor_thread = None
     
     def get_progress(self) -> Dict[str, Any]:
         if not self.monitoring_active:
@@ -880,13 +899,15 @@ class RobustProgressMonitor:
             })
     
     def stop_monitoring(self):
-        """Stop all monitoring"""
-        self.monitoring_active = False
-        for tracker in self.progress_layers:
-            try:
-                tracker.stop_monitoring()
-            except Exception as e:
-                print(f"[ROBUST] Error stopping tracker: {e}")
+        """Stop all monitoring (idempotent)"""
+        if not hasattr(self, '_stopped') or not self._stopped:
+            self._stopped = True
+            self.monitoring_active = False
+            for tracker in self.progress_layers:
+                try:
+                    tracker.stop_monitoring()
+                except Exception as e:
+                    print(f"[ROBUST] Error stopping tracker: {e}")
     
     def finalize_with_output(self, stdout: str):
         """Finalize progress using complete process output"""
@@ -1060,12 +1081,19 @@ class FileTransferMonitor:
         monitor_thread.start()
         
     def stop_monitoring(self):
-        """Stop monitoring gracefully"""
-        self.monitoring_active = False
-        self._log_status("MONITOR", "Stopped process-based progress monitoring")
+        """Stop monitoring gracefully (idempotent)"""
+        if not hasattr(self, '_stopped') or not self._stopped:
+            self._stopped = True
+            self.monitoring_active = False
+            self._log_status("MONITOR", "Stopped process-based progress monitoring")
     
     def finalize_progress(self, process_success: bool, verification_success: bool):
         """Set final progress based on process and verification results"""
+        if hasattr(self, '_finalized') and self._finalized:
+            self._log_status("MONITOR", "Progress already finalized, skipping")
+            return
+        self._finalized = True
+        
         if verification_success:
             # Transfer completed and verified successfully
             final_progress = {
@@ -2027,15 +2055,9 @@ class RealBackupExecutor:
                     self._log_status("CLIENT_STDERR", stderr_safe)
                 result['error'] = "Process timed out"
                 result['process_exit_code'] = -1
-                
-                # Stop monitoring and finalize progress for timeout case
-                monitor.stop_monitoring()
             
             # Release subprocess reference to allow safe cleanup
             self.file_manager.release_subprocess_use(transfer_file_id)
-            
-            # Stop monitoring gracefully before verification
-            monitor.stop_monitoring()
             
             # Verify actual file transfer
             self._log_status("VERIFY", "Verifying actual file transfer...")
@@ -2046,8 +2068,11 @@ class RealBackupExecutor:
             process_success = result.get('process_exit_code') == 0
             verification_success = verification['transferred']
             
-            # Finalize progress based on combined results
+            # Finalize progress BEFORE stopping monitoring to prevent race conditions
             monitor.finalize_progress(process_success, verification_success)
+            
+            # Stop monitoring after finalization
+            monitor.stop_monitoring()
             
             # Prioritize file transfer verification over process exit code
             if verification['transferred']:
@@ -2070,10 +2095,11 @@ class RealBackupExecutor:
             # Ensure monitoring is stopped and finalized even on exceptions
             try:
                 if 'monitor' in locals():
-                    monitor.stop_monitoring()
+                    # Finalize with failure status first, then stop
                     monitor.finalize_progress(False, False)  # Exception = failed
+                    monitor.stop_monitoring()
             except Exception as monitor_error:
-                self._log_status("WARNING", f"Error stopping monitor: {monitor_error}")
+                self._log_status("WARNING", f"Error during monitor cleanup: {monitor_error}")
         
         finally:
             result['duration'] = time.time() - start_time
