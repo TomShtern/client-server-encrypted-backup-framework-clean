@@ -1,6 +1,9 @@
 {
     "recommendations": [
         "appland.appmap",
-        "sonarsource.sonarlint-vscode"
+        "sonarsource.sonarlint-vscode",
+        "bradlc.vscode-tailwindcss",
+        "ms-mssql.mssql",
+        "redhat.vscode-xml"
     ]
 }

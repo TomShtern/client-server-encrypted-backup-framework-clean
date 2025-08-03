@@ -117,17 +117,20 @@ python scripts/testing/validate_server_gui.py
 ## Architecture Details
 
 ### Core Components
-- **Real Backup Executor** (`src/api/real_backup_executor.py`): Manages C++ client subprocess execution with synchronized file handling
+- **Real Backup Executor** (`src/api/real_backup_executor.py`): Manages C++ client subprocess execution with sophisticated multi-layer progress monitoring
 - **Network Server** (`src/server/network_server.py`): Multi-threaded TCP server handling encrypted file transfers  
 - **Crypto Wrappers** (`src/wrappers/`): RSA/AES encryption abstractions for C++ client
 - **Protocol Implementation**: 23-byte binary headers + encrypted payload with CRC32 verification
 - **Shared Utils** (`src/shared/utils/`): Common utilities including file lifecycle management, error handling, and process monitoring
+- **Progress Monitoring System**: Multi-layer progress tracking with StatisticalProgressTracker, TimeBasedEstimator, BasicProcessingIndicator, and DirectFilePoller
+- **WebSocket Broadcasting**: Real-time progress updates via SocketIO (currently experiencing connectivity issues)
 
 ### Key Integration Points
 - **Subprocess Communication**: Flask API → RealBackupExecutor → C++ client (with `--batch` flag)
 - **File Lifecycle**: SynchronizedFileManager prevents race conditions in file creation/cleanup
+- **Progress Flow**: RealBackupExecutor.status_callback → API server status_handler → WebSocket socketio.emit → Web GUI (currently broken at status_handler level)
 - **Error Propagation**: Status flows back through all 4 layers to web UI
-- **Configuration**: Centralized through `transfer.info` and various JSON configs
+- **Configuration**: Centralized through `transfer.info` and `progress_config.json`
 
 ### Security Considerations
 - **Current Encryption**: RSA-1024 + AES-256-CBC (functional but has known vulnerabilities)
@@ -141,17 +144,18 @@ python scripts/testing/validate_server_gui.py
 4. Monitor ports 9090 and 1256 for conflicts
 5. Check both `build/Release/` and `client/` directories for executables
 
-## Current System Status (2025-08-01)
+## Current System Status (2025-08-03)
 
-**✅ FULLY OPERATIONAL** - All 4 layers working with proven end-to-end file transfers  
-**🔧 RECENTLY FIXED (2025-08-01)**: API server startup issue in one-click script resolved
+**✅ PARTIALLY OPERATIONAL** - File transfer and registration working, progress reporting broken
+**⚠️ KNOWN ISSUE**: Progress reporting to web GUI not functioning (commit 262d224 introduced the issue)
+**🔧 RECENTLY FIXED**: File transfer and API command execution working correctly
 
 ### Key Achievements
 - **Complete Integration**: Web UI → Flask API → C++ Client → Python Server chain working
 - **Socket Communication**: 25-second timeout fixes prevent subprocess termination
 - **Protocol Compliance**: RSA-1024 X.509 format (160-byte) + AES-256-CBC encryption
 - **Windows Compatibility**: Socket TIME_WAIT and Unicode encoding issues resolved
-- **Performance Optimized**: Web GUI enhanced with DOM caching and resource management
+- **Advanced Progress Architecture**: Multi-layer progress monitoring with statistical tracking and WebSocket broadcasting
 
 ### System Capabilities
 1. **Web Interface Upload**: Users can browse to http://127.0.0.1:9090/, select files, register usernames, and upload files
@@ -162,6 +166,7 @@ python scripts/testing/validate_server_gui.py
 6. **Cross-Layer Integration**: All 4 architectural layers working seamlessly
 7. **Windows Console Compatibility**: All Unicode encoding issues resolved for stable operation
 8. **Process Management**: Robust subprocess handling with timeout protection and proper cleanup
+9. **Advanced Progress System**: Multi-layer progress monitoring (StatisticalProgressTracker, TimeBasedEstimator, DirectFilePoller) with WebSocket real-time updates (currently broken)
 
 
 ## Quick Troubleshooting Guide
@@ -197,6 +202,14 @@ python one_click_build_and_run.py
 - **Protocol issues**: Ensure using latest `build/Release/EncryptedBackupClient.exe`
 - **Configuration**: Verify `transfer.info` has exactly 3 lines: `server:port`, `username`, `filepath`
 
+#### Progress Updates Not Working (CURRENT ISSUE)
+- **Issue**: Web GUI progress ring stays at 0%, no real-time updates (known issue since commit 262d224)
+- **Root Cause**: **CRITICAL RACE CONDITION** - Global singleton backup executor causes concurrent requests to overwrite each other's status callbacks
+- **Technical Details**: See "Critical Race Condition Analysis" section below
+- **Current Status**: File transfer works but progress visualization broken
+- **Verification**: File transfer completes successfully, check `src/server/received_files/` for results
+- **Workaround**: Monitor console output and check received_files directory for completion verification
+
 #### Build Failures
 - **vcpkg required**: Must use `cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"`
 - **Missing dependencies**: Run `pip install -r requirements.txt` (flask-cors commonly missing)
@@ -209,6 +222,53 @@ taskkill /f /im EncryptedBackupClient.exe
 del transfer.info
 python one_click_build_and_run.py
 ```
+
+## Critical Race Condition Analysis
+
+### **CRITICAL: Global Singleton Race Condition (Root Cause of Progress Issues)**
+
+**Problem**: The API server uses a global singleton `backup_executor` shared across all concurrent requests, causing progress updates to be routed to the wrong clients.
+
+**Code Location**: `cyberbackup_api_server.py:40`
+```python
+# Global singleton shared across ALL requests - DANGEROUS!
+backup_executor = RealBackupExecutor()
+```
+
+**Race Scenario**:
+1. **Request A** starts backup, sets `backup_executor.set_status_callback(status_handler_A)`
+2. **Request B** starts simultaneously, overwrites with `backup_executor.set_status_callback(status_handler_B)`
+3. **Request A's progress updates** now go to Request B's WebSocket/job_id
+4. **Result**: Progress confusion, lost updates, wrong client notifications
+
+**Impact**:
+- Progress updates go to wrong clients
+- Lost progress updates when callbacks get overwritten
+- WebSocket broadcasting confusion
+- Multi-user backup interference
+- **This explains the current progress reporting failures**
+
+**Solution Required**: Replace global singleton with per-request instances or implement callback multiplexing system
+
+### **MEDIUM: Thread Proliferation in File Monitor**
+
+**Problem**: File receipt monitor creates unlimited monitoring threads (one per received file) without resource limits.
+
+**Code Location**: `src/server/file_receipt_monitor.py:52-58`
+```python
+# One thread per file - no limits!
+stability_thread = threading.Thread(target=self._monitor_file_stability, ...)
+stability_thread.start()
+```
+
+**Solution Required**: Implement thread pool or concurrent file monitoring limits
+
+### **FIXED: File Monitor Thread Safety**
+
+**Status**: ✅ **RESOLVED** - Current implementation has proper locking
+- Uses `threading.Lock()` with consistent `with self.monitoring_lock:` patterns
+- File was completely rewritten in commit `d2dd37b` with thread safety from the start
+- Previous analyses claiming locking issues are outdated
 
 ## Additional Resources
 

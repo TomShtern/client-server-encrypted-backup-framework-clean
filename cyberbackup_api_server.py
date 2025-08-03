@@ -51,6 +51,75 @@ except Exception as e:
 # File receipt monitor will be initialized after SocketIO setup
 file_receipt_monitor = None
 
+
+class CallbackMultiplexer:
+    """
+    Routes progress callbacks to correct job handlers, fixing the race condition
+    where concurrent requests overwrite each other's status callbacks.
+    """
+    
+    def __init__(self):
+        self.handlers = {}  # job_id -> handler_function
+        self.lock = threading.Lock()
+        print("[MULTIPLEXER] CallbackMultiplexer initialized")
+        
+    def register_handler(self, job_id, handler):
+        """Register a handler for a specific job_id"""
+        if not job_id:
+            print(f"[MULTIPLEXER] Warning: Attempted to register handler with empty job_id")
+            return
+            
+        with self.lock:
+            if handler is None:
+                # Remove handler (cleanup case)
+                if job_id in self.handlers:
+                    del self.handlers[job_id]
+                    print(f"[MULTIPLEXER] Removed handler for job {job_id}")
+            else:
+                self.handlers[job_id] = handler
+                print(f"[MULTIPLEXER] Registered handler for job {job_id}")
+    
+    def route_progress(self, phase, data):
+        """Route progress to all active job handlers"""
+        if not phase:
+            print(f"[MULTIPLEXER] Warning: Empty phase received")
+            return
+            
+        with self.lock:
+            active_handlers = []
+            # Collect handlers for active jobs
+            for job_id, handler in list(self.handlers.items()):
+                if job_id in active_backup_jobs and handler is not None:
+                    active_handlers.append((job_id, handler))
+                    
+        # Call all active handlers (outside lock to prevent deadlock)
+        for job_id, handler in active_handlers:
+            try:
+                handler(phase, data)
+            except Exception as e:
+                print(f"[MULTIPLEXER] Error in handler for job {job_id}: {e}")
+                # Continue processing other handlers even if one fails
+        
+        # Cleanup completed jobs
+        if phase in ['COMPLETED', 'FAILED', 'ERROR']:
+            self._cleanup_completed_jobs()
+    
+    def _cleanup_completed_jobs(self):
+        """Remove handlers for completed jobs"""
+        with self.lock:
+            completed = [jid for jid in self.handlers if jid not in active_backup_jobs]
+            for job_id in completed:
+                del self.handlers[job_id]
+                print(f"[MULTIPLEXER] Cleaned up handler for job {job_id}")
+
+
+# Initialize the callback multiplexer and connect it to backup_executor
+callback_multiplexer = CallbackMultiplexer()
+if backup_executor is not None:
+    backup_executor.set_status_callback(callback_multiplexer.route_progress)
+    print("[OK] CallbackMultiplexer initialized and registered with backup executor")
+
+
 def broadcast_file_receipt(event_type: str, data: dict):
     """Broadcast file receipt events to all connected clients"""
     try:
@@ -467,9 +536,9 @@ def api_start_backup():
                     except Exception as e:
                         print(f"[WEBSOCKET] Broadcast failed: {e}")
 
-        # Set the status callback for the backup executor
+        # Register the status handler with the callback multiplexer (fixes race condition)
         if backup_executor is not None:
-            backup_executor.set_status_callback(status_handler)
+            callback_multiplexer.register_handler(job_id, status_handler)
 
         # Update status
         backup_status['backing_up'] = True
@@ -504,6 +573,13 @@ def api_start_backup():
                 print(f"[ERROR] Backup thread error: {str(e)}")
             finally:
                 backup_status['backing_up'] = False
+                
+                # Explicit handler cleanup to prevent memory leaks
+                if 'job_id' in locals() and callback_multiplexer:
+                    with callback_multiplexer.lock:
+                        if job_id in callback_multiplexer.handlers:
+                            del callback_multiplexer.handlers[job_id]
+                            print(f"[CLEANUP] Removed handler for job {job_id}")
                 
                 # Perform cleanup with incremental progress updates
                 def cleanup_with_progress():
