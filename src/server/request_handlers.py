@@ -8,6 +8,7 @@ import uuid
 import os
 import logging
 import re
+import tempfile
 from datetime import datetime
 from typing import Dict, Optional, Any, Callable
 
@@ -259,73 +260,10 @@ class RequestHandler:
             logger.critical(f"Unexpected critical error during reconnect process for client '{client.name}': {e_reconnect}", exc_info=True)
             self._send_response(sock, RESP_RECONNECT_FAIL, client.id)
 
-    def _finalize_file_transfer(self, sock: socket.socket, client: 'Client', filename: str, file_info: dict):
-        temp_path = file_info['path']
-        final_path = os.path.join(self.server.db_manager.storage_dir, filename)
-        original_size = file_info['original_size']
-
-        try:
-            # Decrypt the file in chunks
-            aes = AES.new(client.get_aes_key(), AES.MODE_CBC, iv=b'\x00'*16)
-            crc = 0
-
-            with open(temp_path, 'rb') as f_in, open(final_path, 'wb') as f_out:
-                while True:
-                    encrypted_chunk = f_in.read(1024 * 1024) # 1MB chunks
-                    if not encrypted_chunk:
-                        break
-                    decrypted_chunk = aes.decrypt(encrypted_chunk)
-                    f_out.write(decrypted_chunk)
-                    crc = self.server._calculate_crc(decrypted_chunk, crc)
-
-            # Finalize CRC calculation
-            final_crc = self.server._finalize_crc(crc, original_size)
-
-            # Send CRC to client
-            response_payload = client.id + struct.pack('<I', final_crc) + filename.encode('utf-8').ljust(255, b'\0')
-            self.server._send_response(sock, RESP_FILE_CRC, response_payload)
-
-        except Exception as e:
-            logger.error(f"Error finalizing file transfer for {filename}: {e}")
-            self.server._send_response(sock, RESP_GENERIC_SERVER_ERROR)
-        finally:
-            # Clean up the temporary file
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+    
 
     def _handle_send_file(self, sock: socket.socket, client: 'Client', payload: bytes):
-        # Parse file metadata from payload
-        encrypted_size, original_size, packet_num, total_packets = struct.unpack('<IIHH', payload[:12])
-        filename = self.server._parse_string_from_payload(payload[12:], MAX_FILENAME_FIELD_SIZE, MAX_ACTUAL_FILENAME_LENGTH, 'Filename')
-        encrypted_data = payload[12 + MAX_FILENAME_FIELD_SIZE:]
-
-        with client.lock:
-            # If this is the first packet, set up the temporary file
-            if packet_num == 1:
-                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.encrypted.tmp', dir=self.server.db_manager.storage_dir)
-                client.partial_files[filename] = {
-                    'path': temp_file.name,
-                    'total_packets': total_packets,
-                    'received_packets': 0,
-                    'original_size': original_size,
-                    'timestamp': time.monotonic()
-                }
-            
-            # Get the temporary file path
-            file_info = client.partial_files.get(filename)
-            if not file_info:
-                raise ProtocolError(f"Received packet for unknown file transfer: {filename}")
-
-            # Write the encrypted chunk to the temporary file
-            with open(file_info['path'], 'ab') as f:
-                f.write(encrypted_data)
-
-            file_info['received_packets'] += 1
-
-            # If all packets have been received, finalize the transfer
-            if file_info['received_packets'] == file_info['total_packets']:
-                self._finalize_file_transfer(sock, client, filename, file_info)
-                client.clear_partial_file(filename)
+        self.file_transfer_manager.handle_send_file(sock, client, payload)
 
     def _handle_crc_ok(self, sock: socket.socket, client: Any, payload: bytes):
         """

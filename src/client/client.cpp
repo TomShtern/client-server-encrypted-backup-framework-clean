@@ -98,30 +98,6 @@ private:
     uint32_t crc;
 };
 
-class CRC32Stream {
-public:
-    CRC32Stream() : crc(0) {}
-
-    void update(const uint8_t* data, size_t size) {
-        for (size_t i = 0; i < size; i++) {
-            crc = (crc << 8) ^ crc_table[(crc >> 24) ^ data[i]];
-        }
-    }
-
-    uint32_t finalize(size_t total_size) {
-        uint32_t final_crc = crc;
-        size_t length = total_size;
-        while (length > 0) {
-            final_crc = (final_crc << 8) ^ crc_table[(final_crc >> 24) ^ (length & 0xFF)];
-            length >>= 8;
-        }
-        return ~final_crc;
-    }
-
-private:
-    uint32_t crc;
-};
-
 // Implementation of TransferStats methods
 TransferStats::TransferStats() : totalBytes(0), transferredBytes(0), lastTransferredBytes(0),
                   currentSpeed(0.0), averageSpeed(0.0), estimatedTimeRemaining(0) {}

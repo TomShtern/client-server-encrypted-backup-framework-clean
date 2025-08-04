@@ -1477,7 +1477,7 @@ class RealBackupExecutor:
         # Convert to absolute path to ensure client finds the correct file
         absolute_file_path = os.path.abspath(file_path)
         
-        content = f"{server_ip}:{server_port}\n{username}\n{file_path}\n"
+        content = f"{server_ip}:{server_port}\n{username}\n{absolute_file_path}"
         self._log_status("CONFIG", f"transfer.info content:\n---\n{content}---")
         self._log_status("CONFIG", "Configuration generated - ready for transfer")
         
@@ -1969,7 +1969,7 @@ class RealBackupExecutor:
 
             # Register process with enhanced monitoring system
             process_id = f"backup_client_{int(time.time())}"
-            command = [self.client_exe, "--batch"]  # Use batch mode to disable web GUI and prevent port conflicts
+            command = [str(self.client_exe), "--batch"]  # Use batch mode to disable web GUI and prevent port conflicts
 
             registry = get_process_registry()
             process_info = register_process(
@@ -1986,9 +1986,7 @@ class RealBackupExecutor:
                                stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE,
-                               text=True,
-                               encoding='utf-8',
-                               errors='ignore'):
+                               text=False):
                 raise RuntimeError(f"Failed to start backup process {process_id}")
 
             # Get the subprocess handle for compatibility

@@ -459,63 +459,63 @@ def api_start_backup():
                         active_backup_jobs[job_id]['phase'] = 'VERIFICATION_FAILED'
                         active_backup_jobs[job_id]['message'] = f'CRITICAL: {reason}'
 
-            # --- Register with File Receipt Monitor ---
-            monitor = get_file_receipt_monitor()
-            if monitor:
-                monitor.register_job(
-                    filename=filename_for_thread,
-                    job_id=job_id,
-                    expected_size=expected_size,
-                    expected_hash=expected_hash,
-                    completion_callback=on_completion,
-                    failure_callback=on_failure
+                # --- Register with File Receipt Monitor ---
+                monitor = get_file_receipt_monitor()
+                if monitor:
+                    monitor.register_job(
+                        filename=filename_for_thread,
+                        job_id=job_id,
+                        expected_size=expected_size,
+                        expected_hash=expected_hash,
+                        completion_callback=on_completion,
+                        failure_callback=on_failure
+                    )
+                else:
+                    logger.warning(f"[Job {job_id}] File receipt monitor not available. Verification will be skipped.")
+
+                result = executor.execute_real_backup(
+                    username=username,
+                    file_path=temp_file_path_for_thread,
+                    server_ip=server_ip,
+                    server_port=int(server_port)
                 )
-            else:
-                logger.warning(f"[Job {job_id}] File receipt monitor not available. Verification will be skipped.")
 
-            result = executor.execute_real_backup(
-                username=username,
-                file_path=temp_file_path_for_thread,
-                server_ip=server_ip,
-                server_port=int(server_port)
-            )
+                if result and result.get('success'):
+                    update_backup_status('COMPLETED', 'Backup completed successfully!', 100)
+                else:
+                    error_msg = result.get('error', 'Unknown error') if result else 'Backup executor returned None'
+                    update_backup_status('FAILED', f'Backup failed: {error_msg}')
 
-            if result and result.get('success'):
-                update_backup_status('COMPLETED', 'Backup completed successfully!', 100)
-            else:
-                error_msg = result.get('error', 'Unknown error') if result else 'Backup executor returned None'
-                update_backup_status('FAILED', f'Backup failed: {error_msg}')
+            except Exception as e:
+                update_backup_status('FAILED', f'Backup error: {str(e)}')
+                print(f"[ERROR] Backup thread error: {str(e)}")
+            finally:
+                backup_status['backing_up'] = False
+                
+                # Cleanup the temporary file and directory
+                if os.path.exists(temp_file_path_for_thread):
+                    os.remove(temp_file_path_for_thread)
+                if os.path.exists(temp_dir_for_thread):
+                    os.rmdir(temp_dir_for_thread)
+                print(f"[DEBUG] Cleanup successful for: {temp_file_path_for_thread}")
 
-        except Exception as e:
-            update_backup_status('FAILED', f'Backup error: {str(e)}')
-            print(f"[ERROR] Backup thread error: {str(e)}")
-        finally:
-            backup_status['backing_up'] = False
-            
-            # Cleanup the temporary file and directory
-            if os.path.exists(temp_file_path_for_thread):
-                os.remove(temp_file_path_for_thread)
-            if os.path.exists(temp_dir_for_thread):
-                os.rmdir(temp_dir_for_thread)
-            print(f"[DEBUG] Cleanup successful for: {temp_file_path_for_thread}")
+                time.sleep(1.0)
+                backup_status = get_default_status()
+                backup_status['connected'] = True
+                update_backup_status('READY', 'Ready for new backup.')
 
-            time.sleep(1.0)
-            backup_status = get_default_status()
-            backup_status['connected'] = True
-            update_backup_status('READY', 'Ready for new backup.')
+        # Start backup thread, passing the new executor instance
+        backup_thread = threading.Thread(target=run_backup, args=(backup_executor, temp_file_path, filename, temp_dir))
+        backup_thread.daemon = True
+        backup_thread.start()
 
-    # Start backup thread, passing the new executor instance
-    backup_thread = threading.Thread(target=run_backup, args=(backup_executor, temp_file_path, filename, temp_dir))
-    backup_thread.daemon = True
-    backup_thread.start()
-
-    return jsonify({
-        'success': True,
-        'message': f'Backup started for {filename}',
-        'filename': filename,
-        'username': username,
-        'job_id': job_id  # Include job_id in response for client tracking
-    })
+        return jsonify({
+            'success': True,
+            'message': f'Backup started for {filename}',
+            'filename': filename,
+            'username': username,
+            'job_id': job_id  # Include job_id in response for client tracking
+        })
 
     except Exception as e:
         backup_status['backing_up'] = False
@@ -637,7 +637,7 @@ if __name__ == "__main__":
     
     # Initialize file receipt monitoring
     try:
-        received_files_dir = os.path.join("src", "server", "received_files")  # Windows-compatible path
+        received_files_dir = "received_files"  # Match server's actual file storage location
         file_receipt_monitor = initialize_file_receipt_monitor(received_files_dir, broadcast_file_receipt)
         print(f"[OK] File Receipt Monitor: Watching {received_files_dir}")
     except Exception as e:

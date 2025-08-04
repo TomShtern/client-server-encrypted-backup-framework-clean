@@ -214,7 +214,7 @@ private:
     bool transferFile();
     bool sendFilePacket(const std::string& filename, const std::string& encryptedData,
                        uint32_t originalSize, uint16_t packetNum, uint16_t totalPackets);
-    bool verifyCRC(uint32_t serverCRC, const std::vector<uint8_t>& originalData, const std::string& filename);
+    bool verifyCRC(uint32_t serverCRC, uint32_t clientCRC, const std::string& filename);
 
     // Crypto operations
     bool generateRSAKeys();
