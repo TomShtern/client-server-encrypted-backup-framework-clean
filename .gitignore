@@ -152,6 +152,10 @@ config.local.json
 config.dev.json
 *.config.local.*
 
+# MCP and tool configurations with secrets
+.mcp.json
+.gemini/settings.json
+
 # Local IDE and tool settings
 .claude/
 .specstory/local/
