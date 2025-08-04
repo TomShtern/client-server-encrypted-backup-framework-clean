@@ -45,85 +45,7 @@ active_backup_jobs = {}
 connected_clients = set()
 websocket_enabled = True  # Control WebSocket functionality
 
-# Initialize the real backup executor
-try:
-    backup_executor = RealBackupExecutor()
-    print("[OK] RealBackupExecutor initialized successfully.")
-except Exception as e:
-    print(f"[CRITICAL] Failed to initialize RealBackupExecutor: {e}")
-    # Optionally, exit or disable backup functionality
-    backup_executor = None
 
-# File receipt monitor will be initialized after SocketIO setup
-file_receipt_monitor = None
-
-
-class CallbackMultiplexer:
-    """
-    Routes progress callbacks to correct job handlers, fixing the race condition
-    where concurrent requests overwrite each other's status callbacks.
-    """
-    
-    def __init__(self):
-        self.handlers = {}  # job_id -> handler_function
-        self.lock = threading.Lock()
-        print("[MULTIPLEXER] CallbackMultiplexer initialized")
-        
-    def register_handler(self, job_id, handler):
-        """Register a handler for a specific job_id"""
-        if not job_id:
-            print(f"[MULTIPLEXER] Warning: Attempted to register handler with empty job_id")
-            return
-            
-        with self.lock:
-            if handler is None:
-                # Remove handler (cleanup case)
-                if job_id in self.handlers:
-                    del self.handlers[job_id]
-                    print(f"[MULTIPLEXER] Removed handler for job {job_id}")
-            else:
-                self.handlers[job_id] = handler
-                print(f"[MULTIPLEXER] Registered handler for job {job_id}")
-    
-    def route_progress(self, phase, data):
-        """Route progress to all active job handlers"""
-        if not phase:
-            print(f"[MULTIPLEXER] Warning: Empty phase received")
-            return
-            
-        with self.lock:
-            active_handlers = []
-            # Collect handlers for active jobs
-            for job_id, handler in list(self.handlers.items()):
-                if job_id in active_backup_jobs and handler is not None:
-                    active_handlers.append((job_id, handler))
-                    
-        # Call all active handlers (outside lock to prevent deadlock)
-        for job_id, handler in active_handlers:
-            try:
-                handler(phase, data)
-            except Exception as e:
-                print(f"[MULTIPLEXER] Error in handler for job {job_id}: {e}")
-                # Continue processing other handlers even if one fails
-        
-        # Cleanup completed jobs
-        if phase in ['COMPLETED', 'FAILED', 'ERROR']:
-            self._cleanup_completed_jobs()
-    
-    def _cleanup_completed_jobs(self):
-        """Remove handlers for completed jobs"""
-        with self.lock:
-            completed = [jid for jid in self.handlers if jid not in active_backup_jobs]
-            for job_id in completed:
-                del self.handlers[job_id]
-                print(f"[MULTIPLEXER] Cleaned up handler for job {job_id}")
-
-
-# Initialize the callback multiplexer and connect it to backup_executor
-callback_multiplexer = CallbackMultiplexer()
-if backup_executor is not None:
-    backup_executor.set_status_callback(callback_multiplexer.route_progress)
-    print("[OK] CallbackMultiplexer initialized and registered with backup executor")
 
 
 def broadcast_file_receipt(event_type: str, data: dict):
@@ -423,84 +345,74 @@ def api_start_backup():
     """Start backup using REAL backup executor"""
     global backup_status
     
-    # Check if backup executor is available
-    if backup_executor is None:
+    # Generate unique job ID for this backup operation
+    job_id = str(uuid.uuid4())
+    
+    # Initialize job tracking
+    active_backup_jobs[job_id] = {
+        'phase': 'INITIALIZING',
+        'message': 'Initializing backup job...',
+        'progress': {'percentage': 0, 'current_file': '', 'bytes_transferred': 0, 'total_bytes': 0},
+        'status': 'initializing',
+        'events': [],
+        'connected': True,
+        'backing_up': True,
+        'last_updated': datetime.now().isoformat()
+    }
+    
+    # Create a new, dedicated backup executor for this specific job.
+    # This is the core of the fix for the race condition.
+    try:
+        backup_executor = RealBackupExecutor()
+        print(f"[Job {job_id}] RealBackupExecutor instance created.")
+    except Exception as e:
         return jsonify({
             'success': False, 
-            'error': 'Backup executor not available. Please restart the API server.'
+            'error': f'Failed to initialize backup executor: {e}'
         }), 500
-    
-    job_id = str(uuid.uuid4())
-    active_backup_jobs[job_id] = get_default_status()
-    active_backup_jobs[job_id]['backing_up'] = True
 
-    # Initialize status handler as a no-op function instead of None
-    def status_handler(phase, data):
-        pass  # Will be redefined after we have the filename
+    # Get uploaded file
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file uploaded'}), 400
 
-
-    print(f"[DEBUG] /api/start_backup endpoint called")
-    print(f"[DEBUG] Request method: {request.method}")
-    print(f"[DEBUG] Request files: {list(request.files.keys())}")
-    print(f"[DEBUG] Request form: {dict(request.form)}")
-    print(f"[DEBUG] Content-Type: {request.content_type}")
-    print(f"[DEBUG] Request headers: {dict(request.headers)}")
-    print(f"[DEBUG] Current working directory: {os.getcwd()}")
-    print(f"[DEBUG] Client executable path: {backup_executor.client_exe}")
-    print(f"[DEBUG] Client executable exists: {os.path.exists(backup_executor.client_exe) if backup_executor.client_exe else 'N/A'}")
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No file selected'}), 400
 
     try:
-        # Check if already backing up
-        if backup_status['backing_up']:
-            return jsonify({'success': False, 'error': 'Backup already in progress'}), 400
-
-        # Get uploaded file
-        if 'file' not in request.files:
-            return jsonify({'success': False, 'error': 'No file uploaded'}), 400
-
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'success': False, 'error': 'No file selected'}), 400
-
-        # --- CORRECTED LOGIC ---
-        # Define filename in the main thread's scope
+        # --- STREAMING LOGIC ---
+        # Save the uploaded file directly to a temporary file on disk
+        # to avoid loading it into memory. This is the key to handling large files.
+        temp_dir = tempfile.mkdtemp()
         filename = file.filename or f"backup_file_{int(time.time())}"
-        # Read file data to be passed to the background thread
-        file_data = file.read()
-        # --- END CORRECTED LOGC ---
+        temp_file_path = os.path.join(temp_dir, filename)
+        file.save(temp_file_path)
+        # --- END STREAMING LOGIC ---
 
         # Get form data
         username = request.form.get('username', server_config.get('username', 'default_user'))
         server_ip = request.form.get('server', server_config.get('host', '127.0.0.1'))
         server_port = request.form.get('port', server_config.get('port', 1256))
 
-        # Define status handler now that we have the filename
+        # Define a dedicated status handler for this job
         def status_handler(phase, data):
             if job_id in active_backup_jobs:
                 active_backup_jobs[job_id]['events'].append({'phase': phase, 'data': data})
                 active_backup_jobs[job_id]['phase'] = phase
                 
-                # Debug logging for API server progress handling
-                if isinstance(data, dict) and 'progress' in data:
-                    print(f"[API_DEBUG] Received progress update: {phase} - {data['progress']:.1f}% - {data.get('message', 'No message')}")
-                
-                # Update both job-specific and global backup status
                 if isinstance(data, dict):
                     message = data.get('message', phase)
                     active_backup_jobs[job_id]['message'] = message
                     if 'progress' in data:
                         progress_value = data['progress']
                         active_backup_jobs[job_id]['progress']['percentage'] = progress_value
-                        # Also update global backup status for unified API
                         update_backup_status(phase, message, progress_value)
-                        print(f"[API_DEBUG] Updated job progress to {progress_value:.1f}%")
                     else:
                         update_backup_status(phase, message)
                 else:
                     active_backup_jobs[job_id]['message'] = data
                     update_backup_status(phase, data)
                 
-                # Real-time WebSocket broadcasting
                 if websocket_enabled and connected_clients:
                     try:
                         socketio.emit('progress_update', {
@@ -510,13 +422,11 @@ def api_start_backup():
                             'timestamp': time.time(),
                             'progress': active_backup_jobs[job_id]['progress']['percentage'] if isinstance(data, dict) and 'progress' in data else None
                         })
-                        print(f"[WEBSOCKET] Broadcasted progress update: {phase}")
                     except Exception as e:
                         print(f"[WEBSOCKET] Broadcast failed: {e}")
 
-        # Register the status handler with the callback multiplexer (fixes race condition)
-        if backup_executor is not None:
-            callback_multiplexer.register_handler(job_id, status_handler)
+        # Set the callback for this specific executor instance
+        backup_executor.set_status_callback(status_handler)
 
         # Update status
         backup_status['backing_up'] = True
@@ -525,100 +435,87 @@ def api_start_backup():
         update_backup_status('BACKUP_IN_PROGRESS', f'Starting backup of {filename}...')
 
         # Start backup in background thread
-        def run_backup(file_data_for_thread, filename_for_thread):
-            global backup_status  # Add this line
-            temp_dir = tempfile.mkdtemp()
-            file_path = os.path.join(temp_dir, filename_for_thread)
-            with open(file_path, 'wb') as f:
-                f.write(file_data_for_thread)
+        def run_backup(executor, temp_file_path_for_thread, filename_for_thread, temp_dir_for_thread):
+            global backup_status
 
             try:
-                # --- NEW: Multi-Factor Verification Setup ---
-                expected_size = os.path.getsize(file_path)
-                with open(file_path, 'rb') as f:
+                # --- Verification Setup ---
+                expected_size = os.path.getsize(temp_file_path_for_thread)
+                with open(temp_file_path_for_thread, 'rb') as f:
                     expected_hash = hashlib.sha256(f.read()).hexdigest()
                 logger.info(f"[Job {job_id}] Calculated verification data: Size={expected_size}, Hash={expected_hash[:8]}...")
 
-                # --- NEW: Define completion and failure callbacks for this job ---
+                # --- Completion/Failure Callbacks ---
                 def on_completion():
                     logger.info(f"[Job {job_id}] Received VERIFIED COMPLETION signal for '{filename_for_thread}'. Forcing 100%.")
-                    if job_id in active_backup_jobs and backup_executor:
+                    if job_id in active_backup_jobs:
                         active_backup_jobs[job_id]['phase'] = 'COMPLETED_VERIFIED'
                         active_backup_jobs[job_id]['message'] = 'Backup complete and cryptographically verified.'
                         active_backup_jobs[job_id]['progress']['percentage'] = 100
 
                 def on_failure(reason: str):
                     logger.error(f"[Job {job_id}] Received VERIFICATION FAILED signal for '{filename_for_thread}': {reason}")
-                    if job_id in active_backup_jobs and backup_executor:
+                    if job_id in active_backup_jobs:
                         active_backup_jobs[job_id]['phase'] = 'VERIFICATION_FAILED'
                         active_backup_jobs[job_id]['message'] = f'CRITICAL: {reason}'
-                        active_backup_jobs[job_id]['progress']['percentage'] = 0
 
-                # --- NEW: Register the job with the file receipt monitor ---
-                monitor = get_file_receipt_monitor()
-                if monitor:
-                    monitor.register_job(
-                        filename=filename_for_thread,
-                        job_id=job_id,
-                        expected_size=expected_size,
-                        expected_hash=expected_hash,
-                        completion_callback=on_completion,
-                        failure_callback=on_failure
-                    )
-                else:
-                    logger.warning(f"[Job {job_id}] File receipt monitor not available. Verification will be skipped.")
-
-                print(f"[DEBUG] Starting real backup executor...")
-                if backup_executor is None:
-                    update_backup_status('FAILED', 'Backup executor not available')
-                    return
-                    
-                result = backup_executor.execute_real_backup(
-                    username=username,
-                    file_path=file_path,
-                    server_ip=server_ip,
-                    server_port=int(server_port)
+            # --- Register with File Receipt Monitor ---
+            monitor = get_file_receipt_monitor()
+            if monitor:
+                monitor.register_job(
+                    filename=filename_for_thread,
+                    job_id=job_id,
+                    expected_size=expected_size,
+                    expected_hash=expected_hash,
+                    completion_callback=on_completion,
+                    failure_callback=on_failure
                 )
+            else:
+                logger.warning(f"[Job {job_id}] File receipt monitor not available. Verification will be skipped.")
 
-                if result and result.get('success'):
-                    update_backup_status('COMPLETED', 'Backup completed successfully!', 100)
-                else:
-                    error_msg = result.get('error', 'Unknown error') if result else 'Backup executor returned None'
-                    update_backup_status('FAILED', f'Backup failed: {error_msg}')
+            result = executor.execute_real_backup(
+                username=username,
+                file_path=temp_file_path_for_thread,
+                server_ip=server_ip,
+                server_port=int(server_port)
+            )
 
-            except Exception as e:
-                update_backup_status('FAILED', f'Backup error: {str(e)}')
-                print(f"[ERROR] Backup thread error: {str(e)}")
-            finally:
-                backup_status['backing_up'] = False
-                if 'job_id' in locals() and callback_multiplexer:
-                    with callback_multiplexer.lock:
-                        if job_id in callback_multiplexer.handlers:
-                            del callback_multiplexer.handlers[job_id]
-                            print(f"[CLEANUP] Removed handler for job {job_id}")
-                
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                if os.path.exists(temp_dir):
-                    os.rmdir(temp_dir)
-                print(f"[DEBUG] Cleanup successful for: {file_path}")
+            if result and result.get('success'):
+                update_backup_status('COMPLETED', 'Backup completed successfully!', 100)
+            else:
+                error_msg = result.get('error', 'Unknown error') if result else 'Backup executor returned None'
+                update_backup_status('FAILED', f'Backup failed: {error_msg}')
 
-                time.sleep(1.0)
-                backup_status = get_default_status()
-                backup_status['connected'] = True
-                update_backup_status('READY', 'Ready for new backup.')
+        except Exception as e:
+            update_backup_status('FAILED', f'Backup error: {str(e)}')
+            print(f"[ERROR] Backup thread error: {str(e)}")
+        finally:
+            backup_status['backing_up'] = False
+            
+            # Cleanup the temporary file and directory
+            if os.path.exists(temp_file_path_for_thread):
+                os.remove(temp_file_path_for_thread)
+            if os.path.exists(temp_dir_for_thread):
+                os.rmdir(temp_dir_for_thread)
+            print(f"[DEBUG] Cleanup successful for: {temp_file_path_for_thread}")
 
-        # Start backup thread
-        backup_thread = threading.Thread(target=run_backup, args=(file_data, filename))
-        backup_thread.daemon = True
-        backup_thread.start()
+            time.sleep(1.0)
+            backup_status = get_default_status()
+            backup_status['connected'] = True
+            update_backup_status('READY', 'Ready for new backup.')
 
-        return jsonify({
-            'success': True,
-            'message': f'Backup started for {filename}',
-            'filename': filename,
-            'username': username
-        })
+    # Start backup thread, passing the new executor instance
+    backup_thread = threading.Thread(target=run_backup, args=(backup_executor, temp_file_path, filename, temp_dir))
+    backup_thread.daemon = True
+    backup_thread.start()
+
+    return jsonify({
+        'success': True,
+        'message': f'Backup started for {filename}',
+        'filename': filename,
+        'username': username,
+        'job_id': job_id  # Include job_id in response for client tracking
+    })
 
     except Exception as e:
         backup_status['backing_up'] = False

@@ -32,6 +32,10 @@ from .network_server import NetworkServer
 # GUI Integration
 from .gui_integration import GUIManager
 
+import tempfile
+
+import tempfile
+
 # --- Server Configuration Constants ---
 SERVER_VERSION = 3
 DEFAULT_PORT = 1256
@@ -237,6 +241,30 @@ class BackupServer:
         0x89b8fd09, 0x8d79e0be, 0x803ac667, 0x84fbdbd0, 0x9abc8bd5, 0x9e7d9662, 0x933eb0bb, 0x97ffad0c,
         0xafb010b1, 0xab710d06, 0xa6322bdf, 0xa2f33668, 0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4
     )
+
+    def _calculate_crc(self, data: bytes, crc: int = 0) -> int:
+        for byte in data:
+            crc = (crc << 8) ^ self._CRC32_TABLE[(crc >> 24) ^ byte]
+        return crc
+
+    def _finalize_crc(self, crc: int, total_size: int) -> int:
+        length = total_size
+        while length > 0:
+            crc = (crc << 8) ^ self._CRC32_TABLE[(crc >> 24) ^ (length & 0xFF)]
+            length >>= 8
+        return ~crc & 0xFFFFFFFF
+
+    def _calculate_crc(self, data: bytes, crc: int = 0) -> int:
+        for byte in data:
+            crc = (crc << 8) ^ self._CRC32_TABLE[(crc >> 24) ^ byte]
+        return crc
+
+    def _finalize_crc(self, crc: int, total_size: int) -> int:
+        length = total_size
+        while length > 0:
+            crc = (crc << 8) ^ self._CRC32_TABLE[(crc >> 24) ^ (length & 0xFF)]
+            length >>= 8
+        return ~crc & 0xFFFFFFFF
 
     def __init__(self):
         """Initializes the BackupServer instance."""

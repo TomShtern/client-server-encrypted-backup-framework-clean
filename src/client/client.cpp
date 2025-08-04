@@ -74,6 +74,54 @@ static const uint32_t crc_table[256] = {
     0xBCB4666D, 0xB8757BDA, 0xB5365D03, 0xB1F740B4
 };
 
+class CRC32Stream {
+public:
+    CRC32Stream() : crc(0) {}
+
+    void update(const uint8_t* data, size_t size) {
+        for (size_t i = 0; i < size; i++) {
+            crc = (crc << 8) ^ crc_table[(crc >> 24) ^ data[i]];
+        }
+    }
+
+    uint32_t finalize(size_t total_size) {
+        uint32_t final_crc = crc;
+        size_t length = total_size;
+        while (length > 0) {
+            final_crc = (final_crc << 8) ^ crc_table[(final_crc >> 24) ^ (length & 0xFF)];
+            length >>= 8;
+        }
+        return ~final_crc;
+    }
+
+private:
+    uint32_t crc;
+};
+
+class CRC32Stream {
+public:
+    CRC32Stream() : crc(0) {}
+
+    void update(const uint8_t* data, size_t size) {
+        for (size_t i = 0; i < size; i++) {
+            crc = (crc << 8) ^ crc_table[(crc >> 24) ^ data[i]];
+        }
+    }
+
+    uint32_t finalize(size_t total_size) {
+        uint32_t final_crc = crc;
+        size_t length = total_size;
+        while (length > 0) {
+            final_crc = (final_crc << 8) ^ crc_table[(final_crc >> 24) ^ (length & 0xFF)];
+            length >>= 8;
+        }
+        return ~final_crc;
+    }
+
+private:
+    uint32_t crc;
+};
+
 // Implementation of TransferStats methods
 TransferStats::TransferStats() : totalBytes(0), transferredBytes(0), lastTransferredBytes(0),
                   currentSpeed(0.0), averageSpeed(0.0), estimatedTimeRemaining(0) {}
@@ -1046,89 +1094,102 @@ bool Client::sendPublicKey() {
     return true;
 }
 
-// Transfer file
+// Transfer file using a streaming approach
 bool Client::transferFile() {
-    // Read file
-    displayStatus("Reading file", true, filepath);
-    auto fileData = readFile(filepath);
-    if (fileData.empty()) {
-        // readFile() already logged the specific error, so we can provide more context
-        displayError("File transfer aborted due to file read failure", ErrorType::FILE_IO);
+    // Open the file for reading in binary mode
+    std::ifstream fileStream(filepath, std::ios::binary);
+    if (!fileStream.is_open()) {
+        displayError("File transfer aborted: could not open file " + filepath, ErrorType::FILE_IO);
         return false;
     }
-    
-    stats.totalBytes = fileData.size();
+
+    // Get file size for progress tracking
+    fileStream.seekg(0, std::ios::end);
+    size_t fileSize = fileStream.tellg();
+    fileStream.seekg(0, std::ios::beg);
+    stats.totalBytes = fileSize;
     stats.reset();
-    
+
     // Extract filename
     std::string filename = filepath;
-    size_t lastSlash = filename.find_last_of("/\\");
+    size_t lastSlash = filename.find_last_of("/\\\\");
     if (lastSlash != std::string::npos) {
         filename = filename.substr(lastSlash + 1);
     }
-    
+
     displayStatus("File details", true, "Name: " + filename + ", Size: " + formatBytes(stats.totalBytes));
-    displayStatus("Encrypting file", true, "AES-256-CBC encryption");
-    
-    // Encrypt file
-    std::string encryptedData = encryptFile(fileData);
-    if (encryptedData.empty()) {
-        return false;
-    }
-    
-    displayStatus("Encryption complete", true, "Encrypted size: " + formatBytes(encryptedData.size()));
-    
-    // Calculate packets
-    size_t encryptedSize = encryptedData.size();
-    uint16_t totalPackets = static_cast<uint16_t>((encryptedSize + MAX_PACKET_SIZE - 1) / MAX_PACKET_SIZE);
-    
+    displayStatus("Encrypting file", true, "AES-256-CBC encryption (streaming)");
+
+    // Initialize streaming CRC and AES encryption
+    CRC32Stream crcStream;
+    AESWrapper aes(reinterpret_cast<const unsigned char*>(aesKey.c_str()), AES_KEY_SIZE, true);
+
+    // Calculate total packets needed
+    size_t totalPackets = (fileSize + OPTIMAL_BUFFER_SIZE - 1) / OPTIMAL_BUFFER_SIZE;
     displayStatus("Transfer preparation", true, "Splitting into " + std::to_string(totalPackets) + " packets");
     log_phase_with_timestamp("TRANSFERRING");
     displaySeparator();
-    
-    // Send packets
-    for (uint16_t packet = 1; packet <= totalPackets; packet++) {
-        size_t offset = (packet - 1) * MAX_PACKET_SIZE;
-        size_t chunkSize = std::min(MAX_PACKET_SIZE, encryptedSize - offset);
-        
-        std::string chunk = encryptedData.substr(offset, chunkSize);
-        
-        if (!sendFilePacket(filename, chunk, static_cast<uint32_t>(fileData.size()), packet, totalPackets)) {
-            return false;
-        }
-        
-        stats.update(offset + chunkSize);
-        displayProgress("Transferring", stats.transferredBytes, encryptedData.size());
-        
-        if (packet % 10 == 0 || packet == totalPackets) {
-            displayTransferStats();
+
+    std::vector<uint8_t> buffer(OPTIMAL_BUFFER_SIZE);
+    uint16_t packetNum = 1;
+    size_t bytesTransferred = 0;
+
+    while (fileStream) {
+        fileStream.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+        size_t bytesRead = fileStream.gcount();
+
+        if (bytesRead > 0) {
+            // Update CRC with the raw chunk
+            crcStream.update(buffer.data(), bytesRead);
+
+            // Encrypt the chunk
+            std::string encryptedChunk = aes.encrypt(reinterpret_cast<const char*>(buffer.data()), bytesRead);
+            
+            // Send the encrypted chunk as a packet
+            if (!sendFilePacket(filename, encryptedChunk, static_cast<uint32_t>(fileSize), packetNum, static_cast<uint16_t>(totalPackets))) {
+                return false;
+            }
+
+            bytesTransferred += bytesRead;
+            stats.update(bytesTransferred);
+            displayProgress("Transferring", stats.transferredBytes, stats.totalBytes);
+
+            if (packetNum % 10 == 0 || packetNum == totalPackets) {
+                displayTransferStats();
+            }
+            packetNum++;
         }
     }
-    
+
+    fileStream.close();
     displaySeparator();
     displayStatus("Transfer complete", true, "All packets sent successfully");
     displayStatus("Waiting for server", true, "Server calculating CRC...");
     log_phase_with_timestamp("VERIFYING");
-    
-    // Receive CRC response
+
+    // Finalize CRC calculation
+    uint32_t clientCRC = crcStream.finalize(fileSize);
+
+    // Receive CRC response from server
     ResponseHeader header;
     std::vector<uint8_t> responsePayload;
     if (!receiveResponse(header, responsePayload)) {
         return false;
     }
-    
+
     if (header.code != RESP_FILE_OK || responsePayload.size() < 279) {
         displayError("Invalid file transfer response", ErrorType::PROTOCOL);
         return false;
     }
-    
-    // Extract CRC
+
+    // Extract server CRC from payload
     uint32_t serverCRC;
     std::memcpy(&serverCRC, responsePayload.data() + 275, 4);
-    
+
     // Verify CRC
-    return verifyCRC(serverCRC, fileData, filename);
+    return verifyCRC(serverCRC, clientCRC, filename);
 }
+
 
 // Send file packet
 bool Client::sendFilePacket(const std::string& filename, const std::string& encryptedData,
@@ -1161,12 +1222,7 @@ bool Client::sendFilePacket(const std::string& filename, const std::string& encr
     return sendRequest(REQ_SEND_FILE, payload);
 }
 
-// Verify CRC
-bool Client::verifyCRC(uint32_t serverCRC, const std::vector<uint8_t>& originalData, const std::string& filename) {
-    displayStatus("Calculating CRC", true, "Using cksum algorithm");
-    
-    uint32_t clientCRC = calculateCRC32(originalData.data(), originalData.size());
-    
+bool Client::verifyCRC(uint32_t serverCRC, uint32_t clientCRC, const std::string& filename) {
     displayStatus("CRC verification", true, "Server: " + std::to_string(serverCRC) + 
                   ", Client: " + std::to_string(clientCRC));
     
