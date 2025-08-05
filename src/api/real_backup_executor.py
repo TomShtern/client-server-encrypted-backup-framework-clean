@@ -1856,6 +1856,24 @@ class RealBackupExecutor:
             },
             'metrics_count': len(metrics_history)
         }
+
+    def _get_process_resource_usage(self):
+        """Get basic process resource usage"""
+        if not self.backup_process:
+            return {}
+        
+        try:
+            import psutil
+            proc = psutil.Process(self.backup_process.pid)
+            return {
+                'pid': self.backup_process.pid,
+                'cpu_percent': proc.cpu_percent(),
+                'memory_mb': proc.memory_info().rss / 1024 / 1024,
+                'status': proc.status(),
+                'num_threads': proc.num_threads()
+            }
+        except Exception:
+            return {}
     
     def _check_network_activity(self, server_port: int) -> bool:
         """Check for active network connections to server port"""
@@ -1967,31 +1985,45 @@ class RealBackupExecutor:
             self._log_status("DEBUG", f"Client working directory: {client_working_dir}")
             self._log_status("DEBUG", f"Transfer.info location: {os.path.join(client_working_dir, 'transfer.info')}")
 
-            # Register process with enhanced monitoring system
+            # Register process with enhanced monitoring system but with better error handling
             process_id = f"backup_client_{int(time.time())}"
             command = [str(self.client_exe), "--batch"]  # Use batch mode to disable web GUI and prevent port conflicts
 
-            registry = get_process_registry()
-            process_info = register_process(
-                process_id=process_id,
-                name="EncryptedBackupClient",
-                command=command,
-                cwd=client_working_dir,
-                auto_restart=False,  # Don't auto-restart backup processes
-                max_restarts=0
-            )
+            self._log_status("LAUNCH", f"Starting subprocess: {' '.join(command)}")
+            self._log_status("DEBUG", f"Working directory: {client_working_dir}")
+            
+            try:
+                registry = get_process_registry()
+                process_info = register_process(
+                    process_id=process_id,
+                    name="EncryptedBackupClient",
+                    command=command,
+                    cwd=client_working_dir,
+                    auto_restart=False,  # Don't auto-restart backup processes
+                    max_restarts=0
+                )
 
-            # Start process with enhanced monitoring
-            if not start_process(process_id,
-                               stdin=subprocess.PIPE,
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE,
-                               text=False):
-                raise RuntimeError(f"Failed to start backup process {process_id}")
+                # Start process with enhanced monitoring and better error reporting
+                if not start_process(process_id,
+                                   stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE,
+                                   text=False):
+                    # Try to get error details from the registry
+                    self._log_status("ERROR", f"Failed to start backup process {process_id}")
+                    if hasattr(registry, 'get_process_info'):
+                        proc_info = registry.get_process_info(process_id)
+                        if proc_info and proc_info.last_error:
+                            self._log_status("ERROR", f"Process error: {proc_info.last_error}")
+                    raise RuntimeError(f"Failed to start backup process {process_id}")
 
-            # Get the subprocess handle for compatibility
-            self.backup_process = registry.subprocess_handles[process_id]
-            self.process_id = process_id
+                # Get the subprocess handle for compatibility
+                self.backup_process = registry.subprocess_handles[process_id]
+                self.process_id = process_id
+                
+            except Exception as e:
+                self._log_status("ERROR", f"Failed to start client subprocess: {e}")
+                raise RuntimeError(f"Subprocess launch failed: {e}")
 
             self._log_status("PROCESS", f"Started backup client with enhanced monitoring (ID: {process_id}, PID: {self.backup_process.pid})")
             

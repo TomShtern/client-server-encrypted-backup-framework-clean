@@ -50,7 +50,7 @@ constexpr uint16_t REQ_CRC_ABORT = 1031;
 constexpr uint16_t RESP_REGISTER_OK = 1600;
 constexpr uint16_t RESP_REGISTER_FAIL = 1601;
 constexpr uint16_t RESP_PUBKEY_AES_SENT = 1602;
-constexpr uint16_t RESP_FILE_OK = 1603;
+constexpr uint16_t RESP_FILE_CRC = 1603;
 constexpr uint16_t RESP_ACK = 1604;
 constexpr uint16_t RESP_RECONNECT_AES_SENT = 1605;
 constexpr uint16_t RESP_RECONNECT_FAIL = 1606;
@@ -121,29 +121,59 @@ struct TransferStats {
     void update(size_t newBytes);
 };
 
-// Adaptive Buffer Management System
-class AdaptiveBufferManager {
-public:
-    static size_t calculateOptimalBufferSize(size_t fileSize) {
-        // Calculate power-of-2 buffer size with L1 cache optimization
-        if (fileSize <= 4096) {
-            return 1024;  // 1KB for very small files
-        } else if (fileSize <= 16384) {
-            return 2048;  // 2KB for small files
-        } else if (fileSize <= 65536) {
-            return 4096;  // 4KB for medium-small files
-        } else if (fileSize <= 262144) {
-            return 8192;  // 8KB for medium files
-        } else if (fileSize <= 1048576) {
-            return 16384; // 16KB for large files
-        } else {
-            return 32768; // 32KB for very large files (L1 cache optimal)
-        }
-    }
+// Dynamic Buffer Management System with Network Adaptation
+class DynamicBufferManager {
+private:
+    size_t currentBufferSize;
+    size_t minBufferSize;
+    size_t maxBufferSize;
+    
+    // Performance metrics for adaptation
+    std::chrono::steady_clock::time_point lastPacketTime;
+    double averagePacketTime;
+    double packetTimeVariance;
+    size_t consecutiveSuccesses;
+    size_t consecutiveFailures;
+    
+    // Adaptation parameters
+    static constexpr double GROWTH_FACTOR = 1.5;
+    static constexpr double SHRINK_FACTOR = 0.75;
+    static constexpr size_t SUCCESS_THRESHOLD = 3;
+    static constexpr size_t FAILURE_THRESHOLD = 2;
+    static constexpr double VARIANCE_THRESHOLD = 0.3;
 
+public:
+    DynamicBufferManager(size_t initialSize = 4096) 
+        : currentBufferSize(alignToAESBlocks(initialSize))
+        , minBufferSize(MIN_BUFFER_SIZE)
+        , maxBufferSize(MAX_BUFFER_SIZE)
+        , averagePacketTime(0.0)
+        , packetTimeVariance(0.0)
+        , consecutiveSuccesses(0)
+        , consecutiveFailures(0) {
+        lastPacketTime = std::chrono::steady_clock::now();
+    }
+    
+    // Get current buffer size
+    size_t getCurrentBufferSize() const { return currentBufferSize; }
+    
+    // Adapt buffer size based on transfer performance
+    void adaptAfterPacket(bool success, size_t bytesTransferred);
+    
+    // Reset for new transfer
+    void reset(size_t suggestedInitialSize = 4096);
+    
+    // Align size to AES block boundaries
     static size_t alignToAESBlocks(size_t size) {
-        // Ensure buffer size is aligned to AES block boundaries
         return ((size + AES_BLOCK_SIZE - 1) / AES_BLOCK_SIZE) * AES_BLOCK_SIZE;
+    }
+    
+    // Calculate initial buffer size based on file size hint
+    static size_t calculateInitialBufferSize(size_t fileSize) {
+        if (fileSize <= 16 * 1024) return 2048;    // 2KB for small files
+        if (fileSize <= 256 * 1024) return 8192;   // 8KB for medium files  
+        if (fileSize <= 2 * 1024 * 1024) return 16384; // 16KB for large files
+        return 32768; // 32KB for very large files
     }
 };
 
