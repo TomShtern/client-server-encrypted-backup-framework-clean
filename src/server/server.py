@@ -58,17 +58,27 @@ MAX_ACTUAL_FILENAME_LENGTH = 250 # Practical limit for actual filename within th
 RSA_PUBLIC_KEY_SIZE = 160 # Bytes, X.509 format (for 1024-bit RSA - per protocol specification)
 AES_KEY_SIZE_BYTES = 32 # 256-bit AES
 
-# Logging Configuration
-LOG_FORMAT = '%(asctime)s - %(threadName)s - %(levelname)s - %(message)s'
-logging.basicConfig(
-    level=logging.DEBUG,  # Set to DEBUG for verbose output
-    format=LOG_FORMAT,
-    handlers=[
-        logging.FileHandler("server.log", mode='a'), # Append mode
-        logging.StreamHandler(sys.stdout) # Also log to console
-    ]
+# Enhanced Logging Configuration with dual output
+# Add the project root to path to access shared utilities
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+sys.path.insert(0, project_root)
+from src.shared.logging_utils import setup_dual_logging, create_log_monitor_info
+
+# Set up dual logging (console + timestamped file) while maintaining server.log compatibility
+logger, backup_log_file = setup_dual_logging(
+    logger_name=__name__,
+    server_type="backup-server",
+    console_level=logging.INFO,
+    file_level=logging.DEBUG,
+    console_format='%(asctime)s - %(threadName)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
+
+# Maintain compatibility: also log to the original server.log file
+LOG_FORMAT = '%(asctime)s - %(threadName)s - %(levelname)s - %(message)s'
+server_log_handler = logging.FileHandler("server.log", mode='a')
+server_log_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+server_log_handler.setLevel(logging.DEBUG)
+logger.addHandler(server_log_handler)
 
 # --- Protocol Codes ---
 # Request codes from client
@@ -530,6 +540,19 @@ if __name__ == "__main__":
         print(f"      Secure Encrypted File Backup Server - Version {SERVER_VERSION}      ")
         print(f"      Process ID: {os.getpid()}                                     ")
         print("=====================================================================")
+        
+        # Display logging information
+        try:
+            log_monitor_info = create_log_monitor_info(backup_log_file, "Backup Server")
+            print("Logging Information:")
+            print(f"  Enhanced Log: {log_monitor_info['file_path']}")
+            print(f"  Legacy Log:   {os.path.abspath('server.log')}")
+            print(f"  Live Monitor: {log_monitor_info['powershell_cmd']}")
+            print(f"  Console:      Visible in this window (dual output enabled)")
+            print("=====================================================================")
+        except Exception as e:
+            print(f"  [WARNING] Could not display logging info: {e}")
+            print("=====================================================================")
 
         # Perform basic pre-flight checks before attempting to start the server
         if sys.version_info < (3, 7): # PyCryptodome generally works better with Python 3.7+

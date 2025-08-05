@@ -70,6 +70,35 @@ def open_gui():
         print(f"❌ Failed to open GUI: {e}")
         return False
 
+def get_log_monitoring_info():
+    """Get information about available log files for monitoring"""
+    logs_dir = Path("logs")
+    if not logs_dir.exists():
+        return None
+    
+    log_files = []
+    for log_file in logs_dir.glob("*.log"):
+        if log_file.name.startswith("latest-"):
+            continue
+        
+        if "api-server" in log_file.name:
+            server_type = "API Server"
+        elif "backup-server" in log_file.name:
+            server_type = "Backup Server"
+        else:
+            continue
+        
+        log_files.append({
+            'path': str(log_file.absolute()),
+            'name': log_file.name,
+            'server_type': server_type,
+            'modified': log_file.stat().st_mtime if log_file.exists() else 0
+        })
+    
+    # Sort by modification time (newest first)
+    log_files.sort(key=lambda x: x['modified'], reverse=True)
+    return log_files
+
 def main():
     print("CyberBackup 3.0 - GUI Launcher")
     print("=" * 50)
@@ -104,6 +133,17 @@ def main():
         print("3. Click 'CONNECT' to connect to the backup server")
         print("4. Select files to backup using the interface")
         print()
+        
+        # Display logging information
+        log_files = get_log_monitoring_info()
+        if log_files:
+            print("Log Monitoring:")
+            for lf in log_files[:2]:  # Show latest 2 files
+                print(f"  - {lf['server_type']}: {lf['path']}")
+            print("  - Live Monitor: python scripts/monitor_logs.py --follow")
+            print("  - PowerShell: Get-Content logs\\*.log -Wait -Tail 50")
+            print()
+        
         print("Note: Keep this window open while using the GUI")
         print("Press Ctrl+C to stop the API server when done")
         

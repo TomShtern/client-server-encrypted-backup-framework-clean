@@ -21,6 +21,13 @@ PORT_CONFIG_FILE = "port.info"
 DATABASE_NAME = "defensive.db"
 FILE_STORAGE_DIR = "received_files"  # Directory to store received files
 
+# Enhanced Database Configuration
+DATABASE_CONNECTION_POOL_ENABLED = True  # Enable connection pooling for better performance
+DATABASE_CONNECTION_POOL_SIZE = 5        # Number of connections in pool
+DATABASE_MIGRATION_ENABLED = True        # Enable automatic migrations on startup
+DATABASE_BACKUP_ON_MIGRATION = True      # Create backup before applying migrations
+DATABASE_OPTIMIZATION_ENABLED = True     # Enable database optimization features
+
 # Session and timeout configuration
 CLIENT_SOCKET_TIMEOUT = 60.0  # Timeout for individual socket operations with a client
 CLIENT_SESSION_TIMEOUT = 300  # 5 minutes - Time in seconds before a client session expires due to inactivity

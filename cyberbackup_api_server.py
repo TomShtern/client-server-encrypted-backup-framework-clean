@@ -15,9 +15,19 @@ import hashlib
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, send_file, session
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Import enhanced logging utilities
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+from shared.logging_utils import setup_dual_logging, create_log_monitor_info
+
+# Configure enhanced dual logging (console + file)
+logger, api_log_file = setup_dual_logging(
+    logger_name=__name__,
+    server_type="api-server",
+    console_level=logging.INFO,
+    file_level=logging.DEBUG,
+    console_format='%(asctime)s - %(levelname)s - %(message)s'
+)
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 
@@ -606,6 +616,14 @@ if __name__ == "__main__":
     print(f"* API Server: http://localhost:9090")
     print(f"* Client GUI: http://localhost:9090/")
     print(f"* Health Check: http://localhost:9090/health")
+    print()
+    
+    # Display logging information
+    log_monitor_info = create_log_monitor_info(api_log_file, "API Server")
+    print("* Logging Information:")
+    print(f"* Log File: {log_monitor_info['file_path']}")
+    print(f"* Live Monitor (PowerShell): {log_monitor_info['powershell_cmd']}")
+    print(f"* Console Output: Visible in this window (dual output enabled)")
     print()
 
     # Check components

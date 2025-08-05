@@ -320,7 +320,7 @@ bool Client::run() {
             std::this_thread::sleep_for(std::chrono::seconds(2));
         }
         
-        if (transferFile()) {
+        if (transferFileEnhanced()) {
             transferSuccess = true;
         } else {
             fileRetries++;
@@ -1166,6 +1166,194 @@ bool Client::transferFile() {
     return verifyCRC(serverCRC, clientCRC, filename);
 }
 
+// Enhanced transfer implementation with adaptive buffer management
+bool Client::transferFileEnhanced(const TransferConfig& config) {
+    // Open the file for reading in binary mode
+    std::ifstream fileStream(filepath, std::ios::binary);
+    if (!fileStream.is_open()) {
+        displayError("File transfer aborted: could not open file " + filepath, ErrorType::FILE_IO);
+        return false;
+    }
+
+    // Get file size for strategy selection
+    fileStream.seekg(0, std::ios::end);
+    size_t fileSize = fileStream.tellg();
+    fileStream.seekg(0, std::ios::beg);
+    stats.totalBytes = fileSize;
+    stats.reset();
+
+    // Extract filename
+    std::string filename = filepath;
+    size_t lastSlash = filename.find_last_of("/\\\\");
+    if (lastSlash != std::string::npos) {
+        filename = filename.substr(lastSlash + 1);
+    }
+
+    displayStatus("Enhanced File Transfer", true, "File: " + filename + " (" + formatBytes(fileSize) + ")");
+    
+    // Determine optimal transfer strategy
+    TransferStrategy strategy = config.strategy;
+    if (strategy == TransferStrategy::ADAPTIVE_BUFFER) {
+        // Auto-select strategy based on file size and configuration
+        if (config.enableMemoryMapping && fileSize >= config.mmapThreshold) {
+            strategy = TransferStrategy::MEMORY_MAPPED;
+            displayStatus("Transfer Strategy", true, "Memory-mapped I/O (zero-copy for large file)");
+        } else {
+            displayStatus("Transfer Strategy", true, "Adaptive buffer sizing (cache-optimized)");
+        }
+    }
+
+    bool result = false;
+    try {
+        switch (strategy) {
+            case TransferStrategy::ADAPTIVE_BUFFER:
+                result = transferWithAdaptiveBuffer(fileSize, filename, fileStream);
+                break;
+            case TransferStrategy::MEMORY_MAPPED:
+                fileStream.close();  // Close before memory mapping
+                result = transferWithMemoryMapping(fileSize, filename);
+                break;
+            case TransferStrategy::STREAMING_ROBUST:
+                result = transferWithRobustStreaming(fileSize, filename, fileStream);
+                break;
+        }
+    } catch (const std::exception& e) {
+        displayError("Transfer failed with exception: " + std::string(e.what()), ErrorType::GENERAL);
+        result = false;
+    }
+
+    if (fileStream.is_open()) {
+        fileStream.close();
+    }
+    
+    return result;
+}
+
+// Adaptive buffer transfer implementation
+bool Client::transferWithAdaptiveBuffer(size_t fileSize, const std::string& filename, std::ifstream& fileStream) {
+    // Calculate optimal buffer size using adaptive algorithm
+    size_t optimalBufferSize = AdaptiveBufferManager::calculateOptimalBufferSize(fileSize);
+    size_t alignedBufferSize = AdaptiveBufferManager::alignToAESBlocks(optimalBufferSize);
+    
+    displayStatus("Buffer Optimization", true, 
+                 "Buffer size: " + formatBytes(alignedBufferSize) + " (optimized for " + formatBytes(fileSize) + " file)");
+
+    // Initialize streaming CRC and AES encryption
+    CRC32Stream crcStream;
+    AESWrapper aes(reinterpret_cast<const unsigned char*>(aesKey.c_str()), AES_KEY_SIZE, true);
+
+    // Calculate total packets with optimized buffer size
+    size_t totalPackets = (fileSize + alignedBufferSize - 1) / alignedBufferSize;
+    displayStatus("Transfer Plan", true, "Packets: " + std::to_string(totalPackets) + 
+                 ", Avg packet size: " + formatBytes(alignedBufferSize));
+    
+    log_phase_with_timestamp("TRANSFERRING");
+    displaySeparator();
+
+    // Use aligned buffer for optimal performance
+    std::vector<uint8_t> buffer(alignedBufferSize);
+    uint16_t packetNum = 1;
+    size_t bytesTransferred = 0;
+
+    while (fileStream && bytesTransferred < fileSize) {
+        fileStream.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+        size_t bytesRead = fileStream.gcount();
+
+        if (bytesRead > 0) {
+            // Update CRC with the raw chunk
+            crcStream.update(buffer.data(), bytesRead);
+
+            // Encrypt the chunk with proper error handling
+            std::string encryptedChunk;
+            try {
+                encryptedChunk = aes.encrypt(reinterpret_cast<const char*>(buffer.data()), bytesRead);
+            } catch (const std::exception& e) {
+                displayError("Encryption failed: " + std::string(e.what()), ErrorType::CRYPTO);
+                return false;
+            }
+            
+            // Send the encrypted chunk as a packet with retry logic
+            int retryCount = 0;
+            bool packetSent = false;
+            while (retryCount < MAX_RETRIES && !packetSent) {
+                packetSent = sendFilePacket(filename, encryptedChunk, static_cast<uint32_t>(fileSize), 
+                                          packetNum, static_cast<uint16_t>(totalPackets));
+                if (!packetSent) {
+                    retryCount++;
+                    if (retryCount < MAX_RETRIES) {
+                        displayStatus("Retry", true, "Packet " + std::to_string(packetNum) + 
+                                    " failed, retrying (" + std::to_string(retryCount) + "/" + std::to_string(MAX_RETRIES) + ")");
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100 * retryCount));
+                    }
+                }
+            }
+            
+            if (!packetSent) {
+                displayError("Failed to send packet " + std::to_string(packetNum) + " after " + 
+                           std::to_string(MAX_RETRIES) + " retries", ErrorType::NETWORK);
+                return false;
+            }
+
+            bytesTransferred += bytesRead;
+            stats.update(bytesTransferred);
+            displayProgress("Transferring", stats.transferredBytes, stats.totalBytes);
+
+            // Display stats every 10 packets or on completion
+            if (packetNum % 10 == 0 || packetNum == totalPackets) {
+                displayTransferStats();
+            }
+            packetNum++;
+        }
+    }
+
+    displaySeparator();
+    displayStatus("Transfer Complete", true, "All " + std::to_string(totalPackets) + " packets sent successfully");
+    displayStatus("Waiting for server", true, "Server calculating CRC...");
+    log_phase_with_timestamp("VERIFYING");
+
+    // Finalize CRC calculation
+    uint32_t clientCRC = crcStream.finalize(fileSize);
+
+    // Receive CRC response from server
+    ResponseHeader header;
+    std::vector<uint8_t> responsePayload;
+    if (!receiveResponse(header, responsePayload)) {
+        return false;
+    }
+
+    if (header.code != RESP_FILE_OK || responsePayload.size() < 279) {
+        displayError("Invalid file transfer response", ErrorType::PROTOCOL);
+        return false;
+    }
+
+    // Extract server CRC from payload
+    uint32_t serverCRC;
+    std::memcpy(&serverCRC, responsePayload.data() + 275, 4);
+
+    // Verify CRC
+    return verifyCRC(serverCRC, clientCRC, filename);
+}
+
+// Memory-mapped I/O transfer implementation (placeholder for Phase 2)
+bool Client::transferWithMemoryMapping(size_t fileSize, const std::string& filename) {
+    displayStatus("Memory Mapping", false, "Memory-mapped I/O not yet implemented - falling back to adaptive buffer");
+    
+    // Fallback to adaptive buffer strategy
+    std::ifstream fileStream(filepath, std::ios::binary);
+    if (!fileStream.is_open()) {
+        displayError("File transfer aborted: could not open file " + filepath, ErrorType::FILE_IO);
+        return false;
+    }
+    
+    return transferWithAdaptiveBuffer(fileSize, filename, fileStream);
+}
+
+// Robust streaming transfer implementation (placeholder for Phase 3)
+bool Client::transferWithRobustStreaming(size_t fileSize, const std::string& filename, std::ifstream& fileStream) {
+    displayStatus("Robust Streaming", false, "Robust streaming not yet implemented - falling back to adaptive buffer");
+    return transferWithAdaptiveBuffer(fileSize, filename, fileStream);
+}
+
 
 // Send file packet
 bool Client::sendFilePacket(const std::string& filename, const std::string& encryptedData,
@@ -1227,7 +1415,7 @@ bool Client::verifyCRC(uint32_t serverCRC, uint32_t clientCRC, const std::string
             crcRetries = 0;
             
             // Retry the transfer
-            bool result = transferFile();
+            bool result = transferFileEnhanced();
             
             // Restore retry count if transfer failed
             if (!result) {

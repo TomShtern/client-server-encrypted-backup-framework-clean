@@ -62,7 +62,13 @@ constexpr size_t MAX_NAME_SIZE = 255;
 constexpr size_t RSA_KEY_SIZE = 160;
 constexpr size_t AES_KEY_SIZE = 32;
 constexpr size_t MAX_PACKET_SIZE = 1024 * 1024;
-constexpr size_t OPTIMAL_BUFFER_SIZE = 64 * 1024;
+constexpr size_t OPTIMAL_BUFFER_SIZE = 64 * 1024;  // Legacy - will be replaced by adaptive sizing
+
+// Adaptive buffer constants
+constexpr size_t MIN_BUFFER_SIZE = 1024;        // 1KB minimum
+constexpr size_t MAX_BUFFER_SIZE = 32768;       // 32KB maximum for L1 cache efficiency
+constexpr size_t MMAP_THRESHOLD = 1024 * 1024; // 1MB threshold for memory mapping
+constexpr size_t AES_BLOCK_SIZE = 16;           // AES-256-CBC block size
 
 // Other constants
 constexpr int MAX_RETRIES = 3;
@@ -113,6 +119,47 @@ struct TransferStats {
     TransferStats();
     void reset();
     void update(size_t newBytes);
+};
+
+// Adaptive Buffer Management System
+class AdaptiveBufferManager {
+public:
+    static size_t calculateOptimalBufferSize(size_t fileSize) {
+        // Calculate power-of-2 buffer size with L1 cache optimization
+        if (fileSize <= 4096) {
+            return 1024;  // 1KB for very small files
+        } else if (fileSize <= 16384) {
+            return 2048;  // 2KB for small files
+        } else if (fileSize <= 65536) {
+            return 4096;  // 4KB for medium-small files
+        } else if (fileSize <= 262144) {
+            return 8192;  // 8KB for medium files
+        } else if (fileSize <= 1048576) {
+            return 16384; // 16KB for large files
+        } else {
+            return 32768; // 32KB for very large files (L1 cache optimal)
+        }
+    }
+
+    static size_t alignToAESBlocks(size_t size) {
+        // Ensure buffer size is aligned to AES block boundaries
+        return ((size + AES_BLOCK_SIZE - 1) / AES_BLOCK_SIZE) * AES_BLOCK_SIZE;
+    }
+};
+
+// Enhanced File Transfer Engine
+enum class TransferStrategy {
+    ADAPTIVE_BUFFER,    // Adaptive buffer sizing (default)
+    MEMORY_MAPPED,      // Memory-mapped I/O for large files
+    STREAMING_ROBUST    // Robust streaming with error recovery
+};
+
+struct TransferConfig {
+    TransferStrategy strategy = TransferStrategy::ADAPTIVE_BUFFER;
+    size_t bufferSize = 0;  // 0 = auto-calculate
+    bool enableProgressiveRecovery = true;
+    bool enableMemoryMapping = true;
+    size_t mmapThreshold = MMAP_THRESHOLD;
 };
 
 class Client {
@@ -212,9 +259,15 @@ private:
     bool performReconnection();
     bool sendPublicKey();
     bool transferFile();
+    bool transferFileEnhanced(const TransferConfig& config = TransferConfig());
     bool sendFilePacket(const std::string& filename, const std::string& encryptedData,
                        uint32_t originalSize, uint16_t packetNum, uint16_t totalPackets);
     bool verifyCRC(uint32_t serverCRC, uint32_t clientCRC, const std::string& filename);
+
+    // Enhanced transfer methods
+    bool transferWithAdaptiveBuffer(size_t fileSize, const std::string& filename, std::ifstream& fileStream);
+    bool transferWithMemoryMapping(size_t fileSize, const std::string& filename);
+    bool transferWithRobustStreaming(size_t fileSize, const std::string& filename, std::ifstream& fileStream);
 
     // Crypto operations
     bool generateRSAKeys();

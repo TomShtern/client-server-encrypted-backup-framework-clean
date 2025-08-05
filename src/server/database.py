@@ -18,13 +18,92 @@
 import sqlite3
 import logging
 import os
-from datetime import datetime, timezone
-from typing import Any, Optional, List, Tuple
-from .config import DATABASE_NAME, FILE_STORAGE_DIR
-from .exceptions import ServerError
+import queue
+import threading
+import hashlib
+from datetime import datetime, timezone, timedelta
+from typing import Any, Optional, List, Tuple, Dict, Union
+try:
+    from .config import DATABASE_NAME, FILE_STORAGE_DIR
+    from .exceptions import ServerError
+except ImportError:
+    # Fallback for direct execution
+    DATABASE_NAME = "defensive.db"
+    FILE_STORAGE_DIR = "received_files"
+    class ServerError(Exception):
+        pass
 
 # Setup module logger
 logger = logging.getLogger(__name__)
+
+
+class DatabaseConnectionPool:
+    """
+    Connection pool for SQLite database to improve performance and reduce overhead.
+    """
+    
+    def __init__(self, db_name: str, pool_size: int = 5, timeout: float = 30.0):
+        self.db_name = db_name
+        self.pool_size = pool_size
+        self.timeout = timeout
+        self.pool = queue.Queue(maxsize=pool_size)
+        self.lock = threading.Lock()
+        self._create_connections()
+    
+    def _create_connections(self):
+        """Create initial pool of database connections."""
+        for _ in range(self.pool_size):
+            conn = sqlite3.connect(
+                self.db_name, 
+                timeout=10.0,
+                check_same_thread=False  # Allow connection sharing across threads
+            )
+            # Configure database for better performance while maintaining compatibility
+            try:
+                conn.execute("PRAGMA journal_mode=WAL")
+            except sqlite3.OperationalError:
+                # WAL mode not supported or database locked, use default
+                logger.warning("WAL mode not available, using default journaling")
+            conn.execute("PRAGMA synchronous=NORMAL")  # Balance safety vs performance
+            conn.execute("PRAGMA cache_size=10000")  # Increase cache size
+            conn.execute("PRAGMA temp_store=MEMORY")  # Use memory for temp tables
+            self.pool.put(conn)
+    
+    def get_connection(self) -> sqlite3.Connection:
+        """Get a connection from the pool."""
+        try:
+            return self.pool.get(timeout=self.timeout)
+        except queue.Empty:
+            logger.warning("Connection pool exhausted, creating new connection")
+            conn = sqlite3.connect(self.db_name, timeout=10.0, check_same_thread=False)
+            try:
+                conn.execute("PRAGMA journal_mode=WAL")
+            except sqlite3.OperationalError:
+                pass  # WAL mode not available
+            conn.execute("PRAGMA synchronous=NORMAL")
+            return conn
+    
+    def return_connection(self, conn: sqlite3.Connection):
+        """Return a connection to the pool."""
+        try:
+            # Ensure connection is still valid
+            conn.execute("SELECT 1")
+            self.pool.put_nowait(conn)
+        except (sqlite3.Error, queue.Full):
+            # Connection is invalid or pool is full, close it
+            try:
+                conn.close()
+            except:
+                pass
+    
+    def close_all(self):
+        """Close all connections in the pool."""
+        while not self.pool.empty():
+            try:
+                conn = self.pool.get_nowait()
+                conn.close()
+            except (queue.Empty, sqlite3.Error):
+                break
 
 
 class DatabaseManager:
@@ -33,15 +112,28 @@ class DatabaseManager:
     Handles client persistence, file record management, and SQLite operations.
     """
     
-    def __init__(self, db_name: Optional[str] = None):
+    def __init__(self, db_name: Optional[str] = None, use_pool: bool = True):
         """
         Initialize the DatabaseManager.
         
         Args:
             db_name: Optional database name override. Uses config default if None.
+            use_pool: Whether to use connection pooling for better performance.
         """
         self.db_name = db_name or DATABASE_NAME
-        logger.info(f"DatabaseManager initialized with database: {self.db_name}")
+        self.use_pool = use_pool
+        self.connection_pool = None
+        
+        if use_pool:
+            try:
+                self.connection_pool = DatabaseConnectionPool(self.db_name)
+                logger.info(f"DatabaseManager initialized with connection pool: {self.db_name}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize connection pool: {e}, falling back to direct connections")
+                self.use_pool = False
+        
+        if not self.use_pool:
+            logger.info(f"DatabaseManager initialized with direct connections: {self.db_name}")
     
     def execute(self, query: str, params: tuple = (), commit: bool = False, 
                 fetchone: bool = False, fetchall: bool = False) -> Any:
@@ -63,19 +155,46 @@ class DatabaseManager:
             ServerError: If a database read error occurs that prevents server operation.
         """
         try:
-            # Using a timeout for the connection can prevent indefinite blocking if the DB is locked.
-            # `check_same_thread=False` is generally needed if DB connection is shared across threads,
-            # but here, each call creates a new connection, which is safer for SQLite threading.
-            with sqlite3.connect(self.db_name, timeout=10.0) as conn:  # `timeout` is for busy_timeout
-                cursor = conn.cursor()
-                cursor.execute(query, params)
-                if commit:
-                    conn.commit()
-                if fetchone:
-                    return cursor.fetchone()
-                if fetchall:
-                    return cursor.fetchall()
-                return cursor  # For operations where cursor properties (e.g., lastrowid) are needed
+            if self.use_pool and self.connection_pool:
+                # Use connection pool for better performance
+                conn = self.connection_pool.get_connection()
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute(query, params)
+                    if commit:
+                        conn.commit()
+                    if fetchone:
+                        result = cursor.fetchone()
+                        self.connection_pool.return_connection(conn)
+                        return result
+                    if fetchall:
+                        result = cursor.fetchall()
+                        self.connection_pool.return_connection(conn)
+                        return result
+                    # For cursor operations, we need to keep connection until cursor is used
+                    # This is a design limitation - cursor operations should be avoided with pooling
+                    result = cursor.lastrowid if hasattr(cursor, 'lastrowid') else None
+                    self.connection_pool.return_connection(conn)
+                    return result
+                except Exception as e:
+                    # Don't return potentially corrupted connection to pool
+                    try:
+                        conn.close()
+                    except:
+                        pass
+                    raise e
+            else:
+                # Fallback to direct connection
+                with sqlite3.connect(self.db_name, timeout=10.0) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(query, params)
+                    if commit:
+                        conn.commit()
+                    if fetchone:
+                        return cursor.fetchone()
+                    if fetchall:
+                        return cursor.fetchall()
+                    return cursor
         except sqlite3.OperationalError as e:  # Specific error for "database is locked", "no such table" etc.
             logger.error(f"Database operational error: {e} | Query: {query[:150]}... | Params: {params}")
             # Depending on severity, re-raise or return specific error indicator
@@ -95,6 +214,14 @@ class DatabaseManager:
         """Initializes the database schema if tables do not exist."""
         logger.info(f"Initializing database schema in '{self.db_name}' if needed...")
         
+        # First ensure basic schema exists, then apply migrations
+        self._create_basic_schema()
+        self._apply_database_migrations()
+        
+        logger.info("Database schema initialization complete.")
+    
+    def _create_basic_schema(self):
+        """Create the basic schema tables if they don't exist."""
         # Client Table: Stores information about registered clients.
         # LastSeen is stored as ISO8601 UTC text for portability and readability.
         # AESKey is per spec, though session-based keys are usually not persisted this way.
@@ -124,6 +251,11 @@ class DatabaseManager:
             )
         ''', commit=True)
         
+        # Add missing columns to existing tables
+        self._add_missing_columns()
+    
+    def _add_missing_columns(self):
+        """Add missing columns to existing tables for backward compatibility."""
         # Add FileSize and ModificationDate to older tables if they don't exist
         try:
             self.execute("SELECT FileSize FROM files LIMIT 1", fetchone=True)
@@ -149,8 +281,27 @@ class DatabaseManager:
             self.execute("ALTER TABLE files ADD COLUMN ClientID BLOB(16)", commit=True)
             # Migrate existing data: move ID to ClientID and generate new unique IDs
             self._migrate_files_to_clientid_schema()
-        
-        logger.info("Database schema initialization complete.")
+    
+    def _apply_database_migrations(self):
+        """Apply database migrations to enhance functionality."""
+        try:
+            from .database_migrations import DatabaseMigrationManager
+            migration_manager = DatabaseMigrationManager(self.db_name)
+            
+            pending = migration_manager.get_pending_migrations()
+            if pending:
+                logger.info(f"Applying {len(pending)} database migrations...")
+                success = migration_manager.migrate_to_latest()
+                if success:
+                    logger.info("Database migrations applied successfully")
+                else:
+                    logger.warning("Some database migrations failed - system will continue with existing schema")
+            else:
+                logger.debug("No pending database migrations")
+        except ImportError:
+            logger.debug("Migration system not available - skipping migrations")
+        except Exception as e:
+            logger.warning(f"Migration system error: {e} - continuing with basic schema")
 
     def _migrate_files_to_clientid_schema(self):
         """Migrate existing files table to use ClientID foreign key"""
@@ -513,6 +664,396 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Database error while getting total bytes transferred: {e}")
             return 0
+
+    # Enhanced Database Methods
+    
+    def execute_many(self, query: str, param_list: List[tuple], commit: bool = True) -> bool:
+        """
+        Execute a query multiple times with different parameters for bulk operations.
+        
+        Args:
+            query: The SQL query string.
+            param_list: List of parameter tuples.
+            commit: Whether to commit the transaction.
+            
+        Returns:
+            True if successful, False otherwise.
+        """
+        try:
+            if self.use_pool and self.connection_pool:
+                conn = self.connection_pool.get_connection()
+                try:
+                    cursor = conn.cursor()
+                    cursor.executemany(query, param_list)
+                    if commit:
+                        conn.commit()
+                    self.connection_pool.return_connection(conn)
+                    return True
+                except Exception as e:
+                    try:
+                        conn.close()
+                    except:
+                        pass
+                    raise e
+            else:
+                with sqlite3.connect(self.db_name, timeout=10.0) as conn:
+                    cursor = conn.cursor()
+                    cursor.executemany(query, param_list)
+                    if commit:
+                        conn.commit()
+                    return True
+        except Exception as e:
+            logger.error(f"Bulk database operation failed: {e}")
+            return False
+    
+    def search_files_advanced(self, search_term: str = "", file_type: str = "", 
+                             client_name: str = "", date_from: str = "", 
+                             date_to: str = "", min_size: int = 0, 
+                             max_size: int = 0, verified_only: bool = False) -> List[Dict]:
+        """
+        Advanced file search with multiple filters.
+        
+        Args:
+            search_term: Search in filename or path
+            file_type: File extension to filter by
+            client_name: Client name to filter by
+            date_from: Start date (ISO format)
+            date_to: End date (ISO format)
+            min_size: Minimum file size in bytes
+            max_size: Maximum file size in bytes
+            verified_only: Only return verified files
+            
+        Returns:
+            List of file dictionaries matching the criteria
+        """
+        conditions = ["1=1"]  # Base condition
+        params = []
+        
+        if search_term:
+            conditions.append("(f.FileName LIKE ? OR f.PathName LIKE ?)")
+            params.extend([f"%{search_term}%", f"%{search_term}%"])
+        
+        if file_type:
+            # Try to match FileExtension if available, otherwise extract from filename
+            conditions.append("(f.FileExtension = ? OR f.FileName LIKE ?)")
+            params.extend([file_type, f"%.{file_type}"])
+        
+        if client_name:
+            conditions.append("c.Name LIKE ?")
+            params.append(f"%{client_name}%")
+        
+        if date_from:
+            conditions.append("f.ModificationDate >= ?")
+            params.append(date_from)
+        
+        if date_to:
+            conditions.append("f.ModificationDate <= ?")
+            params.append(date_to)
+        
+        if min_size > 0:
+            conditions.append("f.FileSize >= ?")
+            params.append(min_size)
+        
+        if max_size > 0:
+            conditions.append("f.FileSize <= ?")
+            params.append(max_size)
+        
+        if verified_only:
+            conditions.append("f.Verified = 1")
+        
+        # Build SELECT clause dynamically based on available columns
+        base_columns = "f.FileName, f.PathName, f.FileSize, f.ModificationDate, f.Verified, f.CRC, c.Name as ClientName"
+        extended_columns = ""
+        
+        # Check if extended columns exist (from migrations)
+        try:
+            self.execute("SELECT FileCategory FROM files LIMIT 1", fetchone=True)
+            extended_columns = ", f.FileCategory, f.MimeType, f.FileExtension, f.TransferDuration, f.TransferSpeed"
+        except (sqlite3.OperationalError, ServerError):
+            # Extended columns don't exist yet
+            pass
+        
+        query = f"""
+            SELECT {base_columns}{extended_columns}
+            FROM files f 
+            JOIN clients c ON f.ClientID = c.ID
+            WHERE {' AND '.join(conditions)}
+            ORDER BY f.ModificationDate DESC
+            LIMIT 1000
+        """
+        
+        try:
+            results = self.execute(query, tuple(params), fetchall=True)
+            if results:
+                return [{
+                    'filename': row[0],
+                    'path': row[1],
+                    'size': row[2],
+                    'date': row[3],
+                    'verified': bool(row[4]),
+                    'crc': row[5],
+                    'client': row[6],
+                    'category': row[7] if len(row) > 7 else None,
+                    'mime_type': row[8] if len(row) > 8 else None,
+                    'extension': row[9] if len(row) > 9 else None,
+                    'transfer_duration': row[10] if len(row) > 10 else None,
+                    'transfer_speed': row[11] if len(row) > 11 else None
+                } for row in results]
+            return []
+        except Exception as e:
+            logger.error(f"Advanced file search failed: {e}")
+            return []
+    
+    def get_storage_statistics(self) -> Dict[str, Any]:
+        """Get comprehensive storage and usage statistics."""
+        stats = {
+            'database_info': {},
+            'storage_info': {},
+            'client_stats': {},
+            'file_stats': {},
+            'performance_info': {}
+        }
+        
+        try:
+            # Database information
+            stats['database_info'] = {
+                'file_path': os.path.abspath(self.db_name),
+                'file_size_mb': round(os.path.getsize(self.db_name) / (1024 * 1024), 2) if os.path.exists(self.db_name) else 0,
+                'connection_pool_enabled': self.use_pool,
+                'pool_size': self.connection_pool.pool_size if self.connection_pool else 0
+            }
+            
+            # Storage directory information
+            if os.path.exists(FILE_STORAGE_DIR):
+                try:
+                    total_size = sum(
+                        os.path.getsize(os.path.join(FILE_STORAGE_DIR, f))
+                        for f in os.listdir(FILE_STORAGE_DIR)
+                        if os.path.isfile(os.path.join(FILE_STORAGE_DIR, f))
+                    )
+                except (OSError, PermissionError) as e:
+                    logger.warning(f"Could not calculate storage directory size: {e}")
+                    total_size = 0
+                stats['storage_info'] = {
+                    'directory': os.path.abspath(FILE_STORAGE_DIR),
+                    'total_files': len([f for f in os.listdir(FILE_STORAGE_DIR) if os.path.isfile(os.path.join(FILE_STORAGE_DIR, f))]),
+                    'total_size_mb': round(total_size / (1024 * 1024), 2)
+                }
+            
+            # Client statistics
+            client_stats = self.execute("""
+                SELECT 
+                    COUNT(*) as total_clients,
+                    COUNT(CASE WHEN PublicKey IS NOT NULL THEN 1 END) as clients_with_keys,
+                    AVG(CASE WHEN LastSeen IS NOT NULL THEN julianday('now') - julianday(LastSeen) END) as avg_days_since_seen
+                FROM clients
+            """, fetchone=True)
+            
+            if client_stats:
+                stats['client_stats'] = {
+                    'total_clients': client_stats[0],
+                    'clients_with_keys': client_stats[1],
+                    'average_days_since_seen': round(client_stats[2] or 0, 1)
+                }
+            
+            # File statistics
+            file_stats = self.execute("""
+                SELECT 
+                    COUNT(*) as total_files,
+                    COUNT(CASE WHEN Verified = 1 THEN 1 END) as verified_files,
+                    AVG(FileSize) as avg_file_size,
+                    SUM(FileSize) as total_size,
+                    MIN(FileSize) as min_size,
+                    MAX(FileSize) as max_size
+                FROM files
+                WHERE FileSize IS NOT NULL
+            """, fetchone=True)
+            
+            if file_stats:
+                stats['file_stats'] = {
+                    'total_files': file_stats[0],
+                    'verified_files': file_stats[1],
+                    'verification_rate': round((file_stats[1] / file_stats[0] * 100) if file_stats[0] > 0 else 0, 1),
+                    'average_file_size_mb': round((file_stats[2] or 0) / (1024 * 1024), 2),
+                    'total_size_gb': round((file_stats[3] or 0) / (1024 * 1024 * 1024), 2),
+                    'min_file_size_kb': round((file_stats[4] or 0) / 1024, 2),
+                    'max_file_size_mb': round((file_stats[5] or 0) / (1024 * 1024), 2)
+                }
+            
+            # Performance info (if tables exist)
+            try:
+                index_info = self.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='index' AND sql IS NOT NULL
+                    ORDER BY name
+                """, fetchall=True)
+                
+                stats['performance_info'] = {
+                    'indexes_count': len(index_info) if index_info else 0,
+                    'indexes': [idx[0] for idx in index_info] if index_info else []
+                }
+            except:
+                stats['performance_info'] = {'indexes_count': 0, 'indexes': []}
+                
+        except Exception as e:
+            logger.error(f"Failed to collect storage statistics: {e}")
+            stats['error'] = str(e)
+        
+        return stats
+    
+    def optimize_database(self) -> Dict[str, Any]:
+        """
+        Perform database optimization tasks.
+        
+        Returns:
+            Dictionary with optimization results
+        """
+        results = {
+            'vacuum_performed': False,
+            'analyze_performed': False,
+            'size_before_mb': 0,
+            'size_after_mb': 0,
+            'space_saved_mb': 0,
+            'errors': []
+        }
+        
+        try:
+            # Get initial size
+            if os.path.exists(self.db_name):
+                results['size_before_mb'] = round(os.path.getsize(self.db_name) / (1024 * 1024), 2)
+            
+            # Perform VACUUM to reclaim space
+            try:
+                self.execute("VACUUM", commit=True)
+                results['vacuum_performed'] = True
+                logger.info("Database VACUUM completed")
+            except Exception as e:
+                results['errors'].append(f"VACUUM failed: {e}")
+                logger.error(f"Database VACUUM failed: {e}")
+            
+            # Perform ANALYZE to update statistics
+            try:
+                self.execute("ANALYZE", commit=True)
+                results['analyze_performed'] = True
+                logger.info("Database ANALYZE completed")
+            except Exception as e:
+                results['errors'].append(f"ANALYZE failed: {e}")
+                logger.error(f"Database ANALYZE failed: {e}")
+            
+            # Get final size
+            if os.path.exists(self.db_name):
+                results['size_after_mb'] = round(os.path.getsize(self.db_name) / (1024 * 1024), 2)
+                results['space_saved_mb'] = round(results['size_before_mb'] - results['size_after_mb'], 2)
+            
+        except Exception as e:
+            results['errors'].append(f"Optimization failed: {e}")
+            logger.error(f"Database optimization failed: {e}")
+        
+        return results
+    
+    def backup_database_to_file(self, backup_path: Optional[str] = None) -> str:
+        """
+        Create a backup of the database.
+        
+        Args:
+            backup_path: Optional custom backup path
+            
+        Returns:
+            Path to the created backup file
+        """
+        if not backup_path:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = f"{self.db_name}_backup_{timestamp}.db"
+        
+        try:
+            if self.use_pool and self.connection_pool:
+                conn = self.connection_pool.get_connection()
+                try:
+                    with sqlite3.connect(backup_path) as backup_conn:
+                        conn.backup(backup_conn)
+                    self.connection_pool.return_connection(conn)
+                except Exception as e:
+                    try:
+                        conn.close()
+                    except:
+                        pass
+                    raise e
+            else:
+                with sqlite3.connect(self.db_name) as source_conn:
+                    with sqlite3.connect(backup_path) as backup_conn:
+                        source_conn.backup(backup_conn)
+            
+            logger.info(f"Database backup created: {backup_path}")
+            return backup_path
+            
+        except Exception as e:
+            logger.error(f"Database backup failed: {e}")
+            raise
+    
+    def get_database_health(self) -> Dict[str, Any]:
+        """
+        Check database health and integrity.
+        
+        Returns:
+            Dictionary with health check results
+        """
+        health = {
+            'integrity_check': False,
+            'foreign_key_check': False,
+            'table_count': 0,
+            'index_count': 0,
+            'connection_pool_healthy': False,
+            'issues': []
+        }
+        
+        try:
+            # Integrity check
+            result = self.execute("PRAGMA integrity_check", fetchone=True)
+            if result and result[0] == "ok":
+                health['integrity_check'] = True
+            else:
+                health['issues'].append(f"Integrity check failed: {result[0] if result else 'Unknown error'}")
+            
+            # Foreign key check
+            fk_results = self.execute("PRAGMA foreign_key_check", fetchall=True)
+            if not fk_results:  # Empty result means no foreign key violations
+                health['foreign_key_check'] = True
+            else:
+                health['issues'].append(f"Foreign key violations found: {len(fk_results)}")
+            
+            # Count tables and indexes
+            tables = self.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'", fetchone=True)
+            indexes = self.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='index'", fetchone=True)
+            
+            health['table_count'] = tables[0] if tables else 0
+            health['index_count'] = indexes[0] if indexes else 0
+            
+            # Check connection pool health
+            if self.connection_pool:
+                try:
+                    # Try to get and return a connection
+                    conn = self.connection_pool.get_connection()
+                    conn.execute("SELECT 1")
+                    self.connection_pool.return_connection(conn)
+                    health['connection_pool_healthy'] = True
+                except Exception as e:
+                    health['issues'].append(f"Connection pool issue: {e}")
+            else:
+                health['connection_pool_healthy'] = True  # Not using pool is also healthy
+                
+        except Exception as e:
+            health['issues'].append(f"Health check failed: {e}")
+        
+        return health
+    
+    def cleanup_connection_pool(self):
+        """Close and cleanup the connection pool."""
+        if self.connection_pool:
+            try:
+                self.connection_pool.close_all()
+                logger.info("Database connection pool closed")
+            except Exception as e:
+                logger.error(f"Error closing connection pool: {e}")
 
     def check_startup_permissions(self):
         """
