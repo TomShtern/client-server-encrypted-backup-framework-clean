@@ -1,22 +1,16 @@
-````instructions
 # CyberBackup Framework - AI Coding Agent Instructions
 
 ## Architecture Overview
-This is a **sophisticated 4-layer encrypted backup system** with unique hybrid web-to-native architecture:
-
-1. **Web UI Layer** (`src/client/NewGUIforClient.html`) - Cyberpunk-themed SPA with 15+ JavaScript classes
-2. **Flask API Bridge** (`cyberbackup_api_server.py` + `real_backup_executor.py`) - **Critical integration layer**
-3. **C++ Client Engine** (`src/client/client.cpp` + `src/client/main.cpp`) - High-performance encryption engine (1700+ lines)
-4. **Python Server** (`src/server/server.py`) - Multi-threaded backup storage with custom binary protocol
-
-**Critical Understanding**: The Flask API Bridge is the coordination hub that manages subprocess lifecycles, file uploads, and status aggregation. Web UI communicates ONLY with Flask API, never directly with C++ client or Python server.
+This is a **4-layer encrypted backup system** with hybrid web-to-native architecture:
 
 ```
-Browser GUI → Flask API Bridge → C++ Client (subprocess) → Python Server
-    ↓              ↓                      ↓                     ↓
-HTTP POST    RealBackupExecutor    --batch mode           Custom Binary
-requests     process management    + transfer.info        TCP Protocol
+Web UI → Flask API Bridge → C++ Client (subprocess) → Python Server
+  ↓           ↓                    ↓                     ↓
+HTTP      RealBackupExecutor    --batch mode       Custom Binary
+requests  process management   + transfer.info     TCP Protocol
 ```
+
+**Critical Understanding**: Flask API Bridge (`cyberbackup_api_server.py` + `real_backup_executor.py`) is the coordination hub. Web UI communicates ONLY with Flask API, never directly with C++ client or Python server.
 
 **Key Client Components**:
 - **Web Client**: Single 8000+ line HTML file with modular JavaScript classes (ApiClient, FileManager, App, ThemeManager, ParticleSystem, etc.)
@@ -31,6 +25,8 @@ requests     process management    + transfer.info        TCP Protocol
 python launch_gui.py
 # Starts Flask API server + opens browser to http://localhost:9090/
 # Automatically handles port checking and server readiness
+
+python one_click_build_and_run.py  # Full build + deploy + launch
 ```
 
 ### Build System (CMake + vcpkg)
@@ -215,6 +211,17 @@ def test_full_backup_chain():
 
 **Essential Truth**: Component isolation testing misses critical integration issues. Real verification happens through actual file transfers and hash comparison, not just API responses or exit codes.
 
+## Project-Specific Conventions
+
+- **File Structure**: C++ client expects `transfer.info` in working directory, not executable directory
+- **Batch Mode**: Always use `--batch` flag for C++ client in subprocess to prevent hanging
+- **Port Usage**: Server (1256), API (9090) - check both for conflicts
+- **File Verification**: Success = actual file appears in `received_files/` with correct content
+- **Build Dependencies**: vcpkg toolchain required for C++ build, Flask + flask-cors for API
+- **Process Management**: Use SynchronizedFileManager for `transfer.info` to prevent race conditions
+- **API Communication**: REST endpoints for operations, WebSocket (`/ws`) for real-time progress updates
+- **Error Propagation**: C++ client logs → subprocess stdout → RealBackupExecutor → Flask API → Web UI
+
 ## Quick Reference Commands
 ```bash
 # Check system health
@@ -228,6 +235,10 @@ taskkill /f /im EncryptedBackupClient.exe # Kill C++ client
 # Verify file transfers  
 dir "server\received_files"              # Check received files
 python -c "import hashlib; print(hashlib.sha256(open('file.txt','rb').read()).hexdigest())"
+
+# Build troubleshooting
+cmake --version                          # Check CMake version
+vcpkg list                              # Check installed packages
 ```
 
 When modifying this system, always test the complete integration chain. The unique hybrid architecture means changes in one layer can break communication patterns in unexpected ways.

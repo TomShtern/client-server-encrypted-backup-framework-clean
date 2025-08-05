@@ -4,6 +4,11 @@
         "sonarsource.sonarlint-vscode",
         "bradlc.vscode-tailwindcss",
         "ms-mssql.mssql",
-        "redhat.vscode-xml"
+        "redhat.vscode-xml",
+        "vmware.vscode-spring-boot",
+        "mongodb.mongodb-vscode",
+        "sourcery.sourcery",
+        "supabase.vscode-supabase-extension",
+        "ttoowa.in-your-face-incredible"
     ]
 }
