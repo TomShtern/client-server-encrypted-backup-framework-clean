@@ -740,31 +740,11 @@ bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
         // Code and payload_size need explicit little-endian conversion
         uint32_t payload_size_val = static_cast<uint32_t>(payload.size());
         
-        // Convert to little-endian if needed (host to little-endian)
-        auto hostToLittleEndian16 = [](uint16_t value) -> uint16_t {
-            return ((value & 0xFF) << 8) | ((value >> 8) & 0xFF);
-        };
+        // Use the corrected endianness conversion functions
         
-        auto hostToLittleEndian32 = [](uint32_t value) -> uint32_t {
-            return ((value & 0xFF) << 24) | 
-                   (((value >> 8) & 0xFF) << 16) |
-                   (((value >> 16) & 0xFF) << 8) |
-                   ((value >> 24) & 0xFF);
-        };
-        
-        // Check system endianness and convert if necessary
-        uint16_t endian_test = 1;
-        bool is_little_endian = *reinterpret_cast<uint8_t*>(&endian_test) == 1;
-        
-        if (is_little_endian) {
-            // System is already little-endian, use values directly
-            header.code = code;
-            header.payload_size = payload_size_val;
-        } else {
-            // System is big-endian, convert to little-endian
-            header.code = hostToLittleEndian16(code);
-            header.payload_size = hostToLittleEndian32(payload_size_val);
-        }
+        // Use the corrected endianness conversion functions
+        header.code = hostToLittleEndian16(code);
+        header.payload_size = hostToLittleEndian32(payload_size_val);
         
         // Serialize struct to bytes
         std::vector<uint8_t> headerBytes(sizeof(RequestHeader));
@@ -1110,15 +1090,25 @@ bool Client::sendPublicKey() {
 
 uint16_t Client::hostToLittleEndian16(uint16_t value) {
     // Convert 16-bit value from host byte order to little-endian
-    return ((value & 0xFF) << 8) | ((value >> 8) & 0xFF);
+    // Only swap bytes if host is big-endian
+    if (isSystemLittleEndian()) {
+        return value;  // Already little-endian, no conversion needed
+    } else {
+        return ((value & 0xFF) << 8) | ((value >> 8) & 0xFF);  // Swap bytes for big-endian
+    }
 }
 
 uint32_t Client::hostToLittleEndian32(uint32_t value) {
     // Convert 32-bit value from host byte order to little-endian
-    return ((value & 0xFF) << 24) |
-           (((value >> 8) & 0xFF) << 16) |
-           (((value >> 16) & 0xFF) << 8) |
-           ((value >> 24) & 0xFF);
+    // Only swap bytes if host is big-endian
+    if (isSystemLittleEndian()) {
+        return value;  // Already little-endian, no conversion needed
+    } else {
+        return ((value & 0xFF) << 24) |
+               (((value >> 8) & 0xFF) << 16) |
+               (((value >> 16) & 0xFF) << 8) |
+               ((value >> 24) & 0xFF);  // Swap bytes for big-endian
+    }
 }
 
 bool Client::isSystemLittleEndian() {
@@ -1172,6 +1162,8 @@ bool Client::validateFileSizeForTransfer(size_t fileSize) {
 
     return true;
 }
+
+
 
 // ============================================================================
 // END CRITICAL FIXES: Endianness and Validation Utilities
@@ -1446,13 +1438,11 @@ bool Client::sendFilePacket(const std::string& filename, const std::string& encr
         return false;
     }
 
-    // CRITICAL FIX: Convert metadata to little-endian format (same logic as sendRequest)
-    bool is_little_endian = isSystemLittleEndian();
-
-    uint32_t le_encryptedSize = is_little_endian ? encryptedSize : hostToLittleEndian32(encryptedSize);
-    uint32_t le_originalSize = is_little_endian ? originalSize : hostToLittleEndian32(originalSize);
-    uint16_t le_packetNum = is_little_endian ? packetNum : hostToLittleEndian16(packetNum);
-    uint16_t le_totalPackets = is_little_endian ? totalPackets : hostToLittleEndian16(totalPackets);
+    // CRITICAL FIX: Convert metadata to little-endian format for server compatibility
+    uint32_t le_encryptedSize = hostToLittleEndian32(encryptedSize);
+    uint32_t le_originalSize = hostToLittleEndian32(originalSize);
+    uint16_t le_packetNum = hostToLittleEndian16(packetNum);
+    uint16_t le_totalPackets = hostToLittleEndian16(totalPackets);
 
     // Add metadata in little-endian format (as expected by Python server)
     payload.insert(payload.end(), reinterpret_cast<uint8_t*>(&le_encryptedSize),

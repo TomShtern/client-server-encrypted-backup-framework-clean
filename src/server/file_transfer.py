@@ -549,8 +549,8 @@ class FileTransferManager:
             logger.debug(f"Filename validation failed: contains path traversal chars")
             return False
         
-        # Check for safe characters only
-        if not re.match(r"^[a-zA-Z0-9._\-\s]+$", filename):
+        # Check for safe characters only (including ampersand for common filenames)
+        if not re.match(r"^[a-zA-Z0-9._\-\s&]+$", filename):
             logger.debug(f"Filename validation failed: contains unsafe characters")
             return False
         

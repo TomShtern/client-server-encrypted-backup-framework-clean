@@ -344,6 +344,8 @@ private:
     static size_t validateAndAlignBufferSize(size_t requestedSize, size_t fileSize);
     static bool validateFileSizeForTransfer(size_t fileSize);
 
+
+
     // Visual feedback
     void displayStatus(const std::string& operation, bool success, const std::string& details = "");
     void displayProgress(const std::string& operation, size_t current, size_t total);
