@@ -1104,6 +1104,79 @@ bool Client::sendPublicKey() {
     return true;
 }
 
+// ============================================================================
+// CRITICAL FIXES: Endianness and Validation Utilities
+// ============================================================================
+
+uint16_t Client::hostToLittleEndian16(uint16_t value) {
+    // Convert 16-bit value from host byte order to little-endian
+    return ((value & 0xFF) << 8) | ((value >> 8) & 0xFF);
+}
+
+uint32_t Client::hostToLittleEndian32(uint32_t value) {
+    // Convert 32-bit value from host byte order to little-endian
+    return ((value & 0xFF) << 24) |
+           (((value >> 8) & 0xFF) << 16) |
+           (((value >> 16) & 0xFF) << 8) |
+           ((value >> 24) & 0xFF);
+}
+
+bool Client::isSystemLittleEndian() {
+    // Check system endianness by examining byte order of a test value
+    uint16_t endian_test = 1;
+    return *reinterpret_cast<uint8_t*>(&endian_test) == 1;
+}
+
+size_t Client::validateAndAlignBufferSize(size_t requestedSize, size_t fileSize) {
+    // Validate and align buffer size for optimal performance and server compatibility
+
+    // Ensure minimum buffer size
+    if (requestedSize < MIN_BUFFER_SIZE) {
+        requestedSize = MIN_BUFFER_SIZE;
+    }
+
+    // Ensure buffer doesn't exceed server limits
+    if (requestedSize > MAX_SAFE_PACKET_SIZE) {
+        requestedSize = MAX_SAFE_PACKET_SIZE;
+    }
+
+    // Align to AES block boundaries (16 bytes) for optimal encryption performance
+    size_t alignedSize = ((requestedSize + AES_BLOCK_SIZE - 1) / AES_BLOCK_SIZE) * AES_BLOCK_SIZE;
+
+    // Final validation against server limits
+    if (alignedSize > MAX_SAFE_PACKET_SIZE) {
+        alignedSize = (MAX_SAFE_PACKET_SIZE / AES_BLOCK_SIZE) * AES_BLOCK_SIZE;
+    }
+
+    return alignedSize;
+}
+
+bool Client::validateFileSizeForTransfer(size_t fileSize) {
+    // Validate file size against server limits and system capabilities
+
+    if (fileSize == 0) {
+        return false;  // Empty files not supported
+    }
+
+    if (fileSize > MAX_SAFE_FILE_SIZE) {
+        return false;  // File too large for server
+    }
+
+    // Check if we have enough memory for the file (rough estimate)
+    // This is a basic check - in production, we'd use more sophisticated memory detection
+    if (fileSize > 1024 * 1024 * 1024) {  // 1GB threshold for memory check
+        // For very large files, we should implement streaming in the future
+        // For now, warn but allow (will be caught by allocation failure)
+        std::cout << "[WARNING] Large file detected: " << fileSize << " bytes. May cause memory issues." << std::endl;
+    }
+
+    return true;
+}
+
+// ============================================================================
+// END CRITICAL FIXES: Endianness and Validation Utilities
+// ============================================================================
+
 // Transfer file using a streaming approach with proper dynamic buffer management
 bool Client::transferFile() {
     // Open the file for reading in binary mode
@@ -1125,42 +1198,85 @@ bool Client::transferFile() {
         filename = filename.substr(lastSlash + 1);
     }
 
-    // DYNAMIC BUFFER: Calculate optimal buffer size for THIS specific file
+    // CRITICAL FIX: Enhanced dynamic buffer calculation with validation
     // Buffer size remains constant throughout the entire transfer of this file
     // Realistic file size ranges: tiny configs to 1GB+ media files
-    size_t dynamicBufferSize;
+    size_t rawBufferSize;
     if (fileSize <= 1024) {                       // ≤1KB files: 1KB buffer
-        dynamicBufferSize = 1024;                 // Tiny files (config, small scripts, .env files)
-    } else if (fileSize <= 4 * 1024) {           // 1KB-4KB files: 2KB buffer  
-        dynamicBufferSize = 2 * 1024;             // Small files (small configs, text files, small scripts)
+        rawBufferSize = 1024;                     // Tiny files (config, small scripts, .env files)
+    } else if (fileSize <= 4 * 1024) {           // 1KB-4KB files: 2KB buffer
+        rawBufferSize = 2 * 1024;                 // Small files (small configs, text files, small scripts)
     } else if (fileSize <= 16 * 1024) {          // 4KB-16KB files: 4KB buffer
-        dynamicBufferSize = 4 * 1024;             // Code files (source files, small documents)
+        rawBufferSize = 4 * 1024;                 // Code files (source files, small documents)
     } else if (fileSize <= 64 * 1024) {          // 16KB-64KB files: 8KB buffer
-        dynamicBufferSize = 8 * 1024;             // Medium files (larger code, formatted docs, small images)
+        rawBufferSize = 8 * 1024;                 // Medium files (larger code, formatted docs, small images)
     } else if (fileSize <= 512 * 1024) {         // 64KB-512KB files: 16KB buffer
-        dynamicBufferSize = 16 * 1024;            // Large docs (PDFs, medium images, compiled binaries)
+        rawBufferSize = 16 * 1024;                // Large docs (PDFs, medium images, compiled binaries)
     } else if (fileSize <= 10 * 1024 * 1024) {   // 512KB-10MB files: 32KB buffer
-        dynamicBufferSize = 32 * 1024;            // Large files (big images, small videos, archives) - L1 cache optimized
-    } else {                                      // >10MB files: 64KB buffer  
-        dynamicBufferSize = 64 * 1024;            // Huge files (large videos, big archives, datasets up to 1GB+)
+        rawBufferSize = 32 * 1024;                // Large files (big images, small videos, archives) - L1 cache optimized
+    } else {                                      // >10MB files: 64KB buffer
+        rawBufferSize = 64 * 1024;                // Huge files (large videos, big archives, datasets up to 1GB+)
     }
 
-    displayStatus("File details", true, "Name: " + filename + ", Size: " + formatBytes(fileSize));
-    displayStatus("Dynamic Buffer Transfer", true, "Buffer size: " + formatBytes(dynamicBufferSize) + " (constant for this file)");
+    // CRITICAL FIX: Validate and align the calculated buffer size
+    size_t dynamicBufferSize = validateAndAlignBufferSize(rawBufferSize, fileSize);
 
-    // Use the calculated buffer size for this specific file's entire transfer
+    displayStatus("File details", true, "Name: " + filename + ", Size: " + formatBytes(fileSize));
+    displayStatus("Dynamic Buffer Transfer", true,
+                 "Buffer size: " + formatBytes(dynamicBufferSize) +
+                 " (AES-aligned, server-validated, constant for this file)");
+
+    // Use the validated buffer size for this specific file's entire transfer
     return transferFileWithBuffer(fileStream, filename, fileSize, dynamicBufferSize);
 }
 // Transfer file with specified buffer size (dynamic per-file buffer sizing)
-bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string& filename, 
+bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string& filename,
                                    size_t fileSize, size_t bufferSize) {
+    // CRITICAL FIX: Validate file size and buffer size before proceeding
+    if (!validateFileSizeForTransfer(fileSize)) {
+        displayError("File size validation failed: " + formatBytes(fileSize), ErrorType::FILE_IO);
+        return false;
+    }
+
+    // CRITICAL FIX: Validate and align buffer size
+    size_t validatedBufferSize = validateAndAlignBufferSize(bufferSize, fileSize);
+    if (validatedBufferSize != bufferSize) {
+        displayStatus("Buffer size adjusted", true,
+                     "From " + formatBytes(bufferSize) + " to " + formatBytes(validatedBufferSize) +
+                     " (AES-aligned, server-safe)");
+        bufferSize = validatedBufferSize;
+    }
+
     stats.totalBytes = fileSize;
     stats.reset();
-    
-    // Read the entire file into memory for CRC calculation and encryption
-    std::vector<uint8_t> fileData(fileSize);
-    fileStream.read(reinterpret_cast<char*>(fileData.data()), fileSize);
-    fileStream.close();
+
+    // CRITICAL FIX: Safe memory allocation with error handling
+    std::vector<uint8_t> fileData;
+    try {
+        displayStatus("Memory allocation", true, "Allocating " + formatBytes(fileSize) + " for file data");
+        fileData.reserve(fileSize);  // Reserve capacity first
+        fileData.resize(fileSize);   // Then resize
+
+        displayStatus("File reading", true, "Reading " + formatBytes(fileSize) + " from disk");
+        fileStream.read(reinterpret_cast<char*>(fileData.data()), fileSize);
+
+        if (fileStream.gcount() != static_cast<std::streamsize>(fileSize)) {
+            displayError("File read incomplete: expected " + std::to_string(fileSize) +
+                        " bytes, got " + std::to_string(fileStream.gcount()), ErrorType::FILE_IO);
+            return false;
+        }
+
+        fileStream.close();
+        displayStatus("File loaded", true, "Successfully loaded into memory");
+
+    } catch (const std::bad_alloc& e) {
+        displayError("Memory allocation failed for file size " + formatBytes(fileSize) +
+                    ": " + std::string(e.what()), ErrorType::GENERAL);
+        return false;
+    } catch (const std::exception& e) {
+        displayError("File loading failed: " + std::string(e.what()), ErrorType::FILE_IO);
+        return false;
+    }
     
     // Calculate CRC32 of the original file data  
     uint32_t clientCRC = calculateCRC32(fileData.data(), fileSize);
@@ -1175,10 +1291,31 @@ bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string
         return false;
     }
     
-    // Calculate number of packets needed with the specified buffer size
-    uint16_t totalPackets = static_cast<uint16_t>((encryptedData.size() + bufferSize - 1) / bufferSize);
-    
-    displayStatus("Transfer Plan", true, "Dynamic packet sizing with buffer: " + formatBytes(bufferSize));
+    // CRITICAL FIX: Calculate number of packets with overflow protection
+    size_t packetCount = (encryptedData.size() + bufferSize - 1) / bufferSize;
+
+    if (packetCount == 0) {
+        displayError("Invalid packet count calculation: encrypted data size " +
+                    std::to_string(encryptedData.size()) + ", buffer size " + std::to_string(bufferSize),
+                    ErrorType::PROTOCOL);
+        return false;
+    }
+
+    if (packetCount > UINT16_MAX) {
+        displayError("Too many packets required: " + std::to_string(packetCount) +
+                    " (max: " + std::to_string(UINT16_MAX) + "). Use larger buffer size.",
+                    ErrorType::PROTOCOL);
+        return false;
+    }
+
+    uint16_t totalPackets = static_cast<uint16_t>(packetCount);
+
+    displayStatus("Transfer Plan", true,
+                 "Dynamic packet sizing: " + std::to_string(totalPackets) + " packets, " +
+                 formatBytes(bufferSize) + " buffer");
+    displayStatus("Encryption overhead", true,
+                 "Original: " + formatBytes(fileSize) + " → Encrypted: " + formatBytes(encryptedData.size()) +
+                 " (+" + std::to_string(encryptedData.size() - fileSize) + " bytes padding)");
     displayPhase("TRANSFERRING");
     displaySeparator();
     
@@ -1250,54 +1387,85 @@ bool Client::transferFileEnhanced(const TransferConfig& config) {
         filename = filename.substr(lastSlash + 1);
     }
 
-    // DYNAMIC BUFFER: Calculate optimal buffer size for THIS specific file
+    // CRITICAL FIX: Enhanced dynamic buffer calculation with validation
     // Buffer size remains constant throughout the entire transfer of this file
     // Realistic file size ranges: tiny configs to 1GB+ media files
-    size_t optimalBufferSize;
+    size_t rawOptimalBufferSize;
     if (fileSize <= 1024) {                       // ≤1KB files: 1KB buffer
-        optimalBufferSize = 1024;                 // Tiny files (config, small scripts, .env files)
-    } else if (fileSize <= 4 * 1024) {           // 1KB-4KB files: 2KB buffer  
-        optimalBufferSize = 2 * 1024;             // Small files (small configs, text files, small scripts)
+        rawOptimalBufferSize = 1024;              // Tiny files (config, small scripts, .env files)
+    } else if (fileSize <= 4 * 1024) {           // 1KB-4KB files: 2KB buffer
+        rawOptimalBufferSize = 2 * 1024;          // Small files (small configs, text files, small scripts)
     } else if (fileSize <= 16 * 1024) {          // 4KB-16KB files: 4KB buffer
-        optimalBufferSize = 4 * 1024;             // Code files (source files, small documents)
+        rawOptimalBufferSize = 4 * 1024;          // Code files (source files, small documents)
     } else if (fileSize <= 64 * 1024) {          // 16KB-64KB files: 8KB buffer
-        optimalBufferSize = 8 * 1024;             // Medium files (larger code, formatted docs, small images)
+        rawOptimalBufferSize = 8 * 1024;          // Medium files (larger code, formatted docs, small images)
     } else if (fileSize <= 512 * 1024) {         // 64KB-512KB files: 16KB buffer
-        optimalBufferSize = 16 * 1024;            // Large docs (PDFs, medium images, compiled binaries)
+        rawOptimalBufferSize = 16 * 1024;         // Large docs (PDFs, medium images, compiled binaries)
     } else if (fileSize <= 10 * 1024 * 1024) {   // 512KB-10MB files: 32KB buffer
-        optimalBufferSize = 32 * 1024;            // Large files (big images, small videos, archives) - L1 cache optimized
-    } else {                                      // >10MB files: 64KB buffer  
-        optimalBufferSize = 64 * 1024;            // Huge files (large videos, big archives, datasets up to 1GB+)
+        rawOptimalBufferSize = 32 * 1024;         // Large files (big images, small videos, archives) - L1 cache optimized
+    } else {                                      // >10MB files: 64KB buffer
+        rawOptimalBufferSize = 64 * 1024;         // Huge files (large videos, big archives, datasets up to 1GB+)
     }
 
-    displayStatus("Enhanced File Transfer", true, "File: " + filename + " (" + formatBytes(fileSize) + ")");
-    displayStatus("Transfer Strategy", true, "Dynamic buffer sizing (cache-optimized)");
-    displayStatus("Dynamic Buffer Transfer", true, 
-                 "Optimal buffer: " + formatBytes(optimalBufferSize) + 
-                 " (constant for this file)");
+    // CRITICAL FIX: Validate and align the calculated buffer size
+    size_t optimalBufferSize = validateAndAlignBufferSize(rawOptimalBufferSize, fileSize);
 
-    // Use working transferFile logic with the calculated buffer size
+    displayStatus("Enhanced File Transfer", true, "File: " + filename + " (" + formatBytes(fileSize) + ")");
+    displayStatus("Transfer Strategy", true, "Dynamic buffer sizing (cache-optimized, server-validated)");
+    displayStatus("Dynamic Buffer Transfer", true,
+                 "Optimal buffer: " + formatBytes(optimalBufferSize) +
+                 " (AES-aligned, constant for this file)");
+
+    // Use working transferFile logic with the validated buffer size
     return transferFileWithBuffer(fileStream, filename, fileSize, optimalBufferSize);
 }
 
 bool Client::sendFilePacket(const std::string& filename, const std::string& encryptedData,
                            uint32_t originalSize, uint16_t packetNum, uint16_t totalPackets) {
-    // Create payload
+    // CRITICAL FIX: Create payload with proper endianness handling
     std::vector<uint8_t> payload;
-    
-    // Add metadata
+
+    // Validate inputs first
     uint32_t encryptedSize = static_cast<uint32_t>(encryptedData.size());
-    payload.insert(payload.end(), reinterpret_cast<uint8_t*>(&encryptedSize),
-                   reinterpret_cast<uint8_t*>(&encryptedSize) + 4);
-    
-    payload.insert(payload.end(), reinterpret_cast<uint8_t*>(&originalSize),
-                   reinterpret_cast<uint8_t*>(&originalSize) + 4);
-    
-    payload.insert(payload.end(), reinterpret_cast<uint8_t*>(&packetNum),
-                   reinterpret_cast<uint8_t*>(&packetNum) + 2);
-    
-    payload.insert(payload.end(), reinterpret_cast<uint8_t*>(&totalPackets),
-                   reinterpret_cast<uint8_t*>(&totalPackets) + 2);
+
+    if (encryptedSize == 0) {
+        displayError("Cannot send empty encrypted data packet", ErrorType::PROTOCOL);
+        return false;
+    }
+
+    if (encryptedSize > MAX_SAFE_PACKET_SIZE) {
+        displayError("Encrypted packet size exceeds server limits: " +
+                    formatBytes(encryptedSize) + " > " + formatBytes(MAX_SAFE_PACKET_SIZE),
+                    ErrorType::PROTOCOL);
+        return false;
+    }
+
+    if (packetNum == 0 || packetNum > totalPackets) {
+        displayError("Invalid packet number: " + std::to_string(packetNum) +
+                    " (total: " + std::to_string(totalPackets) + ")", ErrorType::PROTOCOL);
+        return false;
+    }
+
+    // CRITICAL FIX: Convert metadata to little-endian format (same logic as sendRequest)
+    bool is_little_endian = isSystemLittleEndian();
+
+    uint32_t le_encryptedSize = is_little_endian ? encryptedSize : hostToLittleEndian32(encryptedSize);
+    uint32_t le_originalSize = is_little_endian ? originalSize : hostToLittleEndian32(originalSize);
+    uint16_t le_packetNum = is_little_endian ? packetNum : hostToLittleEndian16(packetNum);
+    uint16_t le_totalPackets = is_little_endian ? totalPackets : hostToLittleEndian16(totalPackets);
+
+    // Add metadata in little-endian format (as expected by Python server)
+    payload.insert(payload.end(), reinterpret_cast<uint8_t*>(&le_encryptedSize),
+                   reinterpret_cast<uint8_t*>(&le_encryptedSize) + 4);
+
+    payload.insert(payload.end(), reinterpret_cast<uint8_t*>(&le_originalSize),
+                   reinterpret_cast<uint8_t*>(&le_originalSize) + 4);
+
+    payload.insert(payload.end(), reinterpret_cast<uint8_t*>(&le_packetNum),
+                   reinterpret_cast<uint8_t*>(&le_packetNum) + 2);
+
+    payload.insert(payload.end(), reinterpret_cast<uint8_t*>(&le_totalPackets),
+                   reinterpret_cast<uint8_t*>(&le_totalPackets) + 2);
     
     // Add filename (255 bytes)
     std::vector<uint8_t> filenameBytes(255, 0);

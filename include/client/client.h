@@ -79,6 +79,10 @@ constexpr int SOCKET_TIMEOUT_MS = 30000;
 constexpr int RECONNECT_DELAY_MS = 5000;
 constexpr int KEEPALIVE_INTERVAL = 60;
 
+// Server limits (must match server-side constraints)
+constexpr size_t MAX_SAFE_PACKET_SIZE = 16 * 1024 * 1024;  // 16MB - matches server MAX_PAYLOAD_READ_LIMIT
+constexpr size_t MAX_SAFE_FILE_SIZE = 4ULL * 1024 * 1024 * 1024;  // 4GB - matches server MAX_ORIGINAL_FILE_SIZE
+
 // Enhanced error codes for better debugging
 enum class ErrorType {
     NONE,
@@ -332,6 +336,13 @@ private:
     std::string formatBytes(size_t bytes);
     std::string formatDuration(int seconds);
     std::string getCurrentTimestamp();
+
+    // Endianness and validation utilities (CRITICAL FIXES)
+    static uint16_t hostToLittleEndian16(uint16_t value);
+    static uint32_t hostToLittleEndian32(uint32_t value);
+    static bool isSystemLittleEndian();
+    static size_t validateAndAlignBufferSize(size_t requestedSize, size_t fileSize);
+    static bool validateFileSizeForTransfer(size_t fileSize);
 
     // Visual feedback
     void displayStatus(const std::string& operation, bool success, const std::string& details = "");
