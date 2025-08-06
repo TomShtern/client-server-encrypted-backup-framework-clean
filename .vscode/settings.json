@@ -1,13 +1,12 @@
+
 {
-    "coderabbit.agentType": "Native",
-    "coderabbit.autoReviewMode": "auto",
-    "C_Cpp.workspaceParsingPriority": "medium",
-    "cmake.configureArgs": [
-        "-DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake"
-    ],
-    "cmake.buildDirectory": "${workspaceFolder}/build",
-    "cmake.generator": "Visual Studio 17 2022",
-    "augment.nextEdit.enableGlobalBackgroundSuggestions": true,
-    "augment.nextEdit.showDiffInHover": true,
-    "augment.nextEdit.highlightSuggestionsInTheEditor": true
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "C_Cpp.formatting": "clang-format",
+    "files.associations": {
+        "*.h": "cpp",
+        "*.cpp": "cpp"
+    },
+    "cmake.configureOnOpen": true,
+    "C_Cpp.intelliSenseEngine": "Default",
+    "C_Cpp.errorSquiggles": "Enabled"
 }

@@ -291,12 +291,12 @@ class RequestHandler:
         mod_time = os.path.getmtime(final_save_path) if os.path.exists(final_save_path) else 0
         mod_date = datetime.fromtimestamp(mod_time).isoformat() if mod_time else datetime.now().isoformat()
 
-        # Update the file's record in the database to mark it as verified
-        self.server.db_manager.save_file_info_to_db(client.id, filename_str, final_save_path, True, file_size, mod_date)
-        
         # Send Response 1604 (General ACK)
         # Payload: client_id[16] (client's own ID)
         self._send_response(sock, RESP_ACK, client.id)
+
+        # Update the file's record in the database to mark it as verified
+        self.server.db_manager.save_file_info_to_db(client.id, filename_str, final_save_path, True, file_size, mod_date)
 
     def _handle_crc_invalid_retry(self, sock: socket.socket, client: Any, payload: bytes):
         """

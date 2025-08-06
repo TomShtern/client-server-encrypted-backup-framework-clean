@@ -320,7 +320,7 @@ bool Client::run() {
             std::this_thread::sleep_for(std::chrono::seconds(2));
         }
         
-        if (transferFile()) {
+        if (transferFileEnhanced(TransferConfig())) {
             transferSuccess = true;
         } else {
             fileRetries++;
@@ -793,12 +793,46 @@ bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
             return false;
         }
 
-        // Send payload if any
+        // Send payload if any - use adaptive chunking based on payload size
         if (!payload.empty()) {
-            size_t payloadBytes = boost::asio::write(*socket, boost::asio::buffer(payload));
-            if (payloadBytes != payload.size()) {
-                displayError("Failed to send complete payload", ErrorType::NETWORK);
-                return false;
+            size_t payloadSize = payload.size();
+            
+            // Dynamic chunk sizing based on payload size for optimal performance
+            size_t chunkSize;
+            int delayMs = 0;
+            
+            if (payloadSize <= 1024) {
+                // Small payloads (≤1KB): send in one chunk - no overhead
+                chunkSize = payloadSize;
+            } else if (payloadSize <= 16384) {
+                // Medium payloads (1KB-16KB): send in 2-4 chunks of 4KB each
+                chunkSize = 4096;
+            } else if (payloadSize <= 65536) {
+                // Large payloads (16KB-64KB): send in 8KB chunks with minimal delay
+                chunkSize = 8192;
+                delayMs = 1;
+            } else {
+                // Very large payloads (>64KB): send in 16KB chunks with 2ms delays
+                chunkSize = 16384;
+                delayMs = 2;
+            }
+            
+            size_t totalSent = 0;
+            while (totalSent < payloadSize) {
+                size_t currentChunkSize = std::min(chunkSize, payloadSize - totalSent);
+                boost::asio::const_buffer chunk_buffer(payload.data() + totalSent, currentChunkSize);
+                
+                size_t chunkBytes = boost::asio::write(*socket, chunk_buffer);
+                if (chunkBytes != currentChunkSize) {
+                    displayError("Failed to send complete payload chunk", ErrorType::NETWORK);
+                    return false;
+                }
+                totalSent += chunkBytes;
+                
+                // Add delay between chunks only for large payloads and only if not the last chunk
+                if (delayMs > 0 && totalSent < payloadSize) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
+                }
             }
         }
 
@@ -1070,7 +1104,7 @@ bool Client::sendPublicKey() {
     return true;
 }
 
-// Transfer file using a streaming approach
+// Transfer file using a streaming approach with proper dynamic buffer management
 bool Client::transferFile() {
     // Open the file for reading in binary mode
     std::ifstream fileStream(filepath, std::ios::binary);
@@ -1079,89 +1113,118 @@ bool Client::transferFile() {
         return false;
     }
 
-    // Get file size for progress tracking
+    // Get file size for dynamic buffer calculation
     fileStream.seekg(0, std::ios::end);
     size_t fileSize = fileStream.tellg();
     fileStream.seekg(0, std::ios::beg);
-    stats.totalBytes = fileSize;
-    stats.reset();
 
     // Extract filename
     std::string filename = filepath;
-    size_t lastSlash = filename.find_last_of("/\\\\");
+    size_t lastSlash = filename.find_last_of("/\\");
     if (lastSlash != std::string::npos) {
         filename = filename.substr(lastSlash + 1);
     }
 
-    displayStatus("File details", true, "Name: " + filename + ", Size: " + formatBytes(stats.totalBytes));
-    displayStatus("Encrypting file", true, "AES-256-CBC encryption (streaming)");
-
-    // Initialize streaming CRC and AES encryption
-    CRC32Stream crcStream;
-    AESWrapper aes(reinterpret_cast<const unsigned char*>(aesKey.c_str()), AES_KEY_SIZE, true);
-
-    // Calculate total packets needed
-    size_t totalPackets = (fileSize + OPTIMAL_BUFFER_SIZE - 1) / OPTIMAL_BUFFER_SIZE;
-    displayStatus("Transfer preparation", true, "Splitting into " + std::to_string(totalPackets) + " packets");
-    log_phase_with_timestamp("TRANSFERRING");
-    displaySeparator();
-
-    std::vector<uint8_t> buffer(OPTIMAL_BUFFER_SIZE);
-    uint16_t packetNum = 1;
-    size_t bytesTransferred = 0;
-
-    while (fileStream) {
-        fileStream.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
-        size_t bytesRead = fileStream.gcount();
-
-        if (bytesRead > 0) {
-            // Update CRC with the raw chunk
-            crcStream.update(buffer.data(), bytesRead);
-
-            // Encrypt the chunk
-            std::string encryptedChunk = aes.encrypt(reinterpret_cast<const char*>(buffer.data()), bytesRead);
-            
-            // Send the encrypted chunk as a packet
-            if (!sendFilePacket(filename, encryptedChunk, static_cast<uint32_t>(fileSize), packetNum, static_cast<uint16_t>(totalPackets))) {
-                return false;
-            }
-
-            bytesTransferred += bytesRead;
-            stats.update(bytesTransferred);
-            displayProgress("Transferring", stats.transferredBytes, stats.totalBytes);
-
-            if (packetNum % 10 == 0 || packetNum == totalPackets) {
-                displayTransferStats();
-            }
-            packetNum++;
-        }
+    // DYNAMIC BUFFER: Calculate optimal buffer size for THIS specific file
+    // Buffer size remains constant throughout the entire transfer of this file
+    // Realistic file size ranges: tiny configs to 1GB+ media files
+    size_t dynamicBufferSize;
+    if (fileSize <= 1024) {                       // ≤1KB files: 1KB buffer
+        dynamicBufferSize = 1024;                 // Tiny files (config, small scripts, .env files)
+    } else if (fileSize <= 4 * 1024) {           // 1KB-4KB files: 2KB buffer  
+        dynamicBufferSize = 2 * 1024;             // Small files (small configs, text files, small scripts)
+    } else if (fileSize <= 16 * 1024) {          // 4KB-16KB files: 4KB buffer
+        dynamicBufferSize = 4 * 1024;             // Code files (source files, small documents)
+    } else if (fileSize <= 64 * 1024) {          // 16KB-64KB files: 8KB buffer
+        dynamicBufferSize = 8 * 1024;             // Medium files (larger code, formatted docs, small images)
+    } else if (fileSize <= 512 * 1024) {         // 64KB-512KB files: 16KB buffer
+        dynamicBufferSize = 16 * 1024;            // Large docs (PDFs, medium images, compiled binaries)
+    } else if (fileSize <= 10 * 1024 * 1024) {   // 512KB-10MB files: 32KB buffer
+        dynamicBufferSize = 32 * 1024;            // Large files (big images, small videos, archives) - L1 cache optimized
+    } else {                                      // >10MB files: 64KB buffer  
+        dynamicBufferSize = 64 * 1024;            // Huge files (large videos, big archives, datasets up to 1GB+)
     }
 
+    displayStatus("File details", true, "Name: " + filename + ", Size: " + formatBytes(fileSize));
+    displayStatus("Dynamic Buffer Transfer", true, "Buffer size: " + formatBytes(dynamicBufferSize) + " (constant for this file)");
+
+    // Use the calculated buffer size for this specific file's entire transfer
+    return transferFileWithBuffer(fileStream, filename, fileSize, dynamicBufferSize);
+}
+// Transfer file with specified buffer size (dynamic per-file buffer sizing)
+bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string& filename, 
+                                   size_t fileSize, size_t bufferSize) {
+    stats.totalBytes = fileSize;
+    stats.reset();
+    
+    // Read the entire file into memory for CRC calculation and encryption
+    std::vector<uint8_t> fileData(fileSize);
+    fileStream.read(reinterpret_cast<char*>(fileData.data()), fileSize);
     fileStream.close();
+    
+    // Calculate CRC32 of the original file data  
+    uint32_t clientCRC = calculateCRC32(fileData.data(), fileSize);
+    
+    // Encrypt the file data
+    AESWrapper aes(reinterpret_cast<const unsigned char*>(aesKey.c_str()), AES_KEY_SIZE, true);
+    std::string encryptedData;
+    try {
+        encryptedData = aes.encrypt(reinterpret_cast<const char*>(fileData.data()), fileSize);
+    } catch (const std::exception& e) {
+        displayError("File encryption failed: " + std::string(e.what()), ErrorType::CRYPTO);
+        return false;
+    }
+    
+    // Calculate number of packets needed with the specified buffer size
+    uint16_t totalPackets = static_cast<uint16_t>((encryptedData.size() + bufferSize - 1) / bufferSize);
+    
+    displayStatus("Transfer Plan", true, "Dynamic packet sizing with buffer: " + formatBytes(bufferSize));
+    displayPhase("TRANSFERRING");
     displaySeparator();
-    displayStatus("Transfer complete", true, "All packets sent successfully");
+    
+    // Send file in packets using the calculated buffer size
+    size_t dataOffset = 0;
+    uint16_t packetNum = 1;
+    
+    while (dataOffset < encryptedData.size()) {
+        size_t chunkSize = std::min(bufferSize, encryptedData.size() - dataOffset);
+        std::string chunk = encryptedData.substr(dataOffset, chunkSize);
+        
+        if (!sendFilePacket(filename, chunk, static_cast<uint32_t>(fileSize), packetNum, totalPackets)) {
+            displayError("Failed to send packet " + std::to_string(packetNum), ErrorType::NETWORK);
+            return false;
+        }
+        
+        dataOffset += chunkSize;
+        packetNum++;
+        stats.update(dataOffset);
+        
+        // Update progress display
+        displayProgress("Transferring", stats.transferredBytes, stats.totalBytes);
+    }
+    
+    displaySeparator();
+    displayStatus("Transfer Complete", true, "All " + std::to_string(totalPackets) + " packets sent successfully");
     displayStatus("Waiting for server", true, "Server calculating CRC...");
-    log_phase_with_timestamp("VERIFYING");
-
-    // Finalize CRC calculation
-    uint32_t clientCRC = crcStream.finalize(fileSize);
-
-    // Receive CRC response from server
+    displayPhase("VERIFYING");
+    
+    // Wait for CRC response from server
     ResponseHeader header;
     std::vector<uint8_t> responsePayload;
     if (!receiveResponse(header, responsePayload)) {
+        displayError("Failed to receive CRC response", ErrorType::NETWORK);
         return false;
     }
-
+    
     if (header.code != RESP_FILE_CRC || responsePayload.size() < 279) {
         displayError("Invalid file transfer response", ErrorType::PROTOCOL);
         return false;
     }
-
+    
     // Extract server CRC from payload
     uint32_t serverCRC;
     std::memcpy(&serverCRC, responsePayload.data() + 275, 4);
-
+    
     // Verify CRC
     return verifyCRC(serverCRC, clientCRC, filename);
 }
@@ -1175,256 +1238,48 @@ bool Client::transferFileEnhanced(const TransferConfig& config) {
         return false;
     }
 
-    // Get file size for strategy selection
+    // Get file size for buffer calculation
     fileStream.seekg(0, std::ios::end);
     size_t fileSize = fileStream.tellg();
     fileStream.seekg(0, std::ios::beg);
-    stats.totalBytes = fileSize;
-    stats.reset();
-
+    
     // Extract filename
     std::string filename = filepath;
-    size_t lastSlash = filename.find_last_of("/\\\\");
+    size_t lastSlash = filename.find_last_of("/\\");
     if (lastSlash != std::string::npos) {
         filename = filename.substr(lastSlash + 1);
     }
 
+    // DYNAMIC BUFFER: Calculate optimal buffer size for THIS specific file
+    // Buffer size remains constant throughout the entire transfer of this file
+    // Realistic file size ranges: tiny configs to 1GB+ media files
+    size_t optimalBufferSize;
+    if (fileSize <= 1024) {                       // ≤1KB files: 1KB buffer
+        optimalBufferSize = 1024;                 // Tiny files (config, small scripts, .env files)
+    } else if (fileSize <= 4 * 1024) {           // 1KB-4KB files: 2KB buffer  
+        optimalBufferSize = 2 * 1024;             // Small files (small configs, text files, small scripts)
+    } else if (fileSize <= 16 * 1024) {          // 4KB-16KB files: 4KB buffer
+        optimalBufferSize = 4 * 1024;             // Code files (source files, small documents)
+    } else if (fileSize <= 64 * 1024) {          // 16KB-64KB files: 8KB buffer
+        optimalBufferSize = 8 * 1024;             // Medium files (larger code, formatted docs, small images)
+    } else if (fileSize <= 512 * 1024) {         // 64KB-512KB files: 16KB buffer
+        optimalBufferSize = 16 * 1024;            // Large docs (PDFs, medium images, compiled binaries)
+    } else if (fileSize <= 10 * 1024 * 1024) {   // 512KB-10MB files: 32KB buffer
+        optimalBufferSize = 32 * 1024;            // Large files (big images, small videos, archives) - L1 cache optimized
+    } else {                                      // >10MB files: 64KB buffer  
+        optimalBufferSize = 64 * 1024;            // Huge files (large videos, big archives, datasets up to 1GB+)
+    }
+
     displayStatus("Enhanced File Transfer", true, "File: " + filename + " (" + formatBytes(fileSize) + ")");
-    
-    // Determine optimal transfer strategy
-    TransferStrategy strategy = config.strategy;
-    if (strategy == TransferStrategy::ADAPTIVE_BUFFER) {
-        // Auto-select strategy based on file size and configuration
-        if (config.enableMemoryMapping && fileSize >= config.mmapThreshold) {
-            strategy = TransferStrategy::MEMORY_MAPPED;
-            displayStatus("Transfer Strategy", true, "Memory-mapped I/O (zero-copy for large file)");
-        } else {
-            displayStatus("Transfer Strategy", true, "Adaptive buffer sizing (cache-optimized)");
-        }
-    }
-
-    bool result = false;
-    try {
-        switch (strategy) {
-            case TransferStrategy::ADAPTIVE_BUFFER:
-                result = transferWithAdaptiveBuffer(fileSize, filename, fileStream);
-                break;
-            case TransferStrategy::MEMORY_MAPPED:
-                fileStream.close();  // Close before memory mapping
-                result = transferWithMemoryMapping(fileSize, filename);
-                break;
-            case TransferStrategy::STREAMING_ROBUST:
-                result = transferWithRobustStreaming(fileSize, filename, fileStream);
-                break;
-        }
-    } catch (const std::exception& e) {
-        displayError("Transfer failed with exception: " + std::string(e.what()), ErrorType::GENERAL);
-        result = false;
-    }
-
-    if (fileStream.is_open()) {
-        fileStream.close();
-    }
-    
-    return result;
-}
-
-// Dynamic buffer transfer implementation with network adaptation
-bool Client::transferWithAdaptiveBuffer(size_t fileSize, const std::string& filename, std::ifstream& fileStream) {
-    // Initialize dynamic buffer manager with file-size hint
-    size_t initialBufferSize = DynamicBufferManager::calculateInitialBufferSize(fileSize);
-    DynamicBufferManager bufferManager(initialBufferSize);
-    
+    displayStatus("Transfer Strategy", true, "Dynamic buffer sizing (cache-optimized)");
     displayStatus("Dynamic Buffer Transfer", true, 
-                 "Initial buffer: " + formatBytes(bufferManager.getCurrentBufferSize()) + 
-                 " (will adapt based on network performance)");
+                 "Optimal buffer: " + formatBytes(optimalBufferSize) + 
+                 " (constant for this file)");
 
-    // Initialize streaming CRC and AES encryption
-    CRC32Stream crcStream;
-    AESWrapper aes(reinterpret_cast<const unsigned char*>(aesKey.c_str()), AES_KEY_SIZE, true);
-
-    displayStatus("Transfer Plan", true, "Dynamic packet sizing with network adaptation");
-    log_phase_with_timestamp("TRANSFERRING");
-    displaySeparator();
-
-    uint16_t packetNum = 1;
-    size_t bytesTransferred = 0;
-    size_t totalPacketsSent = 0;
-
-    while (fileStream && bytesTransferred < fileSize) {
-        // Get current dynamic buffer size
-        size_t currentBufferSize = bufferManager.getCurrentBufferSize();
-        
-        // Calculate remaining bytes and adjust buffer if needed
-        size_t remainingBytes = fileSize - bytesTransferred;
-        size_t actualBufferSize = std::min(currentBufferSize, remainingBytes);
-        
-        // Allocate buffer for this packet
-        std::vector<uint8_t> buffer(actualBufferSize);
-        
-        fileStream.read(reinterpret_cast<char*>(buffer.data()), actualBufferSize);
-        size_t bytesRead = fileStream.gcount();
-
-        if (bytesRead > 0) {
-            auto packetStartTime = std::chrono::steady_clock::now();
-            
-            // Update CRC with the raw chunk
-            crcStream.update(buffer.data(), bytesRead);
-
-            // Encrypt the chunk with proper error handling
-            std::string encryptedChunk;
-            try {
-                encryptedChunk = aes.encrypt(reinterpret_cast<const char*>(buffer.data()), bytesRead);
-            } catch (const std::exception& e) {
-                displayError("Encryption failed: " + std::string(e.what()), ErrorType::CRYPTO);
-                return false;
-            }
-            
-            // Send the encrypted chunk as a packet with retry logic
-            int retryCount = 0;
-            bool packetSent = false;
-            while (retryCount < MAX_RETRIES && !packetSent) {
-                packetSent = sendFilePacket(filename, encryptedChunk, static_cast<uint32_t>(fileSize), 
-                                          packetNum, 0); // totalPackets unknown with dynamic sizing
-                if (!packetSent) {
-                    retryCount++;
-                    if (retryCount < MAX_RETRIES) {
-                        displayStatus("Retry", true, "Packet " + std::to_string(packetNum) + 
-                                    " failed, retrying (" + std::to_string(retryCount) + "/" + std::to_string(MAX_RETRIES) + ")");
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100 * retryCount));
-                    }
-                }
-            }
-            
-            // Adapt buffer size based on packet performance
-            auto packetEndTime = std::chrono::steady_clock::now();
-            bufferManager.adaptAfterPacket(packetSent, bytesRead);
-            
-            if (!packetSent) {
-                displayError("Failed to send packet " + std::to_string(packetNum) + " after " + 
-                           std::to_string(MAX_RETRIES) + " retries", ErrorType::NETWORK);
-                return false;
-            }
-
-            bytesTransferred += bytesRead;
-            totalPacketsSent++;
-            stats.update(bytesTransferred);
-            displayProgress("Transferring", stats.transferredBytes, stats.totalBytes);
-
-            // Display stats every 10 packets or show buffer adaptation
-            if (packetNum % 10 == 0) {
-                displayTransferStats();
-                displayStatus("Buffer Status", true, "Current: " + formatBytes(currentBufferSize) + 
-                             ", Packets sent: " + std::to_string(totalPacketsSent));
-            }
-            packetNum++;
-        }
-    }
-
-    displaySeparator();
-    displayStatus("Transfer Complete", true, "All " + std::to_string(totalPacketsSent) + " packets sent successfully");
-    displayStatus("Waiting for server", true, "Server calculating CRC...");
-    log_phase_with_timestamp("VERIFYING");
-
-    // Finalize CRC calculation
-    uint32_t clientCRC = crcStream.finalize(fileSize);
-
-    // Receive CRC response from server
-    ResponseHeader header;
-    std::vector<uint8_t> responsePayload;
-    if (!receiveResponse(header, responsePayload)) {
-        return false;
-    }
-
-    if (header.code != RESP_FILE_CRC || responsePayload.size() < 279) {
-        displayError("Invalid file transfer response", ErrorType::PROTOCOL);
-        return false;
-    }
-
-    // Extract server CRC from payload
-    uint32_t serverCRC;
-    std::memcpy(&serverCRC, responsePayload.data() + 275, 4);
-
-    // Verify CRC
-    return verifyCRC(serverCRC, clientCRC, filename);
+    // Use working transferFile logic with the calculated buffer size
+    return transferFileWithBuffer(fileStream, filename, fileSize, optimalBufferSize);
 }
 
-// Memory-mapped I/O transfer implementation (placeholder for Phase 2)
-bool Client::transferWithMemoryMapping(size_t fileSize, const std::string& filename) {
-    displayStatus("Memory Mapping", false, "Memory-mapped I/O not yet implemented - falling back to adaptive buffer");
-    
-    // Fallback to adaptive buffer strategy
-    std::ifstream fileStream(filepath, std::ios::binary);
-    if (!fileStream.is_open()) {
-        displayError("File transfer aborted: could not open file " + filepath, ErrorType::FILE_IO);
-        return false;
-    }
-    
-    return transferWithAdaptiveBuffer(fileSize, filename, fileStream);
-}
-
-// Robust streaming transfer implementation (placeholder for Phase 3)
-bool Client::transferWithRobustStreaming(size_t fileSize, const std::string& filename, std::ifstream& fileStream) {
-    displayStatus("Robust Streaming", false, "Robust streaming not yet implemented - falling back to dynamic buffer");
-    return transferWithAdaptiveBuffer(fileSize, filename, fileStream);
-}
-
-// DynamicBufferManager implementation
-void DynamicBufferManager::adaptAfterPacket(bool success, size_t bytesTransferred) {
-    auto currentTime = std::chrono::steady_clock::now();
-    auto packetDuration = std::chrono::duration<double, std::milli>(currentTime - lastPacketTime).count();
-    lastPacketTime = currentTime;
-    
-    // Update performance metrics
-    if (averagePacketTime == 0.0) {
-        averagePacketTime = packetDuration;
-    } else {
-        // Exponential moving average
-        averagePacketTime = 0.8 * averagePacketTime + 0.2 * packetDuration;
-    }
-    
-    // Calculate variance for stability detection
-    double deviation = std::abs(packetDuration - averagePacketTime);
-    packetTimeVariance = 0.8 * packetTimeVariance + 0.2 * deviation;
-    
-    if (success) {
-        consecutiveSuccesses++;
-        consecutiveFailures = 0;
-        
-        // Grow buffer if consistently successful and performance is stable
-        if (consecutiveSuccesses >= SUCCESS_THRESHOLD && 
-            packetTimeVariance / averagePacketTime < VARIANCE_THRESHOLD &&
-            currentBufferSize < maxBufferSize) {
-            
-            size_t newBufferSize = static_cast<size_t>(currentBufferSize * GROWTH_FACTOR);
-            currentBufferSize = std::min(alignToAESBlocks(newBufferSize), maxBufferSize);
-            consecutiveSuccesses = 0;  // Reset counter after adaptation
-        }
-    } else {
-        consecutiveFailures++;
-        consecutiveSuccesses = 0;
-        
-        // Shrink buffer if experiencing failures
-        if (consecutiveFailures >= FAILURE_THRESHOLD && currentBufferSize > minBufferSize) {
-            size_t newBufferSize = static_cast<size_t>(currentBufferSize * SHRINK_FACTOR);
-            currentBufferSize = std::max(alignToAESBlocks(newBufferSize), minBufferSize);
-            consecutiveFailures = 0;  // Reset counter after adaptation
-        }
-    }
-}
-
-void DynamicBufferManager::reset(size_t suggestedInitialSize) {
-    currentBufferSize = alignToAESBlocks(suggestedInitialSize);
-    averagePacketTime = 0.0;
-    packetTimeVariance = 0.0;
-    consecutiveSuccesses = 0;
-    consecutiveFailures = 0;
-    lastPacketTime = std::chrono::steady_clock::now();
-}
-
-
-
-// Send file packet
 bool Client::sendFilePacket(const std::string& filename, const std::string& encryptedData,
                            uint32_t originalSize, uint16_t packetNum, uint16_t totalPackets) {
     // Create payload

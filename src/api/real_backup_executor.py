@@ -509,7 +509,7 @@ class FileReceiptProgressTracker(ProgressTracker):
         
         # IMMEDIATE CHECK: See if file already exists (for replacement scenarios)
         if self.destination_dir.exists():
-            print(f"[RECEIPT] 🔍 CHECKING EXISTING FILES in {self.destination_dir}")
+            print(f"[RECEIPT] CHECKING EXISTING FILES in {self.destination_dir}")
             existing_files = list(self.destination_dir.iterdir())
             print(f"[RECEIPT] Found {len(existing_files)} existing files: {[f.name for f in existing_files if f.is_file()]}")
             
@@ -518,11 +518,11 @@ class FileReceiptProgressTracker(ProgressTracker):
                     match_result = self._check_file_match(existing_file.name, self.target_filename)
                     print(f"[RECEIPT] Comparing '{existing_file.name}' vs '{self.target_filename}' = {match_result}")
                     if match_result:
-                        print(f"[RECEIPT] ✅ FILE ALREADY EXISTS: {existing_file.name} matches {self.target_filename}")
+                        print(f"[RECEIPT] FILE ALREADY EXISTS: {existing_file.name} matches {self.target_filename}")
                         self._trigger_file_received(existing_file.name)
                         return  # File already exists, no need to monitor
         else:
-            print(f"[RECEIPT] ❌ Destination directory does not exist: {self.destination_dir}")
+            print(f"[RECEIPT] ERROR: Destination directory does not exist: {self.destination_dir}")
         
         # Start file system monitoring with DUAL approach (watchdog + polling backup)
         if WATCHDOG_AVAILABLE:
@@ -588,7 +588,7 @@ class FileReceiptProgressTracker(ProgressTracker):
             try:
                 poll_count += 1
                 if poll_count % 10 == 1:  # Log every 5 seconds (10 * 0.5s)
-                    print(f"[RECEIPT] 🔄 Polling for '{self.target_filename}' (attempt {poll_count})")
+                    print(f"[RECEIPT] Polling for '{self.target_filename}' (attempt {poll_count})")
                 
                 if self.destination_dir.exists():
                     files = list(self.destination_dir.iterdir())
@@ -596,7 +596,7 @@ class FileReceiptProgressTracker(ProgressTracker):
                         if file_path.is_file():
                             # Use enhanced filename matching for server timestamp prefix pattern
                             if self._check_file_match(file_path.name, self.target_filename):
-                                print(f"[RECEIPT] 🎯 File found via polling: {file_path.name}")
+                                print(f"[RECEIPT] File found via polling: {file_path.name}")
                                 self._trigger_stability_check(str(file_path))
                                 return
                     
@@ -652,8 +652,8 @@ class FileReceiptProgressTracker(ProgressTracker):
         """Trigger immediate file received state"""
         self.file_received = True
         self.progress_override = True
-        print(f"[RECEIPT] ✅ FILE ALREADY RECEIVED! {filename}")
-        print(f"[RECEIPT] ⚡ OVERRIDING PROGRESS TO 100% - FILE CONFIRMED ON SERVER")
+        print(f"[RECEIPT] FILE ALREADY RECEIVED! {filename}")
+        print(f"[RECEIPT] OVERRIDING PROGRESS TO 100% - FILE CONFIRMED ON SERVER")
     
     def _confirm_file_receipt(self, file_path: str):
         """Confirm file is completely received and stable"""
@@ -673,8 +673,8 @@ class FileReceiptProgressTracker(ProgressTracker):
                 self.progress_override = True
                 file_size = stat1.st_size
                 
-                print(f"[RECEIPT] ✅ FILE RECEIVED! {os.path.basename(file_path)} ({file_size} bytes)")
-                print(f"[RECEIPT] ⚡ OVERRIDING PROGRESS TO 100% - FILE CONFIRMED ON SERVER")
+                print(f"[RECEIPT] FILE RECEIVED! {os.path.basename(file_path)} ({file_size} bytes)")
+                print(f"[RECEIPT] OVERRIDING PROGRESS TO 100% - FILE CONFIRMED ON SERVER")
                 
             else:
                 print(f"[RECEIPT] File still changing, extending stability check")
@@ -721,7 +721,7 @@ class FileReceiptProgressTracker(ProgressTracker):
             # GROUND TRUTH: File is on server = 100% complete!
             return {
                 "progress": 100,
-                "message": "✅ File received on server - Backup complete!",
+                "message": "File received on server - Backup complete!",
                 "phase": "COMPLETED",
                 "confidence": "absolute",
                 "override": True,
@@ -875,7 +875,7 @@ class RobustProgressMonitor:
         if isinstance(file_receipt_tracker, FileReceiptProgressTracker) and not self.file_receipt_started:
             file_receipt_tracker.start_monitoring(context)
             self.file_receipt_started = True
-            print(f"[ROBUST] ✅ ALWAYS STARTED: FileReceiptProgressTracker for ground truth file detection")
+            print(f"[ROBUST] ALWAYS STARTED: FileReceiptProgressTracker for ground truth file detection")
         
         # Find first available tracker for primary monitoring
         for i, tracker in enumerate(self.progress_layers):
@@ -946,7 +946,7 @@ class RobustProgressMonitor:
                 receipt_progress = file_receipt_tracker.get_progress()
                 if receipt_progress.get("override", False):
                     # GROUND TRUTH: File is on server = 100% complete!
-                    print("[ROBUST] ✅ FILE RECEIPT OVERRIDE: File detected on server, forcing 100% completion!")
+                    print("[ROBUST] FILE RECEIPT OVERRIDE: File detected on server, forcing 100% completion!")
                     receipt_progress["tracker"] = "FileReceiptProgressTracker"
                     receipt_progress["layer"] = 0
                     receipt_progress["fallback_count"] = self.fallback_count
@@ -1398,7 +1398,7 @@ class RealBackupExecutor:
                         
                         # If file receipt override detected, we can continue monitoring
                         if progress_data.get("override", False):
-                            print(f"[POLLING] 🚀 FILE RECEIPT OVERRIDE DETECTED! Progress set to 100%")
+                            print(f"[POLLING] FILE RECEIPT OVERRIDE DETECTED! Progress set to 100%")
                     
                     time.sleep(0.2)  # Poll every 200ms for highly responsive updates
                     
@@ -1948,20 +1948,31 @@ class RealBackupExecutor:
             # Clear cached credentials if username has changed
             self._clear_cached_credentials_if_username_changed(username)
 
-            # Generate managed transfer.info
-            transfer_file_id, transfer_info_path = self._generate_transfer_info(server_ip, server_port, username, file_path)
-
-            # Copy transfer.info to BOTH the client executable directory AND the working directory
-            # The client looks for transfer.info in the current working directory, not the executable directory
+            # Generate transfer.info in the client executable's directory
             client_dir = os.path.dirname(self.client_exe)
-            client_transfer_info = os.path.join(client_dir, "transfer.info")
-            working_dir_transfer_info = "transfer.info"  # Current working directory
+            transfer_info_path = os.path.join(client_dir, "transfer.info")
+            with open(transfer_info_path, 'w') as f:
+                f.write(f"{server_ip}:{server_port}\n")
+                f.write(f"{username}\n")
+                f.write(f"{os.path.abspath(file_path)}\n")
 
-            # Use synchronized file manager to copy to required locations
-            target_locations = [client_transfer_info, working_dir_transfer_info]
-            copy_locations = self.file_manager.copy_to_locations(transfer_file_id, target_locations)
+            self._log_status("CONFIG", f"Generated transfer.info at: {transfer_info_path}")
 
-            self._log_status("CONFIG", f"Copied transfer.info to {len(copy_locations)} locations: {copy_locations}")
+            # Use the client executable's directory as the working directory
+            client_working_dir = client_dir
+            self._log_status("DEBUG", f"Using project root as working directory: {client_working_dir}")
+            
+            # Verify transfer.info is accessible in working directory before launching subprocess
+            working_transfer_info = os.path.join(client_working_dir, "transfer.info")
+            if os.path.exists(working_transfer_info):
+                try:
+                    with open(working_transfer_info, 'r') as f:
+                        content = f.read()
+                    self._log_status("VERIFY", f"transfer.info verified in working directory - content: {len(content)} chars")
+                except Exception as e:
+                    self._log_status("ERROR", f"transfer.info exists but cannot be read: {e}")
+            else:
+                self._log_status("ERROR", f"transfer.info NOT found in working directory: {working_transfer_info}")
             
             self._log_status("LAUNCH", f"Launching {self.client_exe}")
             self._log_status("STARTUP", "C++ client process starting - monitoring will begin shortly")
@@ -1969,17 +1980,7 @@ class RealBackupExecutor:
             if not self.client_exe:
                 raise RuntimeError("Client executable path is not set")
 
-            # Mark file as in use by subprocess to prevent premature cleanup
-            self.file_manager.mark_in_subprocess_use(transfer_file_id)
             
-            # Determine best working directory - use client directory if executable is there
-            if "client" in self.client_exe.lower():
-                client_working_dir = "client"
-                # Copy transfer.info to client directory too
-                client_transfer_info = os.path.join(client_working_dir, "transfer.info")
-                self.file_manager.copy_to_locations(transfer_file_id, [client_transfer_info])
-            else:
-                client_working_dir = os.getcwd()
                 
             self._log_status("DEBUG", f"Client executable: {os.path.abspath(self.client_exe)}")
             self._log_status("DEBUG", f"Client working directory: {client_working_dir}")
@@ -1989,7 +1990,7 @@ class RealBackupExecutor:
             process_id = f"backup_client_{int(time.time())}"
             command = [str(self.client_exe), "--batch"]  # Use batch mode to disable web GUI and prevent port conflicts
 
-            self._log_status("LAUNCH", f"Starting subprocess: {' '.join(command)}")
+            self._log_status("LAUNCH", f"Starting subprocess with process registry: {' '.join(command)}")
             self._log_status("DEBUG", f"Working directory: {client_working_dir}")
             
             try:
@@ -2004,6 +2005,11 @@ class RealBackupExecutor:
                 )
 
                 # Start process with enhanced monitoring and better error reporting
+                self._log_status("DEBUG", f"About to start process with command: {command}")
+                self._log_status("DEBUG", f"Process working directory: {client_working_dir}")
+                self._log_status("REGISTRY_DEBUG", f"Process registry: {type(registry)}")
+                self._log_status("REGISTRY_DEBUG", f"Process info: {process_info}")
+                
                 if not start_process(process_id,
                                    stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE,
@@ -2015,11 +2021,21 @@ class RealBackupExecutor:
                         proc_info = registry.get_process_info(process_id)
                         if proc_info and proc_info.last_error:
                             self._log_status("ERROR", f"Process error: {proc_info.last_error}")
+                    
+                    # Also check if the executable exists and is accessible
+                    if not os.path.exists(self.client_exe):
+                        self._log_status("ERROR", f"Client executable does not exist: {self.client_exe}")
+                    elif not os.access(self.client_exe, os.X_OK):
+                        self._log_status("ERROR", f"Client executable is not executable: {self.client_exe}")
+                    
                     raise RuntimeError(f"Failed to start backup process {process_id}")
 
                 # Get the subprocess handle for compatibility
                 self.backup_process = registry.subprocess_handles[process_id]
                 self.process_id = process_id
+                
+                self._log_status("REGISTRY_DEBUG", f"Subprocess handle: {self.backup_process}")
+                self._log_status("REGISTRY_DEBUG", f"Process PID: {self.backup_process.pid if self.backup_process else 'None'}")
                 
             except Exception as e:
                 self._log_status("ERROR", f"Failed to start client subprocess: {e}")

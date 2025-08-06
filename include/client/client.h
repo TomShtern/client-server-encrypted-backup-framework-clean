@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <deque>
 #include <cstring>
 #include <algorithm>
 #include <chrono>
@@ -14,6 +15,8 @@
 #include <atomic>
 #include <memory>
 #include <ctime>
+#include <cassert>
+#include <cmath>
 
 // Boost.Asio for cross-platform networking
 #include <boost/asio.hpp>
@@ -31,7 +34,7 @@
 #include "wrappers/AESWrapper.h"
 #include "wrappers/Base64Wrapper.h"
 #include "wrappers/RSAWrapper.h"
-#include "client/WebServerBackend.h"
+#include "WebServerBackend.h"
 
 // Protocol constants
 constexpr uint8_t CLIENT_VERSION = 3;
@@ -121,60 +124,78 @@ struct TransferStats {
     void update(size_t newBytes);
 };
 
-// Dynamic Buffer Management System with Network Adaptation
-class DynamicBufferManager {
+// Professional Dynamic Buffer Management with Network Performance Isolation
+class ProperDynamicBufferManager {
 private:
-    size_t currentBufferSize;
-    size_t minBufferSize;
-    size_t maxBufferSize;
+    // Buffer pool - pre-allocated, AES-aligned buffers to eliminate allocation overhead
+    static constexpr size_t BUFFER_POOL_SIZES[] = {1024, 2048, 4096, 8192, 16384, 32768, 65536}; // 1KB to 64KB
+    static constexpr size_t BUFFER_POOL_COUNT = sizeof(BUFFER_POOL_SIZES) / sizeof(size_t);
     
-    // Performance metrics for adaptation
-    std::chrono::steady_clock::time_point lastPacketTime;
-    double averagePacketTime;
-    double packetTimeVariance;
-    size_t consecutiveSuccesses;
-    size_t consecutiveFailures;
+    std::vector<std::vector<uint8_t>> buffer_pool;
+    size_t current_buffer_index;
     
-    // Adaptation parameters
-    static constexpr double GROWTH_FACTOR = 1.5;
-    static constexpr double SHRINK_FACTOR = 0.75;
-    static constexpr size_t SUCCESS_THRESHOLD = 3;
-    static constexpr size_t FAILURE_THRESHOLD = 2;
-    static constexpr double VARIANCE_THRESHOLD = 0.3;
+    // Network performance tracking (isolated from encryption performance)
+    std::deque<double> network_throughput_mbps;    // Megabits per second
+    std::deque<std::chrono::milliseconds> encryption_times;
+    
+    // Adaptation control
+    size_t packets_since_last_adaptation;
+    size_t total_packets_sent;
+    std::chrono::steady_clock::time_point last_adaptation_time;
+    
+    // Stability and hysteresis parameters
+    static constexpr size_t MIN_PACKETS_FOR_ADAPTATION = 8;     // Collect data before adapting
+    static constexpr size_t MIN_SECONDS_BETWEEN_ADAPTATIONS = 5; // Prevent rapid changes
+    static constexpr double THROUGHPUT_IMPROVEMENT_THRESHOLD = 1.15; // 15% improvement to grow
+    static constexpr double THROUGHPUT_DEGRADATION_THRESHOLD = 0.80; // 20% degradation to shrink
+    static constexpr size_t THROUGHPUT_HISTORY_SIZE = 10;       // Samples for moving average
+    
+    // Performance analysis
+    double calculateAverageThroughput() const;
+    bool shouldGrowBuffer() const;
+    bool shouldShrinkBuffer() const;
+    void adaptBufferSize();
 
 public:
-    DynamicBufferManager(size_t initialSize = 4096) 
-        : currentBufferSize(alignToAESBlocks(initialSize))
-        , minBufferSize(MIN_BUFFER_SIZE)
-        , maxBufferSize(MAX_BUFFER_SIZE)
-        , averagePacketTime(0.0)
-        , packetTimeVariance(0.0)
-        , consecutiveSuccesses(0)
-        , consecutiveFailures(0) {
-        lastPacketTime = std::chrono::steady_clock::now();
+    ProperDynamicBufferManager(size_t initial_buffer_size = 8192);
+    
+    // Get current buffer reference (zero-copy)
+    std::vector<uint8_t>& getCurrentBuffer() { return buffer_pool[current_buffer_index]; }
+    const std::vector<uint8_t>& getCurrentBuffer() const { return buffer_pool[current_buffer_index]; }
+    
+    // Get current buffer size for reads
+    size_t getCurrentBufferSize() const { return BUFFER_POOL_SIZES[current_buffer_index]; }
+    
+    // Calculate total packets for protocol compliance
+    uint16_t calculateTotalPackets(size_t file_size) const {
+        size_t packets = (file_size + getCurrentBufferSize() - 1) / getCurrentBufferSize();
+        return static_cast<uint16_t>(std::min(packets, static_cast<size_t>(UINT16_MAX)));
     }
     
-    // Get current buffer size
-    size_t getCurrentBufferSize() const { return currentBufferSize; }
+    // Record performance metrics and trigger adaptation if needed
+    void recordPacketMetrics(size_t bytes_sent, 
+                           std::chrono::steady_clock::time_point send_start,
+                           std::chrono::steady_clock::time_point send_end,
+                           std::chrono::steady_clock::time_point encrypt_start,
+                           std::chrono::steady_clock::time_point encrypt_end,
+                           bool network_success);
     
-    // Adapt buffer size based on transfer performance
-    void adaptAfterPacket(bool success, size_t bytesTransferred);
+    // Get performance diagnostics
+    struct PerformanceStats {
+        double current_throughput_mbps;
+        double average_throughput_mbps;
+        size_t current_buffer_size;
+        size_t current_buffer_index;
+        size_t total_adaptations;
+        std::chrono::milliseconds avg_encryption_time;
+    };
+    PerformanceStats getPerformanceStats() const;
     
     // Reset for new transfer
-    void reset(size_t suggestedInitialSize = 4096);
+    void reset(size_t suggested_initial_size = 8192);
     
-    // Align size to AES block boundaries
-    static size_t alignToAESBlocks(size_t size) {
-        return ((size + AES_BLOCK_SIZE - 1) / AES_BLOCK_SIZE) * AES_BLOCK_SIZE;
-    }
-    
-    // Calculate initial buffer size based on file size hint
-    static size_t calculateInitialBufferSize(size_t fileSize) {
-        if (fileSize <= 16 * 1024) return 2048;    // 2KB for small files
-        if (fileSize <= 256 * 1024) return 8192;   // 8KB for medium files  
-        if (fileSize <= 2 * 1024 * 1024) return 16384; // 16KB for large files
-        return 32768; // 32KB for very large files
-    }
+private:
+    size_t total_adaptations;
 };
 
 // Enhanced File Transfer Engine
@@ -290,14 +311,13 @@ private:
     bool sendPublicKey();
     bool transferFile();
     bool transferFileEnhanced(const TransferConfig& config = TransferConfig());
+    bool transferFileWithBuffer(std::ifstream& fileStream, const std::string& filename, 
+                               size_t fileSize, size_t bufferSize);
     bool sendFilePacket(const std::string& filename, const std::string& encryptedData,
                        uint32_t originalSize, uint16_t packetNum, uint16_t totalPackets);
     bool verifyCRC(uint32_t serverCRC, uint32_t clientCRC, const std::string& filename);
 
-    // Enhanced transfer methods
-    bool transferWithAdaptiveBuffer(size_t fileSize, const std::string& filename, std::ifstream& fileStream);
-    bool transferWithMemoryMapping(size_t fileSize, const std::string& filename);
-    bool transferWithRobustStreaming(size_t fileSize, const std::string& filename, std::ifstream& fileStream);
+    // Enhanced transfer methods (removed broken implementations)
 
     // Crypto operations
     bool generateRSAKeys();

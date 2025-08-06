@@ -202,6 +202,7 @@ def api_test():
     return jsonify({'success': True, 'message': 'POST test successful'})
 
 @app.route('/api/status')
+@app.route('/api/status')
 def api_status():
     """Get current backup status with proper connection state management"""
     try:
@@ -397,7 +398,8 @@ def api_start_backup():
         filename = file.filename or f"backup_file_{int(time.time())}"
         temp_file_path = os.path.join(temp_dir, filename)
         file.save(temp_file_path)
-        # --- END STREAMING LOGIC ---
+
+        
 
         # Get form data
         username = request.form.get('username', server_config.get('username', 'default_user'))
@@ -673,7 +675,8 @@ if __name__ == "__main__":
             host='127.0.0.1',
             port=9090,
             debug=True,
-            allow_unsafe_werkzeug=True  # Allow threading with SocketIO
+            allow_unsafe_werkzeug=True,  # Allow threading with SocketIO
+            use_reloader=False
         )
     except KeyboardInterrupt:
         print("\n[INFO] API Server shutdown requested")

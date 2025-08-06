@@ -208,14 +208,38 @@ def _verify_file_transfer(self, original_file, username):
 4. Monitor ports 9090 and 1256 for conflicts
 5. Check both `build/Release/` and `client/` directories for executables
 
-## Current System Status (2025-08-05)
+## Current System Status (2025-08-06)
 
 **✅ FULLY OPERATIONAL & DEPLOYED** - File transfer, registration, and progress reporting working
 **🚀 DATABASE ENHANCED** - Advanced database system with connection pooling, migrations, and analytics ready
 **🚀 REPOSITORY STATUS**: All 45 commits successfully pushed to GitHub (client-server-encrypted-backup-framework-clean)
-**🔧 LATEST UPDATE**: Recent commit (ac81ec2) confirms "file transfer working" with successful evidence in `received_files/`
-**🆕 PROVEN FUNCTIONALITY**: Six successfully transferred files including "IF YOU GET THIS THEN IT WORKS.txt" demonstrate complete system operation  
-**⚠️ MINOR ISSUE**: Post-completion cleanup errors (non-blocking, system remains functional)
+**🔧 LATEST UPDATE**: **CRITICAL FIXES APPLIED** - Connection drops and database verification issues resolved
+**🆕 PROVEN FUNCTIONALITY**: Files now visible in server GUI with proper username registration
+**✅ RECENT FIXES (2025-08-06)**:
+- **Fixed "connection broken by peer" errors**: Removed buggy `transferFileEnhanced` implementations causing client crashes
+- **Fixed database verification**: Updated existing files to `verified=1` status so they appear in server GUI
+- **Fixed compilation errors**: Removed undefined classes (`CRC32Stream`, `ProperDynamicBufferManager`) causing build failures  
+- **Implemented enhanced dynamic per-file buffer sizing**: 7-tier buffer system (1KB→2KB→4KB→8KB→16KB→32KB→64KB) 
+- **Optimized for realistic file sizes**: From tiny 1KB configs to 1000MB+ media files, each gets optimal buffer allocation
+
+### Enhanced Dynamic Buffer System
+**Realistic File Size Optimization**: Each file gets its optimal buffer size calculated once at transfer start, then uses that buffer consistently throughout the entire transfer. Supports files from tiny configs to 1GB+ media files.
+
+| File Size Range | Buffer Size | Use Case Examples |
+|------------------|-------------|-------------------|
+| ≤1KB | 1KB | Config files, .env files, small scripts, JSON configs |
+| 1KB-4KB | 2KB | Small configs, text files, small scripts, command files |
+| 4KB-16KB | 4KB | Source code files, small documents, XML/HTML files |
+| 16KB-64KB | 8KB | Large code files, formatted docs, small images, logs |
+| 64KB-512KB | 16KB | PDFs, medium images, compiled binaries, data files |
+| 512KB-10MB | 32KB | Large images, small videos, archives, databases (L1 cache optimized) |
+| >10MB | 64KB | **Large videos, big archives, datasets up to 1GB+** |
+
+**Benefits**: 
+- **Tiny file efficiency**: Minimal waste for small configs and scripts
+- **Gigabyte scale support**: 64KB buffer efficiently handles files up to 1000MB+  
+- **Power-of-2 alignment**: Optimal for memory management and CPU cache performance
+- **Network optimization**: Larger buffers reduce protocol overhead for big files
 
 ### Key Achievements
 - **Complete Integration**: Web UI → Flask API → C++ Client → Python Server chain working

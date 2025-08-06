@@ -46,23 +46,56 @@ def print_phase(phase_num, total_phases, title):
     print(f"[PHASE {phase_num}/{total_phases}] {title}...")
     print("-" * 40)
 
-def run_command(command, shell=True, check_exit=True, cwd=None):
-    """Run a command and handle errors"""
+def run_command(command, shell=True, check_exit=True, cwd=None, timeout=60):
+    """Run a command and handle errors with better timeout and path handling"""
     print(f"Running: {command}")
     print()
     
-    result = subprocess.run(command, shell=shell, cwd=cwd)
-    
-    if check_exit and result.returncode != 0:
+    try:
+        # For Windows batch files, ensure proper execution
+        if isinstance(command, str) and command.endswith('.bat'):
+            # Use absolute path and proper shell execution for batch files
+            command = os.path.abspath(command)
+        
+        result = subprocess.run(
+            command, 
+            shell=shell, 
+            cwd=cwd or os.getcwd(),
+            timeout=timeout,
+            capture_output=False  # Show output in real-time
+        )
+        
+        if check_exit and result.returncode != 0:
+            print()
+            print(f"[ERROR] Command failed with exit code: {result.returncode}")
+            try:
+                input("Press Enter to exit...")
+            except EOFError:
+                pass
+            sys.exit(1)
+        
+        return result.returncode == 0
+        
+    except subprocess.TimeoutExpired:
         print()
-        print(f"[ERROR] Command failed with exit code: {result.returncode}")
-        try:
-            input("Press Enter to exit...")
-        except EOFError:
-            pass
-        sys.exit(1)
-    
-    return result.returncode == 0
+        print(f"[ERROR] Command timed out after {timeout} seconds: {command}")
+        if check_exit:
+            try:
+                input("Press Enter to exit...")
+            except EOFError:
+                pass
+            sys.exit(1)
+        return False
+    except Exception as e:
+        print()
+        print(f"[ERROR] Failed to run command: {e}")
+        if check_exit:
+            try:
+                input("Press Enter to exit...")
+            except EOFError:
+                pass
+            sys.exit(1)
+        return False
 
 def check_command_exists(command):
     """Check if a command exists"""
@@ -334,7 +367,7 @@ def main():
         print("Calling scripts\\build\\configure_cmake.bat for CMake + vcpkg setup...")
         print()
         
-        if not run_command("call scripts\\build\\configure_cmake.bat"):
+        if not run_command("scripts\\build\\configure_cmake.bat", timeout=300):
             print()
             print("[ERROR] CMake configuration failed!")
             print("Check the output above for details.")
@@ -357,7 +390,7 @@ def main():
         print("Command: cmake --build build --config Release")
         print()
         
-        if not run_command("cmake --build build --config Release"):
+        if not run_command("cmake --build build --config Release", timeout=180):
             print()
             print("[ERROR] C++ client build failed!")
             print("Check the compiler output above for details.")
@@ -414,7 +447,7 @@ def main():
     
     requirements_file = Path("requirements.txt")
     if requirements_file.exists():
-        result = run_command("pip install -r requirements.txt", check_exit=False)
+        result = run_command("pip install -r requirements.txt", check_exit=False, timeout=180)
         if not result:
             print("[WARNING] Some Python dependencies failed to install")
             print("This may cause issues with the API server or GUI")
@@ -424,11 +457,11 @@ def main():
     else:
         print("[WARNING] requirements.txt not found")
         print("Installing basic dependencies manually...")
-        run_command("pip install cryptography pycryptodome psutil flask", check_exit=False)
+        run_command("pip install cryptography pycryptodome psutil flask", check_exit=False, timeout=180)
     
     # Install additional GUI dependencies
     print("Installing GUI-specific dependencies...")
-    run_command("pip install sentry-sdk flask-cors", check_exit=False)
+    run_command("pip install sentry-sdk flask-cors", check_exit=False, timeout=120)
     
     print()
     
@@ -446,14 +479,14 @@ def main():
         print("[OK] RSA private key found")
     else:
         print("[WARNING] RSA private key missing - generating keys...")
-        run_command("python scripts\\security\\key-generation\\create_working_keys.py", check_exit=False)
+        run_command("python scripts\\security\\key-generation\\create_working_keys.py", check_exit=False, timeout=60)
     
     public_key = data_dir / "valid_public_key.der"
     if public_key.exists():
         print("[OK] RSA public key found")
     else:
         print("[WARNING] RSA public key missing - generating keys...")
-        run_command("python scripts\\security\\key-generation\\create_working_keys.py", check_exit=False)
+        run_command("python scripts\\security\\key-generation\\create_working_keys.py", check_exit=False, timeout=60)
     
     # Check if transfer.info exists
     transfer_info = data_dir / "transfer.info"
