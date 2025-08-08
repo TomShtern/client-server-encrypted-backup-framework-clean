@@ -8,7 +8,7 @@ jobs:
       - checkout
       - run:
           name: "build and run"
-          command: "one_click_build_and_run.py"
+          command: "python one_click_build_and_run.py"
 
 workflows:
   say-hello-workflow:
