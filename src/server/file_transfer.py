@@ -63,12 +63,12 @@ import time
 import threading
 import logging
 import re
-import tempfile
+import contextlib
 from datetime import datetime
-from typing import Dict, Optional, Any, Tuple
+from typing import Dict, Any, Tuple
 
 # Import crypto components through compatibility layer
-from .crypto_compat import AES, pad, unpad
+from .crypto_compat import AES, unpad
 
 # Import custom exceptions
 from .exceptions import ServerError, ProtocolError, ClientError, FileError
@@ -76,7 +76,7 @@ from .exceptions import ServerError, ProtocolError, ClientError, FileError
 # Import configuration constants
 from .config import (
     FILE_STORAGE_DIR, MAX_FILENAME_FIELD_SIZE, MAX_ACTUAL_FILENAME_LENGTH,
-    AES_KEY_SIZE_BYTES, MAX_PAYLOAD_READ_LIMIT, MAX_ORIGINAL_FILE_SIZE
+    MAX_PAYLOAD_READ_LIMIT, MAX_ORIGINAL_FILE_SIZE
 )
 
 # Import protocol constants
@@ -171,13 +171,11 @@ class FileTransferManager:
           uint8_t  content[];         // Encrypted file chunk for this packet
         """
         # High-signal pre-parse log
-        try:
+        with contextlib.suppress(Exception):
+            # Do not let logging failures impact flow
             logger.debug(
                 f"XFER/PARSE: client='{client.name}', payload_len={len(payload)}"
             )
-        except Exception:
-            # Do not let logging failures impact flow
-            pass
 
         try:
             # Parse and validate the file transfer metadata
@@ -369,7 +367,7 @@ class FileTransferManager:
             file_state["timestamp"] = time.monotonic()
 
             # Emit concise state snapshot
-            try:
+            with contextlib.suppress(Exception):
                 received_count = len(file_state["received_chunks"])
                 # For efficiency, only compute cumulative bytes for small N
                 cumulative_enc = sum(len(ch) for ch in file_state["received_chunks"].values()) if received_count <= 64 else -1
@@ -377,8 +375,6 @@ class FileTransferManager:
                     f"XFER/REASM_STATE: client='{client.name}', file='{filename}', received={received_count}/{total_packets}, "
                     f"cum_enc_bytes={cumulative_enc if cumulative_enc >= 0 else 'skipped'}"
                 )
-            except Exception:
-                pass
 
             # Check if transfer is complete
             return len(file_state["received_chunks"]) == total_packets
@@ -549,10 +545,8 @@ class FileTransferManager:
         except OSError as e:
             # Cleanup temporary file on error
             if os.path.exists(temp_path):
-                try:
+                with contextlib.suppress(OSError):
                     os.remove(temp_path)
-                except OSError:
-                    pass
             raise FileError(f"Failed to save file '{filename}': {e}") from e
     
     def _send_file_crc_response(self, sock: socket.socket, client: Any, 
@@ -628,14 +622,14 @@ class FileTransferManager:
         # Prevent path traversal
         if ('/' in filename or '\\' in filename or 
             '..' in filename or '\0' in filename):
-            logger.debug(f"Filename validation failed: contains path traversal chars")
+            logger.debug("Filename validation failed: contains path traversal chars")
             return False
 
         # Check for safe characters only
         # Allow common punctuation often present in user filenames: space, dot, underscore, dash,
         # ampersand, hash, parentheses, plus, comma
         if not re.match(r"^[a-zA-Z0-9._\-\s&#()+,]+$", filename):
-            logger.debug(f"Filename validation failed: contains unsafe characters")
+            logger.debug("Filename validation failed: contains unsafe characters")
             return False
 
         # Check for OS reserved names
@@ -689,6 +683,7 @@ class FileTransferManager:
                 raise
     
     def cleanup_stale_transfers(self, timeout_seconds: int = 900) -> int:
+        _ = timeout_seconds  # Currently unused but preserved for API compatibility
         """
         Cleans up stale file transfers that have been inactive.
         
@@ -698,15 +693,14 @@ class FileTransferManager:
         Returns:
             Number of transfers cleaned up
         """
-        cleaned_count = 0
-        current_time = time.monotonic()
+        _ = time.monotonic()  # Reserved for future stale transfer detection
         
         with self.transfer_lock:
             # This would be used if we maintained global transfer state
             # For now, individual clients handle their own cleanup
             pass
         
-        return cleaned_count
+        return 0  # Inline the immediately returned variable
     
     def get_transfer_statistics(self) -> Dict[str, Any]:
         """

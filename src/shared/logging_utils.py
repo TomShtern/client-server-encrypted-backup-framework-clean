@@ -7,10 +7,9 @@ Provides dual output (console + file) with live monitoring capabilities
 import os
 import sys
 import logging
-import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, TextIO
+from typing import Optional
 
 
 def setup_dual_logging_simple(logger_name: str, server_type: str, 
@@ -74,6 +73,9 @@ def setup_dual_logging(
     Set up dual logging (console + file) for a server.
     Uses the simplified approach with separate handlers for reliability.
     """
+    
+    # Parameters console_format and include_timestamp are preserved for API compatibility
+    _ = console_format, include_timestamp
     
     # Use the simplified approach
     logger, log_file_path = setup_dual_logging_simple(logger_name, server_type, console_level, file_level)

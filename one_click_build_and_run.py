@@ -37,6 +37,7 @@ import os
 import sys
 import subprocess
 import time
+import contextlib
 import psutil
 from pathlib import Path
 
@@ -68,10 +69,8 @@ def run_command(command, shell=True, check_exit=True, cwd=None, timeout=60):
         if check_exit and result.returncode != 0:
             print()
             print(f"[ERROR] Command failed with exit code: {result.returncode}")
-            try:
+            with contextlib.suppress(EOFError):
                 input("Press Enter to exit...")
-            except EOFError:
-                pass
             sys.exit(1)
         
         return result.returncode == 0
@@ -80,20 +79,16 @@ def run_command(command, shell=True, check_exit=True, cwd=None, timeout=60):
         print()
         print(f"[ERROR] Command timed out after {timeout} seconds: {command}")
         if check_exit:
-            try:
+            with contextlib.suppress(EOFError):
                 input("Press Enter to exit...")
-            except EOFError:
-                pass
             sys.exit(1)
         return False
     except Exception as e:
         print()
         print(f"[ERROR] Failed to run command: {e}")
         if check_exit:
-            try:
+            with contextlib.suppress(EOFError):
                 input("Press Enter to exit...")
-            except EOFError:
-                pass
             sys.exit(1)
         return False
 
@@ -137,7 +132,7 @@ def check_port_available(port=9090):
     try:
         import socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        result = sock.bind(('127.0.0.1', port))
+        sock.bind(('127.0.0.1', port))
         sock.close()
         return True
     except Exception:
@@ -274,15 +269,13 @@ def cleanup_existing_processes():
                         conn_port = conn.laddr[1]
                 
                 if conn_port == port and conn.status == psutil.CONN_LISTEN:
-                    try:
+                    with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
                         process = psutil.Process(conn.pid)
                         print(f"Killing process using port {port}: {process.name()} (PID: {conn.pid})")
                         process.terminate()
                         time.sleep(1)
                         if process.is_running():
                             process.kill()
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
         except Exception as e:
             print(f"[WARNING] Error cleaning port {port}: {e}")
     
@@ -291,10 +284,8 @@ def cleanup_existing_processes():
 
 def main():
     # Set UTF-8 encoding for emoji support
-    try:
+    with contextlib.suppress(Exception):
         os.system("chcp 65001 > nul")
-    except:
-        pass
     
     print()
     print("=" * 72)
@@ -330,10 +321,8 @@ def main():
     if not exists:
         print("[ERROR] Python is not installed or not in PATH")
         print("Please install Python 3.x and add it to your PATH")
-        try:
+        with contextlib.suppress(EOFError):
             input("Press Enter to exit...")
-        except EOFError:
-            pass
         sys.exit(1)
     print(f"[OK] Python found: {version.split()[1] if version else 'Unknown version'}")
     
@@ -371,10 +360,8 @@ def main():
             print()
             print("[ERROR] CMake configuration failed!")
             print("Check the output above for details.")
-            try:
+            with contextlib.suppress(EOFError):
                 input("Press Enter to exit...")
-            except EOFError:
-                pass
             sys.exit(1)
         
         print()
@@ -394,10 +381,8 @@ def main():
             print()
             print("[ERROR] C++ client build failed!")
             print("Check the compiler output above for details.")
-            try:
+            with contextlib.suppress(EOFError):
                 input("Press Enter to exit...")
-            except EOFError:
-                pass
             sys.exit(1)
         
         # Verify the executable was created
@@ -405,10 +390,8 @@ def main():
         if not exe_path.exists():
             print("[ERROR] EncryptedBackupClient.exe was not created!")
             print(f"Expected location: {exe_path}")
-            try:
+            with contextlib.suppress(EOFError):
                 input("Press Enter to exit...")
-            except EOFError:
-                pass
             sys.exit(1)
         
         print()
@@ -574,20 +557,17 @@ def main():
     
     # Step 1: Check Python dependencies
     print("\nChecking Python dependencies...")
-    missing_deps = check_python_dependencies()
-    if missing_deps:
+    if missing_deps := check_python_dependencies():
         print(f"[ERROR] Missing required Python modules: {', '.join(missing_deps)}")
         print("Please install missing dependencies:")
         for dep in missing_deps:
             if dep == 'flask_cors':
-                print(f"  pip install flask-cors")
+                print("  pip install flask-cors")
             else:
                 print(f"  pip install {dep}")
         print()
-        try:
+        with contextlib.suppress(EOFError):
             input("Press Enter to continue anyway (may cause startup failure)...")
-        except EOFError:
-            pass
     else:
         print("[OK] All required Python dependencies are available")
     
@@ -600,10 +580,8 @@ def main():
         print("  1. Close other applications using port 9090")
         print("  2. Continue anyway (server may fail to start)")
         print()
-        try:
+        with contextlib.suppress(EOFError):
             input("Press Enter to continue...")
-        except EOFError:
-            pass
     else:
         print("[OK] Port 9090 is available")
     
@@ -657,15 +635,13 @@ def main():
         print("3. Run: python cyberbackup_api_server.py")
         print("4. Wait for server to start, then open: http://127.0.0.1:9090/")
         print()
-        try:
+        with contextlib.suppress(EOFError):
             choice = input("Would you like to try opening the browser anyway? (y/N): ").strip().lower()
             if choice in ['y', 'yes']:
                 import webbrowser
                 gui_url = "http://127.0.0.1:9090/"
                 print(f"Opening Web GUI in browser: {gui_url}")
                 webbrowser.open(gui_url)
-        except EOFError:
-            pass
     
     # Enhanced success/status message
     print()
@@ -742,8 +718,6 @@ if __name__ == "__main__":
         sys.exit(1)
     except Exception as e:
         print(f"\n\n[ERROR] An unexpected error occurred: {e}")
-        try:
+        with contextlib.suppress(EOFError):
             input("Press Enter to exit...")
-        except EOFError:
-            pass
         sys.exit(1)

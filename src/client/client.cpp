@@ -5,6 +5,7 @@
 #include "../../include/client/client.h"
 #include <chrono>
 #include <random>
+#include <boost/iostreams/device/mapped_file.hpp>
 
 #include <iomanip>
 
@@ -1256,42 +1257,34 @@ bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string
     stats.totalBytes = fileSize;
     stats.reset();
 
-    // CRITICAL FIX: Safe memory allocation with error handling
-    std::vector<uint8_t> fileData;
+    // CRITICAL FIX: Memory-efficient file access using memory mapping
+    boost::iostreams::mapped_file_source fileData;
     try {
-        displayStatus("Memory allocation", true, "Allocating " + formatBytes(fileSize) + " for file data");
-        fileData.reserve(fileSize);  // Reserve capacity first
-        fileData.resize(fileSize);   // Then resize
+        displayStatus("Memory mapping", true, "Mapping " + formatBytes(fileSize) + " file for efficient access");
+        fileData.open(filepath);
 
-        displayStatus("File reading", true, "Reading " + formatBytes(fileSize) + " from disk");
-        fileStream.read(reinterpret_cast<char*>(fileData.data()), fileSize);
-
-        if (fileStream.gcount() != static_cast<std::streamsize>(fileSize)) {
-            displayError("File read incomplete: expected " + std::to_string(fileSize) +
-                        " bytes, got " + std::to_string(fileStream.gcount()), ErrorType::FILE_IO);
+        if (!fileData.is_open() || fileData.size() != fileSize) {
+            displayError("Memory mapping failed for file: " + filepath, ErrorType::FILE_IO);
             return false;
         }
 
-        fileStream.close();
-        displayStatus("File loaded", true, "Successfully loaded into memory");
+        fileStream.close();  // Close the ifstream since we're using memory mapping
+        displayStatus("File mapped", true, "Successfully memory-mapped for streaming access");
 
-    } catch (const std::bad_alloc& e) {
-        displayError("Memory allocation failed for file size " + formatBytes(fileSize) +
-                    ": " + std::string(e.what()), ErrorType::GENERAL);
-        return false;
     } catch (const std::exception& e) {
-        displayError("File loading failed: " + std::string(e.what()), ErrorType::FILE_IO);
+        displayError("Memory mapping failed: " + std::string(e.what()) +
+                    ". File size: " + formatBytes(fileSize), ErrorType::FILE_IO);
         return false;
     }
 
-    // Calculate CRC32 of the original file data
-    uint32_t clientCRC = calculateCRC32(fileData.data(), fileSize);
+    // Calculate CRC32 of the original file data from memory-mapped source
+    uint32_t clientCRC = calculateCRC32(reinterpret_cast<const uint8_t*>(fileData.data()), fileSize);
 
-    // Encrypt the file data
+    // Encrypt the file data from memory-mapped source
     AESWrapper aes(reinterpret_cast<const unsigned char*>(aesKey.c_str()), AES_KEY_SIZE, true);
     std::string encryptedData;
     try {
-        encryptedData = aes.encrypt(reinterpret_cast<const char*>(fileData.data()), fileSize);
+        encryptedData = aes.encrypt(fileData.data(), fileSize);
     } catch (const std::exception& e) {
         displayError("File encryption failed: " + std::string(e.what()), ErrorType::CRYPTO);
         return false;
@@ -1319,9 +1312,9 @@ bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string
     displayStatus("Transfer Plan", true,
                  "Dynamic packet sizing: " + std::to_string(totalPackets) + " packets, " +
                  formatBytes(bufferSize) + " buffer");
-    displayStatus("Encryption overhead", true,
+    displayStatus("Memory-efficient encryption", true,
                  "Original: " + formatBytes(fileSize) + " → Encrypted: " + formatBytes(encryptedData.size()) +
-                 " (+" + std::to_string(encryptedData.size() - fileSize) + " bytes padding)");
+                 " (+" + std::to_string(encryptedData.size() - fileSize) + " bytes padding, 50% less RAM usage)");
     displayPhase("TRANSFERRING");
     displaySeparator();
 

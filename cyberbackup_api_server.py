@@ -12,6 +12,7 @@ import threading
 import tempfile
 import logging
 import hashlib
+import contextlib
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, send_file, session
 
@@ -39,8 +40,6 @@ from src.server.server_singleton import ensure_single_server_instance
 
 # Import file receipt monitoring
 from src.server.file_receipt_monitor import initialize_file_receipt_monitor, get_file_receipt_monitor, stop_file_receipt_monitor
-
-import uuid
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for local development
@@ -260,7 +259,7 @@ def api_connect():
     """Connect to backup server with configuration using real backup protocol"""
     global server_config, backup_status, backup_executor, connection_established, connection_timestamp
 
-    print(f"[DEBUG] /api/connect endpoint called")
+    print("[DEBUG] /api/connect endpoint called")
     print(f"[DEBUG] Request method: {request.method}")
     print(f"[DEBUG] Request headers: {dict(request.headers)}")
     print(f"[DEBUG] Request data: {request.get_data()}")
@@ -279,9 +278,8 @@ def api_connect():
 
         # Validate required fields
         required_fields = ['host', 'port', 'username']
-        missing_fields = [field for field in required_fields if field not in config or not config[field]]
-
-        if missing_fields:
+        
+        if missing_fields := [field for field in required_fields if field not in config or not config[field]]:
             return jsonify({
                 'success': False,
                 'error': f'Missing required fields: {", ".join(missing_fields)}'
@@ -304,7 +302,7 @@ def api_connect():
             backup_status['connected'] = True
             backup_status['status'] = 'connected'
             backup_status['message'] = f'Connected to backup server at {server_config["host"]}:{server_config["port"]}'
-            update_backup_status('READY', f'Connected successfully. Ready for backup.')
+            update_backup_status('READY', 'Connected successfully. Ready for backup.')
             print(f"[DEBUG] Connection established at {connection_timestamp.isoformat()}")
         else:
             connection_established = False
@@ -312,9 +310,9 @@ def api_connect():
 
             backup_status['connected'] = False
             backup_status['status'] = 'connection_failed'
-            backup_status['message'] = f'Connection failed: Backup server not responding'
-            update_backup_status('ERROR', f'Connection test failed: Backup server not responding')
-            print(f"[DEBUG] Connection failed - server not reachable")
+            backup_status['message'] = 'Connection failed: Backup server not responding'
+            update_backup_status('ERROR', 'Connection test failed: Backup server not responding')
+            print("[DEBUG] Connection failed - server not reachable")
 
         return jsonify({
             'success': server_reachable,
@@ -334,7 +332,7 @@ def api_disconnect():
     """Disconnect from backup server"""
     global connection_established, connection_timestamp, backup_status
 
-    print(f"[DEBUG] /api/disconnect called")
+    print("[DEBUG] /api/disconnect called")
 
 
     try:
@@ -346,7 +344,7 @@ def api_disconnect():
         backup_status['message'] = 'Disconnected from backup server'
         backup_status['phase'] = 'READY'
 
-        print(f"[DEBUG] Connection terminated")
+        print("[DEBUG] Connection terminated")
 
         return jsonify({
             'success': True,
@@ -414,14 +412,11 @@ def api_start_backup_working():
         temp_file_path = os.path.join(temp_dir, safe_temp_name)
 
         # Initialize performance monitor for this job with known total bytes if available
-        try:
+        total_bytes = None
+        with contextlib.suppress(Exception):
             total_bytes = os.path.getsize(temp_file_path)
-        except Exception:
-            total_bytes = None
-        try:
+        with contextlib.suppress(Exception):
             perf_monitor.start_job(job_id, total_bytes=total_bytes)
-        except Exception:
-            pass
 
         print(f"[DEBUG] Original filename: {original_filename}")
         print(f"[DEBUG] Safe temp filename: {safe_temp_name}")
@@ -438,85 +433,85 @@ def api_start_backup_working():
 
         # Define a dedicated status handler for this job
         def status_handler(phase, data):
-            if job_id in active_backup_jobs:
-                active_backup_jobs[job_id]['events'].append({'phase': phase, 'data': data})
-                active_backup_jobs[job_id]['phase'] = phase
+            if job_id not in active_backup_jobs:
+                return
+                
+            active_backup_jobs[job_id]['events'].append({'phase': phase, 'data': data})
+            active_backup_jobs[job_id]['phase'] = phase
 
-                # Debug logging for API server progress handling
-                if isinstance(data, dict) and 'progress' in data:
-                    print(f"[API_DEBUG] Received progress update: {phase} - {data['progress']:.1f}% - {data.get('message', 'No message')}")
+            # Debug logging for API server progress handling
+            if isinstance(data, dict) and 'progress' in data:
+                print(f"[API_DEBUG] Received progress update: {phase} - {data['progress']:.1f}% - {data.get('message', 'No message')}")
 
-                # Update both job-specific and global backup status
-                if isinstance(data, dict):
-                    message = data.get('message', phase)
-                    active_backup_jobs[job_id]['message'] = message
-                    if 'progress' in data:
-                        progress_value = data['progress']
-                        active_backup_jobs[job_id]['progress']['percentage'] = progress_value
-                    # Feed performance monitor when we get rich progress from executor
-                    try:
-                        if isinstance(data, dict):
-                            bytes_tx = data.get('bytes_transferred')
-                            total_b = data.get('total_bytes')
-                            speed = data.get('speed')
-                            perf_monitor.record_sample(
-                                job_id,
-                                bytes_transferred=int(bytes_tx) if isinstance(bytes_tx, (int, float)) else None,
-                                total_bytes=int(total_b) if isinstance(total_b, (int, float)) else None,
-                                speed_bps=float(speed) if isinstance(speed, (int, float)) else None,
-                                phase=phase,
-                            )
-                    except Exception:
-                        pass
+            # Update both job-specific and global backup status
+            if isinstance(data, dict):
+                message = data.get('message', phase)
+                active_backup_jobs[job_id]['message'] = message
+                if 'progress' in data:
+                    progress_value = data['progress']
+                    active_backup_jobs[job_id]['progress']['percentage'] = progress_value
+                # Feed performance monitor when we get rich progress from executor
+                with contextlib.suppress(Exception):
+                    if isinstance(data, dict):
+                        bytes_tx = data.get('bytes_transferred')
+                        total_b = data.get('total_bytes')
+                        speed = data.get('speed')
+                        perf_monitor.record_sample(
+                            job_id,
+                            bytes_transferred=int(bytes_tx) if isinstance(bytes_tx, (int, float)) else None,
+                            total_bytes=int(total_b) if isinstance(total_b, (int, float)) else None,
+                            speed_bps=float(speed) if isinstance(speed, (int, float)) else None,
+                            phase=phase,
+                        )
 
-                        # Also update global backup status for unified API
-                        if 'progress' in data:
-                            progress_value = data['progress']
-                            update_backup_status(phase, message, progress_value)
-                            print(f"[API_DEBUG] Updated job progress to {progress_value:.1f}%")
-                        else:
-                            update_backup_status(phase, message)
+                # Also update global backup status for unified API
+                if 'progress' in data:
+                    progress_value = data['progress']
+                    update_backup_status(phase, message, progress_value)
+                    print(f"[API_DEBUG] Updated job progress to {progress_value:.1f}%")
                 else:
-                    active_backup_jobs[job_id]['message'] = data
-                    update_backup_status(phase, data)
+                    update_backup_status(phase, message)
+            else:
+                active_backup_jobs[job_id]['message'] = data
+                update_backup_status(phase, data)
 
-                # Enhanced completion logic with file receipt verification
-                if phase in ['COMPLETED', 'FAILED', 'ERROR']:
-                    # Check actual file receipt regardless of reported status
-                    monitor = get_file_receipt_monitor()
-                    if monitor and original_filename:
-                        file_filename = os.path.basename(original_filename)
-                        receipt_check = monitor.check_file_receipt(file_filename)
-                        if receipt_check.get('received', False):
-                            # File actually received - override any failure status
-                            if phase in ['FAILED', 'ERROR']:
-                                print(f"[OVERRIDE] Process reported {phase} but file was received - marking as SUCCESS")
-                                phase = 'COMPLETED'
-                                active_backup_jobs[job_id]['phase'] = 'COMPLETED'
-                                active_backup_jobs[job_id]['message'] = 'File successfully received and verified!'
-                                update_backup_status('COMPLETED', 'File transfer verified - backup successful!', 100)
-                        else:
-                            # File not received - ensure we report failure even if process claims success
-                            if phase == 'COMPLETED':
-                                print(f"[OVERRIDE] Process reported COMPLETED but file not received - marking as FAILED")
-                                phase = 'FAILED'
-                                active_backup_jobs[job_id]['phase'] = 'FAILED'
-                                active_backup_jobs[job_id]['message'] = 'Process completed but file not received on server'
-                                update_backup_status('FAILED', 'File transfer failed - no file received', 0)
+            # Enhanced completion logic with file receipt verification
+            if phase in ['COMPLETED', 'FAILED', 'ERROR']:
+                # Check actual file receipt regardless of reported status
+                monitor = get_file_receipt_monitor()
+                if monitor and original_filename:
+                    file_filename = os.path.basename(original_filename)
+                    receipt_check = monitor.check_file_receipt(file_filename)
+                    if receipt_check.get('received', False):
+                        # File actually received - override any failure status
+                        if phase in ['FAILED', 'ERROR']:
+                            print(f"[OVERRIDE] Process reported {phase} but file was received - marking as SUCCESS")
+                            phase = 'COMPLETED'
+                            active_backup_jobs[job_id]['phase'] = 'COMPLETED'
+                            active_backup_jobs[job_id]['message'] = 'File successfully received and verified!'
+                            update_backup_status('COMPLETED', 'File transfer verified - backup successful!', 100)
+                    else:
+                        # File not received - ensure we report failure even if process claims success
+                        if phase == 'COMPLETED':
+                            print("[OVERRIDE] Process reported COMPLETED but file not received - marking as FAILED")
+                            phase = 'FAILED'
+                            active_backup_jobs[job_id]['phase'] = 'FAILED'
+                            active_backup_jobs[job_id]['message'] = 'Process completed but file not received on server'
+                            update_backup_status('FAILED', 'File transfer failed - no file received', 0)
 
-                # Real-time WebSocket broadcasting
-                if websocket_enabled and connected_clients:
-                    try:
-                        socketio.emit('progress_update', {
-                            'job_id': job_id,
-                            'phase': phase,
-                            'data': data,
-                            'timestamp': time.time(),
-                            'progress': active_backup_jobs[job_id]['progress']['percentage'] if isinstance(data, dict) and 'progress' in data else None
-                        })
-                        print(f"[WEBSOCKET] Broadcasted progress update: {phase}")
-                    except Exception as e:
-                        print(f"[WEBSOCKET] Broadcast failed: {e}")
+            # Real-time WebSocket broadcasting
+            if websocket_enabled and connected_clients:
+                try:
+                    socketio.emit('progress_update', {
+                        'job_id': job_id,
+                        'phase': phase,
+                        'data': data,
+                        'timestamp': time.time(),
+                        'progress': active_backup_jobs[job_id]['progress']['percentage'] if isinstance(data, dict) and 'progress' in data else None
+                    })
+                    print(f"[WEBSOCKET] Broadcasted progress update: {phase}")
+                except Exception as e:
+                    print(f"[WEBSOCKET] Broadcast failed: {e}")
 
         # Set the callback for this specific executor instance
         backup_executor.set_status_callback(status_handler)
@@ -704,9 +699,9 @@ if __name__ == "__main__":
     print("=" * 70)
     print("* CyberBackup 3.0 API Server - REAL Integration")
     print("=" * 70)
-    print(f"* API Server: http://localhost:9090")
-    print(f"* Client GUI: http://localhost:9090/")
-    print(f"* Health Check: http://localhost:9090/health")
+    print("* API Server: http://localhost:9090")
+    print("* Client GUI: http://localhost:9090/")
+    print("* Health Check: http://localhost:9090/health")
     print()
 
     # Display logging information
@@ -714,7 +709,7 @@ if __name__ == "__main__":
     print("* Logging Information:")
     print(f"* Log File: {log_monitor_info['file_path']}")
     print(f"* Live Monitor (PowerShell): {log_monitor_info['powershell_cmd']}")
-    print(f"* Console Output: Visible in this window (dual output enabled)")
+    print("* Console Output: Visible in this window (dual output enabled)")
     print()
 
     # Check components
@@ -735,11 +730,10 @@ if __name__ == "__main__":
         print(f"[MISSING] C++ Client: {client_exe} NOT FOUND")
 
     # Check backup server
-    server_running = check_backup_server_status()
-    if server_running:
-        print(f"[OK] Backup Server: Running on port 1256")
+    if server_running := check_backup_server_status():
+        print("[OK] Backup Server: Running on port 1256")
     else:
-        print(f"[WARNING] Backup Server: Not running on port 1256")
+        print("[WARNING] Backup Server: Not running on port 1256")
 
     print()
 
@@ -791,8 +785,7 @@ if __name__ == "__main__":
 @app.route('/api/perf/<job_id>')
 def api_perf_job(job_id):
     try:
-        summary = perf_monitor.get_job_summary(job_id)
-        if not summary:
+        if not (summary := perf_monitor.get_job_summary(job_id)):
             return jsonify({'success': False, 'error': f'No performance data for job_id={job_id}'}), 404
         return jsonify({'success': True, 'job': summary})
     except Exception as e:
@@ -802,8 +795,7 @@ def api_perf_job(job_id):
 @app.route('/api/cancel/<job_id>', methods=['POST'])
 def api_cancel_job(job_id):
     try:
-        job = active_backup_jobs.get(job_id)
-        if not job:
+        if not (job := active_backup_jobs.get(job_id)):
             return jsonify({'success': False, 'error': f'Unknown job_id={job_id}'}), 404
         executor = job.get('executor')
         if not executor:
@@ -819,7 +811,7 @@ def api_cancel_job(job_id):
         # Attach optional cancel reason to job record for UI consumption
         cancel_reason = None
         try:
-            if request and request.is_json:
+            if request and request.is_json and request.json:
                 cancel_reason = request.json.get('reason')
         except Exception:
             cancel_reason = None
@@ -849,8 +841,7 @@ def api_cancel_all_jobs():
     try:
         results = {}
         for jid, job in list(active_backup_jobs.items()):
-            execu = job.get('executor')
-            if execu:
+            if execu := job.get('executor'):
                 try:
                     ok = execu.cancel('API cancel all')
                     job['phase'] = 'CANCELLED' if ok else job.get('phase', 'UNKNOWN')
@@ -896,10 +887,3 @@ def api_perf_all():
         return jsonify({'success': True, 'jobs': perf_monitor.get_all_summaries()})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
-        # Cleanup file receipt monitor
-        try:
-            stop_file_receipt_monitor()
-            print("[INFO] File receipt monitor stopped")
-        except Exception as e:
-            print(f"[WARNING] Error stopping file receipt monitor: {e}")

@@ -30,7 +30,7 @@ def check_python_deps():
                 try:
                     version = importlib.import_module(dep).__version__
                     print(f"✓ {dep:<15} - OK (v{version})")
-                except:
+                except Exception:
                     print(f"✓ {dep:<15} - OK")
         except ImportError:
             print(f"✗ {dep:<15} - MISSING")
