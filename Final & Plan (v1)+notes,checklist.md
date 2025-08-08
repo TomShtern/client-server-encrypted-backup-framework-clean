@@ -1,0 +1,5 @@
+# Acceptance Test
+
+This is a test.
+
+FILENAME_ACCEPT_TEST_SIGNATURE::08e1fd54-1115-4487-9272-a1148c947164
