@@ -181,13 +181,21 @@ class Client:
             if len(aes_key_data) != AES_KEY_SIZE_BYTES:
                  raise ValueError(f"AES key size for client '{self.name}' is incorrect. Expected {AES_KEY_SIZE_BYTES}, got {len(aes_key_data)}.")
             self.aes_key = aes_key_data
-    
+
     def clear_partial_file(self, filename: str):
         """Removes partial file reassembly data for a given filename."""
         with self.lock:
             if filename in self.partial_files:
                 del self.partial_files[filename]
                 logger.debug(f"Client '{self.name}': Cleared partial file reassembly data for '{filename}'.")
+
+
+    def clear_all_partial_files(self):
+        """Clears all in-memory partial file transfer states for this client."""
+        with self.lock:
+            count = len(self.partial_files)
+            self.partial_files.clear()
+            logger.debug(f"Client '{self.name}': Cleared all partial file data ({count} entries)")
 
     def cleanup_stale_partial_files(self) -> int:
         """
@@ -202,12 +210,12 @@ class Client:
                 filename for filename, data in self.partial_files.items()
                 if current_monotonic_time - data.get("timestamp", 0) > PARTIAL_FILE_TIMEOUT
             ]
-            
+
             # Remove stale entries
             for filename in stale_files_to_remove:
                 logger.warning(f"Client '{self.name}': Stale partial file transfer timed out for '{filename}'. Removing associated data.")
                 del self.partial_files[filename]
-            
+
             return len(stale_files_to_remove)
 
 
@@ -269,7 +277,7 @@ class BackupServer:
         self.clients: Dict[bytes, Client] = {} # In-memory store: client_id_bytes -> Client object
         self.clients_by_name: Dict[str, bytes] = {} # In-memory store: client_name_str -> client_id_bytes
         self.clients_lock: threading.Lock = threading.Lock() # Protects access to clients and clients_by_name
-        
+
         # Use default port for now
         self.port = DEFAULT_PORT
         self.running = False
@@ -285,19 +293,19 @@ class BackupServer:
             client_resolver=self.resolve_client,
             shutdown_event=self.shutdown_event
         )
-        
+
         # Initialize database manager
         self.db_manager: DatabaseManager = DatabaseManager()
-        
+
         # Initialize GUI manager
         self.gui_manager = GUIManager(self)
         self.gui_manager.initialize_gui()
-        
+
         # Perform pre-flight checks and initialize database
         self.db_manager.check_startup_permissions() # Perform pre-flight checks before extensive setup
         self.db_manager.ensure_storage_dir() # Ensure 'received_files' directory exists
         self.db_manager.init_database()      # Initialize SQLite database and tables
-        
+
         # Note: Signal handlers are now managed by NetworkServer
         # but we keep a reference for main server coordination
         # Port is already set during NetworkServer initialization
@@ -349,18 +357,18 @@ class BackupServer:
         """
         if len(payload_bytes) < field_len:
             raise ProtocolError(f"{field_name}: Field is shorter than expected ({len(payload_bytes)} < {field_len})")
-        
+
         string_field = payload_bytes[:field_len]
         null_pos = string_field.find(b'\x00')
-        
+
         if null_pos == -1:
             actual_string_bytes = string_field
         else:
             actual_string_bytes = string_field[:null_pos]
-        
+
         if len(actual_string_bytes) > max_actual_len:
             raise ProtocolError(f"{field_name}: String too long ({len(actual_string_bytes)} > {max_actual_len})")
-        
+
         try:
             return actual_string_bytes.decode('utf-8', errors='strict')
         except UnicodeDecodeError as e:
@@ -458,7 +466,7 @@ class BackupServer:
                     'clients_cleaned': inactive_clients_removed_count,
                     'last_cleanup': datetime.now().isoformat()
                 }
-                
+
                 # 2. Put the gathered data into the GUI's queue
                 self.gui_manager.queue_update("status", status_data)
                 self.gui_manager.queue_update("client_stats", client_stats_data)
@@ -478,7 +486,7 @@ class BackupServer:
 
         self.running = True
         self.shutdown_event.clear()
-        
+
         try:
             self._load_clients_from_db()
         except SystemExit as e:
@@ -528,7 +536,7 @@ if __name__ == "__main__":
         print(f"      Secure Encrypted File Backup Server - Version {SERVER_VERSION}      ")
         print(f"      Process ID: {os.getpid()}                                     ")
         print("=====================================================================")
-        
+
         # Display logging information
         try:
             log_monitor_info = create_log_monitor_info(backup_log_file, "Backup Server")
@@ -571,7 +579,7 @@ if __name__ == "__main__":
         # The GUI is running in a separate thread, started by the GUIManager.
         # The main thread can now wait for a shutdown signal or simply keep alive.
         # The GUI's mainloop will handle user interaction and application lifetime.
-        
+
         # Wait for the GUI to signal it's ready before we proceed (with timeout)
         print("DEBUG: Waiting for GUI to initialize...")
         logger.info("Waiting for GUI to initialize...")
@@ -607,6 +615,6 @@ if __name__ == "__main__":
         if server_instance:
             logger.info("Ensuring server shutdown is called from __main__ 'finally' block...")
             server_instance.stop()
-        
+
         logger.info("Server application has completed its full termination sequence.")
         print("Server shutdown process complete. Exiting.")

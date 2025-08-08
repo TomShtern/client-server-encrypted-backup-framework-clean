@@ -47,6 +47,14 @@ CORS(app)  # Enable CORS for local development
 
 # Initialize SocketIO with origin-locked CORS for security
 socketio = SocketIO(app, cors_allowed_origins=["http://localhost:9090", "http://127.0.0.1:9090"])
+# Performance monitoring singleton
+from src.shared.utils.performance_monitor import get_performance_monitor
+# Connection health monitoring
+from src.server.connection_health import get_connection_health_monitor
+conn_health = get_connection_health_monitor()
+
+perf_monitor = get_performance_monitor()
+
 
 # --- Initialize global variables ---
 connection_established = False
@@ -131,7 +139,7 @@ def handle_connect():
     session['client_id'] = client_id
     connected_clients.add(client_id)
     print(f"[WEBSOCKET] Client connected: {client_id} (Total: {len(connected_clients)})")
-    
+
     # Send initial status to new client
     emit('status', {
         'connected': check_backup_server_status(),
@@ -152,11 +160,11 @@ def handle_status_request(data):
     """Handle client status requests via WebSocket"""
     job_id = data.get('job_id') if data else None
     status = active_backup_jobs.get(job_id, last_known_status) if job_id else last_known_status
-    
+
     # Always provide the latest connection status
     status['connected'] = check_backup_server_status() and connection_established
     status['isConnected'] = status['connected']
-    
+
     emit('status_response', {
         'status': status,
         'job_id': job_id,
@@ -272,17 +280,17 @@ def api_connect():
         # Validate required fields
         required_fields = ['host', 'port', 'username']
         missing_fields = [field for field in required_fields if field not in config or not config[field]]
-        
+
         if missing_fields:
             return jsonify({
-                'success': False, 
+                'success': False,
                 'error': f'Missing required fields: {", ".join(missing_fields)}'
             }), 400
 
         # Update server configuration
         if config:
             server_config.update(config)
-        
+
         update_backup_status('CONNECT', f'Testing connection to {server_config["host"]}:{server_config["port"]}...')
 
         # Test if backup server is reachable
@@ -328,6 +336,7 @@ def api_disconnect():
 
     print(f"[DEBUG] /api/disconnect called")
 
+
     try:
         connection_established = False
         connection_timestamp = None
@@ -357,7 +366,7 @@ def api_start_backup_working():
 
     # Generate unique job ID for this backup operation
     job_id = f"job_{int(time.time() * 1000000)}"
-    
+
     # Initialize job tracking
     active_backup_jobs[job_id] = {
         'phase': 'INITIALIZING',
@@ -369,15 +378,17 @@ def api_start_backup_working():
         'backing_up': True,
         'last_updated': datetime.now().isoformat()
     }
-    
+
     # Create a new, dedicated backup executor for this specific job.
     # This is the core of the fix for the race condition.
     try:
         backup_executor = RealBackupExecutor()
+        # Store executor on the job record for cancellation control
+        active_backup_jobs[job_id]['executor'] = backup_executor
         print(f"[Job {job_id}] RealBackupExecutor instance created.")
     except Exception as e:
         return jsonify({
-            'success': False, 
+            'success': False,
             'error': f'Failed to initialize backup executor: {e}'
         }), 500
 
@@ -402,13 +413,23 @@ def api_start_backup_working():
         safe_temp_name = f"upload_{int(time.time() * 1000000)}_{original_filename}"
         temp_file_path = os.path.join(temp_dir, safe_temp_name)
 
+        # Initialize performance monitor for this job with known total bytes if available
+        try:
+            total_bytes = os.path.getsize(temp_file_path)
+        except Exception:
+            total_bytes = None
+        try:
+            perf_monitor.start_job(job_id, total_bytes=total_bytes)
+        except Exception:
+            pass
+
         print(f"[DEBUG] Original filename: {original_filename}")
         print(f"[DEBUG] Safe temp filename: {safe_temp_name}")
         print(f"[DEBUG] Temp file path: {temp_file_path}")
 
         file.save(temp_file_path)
 
-        
+
 
         # Get form data
         username = request.form.get('username', server_config.get('username', 'default_user'))
@@ -420,11 +441,11 @@ def api_start_backup_working():
             if job_id in active_backup_jobs:
                 active_backup_jobs[job_id]['events'].append({'phase': phase, 'data': data})
                 active_backup_jobs[job_id]['phase'] = phase
-                
+
                 # Debug logging for API server progress handling
                 if isinstance(data, dict) and 'progress' in data:
                     print(f"[API_DEBUG] Received progress update: {phase} - {data['progress']:.1f}% - {data.get('message', 'No message')}")
-                
+
                 # Update both job-specific and global backup status
                 if isinstance(data, dict):
                     message = data.get('message', phase)
@@ -432,15 +453,33 @@ def api_start_backup_working():
                     if 'progress' in data:
                         progress_value = data['progress']
                         active_backup_jobs[job_id]['progress']['percentage'] = progress_value
+                    # Feed performance monitor when we get rich progress from executor
+                    try:
+                        if isinstance(data, dict):
+                            bytes_tx = data.get('bytes_transferred')
+                            total_b = data.get('total_bytes')
+                            speed = data.get('speed')
+                            perf_monitor.record_sample(
+                                job_id,
+                                bytes_transferred=int(bytes_tx) if isinstance(bytes_tx, (int, float)) else None,
+                                total_bytes=int(total_b) if isinstance(total_b, (int, float)) else None,
+                                speed_bps=float(speed) if isinstance(speed, (int, float)) else None,
+                                phase=phase,
+                            )
+                    except Exception:
+                        pass
+
                         # Also update global backup status for unified API
-                        update_backup_status(phase, message, progress_value)
-                        print(f"[API_DEBUG] Updated job progress to {progress_value:.1f}%")
-                    else:
-                        update_backup_status(phase, message)
+                        if 'progress' in data:
+                            progress_value = data['progress']
+                            update_backup_status(phase, message, progress_value)
+                            print(f"[API_DEBUG] Updated job progress to {progress_value:.1f}%")
+                        else:
+                            update_backup_status(phase, message)
                 else:
                     active_backup_jobs[job_id]['message'] = data
                     update_backup_status(phase, data)
-                
+
                 # Enhanced completion logic with file receipt verification
                 if phase in ['COMPLETED', 'FAILED', 'ERROR']:
                     # Check actual file receipt regardless of reported status
@@ -464,7 +503,7 @@ def api_start_backup_working():
                                 active_backup_jobs[job_id]['phase'] = 'FAILED'
                                 active_backup_jobs[job_id]['message'] = 'Process completed but file not received on server'
                                 update_backup_status('FAILED', 'File transfer failed - no file received', 0)
-                
+
                 # Real-time WebSocket broadcasting
                 if websocket_enabled and connected_clients:
                     try:
@@ -545,7 +584,7 @@ def api_start_backup_working():
                 print(f"[ERROR] Backup thread error: {str(e)}")
             finally:
                 backup_status['backing_up'] = False
-                
+
                 # Cleanup the temporary file and directory
                 if os.path.exists(temp_file_path_for_thread):
                     os.remove(temp_file_path_for_thread)
@@ -589,15 +628,15 @@ def api_check_file_receipt(filename):
                 'error': 'File receipt monitoring not available',
                 'received': False
             }), 503
-        
+
         receipt_info = monitor.check_file_receipt(filename)
-        
+
         return jsonify({
             'success': True,
             'filename': filename,
             **receipt_info
         })
-        
+
     except Exception as e:
         error_msg = f"Error checking file receipt: {str(e)}"
         print(f"[ERROR] {error_msg}")
@@ -617,10 +656,10 @@ def api_list_received_files():
                 'success': False,
                 'error': 'File receipt monitoring not available'
             }), 503
-        
+
         files_info = monitor.list_received_files()
         return jsonify(files_info)
-        
+
     except Exception as e:
         error_msg = f"Error listing received files: {str(e)}"
         print(f"[ERROR] {error_msg}")
@@ -639,10 +678,10 @@ def api_monitor_status():
                 'monitoring_active': False,
                 'error': 'File receipt monitoring not initialized'
             })
-        
+
         status = monitor.get_monitoring_status()
         return jsonify(status)
-        
+
     except Exception as e:
         error_msg = f"Error getting monitor status: {str(e)}"
         print(f"[ERROR] {error_msg}")
@@ -650,6 +689,14 @@ def api_monitor_status():
             'monitoring_active': False,
             'error': error_msg
         }), 500
+
+@app.route('/api/server/connection_health')
+def api_server_connection_health():
+    """Get server connection health status"""
+    try:
+        return jsonify({'success': True, 'connections': conn_health.get_summary()})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # --- Enhanced server startup with WebSocket support ---
 
@@ -661,7 +708,7 @@ if __name__ == "__main__":
     print(f"* Client GUI: http://localhost:9090/")
     print(f"* Health Check: http://localhost:9090/health")
     print()
-    
+
     # Display logging information
     log_monitor_info = create_log_monitor_info(api_log_file, "API Server")
     print("* Logging Information:")
@@ -695,8 +742,9 @@ if __name__ == "__main__":
         print(f"[WARNING] Backup Server: Not running on port 1256")
 
     print()
+
     print("[ROCKET] Starting Flask API server with WebSocket support...")
-    
+
     # Initialize file receipt monitoring
     try:
         received_files_dir = "received_files"  # Match server's actual file storage location
@@ -704,7 +752,7 @@ if __name__ == "__main__":
         print(f"[OK] File Receipt Monitor: Watching {received_files_dir}")
     except Exception as e:
         print(f"[WARNING] File Receipt Monitor: Failed to initialize - {e}")
-    
+
     # Ensure only one API server instance runs at a time
     print("Ensuring single API server instance...")
     ensure_single_server_instance("APIServer", 9090)
@@ -712,19 +760,143 @@ if __name__ == "__main__":
 
     try:
         print("[WEBSOCKET] Starting Flask-SocketIO server with real-time support...")
+        print("[DEBUG] About to call socketio.run()...")
         socketio.run(
             app,
             host='127.0.0.1',
             port=9090,
-            debug=True,
+            debug=False,
             allow_unsafe_werkzeug=True,  # Allow threading with SocketIO
             use_reloader=False
         )
+        print("[DEBUG] socketio.run() returned normally")
     except KeyboardInterrupt:
         print("\n[INFO] API Server shutdown requested")
     except Exception as e:
-        print(f"[MISSING] Server error: {e}")
+        print(f"[ERROR] Server error: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
+        print("[DEBUG] Entering finally block...")
+        # Cleanup file receipt monitor
+        try:
+            stop_file_receipt_monitor()
+            print("[INFO] File receipt monitor stopped")
+        except Exception as e:
+            print(f"[WARNING] Error stopping file receipt monitor: {e}")
+        print("[DEBUG] API Server process ending...")
+
+
+# --- Performance Monitoring Endpoints (after primary routes) ---
+@app.route('/api/perf/<job_id>')
+def api_perf_job(job_id):
+    try:
+        summary = perf_monitor.get_job_summary(job_id)
+        if not summary:
+            return jsonify({'success': False, 'error': f'No performance data for job_id={job_id}'}), 404
+        return jsonify({'success': True, 'job': summary})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# --- Cancellation Endpoint ---
+@app.route('/api/cancel/<job_id>', methods=['POST'])
+def api_cancel_job(job_id):
+    try:
+        job = active_backup_jobs.get(job_id)
+        if not job:
+            return jsonify({'success': False, 'error': f'Unknown job_id={job_id}'}), 404
+        executor = job.get('executor')
+        if not executor:
+            return jsonify({'success': False, 'error': 'No executor associated with this job'}), 400
+        ok = False
+        try:
+            ok = executor.cancel('API cancellation')
+        except Exception as e:
+            return jsonify({'success': False, 'error': f'Cancel failed: {e}'}), 500
+        # Update job state
+        job['phase'] = 'CANCELLED' if ok else 'CANCEL_REQUESTED'
+        job['message'] = 'Backup cancelled' if ok else 'Cancellation requested'
+        # Attach optional cancel reason to job record for UI consumption
+        cancel_reason = None
+        try:
+            if request and request.is_json:
+                cancel_reason = request.json.get('reason')
+        except Exception:
+            cancel_reason = None
+        if cancel_reason:
+            job['cancel_reason'] = cancel_reason
+        if ok:
+            job['progress']['percentage'] = max(job['progress'].get('percentage', 0), 0)
+        # Broadcast over WebSocket if enabled
+        try:
+            if websocket_enabled and connected_clients:
+                socketio.emit('job_cancelled', {
+                    'job_id': job_id,
+                    'success': ok,
+                    'phase': job['phase'],
+                    'reason': job.get('cancel_reason') if isinstance(job, dict) else None,
+                    'timestamp': time.time()
+                })
+        except Exception as be:
+            print(f"[WEBSOCKET] Cancel broadcast failed: {be}")
+        return jsonify({'success': ok, 'job_id': job_id, 'phase': job['phase']})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# --- Cancel All Endpoint ---
+@app.route('/api/cancel_all', methods=['POST'])
+def api_cancel_all_jobs():
+    try:
+        results = {}
+        for jid, job in list(active_backup_jobs.items()):
+            execu = job.get('executor')
+            if execu:
+                try:
+                    ok = execu.cancel('API cancel all')
+                    job['phase'] = 'CANCELLED' if ok else job.get('phase', 'UNKNOWN')
+                    job['message'] = 'Backup cancelled' if ok else job.get('message', '')
+                    results[jid] = ok
+                except Exception as e:
+                    results[jid] = False
+        # Broadcast
+        try:
+            if websocket_enabled and connected_clients:
+                socketio.emit('jobs_cancelled', {'results': results, 'timestamp': time.time()})
+        except Exception as be:
+            print(f"[WEBSOCKET] Cancel-all broadcast failed: {be}")
+        return jsonify({'success': True, 'results': results})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# --- Cancelable Jobs Endpoint ---
+@app.route('/api/cancelable_jobs', methods=['GET'])
+def api_cancelable_jobs():
+    try:
+        items = []
+        for jid, job in active_backup_jobs.items():
+            # A job is cancelable if it has an executor and is in a running phase
+            cancelable = bool(job.get('executor')) and job.get('phase') not in ['COMPLETED', 'FAILED', 'ERROR', 'CANCELLED']
+            if cancelable:
+                items.append({
+                    'job_id': jid,
+                    'phase': job.get('phase'),
+                    'file': job.get('progress', {}).get('current_file'),
+                    'progress': job.get('progress', {}).get('percentage'),
+                    'message': job.get('message')
+                })
+        return jsonify({'success': True, 'jobs': items})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/perf')
+def api_perf_all():
+    try:
+        return jsonify({'success': True, 'jobs': perf_monitor.get_all_summaries()})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
         # Cleanup file receipt monitor
         try:
             stop_file_receipt_monitor()

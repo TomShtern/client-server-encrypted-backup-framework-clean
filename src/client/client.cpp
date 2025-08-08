@@ -4,7 +4,21 @@
 
 #include "../../include/client/client.h"
 #include <chrono>
+#include <random>
+
 #include <iomanip>
+
+// Backoff helper with jitter
+static int compute_backoff_ms(int attempt, int base_ms = 500, int max_ms = 8000) {
+    long long delay = static_cast<long long>(base_ms) << (attempt - 1); // base * 2^(attempt-1)
+    if (delay > max_ms) delay = max_ms;
+    static thread_local std::mt19937 rng{std::random_device{}()};
+    int jitter = static_cast<int>(delay / 4); // +/-25%
+    std::uniform_int_distribution<int> dist(-jitter, jitter);
+    int with_jitter = static_cast<int>(delay) + dist(rng);
+    if (with_jitter < 0) with_jitter = 0;
+    return with_jitter;
+}
 
 // CRC table for polynomial 0x04C11DB7 (used by Linux cksum)
 static const uint32_t crc_table[256] = {
@@ -146,7 +160,7 @@ void log_phase_with_timestamp(const std::string& phase) {
     auto now = std::chrono::high_resolution_clock::now();
     auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
         now.time_since_epoch()).count();
-    
+
     // Output format: [PHASE:timestamp] phase_name
     // This format is parsed by RealBackupExecutor for progress tracking
     std::cout << "[PHASE:" << timestamp << "] " << phase << std::endl;
@@ -202,15 +216,15 @@ Client::~Client() {
 bool Client::initialize() {
     operationStartTime = std::chrono::steady_clock::now();
     displaySplashScreen();
-    
+
     displayPhase("Initialization");
-    
+
     displayStatus("System initialization", true, "Starting client v1.0");
-    
+
     if (!readTransferInfo()) {
         return false;
     }
-    
+
     if (!validateConfiguration()) {
         return false;
     }
@@ -237,27 +251,28 @@ bool Client::initialize() {
 // Main client run function
 bool Client::run() {
     displayPhase("Connection Setup");
-    
+
     displayStatus("Connecting to server", true, serverIP + ":" + std::to_string(serverPort));
       // Try to connect with retries
     bool connectedSuccessfully = false;
     for (int attempt = 1; attempt <= 3 && !connectedSuccessfully; attempt++) {
         if (attempt > 1) {
             displayStatus("Connection attempt", true, "Retry " + std::to_string(attempt) + " of 3");
-            std::this_thread::sleep_for(std::chrono::milliseconds(RECONNECT_DELAY_MS));
-        } 
-        
+            int delay_ms = compute_backoff_ms(attempt, /*base_ms=*/500, /*max_ms=*/RECONNECT_DELAY_MS);
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+        }
+
         if (connectToServer()) {
             connectedSuccessfully = true;
         }
     }
-    
+
     if (!connectedSuccessfully) {
         displayError("Failed to connect after 3 attempts", ErrorType::NETWORK);
         return false;
     }
     displayConnectionInfo();
-    
+
     // Test connection quality with proper error handling
     displayStatus("Testing connection", true, "Verifying server communication...");
     if (!testConnection()) {
@@ -269,16 +284,16 @@ bool Client::run() {
 
     // Enable keep-alive for long transfers
     enableKeepAlive();
-    
+
     displayPhase("Authentication");
-    
+
     // Check if we have existing registration
     bool hasRegistration = loadMeInfo();
-    
+
     if (hasRegistration) {
         displayStatus("Client credentials", true, "Found existing registration");
         displayStatus("Attempting reconnection", true, "Client: " + username);
-        
+
         // Load private key
         if (!loadPrivateKey()) {
             displayStatus("Loading private key", false, "Key not found");
@@ -291,14 +306,14 @@ bool Client::run() {
             }
         }
     }
-    
+
     if (!hasRegistration) {
         displayStatus("Registering new client", true, username);
-        
+
         if (!performRegistration()) {
             return false;
         }
-        
+
         displayStatus("DEBUG: About to call sendPublicKey()", true, "Starting key exchange phase");
         if (!sendPublicKey()) {
             displayError("DEBUG: sendPublicKey() failed", ErrorType::CRYPTO);
@@ -306,20 +321,21 @@ bool Client::run() {
         }
         displayStatus("DEBUG: sendPublicKey() completed successfully", true, "Key exchange phase done");
     }
-    
+
     displayPhase("File Transfer");
-    
+
     // Transfer the file with retry logic
     bool transferSuccess = false;
     fileRetries = 0;
-    
+
     while (fileRetries < MAX_RETRIES && !transferSuccess) {
         if (fileRetries > 0) {
             displayStatus("File transfer", false, "Retrying (attempt " +
                          std::to_string(fileRetries + 1) + " of " + std::to_string(MAX_RETRIES) + ")");
-            std::this_thread::sleep_for(std::chrono::seconds(2));
+            int delay_ms = compute_backoff_ms(fileRetries, /*base_ms=*/500, /*max_ms=*/4000);
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
         }
-        
+
         displayStatus("Starting file transfer", true, "Calling transferFileEnhanced()");
         if (transferFileEnhanced(TransferConfig())) {
             displayStatus("File transfer completed", true, "Success");
@@ -329,16 +345,16 @@ bool Client::run() {
             fileRetries++;
         }
     }
-    
+
     if (!transferSuccess) {
         displayError("File transfer failed after " + std::to_string(MAX_RETRIES) + " attempts", ErrorType::NETWORK);
         return false;
     }
-    
+
     displayPhase("Transfer Complete");
     log_phase_with_timestamp("COMPLETED");
     displaySummary();
-    
+
     return true;
 }
 
@@ -349,21 +365,21 @@ bool Client::readTransferInfo() {
         displayError("Cannot open transfer.info", ErrorType::CONFIG);
         return false;
     }
-    
+
     std::string line;
-    
+
     // Line 1: server:port
     if (!std::getline(file, line)) {
         displayError("Invalid transfer.info format - missing server address", ErrorType::CONFIG);
         return false;
     }
-    
+
     size_t colonPos = line.find(':');
     if (colonPos == std::string::npos) {
         displayError("Invalid server address format (expected IP:port)", ErrorType::CONFIG);
         return false;
     }
-    
+
     serverIP = line.substr(0, colonPos);
     try {
         serverPort = static_cast<uint16_t>(std::stoi(line.substr(colonPos + 1)));
@@ -371,24 +387,24 @@ bool Client::readTransferInfo() {
         displayError("Invalid port number", ErrorType::CONFIG);
         return false;
     }
-    
+
     // Line 2: username
     if (!std::getline(file, username) || username.empty()) {
         displayError("Invalid username - cannot be empty", ErrorType::CONFIG);
         return false;
     }
-    
+
     if (username.length() > 100) {
         displayError("Username too long (max 100 characters)", ErrorType::CONFIG);
         return false;
     }
-    
+
     // Line 3: filepath
     if (!std::getline(file, filepath) || filepath.empty()) {
         displayError("Invalid file path - cannot be empty", ErrorType::CONFIG);
         return false;
     }
-    
+
     displayStatus("Configuration loaded", true, "transfer.info parsed successfully");
     return true;
 }
@@ -396,103 +412,103 @@ bool Client::readTransferInfo() {
 // Validate configuration
 bool Client::validateConfiguration() {
     displayStatus("Validating configuration", true, "Checking parameters");
-    
+
     // Validate server IP (Boost.Asio will handle IP validation during connect)
     if (serverIP.empty()) {
         displayError("Invalid IP address: empty", ErrorType::CONFIG);
         return false;
     }
-    
+
     // Validate port
     if (serverPort == 0 || serverPort > 65535) {
         displayError("Invalid port number: " + std::to_string(serverPort), ErrorType::CONFIG);
         return false;
     }
-    
+
     // Validate file exists and get size
     std::ifstream testFile(filepath, std::ios::binary);
     if (!testFile.is_open()) {
         displayError("File not found: " + filepath, ErrorType::FILE_IO);
         return false;
     }
-    
+
     testFile.seekg(0, std::ios::end);
     stats.totalBytes = testFile.tellg();
     testFile.close();
-    
+
     if (stats.totalBytes == 0) {
         displayError("File is empty: " + filepath, ErrorType::FILE_IO);
         return false;
     }
-    
+
     displayStatus("File validation", true, filepath + " (" + formatBytes(stats.totalBytes) + ")");
     displayStatus("Server validation", true, serverIP + ":" + std::to_string(serverPort));
     displayStatus("Username validation", true, username);
-    
+
     return true;
 }
 
 // New method: validate and apply configuration directly (no file I/O)
 bool Client::validateAndApplyConfig(const BackupConfig& config) {
     displayStatus("Validating direct configuration", true, "Checking parameters");
-    
+
     // Basic validation using the BackupConfig isValid() method
     if (!config.isValid()) {
         displayError("Invalid configuration provided", ErrorType::CONFIG);
         return false;
     }
-    
+
     // Additional validation for server IP (more thorough than just non-empty check)
     if (config.serverIP.empty() || config.serverIP.length() > 253) {
         displayError("Invalid IP address: " + config.serverIP, ErrorType::CONFIG);
         return false;
     }
-    
+
     // Validate port range
     if (config.serverPort == 0 || config.serverPort > 65535) {
         displayError("Invalid port number: " + std::to_string(config.serverPort), ErrorType::CONFIG);
         return false;
     }
-    
+
     // Validate username length and characters
     if (config.username.empty() || config.username.length() > 100) {
         displayError("Invalid username length (1-100 characters required)", ErrorType::CONFIG);
         return false;
     }
-    
+
     // Validate file exists and get size
     std::ifstream testFile(config.filepath, std::ios::binary);
     if (!testFile.is_open()) {
         displayError("File not found: " + config.filepath, ErrorType::FILE_IO);
         return false;
     }
-    
+
     testFile.seekg(0, std::ios::end);
     std::streampos fileSize = testFile.tellg();
     testFile.close();
-    
+
     if (fileSize == 0) {
         displayError("File is empty: " + config.filepath, ErrorType::FILE_IO);
         return false;
     }
-    
+
     if (fileSize > (4LL * 1024 * 1024 * 1024)) { // 4GB limit
         displayError("File too large (max 4GB): " + config.filepath, ErrorType::FILE_IO);
         return false;
     }
-    
+
     // Apply the validated configuration to the client instance
     serverIP = config.serverIP;
     serverPort = config.serverPort;
     username = config.username;
     filepath = config.filepath;
     stats.totalBytes = static_cast<size_t>(fileSize);
-    
+
     // Display validation success
     displayStatus("Direct configuration applied", true, config.filepath + " (" + formatBytes(stats.totalBytes) + ")");
     displayStatus("Server configuration", true, config.serverIP + ":" + std::to_string(config.serverPort));
     displayStatus("Username configured", true, config.username);
-    
+
     return true;
 }
 
@@ -502,27 +518,27 @@ bool Client::loadMeInfo() {
     if (!file.is_open()) {
         return false;
     }
-    
+
     std::string line;
-    
+
     // Line 1: username
     if (!std::getline(file, line) || line != username) {
         return false;
     }
-    
+
     // Line 2: UUID hex
     if (!std::getline(file, line) || line.length() != 32) {
         return false;
     }
-    
+
     auto bytes = hexToBytes(line);
     if (bytes.size() != CLIENT_ID_SIZE) {
         return false;
     }
     std::copy(bytes.begin(), bytes.end(), clientID.begin());
-    
+
     displayStatus("Client ID loaded", true, "UUID: " + line.substr(0, 8) + "...");
-    
+
     // Line 3: private key base64 (we'll load separately)
     return true;
 }
@@ -534,17 +550,17 @@ bool Client::saveMeInfo() {
         displayError("Cannot create me.info", ErrorType::FILE_IO);
         return false;
     }
-    
+
     file << username << "\n";
     std::string hexId = bytesToHex(clientID.data(), CLIENT_ID_SIZE);
     file << hexId << "\n";
-    
+
     if (rsaPrivate) {
         std::string privateKey = rsaPrivate->getPrivateKey();
         std::string encoded = Base64Wrapper::encode(privateKey);
         file << encoded << "\n";
     }
-    
+
     displayStatus("Client info saved", true, "me.info created");
     return true;
 }
@@ -556,7 +572,7 @@ bool Client::loadPrivateKey() {
     if (keyFile.is_open()) {
         std::string keyData((std::istreambuf_iterator<char>(keyFile)), std::istreambuf_iterator<char>());
         keyFile.close();
-        
+
         try {
             // priv.key contains binary DER data, use the char* constructor
             rsaPrivate = new RSAPrivateWrapper(keyData.c_str(), keyData.length());
@@ -568,31 +584,31 @@ bool Client::loadPrivateKey() {
             rsaPrivate = nullptr;
         }
     }
-    
+
     // Try me.info
     std::ifstream infoFile("me.info");
     if (!infoFile.is_open()) {
         return false;
     }
-    
+
     std::string line;
     std::getline(infoFile, line); // skip username
     std::getline(infoFile, line); // skip UUID
-    
+
     if (!std::getline(infoFile, line) || line.empty()) {
         return false;
     }
       try {
         std::string decoded = Base64Wrapper::decode(line);
         rsaPrivate = new RSAPrivateWrapper(decoded);
-        
+
         // Save to priv.key
         std::ofstream privKey("priv.key", std::ios::binary);
         if (privKey.is_open()) {
             privKey.write(decoded.c_str(), decoded.length());
             displayStatus("Private key cached", true, "Saved to priv.key");
         }
-        
+
         return true;
     } catch (...) {
         if (rsaPrivate) {
@@ -606,14 +622,14 @@ bool Client::loadPrivateKey() {
 // Save private key
 bool Client::savePrivateKey() {
     if (!rsaPrivate) return false;
-    
+
     std::string privateKey = rsaPrivate->getPrivateKey();
     std::ofstream file("priv.key", std::ios::binary);
     if (!file.is_open()) {
         displayError("Cannot create priv.key", ErrorType::FILE_IO);
         return false;
     }
-    
+
     file.write(privateKey.c_str(), privateKey.length());
     displayStatus("Private key saved", true, "priv.key created");
     return true;
@@ -623,13 +639,13 @@ bool Client::savePrivateKey() {
 bool Client::connectToServer() {
     try {
         socket = std::make_unique<boost::asio::ip::tcp::socket>(ioContext);
-        
+
         boost::asio::ip::tcp::resolver resolver(ioContext);
-        boost::asio::ip::tcp::resolver::results_type endpoints = 
+        boost::asio::ip::tcp::resolver::results_type endpoints =
             resolver.resolve(serverIP, std::to_string(serverPort));
-        
+
         displayStatus("Connecting", true, "Establishing TCP connection...");
-        
+
         boost::asio::connect(*socket, endpoints);
 
         // Verify the connection is actually established
@@ -654,13 +670,13 @@ bool Client::connectToServer() {
 
         connected = true;
         displayStatus("Connected", true, "TCP connection established");
-        
+
         return true;
-        
+
     } catch (const std::exception& e) {        displayError("Connection failed: " + std::string(e.what()), ErrorType::NETWORK);
         socket.reset();
         connected = false;
-        
+
         return false;
     }
 }
@@ -671,26 +687,26 @@ bool Client::testConnection() {
         displayError("Cannot test connection - socket not open", ErrorType::NETWORK);
         return false;
     }
-    
+
     try {
         auto start = std::chrono::steady_clock::now();
-        
+
         // Instead of sending a test request with invalid code,
         // just check if the socket is still connected and responsive
         boost::system::error_code ec;
         size_t available = socket->available(ec);
-        
+
         if (ec) {
             displayError("Connection test failed: " + ec.message(), ErrorType::NETWORK);
             return false;
         }
-        
+
         auto end = std::chrono::steady_clock::now();
         auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        
+
         displayStatus("Connection test", true, "Socket responsive (checked in " + std::to_string(latency) + "ms)");
         return true;
-        
+
     } catch (const std::exception& e) {
         displayError("Connection test exception: " + std::string(e.what()), ErrorType::NETWORK);
         return false;
@@ -728,31 +744,31 @@ bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
         displayError("Not connected to server", ErrorType::NETWORK);
         return false;
     }
-    
+
     try {
         // FIXED: Use proper struct serialization with explicit endianness handling
         // The Python server expects little-endian format explicitly
         RequestHeader header;
-        
+
         // Client ID (16 bytes) - copy as-is
         std::copy(clientID.begin(), clientID.end(), header.client_id);
-        
+
         // Version (1 byte)
         header.version = CLIENT_VERSION;
-        
+
         // Code and payload_size need explicit little-endian conversion
         uint32_t payload_size_val = static_cast<uint32_t>(payload.size());
-        
+
         // Use the corrected endianness conversion functions
-        
+
         // Use the corrected endianness conversion functions
         header.code = hostToLittleEndian16(code);
         header.payload_size = hostToLittleEndian32(payload_size_val);
-        
+
         // Serialize struct to bytes
         std::vector<uint8_t> headerBytes(sizeof(RequestHeader));
         std::memcpy(headerBytes.data(), &header, sizeof(RequestHeader));
-        
+
         // Debug: show header values for important requests
         if (code == REQ_REGISTER || code == REQ_RECONNECT || code == REQ_SEND_PUBLIC_KEY) {
             displayStatus("Debug: Request header", true,
@@ -768,7 +784,7 @@ bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
             }
             displayStatus("Debug: Header bytes", true, hexDump.str());
         }
-        
+
         // Send header
         size_t headerBytesSent = boost::asio::write(*socket, boost::asio::buffer(headerBytes));
         if (headerBytesSent != headerBytes.size()) {
@@ -825,7 +841,7 @@ bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
         }
 
         return true;
-        
+
     } catch (const std::exception& e) {
         displayError("Failed to send request: " + std::string(e.what()), ErrorType::NETWORK);
         return false;
@@ -838,17 +854,17 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
         displayError("Not connected to server", ErrorType::NETWORK);
         return false;
     }
-    
+
     try {
         boost::system::error_code ec;
-        
+
         // Set socket receive timeout to 25 seconds (less than 30s Python subprocess timeout)
         // This prevents the subprocess from hanging and getting killed
-        
+
         // Windows socket timeout
         #ifdef _WIN32
             DWORD timeout = 25000; // 25 seconds in milliseconds
-            if (setsockopt(socket->native_handle(), SOL_SOCKET, SO_RCVTIMEO, 
+            if (setsockopt(socket->native_handle(), SOL_SOCKET, SO_RCVTIMEO,
                           (const char*)&timeout, sizeof(timeout)) != 0) {
                 displayStatus("Socket timeout", false, "Could not set receive timeout");
             } else {
@@ -858,18 +874,18 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
             struct timeval tv;
             tv.tv_sec = 25;
             tv.tv_usec = 0;
-            if (setsockopt(socket->native_handle(), SOL_SOCKET, SO_RCVTIMEO, 
+            if (setsockopt(socket->native_handle(), SOL_SOCKET, SO_RCVTIMEO,
                           (const char*)&tv, sizeof(tv)) != 0) {
                 displayStatus("Socket timeout", false, "Could not set receive timeout");
             } else {
                 displayStatus("Socket timeout", true, "25s receive timeout set");
             }
         #endif
-        
+
         // Synchronously receive header with timeout
         displayStatus("Waiting for server response", true, "Max wait: 25 seconds");
         std::size_t headerBytes = boost::asio::read(*socket, boost::asio::buffer(&header, sizeof(header)), ec);
-        
+
         if (ec) {
             if (ec == boost::asio::error::timed_out || ec == boost::asio::error::operation_aborted) {
                 displayError("Timeout waiting for server response - this prevents subprocess kill", ErrorType::NETWORK);
@@ -878,12 +894,12 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
             }
             return false;
         }
-        
+
         if (headerBytes != sizeof(header)) {
             displayError("Failed to receive complete header: got " + std::to_string(headerBytes) + " bytes, expected " + std::to_string(sizeof(header)), ErrorType::NETWORK);
             return false;
         }
-        
+
         // Debug: show raw header bytes received
         uint8_t* rawBytes = reinterpret_cast<uint8_t*>(&header);
         std::stringstream hexStream;
@@ -891,11 +907,11 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
             hexStream << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(rawBytes[i]) << " ";
         }
         displayStatus("Debug: Raw header bytes", true, hexStream.str());
-        
+
         // Debug: show interpreted header values
-        displayStatus("Debug: Response received", true, 
-                     "Version=" + std::to_string(header.version) + 
-                     ", Code=" + std::to_string(header.code) + 
+        displayStatus("Debug: Response received", true,
+                     "Version=" + std::to_string(header.version) +
+                     ", Code=" + std::to_string(header.code) +
                      ", PayloadSize=" + std::to_string(header.payload_size));
 
         // Check version
@@ -914,7 +930,7 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
         payload.clear();
         if (header.payload_size > 0) {
             payload.resize(header.payload_size);
-            
+
             std::size_t payloadBytes = boost::asio::read(*socket, boost::asio::buffer(payload), ec);
             if (ec || payloadBytes != header.payload_size) {
                 displayError("Failed to receive payload: " + (ec ? ec.message() : "incomplete data"), ErrorType::NETWORK);
@@ -939,51 +955,51 @@ bool Client::performRegistration() {
         displayError("RSA keys not available for registration", ErrorType::CRYPTO);
         return false;
     }
-    
+
     // Prepare registration payload
     std::vector<uint8_t> payload(MAX_NAME_SIZE, 0);
     std::copy(username.begin(), username.end(), payload.begin());
       displayStatus("Sending registration", true, "Username: " + username);
-    
+
     // Debug: show what we're sending
-    displayStatus("Debug: Registration packet", true, 
-                 "Payload size=" + std::to_string(payload.size()) + 
+    displayStatus("Debug: Registration packet", true,
+                 "Payload size=" + std::to_string(payload.size()) +
                  " bytes, Username='" + username + "'");
 
     // Send registration request
     if (!sendRequest(REQ_REGISTER, payload)) {
         return false;
     }
-    
+
     // Add small delay to ensure server processes request
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     // Receive response
     ResponseHeader header;
     std::vector<uint8_t> responsePayload;
     if (!receiveResponse(header, responsePayload)) {
         return false;
     }
-    
+
     if (header.code == RESP_REGISTER_FAIL) {
         displayError("Registration failed: Username already exists", ErrorType::AUTHENTICATION);
         return false;
     }
-    
+
     if (header.code != RESP_REGISTER_OK || responsePayload.size() != CLIENT_ID_SIZE) {
         displayError("Invalid registration response", ErrorType::PROTOCOL);
         return false;
     }
-    
+
     // Store client ID
     std::copy(responsePayload.begin(), responsePayload.end(), clientID.begin());
-    
+
     // Save info
     if (!saveMeInfo() || !savePrivateKey()) {
         displayError("Failed to save registration info", ErrorType::FILE_IO);
         return false;
     }
-    
+
     displayStatus("Registration", true, "New client ID: " + bytesToHex(clientID.data(), 8) + "...");
     return true;
 }
@@ -993,40 +1009,40 @@ bool Client::performReconnection() {
     // Prepare reconnection payload
     std::vector<uint8_t> payload(MAX_NAME_SIZE, 0);
     std::copy(username.begin(), username.end(), payload.begin());
-    
+
     displayStatus("Sending reconnection", true, "Client ID: " + bytesToHex(clientID.data(), 8) + "...");
-    
+
     // Send reconnection request
     if (!sendRequest(REQ_RECONNECT, payload)) {
         return false;
     }
-    
+
     // Receive response
     ResponseHeader header;
     std::vector<uint8_t> responsePayload;
     if (!receiveResponse(header, responsePayload)) {
         return false;
     }
-    
+
     if (header.code == RESP_RECONNECT_FAIL) {
         return false;
     }
-    
+
     if (header.code != RESP_RECONNECT_AES_SENT || responsePayload.size() <= CLIENT_ID_SIZE) {
         displayError("Invalid reconnection response", ErrorType::PROTOCOL);
         return false;
     }
-    
+
     // Extract encrypted AES key
     std::vector<uint8_t> encryptedKey(responsePayload.begin() + CLIENT_ID_SIZE, responsePayload.end());
-    
+
     displayStatus("Decrypting AES key", true, "Using stored RSA private key");
-    
+
     // Decrypt AES key
     if (!decryptAESKey(encryptedKey)) {
         return false;
     }
-    
+
     displayStatus("Reconnection", true, "Successfully authenticated");
     return true;
 }
@@ -1037,47 +1053,47 @@ bool Client::sendPublicKey() {
         displayError("No RSA keys available", ErrorType::CRYPTO);
         return false;
     }
-    
+
     // Prepare payload
     std::vector<uint8_t> payload(MAX_NAME_SIZE + RSA_KEY_SIZE, 0);
-    
+
     // Add username
     std::copy(username.begin(), username.end(), payload.begin());
-    
+
     // Add public key
     char publicKeyBuffer[RSAPublicWrapper::KEYSIZE];
     rsaPrivate->getPublicKey(publicKeyBuffer, RSAPublicWrapper::KEYSIZE);
     std::copy(publicKeyBuffer, publicKeyBuffer + RSAPublicWrapper::KEYSIZE, payload.begin() + MAX_NAME_SIZE);
-    
+
     displayStatus("Sending public key", true, "RSA 1024-bit public key");
-    
+
     // Send request
     if (!sendRequest(REQ_SEND_PUBLIC_KEY, payload)) {
         return false;
     }
-    
+
     // Receive response
     ResponseHeader header;
     std::vector<uint8_t> responsePayload;
     if (!receiveResponse(header, responsePayload)) {
         return false;
     }
-    
+
     if (header.code != RESP_PUBKEY_AES_SENT || responsePayload.size() <= CLIENT_ID_SIZE) {
         displayError("Invalid public key response", ErrorType::PROTOCOL);
         return false;
     }
-    
+
     // Extract encrypted AES key
     std::vector<uint8_t> encryptedKey(responsePayload.begin() + CLIENT_ID_SIZE, responsePayload.end());
-    
+
     displayStatus("Received AES key", true, "Encrypted with RSA");
-    
+
     // Decrypt AES key
     if (!decryptAESKey(encryptedKey)) {
         return false;
     }
-    
+
     displayStatus("Key exchange", true, "AES-256 key established");
     return true;
 }
@@ -1267,10 +1283,10 @@ bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string
         displayError("File loading failed: " + std::string(e.what()), ErrorType::FILE_IO);
         return false;
     }
-    
-    // Calculate CRC32 of the original file data  
+
+    // Calculate CRC32 of the original file data
     uint32_t clientCRC = calculateCRC32(fileData.data(), fileSize);
-    
+
     // Encrypt the file data
     AESWrapper aes(reinterpret_cast<const unsigned char*>(aesKey.c_str()), AES_KEY_SIZE, true);
     std::string encryptedData;
@@ -1280,7 +1296,7 @@ bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string
         displayError("File encryption failed: " + std::string(e.what()), ErrorType::CRYPTO);
         return false;
     }
-    
+
     // CRITICAL FIX: Calculate number of packets with overflow protection
     size_t packetCount = (encryptedData.size() + bufferSize - 1) / bufferSize;
 
@@ -1308,7 +1324,7 @@ bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string
                  " (+" + std::to_string(encryptedData.size() - fileSize) + " bytes padding)");
     displayPhase("TRANSFERRING");
     displaySeparator();
-    
+
     // Send file in packets using the calculated buffer size
     size_t dataOffset = 0;
     uint16_t packetNum = 1;
@@ -1326,20 +1342,20 @@ bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string
             displayError("Failed to send packet " + std::to_string(packetNum), ErrorType::NETWORK);
             return false;
         }
-        
+
         dataOffset += chunkSize;
         packetNum++;
         stats.update(dataOffset);
-        
+
         // Update progress display
         displayProgress("Transferring", stats.transferredBytes, stats.totalBytes);
     }
-    
+
     displaySeparator();
     displayStatus("Transfer Complete", true, "All " + std::to_string(totalPackets) + " packets sent successfully");
     displayStatus("Waiting for server", true, "Server calculating CRC...");
     displayPhase("VERIFYING");
-    
+
     // Wait for CRC response from server
     ResponseHeader header;
     std::vector<uint8_t> responsePayload;
@@ -1347,16 +1363,16 @@ bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string
         displayError("Failed to receive CRC response", ErrorType::NETWORK);
         return false;
     }
-    
+
     if (header.code != RESP_FILE_CRC || responsePayload.size() < 279) {
         displayError("Invalid file transfer response", ErrorType::PROTOCOL);
         return false;
     }
-    
+
     // Extract server CRC from payload
     uint32_t serverCRC;
     std::memcpy(&serverCRC, responsePayload.data() + 275, 4);
-    
+
     // Verify CRC
     return verifyCRC(serverCRC, clientCRC, filename);
 }
@@ -1378,7 +1394,7 @@ bool Client::transferFileEnhanced(const TransferConfig& config) {
     fileStream.seekg(0, std::ios::end);
     size_t fileSize = fileStream.tellg();
     fileStream.seekg(0, std::ios::beg);
-    
+
     // Extract filename
     std::string filename = filepath;
     size_t lastSlash = filename.find_last_of("/\\");
@@ -1463,54 +1479,57 @@ bool Client::sendFilePacket(const std::string& filename, const std::string& encr
 
     payload.insert(payload.end(), reinterpret_cast<uint8_t*>(&le_totalPackets),
                    reinterpret_cast<uint8_t*>(&le_totalPackets) + 2);
-    
+
     // Add filename (255 bytes)
     std::vector<uint8_t> filenameBytes(255, 0);
     std::copy(filename.begin(), filename.end(), filenameBytes.begin());
     payload.insert(payload.end(), filenameBytes.begin(), filenameBytes.end());
-    
+
     // Add encrypted data
     payload.insert(payload.end(), encryptedData.begin(), encryptedData.end());
-    
+
     return sendRequest(REQ_SEND_FILE, payload);
 }
 
 bool Client::verifyCRC(uint32_t serverCRC, uint32_t clientCRC, const std::string& filename) {
-    displayStatus("CRC verification", true, "Server: " + std::to_string(serverCRC) + 
+    displayStatus("CRC verification", true, "Server: " + std::to_string(serverCRC) +
                   ", Client: " + std::to_string(clientCRC));
-    
+
     // Prepare filename payload
     std::vector<uint8_t> payload(255, 0);
     std::copy(filename.begin(), filename.end(), payload.begin());
-    
+
     if (serverCRC == clientCRC) {
         displayStatus("CRC verification", true, "[OK] Checksums match - file integrity confirmed");
         sendRequest(REQ_CRC_OK, payload);
-        
+
         // Wait for ACK
         ResponseHeader header;
         std::vector<uint8_t> responsePayload;
         receiveResponse(header, responsePayload);
-        
+
         return true;
     } else {
         crcRetries++;
         if (crcRetries < MAX_RETRIES) {
             displayStatus("CRC verification", false, "Mismatch - Retry " + std::to_string(crcRetries) + " of " + std::to_string(MAX_RETRIES));
             sendRequest(REQ_CRC_RETRY, payload);
-            
+
             // Reset CRC retries for next attempt
             int savedRetries = crcRetries;
             crcRetries = 0;
-            
+
+            // Backoff before retrying the transfer
+            int delay_ms = compute_backoff_ms(savedRetries, /*base_ms=*/500, /*max_ms=*/4000);
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
             // Retry the transfer
             bool result = transferFile();
-            
+
             // Restore retry count if transfer failed
             if (!result) {
                 crcRetries = savedRetries;
             }
-            
+
             return result;
         } else {
             displayStatus("CRC verification", false, "Maximum retries exceeded - aborting");
@@ -1545,16 +1564,16 @@ bool Client::decryptAESKey(const std::vector<uint8_t>& encryptedKey) {
         displayError("No RSA private key available", ErrorType::CRYPTO);
         return false;
     }
-    
+
     try {
         std::string encrypted(reinterpret_cast<const char*>(encryptedKey.data()), encryptedKey.size());
         aesKey = rsaPrivate->decrypt(encrypted);
-        
+
         if (aesKey.size() != AES_KEY_SIZE) {
             displayError("Invalid AES key size: " + std::to_string(aesKey.size()) + " bytes (expected 32)", ErrorType::CRYPTO);
             return false;
         }
-        
+
         displayStatus("AES key decrypted", true, "256-bit key ready");
         return true;
     } catch (...) {
@@ -1573,24 +1592,24 @@ std::string Client::encryptFile(const std::vector<uint8_t>& data) {
         auto start = std::chrono::steady_clock::now();
         // Debug: Check actual AES key size
         displayStatus("AES key debug", true, "Key size: " + std::to_string(aesKey.size()) + " bytes");
-        
+
         if (aesKey.size() != 32) {
             displayError("Invalid AES key size: " + std::to_string(aesKey.size()) + " bytes (expected 32)", ErrorType::CRYPTO);
             return "";
         }
-        
+
         // Use 32-byte key and static IV of all zeros for protocol compliance
         AESWrapper aes(reinterpret_cast<const unsigned char*>(aesKey.c_str()), 32, true);
         std::string result = aes.encrypt(reinterpret_cast<const char*>(data.data()), data.size());
         auto end = std::chrono::steady_clock::now();
-        
+
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         double speed = (data.size() / 1024.0 / 1024.0) / (duration / 1000.0);
-        
-        displayStatus("Encryption performance", true, 
+
+        displayStatus("Encryption performance", true,
                      std::to_string(duration) + "ms (" +
                      std::to_string(static_cast<int>(speed)) + " MB/s)");
-        
+
         return result;
     } catch (...) {
         displayError("Failed to encrypt file", ErrorType::CRYPTO);
@@ -1607,68 +1626,68 @@ std::vector<uint8_t> Client::readFile(const std::string& path) {
         return {};
     }
     testFile.close();
-    
+
     // Now attempt to open for binary reading
     std::ifstream file(path, std::ios::binary);
     if (!file.is_open()) {
         displayError("Cannot open file for reading: " + path, ErrorType::FILE_IO);
         return {};
     }
-    
+
     // Get file size
     file.seekg(0, std::ios::end);
     std::streampos fileSize = file.tellg();
     file.seekg(0, std::ios::beg);
-    
+
     // Handle negative file size (error condition)
     if (fileSize < 0) {
         displayError("Cannot determine file size: " + path, ErrorType::FILE_IO);
         file.close();
         return {};
     }
-    
+
     size_t size = static_cast<size_t>(fileSize);
-    
+
     // Check for empty file explicitly - this is a valid condition but should be logged
     if (size == 0) {
         displayError("File is empty: " + path, ErrorType::FILE_IO);
         file.close();
         return {};  // Return empty vector but calling code can check error details
     }
-    
+
     // Check for extremely large files
     if (size > (4LL * 1024 * 1024 * 1024)) { // 4GB limit
         displayError("File too large (max 4GB): " + path + " (" + formatBytes(size) + ")", ErrorType::FILE_IO);
         file.close();
         return {};
     }
-    
+
     std::vector<uint8_t> data(size);
-    
+
     // Read in chunks for better performance
     size_t bytesRead = 0;
     while (bytesRead < size) {
         size_t toRead = std::min(OPTIMAL_BUFFER_SIZE, size - bytesRead);
         file.read(reinterpret_cast<char*>(data.data() + bytesRead), toRead);
-        
+
         if (file.fail() && !file.eof()) {
             displayError("Failed to read file data at offset " + std::to_string(bytesRead) + ": " + path, ErrorType::FILE_IO);
             file.close();
             return {};
         }
-        
+
         bytesRead += file.gcount();
     }
-    
+
     file.close();
-    
+
     // Verify we read the expected amount
     if (bytesRead != size) {
-        displayError("Incomplete file read: expected " + std::to_string(size) + 
+        displayError("Incomplete file read: expected " + std::to_string(size) +
                     " bytes, got " + std::to_string(bytesRead) + " bytes from " + path, ErrorType::FILE_IO);
         return {};
     }
-    
+
     return data;
 }
 
@@ -1722,12 +1741,12 @@ std::string Client::formatBytes(size_t bytes) {
     const char* sizes[] = {"B", "KB", "MB", "GB"};
     int order = 0;
     double size = static_cast<double>(bytes);
-    
+
     while (size >= 1024 && order < 3) {
         order++;
         size /= 1024;
     }
-    
+
     std::stringstream ss;
     ss << std::fixed << std::setprecision(2) << size << " " << sizes[order];
     return ss.str();
@@ -1763,9 +1782,9 @@ std::string Client::getCurrentTimestamp() {
 void Client::displayStatus(const std::string& operation, bool success, const std::string& details) {
 #ifdef _WIN32
     clearLine();
-    
+
     std::cout << "[" << getCurrentTimestamp() << "] ";
-    
+
     if (success) {
         SetConsoleTextAttribute(hConsole, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
         std::cout << "[OK] ";
@@ -1773,10 +1792,10 @@ void Client::displayStatus(const std::string& operation, bool success, const std
         SetConsoleTextAttribute(hConsole, FOREGROUND_RED | FOREGROUND_INTENSITY);
         std::cout << "[FAIL] ";
     }
-    
+
     SetConsoleTextAttribute(hConsole, savedAttributes);
     std::cout << operation;
-    
+
     if (!details.empty()) {
         SetConsoleTextAttribute(hConsole, FOREGROUND_INTENSITY);
         std::cout << " - " << details;
@@ -1795,32 +1814,32 @@ void Client::displayStatus(const std::string& operation, bool success, const std
 
 void Client::displayProgress(const std::string& operation, size_t current, size_t total) {
     if (total == 0) return;
-    
+
     int percentage = static_cast<int>((current * 100) / total);
-    
+
 #ifdef _WIN32
     clearLine();
     std::cout << operation << " [";
-    
+
     const int barWidth = 40;
     int pos = (barWidth * current) / total;
-    
+
     SetConsoleTextAttribute(hConsole, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
     for (int i = 0; i < pos; i++) std::cout << "#";
-    
+
     SetConsoleTextAttribute(hConsole, FOREGROUND_GREEN);
     for (int i = pos; i < barWidth; i++) std::cout << ".";
-    
+
     SetConsoleTextAttribute(hConsole, savedAttributes);
-    std::cout << "] " << std::setw(3) << percentage << "% (" 
+    std::cout << "] " << std::setw(3) << percentage << "% ("
               << formatBytes(current) << "/" << formatBytes(total) << ")\r";
     std::cout.flush();
-    
+
     if (current >= total) {
         std::cout << std::endl;
     }
 #else
-    std::cout << "\r" << operation << " " << percentage << "% (" 
+    std::cout << "\r" << operation << " " << percentage << "% ("
               << formatBytes(current) << "/" << formatBytes(total) << ")";
     std::cout.flush();
     if (current >= total) {
@@ -1834,7 +1853,7 @@ void Client::displayTransferStats() {
     SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY);
     std::cout << "\r[STATS] ";
     SetConsoleTextAttribute(hConsole, savedAttributes);
-    
+
     std::cout << "Speed: " << formatBytes(static_cast<size_t>(stats.currentSpeed)) << "/s | "
               << "Avg: " << formatBytes(static_cast<size_t>(stats.averageSpeed)) << "/s | "
               << "ETA: " << formatDuration(stats.estimatedTimeRemaining) << "    " << std::endl;
@@ -1848,12 +1867,12 @@ void Client::displayTransferStats() {
 void Client::displaySplashScreen() {
 #ifdef _WIN32
     system("cls");
-    
+
     SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY);
     std::cout << "\n╔════════════════════════════════════════════╗\n";
     std::cout << "║     ENCRYPTED FILE BACKUP CLIENT v1.0      ║\n";
     std::cout << "╚════════════════════════════════════════════╝\n";
-    
+
     SetConsoleTextAttribute(hConsole, savedAttributes);
     std::cout << "  Build Date: " << __DATE__ << " " << __TIME__ << "\n";
     std::cout << "  Protocol Version: " << static_cast<int>(CLIENT_VERSION) << "\n";
@@ -1891,10 +1910,10 @@ void Client::displayConnectionInfo() {
 void Client::displayError(const std::string& message, ErrorType type) {
     lastError = type;
     lastErrorDetails = message;
-    
+
     // Temporarily show actual error message for debugging
     // Check if this is a server error response
-    // if (message.find("server") != std::string::npos || 
+    // if (message.find("server") != std::string::npos ||
     //     message.find("response") != std::string::npos ||
     //     type == ErrorType::SERVER_ERROR) {
     //     std::cerr << "server responded with an error" << std::endl;
@@ -1906,7 +1925,7 @@ void Client::displayError(const std::string& message, ErrorType type) {
 #else
         std::cerr << "[ERROR] ";
 #endif
-        
+
         switch (type) {
             case ErrorType::NETWORK:
                 std::cerr << "[NETWORK] ";
@@ -1957,7 +1976,7 @@ void Client::displayPhase(const std::string& phase) {
 void Client::displaySummary() {
     auto endTime = std::chrono::steady_clock::now();
     auto totalDuration = std::chrono::duration_cast<std::chrono::seconds>(endTime - operationStartTime).count();
-    
+
     displaySeparator();
 #ifdef _WIN32
     SetConsoleTextAttribute(hConsole, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
@@ -1966,7 +1985,7 @@ void Client::displaySummary() {
 #else
     std::cout << "[SUCCESS] BACKUP COMPLETED SUCCESSFULLY\n";
 #endif
-    
+
     std::cout << "\nTransfer Summary:\n";
     std::cout << "  File: " << filepath << "\n";
     std::cout << "  Size: " << formatBytes(stats.totalBytes) << "\n";
@@ -2009,8 +2028,8 @@ bool Client::runBackupOperation(const BackupConfig& config) {
             return false;
         }
 
-        displayStatus("Configuration applied directly", true, 
-            "Server: " + config.serverIP + ":" + std::to_string(config.serverPort) + 
+        displayStatus("Configuration applied directly", true,
+            "Server: " + config.serverIP + ":" + std::to_string(config.serverPort) +
             ", User: " + config.username + ", File: " + config.filepath);
 
         // Run the backup operation

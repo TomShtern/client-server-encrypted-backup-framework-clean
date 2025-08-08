@@ -14,7 +14,7 @@ from .crypto_compat import RSA
 # Import custom exceptions and configuration
 from .exceptions import ServerError, ProtocolError, ClientError
 from .config import (
-    CLIENT_SESSION_TIMEOUT, 
+    CLIENT_SESSION_TIMEOUT,
     PARTIAL_FILE_TIMEOUT,
     RSA_PUBLIC_KEY_SIZE,
     AES_KEY_SIZE_BYTES,
@@ -31,7 +31,7 @@ class Client:
     Represents a connected client and stores its state.
     Thread-safe client object with comprehensive state management.
     """
-    
+
     def __init__(self, client_id: bytes, name: str, public_key_bytes: Optional[bytes] = None):
         """
         Initializes a Client object.
@@ -104,13 +104,27 @@ class Client:
             if len(aes_key_data) != AES_KEY_SIZE_BYTES:
                 raise ValueError(f"AES key size for client '{self.name}' is incorrect. Expected {AES_KEY_SIZE_BYTES}, got {len(aes_key_data)}.")
             self.aes_key = aes_key_data
-    
+
     def clear_partial_file(self, filename: str):
         """Removes partial file reassembly data for a given filename."""
         with self.lock:
             if filename in self.partial_files:
                 del self.partial_files[filename]
                 logger.debug(f"Client '{self.name}': Cleared partial file reassembly data for '{filename}'.")
+
+
+    def clear_all_partial_files(self) -> int:
+        """Clears all in-memory partial file transfer states for this client.
+        Returns the number of cleared partial entries.
+        """
+        with self.lock:
+            count = len(self.partial_files)
+            self.partial_files.clear()
+            if count > 0:
+                logger.info(f"Client '{self.name}': Cleared all partial file data due to disconnect/cancellation ({count} entries)")
+            else:
+                logger.debug(f"Client '{self.name}': No partial file data to clear on disconnect/cancellation")
+            return count
 
     def cleanup_stale_partial_files(self) -> int:
         """
@@ -125,12 +139,12 @@ class Client:
                 filename for filename, data in self.partial_files.items()
                 if current_monotonic_time - data.get("timestamp", 0) > PARTIAL_FILE_TIMEOUT
             ]
-            
+
             # Remove stale entries
             for filename in stale_files_to_remove:
                 logger.warning(f"Client '{self.name}': Stale partial file transfer timed out for '{filename}'. Removing associated data.")
                 del self.partial_files[filename]
-            
+
             return len(stale_files_to_remove)
 
     def is_session_expired(self) -> bool:
@@ -213,7 +227,7 @@ class ClientManager:
     def load_clients_from_db(self):
         """
         Loads existing client data from the database into memory at startup.
-        
+
         Raises:
             SystemExit: If critical client data cannot be loaded from database.
         """
@@ -287,7 +301,7 @@ class ClientManager:
             client = Client(client_id, name, public_key_bytes)
             self.clients[client_id] = client
             self.clients_by_name[name] = client_id
-            
+
             logger.info(f"Registered new client: '{name}' (ID: {client_id.hex()})")
             return client
 
@@ -407,25 +421,25 @@ class ClientManager:
             Dictionary with maintenance statistics.
         """
         logger.debug("Running client maintenance tasks...")
-        
+
         # Clean up expired sessions
         expired_sessions_removed = self.cleanup_expired_sessions()
-        
+
         # Clean up stale partial files
         stale_files_cleaned = self.cleanup_stale_partial_files()
-        
+
         self.maintenance_stats['last_cleanup'] = datetime.now(timezone.utc).isoformat()
-        
+
         stats = {
             'expired_sessions_removed': expired_sessions_removed,
             'stale_files_cleaned': stale_files_cleaned,
             'active_clients': self.get_active_client_count(),
             'total_partial_files': self.get_total_partial_files()
         }
-        
+
         if expired_sessions_removed > 0 or stale_files_cleaned > 0:
             logger.info(f"Maintenance completed: {expired_sessions_removed} expired sessions removed, {stale_files_cleaned} stale partial files cleaned")
-        
+
         return stats
 
     def get_active_client_count(self) -> int:
@@ -458,7 +472,7 @@ class ClientManager:
         with self.clients_lock:
             clients_with_keys = sum(1 for client in self.clients.values() if client.has_public_key())
             clients_with_aes = sum(1 for client in self.clients.values() if client.has_aes_key())
-            
+
             return {
                 'active_clients': len(self.clients),
                 'clients_with_public_keys': clients_with_keys,
@@ -502,11 +516,11 @@ class ClientManager:
         with self.clients_lock:
             if name not in self.clients_by_name:
                 return True
-            
+
             if exclude_id is not None:
                 existing_id = self.clients_by_name[name]
                 return existing_id == exclude_id
-                
+
             return False
 
     def shutdown(self):

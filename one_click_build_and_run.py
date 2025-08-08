@@ -547,7 +547,22 @@ def main():
             print("[INFO] AppMap recording active - execution traces will be generated")
             print("       AppMap data will be saved when the server stops")
         
-        time.sleep(3)  # Give server time to start
+        # Wait for backup server to actually start listening on port 1256
+        print("Waiting for backup server to start listening...")
+        backup_server_ready = False
+        for attempt in range(15):  # Try for 15 seconds
+            if check_backup_server_status():
+                backup_server_ready = True
+                print(f"[OK] Backup server is listening on port 1256 after {attempt + 1} seconds")
+                break
+            print(f"  Attempt {attempt + 1}/15: Waiting for backup server...")
+            time.sleep(1)
+        
+        if not backup_server_ready:
+            print("[ERROR] Backup server failed to start within 15 seconds")
+            print("The API server may fail to connect to the backup server.")
+        else:
+            print("[OK] Backup server is ready!")
     else:
         print(f"[WARNING] Server file not found: {server_path}")
     
