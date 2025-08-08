@@ -1,4 +1,6 @@
 version: 2.1
+orbs:
+  coveralls: coveralls/coveralls@2.2.5
 
 jobs:
   one_click_build_and_run:
