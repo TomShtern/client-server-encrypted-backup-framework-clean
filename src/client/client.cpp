@@ -320,9 +320,12 @@ bool Client::run() {
             std::this_thread::sleep_for(std::chrono::seconds(2));
         }
         
+        displayStatus("Starting file transfer", true, "Calling transferFileEnhanced()");
         if (transferFileEnhanced(TransferConfig())) {
+            displayStatus("File transfer completed", true, "Success");
             transferSuccess = true;
         } else {
+            displayStatus("File transfer failed", false, "Retrying...");
             fileRetries++;
         }
     }
@@ -776,43 +779,38 @@ bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
         // Send payload if any - use adaptive chunking based on payload size
         if (!payload.empty()) {
             size_t payloadSize = payload.size();
-            
-            // Dynamic chunk sizing based on payload size for optimal performance
+
+            // CRITICAL FIX: Optimized chunk sizing without delays to prevent 66KB file transfer issues
             size_t chunkSize;
-            int delayMs = 0;
-            
+
             if (payloadSize <= 1024) {
                 // Small payloads (≤1KB): send in one chunk - no overhead
                 chunkSize = payloadSize;
             } else if (payloadSize <= 16384) {
-                // Medium payloads (1KB-16KB): send in 2-4 chunks of 4KB each
+                // Medium payloads (1KB-16KB): send in 4KB chunks
                 chunkSize = 4096;
-            } else if (payloadSize <= 65536) {
-                // Large payloads (16KB-64KB): send in 8KB chunks with minimal delay
-                chunkSize = 8192;
-                delayMs = 1;
-            } else {
-                // Very large payloads (>64KB): send in 16KB chunks with 2ms delays
+            } else if (payloadSize <= 131072) {
+                // Large payloads (16KB-128KB): send in 16KB chunks - NO DELAYS
                 chunkSize = 16384;
-                delayMs = 2;
+            } else {
+                // Very large payloads (>128KB): send in 32KB chunks - NO DELAYS
+                chunkSize = 32768;
             }
-            
+
             size_t totalSent = 0;
             while (totalSent < payloadSize) {
                 size_t currentChunkSize = std::min(chunkSize, payloadSize - totalSent);
                 boost::asio::const_buffer chunk_buffer(payload.data() + totalSent, currentChunkSize);
-                
+
                 size_t chunkBytes = boost::asio::write(*socket, chunk_buffer);
                 if (chunkBytes != currentChunkSize) {
                     displayError("Failed to send complete payload chunk", ErrorType::NETWORK);
                     return false;
                 }
                 totalSent += chunkBytes;
-                
-                // Add delay between chunks only for large payloads and only if not the last chunk
-                if (delayMs > 0 && totalSent < payloadSize) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
-                }
+
+                // CRITICAL FIX: No delays - they were causing 66KB file transfer failures
+                // The server handles continuous data streams better than delayed chunks
             }
         }
 
@@ -1190,24 +1188,24 @@ bool Client::transferFile() {
         filename = filename.substr(lastSlash + 1);
     }
 
-    // CRITICAL FIX: Enhanced dynamic buffer calculation with validation
-    // Buffer size remains constant throughout the entire transfer of this file
-    // Realistic file size ranges: tiny configs to 1GB+ media files
+    // CRITICAL FIX: Use configured chunk size for consistency with server
+    // This ensures client and server are aligned on chunk size expectations
+    // Standard chunk size is 64KB (65536 bytes) as per server configuration
+    const size_t CONFIGURED_CHUNK_SIZE = 65536;  // 64KB - matches server config
+
     size_t rawBufferSize;
-    if (fileSize <= 1024) {                       // ≤1KB files: 1KB buffer
-        rawBufferSize = 1024;                     // Tiny files (config, small scripts, .env files)
-    } else if (fileSize <= 4 * 1024) {           // 1KB-4KB files: 2KB buffer
-        rawBufferSize = 2 * 1024;                 // Small files (small configs, text files, small scripts)
-    } else if (fileSize <= 16 * 1024) {          // 4KB-16KB files: 4KB buffer
-        rawBufferSize = 4 * 1024;                 // Code files (source files, small documents)
-    } else if (fileSize <= 64 * 1024) {          // 16KB-64KB files: 8KB buffer
-        rawBufferSize = 8 * 1024;                 // Medium files (larger code, formatted docs, small images)
-    } else if (fileSize <= 512 * 1024) {         // 64KB-512KB files: 16KB buffer
-        rawBufferSize = 16 * 1024;                // Large docs (PDFs, medium images, compiled binaries)
-    } else if (fileSize <= 10 * 1024 * 1024) {   // 512KB-10MB files: 32KB buffer
-        rawBufferSize = 32 * 1024;                // Large files (big images, small videos, archives) - L1 cache optimized
-    } else {                                      // >10MB files: 64KB buffer
-        rawBufferSize = 64 * 1024;                // Huge files (large videos, big archives, datasets up to 1GB+)
+    // CRITICAL FIX: Use a more conservative threshold to avoid edge cases
+    // Files slightly larger than 64KB (like 66KB) were failing due to multi-packet boundary issues
+    const size_t SAFE_SINGLE_PACKET_THRESHOLD = 60 * 1024; // 60KB - safer threshold
+
+    if (fileSize <= SAFE_SINGLE_PACKET_THRESHOLD) {
+        // Files that fit comfortably in one chunk: use file size as buffer (single packet)
+        rawBufferSize = fileSize;
+        displayStatus("Transfer Strategy", true, "Single packet transfer (file ≤ 60KB)");
+    } else {
+        // Files larger than safe threshold: use configured chunk size for multi-packet transfer
+        rawBufferSize = CONFIGURED_CHUNK_SIZE;
+        displayStatus("Transfer Strategy", true, "Multi-packet transfer using 64KB chunks");
     }
 
     // CRITICAL FIX: Validate and align the calculated buffer size
@@ -1314,11 +1312,16 @@ bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string
     // Send file in packets using the calculated buffer size
     size_t dataOffset = 0;
     uint16_t packetNum = 1;
-    
+
+    displayStatus("Packet sending loop", true, "Starting to send " + std::to_string(totalPackets) + " packets");
+
     while (dataOffset < encryptedData.size()) {
         size_t chunkSize = std::min(bufferSize, encryptedData.size() - dataOffset);
         std::string chunk = encryptedData.substr(dataOffset, chunkSize);
-        
+
+        displayStatus("Sending packet", true, "Packet " + std::to_string(packetNum) + "/" + std::to_string(totalPackets) +
+                     " (" + formatBytes(chunkSize) + ")");
+
         if (!sendFilePacket(filename, chunk, static_cast<uint32_t>(fileSize), packetNum, totalPackets)) {
             displayError("Failed to send packet " + std::to_string(packetNum), ErrorType::NETWORK);
             return false;
@@ -1360,12 +1363,16 @@ bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string
 
 // Enhanced transfer implementation with adaptive buffer management
 bool Client::transferFileEnhanced(const TransferConfig& config) {
+    displayStatus("transferFileEnhanced", true, "Starting enhanced file transfer");
+
     // Open the file for reading in binary mode
     std::ifstream fileStream(filepath, std::ios::binary);
     if (!fileStream.is_open()) {
         displayError("File transfer aborted: could not open file " + filepath, ErrorType::FILE_IO);
         return false;
     }
+
+    displayStatus("File opened", true, filepath);
 
     // Get file size for buffer calculation
     fileStream.seekg(0, std::ios::end);
@@ -1379,24 +1386,24 @@ bool Client::transferFileEnhanced(const TransferConfig& config) {
         filename = filename.substr(lastSlash + 1);
     }
 
-    // CRITICAL FIX: Enhanced dynamic buffer calculation with validation
-    // Buffer size remains constant throughout the entire transfer of this file
-    // Realistic file size ranges: tiny configs to 1GB+ media files
+    // CRITICAL FIX: Use configured chunk size for consistency with server
+    // This ensures client and server are aligned on chunk size expectations
+    // Standard chunk size is 64KB (65536 bytes) as per server configuration
+    const size_t CONFIGURED_CHUNK_SIZE = 65536;  // 64KB - matches server config
+
     size_t rawOptimalBufferSize;
-    if (fileSize <= 1024) {                       // ≤1KB files: 1KB buffer
-        rawOptimalBufferSize = 1024;              // Tiny files (config, small scripts, .env files)
-    } else if (fileSize <= 4 * 1024) {           // 1KB-4KB files: 2KB buffer
-        rawOptimalBufferSize = 2 * 1024;          // Small files (small configs, text files, small scripts)
-    } else if (fileSize <= 16 * 1024) {          // 4KB-16KB files: 4KB buffer
-        rawOptimalBufferSize = 4 * 1024;          // Code files (source files, small documents)
-    } else if (fileSize <= 64 * 1024) {          // 16KB-64KB files: 8KB buffer
-        rawOptimalBufferSize = 8 * 1024;          // Medium files (larger code, formatted docs, small images)
-    } else if (fileSize <= 512 * 1024) {         // 64KB-512KB files: 16KB buffer
-        rawOptimalBufferSize = 16 * 1024;         // Large docs (PDFs, medium images, compiled binaries)
-    } else if (fileSize <= 10 * 1024 * 1024) {   // 512KB-10MB files: 32KB buffer
-        rawOptimalBufferSize = 32 * 1024;         // Large files (big images, small videos, archives) - L1 cache optimized
-    } else {                                      // >10MB files: 64KB buffer
-        rawOptimalBufferSize = 64 * 1024;         // Huge files (large videos, big archives, datasets up to 1GB+)
+    // CRITICAL FIX: Use a more conservative threshold to avoid edge cases
+    // Files slightly larger than 64KB (like 66KB) were failing due to multi-packet boundary issues
+    const size_t SAFE_SINGLE_PACKET_THRESHOLD = 60 * 1024; // 60KB - safer threshold
+
+    if (fileSize <= SAFE_SINGLE_PACKET_THRESHOLD) {
+        // Files that fit comfortably in one chunk: use file size as buffer (single packet)
+        rawOptimalBufferSize = fileSize;
+        displayStatus("Transfer Strategy", true, "Single packet transfer (file ≤ 60KB)");
+    } else {
+        // Files larger than safe threshold: use configured chunk size for multi-packet transfer
+        rawOptimalBufferSize = CONFIGURED_CHUNK_SIZE;
+        displayStatus("Transfer Strategy", true, "Multi-packet transfer using 64KB chunks");
     }
 
     // CRITICAL FIX: Validate and align the calculated buffer size

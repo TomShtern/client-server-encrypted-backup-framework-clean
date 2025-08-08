@@ -63,6 +63,7 @@ import time
 import threading
 import logging
 import re
+import tempfile
 from datetime import datetime
 from typing import Dict, Optional, Any, Tuple
 
@@ -99,7 +100,7 @@ class FileTransferManager:
     
     # Standard POSIX cksum CRC32 table for file integrity verification
     _CRC32_TABLE = (
-        0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b, 0x1a864db2, 0x1e475050,
+        0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b, 0x1a864db2, 0x1e475005,
         0x2608edb8, 0x22c9f00f, 0x2f8ad6d6, 0x2b4bcb61, 0x350c9b64, 0x31cd86d3, 0x3c8ea00a, 0x384fbdbd,
         0x4c11db70, 0x48d0c6c7, 0x4593e01e, 0x4152fda9, 0x5f15adac, 0x5bd4b01b, 0x569796c2, 0x52568b75,
         0x6a1936c8, 0x6ed82b7f, 0x639b0da6, 0x675a1011, 0x791d4014, 0x7ddc5da3, 0x709f7b7a, 0x745e66cd,
@@ -178,16 +179,29 @@ class FileTransferManager:
             if not aes_key:
                 raise ClientError(f"Client '{client.name}' has no active AES key for file decryption")
             
-            # Log the file transfer progress
+            # Log the file transfer progress with enhanced debugging
             logger.info(f"Client '{client.name}': Receiving file '{metadata['filename']}', "
                        f"Packet {metadata['packet_number']}/{metadata['total_packets']} "
                        f"(EncSize:{metadata['encrypted_size']}, OrigSize:{metadata['original_size']})")
+
+            # DEBUG: Enhanced logging for multi-packet transfers
+            if metadata['total_packets'] > 1:
+                logger.debug(f"MULTI-PACKET DEBUG: Client '{client.name}', File '{metadata['filename']}', "
+                           f"Packet {metadata['packet_number']}/{metadata['total_packets']}, "
+                           f"Content size: {len(metadata['content'])} bytes")
             
             # Handle multi-packet reassembly logic
             is_complete = self._handle_packet_reassembly(client, metadata)
-            
+
+            # DEBUG: Log reassembly status
+            if metadata['total_packets'] > 1:
+                logger.debug(f"REASSEMBLY DEBUG: Client '{client.name}', File '{metadata['filename']}', "
+                           f"Packet {metadata['packet_number']}/{metadata['total_packets']}, "
+                           f"Transfer complete: {is_complete}")
+
             if is_complete:
                 # All packets received - process the complete file
+                logger.debug(f"COMPLETE TRANSFER: Processing complete file '{metadata['filename']}' for client '{client.name}'")
                 self._process_complete_file(sock, client, metadata['filename'], aes_key)
             
         except (ProtocolError, FileError, ClientError) as e:
@@ -506,25 +520,26 @@ class FileTransferManager:
     def _calculate_crc(self, data: bytes) -> int:
         """
         Calculates a CRC32 checksum compatible with the Linux 'cksum' command.
-        
+        CRITICAL FIX: Aligned with client implementation for consistent CRC calculation.
+
         Args:
             data: Input bytes for CRC calculation
-            
+
         Returns:
             32-bit CRC value
         """
         crc = 0
-        
-        # Process each byte of data
+
+        # Process each byte of data - FIXED: Match client's order of operations
         for byte_val in data:
-            crc = (self._CRC32_TABLE[(crc >> 24) ^ byte_val] ^ (crc << 8)) & 0xFFFFFFFF
-        
-        # Process the length of the data
+            crc = ((crc << 8) ^ self._CRC32_TABLE[(crc >> 24) ^ byte_val]) & 0xFFFFFFFF
+
+        # Process the length of the data - FIXED: Match client's order of operations
         length = len(data)
         while length:
-            crc = (self._CRC32_TABLE[(crc >> 24) ^ (length & 0xFF)] ^ (crc << 8)) & 0xFFFFFFFF
+            crc = ((crc << 8) ^ self._CRC32_TABLE[(crc >> 24) ^ (length & 0xFF)]) & 0xFFFFFFFF
             length >>= 8
-        
+
         # Return one's complement
         return (~crc) & 0xFFFFFFFF
     
@@ -549,8 +564,8 @@ class FileTransferManager:
             logger.debug(f"Filename validation failed: contains path traversal chars")
             return False
         
-        # Check for safe characters only (including ampersand for common filenames)
-        if not re.match(r"^[a-zA-Z0-9._\-\s&]+$", filename):
+        # Check for safe characters only (including ampersand and hash for common filenames)
+        if not re.match(r"^[a-zA-Z0-9._\-\s&#]+$", filename):
             logger.debug(f"Filename validation failed: contains unsafe characters")
             return False
         

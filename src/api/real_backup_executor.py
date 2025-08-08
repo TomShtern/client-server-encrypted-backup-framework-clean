@@ -1951,22 +1951,49 @@ class RealBackupExecutor:
             # Generate transfer.info in the client executable's directory
             client_dir = os.path.dirname(self.client_exe)
             transfer_info_path = os.path.join(client_dir, "transfer.info")
-            with open(transfer_info_path, 'w') as f:
+
+            # CRITICAL FIX: Use UTF-8 encoding and ensure complete file path is written
+            absolute_file_path = os.path.abspath(file_path)
+            self._log_status("DEBUG", f"Writing file path to transfer.info: {absolute_file_path}")
+            self._log_status("DEBUG", f"File path length: {len(absolute_file_path)} characters")
+
+            with open(transfer_info_path, 'w', encoding='utf-8') as f:
                 f.write(f"{server_ip}:{server_port}\n")
                 f.write(f"{username}\n")
-                f.write(f"{os.path.abspath(file_path)}\n")
+                f.write(f"{absolute_file_path}\n")
+                f.flush()  # Ensure data is written to disk
 
             self._log_status("CONFIG", f"Generated transfer.info at: {transfer_info_path}")
+
+            # CRITICAL FIX: Verify transfer.info was written correctly with complete file path
+            try:
+                with open(transfer_info_path, 'r', encoding='utf-8') as f:
+                    written_content = f.read()
+                    lines = written_content.strip().split('\n')
+                    if len(lines) >= 3:
+                        written_file_path = lines[2]
+                        self._log_status("VERIFY", f"transfer.info file path: {written_file_path}")
+                        self._log_status("VERIFY", f"Original file path: {absolute_file_path}")
+                        self._log_status("VERIFY", f"Paths match: {written_file_path == absolute_file_path}")
+
+                        if written_file_path != absolute_file_path:
+                            self._log_status("ERROR", f"File path truncation detected!")
+                            self._log_status("ERROR", f"Expected: {absolute_file_path}")
+                            self._log_status("ERROR", f"Written: {written_file_path}")
+                    else:
+                        self._log_status("ERROR", f"transfer.info has insufficient lines: {len(lines)}")
+            except Exception as verify_error:
+                self._log_status("ERROR", f"Failed to verify transfer.info: {verify_error}")
 
             # Use the client executable's directory as the working directory
             client_working_dir = client_dir
             self._log_status("DEBUG", f"Using project root as working directory: {client_working_dir}")
-            
+
             # Verify transfer.info is accessible in working directory before launching subprocess
             working_transfer_info = os.path.join(client_working_dir, "transfer.info")
             if os.path.exists(working_transfer_info):
                 try:
-                    with open(working_transfer_info, 'r') as f:
+                    with open(working_transfer_info, 'r', encoding='utf-8') as f:
                         content = f.read()
                     self._log_status("VERIFY", f"transfer.info verified in working directory - content: {len(content)} chars")
                 except Exception as e:
@@ -2102,8 +2129,9 @@ class RealBackupExecutor:
                 result['error'] = "Process timed out"
                 result['process_exit_code'] = -1
             
-            # Release subprocess reference to allow safe cleanup
-            self.file_manager.release_subprocess_use(transfer_file_id)
+            # Release subprocess reference to allow safe cleanup (if using managed files)
+            if 'transfer_file_id' in locals():
+                self.file_manager.release_subprocess_use(transfer_file_id)
             
             # Verify actual file transfer
             self._log_status("VERIFY", "Verifying actual file transfer...")
@@ -2160,6 +2188,14 @@ class RealBackupExecutor:
                         self._log_status("CLEANUP", "Successfully cleaned up transfer.info files")
                     else:
                         self._log_status("WARNING", "Some files may not have been cleaned up properly")
+                else:
+                    # Direct file cleanup (non-managed approach)
+                    if 'transfer_info_path' in locals() and os.path.exists(transfer_info_path):
+                        try:
+                            os.remove(transfer_info_path)
+                            self._log_status("CLEANUP", f"Cleaned up transfer.info: {transfer_info_path}")
+                        except Exception as cleanup_error:
+                            self._log_status("WARNING", f"Could not clean up transfer.info: {cleanup_error}")
             except Exception as e:
                 self._log_status("WARNING", f"Error during safe cleanup: {e}")
         

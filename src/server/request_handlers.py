@@ -458,10 +458,10 @@ class RequestHandler:
             return False
         
         # Regex for generally safe filename characters:
-        # Allows alphanumeric, dots, underscores, hyphens, spaces, and ampersands.
+        # Allows alphanumeric, dots, underscores, hyphens, spaces, ampersands, and hash symbols.
         # This can be made stricter or more lenient based on specific server OS and policies.
-        if not re.match(r"^[a-zA-Z0-9._\-\s&]+$", filename_str):
-            logger.debug(f"Filename validation failed for '{filename_str}': Contains disallowed characters (does not match regex '^[a-zA-Z0-9._\\-\\s&]+$').")
+        if not re.match(r"^[a-zA-Z0-9._\-\s&#]+$", filename_str):
+            logger.debug(f"Filename validation failed for '{filename_str}': Contains disallowed characters (does not match regex '^[a-zA-Z0-9._\\-\\s&#]+$').")
             return False
         
         # Check for names that are problematic on some operating systems (e.g., Windows reserved names like CON, PRN)

@@ -40,8 +40,6 @@ from src.server.server_singleton import ensure_single_server_instance
 # Import file receipt monitoring
 from src.server.file_receipt_monitor import initialize_file_receipt_monitor, get_file_receipt_monitor, stop_file_receipt_monitor
 
-import uuid
-
 app = Flask(__name__)
 CORS(app)  # Enable CORS for local development
 
@@ -126,7 +124,8 @@ def check_backup_server_status():
 def handle_connect():
     """Handle WebSocket client connection"""
     # Generate a unique client ID and store it in the session
-    client_id = str(uuid.uuid4())
+    import uuid as uuid_lib
+    client_id = str(uuid_lib.uuid4())
     session['client_id'] = client_id
     connected_clients.add(client_id)
     print(f"[WEBSOCKET] Client connected: {client_id} (Total: {len(connected_clients)})")
@@ -352,12 +351,12 @@ def api_disconnect():
         return jsonify({'success': False, 'error': error_msg}), 500
 
 @app.route('/api/start_backup', methods=['POST'])
-def api_start_backup():
-    """Start backup using REAL backup executor"""
+def api_start_backup_working():
+    """Start backup using REAL backup executor - WORKING VERSION"""
     global backup_status
-    
+
     # Generate unique job ID for this backup operation
-    job_id = str(uuid.uuid4())
+    job_id = f"job_{int(time.time() * 1000000)}"
     
     # Initialize job tracking
     active_backup_jobs[job_id] = {
@@ -395,8 +394,18 @@ def api_start_backup():
         # Save the uploaded file directly to a temporary file on disk
         # to avoid loading it into memory. This is the key to handling large files.
         temp_dir = tempfile.mkdtemp()
-        filename = file.filename or f"backup_file_{int(time.time())}"
-        temp_file_path = os.path.join(temp_dir, filename)
+
+        # CRITICAL FIX: Preserve original filename but ensure safe temp file creation
+        original_filename = file.filename or f"backup_file_{int(time.time())}"
+
+        # Create a safe temporary filename while preserving the original for display
+        safe_temp_name = f"upload_{int(time.time() * 1000000)}_{original_filename}"
+        temp_file_path = os.path.join(temp_dir, safe_temp_name)
+
+        print(f"[DEBUG] Original filename: {original_filename}")
+        print(f"[DEBUG] Safe temp filename: {safe_temp_name}")
+        print(f"[DEBUG] Temp file path: {temp_file_path}")
+
         file.save(temp_file_path)
 
         
@@ -443,8 +452,8 @@ def api_start_backup():
         # Update status
         backup_status['backing_up'] = True
         backup_status['phase'] = 'BACKUP_IN_PROGRESS'
-        backup_status['progress']['current_file'] = filename
-        update_backup_status('BACKUP_IN_PROGRESS', f'Starting backup of {filename}...')
+        backup_status['progress']['current_file'] = original_filename
+        update_backup_status('BACKUP_IN_PROGRESS', f'Starting backup of {original_filename}...')
 
         # Start backup in background thread
         def run_backup(executor, temp_file_path_for_thread, filename_for_thread, temp_dir_for_thread):
@@ -517,14 +526,14 @@ def api_start_backup():
                 update_backup_status('READY', 'Ready for new backup.')
 
         # Start backup thread, passing the new executor instance
-        backup_thread = threading.Thread(target=run_backup, args=(backup_executor, temp_file_path, filename, temp_dir))
+        backup_thread = threading.Thread(target=run_backup, args=(backup_executor, temp_file_path, original_filename, temp_dir))
         backup_thread.daemon = True
         backup_thread.start()
 
         return jsonify({
             'success': True,
-            'message': f'Backup started for {filename}',
-            'filename': filename,
+            'message': f'Backup started for {original_filename}',
+            'filename': original_filename,
             'username': username,
             'job_id': job_id  # Include job_id in response for client tracking
         })
