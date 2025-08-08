@@ -84,6 +84,9 @@ from .protocol import RESP_FILE_CRC, RESP_GENERIC_SERVER_ERROR
 
 logger = logging.getLogger(__name__)
 
+# Module version tag for runtime verification in logs
+__FTM_VERSION__ = "2025-08-06a"
+
 
 class FileTransferManager:
     """
@@ -145,8 +148,9 @@ class FileTransferManager:
         self.server = server_instance
         self.transfer_lock = threading.Lock()  # Global lock for transfer operations
         self.active_transfers: Dict[str, Dict[str, Any]] = {}  # Track active transfers
-        
-        logger.info("FileTransferManager initialized")
+        self.version = __FTM_VERSION__
+
+        logger.info(f"FileTransferManager initialized (version={__FTM_VERSION__})")
     
     def handle_send_file(self, sock: socket.socket, client: Any, payload: bytes) -> None:
         """
@@ -166,19 +170,28 @@ class FileTransferManager:
           char     filename[255];     // Null-terminated, zero-padded filename field
           uint8_t  content[];         // Encrypted file chunk for this packet
         """
+        # High-signal pre-parse log
+        try:
+            logger.debug(
+                f"XFER/PARSE: client='{client.name}', payload_len={len(payload)}"
+            )
+        except Exception:
+            # Do not let logging failures impact flow
+            pass
+
         try:
             # Parse and validate the file transfer metadata
             metadata = self._parse_file_transfer_metadata(payload)
-            
+
             # Validate the filename for security and storage compatibility
             if not self._is_valid_filename_for_storage(metadata['filename']):
                 raise FileError(f"Invalid or unsafe filename: '{metadata['filename']}'")
-            
+
             # Get the client's AES key for decryption
             aes_key = client.get_aes_key()
             if not aes_key:
                 raise ClientError(f"Client '{client.name}' has no active AES key for file decryption")
-            
+
             # Log the file transfer progress with enhanced debugging
             logger.info(f"Client '{client.name}': Receiving file '{metadata['filename']}', "
                        f"Packet {metadata['packet_number']}/{metadata['total_packets']} "
@@ -203,7 +216,7 @@ class FileTransferManager:
                 # All packets received - process the complete file
                 logger.debug(f"COMPLETE TRANSFER: Processing complete file '{metadata['filename']}' for client '{client.name}'")
                 self._process_complete_file(sock, client, metadata['filename'], aes_key)
-            
+
         except (ProtocolError, FileError, ClientError) as e:
             logger.error(f"File transfer error for client '{client.name}': {e}")
             self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
@@ -229,6 +242,9 @@ class FileTransferManager:
         metadata_header_size = 4 + 4 + 2 + 2 + MAX_FILENAME_FIELD_SIZE
         
         if len(payload) < metadata_header_size:
+            logger.error(
+                f"XFER/PARSE_ERR: payload_too_short payload_len={len(payload)} expected_at_least={metadata_header_size}"
+            )
             raise ProtocolError(f"Payload too short for file metadata: {len(payload)} < {metadata_header_size}")
         
         # Unpack metadata fields (all little-endian)
@@ -239,6 +255,9 @@ class FileTransferManager:
         filename_bytes = payload[12:12 + MAX_FILENAME_FIELD_SIZE]
         
         # Validate metadata fields
+        logger.debug(
+            f"XFER/PARSE: hdr enc_size={encrypted_size}, orig_size={original_size}, pkt={packet_number}, total={total_packets}"
+        )
         self._validate_transfer_metadata(encrypted_size, original_size, packet_number, total_packets)
         
         # Parse filename
@@ -250,6 +269,10 @@ class FileTransferManager:
         # Extract encrypted content
         actual_content = payload[metadata_header_size:]
         if len(actual_content) != encrypted_size:
+            logger.error(
+                f"XFER/PARSE_ERR: content_len_mismatch declared={encrypted_size} actual={len(actual_content)} "
+                f"pkt={packet_number}/{total_packets}"
+            )
             raise ProtocolError(f"Content size mismatch: declared {encrypted_size}, actual {len(actual_content)}")
         
         return {
@@ -277,15 +300,21 @@ class FileTransferManager:
             ProtocolError: If any metadata is invalid
         """
         if not (0 < encrypted_size <= MAX_PAYLOAD_READ_LIMIT):
+            logger.error(f"XFER/VALIDATE_ERR: invalid_encrypted_size value={encrypted_size}")
             raise ProtocolError(f"Invalid encrypted_size: {encrypted_size}")
         
         if not (0 <= original_size <= MAX_ORIGINAL_FILE_SIZE):
+            logger.error(f"XFER/VALIDATE_ERR: invalid_original_size value={original_size}")
             raise ProtocolError(f"Invalid original_size: {original_size}")
         
         if total_packets <= 0:
+            logger.error(f"XFER/VALIDATE_ERR: invalid_total_packets value={total_packets}")
             raise ProtocolError(f"Invalid total_packets: {total_packets}")
         
         if not (1 <= packet_number <= total_packets):
+            logger.error(
+                f"XFER/VALIDATE_ERR: invalid_packet_number pkt={packet_number} total={total_packets}"
+            )
             raise ProtocolError(f"Invalid packet_number {packet_number} for {total_packets} total packets")
     
     def _handle_packet_reassembly(self, client: Any, metadata: Dict[str, Any]) -> bool:
@@ -302,13 +331,13 @@ class FileTransferManager:
         filename = metadata['filename']
         packet_number = metadata['packet_number']
         total_packets = metadata['total_packets']
-        
+
         with client.lock:  # Thread-safe access to client's partial files
             # Initialize or validate partial file state
             if packet_number == 1:
                 if filename in client.partial_files:
                     logger.warning(f"Client '{client.name}': Restarting transfer for '{filename}'")
-                
+
                 # Create new transfer state
                 client.partial_files[filename] = {
                     "total_packets": total_packets,
@@ -316,27 +345,41 @@ class FileTransferManager:
                     "original_size": metadata['original_size'],
                     "timestamp": time.monotonic()
                 }
-            
+
             # Get current file state
             file_state = client.partial_files.get(filename)
-            
+
             # Validate consistency for ongoing transfers
-            if not file_state or (packet_number > 1 and 
-                                (file_state["total_packets"] != total_packets or 
-                                 file_state["original_size"] != metadata['original_size'])):
+            if not file_state or (packet_number > 1 and
+                                  (file_state["total_packets"] != total_packets or
+                                   file_state["original_size"] != metadata['original_size'])):
                 logger.error(f"Client '{client.name}': Inconsistent metadata for '{filename}'")
                 if file_state:
                     client.clear_partial_file(filename)
                 raise ProtocolError("Inconsistent file transfer metadata")
-            
+
             # Handle duplicate packets
             if packet_number in file_state["received_chunks"]:
-                logger.warning(f"Client '{client.name}': Duplicate packet {packet_number} for '{filename}'")
-            
+                logger.warning(
+                    f"XFER/REASM_WARN: duplicate_packet client='{client.name}', file='{filename}', pkt={packet_number}"
+                )
+
             # Store the packet
             file_state["received_chunks"][packet_number] = metadata['content']
             file_state["timestamp"] = time.monotonic()
-            
+
+            # Emit concise state snapshot
+            try:
+                received_count = len(file_state["received_chunks"])
+                # For efficiency, only compute cumulative bytes for small N
+                cumulative_enc = sum(len(ch) for ch in file_state["received_chunks"].values()) if received_count <= 64 else -1
+                logger.debug(
+                    f"XFER/REASM_STATE: client='{client.name}', file='{filename}', received={received_count}/{total_packets}, "
+                    f"cum_enc_bytes={cumulative_enc if cumulative_enc >= 0 else 'skipped'}"
+                )
+            except Exception:
+                pass
+
             # Check if transfer is complete
             return len(file_state["received_chunks"]) == total_packets
     
@@ -359,9 +402,19 @@ class FileTransferManager:
             try:
                 # Reassemble encrypted data
                 full_encrypted_data = self._reassemble_encrypted_data(file_state)
+                logger.info(
+                    f"XFER/FINAL: client='{client.name}', file='{filename}', total_packets={file_state['total_packets']}, "
+                    f"assembled_enc_size={len(full_encrypted_data)}"
+                )
                 
                 # Decrypt the complete file
+                decrypt_start = time.perf_counter()
                 decrypted_data = self._decrypt_file_data(full_encrypted_data, aes_key)
+                decrypt_ms = int((time.perf_counter() - decrypt_start) * 1000)
+                logger.info(
+                    f"XFER/FINAL: client='{client.name}', file='{filename}', decrypted_size={len(decrypted_data)}, "
+                    f"expected_orig_size={file_state['original_size']}, decrypt_ms={decrypt_ms}"
+                )
                 
                 # Validate decrypted size
                 if len(decrypted_data) != file_state["original_size"]:
@@ -370,6 +423,9 @@ class FileTransferManager:
                 
                 # Calculate CRC checksum
                 crc_value = self._calculate_crc(decrypted_data)
+                logger.debug(
+                    f"XFER/FINAL: client='{client.name}', file='{filename}', crc=0x{crc_value:08x}"
+                )
                 
                 # Save file to storage
                 final_path, mod_date = self._save_file_to_storage(filename, decrypted_data)
@@ -407,15 +463,21 @@ class FileTransferManager:
         try:
             full_encrypted_data = b''
             total_packets = file_state["total_packets"]
-            
+
             for i in range(1, total_packets + 1):
                 if i not in file_state["received_chunks"]:
+                    logger.error(f"XFER/REASM_ERR: missing_packet index={i} of {total_packets}")
                     raise ServerError(f"Missing packet {i} during reassembly")
                 full_encrypted_data += file_state["received_chunks"][i]
-            
+
+            logger.debug(
+                f"XFER/REASM_OK: assembled_bytes={len(full_encrypted_data)} from {total_packets} packets"
+            )
+
             return full_encrypted_data
-            
+
         except KeyError as e:
+            logger.error(f"XFER/REASM_ERR: key_error detail={e}")
             raise ServerError(f"Packet reassembly failed: {e}") from e
     
     def _decrypt_file_data(self, encrypted_data: bytes, aes_key: bytes) -> bytes:
@@ -433,12 +495,15 @@ class FileTransferManager:
             FileError: If decryption fails
         """
         try:
+            logger.debug(f"XFER/DECRYPT: enc_size={len(encrypted_data)}")
             # AES-CBC mode with zero IV (as per protocol specification)
             cipher = AES.new(aes_key, AES.MODE_CBC, iv=b'\0' * 16)
             decrypted_data = unpad(cipher.decrypt(encrypted_data), AES.block_size)
+            logger.debug(f"XFER/DECRYPT_OK: dec_size={len(decrypted_data)}")
             return decrypted_data
-            
+
         except (ValueError, KeyError) as e:
+            logger.error(f"XFER/DECRYPT_ERR: detail={e}")
             raise FileError(f"File decryption failed: {e}") from e
     
     def _save_file_to_storage(self, filename: str, data: bytes) -> Tuple[str, str]:
@@ -461,6 +526,8 @@ class FileTransferManager:
         final_path = os.path.join(FILE_STORAGE_DIR, filename)
         
         try:
+            # Ensure storage directory exists (defensive; server should already create it)
+            os.makedirs(FILE_STORAGE_DIR, exist_ok=True)
             # Write to temporary file first
             with open(temp_path, 'wb') as f:
                 f.write(data)
@@ -563,22 +630,24 @@ class FileTransferManager:
             '..' in filename or '\0' in filename):
             logger.debug(f"Filename validation failed: contains path traversal chars")
             return False
-        
-        # Check for safe characters only (including ampersand and hash for common filenames)
-        if not re.match(r"^[a-zA-Z0-9._\-\s&#]+$", filename):
+
+        # Check for safe characters only
+        # Allow common punctuation often present in user filenames: space, dot, underscore, dash,
+        # ampersand, hash, parentheses, plus, comma
+        if not re.match(r"^[a-zA-Z0-9._\-\s&#()+,]+$", filename):
             logger.debug(f"Filename validation failed: contains unsafe characters")
             return False
-        
+
         # Check for OS reserved names
         base_name = os.path.splitext(filename)[0].upper()
         reserved_names = {"CON", "PRN", "AUX", "NUL"} | \
-                        {f"COM{i}" for i in range(1, 10)} | \
-                        {f"LPT{i}" for i in range(1, 10)}
-        
+                         {f"COM{i}" for i in range(1, 10)} | \
+                         {f"LPT{i}" for i in range(1, 10)}
+
         if base_name in reserved_names:
             logger.debug(f"Filename validation failed: reserved OS name '{base_name}'")
             return False
-        
+
         return True
     
     def _update_gui_stats(self, filename: str, client_name: str, bytes_transferred: int) -> None:

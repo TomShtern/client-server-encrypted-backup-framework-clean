@@ -18,7 +18,7 @@ from flask import Flask, request, jsonify, send_from_directory, send_file, sessi
 # Import enhanced logging utilities
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
-from shared.logging_utils import setup_dual_logging, create_log_monitor_info
+from src.shared.logging_utils import setup_dual_logging, create_log_monitor_info
 
 # Configure enhanced dual logging (console + file)
 logger, api_log_file = setup_dual_logging(
@@ -39,6 +39,8 @@ from src.server.server_singleton import ensure_single_server_instance
 
 # Import file receipt monitoring
 from src.server.file_receipt_monitor import initialize_file_receipt_monitor, get_file_receipt_monitor, stop_file_receipt_monitor
+
+import uuid
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for local development
@@ -141,8 +143,7 @@ def handle_connect():
 @socketio.on('disconnect')
 def handle_disconnect():
     """Handle WebSocket client disconnection"""
-    client_id = session.get('client_id')
-    if client_id:
+    if client_id := session.get('client_id'):
         connected_clients.discard(client_id)
         print(f"[WEBSOCKET] Client disconnected: {client_id} (Total: {len(connected_clients)})")
 
@@ -200,7 +201,6 @@ def api_test():
     print("[DEBUG] Test POST endpoint called!")
     return jsonify({'success': True, 'message': 'POST test successful'})
 
-@app.route('/api/status')
 @app.route('/api/status')
 def api_status():
     """Get current backup status with proper connection state management"""
@@ -421,19 +421,51 @@ def api_start_backup_working():
                 active_backup_jobs[job_id]['events'].append({'phase': phase, 'data': data})
                 active_backup_jobs[job_id]['phase'] = phase
                 
+                # Debug logging for API server progress handling
+                if isinstance(data, dict) and 'progress' in data:
+                    print(f"[API_DEBUG] Received progress update: {phase} - {data['progress']:.1f}% - {data.get('message', 'No message')}")
+                
+                # Update both job-specific and global backup status
                 if isinstance(data, dict):
                     message = data.get('message', phase)
                     active_backup_jobs[job_id]['message'] = message
                     if 'progress' in data:
                         progress_value = data['progress']
                         active_backup_jobs[job_id]['progress']['percentage'] = progress_value
+                        # Also update global backup status for unified API
                         update_backup_status(phase, message, progress_value)
+                        print(f"[API_DEBUG] Updated job progress to {progress_value:.1f}%")
                     else:
                         update_backup_status(phase, message)
                 else:
                     active_backup_jobs[job_id]['message'] = data
                     update_backup_status(phase, data)
                 
+                # Enhanced completion logic with file receipt verification
+                if phase in ['COMPLETED', 'FAILED', 'ERROR']:
+                    # Check actual file receipt regardless of reported status
+                    monitor = get_file_receipt_monitor()
+                    if monitor and original_filename:
+                        file_filename = os.path.basename(original_filename)
+                        receipt_check = monitor.check_file_receipt(file_filename)
+                        if receipt_check.get('received', False):
+                            # File actually received - override any failure status
+                            if phase in ['FAILED', 'ERROR']:
+                                print(f"[OVERRIDE] Process reported {phase} but file was received - marking as SUCCESS")
+                                phase = 'COMPLETED'
+                                active_backup_jobs[job_id]['phase'] = 'COMPLETED'
+                                active_backup_jobs[job_id]['message'] = 'File successfully received and verified!'
+                                update_backup_status('COMPLETED', 'File transfer verified - backup successful!', 100)
+                        else:
+                            # File not received - ensure we report failure even if process claims success
+                            if phase == 'COMPLETED':
+                                print(f"[OVERRIDE] Process reported COMPLETED but file not received - marking as FAILED")
+                                phase = 'FAILED'
+                                active_backup_jobs[job_id]['phase'] = 'FAILED'
+                                active_backup_jobs[job_id]['message'] = 'Process completed but file not received on server'
+                                update_backup_status('FAILED', 'File transfer failed - no file received', 0)
+                
+                # Real-time WebSocket broadcasting
                 if websocket_enabled and connected_clients:
                     try:
                         socketio.emit('progress_update', {
@@ -443,6 +475,7 @@ def api_start_backup_working():
                             'timestamp': time.time(),
                             'progress': active_backup_jobs[job_id]['progress']['percentage'] if isinstance(data, dict) and 'progress' in data else None
                         })
+                        print(f"[WEBSOCKET] Broadcasted progress update: {phase}")
                     except Exception as e:
                         print(f"[WEBSOCKET] Broadcast failed: {e}")
 

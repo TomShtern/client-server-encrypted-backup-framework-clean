@@ -8,5 +8,6 @@
     },
     "cmake.configureOnOpen": true,
     "C_Cpp.intelliSenseEngine": "Default",
-    "C_Cpp.errorSquiggles": "Enabled"
+    "C_Cpp.errorSquiggles": "Enabled",
+    "github.copilot.nextEditSuggestions.enabled": true
 }

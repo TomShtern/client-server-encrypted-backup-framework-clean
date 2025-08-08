@@ -1,0 +1,17 @@
+{
+  "backing_up": false,
+  "connected": true,
+  "events": [],
+  "isConnected": true,
+  "last_updated": "2025-08-08T14:48:36.555605",
+  "message": "Ready for backup",
+  "phase": "READY",
+  "progress": {
+    "bytes_transferred": 0,
+    "current_file": "",
+    "percentage": 0,
+    "total_bytes": 0
+  },
+  "status": "ready"
+}
+

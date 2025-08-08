@@ -67,7 +67,7 @@ def setup_dual_logging(
     server_type: str,
     console_level: int = logging.INFO,
     file_level: int = logging.DEBUG,
-    console_format: str = None,
+    console_format: Optional[str] = None,
     include_timestamp: bool = True
 ) -> tuple[logging.Logger, str]:
     """

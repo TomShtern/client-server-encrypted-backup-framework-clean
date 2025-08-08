@@ -1,0 +1,338 @@
+{
+  "directory": "received_files",
+  "files": [
+    {
+      "age_seconds": 61746.33518767357,
+      "filename": "all files and snippets that came with the spesifications.md",
+      "modified_time": 1754592117.9626346,
+      "size": 64937
+    },
+    {
+      "age_seconds": 394089.9231595993,
+      "filename": "CC plan.md",
+      "modified_time": 1754259774.3747337,
+      "size": 22193
+    },
+    {
+      "age_seconds": 151371.024869442,
+      "filename": "Defensive_Systems_Programming_Clean.md",
+      "modified_time": 1754502493.273088,
+      "size": 21644
+    },
+    {
+      "age_seconds": 142838.40828037262,
+      "filename": "Final & Complete Project Specification Secure File Transfer System.md",
+      "modified_time": 1754511025.8897467,
+      "size": 42091
+    },
+    {
+      "age_seconds": 582870.9446544647,
+      "filename": "IF YOU GET THIS THEN IT WORKS.txt",
+      "modified_time": 1754070993.3534336,
+      "size": 238
+    },
+    {
+      "age_seconds": 63480.80452942848,
+      "filename": "professional-ms-word-resume-template.docx",
+      "modified_time": 1754590383.4936173,
+      "size": 52020
+    },
+    {
+      "age_seconds": 179884.22440576553,
+      "filename": "simple_test.txt",
+      "modified_time": 1754473980.073796,
+      "size": 19
+    },
+    {
+      "age_seconds": 655918.0968873501,
+      "filename": "TestFile.txt",
+      "modified_time": 1753997946.2013688,
+      "size": 257
+    },
+    {
+      "age_seconds": 225455.0561823845,
+      "filename": "test_api_integration.txt",
+      "modified_time": 1754428409.242129,
+      "size": 21
+    },
+    {
+      "age_seconds": 226356.0405342579,
+      "filename": "test_manual.txt",
+      "modified_time": 1754427508.2578356,
+      "size": 22
+    },
+    {
+      "age_seconds": 175664.49569821358,
+      "filename": "test_regex_fix.txt",
+      "modified_time": 1754478199.8027282,
+      "size": 39
+    },
+    {
+      "age_seconds": 746609.47570467,
+      "filename": "test_timeout_fix.txt",
+      "modified_time": 1753907254.8227768,
+      "size": 256
+    },
+    {
+      "age_seconds": 731748.4651863575,
+      "filename": "test_upload.txt",
+      "modified_time": 1753922115.8334491,
+      "size": 18
+    },
+    {
+      "age_seconds": 148840.7147538662,
+      "filename": "tmp0gpnp80o_large.txt",
+      "modified_time": 1754505023.5839477,
+      "size": 507905
+    },
+    {
+      "age_seconds": 141706.38945817947,
+      "filename": "tmp1l1rek83.txt",
+      "modified_time": 1754512157.9093032,
+      "size": 14
+    },
+    {
+      "age_seconds": 130621.0563685894,
+      "filename": "tmp1sb9dtxm.txt",
+      "modified_time": 1754523243.242452,
+      "size": 1025
+    },
+    {
+      "age_seconds": 143361.7425043583,
+      "filename": "tmp24zq_m8b_small.txt",
+      "modified_time": 1754510502.5563734,
+      "size": 5000
+    },
+    {
+      "age_seconds": 63188.95104622841,
+      "filename": "tmp32kq5au6_60KB.txt",
+      "modified_time": 1754590675.3478897,
+      "size": 61440
+    },
+    {
+      "age_seconds": 131898.16565728188,
+      "filename": "tmp4gbndlpv.txt",
+      "modified_time": 1754521966.133332,
+      "size": 1025
+    },
+    {
+      "age_seconds": 131427.93381738663,
+      "filename": "tmp586xiviw.txt",
+      "modified_time": 1754522436.3652241,
+      "size": 1025
+    },
+    {
+      "age_seconds": 61542.69585633278,
+      "filename": "tmp5h3w97k0_1KB_test.txt",
+      "modified_time": 1754592321.6032379,
+      "size": 1024
+    },
+    {
+      "age_seconds": 46127.136922836304,
+      "filename": "tmp637wgbqs_1KB_0B.txt",
+      "modified_time": 1754607737.1622221,
+      "size": 1024
+    },
+    {
+      "age_seconds": 131096.71741223335,
+      "filename": "tmp6srcdhfy.txt",
+      "modified_time": 1754522767.5817842,
+      "size": 1025
+    },
+    {
+      "age_seconds": 143391.69481229782,
+      "filename": "tmp81wiswe3_tiny.txt",
+      "modified_time": 1754510472.604437,
+      "size": 500
+    },
+    {
+      "age_seconds": 130303.17765307426,
+      "filename": "tmp85tsztni.txt",
+      "modified_time": 1754523561.1216512,
+      "size": 1025
+    },
+    {
+      "age_seconds": 143236.07522416115,
+      "filename": "tmp8gqph1ht.txt",
+      "modified_time": 1754510628.2241337,
+      "size": 11
+    },
+    {
+      "age_seconds": 60018.44510555267,
+      "filename": "tmp97jyr1_s_66KB_test.txt",
+      "modified_time": 1754593845.8543067,
+      "size": 67584
+    },
+    {
+      "age_seconds": 141745.08146691322,
+      "filename": "tmpb2_eu5sl.txt",
+      "modified_time": 1754512119.217997,
+      "size": 14
+    },
+    {
+      "age_seconds": 148931.88745737076,
+      "filename": "tmpbn2gxxzo_tiny.txt",
+      "modified_time": 1754504932.4120598,
+      "size": 508
+    },
+    {
+      "age_seconds": 132072.88606977463,
+      "filename": "tmpbww42ker.txt",
+      "modified_time": 1754521791.4134977,
+      "size": 1025
+    },
+    {
+      "age_seconds": 46046.48960876465,
+      "filename": "tmpcr6furd6_62KB_0B.txt",
+      "modified_time": 1754607817.810014,
+      "size": 63488
+    },
+    {
+      "age_seconds": 143331.71521544456,
+      "filename": "tmpep31o9o3_medium.txt",
+      "modified_time": 1754510532.5844598,
+      "size": 50000
+    },
+    {
+      "age_seconds": 130830.20174360275,
+      "filename": "tmpeuzaw9o8.txt",
+      "modified_time": 1754523034.0979912,
+      "size": 1025
+    },
+    {
+      "age_seconds": 142210.3074746132,
+      "filename": "tmpewmc4oez.txt",
+      "modified_time": 1754511653.9923205,
+      "size": 16
+    },
+    {
+      "age_seconds": 141875.90503430367,
+      "filename": "tmpfke9x3n6.txt",
+      "modified_time": 1754511988.3948126,
+      "size": 17
+    },
+    {
+      "age_seconds": 63098.54993581772,
+      "filename": "tmpfrvw10mo_70KB.txt",
+      "modified_time": 1754590765.7499633,
+      "size": 71680
+    },
+    {
+      "age_seconds": 131996.92520022392,
+      "filename": "tmpgqgsvmvb.txt",
+      "modified_time": 1754521867.3747492,
+      "size": 1025
+    },
+    {
+      "age_seconds": 46073.39176106453,
+      "filename": "tmph7d52095_60KB_0B.txt",
+      "modified_time": 1754607790.9082417,
+      "size": 61440
+    },
+    {
+      "age_seconds": 148901.8719854355,
+      "filename": "tmpjlypu_j3_small.txt",
+      "modified_time": 1754504962.4281085,
+      "size": 5088
+    },
+    {
+      "age_seconds": 63128.8159866333,
+      "filename": "tmpkdrtqe62_66KB.txt",
+      "modified_time": 1754590735.4841607,
+      "size": 67584
+    },
+    {
+      "age_seconds": 144950.82616734505,
+      "filename": "tmplnk6y211.txt",
+      "modified_time": 1754508913.4740353,
+      "size": 23
+    },
+    {
+      "age_seconds": 148767.75639510155,
+      "filename": "tmpmr1ziyd4_retry_test.txt",
+      "modified_time": 1754505096.5438704,
+      "size": 1017
+    },
+    {
+      "age_seconds": 46100.249761343,
+      "filename": "tmpn2m_0ray_32KB_0B.txt",
+      "modified_time": 1754607764.0505598,
+      "size": 32768
+    },
+    {
+      "age_seconds": 62560.05430364609,
+      "filename": "tmpn7085e5p_66KB_debug.txt",
+      "modified_time": 1754591304.2460704,
+      "size": 67584
+    },
+    {
+      "age_seconds": 148871.82461452484,
+      "filename": "tmpo1_dehc8_medium.txt",
+      "modified_time": 1754504992.4758127,
+      "size": 50829
+    },
+    {
+      "age_seconds": 147914.7371995449,
+      "filename": "tmppcrcf1ci.txt",
+      "modified_time": 1754505949.5632777,
+      "size": 6200
+    },
+    {
+      "age_seconds": 148800.42408704758,
+      "filename": "tmppewzc8ph_very_large.txt",
+      "modified_time": 1754505063.8764598,
+      "size": 5079561
+    },
+    {
+      "age_seconds": 45881.046070337296,
+      "filename": "tmpr4k69uev_63KB.txt",
+      "modified_time": 1754607983.2545273,
+      "size": 64512
+    },
+    {
+      "age_seconds": 130962.28447985649,
+      "filename": "tmpr5lidlez.txt",
+      "modified_time": 1754522902.0161674,
+      "size": 1025
+    },
+    {
+      "age_seconds": 142086.09189391136,
+      "filename": "tmpvbqzax1b.txt",
+      "modified_time": 1754511778.2088032,
+      "size": 15
+    },
+    {
+      "age_seconds": 130580.22205901146,
+      "filename": "tmpxw01_bf2.txt",
+      "modified_time": 1754523284.078688,
+      "size": 1025
+    },
+    {
+      "age_seconds": 46019.60101222992,
+      "filename": "tmpydhf68we_63KB_0B.txt",
+      "modified_time": 1754607844.6997845,
+      "size": 64512
+    },
+    {
+      "age_seconds": 63158.818883895874,
+      "filename": "tmpym5vgs1q_64KB.txt",
+      "modified_time": 1754590705.4819727,
+      "size": 65536
+    },
+    {
+      "age_seconds": 46638.65123295784,
+      "filename": "upload_1754607224379173_tmp4akw4fzw_test.txt",
+      "modified_time": 1754607225.6496816,
+      "size": 36
+    },
+    {
+      "age_seconds": 44813.612912893295,
+      "filename": "upload_1754609049883469_tmphnh6ufd1_uuid_test.txt",
+      "modified_time": 1754609050.688054,
+      "size": 21
+    }
+  ],
+  "success": true,
+  "total_files": 55
+}
+

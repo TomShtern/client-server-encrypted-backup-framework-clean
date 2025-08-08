@@ -16,25 +16,28 @@ def main():
     """Start the backup server with proper imports"""
     try:
         # Import and start the server
+        import threading
         from src.server.network_server import NetworkServer
         from src.server.database import DatabaseManager
         from src.server.request_handlers import RequestHandler
-        from src.server.gui_integration import GUIManager
-        
+
         print("Starting CyberBackup 3.0 Server...")
         print("Port: 1256")
         print("=" * 50)
-        
+
         # Initialize components
         db_manager = DatabaseManager()
         request_handler = RequestHandler(db_manager)
-        gui_manager = GUIManager()
-        
+
+        # Create shutdown event for graceful server shutdown
+        shutdown_event = threading.Event()
+
         # Create and start network server
         network_server = NetworkServer(
             port=1256,
             request_handler=request_handler.process_request,
-            client_resolver=db_manager.get_client_by_id
+            client_resolver=db_manager.get_client_by_id,
+            shutdown_event=shutdown_event
         )
         
         # Start the server
