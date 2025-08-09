@@ -1,7 +1,31 @@
 #!/usr/bin/env python3
 """
+⚠️  DEPRECATED AND ARCHIVED ⚠️
+
+This file has been ARCHIVED and is no longer maintained.
+
+REASON FOR ARCHIVAL:
+- Was a debugging tool for isolating 500 errors in /api/status endpoint
+- Issues have been resolved in the main API server
+- Runs on different port (9091) and has limited functionality
+
+USE INSTEAD:
+- cyberbackup_api_server.py (project root)
+
+ARCHIVED DATE: 2025-01-09
+ARCHIVAL REASON: Unify API server entrypoint and eliminate duplicates
+
+DO NOT USE THIS FILE - IT IS FOR DEBUGGING ONLY
+
+Original Description:
 Debug server to isolate the 500 error in the /api/status endpoint
 """
+
+import sys
+print("⚠️  WARNING: This API server has been DEPRECATED and ARCHIVED")
+print("⚠️  This was a debugging tool only - use cyberbackup_api_server.py instead")
+print("⚠️  The issues this was debugging have been resolved")
+sys.exit(1)
 
 import os
 import sys

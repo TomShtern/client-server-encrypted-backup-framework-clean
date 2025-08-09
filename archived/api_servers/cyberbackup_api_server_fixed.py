@@ -1,10 +1,34 @@
 #!/usr/bin/env python3
 """
+⚠️  DEPRECATED AND ARCHIVED ⚠️
+
+This file has been ARCHIVED and is no longer maintained.
+
+REASON FOR ARCHIVAL:
+- Superseded by the canonical cyberbackup_api_server.py
+- Contains outdated import paths and missing features
+- No longer used by any part of the system
+
+USE INSTEAD:
+- cyberbackup_api_server.py (project root)
+
+ARCHIVED DATE: 2025-01-09
+ARCHIVAL REASON: Unify API server entrypoint and eliminate duplicates
+
+DO NOT USE THIS FILE - IT MAY NOT WORK CORRECTLY
+
+Original Description:
 CyberBackup 3.0 API Server - FIXED VERSION
 Provides Flask API backend for the NewGUIforClient.html interface
 Connects to the actual C++ backup client and Python backup server
 NO SIMULATION - REAL INTEGRATION ONLY
 """
+
+import sys
+print("⚠️  WARNING: This API server has been DEPRECATED and ARCHIVED")
+print("⚠️  Use cyberbackup_api_server.py instead (project root)")
+print("⚠️  This file may not work correctly and is no longer maintained")
+sys.exit(1)
 
 import os
 import time

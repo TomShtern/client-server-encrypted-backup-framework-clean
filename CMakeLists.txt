@@ -43,7 +43,7 @@ target_include_directories(EncryptedBackupClient PRIVATE
 
 # 6. Find and Link Libraries: Use vcpkg packages with fallback
 # Try modern config-based discovery first (vcpkg style)
-find_package(Boost CONFIG QUIET COMPONENTS asio beast)
+find_package(Boost CONFIG QUIET COMPONENTS asio beast iostreams)
 
 if(NOT Boost_FOUND)
     # Fallback to traditional FindBoost module
@@ -63,9 +63,10 @@ find_package(cryptopp CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
 
 # 7. Link Libraries: Include both external and Windows system libraries
-target_link_libraries(EncryptedBackupClient PRIVATE 
+target_link_libraries(EncryptedBackupClient PRIVATE
     Boost::asio
     Boost::beast
+    Boost::iostreams
     cryptopp::cryptopp
     ZLIB::ZLIB
 )

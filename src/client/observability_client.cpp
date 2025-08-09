@@ -13,7 +13,7 @@
 
 class ClientMetrics {
 private:
-    std::mutex metrics_mutex;
+    mutable std::mutex metrics_mutex;
     std::map<std::string, int> counters;
     std::map<std::string, double> gauges;
     std::map<std::string, std::vector<double>> timers;

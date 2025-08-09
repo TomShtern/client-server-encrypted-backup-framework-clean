@@ -1,7 +1,31 @@
 #!/usr/bin/env python3
 """
+⚠️  DEPRECATED AND ARCHIVED ⚠️
+
+This file has been ARCHIVED and is no longer maintained.
+
+REASON FOR ARCHIVAL:
+- Was a testing/debugging tool, not a production server
+- Only provided minimal functionality for UUID fix testing
+- No real backup integration, simulation-only
+
+USE INSTEAD:
+- cyberbackup_api_server.py (project root)
+
+ARCHIVED DATE: 2025-01-09
+ARCHIVAL REASON: Unify API server entrypoint and eliminate duplicates
+
+DO NOT USE THIS FILE - IT IS FOR TESTING ONLY
+
+Original Description:
 Minimal API Server for testing UUID fix
 """
+
+import sys
+print("⚠️  WARNING: This API server has been DEPRECATED and ARCHIVED")
+print("⚠️  This was a testing tool only - use cyberbackup_api_server.py instead")
+print("⚠️  This file provides no real backup functionality")
+sys.exit(1)
 
 import os
 import time

@@ -142,14 +142,73 @@ def check_python_dependencies():
     """Check if required Python dependencies are available"""
     required_modules = ['flask', 'flask_cors', 'psutil']
     missing_modules = []
-    
+
     for module in required_modules:
         try:
             __import__(module)
         except ImportError:
             missing_modules.append(module)
-    
+
     return missing_modules
+
+def check_and_fix_vcpkg_dependencies():
+    """Check and fix vcpkg dependencies, especially boost-iostreams"""
+    print("Checking vcpkg dependencies...")
+
+    # Check if vcpkg.json exists and has required dependencies
+    vcpkg_json_path = Path("vcpkg.json")
+    if not vcpkg_json_path.exists():
+        print("[ERROR] vcpkg.json not found!")
+        return False
+
+    try:
+        import json
+        with open(vcpkg_json_path, 'r') as f:
+            vcpkg_config = json.load(f)
+
+        required_deps = ["boost-asio", "boost-beast", "boost-iostreams", "cryptopp", "zlib"]
+        current_deps = vcpkg_config.get("dependencies", [])
+
+        missing_deps = [dep for dep in required_deps if dep not in current_deps]
+
+        if missing_deps:
+            print(f"[WARNING] Missing vcpkg dependencies: {', '.join(missing_deps)}")
+            print("Updating vcpkg.json...")
+
+            # Update dependencies
+            vcpkg_config["dependencies"] = required_deps
+
+            with open(vcpkg_json_path, 'w') as f:
+                json.dump(vcpkg_config, f, indent=2)
+
+            print("[OK] vcpkg.json updated with missing dependencies")
+            return True
+        else:
+            print("[OK] All required vcpkg dependencies are present")
+            return True
+
+    except Exception as e:
+        print(f"[ERROR] Failed to check vcpkg dependencies: {e}")
+        return False
+
+def force_vcpkg_reinstall():
+    """Force reinstall of vcpkg dependencies"""
+    print("Forcing vcpkg dependency reinstall...")
+
+    # Remove vcpkg_installed directory to force fresh install
+    vcpkg_installed_path = Path("vcpkg_installed")
+    if vcpkg_installed_path.exists():
+        print("Removing vcpkg_installed directory...")
+        try:
+            import shutil
+            shutil.rmtree(vcpkg_installed_path)
+            print("[OK] vcpkg_installed directory removed")
+        except Exception as e:
+            print(f"[WARNING] Failed to remove vcpkg_installed: {e}")
+
+    # Run vcpkg install command
+    print("Running vcpkg install...")
+    return run_command("vcpkg\\vcpkg.exe install --triplet x64-windows --recurse", timeout=600)
 
 def wait_for_server_startup(host='127.0.0.1', port=9090, max_wait=30, check_interval=1):
     """Wait for server to start with progress feedback"""
@@ -352,7 +411,14 @@ def main():
         # PHASE 2: CMAKE CONFIGURATION AND VCPKG SETUP
         # ========================================================================
         print_phase(2, 7, "Configuring Build System")
-        
+
+        # Check and fix vcpkg dependencies first
+        if not check_and_fix_vcpkg_dependencies():
+            print("[ERROR] Failed to verify vcpkg dependencies!")
+            with contextlib.suppress(EOFError):
+                input("Press Enter to exit...")
+            sys.exit(1)
+
         print("Calling scripts\\build\\configure_cmake.bat for CMake + vcpkg setup...")
         print()
         
@@ -381,9 +447,41 @@ def main():
             print()
             print("[ERROR] C++ client build failed!")
             print("Check the compiler output above for details.")
-            with contextlib.suppress(EOFError):
-                input("Press Enter to exit...")
-            sys.exit(1)
+            print()
+            print("Common solutions:")
+            print("1. Missing Boost dependencies:")
+            print("   - Run: vcpkg\\vcpkg.exe install boost-iostreams:x64-windows")
+            print("   - Or delete 'build' folder and run this script again")
+            print("2. Outdated vcpkg cache:")
+            print("   - Delete 'vcpkg_installed' folder and rebuild")
+            print("3. CMake configuration issues:")
+            print("   - Run: cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake")
+            print()
+
+            # Offer to try automatic fix
+            try:
+                choice = input("Would you like to try automatic vcpkg dependency reinstall? (y/N): ").strip().lower()
+                if choice in ['y', 'yes']:
+                    print("\nAttempting automatic fix...")
+                    if force_vcpkg_reinstall():
+                        print("Retrying build...")
+                        if run_command("cmake --build build --config Release", timeout=180):
+                            print("[OK] Build succeeded after vcpkg reinstall!")
+                        else:
+                            print("[ERROR] Build still failed after vcpkg reinstall")
+                            print("Manual intervention may be required")
+                            input("Press Enter to exit...")
+                            sys.exit(1)
+                    else:
+                        print("[ERROR] vcpkg reinstall failed")
+                        input("Press Enter to exit...")
+                        sys.exit(1)
+                else:
+                    input("Press Enter to exit...")
+                    sys.exit(1)
+            except (EOFError, KeyboardInterrupt):
+                print("\nExiting...")
+                sys.exit(1)
         
         # Verify the executable was created
         exe_path = Path("build/Release/EncryptedBackupClient.exe")

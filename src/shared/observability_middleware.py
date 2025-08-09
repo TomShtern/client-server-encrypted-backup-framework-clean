@@ -111,21 +111,37 @@ class FlaskObservabilityMiddleware:
                 context={"exception_str": str(exception)}
             )
             
-            # Record error metric
-            self.metrics.record_counter(
-                "http.errors.total",
-                tags={
-                    "method": request.method,
-                    "endpoint": request.endpoint or "unknown",
-                    "error_type": type(exception).__name__
-                }
-            )
+            # Record error metric - only if we're in a request context
+            try:
+                from flask import has_request_context
+                if has_request_context():
+                    self.metrics.record_counter(
+                        "http.errors.total",
+                        tags={
+                            "method": request.method,
+                            "endpoint": request.endpoint or "unknown",
+                            "error_type": type(exception).__name__
+                        }
+                    )
+                else:
+                    # Log error without request context
+                    self.metrics.record_counter(
+                        "http.errors.total",
+                        tags={
+                            "method": "unknown",
+                            "endpoint": "unknown",
+                            "error_type": type(exception).__name__
+                        }
+                    )
+            except Exception as e:
+                # Fallback if request context check fails
+                g.request_logger.debug(f"Could not record error metric: {e}") if hasattr(g, 'request_logger') else None
             
     def _register_observability_endpoints(self):
         """Register observability endpoints"""
         
         @self.app.route('/api/observability/health')
-        def health_check():
+        def observability_health_check():
             """Health check endpoint"""
             system_monitor = get_system_monitor()
             latest_metrics = system_monitor.get_latest_metrics()

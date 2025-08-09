@@ -407,7 +407,64 @@ Integration with existing tests:
 
 ---
 
-## 10. Future work suggestions
+## 10. Unify API Server Entrypoint and Archive Duplicates
+
+What & Why:
+- Unified the API server architecture by establishing a single canonical entry point and archiving duplicate/obsolete implementations to eliminate confusion and maintain clean project structure.
+
+Files changed/archived:
+- CANONICAL: `cyberbackup_api_server.py` (project root)
+  - Enhanced documentation as the official API server
+  - Added clear identification as canonical implementation
+  - Includes all latest features: observability, performance monitoring, WebSocket support
+- ARCHIVED: `cyberbackup_api_server_fixed.py` → `archived/api_servers/`
+  - Obsolete "fixed" version with outdated imports and missing features
+  - Added deprecation warnings to prevent accidental usage
+- ARCHIVED: `minimal_api_server.py` → `archived/api_servers/`
+  - Testing tool for UUID fix, not production server
+  - Added deprecation warnings and usage guidance
+- ARCHIVED: `debug_server.py` → `archived/api_servers/`
+  - Debugging tool for 500 errors, issues resolved in main server
+  - Added deprecation warnings and historical context
+- ADDED: `archived/api_servers/README.md`
+  - Comprehensive documentation of archived files
+  - Migration history and usage guidelines
+  - Technical comparison between archived and canonical versions
+- ADDED: `API_SERVER_UNIFICATION.md` (project root)
+  - Complete unification documentation
+  - Developer guidelines and troubleshooting
+  - System architecture and integration points
+
+How it was implemented:
+- **Archive Structure**: Created `archived/api_servers/` directory for obsolete implementations
+- **Deprecation Warnings**: Added clear warnings to archived files that exit immediately
+- **Documentation**: Comprehensive documentation explaining the unification process
+- **Canonical Enhancement**: Enhanced the main API server documentation and identification
+- **Integration Verification**: Confirmed `one_click_build_and_run.py` uses canonical server
+
+What you can do with it & How to use:
+- **Single Entry Point**: Use only `cyberbackup_api_server.py` for all API server needs
+- **Direct Execution**: `python cyberbackup_api_server.py`
+- **Recommended Startup**: `python one_click_build_and_run.py` (full system)
+- **Health Monitoring**: `http://localhost:9090/health` and `/api/observability/health`
+- **Documentation**: Refer to `API_SERVER_UNIFICATION.md` for complete details
+
+Benefits achieved:
+- **Eliminated Confusion**: Single canonical API server, no more "which one to use?"
+- **Reduced Maintenance**: One codebase to maintain instead of multiple duplicates
+- **Enhanced Features**: All functionality consolidated with latest improvements
+- **Clean Architecture**: Clear project structure with archived obsolete code
+- **Better Documentation**: Comprehensive guides for developers and users
+- **Preserved History**: Archived files maintain historical context and migration path
+
+Integration points:
+- **One-Click Launcher**: Specifically references canonical server
+- **Integration Tests**: Validate complete flow using canonical server
+- **System Architecture**: Clear single entry point in Web UI → API → Client → Server flow
+
+---
+
+## 11. Future work suggestions
 - Add distributed tracing across client-server boundaries in integration tests
 - Implement load testing with hundreds of concurrent transfers
 - Add network latency simulation for realistic testing conditions

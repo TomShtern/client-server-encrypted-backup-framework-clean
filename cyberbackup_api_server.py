@@ -1,9 +1,30 @@
 #!/usr/bin/env python3
 """
-CyberBackup 3.0 API Server - REAL IMPLEMENTATION
-Provides Flask API backend for the NewGUIforClient.html interface
-Connects to the actual C++ backup client and Python backup server
+CyberBackup 3.0 API Server - CANONICAL IMPLEMENTATION
+=====================================================
+
+This is the OFFICIAL and ONLY API server for CyberBackup 3.0.
+
+Features:
+- Complete Flask API backend for NewGUIforClient.html interface
+- Real integration with C++ backup client and Python backup server
+- Enhanced observability and structured logging
+- Performance monitoring and metrics collection
+- WebSocket support for real-time communication
+- File receipt monitoring and health checks
+- Singleton management and comprehensive error handling
+
+Usage:
+- Direct: python cyberbackup_api_server.py
+- Recommended: python one_click_build_and_run.py
+
+Port: 9090
+Endpoints: /api/*, /health, /api/observability/*
+
 NO SIMULATION - REAL INTEGRATION ONLY
+
+Note: Other API server files have been archived to eliminate duplicates.
+See API_SERVER_UNIFICATION.md for details.
 """
 
 import os
