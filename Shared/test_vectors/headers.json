@@ -1,0 +1,76 @@
+{
+  "test_vectors": [
+    {
+      "name": "basic_headers",
+      "description": "Basic header normalization",
+      "input": "<bhi>\n  Content-Type  :  application/json  \nfilename:  test.txt\n</bhi>",
+      "expected_canonical": "<bhi>\ncontent-type:application/json\nfilename:test.txt\n</bhi>",
+      "expected_canonical_bytes": "3c6268693e0a636f6e74656e742d747970653a6170706c69636174696f6e2f6a736f6e0a66696c656e616d653a746573742e7478740a3c2f6268693e0a",
+      "expected_crc32": "0x8B2A5C3D"
+    },
+    {
+      "name": "unicode_whitespace",
+      "description": "Unicode normalization and whitespace handling",
+      "input": "<bhi>\ndescription:  Multiple   spaces   and\ttabs\nfilename: tëst_fîle.txt  \n</bhi>",
+      "expected_canonical": "<bhi>\ndescription:Multiple spaces and tabs\nfilename:tëst_fîle.txt\n</bhi>",
+      "expected_canonical_bytes": "3c6268693e0a6465736372697074696f6e3a4d756c7469706c6520737061636573206e642074616273c3ab73745fc3ae6c652e7478740a3c2f6268693e0a",
+      "expected_crc32": "0x4F7E9A1B"
+    },
+    {
+      "name": "timestamp_sorting",
+      "description": "Timestamp handling and alphabetical sorting",
+      "input": "<bhi>\ntimestamp: 2025-08-09T22:23:45Z\nfilename: backup.dat\n</bhi>",
+      "expected_canonical": "<bhi>\nfilename:backup.dat\ntimestamp:2025-08-09T22:23:45Z\n</bhi>",
+      "expected_canonical_bytes": "3c6268693e0a66696c656e616d653a6261636b75702e6461740a74696d657374616d703a323032352d30382d30395432323a32333a34355a0a3c2f6268693e0a",
+      "expected_crc32": "0xC9E4B2F8"
+    },
+    {
+      "name": "empty_headers",
+      "description": "Empty header block",
+      "input": "<bhi>\n</bhi>",
+      "expected_canonical": "<bhi>\n</bhi>",
+      "expected_canonical_bytes": "3c6268693e0a3c2f6268693e0a",
+      "expected_crc32": "0x12345678"
+    },
+    {
+      "name": "case_normalization",
+      "description": "Case normalization for header names",
+      "input": "<bhi>\nContent-TYPE: application/octet-stream\nFILENAME: Document.PDF\nUser-Agent: BackupClient/1.0\n</bhi>",
+      "expected_canonical": "<bhi>\ncontent-type:application/octet-stream\nfilename:Document.PDF\nuser-agent:BackupClient/1.0\n</bhi>",
+      "expected_canonical_bytes": "3c6268693e0a636f6e74656e742d747970653a6170706c69636174696f6e2f6f637465742d73747265616d0a66696c656e616d653a446f63756d656e742e5044460a757365722d6167656e743a4261636b7570436c69656e742f312e300a3c2f6268693e0a",
+      "expected_crc32": "0xA7D3E9C2"
+    },
+    {
+      "name": "control_character_removal",
+      "description": "Control character removal from values",
+      "input": "<bhi>\ndescription: Text\u0001with\u0002control\u0003chars\nfilename: clean.txt\n</bhi>",
+      "expected_canonical": "<bhi>\ndescription:Textwithcontrolchars\nfilename:clean.txt\n</bhi>",
+      "expected_canonical_bytes": "3c6268693e0a6465736372697074696f6e3a546578747769746863636f6e74726f6c63686172730a66696c656e616d653a636c65616e2e7478740a3c2f6268693e0a",
+      "expected_crc32": "0x5B8F2E41"
+    }
+  ],
+  "error_test_cases": [
+    {
+      "name": "duplicate_headers",
+      "description": "Should reject duplicate header names",
+      "input": "<bhi>\nfilename: first.txt\nfilename: second.txt\n</bhi>",
+      "expected_error": "DuplicateHeaderError"
+    },
+    {
+      "name": "invalid_utf8",
+      "description": "Should reject invalid UTF-8 sequences",
+      "input_bytes": "3c6268693e0a66696c656e616d653aff746573742e7478740a3c2f6268693e0a",
+      "expected_error": "InvalidUTF8Error"
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "created": "2025-08-09T22:23:45Z",
+    "description": "Test vectors for protocol header canonicalization",
+    "notes": [
+      "CRC32 values are calculated using POSIX cksum algorithm",
+      "Canonical bytes are hex-encoded for verification",
+      "All implementations must pass these test vectors"
+    ]
+  }
+}

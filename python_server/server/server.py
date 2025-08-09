@@ -29,6 +29,9 @@ from .request_handlers import RequestHandler
 # Import network server module
 from .network_server import NetworkServer
 
+# Import canonical shared utilities
+from ..shared.crc import calculate_crc32, CRC32Stream
+
 # GUI Integration
 from .gui_integration import GUIManager
 
