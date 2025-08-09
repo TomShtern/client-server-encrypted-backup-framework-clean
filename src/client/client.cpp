@@ -6,6 +6,7 @@
 #include <chrono>
 #include <random>
 #include <boost/iostreams/device/mapped_file.hpp>
+#include "observability_client.cpp"  // Include observability features
 
 #include <iomanip>
 
@@ -1239,8 +1240,16 @@ bool Client::transferFile() {
 // Transfer file with specified buffer size (dynamic per-file buffer sizing)
 bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string& filename,
                                    size_t fileSize, size_t bufferSize) {
+    // Start operation timing for observability
+    TIMED_OPERATION("file_transfer");
+    LOG_CLIENT_INFO("Starting memory-efficient file transfer", "file_transfer");
+    RECORD_GAUGE("transfer.file_size_bytes", static_cast<double>(fileSize));
+    RECORD_GAUGE("transfer.buffer_size_bytes", static_cast<double>(bufferSize));
+
     // CRITICAL FIX: Validate file size and buffer size before proceeding
     if (!validateFileSizeForTransfer(fileSize)) {
+        LOG_CLIENT_ERROR("File size validation failed", "file_transfer");
+        RECORD_COUNTER("transfer.errors.invalid_file_size", 1);
         displayError("File size validation failed: " + formatBytes(fileSize), ErrorType::FILE_IO);
         return false;
     }
@@ -1260,15 +1269,20 @@ bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string
     // CRITICAL FIX: Memory-efficient file access using memory mapping
     boost::iostreams::mapped_file_source fileData;
     try {
+        LOG_CLIENT_INFO("Starting memory mapping", "memory_mapping");
         displayStatus("Memory mapping", true, "Mapping " + formatBytes(fileSize) + " file for efficient access");
         fileData.open(filepath);
 
         if (!fileData.is_open() || fileData.size() != fileSize) {
+            LOG_CLIENT_ERROR("Memory mapping failed", "memory_mapping");
+            RECORD_COUNTER("transfer.errors.memory_mapping", 1);
             displayError("Memory mapping failed for file: " + filepath, ErrorType::FILE_IO);
             return false;
         }
 
         fileStream.close();  // Close the ifstream since we're using memory mapping
+        LOG_CLIENT_INFO("Memory mapping successful", "memory_mapping");
+        RECORD_COUNTER("transfer.memory_mapping.success", 1);
         displayStatus("File mapped", true, "Successfully memory-mapped for streaming access");
 
     } catch (const std::exception& e) {

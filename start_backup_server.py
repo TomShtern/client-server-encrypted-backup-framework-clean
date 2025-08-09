@@ -1,7 +1,17 @@
 #!/usr/bin/env python3
 """
-Standalone Backup Server Launcher
-Fixes import issues and starts the backup server properly
+DEPRECATED: Standalone Backup Server Launcher
+
+This file is DEPRECATED and should not be used.
+Use the official server entry point instead:
+
+    python -m src.server.server
+
+Or use the one-click launcher:
+
+    python one_click_build_and_run.py
+
+This file will be removed in a future version.
 """
 
 import sys
@@ -13,60 +23,35 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 def main():
-    """Start the backup server with proper imports"""
+    """DEPRECATED: Use official server entry point instead"""
+    print("=" * 60)
+    print("⚠️  DEPRECATION WARNING")
+    print("=" * 60)
+    print("This script (start_backup_server.py) is DEPRECATED.")
+    print()
+    print("Please use the official server entry point instead:")
+    print("  python -m src.server.server")
+    print()
+    print("Or use the one-click launcher:")
+    print("  python one_click_build_and_run.py")
+    print()
+    print("This file will be removed in a future version.")
+    print("=" * 60)
+
+    # Ask user if they want to continue anyway
     try:
-        # Import and start the server
-        import threading
-        from src.server.network_server import NetworkServer
-        from src.server.database import DatabaseManager
-        from src.server.request_handlers import RequestHandler
-
-        print("Starting CyberBackup 3.0 Server...")
-        print("Port: 1256")
-        print("=" * 50)
-
-        # Initialize components
-        db_manager = DatabaseManager()
-        request_handler = RequestHandler(db_manager)
-
-        # Create shutdown event for graceful server shutdown
-        shutdown_event = threading.Event()
-
-        # Create and start network server
-        network_server = NetworkServer(
-            port=1256,
-            request_handler=request_handler.process_request,
-            client_resolver=db_manager.get_client_by_id,
-            shutdown_event=shutdown_event
-        )
-        
-        # Start the server
-        success = network_server.start()
-        if not success:
-            print("Failed to start backup server!")
+        response = input("\nDo you want to start the official server instead? (y/N): ").strip().lower()
+        if response in ['y', 'yes']:
+            print("\nStarting official server...")
+            import subprocess
+            import sys
+            subprocess.run([sys.executable, "-m", "src.server.server"])
+            return 0
+        else:
+            print("Exiting. Please use the official server entry point.")
             return 1
-            
-        print("Backup server started successfully!")
-        print("Press Ctrl+C to stop the server")
-        
-        # Keep the server running
-        try:
-            while True:
-                import time
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("\nShutting down server...")
-            network_server.stop()
-            print("Server stopped.")
-            
-        return 0
-        
-    except ImportError as e:
-        print(f"Import error: {e}")
-        print("Please ensure all dependencies are installed")
-        return 1
-    except Exception as e:
-        print(f"Error starting server: {e}")
+    except KeyboardInterrupt:
+        print("\nExiting.")
         return 1
 
 if __name__ == "__main__":

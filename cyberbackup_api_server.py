@@ -21,7 +21,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 from src.shared.logging_utils import setup_dual_logging, create_log_monitor_info
 
-# Configure enhanced dual logging (console + file)
+# Configure enhanced dual logging (console + file) with observability
 logger, api_log_file = setup_dual_logging(
     logger_name=__name__,
     server_type="api-server",
@@ -29,6 +29,10 @@ logger, api_log_file = setup_dual_logging(
     file_level=logging.DEBUG,
     console_format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+# Setup structured logging and observability
+from src.shared.observability_middleware import setup_observability_for_flask
+from src.shared.logging_utils import create_enhanced_logger, log_performance_metrics
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 
@@ -46,6 +50,11 @@ CORS(app)  # Enable CORS for local development
 
 # Initialize SocketIO with origin-locked CORS for security
 socketio = SocketIO(app, cors_allowed_origins=["http://localhost:9090", "http://127.0.0.1:9090"])
+
+# Setup enhanced observability middleware
+observability_middleware = setup_observability_for_flask(app, "api-server")
+structured_logger = create_enhanced_logger("api-server", logger)
+
 # Performance monitoring singleton
 from src.shared.utils.performance_monitor import get_performance_monitor
 # Connection health monitoring
@@ -359,8 +368,11 @@ def api_disconnect():
 
 @app.route('/api/start_backup', methods=['POST'])
 def api_start_backup_working():
-    """Start backup using REAL backup executor - WORKING VERSION"""
+    """Start backup using REAL backup executor with enhanced observability"""
     global backup_status
+    start_time = time.time()
+
+    structured_logger.info("Backup request received", operation="start_backup")
 
     # Generate unique job ID for this backup operation
     job_id = f"job_{int(time.time() * 1000000)}"
@@ -597,6 +609,20 @@ def api_start_backup_working():
         backup_thread.daemon = True
         backup_thread.start()
 
+        # Log successful backup initiation with performance metrics
+        duration_ms = (time.time() - start_time) * 1000
+        structured_logger.info(f"Backup job {job_id} started successfully",
+                             operation="start_backup",
+                             duration_ms=duration_ms,
+                             context={
+                                 "job_id": job_id,
+                                 "username": username,
+                                 "filename": original_filename
+                             })
+
+        log_performance_metrics(logger, "start_backup", duration_ms, True,
+                              job_id=job_id, username=username)
+
         return jsonify({
             'success': True,
             'message': f'Backup started for {original_filename}',
@@ -606,8 +632,19 @@ def api_start_backup_working():
         })
 
     except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
         backup_status['backing_up'] = False
         error_msg = f"Backup start error: {str(e)}"
+
+        structured_logger.error(error_msg,
+                              operation="start_backup",
+                              duration_ms=duration_ms,
+                              error_code=type(e).__name__,
+                              context={"exception": str(e)})
+
+        log_performance_metrics(logger, "start_backup", duration_ms, False,
+                              error=str(e))
+
         print(f"[ERROR] {error_msg}")
         update_backup_status('ERROR', error_msg)
         return jsonify({'success': False, 'error': error_msg}), 500

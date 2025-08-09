@@ -228,10 +228,197 @@ Memory usage impact:
 
 ---
 
-## 7. Future work suggestions
+## 7. Deprecate start_backup_server.py
+
+What & Why:
+- Deprecated redundant server entry point that duplicated functionality of the official src/server/server.py
+
+Files changed:
+- MODIFIED: `start_backup_server.py`
+  - Added deprecation warning in file header
+  - Replaced main() function with deprecation notice and user guidance
+  - Added option to automatically launch official server instead
+  - Maintained file structure for backward compatibility during transition
+
+How it was implemented:
+- Clear deprecation warnings with guidance to official entry points
+- Interactive prompt to launch official server if user attempts to run deprecated script
+- Preserved file for transition period but made it non-functional for server operations
+
+What you can do with it & How to use:
+- **DO NOT USE** start_backup_server.py - it's deprecated
+- Use official server entry point: `python -m src.server.server`
+- Use one-click launcher: `python one_click_build_and_run.py`
+- If accidentally run, script will guide you to correct entry points
+
+Rationale for deprecation:
+- **Redundant:** Duplicated functionality already in src/server/server.py
+- **Incomplete:** Missing GUI manager, proper client management, advanced features
+- **Unused:** No references in codebase, not used by any launcher scripts
+- **Maintenance burden:** Multiple entry points create confusion and maintenance overhead
+
+---
+
+## 8. Logging and Observability Enhancements
+
+What & Why:
+- Implemented comprehensive observability framework with structured logging, metrics collection, performance monitoring, and health checks across the entire system.
+
+Files changed/added:
+- ADDED: `src/shared/observability.py`
+  - StructuredLogger with context management and tracing
+  - MetricsCollector for counters, gauges, timers, and histograms
+  - SystemMonitor for real-time system metrics collection
+  - TimedOperation context manager for automatic operation timing
+- ADDED: `src/shared/observability_middleware.py`
+  - FlaskObservabilityMiddleware for automatic request/response monitoring
+  - Observability decorators (@observe_operation, @observe_async_operation)
+  - BackgroundMetricsReporter for periodic metrics reporting
+  - Health check and metrics endpoints (/api/observability/*)
+- ADDED: `src/client/observability_client.cpp`
+  - C++ structured logging and metrics collection
+  - OperationTimer for automatic timing
+  - C-style interface for integration with existing client code
+  - Macro helpers for easier integration
+- MODIFIED: `src/shared/logging_utils.py`
+  - Enhanced with observability features integration
+  - Added create_enhanced_logger() and log_performance_metrics()
+  - Automatic system monitoring startup
+- MODIFIED: `cyberbackup_api_server.py`
+  - Integrated Flask observability middleware
+  - Enhanced start_backup endpoint with structured logging and performance metrics
+  - Automatic request/response timing and error tracking
+- MODIFIED: `src/server/server.py`
+  - Added structured logging for server startup and operations
+  - Integrated metrics collection for server lifecycle events
+  - Enhanced error tracking and performance monitoring
+- MODIFIED: `src/client/client.cpp`
+  - Integrated C++ observability features
+  - Added operation timing and metrics for file transfers
+  - Enhanced error tracking and logging
+
+How it was implemented:
+- Structured logging with JSON format for machine parsing + human-readable console output
+- Thread-safe metrics collection with configurable history retention
+- Automatic Flask middleware for request/response observability
+- Cross-language observability (Python + C++) with consistent interfaces
+- Real-time system monitoring with configurable collection intervals
+- Health check endpoints with automatic degradation detection
+
+What you can do with it & How to use:
+- **Structured Logging:** All components now log in structured JSON format with context, tracing, and operation timing
+- **Metrics Collection:** Automatic collection of counters, gauges, and timers across all operations
+- **Health Monitoring:** Real-time health checks at `/api/observability/health`
+- **Metrics Dashboard:** View metrics summaries at `/api/observability/metrics`
+- **System Monitoring:** System resource monitoring at `/api/observability/system`
+- **Performance Tracking:** Automatic timing of all major operations (file transfers, API requests, server startup)
+- **Error Tracking:** Structured error logging with categorization and context
+- **Tracing:** Request tracing across components with trace IDs
+
+Key observability endpoints:
+- `GET /api/observability/health` - Health status with system metrics
+- `GET /api/observability/metrics?window=300` - Metrics summary for time window
+- `GET /api/observability/system?window=300` - System metrics history
+
+Benefits:
+- **Debugging:** Structured logs make troubleshooting much easier
+- **Performance:** Real-time performance metrics and bottleneck identification
+- **Reliability:** Health monitoring with automatic degradation detection
+- **Operations:** Comprehensive visibility into system behavior
+- **Scalability:** Metrics help identify scaling bottlenecks
+- **Maintenance:** Automated monitoring reduces manual oversight needs
+
+---
+
+## 9. Integration Tests for API → C++ Client → Server Flow
+
+What & Why:
+- Implemented comprehensive integration tests that validate the complete end-to-end workflow from API server through C++ client to backup server, ensuring all components work together correctly.
+
+Files added:
+- ADDED: `tests/integration/test_complete_flow.py`
+  - Basic integration tests for small, medium, and large file transfers
+  - Concurrent transfer testing
+  - Error handling for invalid files and connection failures
+  - Observability integration verification
+  - Health endpoint validation
+- ADDED: `tests/integration/test_performance_flow.py`
+  - Performance benchmarks for different file sizes
+  - Memory usage monitoring and efficiency testing
+  - Concurrent load testing with resource cleanup verification
+  - Performance degradation detection over multiple transfers
+- ADDED: `tests/integration/test_error_scenarios.py`
+  - Network failure simulation and timeout scenarios
+  - Invalid input handling (malformed JSON, missing fields)
+  - Corrupted file upload testing
+  - Resource exhaustion scenarios (large files, rapid requests)
+  - Server shutdown during transfer testing
+- ADDED: `tests/integration/run_integration_tests.py`
+  - Comprehensive test runner with detailed reporting
+  - Prerequisites checking (ports, files, dependencies)
+  - Performance metrics collection and analysis
+  - JSON and text report generation
+- ADDED: `tests/integration/README.md`
+  - Complete documentation for integration testing
+  - Usage examples and troubleshooting guide
+  - Performance benchmarks and CI/CD integration examples
+
+Files modified:
+- MODIFIED: `scripts/testing/master_test_suite.py`
+  - Added integration with comprehensive integration tests
+  - Automatic execution of integration tests when basic tests pass
+  - Enhanced test reporting with integration test results
+
+How it was implemented:
+- **IntegrationTestFramework**: Base framework managing server startup/shutdown, port management, file creation/cleanup, and health monitoring
+- **Automated Infrastructure**: Tests automatically start/stop API server (port 9090) and backup server (port 1256)
+- **File Integrity Verification**: SHA256 hash comparison ensures transferred files maintain integrity
+- **Performance Monitoring**: Real-time metrics collection for transfer speed, memory usage, and resource efficiency
+- **Error Simulation**: Comprehensive error scenario testing including network failures, invalid inputs, and resource exhaustion
+- **Concurrent Testing**: Multi-threaded transfer testing to validate system behavior under load
+
+What you can do with it & How to use:
+- **Run All Tests:** `python tests/integration/run_integration_tests.py --all --verbose --report`
+- **Quick Tests:** `python tests/integration/run_integration_tests.py --quick`
+- **Performance Only:** `python tests/integration/run_integration_tests.py --performance`
+- **Error Scenarios:** `python tests/integration/run_integration_tests.py --errors`
+- **Individual Suites:** `python -m unittest tests.integration.test_complete_flow -v`
+
+Test Coverage:
+- **Basic Flow**: Small (1KB), medium (64KB), and large (1MB) file transfers
+- **Concurrent Operations**: Multiple simultaneous transfers with resource monitoring
+- **Error Handling**: Invalid files, network failures, server shutdowns, timeouts
+- **Performance**: Transfer speed benchmarks, memory efficiency, resource cleanup
+- **Edge Cases**: Empty files, special characters, extremely long filenames, corrupted data
+- **Observability**: Health endpoints, metrics collection, structured logging integration
+
+Benefits:
+- **Quality Assurance**: Comprehensive validation of complete system integration
+- **Performance Monitoring**: Automated performance benchmarking and regression detection
+- **Error Detection**: Early detection of integration issues and edge case failures
+- **CI/CD Ready**: Automated test execution with detailed reporting for continuous integration
+- **Documentation**: Complete testing guide with troubleshooting and best practices
+- **Reliability**: Ensures all components work together correctly under various conditions
+
+Integration with existing tests:
+- Master test suite automatically runs integration tests when basic tests achieve 80% pass rate
+- Integration tests complement existing unit tests and component-specific tests
+- Provides end-to-end validation that unit tests cannot cover
+
+---
+
+## 10. Future work suggestions
+- Add distributed tracing across client-server boundaries in integration tests
+- Implement load testing with hundreds of concurrent transfers
+- Add network latency simulation for realistic testing conditions
+- Create integration test dashboard for CI/CD visualization
+- Add Prometheus/OpenTelemetry export for enterprise monitoring integration
+- Implement distributed tracing across client-server boundaries
+- Add alerting based on health check degradation
+- Create observability dashboard UI
+- Remove start_backup_server.py completely after transition period
 - Implement server-side memory-mapped packet reassembly for further memory reduction
 - Optionally register `src/server/health_api.py` Blueprint in Flask server where appropriate
 - Add server-side explicit abort of a specific partial file (by name) if needed
 - Enrich `jobs_cancelled` broadcast with optional per-job reasons
-- Add Prometheus or OTEL export for connection health and cleanup metrics
 

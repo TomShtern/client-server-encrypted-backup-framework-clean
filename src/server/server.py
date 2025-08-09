@@ -64,7 +64,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, project_root)
 from src.shared.logging_utils import setup_dual_logging, create_log_monitor_info
 
-# Set up dual logging (console + timestamped file) while maintaining server.log compatibility
+# Set up enhanced dual logging with observability features
 logger, backup_log_file = setup_dual_logging(
     logger_name=__name__,
     server_type="backup-server",
@@ -72,6 +72,13 @@ logger, backup_log_file = setup_dual_logging(
     file_level=logging.DEBUG,
     console_format='%(asctime)s - %(threadName)s - %(levelname)s - %(message)s'
 )
+
+# Setup structured logging for backup server
+from src.shared.logging_utils import create_enhanced_logger
+from src.shared.observability import get_metrics_collector, get_system_monitor
+structured_logger = create_enhanced_logger("backup-server", logger)
+metrics_collector = get_metrics_collector()
+system_monitor = get_system_monitor()
 
 # Maintain compatibility: also log to the original server.log file
 LOG_FORMAT = '%(asctime)s - %(threadName)s - %(levelname)s - %(message)s'
@@ -484,12 +491,29 @@ class BackupServer:
             logger.warning("Server is already running. Start command ignored.")
             return
 
+        start_time = time.time()
+        structured_logger.info("Starting backup server", operation="server_start")
+
         self.running = True
         self.shutdown_event.clear()
 
         try:
+            # Start system monitoring
+            if not system_monitor.running:
+                system_monitor.start()
+                structured_logger.info("System monitoring started")
+
             self._load_clients_from_db()
+
+            # Record server start metrics
+            metrics_collector.record_counter("server.starts.total")
+
         except SystemExit as e:
+            duration_ms = (time.time() - start_time) * 1000
+            structured_logger.error(f"Server startup aborted: {e}",
+                                  operation="server_start",
+                                  duration_ms=duration_ms,
+                                  error_code="SystemExit")
             logger.critical(f"Server startup aborted due to critical error during data loading: {e}")
             self.running = False
             self.shutdown_event.set()
@@ -500,7 +524,21 @@ class BackupServer:
         self.network_thread = threading.Thread(target=self.network_server.start, daemon=True)
         self.network_thread.start()
 
+        duration_ms = (time.time() - start_time) * 1000
+        structured_logger.info(f"Backup server started successfully",
+                             operation="server_start",
+                             duration_ms=duration_ms,
+                             context={
+                                 "version": SERVER_VERSION,
+                                 "port": self.port,
+                                 "clients_loaded": len(self.clients)
+                             })
+
         logger.info(f"Encrypted Backup Server Version {SERVER_VERSION} started successfully on port {self.port}.")
+
+        # Record successful start metrics
+        metrics_collector.record_timer("server.startup.duration", duration_ms)
+        metrics_collector.record_gauge("server.clients.loaded", len(self.clients))
 
         # Update GUI with server status
         self.gui_manager.update_server_status(True, "0.0.0.0", self.port)
