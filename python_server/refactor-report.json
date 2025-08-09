@@ -118,6 +118,24 @@
         ]
       },
       {
+        "category": "data_cleanup",
+        "count": 1,
+        "moves": [
+          {
+            "source": "(untracked) data/databases/defensive.db",
+            "destination": "archived/duplicates-20250810_122500/data/databases/defensive.db (planned)",
+            "status": "skipped_untracked",
+            "rationale": "Older DB variant not tracked; left in place for manual decision. Active DB in Database/ retained."
+          }
+        ],
+        "additions": [
+          {
+            "path": "Client/other/keys/README.md",
+            "purpose": "Document secure handling and location for demo/test keys"
+          }
+        ]
+      },
+      {
         "category": "client_cpp",
         "count": 15,
         "moves": [
