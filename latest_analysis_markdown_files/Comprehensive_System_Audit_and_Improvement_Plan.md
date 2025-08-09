@@ -428,3 +428,73 @@ D) Most invasive/hard (later, as needed)
 Notes
 - Each item should ship in a small PR with tests and clear acceptance criteria above.
 - Avoid scope creep; keep changes localized and reversible.
+
+
+## 17) Technical Debt Inventory and Paydown Plan
+
+This section captures concrete technical debt areas, why they matter, and how we will pay them down without breaking working parts. Each item includes Impact, Risk/Interest, Effort, Invasiveness, and Remediation.
+
+1) Duplication and Drift (protocol/CRC/filename validators/config)
+- Impact: Inconsistencies cause subtle bugs and user-visible failures
+- Risk/Interest: Grows with each change; more places to update; increases MTTR
+- Effort/Invasiveness: Easy, non‑invasive
+- Remediation: Single sources in shared modules (Sections 2, 6, 16‑A2)
+
+2) Layering/Abstraction Leaks (multiple send/construct paths, sys.path hacks)
+- Impact: Inconsistent logging/metrics; brittle imports
+- Risk/Interest: High coupling blocks future improvements
+- Effort/Invasiveness: Medium, low invasiveness
+- Remediation: Centralize send in NetworkServer; adopt proper package layout (Section 2.7, 2.8, 16‑A1/A2)
+
+3) Concurrency & Thread‑Safety (API globals, GUI/server lifecycles)
+- Impact: Heisenbugs under load; inconsistent status in UI
+- Risk/Interest: Hard to diagnose; user trust erosion
+- Effort/Invasiveness: Medium, low‑medium invasiveness
+- Remediation: Thread‑safe state wrapper, lifecycle guards (Section 2.10, 16‑A4)
+
+4) Error Handling & Diagnostics (partial maintenance, weak health checks)
+- Impact: Longer outages; unclear failures
+- Risk/Interest: High MTTR when issues occur
+- Effort/Invasiveness: Easy‑medium, low invasiveness
+- Remediation: Wire periodic maintenance; enrich /health and add /diagnostics; CLI self‑check (Sections 2.5, 15‑2, 16‑B8)
+
+5) Configuration Management (constants in code, missing CLI/env)
+- Impact: Hard to operate across environments; hidden assumptions
+- Risk/Interest: Misconfigurations, fragile deployments
+- Effort/Invasiveness: Easy‑medium, low invasiveness
+- Remediation: Single config source, argparse flags, env overrides, startup preflight (Sections 2.2, 15‑3, 16‑B9/B11)
+
+6) Repo Hygiene & Artifacts (tracked DB/logs/build outputs)
+- Impact: Risk of corrupt/secret data in Git; noisy diffs; larger checkouts
+- Risk/Interest: Security and productivity cost grows over time
+- Effort/Invasiveness: Easy, non‑invasive
+- Remediation: .gitignore, standard runtime dirs under data/, scripted cleanup (Sections 2.6, 11, 16‑A5)
+
+7) Test Coverage Gaps (protocol, validators, concurrency, large files)
+- Impact: Regressions slip through; fear of change
+- Risk/Interest: Slows velocity; increases rollbacks
+- Effort/Invasiveness: Medium, non‑invasive
+- Remediation: Add targeted tests per Section 8 (roundtrips, parity, property tests, concurrency, large‑file perf)
+
+8) Performance & Memory (in‑memory reassembly)
+- Impact: Limits scalability; OOM risk with large files
+- Risk/Interest: Costs rise with file sizes and clients
+- Effort/Invasiveness: Hard, invasive
+- Remediation: Streaming decryption/saving pipeline (Section 16‑D17)
+
+9) Security Posture (zero IV, lack of quotas/limits)
+- Impact: Weaker confidentiality; DoS exposure
+- Risk/Interest: Elevated operational risk
+- Effort/Invasiveness: Medium‑hard (crypto), low (limits)
+- Remediation: Optional per‑file IV (compat‑gated), upload/packet/connection limits (Sections 3.11, 3.12, 16‑D18)
+
+10) Operational Tooling & Runbooks (backups/migrations)
+- Impact: Risk during upgrades/migrations; longer maintenance windows
+- Risk/Interest: Operational fragility compounds
+- Effort/Invasiveness: Easy‑medium, non‑invasive
+- Remediation: DB backup/restore tooling; migration dry‑run; documented procedures (Sections 15‑8, 9, 16‑C15)
+
+Debt Metrics & Guardrails
+- Track: open debt items, duplicated LOC (via linter), test coverage (critical paths), mean time to detect/repair (MTTD/MTTR), error rate, large‑file memory footprint
+- Definition of Done (per item): single source implemented, tests cover edge cases, docs updated, no new call sites to legacy path, measurable metric improvement where applicable
+- Hygiene cadence: allocate a fixed budget (e.g., 15%) of each iteration to pay down high‑interest debt (1–4 above)
