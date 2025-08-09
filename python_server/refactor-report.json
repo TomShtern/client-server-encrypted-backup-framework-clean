@@ -106,6 +106,18 @@
         ]
       },
       {
+        "category": "log_archival",
+        "count": "many",
+        "moves": [
+          {
+            "source": "logs/* (except 5 most recent)",
+            "destination": "archived/logs-20250810_121200/",
+            "status": "archived",
+            "rationale": "Reduce noise; retain only 5 latest logs in active directory per policy"
+          }
+        ]
+      },
+      {
         "category": "client_cpp",
         "count": 15,
         "moves": [

@@ -77,6 +77,9 @@ Rationale: These tooling configs were misplaced inside `config/` (which is reser
 
 Rationale: `transfer.info` is a per-run generated configuration (server endpoint, username, absolute path) and should not live in version-controlled config trees. Tests create this file dynamically. The archived copy documents prior presence; untracked duplicate under `data/transfer.info` was ignored (never committed) and will be regenerated as needed.
 
+### Log Archival
+All but the 5 most recent log files were moved to `archived/logs-20250810_121200/` to reduce clutter while preserving history. Retained active logs: `appmap.log`, `server.log`, `backup-server-2025-08-09_123058.log`, `api-server-2025-08-09_123101.log`, `api-server-2025-08-09_113911.log`.
+
 ### Client C++ Code (15 files)
 - `src/client/client.cpp` → `Client/cpp/client.cpp`
 - `src/client/main.cpp` → `Client/cpp/main.cpp`
