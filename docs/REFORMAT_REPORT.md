@@ -66,6 +66,17 @@
 
 ## Files Moved (Git History Preserved)
 
+### Tooling Configuration (2 files)
+- `config/.clang-format` → `.clang-format` (moved to root so clang-format auto-detects project style without extra path config)
+- `config/.clang-tidy` → `.clang-tidy` (moved to root for IDE/CI static analysis auto-discovery)
+
+Rationale: These tooling configs were misplaced inside `config/` (which is reserved for runtime/server configuration JSON). Moving them to the repository root aligns with common tooling expectations and prevents duplication later. No content changes performed.
+
+### Generated / Runtime Artifacts Archived (1 file)
+- `config/server/client/transfer.info` → `archived/duplicates-20250810_120500/config/server/client/transfer.info`
+
+Rationale: `transfer.info` is a per-run generated configuration (server endpoint, username, absolute path) and should not live in version-controlled config trees. Tests create this file dynamically. The archived copy documents prior presence; untracked duplicate under `data/transfer.info` was ignored (never committed) and will be regenerated as needed.
+
 ### Client C++ Code (15 files)
 - `src/client/client.cpp` → `Client/cpp/client.cpp`
 - `src/client/main.cpp` → `Client/cpp/main.cpp`

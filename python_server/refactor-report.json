@@ -76,6 +76,36 @@
     ],
     "file_moves": [
       {
+        "category": "tooling_configs",
+        "count": 2,
+        "moves": [
+          {
+            "source": "config/.clang-format",
+            "destination": ".clang-format",
+            "status": "completed",
+            "rationale": "Centralize style config at repo root for tooling auto-discovery"
+          },
+          {
+            "source": "config/.clang-tidy",
+            "destination": ".clang-tidy",
+            "status": "completed",
+            "rationale": "Centralize static analysis config at repo root"
+          }
+        ]
+      },
+      {
+        "category": "generated_duplicate_files",
+        "count": 1,
+        "moves": [
+          {
+            "source": "config/server/client/transfer.info",
+            "destination": "archived/duplicates-20250810_120500/config/server/client/transfer.info",
+            "status": "archived",
+            "rationale": "Generated runtime file; canonical location created dynamically during tests/runtime"
+          }
+        ]
+      },
+      {
         "category": "client_cpp",
         "count": 15,
         "moves": [
