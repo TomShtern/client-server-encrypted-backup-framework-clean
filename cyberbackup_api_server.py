@@ -72,7 +72,7 @@ CORS(app)  # Enable CORS for local development
 # Initialize SocketIO with origin-locked CORS for security
 socketio = SocketIO(app, cors_allowed_origins=["http://localhost:9090", "http://127.0.0.1:9090"])
 
-# Setup enhanced observability middleware
+# Setup enhanced observability middleware - FIXED VERSION
 observability_middleware = setup_observability_for_flask(app, "api-server")
 structured_logger = create_enhanced_logger("api-server", logger)
 

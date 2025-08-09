@@ -35,70 +35,38 @@ class FlaskObservabilityMiddleware:
         self._register_observability_endpoints()
         
     def _before_request(self):
-        """Called before each request"""
-        g.start_time = time.time()
-        g.trace_id = str(uuid.uuid4())[:8]
-        g.request_logger = self.logger.with_trace(g.trace_id)
-        
-        # Log request start
-        g.request_logger.info(
-            f"Request started: {request.method} {request.path}",
-            operation="http_request",
-            context={
-                "method": request.method,
-                "path": request.path,
-                "remote_addr": request.remote_addr,
-                "user_agent": request.headers.get('User-Agent', ''),
-                "content_length": request.content_length or 0
-            }
-        )
-        
-        # Record request metric
-        self.metrics.record_counter(
-            "http.requests.total",
-            tags={
-                "method": request.method,
-                "endpoint": request.endpoint or "unknown"
-            }
-        )
+        """Called before each request - simplified to avoid deadlocks"""
+        try:
+            g.start_time = time.time()
+            g.trace_id = str(uuid.uuid4())[:8]
+            g.request_logger = self.logger.with_trace(g.trace_id)
+
+            # Simple request logging without complex context
+            if hasattr(request, 'method') and hasattr(request, 'path'):
+                g.request_logger.debug(f"Request: {request.method} {request.path}")
+
+                # Simple metrics without complex tags
+                self.metrics.record_counter("http.requests.total")
+        except Exception as e:
+            # Fail silently to avoid breaking requests
+            pass
         
     def _after_request(self, response):
-        """Called after each request"""
-        if hasattr(g, 'start_time') and hasattr(g, 'request_logger'):
-            duration_ms = (time.time() - g.start_time) * 1000
-            
-            # Log request completion
-            g.request_logger.info(
-                f"Request completed: {request.method} {request.path} -> {response.status_code}",
-                operation="http_request",
-                duration_ms=duration_ms,
-                context={
-                    "status_code": response.status_code,
-                    "response_size": len(response.get_data()) if response.get_data() else 0
-                }
-            )
-            
-            # Record timing and status metrics
-            self.metrics.record_timer(
-                "http.request.duration",
-                duration_ms,
-                tags={
-                    "method": request.method,
-                    "endpoint": request.endpoint or "unknown",
-                    "status_code": str(response.status_code)
-                }
-            )
-            
-            # Record status code counter
-            self.metrics.record_counter(
-                "http.responses.total",
-                tags={
-                    "method": request.method,
-                    "endpoint": request.endpoint or "unknown",
-                    "status_code": str(response.status_code)
-                }
-            )
-            
+        """Called after each request - simplified to avoid deadlocks"""
+        try:
+            if hasattr(g, 'start_time') and hasattr(g, 'request_logger'):
+                duration_ms = (time.time() - g.start_time) * 1000
+
+                # Simple logging without complex context
+                g.request_logger.debug(f"Request completed: {response.status_code} ({duration_ms:.1f}ms)")
+
+                # Simple metrics
+                self.metrics.record_timer("http.request.duration", duration_ms)
+                self.metrics.record_counter("http.responses.total")
+        except Exception:
+            # Fail silently to avoid breaking requests
+            pass
+
         return response
         
     def _teardown_request(self, exception):
@@ -136,7 +104,25 @@ class FlaskObservabilityMiddleware:
             except Exception as e:
                 # Fallback if request context check fails
                 g.request_logger.debug(f"Could not record error metric: {e}") if hasattr(g, 'request_logger') else None
-            
+
+    def _get_response_size(self, response):
+        """Safely get response size without triggering passthrough mode errors"""
+        try:
+            # Try to get content length from headers first
+            content_length = response.headers.get('Content-Length')
+            if content_length:
+                return int(content_length)
+
+            # For non-file responses, try to get data
+            if hasattr(response, 'get_data'):
+                data = response.get_data()
+                return len(data) if data else 0
+
+            return 0
+        except (RuntimeError, AttributeError):
+            # Handle passthrough mode or other errors
+            return 0
+
     def _register_observability_endpoints(self):
         """Register observability endpoints"""
         
@@ -146,11 +132,14 @@ class FlaskObservabilityMiddleware:
             system_monitor = get_system_monitor()
             latest_metrics = system_monitor.get_latest_metrics()
             
+            # Get start time from config instead of private attribute
+            start_time = self.app.config.get('OBSERVABILITY_START_TIME', time.time())
+            
             health_status = {
                 "status": "healthy",
                 "timestamp": time.time(),
                 "component": self.component_name,
-                "uptime_seconds": time.time() - getattr(self.app, '_start_time', time.time())
+                "uptime_seconds": time.time() - start_time
             }
             
             if latest_metrics:
@@ -311,7 +300,7 @@ class BackgroundMetricsReporter:
         system_monitor = get_system_monitor()
         
         # Get summaries
-        metric_summaries = metrics.get_all_summaries(window_seconds=self.interval_seconds)
+        metric_summaries = metrics.get_all_summaries(window_seconds=int(self.interval_seconds))
         system_metrics = system_monitor.get_latest_metrics()
         
         # Log summary
@@ -332,8 +321,8 @@ class BackgroundMetricsReporter:
 
 def setup_observability_for_flask(app: Flask, component_name: str = "api-server") -> FlaskObservabilityMiddleware:
     """Setup complete observability for a Flask application"""
-    # Store start time
-    app._start_time = time.time()
+    # Store start time in Flask config instead of as attribute
+    app.config['OBSERVABILITY_START_TIME'] = time.time()
     
     # Setup middleware
     middleware = FlaskObservabilityMiddleware(app, component_name)
@@ -347,8 +336,10 @@ def setup_observability_for_flask(app: Flask, component_name: str = "api-server"
     reporter = BackgroundMetricsReporter(component=f"{component_name}-reporter")
     reporter.start()
     
-    # Store references for cleanup
-    app._observability_middleware = middleware
-    app._metrics_reporter = reporter
+    # Store references for cleanup using Flask's extensions dictionary
+    if not hasattr(app, 'extensions'):
+        app.extensions = {}
+    app.extensions['observability_middleware'] = middleware
+    app.extensions['metrics_reporter'] = reporter
     
     return middleware
