@@ -7,6 +7,7 @@ Provides Flask middleware, decorators, and integration helpers
 import time
 import functools
 import threading
+import contextlib
 from typing import Callable, Optional
 from flask import Flask, request, g, jsonify
 from .observability import (
@@ -36,7 +37,7 @@ class FlaskObservabilityMiddleware:
         
     def _before_request(self):
         """Called before each request - simplified to avoid deadlocks"""
-        try:
+        with contextlib.suppress(Exception):
             g.start_time = time.time()
             g.trace_id = str(uuid.uuid4())[:8]
             g.request_logger = self.logger.with_trace(g.trace_id)
@@ -47,13 +48,10 @@ class FlaskObservabilityMiddleware:
 
                 # Simple metrics without complex tags
                 self.metrics.record_counter("http.requests.total")
-        except Exception as e:
-            # Fail silently to avoid breaking requests
-            pass
         
     def _after_request(self, response):
         """Called after each request - simplified to avoid deadlocks"""
-        try:
+        with contextlib.suppress(Exception):
             if hasattr(g, 'start_time') and hasattr(g, 'request_logger'):
                 duration_ms = (time.time() - g.start_time) * 1000
 
@@ -63,9 +61,6 @@ class FlaskObservabilityMiddleware:
                 # Simple metrics
                 self.metrics.record_timer("http.request.duration", duration_ms)
                 self.metrics.record_counter("http.responses.total")
-        except Exception:
-            # Fail silently to avoid breaking requests
-            pass
 
         return response
         
@@ -109,8 +104,7 @@ class FlaskObservabilityMiddleware:
         """Safely get response size without triggering passthrough mode errors"""
         try:
             # Try to get content length from headers first
-            content_length = response.headers.get('Content-Length')
-            if content_length:
+            if content_length := response.headers.get('Content-Length'):
                 return int(content_length)
 
             # For non-file responses, try to get data

@@ -42,8 +42,7 @@ def find_new_files(initial_snapshots):
         before = initial_snapshots[idx]
         after = list_dir_safe(d)
         if after - before:
-            for f in sorted(after - before):
-                new_files.append((d, f))
+            new_files.extend((d, f) for f in sorted(after - before))
     return new_files
 
 
@@ -94,10 +93,11 @@ def test_filename_acceptance_via_gui_api():
         return False
 
     # Try to locate the uploaded file among new files (filenames on server are usually prefixed)
-    matched = []
-    for d, fname in found_paths:
-        if base_filename in fname or fname.endswith(base_filename):
-            matched.append(os.path.join(d, fname))
+    matched = [
+        os.path.join(d, fname) 
+        for d, fname in found_paths 
+        if base_filename in fname or fname.endswith(base_filename)
+    ]
 
     # Fall back to checking all new files if name-prefixing scheme differs
     to_check = matched or [os.path.join(d, f) for d, f in found_paths]

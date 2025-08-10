@@ -35,6 +35,7 @@ import logging
 import hashlib
 import contextlib
 from datetime import datetime
+from typing import Optional
 from flask import Flask, request, jsonify, send_from_directory, send_file, session
 
 # Import enhanced logging utilities
@@ -58,7 +59,10 @@ from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 
 # Import our real backup executor
-from real_backup_executor import RealBackupExecutor
+try:
+    from .real_backup_executor import RealBackupExecutor
+except ImportError:
+    from real_backup_executor import RealBackupExecutor
 
 # Import singleton manager to prevent multiple API server instances
 from python_server.server.server_singleton import ensure_single_server_instance
@@ -145,13 +149,19 @@ def update_backup_status(phase, message, progress=None):
             backup_status['progress']['percentage'] = progress
     print(f"[STATUS] {phase}: {message}")
 
-def check_backup_server_status():
-    """Check if the Python backup server is running on port 1256"""
+def check_backup_server_status(host: Optional[str] = None, port: Optional[int] = None):
+    """Check if the Python backup server is reachable.
+
+    Uses dynamic server_config host/port unless explicitly overridden.
+    Backwards compatible: callers without args still work (defaults applied).
+    """
     try:
         import socket
+        target_host = host or server_config.get('host', '127.0.0.1')
+        target_port = int(port or server_config.get('port', 1256))
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(2)
-        result = sock.connect_ex(('127.0.0.1', 1256))
+        result = sock.connect_ex((target_host, target_port))
         sock.close()
         return result == 0
     except Exception:
@@ -171,7 +181,7 @@ def handle_connect():
 
     # Send initial status to new client
     emit('status', {
-        'connected': check_backup_server_status(),
+        'connected': check_backup_server_status(),  # dynamic via server_config
         'server_running': True,
         'timestamp': time.time(),
         'message': 'WebSocket connected - real-time updates enabled'
@@ -332,6 +342,14 @@ def api_connect():
         if not config:
             return jsonify({'success': False, 'error': 'No configuration data provided'}), 400
 
+        # Normalize field naming (accept legacy 'server' alias for 'host')
+        if 'server' in config:
+            if 'host' not in config:
+                config['host'] = config['server']
+            elif config['server'] != config['host']:
+                logger.warning(f"Both 'server' ({config['server']}) and 'host' ({config['host']}) provided; using 'host'.")
+            config.pop('server')
+
         # Validate required fields
         required_fields = ['host', 'port', 'username']
         
@@ -348,7 +366,7 @@ def api_connect():
         update_backup_status('CONNECT', f'Testing connection to {server_config["host"]}:{server_config["port"]}...')
 
         # Test if backup server is reachable
-        server_reachable = check_backup_server_status()
+        server_reachable = check_backup_server_status(server_config['host'], server_config['port'])
 
         if server_reachable:
             # Establish connection session
@@ -439,10 +457,15 @@ def api_start_backup_working():
     # Create a new, dedicated backup executor for this specific job.
     # This is the core of the fix for the race condition.
     try:
-        backup_executor = RealBackupExecutor()
+        # Get the correct path to the C++ client executable
+        api_server_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(api_server_dir)
+        client_exe_path = os.path.join(project_root, "build", "Release", "EncryptedBackupClient.exe")
+        
+        backup_executor = RealBackupExecutor(client_exe_path)
         # Store executor on the job record for cancellation control
         active_backup_jobs[job_id]['executor'] = backup_executor
-        print(f"[Job {job_id}] RealBackupExecutor instance created.")
+        print(f"[Job {job_id}] RealBackupExecutor instance created with client: {client_exe_path}")
     except Exception as e:
         return jsonify({
             'success': False,
@@ -483,11 +506,10 @@ def api_start_backup_working():
 
         file.save(temp_file_path)
 
-
-
         # Get form data
         username = request.form.get('username', server_config.get('username', 'default_user'))
-        server_ip = request.form.get('server', server_config.get('host', '127.0.0.1'))
+        # Accept 'server' as alias for host
+        server_ip = request.form.get('host') or request.form.get('server') or server_config.get('host', '127.0.0.1')
         server_port = request.form.get('port', server_config.get('port', 1256))
 
         # Define a dedicated status handler for this job
@@ -810,7 +832,7 @@ if __name__ == "__main__":
         print(f"[MISSING] HTML Client: {client_html} NOT FOUND")
 
     # Check C++ client
-    client_exe = "build/Release/EncryptedBackupClient.exe"
+    client_exe = os.path.join(project_root, "build", "Release", "EncryptedBackupClient.exe")
     if os.path.exists(client_exe):
         print(f"[OK] C++ Client: {client_exe}")
     else:

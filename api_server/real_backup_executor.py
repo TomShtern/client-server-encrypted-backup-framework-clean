@@ -5,6 +5,7 @@ This module provides REAL integration with the existing C++ client, not fake API
 """
 
 import os
+import contextlib
 import sys
 import time
 import json
@@ -12,9 +13,10 @@ import hashlib
 import subprocess
 import threading
 import tempfile
+import logging
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, Any, Callable, List
+from typing import Optional, Dict, Any, Callable, List, Union
 import statistics
 from abc import ABC, abstractmethod
 
@@ -26,13 +28,15 @@ try:
 except ImportError:
     WATCHDOG_AVAILABLE = False
 from Shared.utils.file_lifecycle import SynchronizedFileManager
+
+# Module logger (previously missing, resolves issues 1/8 set)
+logger = logging.getLogger(__name__)
 from Shared.utils.error_handler import (
-    get_error_handler, handle_subprocess_error, handle_file_transfer_error,
-    ErrorSeverity, ErrorCategory, ErrorCode
+    handle_subprocess_error, handle_file_transfer_error,
+    ErrorSeverity
 )
 from Shared.utils.process_monitor import (
-    get_process_registry, register_process, start_process, stop_process,
-    ProcessState, get_process_metrics
+    get_process_registry, register_process, start_process
 )
 
 class ProgressTracker(ABC):
@@ -329,7 +333,7 @@ class BasicProcessingIndicator(ProgressTracker):
     def start_monitoring(self, context: Dict[str, Any]):
         self.start_time = time.perf_counter()
         self.monitoring_active = True
-        print(f"[BASIC] Started basic processing indicator")
+        print("[BASIC] Started basic processing indicator")
 
     def stop_monitoring(self):
         """Stop monitoring (idempotent)"""
@@ -379,7 +383,7 @@ class OutputProgressTracker(ProgressTracker):
                 name="OutputProgressMonitor"
             )
             self.monitor_thread.start()
-            print(f"[OUTPUT] Started real-time C++ client output parsing")
+            print("[OUTPUT] Started real-time C++ client output parsing")
 
     def stop_monitoring(self):
         self.monitoring_active = False
@@ -433,11 +437,11 @@ class OutputProgressTracker(ProgressTracker):
                     max_progress = progress
                     self.last_phase = phase_name
 
-            return max_progress
+            return int(max_progress)
 
         except Exception as e:
             print(f"[OUTPUT] Progress parsing error: {e}")
-            return self.current_progress
+            return int(self.current_progress)
 
     def get_progress(self) -> Dict[str, Any]:
         if not self.monitoring_active:
@@ -499,7 +503,7 @@ class FileReceiptProgressTracker(ProgressTracker):
         self.progress_override = False
 
         if not self.target_filename:
-            print(f"[RECEIPT] Warning: No target filename provided")
+            print("[RECEIPT] Warning: No target filename provided")
             return
 
         print(f"[RECEIPT] Starting file receipt monitoring for: {self.target_filename}")
@@ -531,28 +535,31 @@ class FileReceiptProgressTracker(ProgressTracker):
             self._start_polling_monitoring()
             print(f"[RECEIPT] Started DUAL monitoring: Watchdog + Polling backup")
         else:
-            print(f"[RECEIPT] Watchdog not available, using polling only")
+            print("[RECEIPT] Watchdog not available, using polling only")
             self._start_polling_monitoring()
 
     def _start_watchdog_monitoring(self):
         """Start real-time file system monitoring using watchdog"""
         try:
-            class FileReceiptHandler(FileSystemEventHandler):
+            if not WATCHDOG_AVAILABLE:
+                raise RuntimeError("Watchdog not available")
+
+            class FileReceiptHandler(FileSystemEventHandler):  # type: ignore[name-defined]
                 def __init__(self, tracker):
                     self.tracker = tracker
 
-                def on_created(self, event):
+                def on_created(self, event):  # type: ignore[no-redef]
                     if not event.is_directory:
                         self.tracker._handle_file_event(event.src_path, "created")
 
-                def on_modified(self, event):
+                def on_modified(self, event):  # type: ignore[no-redef]
                     if not event.is_directory:
                         self.tracker._handle_file_event(event.src_path, "modified")
 
-            self.observer = Observer()
+            self.observer = Observer()  # type: ignore[name-defined]
             handler = FileReceiptHandler(self)
-            self.observer.schedule(handler, str(self.destination_dir), recursive=False)
-            self.observer.start()
+            self.observer.schedule(handler, str(self.destination_dir), recursive=False)  # type: ignore[attr-defined]
+            self.observer.start()  # type: ignore[attr-defined]
             print(f"[RECEIPT] Watchdog monitoring started")
 
         except Exception as e:
@@ -567,17 +574,16 @@ class FileReceiptProgressTracker(ProgressTracker):
             name="FileReceiptPoller"
         )
         self.monitor_thread.start()
-        print(f"[RECEIPT] Polling monitoring started")
+        print("[RECEIPT] Polling monitoring started")
 
     def _handle_file_event(self, file_path: str, event_type: str):
         """Handle file system events"""
         if not self.monitoring_active or self.file_received:
             return
-
         file_name = os.path.basename(file_path)
 
         # Use enhanced filename matching for server timestamp prefix pattern
-        if self._check_file_match(file_name, self.target_filename):
+        if self.target_filename and self._check_file_match(file_name, self.target_filename):
             print(f"[RECEIPT] File event detected: {event_type} - {file_name}")
             self._trigger_stability_check(file_path)
 
@@ -595,7 +601,7 @@ class FileReceiptProgressTracker(ProgressTracker):
                     for file_path in files:
                         if file_path.is_file():
                             # Use enhanced filename matching for server timestamp prefix pattern
-                            if self._check_file_match(file_path.name, self.target_filename):
+                            if self.target_filename and self._check_file_match(file_path.name, self.target_filename):
                                 print(f"[RECEIPT] File found via polling: {file_path.name}")
                                 self._trigger_stability_check(str(file_path))
                                 return
@@ -653,7 +659,7 @@ class FileReceiptProgressTracker(ProgressTracker):
         self.file_received = True
         self.progress_override = True
         print(f"[RECEIPT] FILE ALREADY RECEIVED! {filename}")
-        print(f"[RECEIPT] OVERRIDING PROGRESS TO 100% - FILE CONFIRMED ON SERVER")
+        print("[RECEIPT] OVERRIDING PROGRESS TO 100% - FILE CONFIRMED ON SERVER")
 
     def _confirm_file_receipt(self, file_path: str):
         """Confirm file is completely received and stable"""
@@ -674,10 +680,10 @@ class FileReceiptProgressTracker(ProgressTracker):
                 file_size = stat1.st_size
 
                 print(f"[RECEIPT] FILE RECEIVED! {os.path.basename(file_path)} ({file_size} bytes)")
-                print(f"[RECEIPT] OVERRIDING PROGRESS TO 100% - FILE CONFIRMED ON SERVER")
+                print("[RECEIPT] OVERRIDING PROGRESS TO 100% - FILE CONFIRMED ON SERVER")
 
             else:
-                print(f"[RECEIPT] File still changing, extending stability check")
+                print("[RECEIPT] File still changing, extending stability check")
                 self._trigger_stability_check(file_path)
 
         except Exception as e:
@@ -834,10 +840,21 @@ class RobustProgressMonitor:
         self.file_receipt_started = False  # Prevent multiple starts
 
     def force_completion(self):
-        """Force progress to 100% on verified completion."""
+        """Force progress to 100% on verified completion.
+
+        Implements issue #4: ensure all active trackers are explicitly stopped/cleaned
+        when an override completion is forced so background threads don't continue
+        running and emitting stale progress.
+        """
         logger.info("FORCE_COMPLETION triggered. Overriding all other progress.")
         self.override_active = True
-        self.monitoring_active = False # Stop further monitoring
+        # Proactively stop all trackers (issue #4)
+        for tracker in self.progress_layers:
+            try:
+                tracker.stop_monitoring()
+            except Exception as e:
+                logger.debug(f"Error stopping tracker during force_completion: {e}")
+        self.monitoring_active = False  # Block further monitoring
         if self.status_callback:
             self.status_callback("COMPLETED_VERIFIED", {
                 "progress": 100,
@@ -848,13 +865,22 @@ class RobustProgressMonitor:
             })
 
     def force_failure(self, reason: str):
-        """Force progress to a failed state on verification failure."""
+        """Force progress to a failed state on verification failure.
+
+        Implements issue #4: ensure all trackers are stopped so no further
+        optimistic progress updates leak through after a hard failure.
+        """
         logger.error(f"FORCE_FAILURE triggered: {reason}. Overriding all other progress.")
         self.override_active = True
-        self.monitoring_active = False # Stop further monitoring
+        for tracker in self.progress_layers:
+            try:
+                tracker.stop_monitoring()
+            except Exception as e:
+                logger.debug(f"Error stopping tracker during force_failure: {e}")
+        self.monitoring_active = False  # Block further monitoring
         if self.status_callback:
             self.status_callback("VERIFICATION_FAILED", {
-                "progress": 0, # Or keep last known good?
+                "progress": 0,  # Could retain last good progress; choose 0 for clarity
                 "message": f"CRITICAL: {reason}",
                 "phase": "VERIFICATION_FAILED",
                 "confidence": "absolute",
@@ -875,7 +901,7 @@ class RobustProgressMonitor:
         if isinstance(file_receipt_tracker, FileReceiptProgressTracker) and not self.file_receipt_started:
             file_receipt_tracker.start_monitoring(context)
             self.file_receipt_started = True
-            print(f"[ROBUST] ALWAYS STARTED: FileReceiptProgressTracker for ground truth file detection")
+            print("[ROBUST] ALWAYS STARTED: FileReceiptProgressTracker for ground truth file detection")
 
         # Find first available tracker for primary monitoring
         for i, tracker in enumerate(self.progress_layers):
@@ -913,10 +939,17 @@ class RobustProgressMonitor:
         """Finalize progress using complete process output"""
         try:
             # Try to finalize with OutputProgressTracker if it exists and has the method
-            output_tracker = self.progress_layers[0]  # OutputProgressTracker is first
+            # ORIGINAL BUG: index 0 is FileReceiptProgressTracker; locate OutputProgressTracker
+            output_tracker = None
+            for t in self.progress_layers:
+                if isinstance(t, OutputProgressTracker):
+                    output_tracker = t
+                    break
+            if not output_tracker:
+                return  # Nothing to finalize
             if hasattr(output_tracker, 'finalize_with_output'):
                 output_tracker.finalize_with_output(stdout)
-                print(f"[ROBUST] Finalized progress with complete stdout output")
+                print("[ROBUST] Finalized progress with complete stdout output")
 
             # Trigger a final progress update
             if self.status_callback and self.monitoring_active:
@@ -1221,7 +1254,7 @@ class FileTransferMonitor:
                     current_phase = phase_name
 
             # Debug logging for phase detection
-            elapsed = time.time() - self.transfer_start_time
+            elapsed = time.time() - (self.transfer_start_time or time.time())
             if max_progress > self.current_progress:
                 print(f"[PROGRESS_PHASE] t={elapsed:.1f}s: Detected '{current_phase}' → {max_progress}%")
                 self.last_phase_detected = current_phase
@@ -1234,7 +1267,7 @@ class FileTransferMonitor:
 
     def _create_progress_info(self, progress_pct: int) -> Dict[str, Any]:
         """Create progress info dict from percentage"""
-        elapsed = time.time() - self.transfer_start_time
+        elapsed = time.time() - (self.transfer_start_time or time.time())
 
         # Estimate transfer metrics
         estimated_bytes = int((progress_pct / 100.0) * self.original_size)
@@ -1280,7 +1313,7 @@ class FileTransferMonitor:
 
         self.status_callback("PROGRESS", progress_info)
 
-    def _format_bytes(self, bytes_val: int) -> str:
+    def _format_bytes(self, bytes_val: float) -> str:
         """Format bytes in human-readable format"""
         for unit in ['B', 'KB', 'MB', 'GB']:
             if bytes_val < 1024:
@@ -1290,7 +1323,7 @@ class FileTransferMonitor:
 
     def _format_bytes_per_second(self, bytes_per_sec: float) -> str:
         """Format transfer speed"""
-        return f"{self._format_bytes(bytes_per_sec)}/s"
+        return f"{self._format_bytes(float(bytes_per_sec))}/s"
 
     def _format_time(self, seconds: float) -> str:
         """Format time duration"""
@@ -1333,8 +1366,13 @@ class RealBackupExecutor:
         # Try different possible locations for the client executable
         # IMPORTANT: Only use the build/Release version which has our latest fixes
         if not client_exe_path:
+            # Get the project root directory (parent of api_server)
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)
+            
             possible_paths = [
-                r"build\Release\EncryptedBackupClient.exe",  # Latest version with fixes - REQUIRED
+                os.path.join(project_root, "build", "Release", "EncryptedBackupClient.exe"),  # Latest version with fixes - REQUIRED
+                r"build\Release\EncryptedBackupClient.exe",  # Relative fallback
                 r"EncryptedBackupClient.exe"                 # Root directory fallback
             ]
 
@@ -1345,8 +1383,8 @@ class RealBackupExecutor:
                     break
 
             if not self.client_exe:
-                # Default to the most likely location
-                self.client_exe = r"build\Release\EncryptedBackupClient.exe"
+                # Default to the most likely location (absolute path)
+                self.client_exe = os.path.join(project_root, "build", "Release", "EncryptedBackupClient.exe")
         else:
             self.client_exe = client_exe_path
 
@@ -1426,7 +1464,7 @@ class RealBackupExecutor:
             print("[POLLING] Starting active progress polling loop")
             last_progress = -1
 
-            while self.backup_process.poll() is None:  # While process is running
+            while self.backup_process and self.backup_process.poll() is None:  # While process is running
                 try:
                     # Get current progress from monitor
                     progress_data = monitor.get_progress()
@@ -1447,7 +1485,7 @@ class RealBackupExecutor:
 
                         # If file receipt override detected, we can continue monitoring
                         if progress_data.get("override", False):
-                            print(f"[POLLING] FILE RECEIPT OVERRIDE DETECTED! Progress set to 100%")
+                            print("[POLLING] FILE RECEIPT OVERRIDE DETECTED! Progress set to 100%")
 
                     time.sleep(0.2)  # Poll every 200ms for highly responsive updates
 
@@ -1460,7 +1498,7 @@ class RealBackupExecutor:
         def stdout_reader():
             """Read stdout in background to prevent blocking"""
             try:
-                if self.backup_process.stdout:
+                if self.backup_process and self.backup_process.stdout:
                     for line in iter(self.backup_process.stdout.readline, b''):
                         stdout_chunks.append(line)
             except Exception as e:
@@ -1469,7 +1507,7 @@ class RealBackupExecutor:
         def stderr_reader():
             """Read stderr in background to prevent blocking"""
             try:
-                if self.backup_process.stderr:
+                if self.backup_process and self.backup_process.stderr:
                     for line in iter(self.backup_process.stderr.readline, b''):
                         stderr_chunks.append(line)
             except Exception as e:
@@ -1477,8 +1515,8 @@ class RealBackupExecutor:
 
         # Start background threads for progress polling and output reading
         polling_thread = threading.Thread(target=progress_polling_loop, daemon=True)
-        stdout_thread = threading.Thread(target=stdout_reader, daemon=True) if self.backup_process.stdout else None
-        stderr_thread = threading.Thread(target=stderr_reader, daemon=True) if self.backup_process.stderr else None
+        stdout_thread = threading.Thread(target=stdout_reader, daemon=True) if self.backup_process and self.backup_process.stdout else None
+        stderr_thread = threading.Thread(target=stderr_reader, daemon=True) if self.backup_process and self.backup_process.stderr else None
 
         polling_thread.start()
         if stdout_thread:
@@ -1488,13 +1526,17 @@ class RealBackupExecutor:
 
         # Wait for process to complete with timeout
         try:
-            self.backup_process.wait(timeout=timeout)
+            if self.backup_process:
+                self.backup_process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
             print("[POLLING] Process timeout - terminating")
-            self.backup_process.terminate()
-            time.sleep(2)
-            if self.backup_process.poll() is None:
-                self.backup_process.kill()
+            if self.backup_process:
+                with contextlib.suppress(Exception):
+                    self.backup_process.terminate()
+                time.sleep(2)
+                if self.backup_process and self.backup_process.poll() is None:
+                    with contextlib.suppress(Exception):
+                        self.backup_process.kill()
 
         # Wait for threads to complete (brief timeout to avoid hanging)
         polling_thread.join(timeout=2.0)
@@ -1689,7 +1731,7 @@ class RealBackupExecutor:
                 'status': proc.status(),
                 'num_threads': proc.num_threads(),
                 'open_files': len(proc.open_files()),
-                'connections': len(proc.connections()),
+                'connections': len(proc.net_connections()),
                 'create_time': proc.create_time(),
                 'is_running': proc.is_running()
             }
@@ -1958,295 +2000,170 @@ class RealBackupExecutor:
     def execute_real_backup(self, username: str, file_path: str,
                            server_ip: str = "127.0.0.1", server_port: int = 1256,
                            timeout: int = 120) -> Dict[str, Any]:
-        """
-        Execute REAL backup using the existing C++ client with full verification
+        """Execute REAL backup using the C++ client with verification and robust progress.
+
+        This rewritten implementation corrects prior indentation corruption and consolidates
+        lifecycle management (transfer.info generation, subprocess launch, monitoring,
+        verification and cleanup) inside a single well-structured try/except/finally block.
         """
         self._log_status("START", f"Starting REAL backup for {username}: {file_path}")
 
-        result = {
+        result: Dict[str, Any] = {
             'success': False,
             'error': None,
             'process_exit_code': None,
             'verification': None,
-            'duration': 0,
+            'duration': 0.0,
             'network_activity': False
         }
 
         start_time = time.time()
+        monitor: Optional[RobustProgressMonitor] = None
+        file_id: Optional[str] = None
+        transfer_info_path: Optional[str] = None
+        stdout: Union[bytes, str] = b''  # predefine
+        stderr: Union[bytes, str] = b''
 
         try:
-            # Pre-flight checks with structured error handling
+            # --- Pre-flight validation ---
             if not os.path.exists(file_path):
-                error_info = handle_file_transfer_error(
+                handle_file_transfer_error(
                     message="Source file not found for backup",
                     details=f"File path: {file_path}",
                     component="pre_flight_check",
                     severity=ErrorSeverity.HIGH
                 )
-                raise FileNotFoundError(f"Source file does not exist: {file_path}")
+                raise FileNotFoundError(file_path)
 
             if not self.client_exe or not os.path.exists(self.client_exe):
-                error_info = handle_subprocess_error(
+                handle_subprocess_error(
                     message="Client executable not found",
                     details=f"Expected path: {self.client_exe}",
                     component="pre_flight_check",
                     severity=ErrorSeverity.CRITICAL
                 )
-                raise FileNotFoundError(f"Client executable not found: {self.client_exe}")
+                raise FileNotFoundError(self.client_exe or "<unset>")
 
-            # Clear cached credentials if username has changed
             self._clear_cached_credentials_if_username_changed(username)
 
-            # Generate transfer.info in the client executable's directory
+            # --- transfer.info management (isolated managed file) ---
             client_dir = os.path.dirname(self.client_exe)
-            transfer_info_path = os.path.join(client_dir, "transfer.info")
-
-            # CRITICAL FIX: Use UTF-8 encoding and ensure complete file path is written
-            absolute_file_path = os.path.abspath(file_path)
-            self._log_status("DEBUG", f"Writing file path to transfer.info: {absolute_file_path}")
-            self._log_status("DEBUG", f"File path length: {len(absolute_file_path)} characters")
-
-            with open(transfer_info_path, 'w', encoding='utf-8') as f:
-                f.write(f"{server_ip}:{server_port}\n")
-                f.write(f"{username}\n")
-                f.write(f"{absolute_file_path}\n")
-                f.flush()  # Ensure data is written to disk
-
-            self._log_status("CONFIG", f"Generated transfer.info at: {transfer_info_path}")
-
-            # CRITICAL FIX: Verify transfer.info was written correctly with complete file path
+            file_id, managed_transfer_path = self._generate_transfer_info(server_ip, server_port, username, file_path)
             try:
-                with open(transfer_info_path, 'r', encoding='utf-8') as f:
-                    written_content = f.read()
-                    lines = written_content.strip().split('\n')
-                    if len(lines) >= 3:
-                        written_file_path = lines[2]
-                        self._log_status("VERIFY", f"transfer.info file path: {written_file_path}")
-                        self._log_status("VERIFY", f"Original file path: {absolute_file_path}")
-                        self._log_status("VERIFY", f"Paths match: {written_file_path == absolute_file_path}")
+                target_path = os.path.join(client_dir, 'transfer.info')
+                if os.path.exists(target_path):
+                    with contextlib.suppress(Exception):
+                        os.remove(target_path)
+                with open(managed_transfer_path, 'r', encoding='utf-8') as src, open(target_path, 'w', encoding='utf-8') as dst:
+                    dst.write(src.read())
+                transfer_info_path = target_path
+                self._log_status('CONFIG', f'Copied managed transfer.info to working dir: {target_path}')
+            except Exception as copy_err:
+                self._log_status('WARNING', f'Failed to copy managed transfer.info to working dir: {copy_err}. Using managed path directly.')
+                transfer_info_path = managed_transfer_path
 
-                        if written_file_path != absolute_file_path:
-                            self._log_status("ERROR", f"File path truncation detected!")
-                            self._log_status("ERROR", f"Expected: {absolute_file_path}")
-                            self._log_status("ERROR", f"Written: {written_file_path}")
-                    else:
-                        self._log_status("ERROR", f"transfer.info has insufficient lines: {len(lines)}")
-            except Exception as verify_error:
-                self._log_status("ERROR", f"Failed to verify transfer.info: {verify_error}")
+            if file_id:
+                with contextlib.suppress(Exception):
+                    self.file_manager.mark_in_subprocess_use(file_id)
 
-            # Use the client executable's directory as the working directory
+            # --- Subprocess launch via registry ---
             client_working_dir = client_dir
-            self._log_status("DEBUG", f"Using project root as working directory: {client_working_dir}")
-
-            # Verify transfer.info is accessible in working directory before launching subprocess
-            working_transfer_info = os.path.join(client_working_dir, "transfer.info")
-            if os.path.exists(working_transfer_info):
-                try:
-                    with open(working_transfer_info, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                    self._log_status("VERIFY", f"transfer.info verified in working directory - content: {len(content)} chars")
-                except Exception as e:
-                    self._log_status("ERROR", f"transfer.info exists but cannot be read: {e}")
-            else:
-                self._log_status("ERROR", f"transfer.info NOT found in working directory: {working_transfer_info}")
-
-            self._log_status("LAUNCH", f"Launching {self.client_exe}")
-            self._log_status("STARTUP", "C++ client process starting - monitoring will begin shortly")
-            # Launch client process with automated input handling and BATCH MODE
-            if not self.client_exe:
-                raise RuntimeError("Client executable path is not set")
-
-
-
-            self._log_status("DEBUG", f"Client executable: {os.path.abspath(self.client_exe)}")
-            self._log_status("DEBUG", f"Client working directory: {client_working_dir}")
-            self._log_status("DEBUG", f"Transfer.info location: {os.path.join(client_working_dir, 'transfer.info')}")
-
-            # Register process with enhanced monitoring system but with better error handling
             process_id = f"backup_client_{int(time.time())}"
-            command = [str(self.client_exe), "--batch"]  # Use batch mode to disable web GUI and prevent port conflicts
-
-            self._log_status("LAUNCH", f"Starting subprocess with process registry: {' '.join(command)}")
-            self._log_status("DEBUG", f"Working directory: {client_working_dir}")
-
+            command = [str(self.client_exe), '--batch']
+            self._log_status('LAUNCH', f"Starting subprocess with process registry: {' '.join(command)}")
             try:
                 registry = get_process_registry()
-                process_info = register_process(
+                register_process(
                     process_id=process_id,
-                    name="EncryptedBackupClient",
+                    name='EncryptedBackupClient',
                     command=command,
                     cwd=client_working_dir,
-                    auto_restart=False,  # Don't auto-restart backup processes
+                    auto_restart=False,
                     max_restarts=0
                 )
-
-                # Start process with enhanced monitoring and better error reporting
-                self._log_status("DEBUG", f"About to start process with command: {command}")
-                self._log_status("DEBUG", f"Process working directory: {client_working_dir}")
-                self._log_status("REGISTRY_DEBUG", f"Process registry: {type(registry)}")
-                self._log_status("REGISTRY_DEBUG", f"Process info: {process_info}")
-
                 if not start_process(process_id,
-                                   stdin=subprocess.PIPE,
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE,
-                                   text=False):
-                    # Try to get error details from the registry
-                    self._log_status("ERROR", f"Failed to start backup process {process_id}")
-                    if hasattr(registry, 'get_process_info'):
-                        proc_info = registry.get_process_info(process_id)
-                        if proc_info and proc_info.last_error:
-                            self._log_status("ERROR", f"Process error: {proc_info.last_error}")
-
-                    # Also check if the executable exists and is accessible
-                    if not os.path.exists(self.client_exe):
-                        self._log_status("ERROR", f"Client executable does not exist: {self.client_exe}")
-                    elif not os.access(self.client_exe, os.X_OK):
-                        self._log_status("ERROR", f"Client executable is not executable: {self.client_exe}")
-
-                    raise RuntimeError(f"Failed to start backup process {process_id}")
-
-                # Get the subprocess handle for compatibility
+                                     stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,
+                                     text=False):
+                    self._log_status('ERROR', f'Failed to start backup process {process_id}')
+                    raise RuntimeError(f'Failed to start backup process {process_id}')
                 self.backup_process = registry.subprocess_handles[process_id]
                 self.process_id = process_id
+            except Exception as launch_err:
+                raise RuntimeError(f'Subprocess launch failed: {launch_err}')
 
-                self._log_status("REGISTRY_DEBUG", f"Subprocess handle: {self.backup_process}")
-                self._log_status("REGISTRY_DEBUG", f"Process PID: {self.backup_process.pid if self.backup_process else 'None'}")
+            self._log_status('PROCESS', f'Started backup client (ID: {process_id}, PID: {self.backup_process.pid})')
 
-            except Exception as e:
-                self._log_status("ERROR", f"Failed to start client subprocess: {e}")
-                raise RuntimeError(f"Subprocess launch failed: {e}")
-
-            self._log_status("PROCESS", f"Started backup client with enhanced monitoring (ID: {process_id}, PID: {self.backup_process.pid})")
-
-            # Initialize robust progress monitoring with multiple fallback layers
-            print(f"[MONITOR] Initializing RobustProgressMonitor with destination: {self.server_received_files}")
+            # --- Progress monitoring ---
             monitor = RobustProgressMonitor(self.server_received_files)
             monitor.set_status_callback(self.status_callback or self._log_status)
+            monitor.start_monitoring({
+                'file_size': os.path.getsize(file_path) if os.path.exists(file_path) else 0,
+                'original_filename': os.path.basename(file_path),
+                'process': self.backup_process
+            })
 
-            # Start monitoring with context information
-            file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
-            filename = os.path.basename(file_path)
-            monitor_context = {
-                "file_size": file_size,
-                "original_filename": filename,
-                "process": self.backup_process
-            }
-            print(f"[MONITOR] Starting monitoring for file: {filename} (size: {file_size} bytes)")
-            monitor.start_monitoring(monitor_context)
-
-            # Monitor process with ACTIVE PROGRESS POLLING (instead of blocking communicate)
+            # --- Active polling (non-blocking) ---
             try:
-                # Start active progress polling in parallel with backup execution
                 stdout, stderr = self._monitor_with_active_polling(monitor, timeout)
-                result['process_exit_code'] = self.backup_process.returncode
-                self._log_status("PROCESS", f"Client process finished with exit code: {result['process_exit_code']}")
-
-                # Parse final status from output for completion verification
-                status_info = self._parse_final_status_from_output(stdout)
-                self._log_status("FINAL_STATUS", status_info["message"])
-
-                # Finalize progress monitoring with complete stdout output for regex parsing
-                monitor.finalize_with_output(stdout)
-
-                # The new RobustProgressMonitor handles progress automatically
-                # No need for manual output parsing
-
-                if stdout:
-                    # Handle Unicode encoding for Windows console compatibility
-                    stdout_safe = stdout.decode('utf-8', errors='replace').encode('ascii', errors='replace').decode('ascii') if isinstance(stdout, bytes) else str(stdout).encode('ascii', errors='replace').decode('ascii')
-                    self._log_status("CLIENT_STDOUT", stdout_safe)
-                if stderr:
-                    # Handle Unicode encoding for Windows console compatibility
-                    stderr_safe = stderr.decode('utf-8', errors='replace').encode('ascii', errors='replace').decode('ascii') if isinstance(stderr, bytes) else str(stderr).encode('ascii', errors='replace').decode('ascii')
-                    self._log_status("CLIENT_STDERR", stderr_safe)
-                    result['error'] = stderr_safe
             except subprocess.TimeoutExpired:
-                self._log_status("TIMEOUT", "Terminating backup process due to timeout")
-                self.backup_process.kill()
-                stdout, stderr = self.backup_process.communicate()
-                if stdout:
-                    # Handle Unicode encoding for Windows console compatibility
-                    stdout_safe = stdout.decode('utf-8', errors='replace').encode('ascii', errors='replace').decode('ascii') if isinstance(stdout, bytes) else str(stdout).encode('ascii', errors='replace').decode('ascii')
-                    self._log_status("CLIENT_STDOUT", stdout_safe)
-                    # Also finalize progress monitoring with partial stdout from timeout
-                    monitor.finalize_with_output(stdout)
-                if stderr:
-                    # Handle Unicode encoding for Windows console compatibility
-                    stderr_safe = stderr.decode('utf-8', errors='replace').encode('ascii', errors='replace').decode('ascii') if isinstance(stderr, bytes) else str(stderr).encode('ascii', errors='replace').decode('ascii')
-                    self._log_status("CLIENT_STDERR", stderr_safe)
-                result['error'] = "Process timed out"
+                self._log_status('TIMEOUT', 'Terminating backup process due to timeout')
+                if self.backup_process:
+                    with contextlib.suppress(Exception):
+                        self.backup_process.kill()
+                stdout, stderr = (b'', b'')
                 result['process_exit_code'] = -1
+                result['error'] = 'Process timed out'
+            else:
+                result['process_exit_code'] = self.backup_process.returncode if self.backup_process else None
 
-            # Release subprocess reference to allow safe cleanup (if using managed files)
-            if 'transfer_file_id' in locals():
-                self.file_manager.release_subprocess_use(transfer_file_id)
+            # --- Decode & finalize output ---
+            decoded_stdout = stdout.decode('utf-8', errors='replace') if isinstance(stdout, (bytes, bytearray)) else str(stdout or '')
+            decoded_stderr = stderr.decode('utf-8', errors='replace') if isinstance(stderr, (bytes, bytearray)) else str(stderr or '')
+            if decoded_stdout and monitor:
+                monitor.finalize_with_output(decoded_stdout)
+            if decoded_stdout:
+                self._log_status('CLIENT_STDOUT', decoded_stdout[:4000])
+            if decoded_stderr:
+                self._log_status('CLIENT_STDERR', decoded_stderr[:4000])
+                result['error'] = result['error'] or decoded_stderr
 
-            # Verify actual file transfer
-            self._log_status("VERIFY", "Verifying actual file transfer...")
+            # --- Verification ---
             verification = self._verify_file_transfer(file_path, username)
             result['verification'] = verification
+            process_success = (result.get('process_exit_code') == 0)
+            verification_success = verification.get('transferred', False)
 
-            # Determine overall success and finalize progress based on results
-            process_success = result.get('process_exit_code') == 0
-            verification_success = verification['transferred']
+            if monitor:
+                monitor.finalize_progress(process_success, verification_success)
+                monitor.stop_monitoring()
 
-            # Finalize progress BEFORE stopping monitoring to prevent race conditions
-            monitor.finalize_progress(process_success, verification_success)
-
-            # Stop monitoring after finalization
-            monitor.stop_monitoring()
-
-            # Prioritize file transfer verification over process exit code
-            if verification['transferred']:
+            if verification_success:
                 result['success'] = True
-                self._log_status("COMPLETED", "Backup verified and complete!")
-                if result['process_exit_code'] == 0:
-                    self._log_status("SUCCESS", "REAL backup completed and verified!")
+                if process_success:
+                    self._log_status('SUCCESS', 'REAL backup completed and verified!')
                 else:
-                    result['error'] = f"File transferred successfully but process exit code was {result['process_exit_code']}"
-                    self._log_status("SUCCESS", f"REAL backup completed and verified! (Process was killed but transfer succeeded)")
+                    self._log_status('SUCCESS', 'Backup verified though process exit code was non-zero')
             else:
-                result['error'] = "No file transfer detected - backup may have failed"
-                self._log_status("FAILED", "Verification failed - no file transfer detected")
-                self._log_status("FAILURE", result['error'])
+                result['error'] = result['error'] or 'No file transfer detected - backup may have failed'
+                self._log_status('FAILURE', result['error'])
 
         except Exception as e:
             result['error'] = str(e)
-            self._log_status("ERROR", f"Backup execution failed: {e}")
-
-            # Ensure monitoring is stopped and finalized even on exceptions
-            try:
-                if 'monitor' in locals():
-                    # Finalize with failure status first, then stop
-                    monitor.finalize_progress(False, False)  # Exception = failed
+            self._log_status('ERROR', f'Backup execution failed: {e}')
+            with contextlib.suppress(Exception):
+                if monitor:
+                    monitor.finalize_progress(False, False)
                     monitor.stop_monitoring()
-            except Exception as monitor_error:
-                self._log_status("WARNING", f"Error during monitor cleanup: {monitor_error}")
-
         finally:
             result['duration'] = time.time() - start_time
-
-            # Safe cleanup using SynchronizedFileManager
-            try:
-                if 'transfer_file_id' in locals():
-                    self._log_status("CLEANUP", "Starting safe cleanup of transfer.info files")
-                    # Wait for subprocess completion before cleanup
-                    cleanup_success = self.file_manager.safe_cleanup(transfer_file_id, wait_timeout=10.0)
-                    if cleanup_success:
-                        self._log_status("CLEANUP", "Successfully cleaned up transfer.info files")
-                    else:
-                        self._log_status("WARNING", "Some files may not have been cleaned up properly")
-                else:
-                    # Direct file cleanup (non-managed approach)
-                    if 'transfer_info_path' in locals() and os.path.exists(transfer_info_path):
-                        try:
-                            os.remove(transfer_info_path)
-                            self._log_status("CLEANUP", f"Cleaned up transfer.info: {transfer_info_path}")
-                        except Exception as cleanup_error:
-                            self._log_status("WARNING", f"Could not clean up transfer.info: {cleanup_error}")
-            except Exception as e:
-                self._log_status("WARNING", f"Error during safe cleanup: {e}")
+            if file_id:
+                with contextlib.suppress(Exception):
+                    self.file_manager.safe_cleanup(file_id, wait_timeout=10.0)
+            if transfer_info_path and os.path.exists(transfer_info_path):
+                with contextlib.suppress(Exception):
+                    os.remove(transfer_info_path)
 
         return result
 

@@ -17,6 +17,7 @@ import sys
 import subprocess
 import time
 import contextlib
+import json
 import psutil
 from pathlib import Path
 
@@ -25,6 +26,13 @@ def print_phase(phase_num, total_phases, title):
     print()
     print(f"[PHASE {phase_num}/{total_phases}] {title}...")
     print("-" * 40)
+
+def handle_error_and_exit(error_message, wait_for_input=True):
+    """Print error message and exit with status 1"""
+    print(error_message)
+    if wait_for_input:
+        input("Press Enter to exit...")
+    sys.exit(1)
 
 def run_command(command, shell=True, check_exit=True, cwd=None, timeout=60):
     """Run a command and handle errors with better timeout and path handling"""
@@ -141,7 +149,6 @@ def check_and_fix_vcpkg_dependencies():
         return False
 
     try:
-        import json
         with open(vcpkg_json_path, 'r') as f:
             vcpkg_config = json.load(f)
 
@@ -447,20 +454,13 @@ def main():
                         if run_command("cmake --build build --config Release", timeout=180):
                             print("[OK] Build succeeded after vcpkg reinstall!")
                         else:
-                            print("[ERROR] Build still failed after vcpkg reinstall")
-                            print("Manual intervention may be required")
-                            input("Press Enter to exit...")
-                            sys.exit(1)
+                            handle_error_and_exit("[ERROR] Build still failed after vcpkg reinstall\nManual intervention may be required")
                     else:
-                        print("[ERROR] vcpkg reinstall failed")
-                        input("Press Enter to exit...")
-                        sys.exit(1)
+                        handle_error_and_exit("[ERROR] vcpkg reinstall failed")
                 else:
-                    input("Press Enter to exit...")
-                    sys.exit(1)
+                    handle_error_and_exit("", wait_for_input=True)
             except (EOFError, KeyboardInterrupt):
-                print("\nExiting...")
-                sys.exit(1)
+                handle_error_and_exit("\nExiting...", wait_for_input=False)
         
         # Verify the executable was created
         exe_path = Path("build/Release/EncryptedBackupClient.exe")
