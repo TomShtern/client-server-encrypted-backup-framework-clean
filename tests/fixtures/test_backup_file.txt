@@ -1,5 +1,0 @@
-This is a test file for backup verification.
-Created at: 2025-07-26
-Content: Testing the CyberBackup 3.0 system end-to-end functionality.
-
-This file should appear in the server GUI after successful backup.

@@ -1,7 +1,0 @@
-This is a small test file of about 500 bytes to test the new adaptive buffer sizing system.
-The enhanced client should now automatically select a 1KB buffer for this file size.
-This should resolve the selective file transfer failures we were experiencing.
-The adaptive buffer manager calculates optimal power-of-2 buffer sizes based on file size.
-For files <= 4KB, it uses 1KB buffers which should handle the problematic size range.
-Testing adaptive buffer algorithm with small file content here.
-End of test file content.

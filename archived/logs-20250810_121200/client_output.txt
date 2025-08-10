@@ -1,127 +1,0 @@
-[SECURE] Encrypted Backup Client v3.0 - BATCH MODE
-Starting client initialization...
-Windows console title set
-About to create client object...
-[BATCH] HTTP API server disabled in batch mode
-
-â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-â•‘     ENCRYPTED FILE BACKUP CLIENT v1.0      â•‘
-â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  Build Date: Aug  6 2025 14:01:38
-  Protocol Version: 3
-  Encryption: RSA-1024 + AES-256-CBC
-
-
-> Initialization
-€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
-                                                                                                                        [14:03:19] [OK] System initialization - Starting client v1.0
-                                                                                                                        [14:03:19] [OK] Configuration loaded - transfer.info parsed successfully
-                                                                                                                        [14:03:19] [OK] Validating configuration - Checking parameters
-                                                                                                                        [14:03:19] [OK] File validation - C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\test_regex_fix.txt (39.00 B)
-                                                                                                                        [14:03:19] [OK] Server validation - 127.0.0.1:1256
-                                                                                                                        [14:03:19] [OK] Username validation - TestCLIDebug
-                                                                                                                        [14:03:19] [OK] Preparing RSA keys - 1024-bit key pair for encryption
-[DEBUG] RSAPrivateWrapper: Successfully loaded private key from buffer
-                                                                                                                        [14:03:19] [OK] Private key loaded - From priv.key
-                                                                                                                        [14:03:19] [OK] RSA keys loaded - Using cached key pair
-                                                                                                                        [14:03:19] [OK] Initialization complete - Ready to connect
-[SUCCESS] Client initialized successfully!
-[INFO] Starting backup operation...
-                                                                                                                        [14:03:19] [OK] Configuration loaded - transfer.info parsed successfully
-                                                                                                                        [14:03:19] [OK] Validating configuration - Checking parameters
-                                                                                                                        [14:03:19] [OK] File validation - C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\test_regex_fix.txt (39.00 B)
-                                                                                                                        [14:03:19] [OK] Server validation - 127.0.0.1:1256
-                                                                                                                        [14:03:19] [OK] Username validation - TestCLIDebug
-
-> Connection Setup
-€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
-                                                                                                                        [14:03:19] [OK] Connecting to server - 127.0.0.1:1256
-                                                                                                                        [14:03:19] [OK] Connecting - Establishing TCP connection...
-                                                                                                                        [14:03:19] [OK] Connection verified - Local: 127.0.0.1:57079 -> Remote: 127.0.0.1:1256
-                                                                                                                        [14:03:19] [OK] Connected - TCP connection established
-€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
-Connection Details:
-  Server Address: 127.0.0.1:1256
-  Client Name: TestCLIDebug
-  File to Transfer: C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\test_regex_fix.txt
-  File Size: 39.00 B
-€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
-                                                                                                                        [14:03:19] [OK] Testing connection - Verifying server communication...
-                                                                                                                        [14:03:19] [OK] Connection test - Socket responsive (checked in 0ms)
-                                                                                                                        [14:03:19] [OK] Connection test - Server communication verified
-                                                                                                                        [14:03:19] [OK] Keep-alive - Enabled for stable connection
-
-> Authentication
-€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
-                                                                                                                        [14:03:19] [OK] Registering new client - TestCLIDebug
-                                                                                                                        [14:03:19] [OK] Starting registration - Using pre-generated RSA keys
-                                                                                                                        [14:03:19] [OK] Sending registration - Username: TestCLIDebug
-                                                                                                                        [14:03:19] [OK] Debug: Registration packet - Payload size=255 bytes, Username='TestCLIDebug'
-                                                                                                                        [14:03:19] [OK] Debug: Request header - Version=3, Code=1025, PayloadSize=255
-                                                                                                                        [14:03:19] [OK] Debug: Header bytes - Header hex: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 03 01 04 ff 00 00 00 
-                                                                                                                        [14:03:19] [OK] Debug: Data sent - Header: 23 bytes, Payload: 255 bytes
-                                                                                                                        [14:03:19] [OK] Socket timeout - 25s receive timeout set
-                                                                                                                        [14:03:19] [OK] Waiting for server response - Max wait: 25 seconds
-                                                                                                                        [14:03:19] [OK] Debug: Raw header bytes - 03 40 06 10 00 00 00 
-                                                                                                                        [14:03:19] [OK] Debug: Response received - Version=3, Code=1600, PayloadSize=16
-                                                                                                                        [14:03:19] [OK] Client info saved - me.info created
-                                                                                                                        [14:03:19] [OK] Private key saved - priv.key created
-                                                                                                                        [14:03:19] [OK] Registration - New client ID: 1b560e56da9a4638...
-                                                                                                                        [14:03:19] [OK] DEBUG: About to call sendPublicKey() - Starting key exchange phase
-[DEBUG] RSA getPublicKey: keylen=160, publicKeyData.size()=160
-                                                                                                                        [14:03:19] [OK] Sending public key - RSA 1024-bit public key
-                                                                                                                        [14:03:19] [OK] Debug: Request header - Version=3, Code=1026, PayloadSize=415
-                                                                                                                        [14:03:19] [OK] Debug: Header bytes - Header hex: 1b 56 0e 56 da 9a 46 38 b3 c2 32 7a 76 d3 80 2f 03 02 04 9f 01 00 00 
-                                                                                                                        [14:03:19] [OK] Debug: Data sent - Header: 23 bytes, Payload: 415 bytes
-                                                                                                                        [14:03:19] [OK] Socket timeout - 25s receive timeout set
-                                                                                                                        [14:03:19] [OK] Waiting for server response - Max wait: 25 seconds
-                                                                                                                        [14:03:19] [OK] Debug: Raw header bytes - 03 42 06 90 00 00 00 
-                                                                                                                        [14:03:19] [OK] Debug: Response received - Version=3, Code=1602, PayloadSize=144
-                                                                                                                        [14:03:19] [OK] Received AES key - Encrypted with RSA
-[DEBUG] RSAPrivateWrapper: Successfully decrypted 128 bytes
-                                                                                                                        [14:03:19] [OK] AES key decrypted - 256-bit key ready
-                                                                                                                        [14:03:19] [OK] Key exchange - AES-256 key established
-                                                                                                                        [14:03:19] [OK] DEBUG: sendPublicKey() completed successfully - Key exchange phase done
-
-> File Transfer
-€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
-                                                                                                                        [14:03:19] [OK] Enhanced File Transfer - File: test_regex_fix.txt (39.00 B)
-                                                                                                                        [14:03:19] [OK] Transfer Strategy - Adaptive buffer sizing (cache-optimized)
-                                                                                                                        [14:03:19] [OK] Dynamic Buffer Transfer - Initial buffer: 8.00 KB (will adapt based on network performance)
-[AES] Initialized with 32-byte key (256-bit AES)
-[AES] Using static zero IV for protocol compatibility
-                                                                                                                        [14:03:19] [OK] Transfer Plan - Dynamic packet sizing with network adaptation
-[PHASE:62934332] TRANSFERRING
-€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
-[AES] Encrypted 39 bytes to 48 bytes (with padding)
-                                                                                                                        Transferring [########################################] 100% (39.00 B/39.00 B)
-€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
-                                                                                                                        [14:03:19] [OK] Transfer Complete - All 1 packets sent successfully
-                                                                                                                        [14:03:19] [OK] Waiting for server - Server calculating CRC...
-[PHASE:62934333] VERIFYING
-                                                                                                                        [14:03:19] [OK] Socket timeout - 25s receive timeout set
-                                                                                                                        [14:03:19] [OK] Waiting for server response - Max wait: 25 seconds
-                                                                                                                        [14:03:19] [OK] Debug: Raw header bytes - 03 43 06 17 01 00 00 
-                                                                                                                        [14:03:19] [OK] Debug: Response received - Version=3, Code=1603, PayloadSize=279
-                                                                                                                        [14:03:19] [OK] CRC verification - Server: 40819535, Client: 40819535
-                                                                                                                        [14:03:19] [OK] CRC verification - [OK] Checksums match - file integrity confirmed
-                                                                                                                        [14:03:19] [OK] Socket timeout - 25s receive timeout set
-                                                                                                                        [14:03:19] [OK] Waiting for server response - Max wait: 25 seconds
-[ERROR] [NETWORK] Timeout waiting for server response - this prevents subprocess kill
-
-> Transfer Complete
-€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
-[PHASE:62959349] COMPLETED
-€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
-[SUCCESS] BACKUP COMPLETED SUCCESSFULLY
-
-Transfer Summary:
-  File: C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\test_regex_fix.txt
-  Size: 39.00 B
-  Duration: 25s
-  Average Speed: 0.00 B/s
-  Server: 127.0.0.1:1256
-  Timestamp: 14:03:44
-€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€
-[SUCCESS] Backup completed successfully!
-Client exiting with code: 0
