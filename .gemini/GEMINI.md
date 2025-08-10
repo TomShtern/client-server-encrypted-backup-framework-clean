@@ -535,6 +535,10 @@ nameN:valueN
 *   **Reflect Output**: No
 *   **Final XOR**: 0xFFFFFFFF (one's complement)
 
+#### Test Vectors
+
+Test vectors for the protocol are available in `Shared/test_vectors/headers.json`.
+
 ### Web Client Architecture (8000+ Line Single-File SPA)
 
 ```javascript

@@ -2904,3 +2904,54 @@ class ServerGUI:
         if self.root:
             self.root.destroy()
 
+# ---------------------------------------------------------------------------
+# Standalone Launch Support
+# ---------------------------------------------------------------------------
+
+def launch_standalone():
+    """Launch the Server GUI when this file is executed directly.
+
+    Previously the file had no __main__ entrypoint so the process exited
+    immediately when started by one_click_build_and_run.py. This function
+    provides a stable entry so running `python ServerGUI.py` opens the window.
+    """
+    try:
+        # Ensure project root is on sys.path so relative imports work
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        print("[INFO] Launching Server GUI (standalone mode)...")
+
+        # Instantiate GUI (don't pass tk root; initialize() creates it internally)
+        try:
+            gui = ServerGUI()
+        except Exception as e:
+            print(f"[FATAL] Failed to construct ServerGUI object: {e}")
+            import traceback; traceback.print_exc()
+            return 1
+
+        # Initialize (spawns GUI thread which builds full window & enters mainloop)
+        if not gui.initialize():
+            print("[ERROR] Server GUI failed to initialize")
+            return 1
+
+        print("[OK] Server GUI initialized. Waiting for GUI thread to finish (Ctrl+C to exit)...")
+        try:
+            while gui.gui_thread and gui.gui_thread.is_alive():
+                gui.gui_thread.join(timeout=0.5)
+        except KeyboardInterrupt:
+            print("\n[INFO] Interrupt received. Shutting down Server GUI...")
+            try:
+                gui.shutdown()
+            except Exception as e:
+                print(f"[WARN] Error during GUI shutdown: {e}")
+        return 0
+    except Exception as e:
+        print(f"[FATAL] Unhandled exception launching Server GUI: {e}")
+        import traceback; traceback.print_exc()
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(launch_standalone())
+

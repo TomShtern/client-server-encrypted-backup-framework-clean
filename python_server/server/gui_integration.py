@@ -24,7 +24,8 @@ class GUIManager:
         
         # Try to import GUI components
         try:
-            from .ServerGUI import ServerGUI
+            # Import ServerGUI from sibling package server_gui (adjusted path)
+            from python_server.server_gui.ServerGUI import ServerGUI
             self.ServerGUI = ServerGUI
             self.gui_available = True
             logger.info("GUI components available for initialization")
@@ -44,39 +45,40 @@ class GUIManager:
             logger.info("GUI components not available, running in console mode")
             self.gui_ready.set()  # Signal ready immediately for console mode
             return False
-        
+
         def init_gui():
             try:
                 with self.gui_lock:
-                    # Only proceed if ServerGUI is available
                     if self.ServerGUI is not None:
-                        # Pass the server_instance to the GUI
                         self.gui = self.ServerGUI(server_instance=self.server_instance)
+                        logger.info("[GUI] Calling ServerGUI.initialize() (threaded)")
                         gui_initialized = self.gui.initialize()
+                        logger.info(f"[GUI] ServerGUI.initialize() returned {gui_initialized}")
                     else:
                         logger.warning("ServerGUI is None, cannot initialize GUI")
                         gui_initialized = False
-                
+
                 if gui_initialized:
                     logger.info("Server GUI initialized successfully")
-                    self.gui_ready.set() # Signal that the GUI is ready for updates
+                    self.gui_ready.set()
                 else:
                     logger.warning("Server GUI initialization failed, continuing without GUI")
                     with self.gui_lock:
                         self.gui = None
-                    self.gui_ready.set() # Signal completion even if GUI failed
+                    self.gui_ready.set()
             except Exception as e:
                 logger.warning(f"Failed to initialize server GUI: {e}, continuing without GUI")
                 with self.gui_lock:
                     self.gui = None
-                self.gui_ready.set() # Signal completion even if GUI failed with exception
-        
+                self.gui_ready.set()
+
         try:
+            logger.info("[GUI] Spawning GUI initializer thread ...")
             gui_thread = threading.Thread(target=init_gui, daemon=True, name="GUIInitializer")
             gui_thread.start()
+            logger.info("[GUI] GUI initializer thread started")
             logger.info("GUI initialization started in background")
             return True
-            
         except Exception as e:
             logger.warning(f"Failed to start GUI thread: {e}, continuing without GUI")
             return False

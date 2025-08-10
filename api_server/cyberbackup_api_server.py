@@ -210,16 +210,42 @@ def handle_ping():
 def serve_client():
     """Serve the main client HTML interface"""
     try:
-        return send_file('Client/other/html/NewGUIforClient.html')
-    except FileNotFoundError:
-        return "<h1>Client GUI not found</h1><p>Please ensure Client/other/html/NewGUIforClient.html exists</p>", 404
+        # Use absolute path to handle working directory issues
+        # Get the absolute path to this file, then go up to api_server, then up to project root
+        current_file_abs = os.path.abspath(__file__)
+        api_server_dir = os.path.dirname(current_file_abs)
+        project_root = os.path.dirname(api_server_dir)
+        html_path = os.path.join(project_root, 'Client', 'Client-gui', 'NewGUIforClient.html')
+        
+        # Debug logging
+        logger.debug(f"Current file: {current_file_abs}")
+        logger.debug(f"API server dir: {api_server_dir}")
+        logger.debug(f"Project root: {project_root}")
+        logger.debug(f"HTML path: {html_path}")
+        logger.debug(f"HTML exists: {os.path.exists(html_path)}")
+        
+        return send_file(html_path)
+    except FileNotFoundError as e:
+        logger.error(f"HTML file not found: {e}")
+        return "<h1>Client GUI not found</h1><p>Please ensure Client/Client-gui/NewGUIforClient.html exists</p>", 404
+    except Exception as e:
+        logger.error(f"Error serving HTML: {e}")
+        return f"<h1>Server Error</h1><p>Error serving client: {e}</p>", 500
 
 @app.route('/client/<path:filename>')
 def serve_client_assets(filename):
     """Serve client assets (CSS, JS, images, etc.)"""
     try:
-        return send_from_directory('Client/other/html', filename)
+        # Use absolute path to handle working directory issues
+        current_file_abs = os.path.abspath(__file__)
+        api_server_dir = os.path.dirname(current_file_abs)
+        project_root = os.path.dirname(api_server_dir)
+        client_dir = os.path.join(project_root, 'Client', 'Client-gui')
+        
+        logger.debug(f"Serving asset {filename} from {client_dir}")
+        return send_from_directory(client_dir, filename)
     except FileNotFoundError:
+        logger.error(f"Asset not found: {filename}")
         return f"<h1>Asset not found: {filename}</h1>", 404
 
 @app.route('/progress_config.json')
@@ -774,7 +800,10 @@ if __name__ == "__main__":
     print("Component Status:")
 
     # Check HTML client
-    client_html = "Client/other/html/NewGUIforClient.html"
+    current_file_abs = os.path.abspath(__file__)
+    api_server_dir = os.path.dirname(current_file_abs)
+    project_root = os.path.dirname(api_server_dir)
+    client_html = os.path.join(project_root, 'Client', 'Client-gui', 'NewGUIforClient.html')
     if os.path.exists(client_html):
         print(f"[OK] HTML Client: {client_html}")
     else:

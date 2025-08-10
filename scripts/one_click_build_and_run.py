@@ -1,36 +1,15 @@
 #!/usr/bin/env python3
-"""
-ONE-CLICK BUILD AND RUN - CyberBackup 3.0 (Python Version)
-===========================================================
+"""One-click build and run orchestrator for CyberBackup 3.0.
 
-This Python script does exactly what the .bat file does, but runs in an 
-interactive terminal where you can actually press keys when prompted.
+This script:
+ 1. Verifies environment & dependencies
+ 2. Builds the C++ client (via CMake & vcpkg toolchain)
+ 3. Launches backup server (optionally disables embedded GUI)
+ 4. Launches standalone Server GUI if embedded disabled
+ 5. Launches API bridge server
+ 6. Opens Web GUI in browser
 
-Author: Auto-generated for CyberBackup 3.0
-Usage: py    print()
-    try:
-        print("   ✅ ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!")
-    except UnicodeEncodeError:
-        print("   ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!")
-    print("=" * 72)
-    print()
-    print("Your CyberBackup 3.0 system should now be running with:")
-    print()
-    try:
-        print("   📊 Web GUI:        http://localhost:9090")
-        print("   🖥️  Server GUI:     Started automatically")
-        print("   🔒 Backup Server:  Running on port 1256")
-        print("   🌐 API Server:     Running on port 9090")
-        if check_appmap_available():
-            print("   📈 AppMap:         Recording execution traces")
-    except UnicodeEncodeError:
-        print("   Web GUI:        http://localhost:9090")
-        print("   Server GUI:     Started automatically")
-        print("   Backup Server:  Running on port 1256")
-        print("   API Server:     Running on port 9090")
-        if check_appmap_available():
-            print("   AppMap:         Recording execution traces")d_and_run.py
-===========================================================
+Corrupted header block was repaired on 2025-08-11 after accidental paste.
 """
 
 import os
@@ -358,8 +337,8 @@ def main():
     print("This will configure, build, and launch the entire backup framework.")
     print()
     
-    # Change to project root directory
-    script_dir = Path(__file__).parent
+    # Change to project root directory (parent of scripts directory)
+    script_dir = Path(__file__).parent.parent
     os.chdir(script_dir)
     print(f"Working directory: {os.getcwd()}")
     print()
@@ -602,7 +581,7 @@ def main():
     if server_path.exists():
         # Check if AppMap is available for recording
         appmap_available = check_appmap_available()
-        
+
         if appmap_available:
             print("[INFO] AppMap detected - enabling execution recording")
             # Start backup server with AppMap recording
@@ -618,9 +597,23 @@ def main():
             print(f"Command: {sys.executable} -m python_server.server.server")
         
         # Start backup server as a module from project root in new console window
+        server_env = os.environ.copy()
+        # GUI Mode Selection:
+        # By default we NOW keep the embedded GUI enabled (more reliable startup)
+        # Set CYBERBACKUP_DISABLE_INTEGRATED_GUI=1 to suppress embedded and use standalone
+        # Set CYBERBACKUP_STANDALONE_GUI=1 to force launching standalone (even if embedded enabled)
+        disable_embedded = os.environ.get("CYBERBACKUP_DISABLE_INTEGRATED_GUI", "0")
+        force_standalone = os.environ.get("CYBERBACKUP_STANDALONE_GUI", "0")
+        if disable_embedded == "1":
+            server_env["CYBERBACKUP_DISABLE_INTEGRATED_GUI"] = "1"
+            print("[GUI] Embedded Server GUI disabled via env var")
+        else:
+            server_env.pop("CYBERBACKUP_DISABLE_INTEGRATED_GUI", None)
+            print("[GUI] Embedded Server GUI enabled (default)")
         server_process = subprocess.Popen(
             server_command,
-            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
+            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0,
+            env=server_env
         )
         print(f"Python Backup Server started with PID: {server_process.pid}")
         
@@ -644,6 +637,40 @@ def main():
             print("The API server may fail to connect to the backup server.")
         else:
             print("[OK] Backup server is ready!")
+
+        # Decide whether to launch standalone GUI
+        # Conditions: embedded disabled OR explicit force standalone
+        if disable_embedded == "1" or force_standalone == "1":
+            reason = "embedded disabled" if disable_embedded == "1" else "force flag set"
+            print(f"[INFO] Launching standalone Server GUI ({reason})")
+            server_gui_path = Path("python_server/server_gui/ServerGUI.py")
+            if server_gui_path.exists():
+                try:
+                    gui_env = os.environ.copy()
+                    gui_env["CYBERBACKUP_SERVERGUI_MODE"] = "standalone"
+                    gui_proc = subprocess.Popen(
+                        [sys.executable, str(server_gui_path)],
+                        creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0,
+                        env=gui_env
+                    )
+                    print(f"[OK] Standalone Server GUI launched (PID: {gui_proc.pid})")
+                    # Quick health check after short delay
+                    try:
+                        import psutil as _ps
+                        time.sleep(3)
+                        if not _ps.pid_exists(gui_proc.pid):
+                            print("[WARNING] Standalone Server GUI process exited early. Falling back guidance:")
+                            print("          Run manually: python python_server\\server_gui\\ServerGUI.py")
+                            if disable_embedded == "0":
+                                print("          (Embedded GUI should still attempt to appear inside server console)")
+                    except Exception:
+                        pass
+                except Exception as e:
+                    print(f"[WARNING] Failed to launch standalone Server GUI: {e}")
+            else:
+                print(f"[WARNING] Standalone Server GUI not found: {server_gui_path}")
+        else:
+            print("[INFO] Using embedded Server GUI only (no standalone launch)")
     else:
         print(f"[WARNING] Server file not found: {server_path}")
     
@@ -684,7 +711,7 @@ def main():
         print("[OK] Port 9090 is available")
     
     # Step 3: Start API server with enhanced error handling
-    api_server_path = Path("cyberbackup_api_server.py")
+    api_server_path = Path("api_server/cyberbackup_api_server.py")
     api_process = None
     server_started_successfully = False
     
@@ -709,7 +736,7 @@ def main():
                 print("\nTroubleshooting steps:")
                 print("1. Check if port 9090 is being used by another application")
                 print("2. Verify Flask and flask-cors are installed: pip install flask flask-cors")
-                print("3. Try running manually: python cyberbackup_api_server.py")
+                print("3. Try running manually: python api_server/cyberbackup_api_server.py")
                 print("4. Check console windows for error messages")
                 
         except Exception as e:
@@ -730,7 +757,7 @@ def main():
         print("Since automatic startup failed, you can try:")
         print("1. Open a new terminal/command prompt")
         print("2. Navigate to this directory")
-        print("3. Run: python cyberbackup_api_server.py")
+        print("3. Run: python api_server/cyberbackup_api_server.py")
         print("4. Wait for server to start, then open: http://127.0.0.1:9090/")
         print()
         with contextlib.suppress(EOFError):
@@ -786,7 +813,7 @@ def main():
         print("Troubleshooting - If web GUI is not working:")
         print("   1. Check console windows for error messages")
         print("   2. Verify Flask is installed: pip install flask flask-cors")
-        print("   3. Try manual startup: python cyberbackup_api_server.py")
+        print("   3. Try manual startup: python api_server/cyberbackup_api_server.py")
         print("   4. Check if port 9090 is blocked by firewall/antivirus")
         print("   5. Restart the script after fixing issues")
     print()

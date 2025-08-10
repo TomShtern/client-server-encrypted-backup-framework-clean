@@ -126,6 +126,7 @@ class Client:
         self.public_key_obj: Optional[Any] = None # PyCryptodome RSA key object or compatibility layer equivalent
         self.aes_key: Optional[bytes] = None # Current session AES key
         self.last_seen: float = time.monotonic() # Monotonic time for session timeout
+        self.last_seen_db: Optional[str] = None # Database timestamp for audit purposes
         self.partial_files: Dict[str, Dict[str, Any]] = {} # For reassembling multi-packet files
         self.lock: threading.Lock = threading.Lock() # To protect concurrent access to client state
 
@@ -304,7 +305,14 @@ class BackupServer:
 
         # Initialize GUI manager
         self.gui_manager = GUIManager(self)
-        self.gui_manager.initialize_gui()
+        # Allow disabling integrated GUI when standalone GUI process will be launched
+        disable_flag = os.environ.get("CYBERBACKUP_DISABLE_INTEGRATED_GUI")
+        logger.info(f"[GUI] Embedded GUI disable flag value: {disable_flag!r}")
+        if not disable_flag:
+            logger.info("[GUI] Attempting embedded GUI initialization...")
+            self.gui_manager.initialize_gui()
+        else:
+            logger.info("[GUI] Integrated Server GUI disabled via CYBERBACKUP_DISABLE_INTEGRATED_GUI=1 (no embedded GUI)")
 
         # Perform pre-flight checks and initialize database
         self.db_manager.check_startup_permissions() # Perform pre-flight checks before extensive setup

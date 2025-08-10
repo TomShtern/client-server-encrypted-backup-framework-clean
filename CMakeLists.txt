@@ -27,18 +27,21 @@ endif()
 
 # 4. Define the Executable: List all of our application's source files.
 add_executable(EncryptedBackupClient
-    src/client/main.cpp
-    src/client/client.cpp  # Consolidated client implementation (1.6K lines, complete with CRC)
-    src/client/WebServerBackend.cpp  # HTTP API server for HTML GUI
-    src/utils/CompressionWrapper.cpp
-    src/wrappers/RSAWrapper.cpp  # Using Crypto++ implementation
-    src/wrappers/AESWrapper.cpp
-    src/wrappers/Base64Wrapper.cpp
+    Client/cpp/main.cpp
+    Client/cpp/client.cpp  # Consolidated client implementation (1.6K lines, complete with CRC)
+    Client/cpp/WebServerBackend.cpp  # HTTP API server for HTML GUI
+    Client/deps/CompressionWrapper.cpp
+    Client/deps/RSAWrapper.cpp  # Using Crypto++ implementation
+    Client/deps/AESWrapper.cpp
+    Client/deps/Base64Wrapper.cpp
+    Client/deps/crc.cpp  # CRC implementation for file verification
 )
  
 # 5. Configure Include Directories: Tell our code where to find header files.
 target_include_directories(EncryptedBackupClient PRIVATE 
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/Client/cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Client/deps
+    ${CMAKE_CURRENT_SOURCE_DIR}/Client/deps/shared
 )
 
 # 6. Find and Link Libraries: Use vcpkg packages with fallback

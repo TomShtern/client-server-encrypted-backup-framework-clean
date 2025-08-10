@@ -245,3 +245,5 @@ docs/archive/*_SUMMARY.md
 *.swo
 *.orig
 nul
+defensive.db.backup_20250810_230758
+defensive.db-shm
