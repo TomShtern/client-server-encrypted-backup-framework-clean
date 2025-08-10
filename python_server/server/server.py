@@ -30,7 +30,7 @@ from .request_handlers import RequestHandler
 from .network_server import NetworkServer
 
 # Import canonical shared utilities
-from ..shared.crc import calculate_crc32, CRC32Stream
+from ...Shared.crc import calculate_crc32, CRC32Stream
 
 # GUI Integration
 from .gui_integration import GUIManager
