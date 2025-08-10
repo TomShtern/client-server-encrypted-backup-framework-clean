@@ -1,8 +1,8 @@
 // CFB cipher stubs for missing template instantiations
 // Provides minimal implementations to resolve linker errors
 
-#include "../../third_party/crypto++/cryptlib.h"
-#include "../../third_party/crypto++/modes.h"
+#include <cryptopp/cryptlib.h>
+#include <cryptopp/modes.h>
 
 namespace CryptoPP {
     

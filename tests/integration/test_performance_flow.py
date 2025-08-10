@@ -29,7 +29,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from tests.integration.test_complete_flow import IntegrationTestFramework
-from src.shared.observability import get_metrics_collector, get_system_monitor
+from Shared.observability import get_metrics_collector, get_system_monitor
 
 
 class PerformanceTestFramework(IntegrationTestFramework):

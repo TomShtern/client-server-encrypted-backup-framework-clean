@@ -1,1 +1,0 @@
-# CyberBackup 3.0 - Server package

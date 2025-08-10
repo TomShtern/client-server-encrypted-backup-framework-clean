@@ -177,8 +177,8 @@ def check_project_structure():
     print("-" * 30)
     
     critical_paths = [
-        ("src/client/client.cpp", "C++ Client Source"),
-        ("src/server/server.py", "Python Server"),
+        ("Client/cpp/client.cpp", "C++ Client Source"),
+        ("python_server/server/server.py", "Python Server"),
         ("cyberbackup_api_server.py", "Flask API Server"),
         ("real_backup_executor.py", "Backup Executor"),
         ("requirements.txt", "Python Requirements"),

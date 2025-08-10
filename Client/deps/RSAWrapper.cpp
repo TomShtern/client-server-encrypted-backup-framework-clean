@@ -1,4 +1,4 @@
-#include "../../include/wrappers/RSAWrapper.h"
+#include "RSAWrapper.h"
 #include <cryptopp/rsa.h>
 #include <cryptopp/osrng.h>
 #include <cryptopp/oaep.h>

@@ -1,24 +1,22 @@
 import socket
 import threading
-import struct
-import uuid
 import os
 import time
 import logging
-import re
-import signal
 import sys
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Optional, Any, Tuple
+from datetime import datetime
+from typing import Dict, Optional, Any
 
 # Import singleton manager
 from .server_singleton import ensure_single_server_instance
 
-# Import crypto components through compatibility layer
-from .crypto_compat import AES, RSA, PKCS1_OAEP, pad, unpad, get_random_bytes
+# Import crypto components directly from PyCryptodome
+from Crypto.Cipher import AES
+from Crypto.PublicKey import RSA
+from Crypto.Random import get_random_bytes
 
 # Import custom exceptions
-from .exceptions import ServerError, ProtocolError, ClientError, FileError
+from .exceptions import ServerError, ProtocolError
 
 # Import database module
 from .database import DatabaseManager
@@ -30,14 +28,11 @@ from .request_handlers import RequestHandler
 from .network_server import NetworkServer
 
 # Import canonical shared utilities
-from ...Shared.crc import calculate_crc32, CRC32Stream
+# from Shared.crc import calculate_crc32  # Unused currently
 
 # GUI Integration
 from .gui_integration import GUIManager
 
-import tempfile
-
-import tempfile
 
 # --- Server Configuration Constants ---
 SERVER_VERSION = 3
@@ -65,7 +60,7 @@ AES_KEY_SIZE_BYTES = 32 # 256-bit AES
 # Add the project root to path to access shared utilities
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, project_root)
-from src.shared.logging_utils import setup_dual_logging, create_log_monitor_info
+from Shared.logging_utils import setup_dual_logging, create_log_monitor_info
 
 # Set up enhanced dual logging with observability features
 logger, backup_log_file = setup_dual_logging(
@@ -77,8 +72,8 @@ logger, backup_log_file = setup_dual_logging(
 )
 
 # Setup structured logging for backup server
-from src.shared.logging_utils import create_enhanced_logger
-from src.shared.observability import get_metrics_collector, get_system_monitor
+from Shared.logging_utils import create_enhanced_logger
+from Shared.observability import get_metrics_collector, get_system_monitor
 structured_logger = create_enhanced_logger("backup-server", logger)
 metrics_collector = get_metrics_collector()
 system_monitor = get_system_monitor()
@@ -402,9 +397,8 @@ class BackupServer:
                 for row_id, name, pk_bytes, last_seen_iso_utc in rows:
                     try:
                         client = Client(row_id, name, pk_bytes) # Create Client object
-                        # last_seen_iso_utc is from DB. Internal client.last_seen is monotonic for session timeout.
-                        # We don't directly use DB's LastSeen for session timeout upon loading,
-                        # but it's good for audit/record. Session starts fresh.
+                        # Store DB timestamp for audit/logging while using fresh monotonic time for session
+                        client.last_seen_db = last_seen_iso_utc  # Database timestamp for audit
                         self.clients[row_id] = client
                         self.clients_by_name[name] = row_id
                         loaded_count +=1

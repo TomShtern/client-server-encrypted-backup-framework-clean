@@ -13,7 +13,11 @@ from datetime import datetime
 from typing import Dict, Optional, Any, Callable
 
 # Import crypto components through compatibility layer
-from .crypto_compat import AES, RSA, PKCS1_OAEP, pad, unpad, get_random_bytes, SHA256
+from Crypto.Cipher import AES, PKCS1_OAEP
+from Crypto.PublicKey import RSA
+from Crypto.Util.Padding import pad, unpad
+from Crypto.Random import get_random_bytes
+from Crypto.Hash import SHA256
 
 # Import custom exceptions
 from .exceptions import ServerError, ProtocolError, ClientError, FileError

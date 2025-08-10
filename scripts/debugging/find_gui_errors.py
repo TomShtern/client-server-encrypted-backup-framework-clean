@@ -4,7 +4,7 @@ import os
 import traceback
 
 # Add server directory
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'server'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'python_server', 'server'))
 
 def find_errors():
     print("=== ServerGUI Error Detection ===")

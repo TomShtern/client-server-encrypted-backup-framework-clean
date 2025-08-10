@@ -8,10 +8,9 @@ Enhanced with structured logging and observability features
 import os
 import sys
 import logging
-import json
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional
 from .observability import create_structured_logger, get_metrics_collector, get_system_monitor
 
 

@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any
 
 # Add server modules to path
-sys.path.insert(0, 'src/server')
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'python_server', 'server'))
 
 # Configure logging
 logging.basicConfig(

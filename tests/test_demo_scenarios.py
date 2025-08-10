@@ -327,7 +327,7 @@ if __name__ == "__main__":
     print("for recruiters and evaluators.")
     print()
     print("Prerequisites:")
-    print("1. Start the backup server: python -m src.server.server")
+    print("1. Start the backup server: python -m python_server.server.server")
     print("2. Start the API server: python cyberbackup_api_server.py") 
     print("3. Install Playwright: pip install playwright pytest-asyncio")
     print("4. Install browsers: playwright install")

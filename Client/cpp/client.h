@@ -31,9 +31,9 @@
 #endif
 
 // Required wrapper includes
-#include "wrappers/AESWrapper.h"
-#include "wrappers/Base64Wrapper.h"
-#include "wrappers/RSAWrapper.h"
+#include "../deps/AESWrapper.h"
+#include "../deps/Base64Wrapper.h"
+#include "../deps/RSAWrapper.h"
 #include "WebServerBackend.h"
 
 // Protocol constants

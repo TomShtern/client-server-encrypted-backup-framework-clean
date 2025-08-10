@@ -22,7 +22,7 @@ import socket
 
 # Import server components for real server control
 try:
-    from .server import BackupServer # type: ignore
+    from python_server.server.server import BackupServer # type: ignore
     SERVER_CONTROL_AVAILABLE = True
 except ImportError:
     BackupServer = None
@@ -30,7 +30,7 @@ except ImportError:
     print("Warning: Server control not available - server start/stop disabled")
 
 # Import singleton manager
-from .server_singleton import ensure_single_server_instance
+from python_server.server.server_singleton import ensure_single_server_instance
 
 # Import system tray functionality based on platform
 try:
@@ -85,7 +85,7 @@ except ImportError:
 
 # Import enhanced process monitoring
 try:
-    from ..shared.utils.process_monitor_gui import ProcessMonitorWidget, create_process_monitor_tab
+    from Shared.utils.process_monitor_gui import ProcessMonitorWidget, create_process_monitor_tab
     PROCESS_MONITOR_AVAILABLE = True
     print("[OK] Enhanced process monitoring available")
 except ImportError as e:
@@ -2100,7 +2100,7 @@ class ServerGUI:
 
     def _start_server(self):
         """Start the backup server."""
-        from .server import BackupServer # Local import to avoid circular dependency # type: ignore
+        from python_server.server.server import BackupServer # Local import to avoid circular dependency # type: ignore
         if self.server and not self.server.running:
             try:
                 # The server's start method is already designed to run in threads
@@ -2651,7 +2651,7 @@ class ServerGUI:
                 
                 # Since the CRC calculation is in file_transfer, we need to access it from there.
                 # This is not ideal, but it's the quickest way to implement this feature.
-                from file_transfer import FileTransferManager
+                from python_server.server.file_transfer import FileTransferManager
                 calculated_crc = FileTransferManager(self.server)._calculate_crc(file_data)
 
                 if stored_crc == calculated_crc:

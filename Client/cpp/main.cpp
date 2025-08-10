@@ -16,7 +16,7 @@
 extern bool g_batchMode;
 
 // Include the client header
-#include "client/client.h"
+#include "client.h"
 
 // Signal handler for graceful shutdown
 std::atomic<bool> g_shutdownRequested(false);

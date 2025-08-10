@@ -1,5 +1,5 @@
 #include <iostream>
-#include "include/wrappers/RSAWrapper.h"
+#include "../deps/RSAWrapper.h"
 
 int main() {
     try {

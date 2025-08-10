@@ -25,12 +25,12 @@ try:
     WATCHDOG_AVAILABLE = True
 except ImportError:
     WATCHDOG_AVAILABLE = False
-from src.shared.utils.file_lifecycle import SynchronizedFileManager
-from src.shared.utils.error_handler import (
+from Shared.utils.file_lifecycle import SynchronizedFileManager
+from Shared.utils.error_handler import (
     get_error_handler, handle_subprocess_error, handle_file_transfer_error,
     ErrorSeverity, ErrorCategory, ErrorCode
 )
-from src.shared.utils.process_monitor import (
+from Shared.utils.process_monitor import (
     get_process_registry, register_process, start_process, stop_process,
     ProcessState, get_process_metrics
 )
@@ -1377,7 +1377,7 @@ class RealBackupExecutor:
 
             self._log_status("CANCEL", f"Cancelling backup process (ID: {getattr(self, 'process_id', 'n/a')}) - {reason}")
             try:
-                from src.shared.utils.process_monitor import stop_process
+                from Shared.utils.process_monitor import stop_process
                 # Try graceful terminate, then kill if needed (handled inside stop_process)
                 ok = stop_process(self.process_id, timeout=5.0)
             except Exception as e:

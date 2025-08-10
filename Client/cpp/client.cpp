@@ -2,7 +2,7 @@
 // Encrypted File Backup System - Enhanced Client Implementation
 // Fully compliant with project specifications
 
-#include "../../include/client/client.h"
+#include "client.h"
 #include <chrono>
 #include <random>
 #include <boost/iostreams/device/mapped_file.hpp>

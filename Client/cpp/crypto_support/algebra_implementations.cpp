@@ -1,11 +1,11 @@
 // Abstract algebra template implementations for Crypto++
 // Provides missing template method implementations to resolve linking errors
 
-#include "../third_party/crypto++/integer.h"
-#include "../third_party/crypto++/algebra.h"
-#include "../third_party/crypto++/nbtheory.h"
-#include "../third_party/crypto++/rsa.h"
-#include "../third_party/crypto++/sha.h"
+#include <cryptopp/integer.h>
+#include <cryptopp/algebra.h>
+#include <cryptopp/nbtheory.h>
+#include <cryptopp/rsa.h>
+#include <cryptopp/sha.h>
 #include <cstring>
 
 namespace CryptoPP {

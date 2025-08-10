@@ -1,4 +1,4 @@
-#include "../../include/wrappers/Base64Wrapper.h"
+#include "Base64Wrapper.h"
 #include <stdexcept>
 #include <iostream>
 #include <string>

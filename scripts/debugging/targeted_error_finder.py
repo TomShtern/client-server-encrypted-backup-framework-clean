@@ -8,7 +8,7 @@ import os
 import importlib.util
 
 # Add server directory to path
-server_dir = os.path.join(os.path.dirname(__file__), 'server')
+server_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'python_server', 'server')
 sys.path.insert(0, server_dir)
 
 def test_server_gui_import():

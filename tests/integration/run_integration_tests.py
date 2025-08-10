@@ -32,7 +32,7 @@ import subprocess
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.shared.logging_utils import setup_dual_logging
+from Shared.logging_utils import setup_dual_logging
 
 
 class IntegrationTestRunner:
@@ -120,7 +120,7 @@ class IntegrationTestRunner:
         # Check if required files exist
         required_files = [
             project_root / "cyberbackup_api_server.py",
-            project_root / "src" / "server" / "server.py",
+            project_root / "python_server" / "server" / "server.py",
             project_root / "build" / "Release" / "EncryptedBackupClient.exe"
         ]
         

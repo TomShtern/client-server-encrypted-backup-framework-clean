@@ -9,8 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-# Add src to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+# Add api_server to path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'api_server'))
 
 from api.real_backup_executor import RealBackupExecutor
 

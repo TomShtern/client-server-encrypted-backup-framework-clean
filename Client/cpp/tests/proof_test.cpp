@@ -1,7 +1,7 @@
 #include <iostream>
 #include <iomanip>
-#include "third_party/crypto++/osrng.h"
-#include "third_party/crypto++/hex.h"
+#include <cryptopp/osrng.h>
+#include <cryptopp/hex.h>
 
 int main() {
     try {

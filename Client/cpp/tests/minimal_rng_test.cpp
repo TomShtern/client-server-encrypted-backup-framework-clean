@@ -1,6 +1,6 @@
 #include <iostream>
 #include <chrono>
-#include "third_party/crypto++/osrng.h"
+#include <cryptopp/osrng.h>
 
 int main() {
     std::cout << "=== AUTOSEEDED RANDOM POOL TEST ===" << std::endl;

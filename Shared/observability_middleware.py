@@ -7,11 +7,11 @@ Provides Flask middleware, decorators, and integration helpers
 import time
 import functools
 import threading
-from typing import Callable, Any, Dict, Optional
+from typing import Callable, Optional
 from flask import Flask, request, g, jsonify
 from .observability import (
     get_metrics_collector, get_system_monitor, create_structured_logger,
-    TimedOperation, StructuredLogger
+    TimedOperation
 )
 import logging
 import uuid
@@ -127,7 +127,7 @@ class FlaskObservabilityMiddleware:
         """Register observability endpoints"""
         
         @self.app.route('/api/observability/health')
-        def observability_health_check():
+        def observability_health_check():  # noqa: F841
             """Health check endpoint"""
             system_monitor = get_system_monitor()
             latest_metrics = system_monitor.get_latest_metrics()
@@ -164,7 +164,7 @@ class FlaskObservabilityMiddleware:
             return jsonify(health_status)
             
         @self.app.route('/api/observability/metrics')
-        def metrics_summary():
+        def metrics_summary():  # noqa: F841
             """Metrics summary endpoint"""
             window_seconds = request.args.get('window', 300, type=int)
             summaries = self.metrics.get_all_summaries(window_seconds)
@@ -176,7 +176,7 @@ class FlaskObservabilityMiddleware:
             })
             
         @self.app.route('/api/observability/system')
-        def system_metrics():
+        def system_metrics():  # noqa: F841
             """System metrics endpoint"""
             system_monitor = get_system_monitor()
             window_seconds = request.args.get('window', 300, type=int)

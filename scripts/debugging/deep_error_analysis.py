@@ -10,7 +10,7 @@ import traceback
 from typing import List, Dict, Any
 
 # Add server directory to path
-server_dir = os.path.join(os.path.dirname(__file__), 'server')
+server_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'python_server', 'server')
 sys.path.insert(0, server_dir)
 
 def analyze_python_file(filepath: str) -> Dict[str, Any]:

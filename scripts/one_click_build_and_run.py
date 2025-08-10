@@ -265,7 +265,7 @@ def cleanup_existing_processes():
                 if 'cyberbackup_api_server.py' in cmdline_str:
                     should_terminate = True
                     process_type = "API Server"
-                elif 'src.server.server' in cmdline_str or 'src\\server\\server' in cmdline_str:
+                elif 'python_server.server.server' in cmdline_str or 'python_server\\server\\server' in cmdline_str:
                     should_terminate = True
                     process_type = "Backup Server"
                 elif 'encryptedbackupclient.exe' in cmdline_str:
@@ -597,8 +597,8 @@ def main():
     print("   - Web GUI (Browser interface)")
     print()
     
-    print("Starting Python Backup Server (src.server.server module)...")
-    server_path = Path("src/server/server.py")
+    print("Starting Python Backup Server (python_server.server.server module)...")
+    server_path = Path("python_server/server/server.py")
     if server_path.exists():
         # Check if AppMap is available for recording
         appmap_available = check_appmap_available()
@@ -608,14 +608,14 @@ def main():
             # Start backup server with AppMap recording
             server_command = [
                 "appmap-python", "--record", "process", 
-                "python", "-m", "src.server.server"
+                "python", "-m", "python_server.server.server"
             ]
-            print("Command: appmap-python --record process python -m src.server.server")
+            print("Command: appmap-python --record process python -m python_server.server.server")
         else:
             print("[INFO] AppMap not available - starting server normally")
             # Start backup server normally
-            server_command = [sys.executable, "-m", "src.server.server"]
-            print(f"Command: {sys.executable} -m src.server.server")
+            server_command = [sys.executable, "-m", "python_server.server.server"]
+            print(f"Command: {sys.executable} -m python_server.server.server")
         
         # Start backup server as a module from project root in new console window
         server_process = subprocess.Popen(

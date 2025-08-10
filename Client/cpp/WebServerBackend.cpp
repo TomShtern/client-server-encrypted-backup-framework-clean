@@ -1,7 +1,7 @@
 // WebServerBackend.cpp - Simple HTTP API Server for HTML Client
 // Provides REST API endpoints for the new HTML GUI client
 
-#include "../../include/client/WebServerBackend.h"
+#include "WebServerBackend.h"
 #include <iostream>
 #include <fstream>
 #include <string>

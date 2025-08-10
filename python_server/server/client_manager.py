@@ -9,7 +9,7 @@ from typing import Dict, Optional, Any, List
 from datetime import datetime, timezone
 
 # Import crypto components through compatibility layer
-from .crypto_compat import RSA
+from Crypto.PublicKey import RSA
 
 # Import custom exceptions and configuration
 from .exceptions import ServerError, ProtocolError, ClientError

@@ -89,7 +89,7 @@ def main():
     print_phase(3, 3, "Starting Services with Debug Windows")
     
     # Create batch files for both servers
-    backup_server_command = [sys.executable, "-m", "src.server.server"]
+    backup_server_command = [sys.executable, "-m", "python_server.server.server"]
     api_server_command = [sys.executable, "cyberbackup_api_server.py"]
     
     backup_batch = create_debug_batch_file(backup_server_command, "Backup Server (Port 1256)")

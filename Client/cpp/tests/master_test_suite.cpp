@@ -33,25 +33,24 @@ Combined from:
 #include <memory>
 
 // Crypto++ includes
-#include "third_party/crypto++/rsa.h"
-#include "third_party/crypto++/osrng.h"
-#include "third_party/crypto++/base64.h"
-#include "third_party/crypto++/files.h"
-#include "third_party/crypto++/sha.h"
-#include "third_party/crypto++/hex.h"
-#include "third_party/crypto++/filters.h"
-#include "third_party/crypto++/aes.h"
-#include "third_party/crypto++/modes.h"
+#include <cryptopp/rsa.h>
+#include <cryptopp/osrng.h>
+#include <cryptopp/base64.h>
+#include <cryptopp/files.h>
+#include <cryptopp/sha.h>
+#include <cryptopp/hex.h>
+#include <cryptopp/filters.h>
+#include <cryptopp/aes.h>
+#include <cryptopp/modes.h>
 
 // Include project headers
-#include "include/wrappers/RSAWrapper.h"
-#include "include/wrappers/AESWrapper.h"
-#include "include/wrappers/Base64Wrapper.h"
-#include "include/client/cksum.h"
-#include "include/client/protocol.h"
+#include "../deps/RSAWrapper.h"
+#include "../deps/AESWrapper.h"
+#include "../deps/Base64Wrapper.h"
+// Removed obsolete include references
 
 #ifdef _WIN32
-#include "include/client/ClientGUI.h"
+// Removed obsolete ClientGUI include
 #endif
 
 class MasterTestFramework {

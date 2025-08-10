@@ -8,7 +8,7 @@ specification for consistent header processing across all components.
 import re
 import unicodedata
 import logging
-from typing import Dict, List, Tuple, Union
+from typing import Dict, Tuple, Union, Optional
 from .crc import calculate_crc32
 
 logger = logging.getLogger(__name__)
@@ -67,9 +67,7 @@ def normalize_header_value(value: str) -> str:
     collapsed = re.sub(r'\s+', ' ', stripped)
     
     # Remove control characters except tab (which gets converted to space above)
-    clean = re.sub(r'[\x00-\x08\x0B-\x1F\x7F]', '', collapsed)
-    
-    return clean
+    return re.sub(r'[\x00-\x08\x0B-\x1F\x7F]', '', collapsed)
 
 
 def parse_bhi_headers(bhi_content: str) -> Dict[str, str]:
@@ -129,16 +127,18 @@ def canonicalize_headers_bhi(raw_input: Union[str, bytes]) -> bytes:
     # Convert to string if bytes
     if isinstance(raw_input, bytes):
         try:
-            raw_input = raw_input.decode('utf-8')
+            raw_input_str = raw_input.decode('utf-8')
         except UnicodeDecodeError as e:
-            raise InvalidUTF8Error(f"Invalid UTF-8 sequence: {e}")
+            raise InvalidUTF8Error(f"Invalid UTF-8 sequence: {e}") from e
+    else:
+        raw_input_str = str(raw_input)
     
     # Extract content between <bhi> tags
-    bhi_match = re.search(r'<bhi>\s*(.*?)\s*</bhi>', raw_input, re.DOTALL)
+    bhi_match = re.search(r'<bhi>\s*(.*?)\s*</bhi>', raw_input_str, re.DOTALL)
     if not bhi_match:
         raise MalformedHeaderError("Missing or malformed <bhi> tags")
     
-    bhi_content = bhi_match.group(1)
+    bhi_content = bhi_match[1]
     
     # Parse headers
     headers = parse_bhi_headers(bhi_content)
@@ -147,8 +147,7 @@ def canonicalize_headers_bhi(raw_input: Union[str, bytes]) -> bytes:
     canonical_lines = ['<bhi>']
     
     # Sort headers alphabetically by name
-    for name in sorted(headers.keys()):
-        canonical_lines.append(f"{name}:{headers[name]}")
+    canonical_lines.extend(f"{name}:{headers[name]}" for name in sorted(headers.keys()))
     
     canonical_lines.append('</bhi>')
     
@@ -208,8 +207,8 @@ def format_timestamp_iso8601(timestamp: Union[int, float, str]) -> str:
         try:
             datetime.datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
             return timestamp
-        except ValueError:
-            raise ValueError(f"Invalid ISO 8601 timestamp: {timestamp}")
+        except ValueError as e:
+            raise ValueError(f"Invalid ISO 8601 timestamp: {timestamp}") from e
     
     # Convert numeric timestamp to ISO 8601
     dt = datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)
@@ -272,7 +271,7 @@ class HeaderCanonicalizer:
             self.last_error = e
             raise
     
-    def get_stats(self) -> Dict[str, Union[int, str]]:
+    def get_stats(self) -> Dict[str, Union[int, str, None]]:
         """Get processing statistics."""
         return {
             'processed_count': self.processed_count,
@@ -288,7 +287,7 @@ class HeaderCanonicalizer:
 
 
 # Convenience functions for common operations
-def quick_canonicalize(headers_dict: Dict[str, str]) -> bytes:
+def quick_canonicalize(headers_dict: Dict[str, Union[str, int, float]]) -> bytes:
     """
     Quick canonicalization from dictionary.
     

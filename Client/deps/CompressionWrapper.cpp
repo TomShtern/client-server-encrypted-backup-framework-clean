@@ -1,4 +1,4 @@
-#include "../../include/utils/CompressionWrapper.h"
+#include "CompressionWrapper.h"
 #include <iostream>
 #include <chrono>
 #include <algorithm>

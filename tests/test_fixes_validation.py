@@ -28,14 +28,14 @@ from unittest.mock import Mock, patch, MagicMock
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import the components we're testing
-from src.shared.utils.file_lifecycle import SynchronizedFileManager, create_transfer_info_managed
-from src.shared.utils.error_handler import (
+from Shared.utils.file_lifecycle import SynchronizedFileManager, create_transfer_info_managed
+from Shared.utils.error_handler import (
     get_error_handler, ErrorCode, ErrorCategory, ErrorSeverity,
     handle_subprocess_error, handle_protocol_error
 )
-from src.shared.utils.unified_config import UnifiedConfigurationManager
-from src.server.protocol import validate_protocol_version
-from src.server.config import VERSION_TOLERANCE_ENABLED, COMPATIBLE_VERSIONS
+from Shared.utils.unified_config import UnifiedConfigurationManager
+from python_server.server.protocol import validate_protocol_version
+from python_server.server.config import VERSION_TOLERANCE_ENABLED, COMPATIBLE_VERSIONS
 
 class TestSynchronizedFileManager(unittest.TestCase):
     """Test the SynchronizedFileManager race condition fixes."""
@@ -215,23 +215,23 @@ class TestProtocolFlexibility(unittest.TestCase):
     def setUp(self):
         """Set up test environment."""
         # Ensure version tolerance is enabled for testing
-        import src.server.config as config
+        import python_server.server.config as config
         self.original_tolerance = getattr(config, 'VERSION_TOLERANCE_ENABLED', True)
         config.VERSION_TOLERANCE_ENABLED = True
     
     def tearDown(self):
         """Restore original configuration."""
-        import src.server.config as config
+        import python_server.server.config as config
         config.VERSION_TOLERANCE_ENABLED = self.original_tolerance
     
     def test_exact_version_match(self):
         """Test that exact version matches still work."""
-        from server.config import SERVER_VERSION
+        from python_server.server.config import SERVER_VERSION
         self.assertTrue(validate_protocol_version(SERVER_VERSION))
     
     def test_backward_compatibility(self):
         """Test backward compatibility with older versions."""
-        from server.config import SERVER_VERSION
+        from python_server.server.config import SERVER_VERSION
         
         # Test one version behind (should be allowed)
         older_version = SERVER_VERSION - 1
@@ -246,7 +246,7 @@ class TestProtocolFlexibility(unittest.TestCase):
     
     def test_version_range_support(self):
         """Test version range support."""
-        from server.config import MIN_SUPPORTED_CLIENT_VERSION, MAX_SUPPORTED_CLIENT_VERSION
+        from python_server.server.config import MIN_SUPPORTED_CLIENT_VERSION, MAX_SUPPORTED_CLIENT_VERSION
         
         # Test minimum supported version
         self.assertTrue(validate_protocol_version(MIN_SUPPORTED_CLIENT_VERSION))
@@ -263,13 +263,13 @@ class TestProtocolFlexibility(unittest.TestCase):
     
     def test_version_tolerance_disable(self):
         """Test that version tolerance can be disabled for strict mode."""
-        import src.server.config as config
+        import python_server.server.config as config
         
         # Disable version tolerance
         config.VERSION_TOLERANCE_ENABLED = False
         
         # Only exact server version should be accepted
-        from src.server.config import SERVER_VERSION
+        from python_server.server.config import SERVER_VERSION
         self.assertTrue(validate_protocol_version(SERVER_VERSION))
         
         # Other versions should fail

@@ -68,7 +68,8 @@ from datetime import datetime
 from typing import Dict, Any, Tuple
 
 # Import crypto components through compatibility layer
-from .crypto_compat import AES, unpad
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
 
 # Import custom exceptions
 from .exceptions import ServerError, ProtocolError, ClientError, FileError

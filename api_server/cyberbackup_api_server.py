@@ -39,8 +39,8 @@ from flask import Flask, request, jsonify, send_from_directory, send_file, sessi
 
 # Import enhanced logging utilities
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
-from src.shared.logging_utils import setup_dual_logging, create_log_monitor_info
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from Shared.logging_utils import setup_dual_logging, create_log_monitor_info
 
 # Configure enhanced dual logging (console + file) with observability
 logger, api_log_file = setup_dual_logging(
@@ -52,19 +52,19 @@ logger, api_log_file = setup_dual_logging(
 )
 
 # Setup structured logging and observability
-from src.shared.observability_middleware import setup_observability_for_flask
-from src.shared.logging_utils import create_enhanced_logger, log_performance_metrics
+from Shared.observability_middleware import setup_observability_for_flask
+from Shared.logging_utils import create_enhanced_logger, log_performance_metrics
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 
 # Import our real backup executor
-from src.api.real_backup_executor import RealBackupExecutor
+from real_backup_executor import RealBackupExecutor
 
 # Import singleton manager to prevent multiple API server instances
-from src.server.server_singleton import ensure_single_server_instance
+from python_server.server.server_singleton import ensure_single_server_instance
 
 # Import file receipt monitoring
-from src.server.file_receipt_monitor import initialize_file_receipt_monitor, get_file_receipt_monitor, stop_file_receipt_monitor
+from python_server.server.file_receipt_monitor import initialize_file_receipt_monitor, get_file_receipt_monitor, stop_file_receipt_monitor
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for local development
@@ -77,9 +77,9 @@ observability_middleware = setup_observability_for_flask(app, "api-server")
 structured_logger = create_enhanced_logger("api-server", logger)
 
 # Performance monitoring singleton
-from src.shared.utils.performance_monitor import get_performance_monitor
+from Shared.utils.performance_monitor import get_performance_monitor
 # Connection health monitoring
-from src.server.connection_health import get_connection_health_monitor
+from python_server.server.connection_health import get_connection_health_monitor
 conn_health = get_connection_health_monitor()
 
 perf_monitor = get_performance_monitor()
@@ -210,15 +210,15 @@ def handle_ping():
 def serve_client():
     """Serve the main client HTML interface"""
     try:
-        return send_file('src/client/NewGUIforClient.html')
+        return send_file('Client/other/html/NewGUIforClient.html')
     except FileNotFoundError:
-        return "<h1>Client GUI not found</h1><p>Please ensure src/client/NewGUIforClient.html exists</p>", 404
+        return "<h1>Client GUI not found</h1><p>Please ensure Client/other/html/NewGUIforClient.html exists</p>", 404
 
 @app.route('/client/<path:filename>')
 def serve_client_assets(filename):
     """Serve client assets (CSS, JS, images, etc.)"""
     try:
-        return send_from_directory('src/client', filename)
+        return send_from_directory('Client/other/html', filename)
     except FileNotFoundError:
         return f"<h1>Asset not found: {filename}</h1>", 404
 
@@ -774,7 +774,7 @@ if __name__ == "__main__":
     print("Component Status:")
 
     # Check HTML client
-    client_html = "src/client/NewGUIforClient.html"
+    client_html = "Client/other/html/NewGUIforClient.html"
     if os.path.exists(client_html):
         print(f"[OK] HTML Client: {client_html}")
     else:

@@ -1,9 +1,9 @@
 #include <iostream>
 #include <string>
-#include "third_party/crypto++/osrng.h"
-#include "third_party/crypto++/rsa.h"
-#include "third_party/crypto++/base64.h"
-#include "third_party/crypto++/files.h"
+#include <cryptopp/osrng.h>
+#include <cryptopp/rsa.h>
+#include <cryptopp/base64.h>
+#include <cryptopp/files.h>
 
 int main() {
     try {

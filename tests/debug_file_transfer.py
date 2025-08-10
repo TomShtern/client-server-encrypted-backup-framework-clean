@@ -36,7 +36,7 @@ def debug_file_transfer():
     
     # Step 3: Check what files are currently in received_files
     print("3. Current files in received_files:")
-    received_dirs = ["received_files", "src/server/received_files"]
+    received_dirs = ["received_files", "python_server/server/received_files"]
     for dir_path in received_dirs:
         if os.path.exists(dir_path):
             files = os.listdir(dir_path)

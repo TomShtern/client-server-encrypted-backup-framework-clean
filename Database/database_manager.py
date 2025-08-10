@@ -11,7 +11,7 @@ import json
 from datetime import datetime
 
 # Add server modules to path
-sys.path.insert(0, 'src/server')
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'python_server', 'server'))
 
 def print_header(title):
     """Print a formatted header."""

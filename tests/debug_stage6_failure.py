@@ -47,11 +47,11 @@ def test_server_module():
         print(f"Working directory: {os.getcwd()}")
         
         # Try to import the server module
-        import src.server.server
-        print("[OK] src.server.server module imports successfully")
+        import python_server.server.server
+        print("[OK] python_server.server.server module imports successfully")
         return True
     except Exception as e:
-        print(f"[ERROR] Cannot import src.server.server: {e}")
+        print(f"[ERROR] Cannot import python_server.server.server: {e}")
         return False
 
 def test_api_server():
@@ -81,11 +81,11 @@ def test_subprocess_calls():
     
     # Test 1: Backup Server Command
     print("\n1. Testing Backup Server Command:")
-    print("   Command: python -m src.server.server")
+    print("   Command: python -m python_server.server.server")
     
     try:
         result = subprocess.run(
-            [sys.executable, "-m", "src.server.server"],
+            [sys.executable, "-m", "python_server.server.server"],
             timeout=5,  # 5 second timeout
             capture_output=True,
             text=True,
@@ -162,7 +162,7 @@ def main():
     print("\nCHECK 3: Required Files")
     print("-" * 30)
     
-    server_file = Path("src/server/server.py")
+    server_file = Path("python_server/server/server.py")
     api_file = Path("cyberbackup_api_server.py")
     
     print(f"Server file: {server_file} - {'EXISTS' if server_file.exists() else 'MISSING'}")

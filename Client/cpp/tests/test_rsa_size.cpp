@@ -1,4 +1,4 @@
-#include "include/wrappers/RSAWrapper.h"
+#include "../deps/RSAWrapper.h"
 #include <iostream>
 
 int main() {

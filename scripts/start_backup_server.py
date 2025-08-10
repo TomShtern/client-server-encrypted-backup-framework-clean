@@ -5,7 +5,7 @@ DEPRECATED: Standalone Backup Server Launcher
 This file is DEPRECATED and should not be used.
 Use the official server entry point instead:
 
-    python -m src.server.server
+    python -m python_server.server.server
 
 Or use the one-click launcher:
 
@@ -30,7 +30,7 @@ def main():
     print("This script (start_backup_server.py) is DEPRECATED.")
     print()
     print("Please use the official server entry point instead:")
-    print("  python -m src.server.server")
+    print("  python -m python_server.server.server")
     print()
     print("Or use the one-click launcher:")
     print("  python one_click_build_and_run.py")
@@ -45,7 +45,7 @@ def main():
             print("\nStarting official server...")
             import subprocess
             import sys
-            subprocess.run([sys.executable, "-m", "src.server.server"])
+            subprocess.run([sys.executable, "-m", "python_server.server.server"])
             return 0
         else:
             print("Exiting. Please use the official server entry point.")

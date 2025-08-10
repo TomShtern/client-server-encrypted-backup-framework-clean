@@ -38,8 +38,8 @@ import psutil
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.shared.observability import get_metrics_collector, get_system_monitor
-from src.shared.logging_utils import setup_dual_logging
+from Shared.observability import get_metrics_collector, get_system_monitor
+from Shared.logging_utils import setup_dual_logging
 
 
 class IntegrationTestFramework:
@@ -91,7 +91,7 @@ class IntegrationTestFramework:
             
             # Start backup server
             self.logger.info("Starting backup server")
-            backup_server_cmd = [sys.executable, "-m", "src.server.server"]
+            backup_server_cmd = [sys.executable, "-m", "python_server.server.server"]
             self.backup_server_process = subprocess.Popen(
                 backup_server_cmd,
                 cwd=self.project_root,

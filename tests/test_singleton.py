@@ -155,9 +155,9 @@ def main():
         print("FAILURE: Some tests failed. Please review the output above.")
     
     print("\nUsage instructions:")
-    print("   Start server: python server/server.py")
-    print("   If server conflicts occur: python server/server_singleton.py --cleanup")
-    print("   Check server status: python server/server_singleton.py --check")
+    print("   Start server: python -m python_server.server.server")
+    print("   If server conflicts occur: python -m python_server.server.server_singleton --cleanup")
+    print("   Check server status: python -m python_server.server.server_singleton --check")
     
     return 0 if all_passed else 1
 

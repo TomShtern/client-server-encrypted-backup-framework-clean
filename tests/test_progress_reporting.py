@@ -12,7 +12,7 @@ from datetime import datetime
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from src.api.real_backup_executor import RealBackupExecutor
+from api_server.real_backup_executor import RealBackupExecutor
 
 def test_progress_calculation():
     """Test the dynamic progress calculation methods"""
