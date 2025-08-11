@@ -63,7 +63,7 @@ setup_imports()
 from Shared.logging_utils import setup_dual_logging, create_log_monitor_info
 
 # Initialize Sentry error tracking for backup server
-from Shared.sentry_config import init_sentry
+from Shared.sentry_config import init_sentry, capture_error, capture_message
 sentry_initialized = init_sentry("backup-server", traces_sample_rate=0.1)
 
 # Set up enhanced dual logging with observability features

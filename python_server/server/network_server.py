@@ -15,6 +15,7 @@ from .config import (
     SERVER_VERSION
 )
 from .exceptions import ProtocolError
+from . import protocol
 from .protocol import (
     REQ_REGISTER, REQ_RECONNECT, RESP_GENERIC_SERVER_ERROR, RESP_RECONNECT_FAIL
 )
@@ -240,113 +241,15 @@ class NetworkServer:
                 'uptime_seconds': int(time.time() - self.start_time)
             }
 
-    def _read_exact(self, sock: socket.socket, num_bytes: int) -> bytes:
-        """
-        Reads exactly `num_bytes` from the socket.
-
-        Args:
-            sock: The socket to read from
-            num_bytes: The number of bytes to read
-
-        Returns:
-            The bytes read from the socket
-
-        Raises:
-            ValueError: If `num_bytes` is negative
-            ProtocolError: If `num_bytes` exceeds `MAX_PAYLOAD_READ_LIMIT`
-            TimeoutError: If a socket timeout occurs during read
-            ConnectionError: If the socket is closed or a socket error occurs
-        """
-        if num_bytes < 0:
-            raise ValueError("Cannot read a negative number of bytes.")
-        if num_bytes == 0:
-            return b''  # Reading zero bytes returns empty bytes
-        if num_bytes > MAX_PAYLOAD_READ_LIMIT:
-            raise ProtocolError(f"Requested read of {num_bytes} bytes exceeds server's MAX_PAYLOAD_READ_LIMIT ({MAX_PAYLOAD_READ_LIMIT}).")
-
-        data_chunks = []
-        bytes_received_total = 0
-        while bytes_received_total < num_bytes:
-            try:
-                # Calculate how many bytes are still needed, read up to 4096 at a time
-                bytes_to_read_this_chunk = min(num_bytes - bytes_received_total, 4096)
-                chunk = sock.recv(bytes_to_read_this_chunk)
-            except socket.timeout as e:
-                raise TimeoutError(f"Socket timeout occurred while attempting to read {num_bytes} bytes (already received {bytes_received_total} bytes).") from e
-            except socket.error as e:
-                raise ConnectionError(f"Socket error encountered during read operation: {e}") from e
-
-            if not chunk:  # Empty chunk indicates socket was closed by peer
-                raise ConnectionError(f"Socket connection was broken by peer while attempting to read {num_bytes} bytes (already received {bytes_received_total} bytes).")
-
-            data_chunks.append(chunk)
-            bytes_received_total += len(chunk)
-
-        return b''.join(data_chunks)
-
-    def _parse_request_header(self, header_data: bytes) -> Tuple[bytes, int, int, int]:
-        """
-        Parses the 23-byte request header.
-
-        Args:
-            header_data: The raw bytes of the header
-
-        Returns:
-            A tuple: (client_id_bytes, version, code, payload_size)
-
-        Raises:
-            ProtocolError: If the header length is incorrect
-        """
-        expected_header_len = 16 + 1 + 2 + 4  # client_id + version + code + payload_size
-        if len(header_data) != expected_header_len:
-            raise ProtocolError(f"Invalid request header length. Expected {expected_header_len} bytes, but received {len(header_data)} bytes.")
-
-        client_id = header_data[:16]  # First 16 bytes are Client ID
-        version = int(header_data[16])  # Next byte is Version
-        code = struct.unpack("<H", header_data[17:19])[0]  # Bytes 17-18 for Code (little-endian)
-        payload_size = struct.unpack("<I", header_data[19:23])[0]  # Bytes 19-22 for Payload Size (little-endian)
-
-        return client_id, version, code, payload_size
-
     def _send_response(self, sock: socket.socket, code: int, payload: bytes = b''):
-        """
-        Constructs and sends a response to the client socket.
-
-        Args:
-            sock: The client socket to send the response to
-            code: The response code
-            payload: The response payload (bytes)
-
-        Raises:
-            TimeoutError: If a socket timeout occurs during send
-            ConnectionError: If a socket error occurs during send
-        """
-        # ResponseHeader: version (1 byte) + code (2 bytes) + payload_size (4 bytes)
-        header_bytes = struct.pack("<BHI", SERVER_VERSION, code, len(payload))
-        full_response_bytes = header_bytes + payload
-
+        """Send a response to the client using the protocol format."""
         try:
-            sock.sendall(full_response_bytes)
-            try:
-                health.heartbeat_write(sock.fileno(), len(full_response_bytes))
-            except Exception:
-                pass
-            logger.info(f"[DEBUG] Successfully sent response: Code={code}, TotalSizeSent={len(full_response_bytes)} (Header:{len(header_bytes)}, Payload:{len(payload)})")
-            print(f"[DEBUG] Response sent - Code: {code}, Raw bytes: {full_response_bytes.hex()}")
-        except socket.timeout as e:
-            logger.error(f"Socket timeout occurred while attempting to send response (Code: {code}). Client may not have received it.")
-            try:
-                health.mark_error(sock.fileno(), "write", e)
-            except Exception:
-                pass
-            raise
-        except socket.error as e:
-            logger.error(f"A socket error occurred during send operation (Code: {code}): {e}")
-            try:
-                health.mark_error(sock.fileno(), "write", e)
-            except Exception:
-                pass
-            raise ConnectionError(f"Failed to send response due to socket error: {e}") from e
+            response_bytes = protocol.create_response(code, payload)
+            sock.sendall(response_bytes)
+        except Exception as e:
+            logger.error(f"Failed to send response code {code}: {e}")
+
+    
 
     def _handle_client_connection(self, client_conn: socket.socket, client_address: Tuple[str, int],
                                  conn_semaphore: threading.Semaphore):
@@ -372,12 +275,12 @@ class NetworkServer:
             while not self.shutdown_event.is_set():
                 try:
                     # Read Request Header (23 bytes)
-                    header_bytes = self._read_exact(client_conn, 16 + 1 + 2 + 4)
+                    header_bytes = protocol.read_exact(client_conn, 23)
                     try:
                         health.heartbeat_read(client_conn.fileno(), len(header_bytes))
                     except Exception:
                         pass
-                    client_id_from_header, version_from_header, code_from_header, payload_size_from_header = self._parse_request_header(header_bytes)
+                    client_id_from_header, version_from_header, code_from_header, payload_size_from_header = protocol.parse_request_header(header_bytes)
 
                     # Update log identifier with Client ID and register in monitor
                     current_log_id_str = client_id_from_header.hex() if any(client_id_from_header) else "REGISTRATION_ATTEMPT"
@@ -389,33 +292,30 @@ class NetworkServer:
 
                     logger.info(f"Request received from {log_client_identifier}: Version={version_from_header}, Code={code_from_header}, PayloadSize={payload_size_from_header}")
 
-                    # Protocol Version Check (flexible compatibility)
-                    from .protocol import validate_protocol_version
-
-                    if not validate_protocol_version(version_from_header):
-                        logger.warning(f"Incompatible client protocol version {version_from_header} received from {log_client_identifier}. Closing connection.")
-                        self._send_response(client_conn, RESP_GENERIC_SERVER_ERROR)
+                    if not protocol.validate_protocol_version(version_from_header):
+                        logger.warning(f"Incompatible client protocol version {version_from_header} from {log_client_identifier}. Closing connection.")
+                        client_conn.sendall(protocol.create_response(protocol.RESP_GENERIC_SERVER_ERROR))
                         break
                     else:
                         logger.debug(f"Accepted client protocol version {version_from_header} from {log_client_identifier}")
 
                     # Read Request Payload
-                    payload_bytes = self._read_exact(client_conn, payload_size_from_header)
+                    payload_bytes = protocol.read_exact(client_conn, payload_size_from_header)
                     try:
                         health.heartbeat_read(client_conn.fileno(), len(payload_bytes))
                     except Exception:
                         pass
 
                     # Resolve Client Object for non-registration requests
-                    if code_from_header != REQ_REGISTER:
+                    if code_from_header != protocol.REQ_REGISTER:
                         active_client_obj = self.client_resolver(client_id_from_header)
 
                         if not active_client_obj:
-                            logger.warning(f"Request (Code:{code_from_header}) received from an unknown or previously timed-out client ID: {current_log_id_str}. Denying request.")
-                            if code_from_header == REQ_RECONNECT:
-                                self._send_response(client_conn, RESP_RECONNECT_FAIL, client_id_from_header)
+                            logger.warning(f"Request (Code:{code_from_header}) received from an unknown or timed-out client ID: {current_log_id_str}. Denying request.")
+                            if code_from_header == protocol.REQ_RECONNECT:
+                                client_conn.sendall(protocol.create_response(protocol.RESP_RECONNECT_FAIL, client_id_from_header))
                             else:
-                                self._send_response(client_conn, RESP_GENERIC_SERVER_ERROR)
+                                client_conn.sendall(protocol.create_response(protocol.RESP_GENERIC_SERVER_ERROR))
                             break
 
                         # Update client last seen and log identifier
@@ -441,7 +341,7 @@ class NetworkServer:
                     logger.error(f"Protocol error encountered with {log_client_identifier}: {e}. Sending generic error and closing connection.")
                     if client_conn.fileno() != -1:
                         try:
-                            self._send_response(client_conn, RESP_GENERIC_SERVER_ERROR)
+                            client_conn.sendall(protocol.create_response(RESP_GENERIC_SERVER_ERROR))
                         except Exception as send_error_exception:
                             logger.error(f"Failed to send error response to {log_client_identifier} after a protocol error occurred: {send_error_exception}")
                     break
@@ -449,7 +349,7 @@ class NetworkServer:
                     logger.critical(f"Unexpected critical error occurred while handling client {log_client_identifier}: {e}", exc_info=True)
                     if client_conn.fileno() != -1:
                         try:
-                            self._send_response(client_conn, RESP_GENERIC_SERVER_ERROR)
+                            client_conn.sendall(protocol.create_response(protocol.RESP_GENERIC_SERVER_ERROR))
                         except Exception as send_error_exception:
                             logger.error(f"Failed to send error response to {log_client_identifier} after an unexpected error: {send_error_exception}")
                     break

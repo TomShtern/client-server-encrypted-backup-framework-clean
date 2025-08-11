@@ -45,7 +45,7 @@ setup_imports()
 from Shared.logging_utils import setup_dual_logging, create_log_monitor_info
 
 # Initialize Sentry error tracking
-from Shared.sentry_config import init_sentry, capture_error, capture_message
+from Shared.sentry_config import init_sentry, capture_error
 sentry_initialized = init_sentry("api-server", traces_sample_rate=0.5)
 
 # Configure enhanced dual logging (console + file) with observability
@@ -72,8 +72,7 @@ except ImportError:
 # Import singleton manager to prevent multiple API server instances
 from python_server.server.server_singleton import ensure_single_server_instance
 
-# Import file receipt monitoring
-from python_server.server.file_receipt_monitor import initialize_file_receipt_monitor, get_file_receipt_monitor, stop_file_receipt_monitor
+from Shared.unified_monitor import UnifiedFileMonitor
 
 # Define PROJECT_ROOT for consistent path resolution
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -87,6 +86,10 @@ socketio = SocketIO(app, cors_allowed_origins=["http://localhost:9090", "http://
 # Setup enhanced observability middleware - FIXED VERSION
 observability_middleware = setup_observability_for_flask(app, "api-server")
 structured_logger = create_enhanced_logger("api-server", logger)
+
+# --- Global Singleton Monitor ---
+# This monitor will be shared across all requests.
+file_monitor = UnifiedFileMonitor(os.path.join(PROJECT_ROOT, 'received_files'))
 
 # Add Sentry error handlers
 if sentry_initialized:
@@ -127,15 +130,37 @@ conn_health = get_connection_health_monitor()
 perf_monitor = get_performance_monitor()
 
 
-# --- Initialize global variables ---
+# --- Initialize global variables & Locks ---
+# For job-specific data
+active_backup_jobs = {}
+active_backup_jobs_lock = threading.Lock()
+
+# For general, non-job-specific server status
+def get_default_server_status():
+    return {
+        'connected': False,
+        'backing_up': False,
+        'phase': 'READY',
+        'status': 'ready',
+        'message': 'Ready for backup',
+        'last_updated': datetime.now().isoformat()
+    }
+server_status = get_default_server_status()
+server_status_lock = threading.Lock()
+last_known_status = get_default_server_status()
+
+# Other globals
 connection_established = False
 connection_timestamp = None
-active_backup_jobs = {}
 connected_clients = set()
-websocket_enabled = True  # Control WebSocket functionality
+websocket_enabled = True
 
-
-
+# Server configuration
+server_config = {
+    'host': '127.0.0.1',
+    'port': 1256,
+    'username': 'default_user'
+}
 
 def broadcast_file_receipt(event_type: str, data: dict):
     """Broadcast file receipt events to all connected clients"""
@@ -150,42 +175,13 @@ def broadcast_file_receipt(event_type: str, data: dict):
     except Exception as e:
         print(f"[WEBSOCKET] Error broadcasting file receipt: {e}")
 
-
-def get_default_status():
-    return {
-        'connected': False,
-        'backing_up': False,
-        'phase': 'READY',
-        'progress': {'percentage': 0, 'current_file': '', 'bytes_transferred': 0, 'total_bytes': 0},
-        'status': 'ready',
-        'message': 'Ready for backup',
-        'events': [],
-        'last_updated': datetime.now().isoformat()
-    }
-
-backup_status = get_default_status()
-
-last_known_status = get_default_status() # For providing a consistent default
-
-# Server configuration
-server_config = {
-    'host': '127.0.0.1',
-    'port': 1256,
-    'username': 'default_user'
-}
-
-def update_backup_status(phase, message, progress=None):
-    """Update backup status with thread safety"""
-    global backup_status
-    backup_status['phase'] = phase
-    backup_status['message'] = message
-    backup_status['last_updated'] = datetime.now().isoformat()
-    if progress is not None:
-        if isinstance(progress, dict):
-            backup_status['progress'].update(progress)
-        else:
-            backup_status['progress']['percentage'] = progress
-    print(f"[STATUS] {phase}: {message}")
+def update_server_status(phase, message):
+    """Update general server status with thread safety"""
+    with server_status_lock:
+        server_status['phase'] = phase
+        server_status['message'] = message
+        server_status['last_updated'] = datetime.now().isoformat()
+    print(f"[SERVER_STATUS] {phase}: {message}")
 
 def check_backup_server_status(host: Optional[str] = None, port: Optional[int] = None):
     """Check if the Python backup server is reachable.
@@ -340,75 +336,30 @@ def api_test():
 @app.route('/api/status')
 def api_status():
     """Get current backup status with proper connection state management and timeout protection"""
-    import signal
-    from contextlib import contextmanager
-    
-    @contextmanager
-    def timeout_handler(timeout_seconds=3):
-        """Context manager to prevent API status calls from hanging"""
-        def timeout_signal_handler(signum, frame):
-            raise TimeoutError(f"API status call timed out after {timeout_seconds} seconds")
-        
-        if os.name != 'nt':  # Unix-like systems
-            old_handler = signal.signal(signal.SIGALRM, timeout_signal_handler)
-            signal.alarm(timeout_seconds)
-        try:
-            yield
-        except TimeoutError:
-            logger.warning("API status call timed out - returning cached status")
-            raise
-        finally:
-            if os.name != 'nt':
-                signal.alarm(0)
-                signal.signal(signal.SIGALRM, old_handler)
-    
-    try:
-        with timeout_handler(3):  # 3 second timeout for status calls
-            global last_known_status, active_backup_jobs
+    job_id = request.args.get('job_id')
+    status = None
 
-            job_id = request.args.get('job_id')
-            status = active_backup_jobs.get(job_id, last_known_status)
-
-            # Always provide the latest connection status
-            status['connected'] = check_backup_server_status() and connection_established
-            status['isConnected'] = status['connected']
-
-            # Clear events after reading them
-            events_to_send = status.get('events', [])
-            if job_id and job_id in active_backup_jobs:
+    if job_id:
+        with active_backup_jobs_lock:
+            job_status = active_backup_jobs.get(job_id)
+            if job_status:
+                status = job_status.copy()
+                # Clear events after reading them
+                events_to_send = status.get('events', [])
                 active_backup_jobs[job_id]['events'] = []
-
-            response = status.copy()
-            response['events'] = events_to_send
-
-            return jsonify(response)
-
-    except TimeoutError as e:
-        print(f"[TIMEOUT] API status call timed out: {str(e)}")
-        # Return cached status to prevent client-side timeouts
-        cached_response = {
-            'connected': False,
-            'isConnected': False,
-            'status': 'timeout',
-            'message': 'API status check timed out - server may be busy',
-            'phase': 'TIMEOUT',
-            'last_updated': datetime.now().isoformat(),
-            'cached': True
-        }
-        return jsonify(cached_response), 200
+                status['events'] = events_to_send
     
-    except Exception as e:
-        print(f"[ERROR] Exception in api_status: {str(e)}")
-        error_response = {
-            'connected': False,
-            'isConnected': False,
-            'status': 'error',
-            'message': f'API Error: {str(e)}',
-            'phase': 'ERROR',
-            'last_updated': datetime.now().isoformat(),
-            'error_type': type(e).__name__
-        }
-        return jsonify(error_response), 500
+    if status is None:
+        # No job_id provided or job_id not found, return general server status
+        with server_status_lock:
+            status = server_status.copy()
+        status['backing_up'] = False # General status is never "backing up"
+
+    # Always provide the latest connection status
+    status['connected'] = check_backup_server_status() and connection_established
+    status['isConnected'] = status['connected']
+
+    return jsonify(status)
 
 @app.route('/health')
 def health_check():
@@ -426,6 +377,9 @@ def health_check():
         except Exception:
             cpu_usage = memory_usage = active_connections = 0
         
+        with active_backup_jobs_lock:
+            active_jobs_count = len(active_backup_jobs)
+
         return jsonify({
             'status': 'healthy' if server_running else 'degraded',
             'backup_server': 'running' if server_running else 'not_running',
@@ -434,7 +388,7 @@ def health_check():
                 'cpu_usage_percent': cpu_usage,
                 'memory_usage_percent': memory_usage,
                 'active_websocket_connections': active_connections,
-                'active_backup_jobs': len(active_backup_jobs) if 'active_backup_jobs' in globals() else 0
+                'active_backup_jobs': active_jobs_count
             },
             'timestamp': datetime.now().isoformat(),
             'uptime_info': 'API server responsive'
@@ -451,7 +405,7 @@ def health_check():
 @app.route('/api/connect', methods=['POST'])
 def api_connect():
     """Connect to backup server with configuration using real backup protocol"""
-    global server_config, backup_status, backup_executor, connection_established, connection_timestamp
+    global server_config, connection_established, connection_timestamp
 
     print("[DEBUG] /api/connect endpoint called")
     print(f"[DEBUG] Request method: {request.method}")
@@ -491,61 +445,50 @@ def api_connect():
         if config:
             server_config.update(config)
 
-        update_backup_status('CONNECT', f'Testing connection to {server_config["host"]}:{server_config["port"]}...')
+        update_server_status('CONNECT', f'Testing connection to {server_config["host"]}:{server_config["port"]}...')
 
         # Test if backup server is reachable
         server_reachable = check_backup_server_status(server_config['host'], server_config['port'])
-
+        
+        message = ''
         if server_reachable:
-            # Establish connection session
             connection_established = True
             connection_timestamp = datetime.now()
-
-            backup_status['connected'] = True
-            backup_status['status'] = 'connected'
-            backup_status['message'] = f'Connected to backup server at {server_config["host"]}:{server_config["port"]}'
-            update_backup_status('READY', 'Connected successfully. Ready for backup.')
+            message = f'Connected to backup server at {server_config["host"]}:{server_config["port"]}'
+            update_server_status('READY', 'Connected successfully. Ready for backup.')
             print(f"[DEBUG] Connection established at {connection_timestamp.isoformat()}")
         else:
             connection_established = False
             connection_timestamp = None
-
-            backup_status['connected'] = False
-            backup_status['status'] = 'connection_failed'
-            backup_status['message'] = 'Connection failed: Backup server not responding'
-            update_backup_status('ERROR', 'Connection test failed: Backup server not responding')
+            message = 'Connection failed: Backup server not responding'
+            update_server_status('ERROR', 'Connection test failed: Backup server not responding')
             print("[DEBUG] Connection failed - server not reachable")
 
         return jsonify({
             'success': server_reachable,
             'connected': server_reachable,
-            'message': backup_status['message'],
+            'message': message,
             'server_config': server_config
         })
 
     except Exception as e:
         error_msg = f"Connection error: {str(e)}"
         print(f"[ERROR] {error_msg}")
-        update_backup_status('ERROR', error_msg)
+        update_server_status('ERROR', error_msg)
         return jsonify({'success': False, 'error': error_msg}), 500
 
 @app.route('/api/disconnect', methods=['POST'])
 def api_disconnect():
     """Disconnect from backup server"""
-    global connection_established, connection_timestamp, backup_status
+    global connection_established, connection_timestamp
 
     print("[DEBUG] /api/disconnect called")
-
 
     try:
         connection_established = False
         connection_timestamp = None
 
-        backup_status['connected'] = False
-        backup_status['status'] = 'disconnected'
-        backup_status['message'] = 'Disconnected from backup server'
-        backup_status['phase'] = 'READY'
-
+        update_server_status('READY', 'Disconnected from backup server')
         print("[DEBUG] Connection terminated")
 
         return jsonify({
@@ -562,7 +505,6 @@ def api_disconnect():
 @app.route('/api/start_backup', methods=['POST'])
 def api_start_backup_working():
     """Start backup using REAL backup executor with enhanced observability"""
-    global backup_status
     start_time = time.time()
 
     structured_logger.info("Backup request received", operation="start_backup")
@@ -571,28 +513,27 @@ def api_start_backup_working():
     job_id = f"job_{int(time.time() * 1000000)}"
 
     # Initialize job tracking
-    active_backup_jobs[job_id] = {
-        'phase': 'INITIALIZING',
-        'message': 'Initializing backup job...',
-        'progress': {'percentage': 0, 'current_file': '', 'bytes_transferred': 0, 'total_bytes': 0},
-        'status': 'initializing',
-        'events': [],
-        'connected': True,
-        'backing_up': True,
-        'last_updated': datetime.now().isoformat()
-    }
+    with active_backup_jobs_lock:
+        active_backup_jobs[job_id] = {
+            'phase': 'INITIALIZING',
+            'message': 'Initializing backup job...',
+            'progress': {'percentage': 0, 'current_file': '', 'bytes_transferred': 0, 'total_bytes': 0},
+            'status': 'initializing',
+            'events': [],
+            'connected': True,
+            'backing_up': True,
+            'last_updated': datetime.now().isoformat()
+        }
 
     # Create a new, dedicated backup executor for this specific job.
-    # This is the core of the fix for the race condition.
     try:
-        # Get the correct path to the C++ client executable
         api_server_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(api_server_dir)
         client_exe_path = os.path.join(project_root, "build", "Release", "EncryptedBackupClient.exe")
         
         backup_executor = RealBackupExecutor(client_exe_path)
-        # Store executor on the job record for cancellation control
-        active_backup_jobs[job_id]['executor'] = backup_executor
+        with active_backup_jobs_lock:
+            active_backup_jobs[job_id]['executor'] = backup_executor
         print(f"[Job {job_id}] RealBackupExecutor instance created with client: {client_exe_path}")
     except Exception as e:
         return jsonify({
@@ -600,7 +541,6 @@ def api_start_backup_working():
             'error': f'Failed to initialize backup executor: {e}'
         }), 500
 
-    # Get uploaded file
     if 'file' not in request.files:
         return jsonify({'success': False, 'error': 'No file uploaded'}), 400
 
@@ -609,19 +549,11 @@ def api_start_backup_working():
         return jsonify({'success': False, 'error': 'No file selected'}), 400
 
     try:
-        # --- STREAMING LOGIC ---
-        # Save the uploaded file directly to a temporary file on disk
-        # to avoid loading it into memory. This is the key to handling large files.
         temp_dir = tempfile.mkdtemp()
-
-        # CRITICAL FIX: Preserve original filename but ensure safe temp file creation
         original_filename = file.filename or f"backup_file_{int(time.time())}"
-
-        # Create a safe temporary filename while preserving the original for display
         safe_temp_name = f"upload_{int(time.time() * 1000000)}_{original_filename}"
         temp_file_path = os.path.join(temp_dir, safe_temp_name)
 
-        # Initialize performance monitor for this job with known total bytes if available
         total_bytes = None
         with contextlib.suppress(Exception):
             total_bytes = os.path.getsize(temp_file_path)
@@ -629,84 +561,34 @@ def api_start_backup_working():
             perf_monitor.start_job(job_id, total_bytes=total_bytes)
 
         print(f"[DEBUG] Original filename: {original_filename}")
-        print(f"[DEBUG] Safe temp filename: {safe_temp_name}")
         print(f"[DEBUG] Temp file path: {temp_file_path}")
 
         file.save(temp_file_path)
 
-        # Get form data
         username = request.form.get('username', server_config.get('username', 'default_user'))
-        # Accept 'server' as alias for host
         server_ip = request.form.get('host') or request.form.get('server') or server_config.get('host', '127.0.0.1')
         server_port = request.form.get('port', server_config.get('port', 1256))
 
-        # Define a dedicated status handler for this job
         def status_handler(phase, data):
-            if job_id not in active_backup_jobs:
-                return
+            with active_backup_jobs_lock:
+                if job_id not in active_backup_jobs:
+                    return
                 
-            active_backup_jobs[job_id]['events'].append({'phase': phase, 'data': data})
-            active_backup_jobs[job_id]['phase'] = phase
+                job_data = active_backup_jobs[job_id]
+                job_data['events'].append({'phase': phase, 'data': data})
+                job_data['phase'] = phase
+                job_data['last_updated'] = datetime.now().isoformat()
 
-            # Debug logging for API server progress handling
-            if isinstance(data, dict) and 'progress' in data:
-                print(f"[API_DEBUG] Received progress update: {phase} - {data['progress']:.1f}% - {data.get('message', 'No message')}")
-
-            # Update both job-specific and global backup status
-            if isinstance(data, dict):
-                message = data.get('message', phase)
-                active_backup_jobs[job_id]['message'] = message
-                if 'progress' in data:
-                    progress_value = data['progress']
-                    active_backup_jobs[job_id]['progress']['percentage'] = progress_value
-                # Feed performance monitor when we get rich progress from executor
-                with contextlib.suppress(Exception):
-                    if isinstance(data, dict):
-                        bytes_tx = data.get('bytes_transferred')
-                        total_b = data.get('total_bytes')
-                        speed = data.get('speed')
-                        perf_monitor.record_sample(
-                            job_id,
-                            bytes_transferred=int(bytes_tx) if isinstance(bytes_tx, (int, float)) else None,
-                            total_bytes=int(total_b) if isinstance(total_b, (int, float)) else None,
-                            speed_bps=float(speed) if isinstance(speed, (int, float)) else None,
-                            phase=phase,
-                        )
-
-                # Also update global backup status for unified API
-                if 'progress' in data:
-                    progress_value = data['progress']
-                    update_backup_status(phase, message, progress_value)
-                    print(f"[API_DEBUG] Updated job progress to {progress_value:.1f}%")
+                if isinstance(data, dict):
+                    job_data['message'] = data.get('message', phase)
+                    if 'progress' in data:
+                        job_data['progress']['percentage'] = data['progress']
+                    if 'bytes_transferred' in data:
+                        job_data['progress']['bytes_transferred'] = data['bytes_transferred']
+                    if 'total_bytes' in data:
+                        job_data['progress']['total_bytes'] = data['total_bytes']
                 else:
-                    update_backup_status(phase, message)
-            else:
-                active_backup_jobs[job_id]['message'] = data
-                update_backup_status(phase, data)
-
-            # Enhanced completion logic with file receipt verification
-            if phase in ['COMPLETED', 'FAILED', 'ERROR']:
-                # Check actual file receipt regardless of reported status
-                monitor = get_file_receipt_monitor()
-                if monitor and original_filename:
-                    file_filename = os.path.basename(original_filename)
-                    receipt_check = monitor.check_file_receipt(file_filename)
-                    if receipt_check.get('received', False):
-                        # File actually received - override any failure status
-                        if phase in ['FAILED', 'ERROR']:
-                            print(f"[OVERRIDE] Process reported {phase} but file was received - marking as SUCCESS")
-                            phase = 'COMPLETED'
-                            active_backup_jobs[job_id]['phase'] = 'COMPLETED'
-                            active_backup_jobs[job_id]['message'] = 'File successfully received and verified!'
-                            update_backup_status('COMPLETED', 'File transfer verified - backup successful!', 100)
-                    else:
-                        # File not received - ensure we report failure even if process claims success
-                        if phase == 'COMPLETED':
-                            print("[OVERRIDE] Process reported COMPLETED but file not received - marking as FAILED")
-                            phase = 'FAILED'
-                            active_backup_jobs[job_id]['phase'] = 'FAILED'
-                            active_backup_jobs[job_id]['message'] = 'Process completed but file not received on server'
-                            update_backup_status('FAILED', 'File transfer failed - no file received', 0)
+                    job_data['message'] = data
 
             # Real-time WebSocket broadcasting
             if websocket_enabled and connected_clients:
@@ -715,49 +597,44 @@ def api_start_backup_working():
                         'job_id': job_id,
                         'phase': phase,
                         'data': data,
-                        'timestamp': time.time(),
-                        'progress': active_backup_jobs[job_id]['progress']['percentage'] if isinstance(data, dict) and 'progress' in data else None
+                        'timestamp': time.time()
                     })
-                    print(f"[WEBSOCKET] Broadcasted progress update: {phase}")
                 except Exception as e:
                     print(f"[WEBSOCKET] Broadcast failed: {e}")
 
-        # Set the callback for this specific executor instance
         backup_executor.set_status_callback(status_handler)
 
-        # Update status
-        backup_status['backing_up'] = True
-        backup_status['phase'] = 'BACKUP_IN_PROGRESS'
-        backup_status['progress']['current_file'] = original_filename
-        update_backup_status('BACKUP_IN_PROGRESS', f'Starting backup of {original_filename}...')
+        with active_backup_jobs_lock:
+            active_backup_jobs[job_id]['backing_up'] = True
+            active_backup_jobs[job_id]['phase'] = 'BACKUP_IN_PROGRESS'
+            active_backup_jobs[job_id]['progress']['current_file'] = original_filename
+            active_backup_jobs[job_id]['message'] = f'Starting backup of {original_filename}...'
 
-        # Start backup in background thread
         def run_backup(executor, temp_file_path_for_thread, filename_for_thread, temp_dir_for_thread):
-            global backup_status
-
             try:
-                # --- Verification Setup ---
                 expected_size = os.path.getsize(temp_file_path_for_thread)
                 with open(temp_file_path_for_thread, 'rb') as f:
                     expected_hash = hashlib.sha256(f.read()).hexdigest()
                 logger.info(f"[Job {job_id}] Calculated verification data: Size={expected_size}, Hash={expected_hash[:8]}...")
 
-                # --- Completion/Failure Callbacks ---
                 def on_completion():
                     logger.info(f"[Job {job_id}] Received VERIFIED COMPLETION signal for '{filename_for_thread}'. Forcing 100%.")
-                    if job_id in active_backup_jobs:
-                        active_backup_jobs[job_id]['phase'] = 'COMPLETED_VERIFIED'
-                        active_backup_jobs[job_id]['message'] = 'Backup complete and cryptographically verified.'
-                        active_backup_jobs[job_id]['progress']['percentage'] = 100
+                    with active_backup_jobs_lock:
+                        if job_id in active_backup_jobs:
+                            active_backup_jobs[job_id]['phase'] = 'COMPLETED_VERIFIED'
+                            active_backup_jobs[job_id]['message'] = 'Backup complete and cryptographically verified.'
+                            active_backup_jobs[job_id]['progress']['percentage'] = 100
+                            active_backup_jobs[job_id]['backing_up'] = False
 
                 def on_failure(reason: str):
                     logger.error(f"[Job {job_id}] Received VERIFICATION FAILED signal for '{filename_for_thread}': {reason}")
-                    if job_id in active_backup_jobs:
-                        active_backup_jobs[job_id]['phase'] = 'VERIFICATION_FAILED'
-                        active_backup_jobs[job_id]['message'] = f'CRITICAL: {reason}'
+                    with active_backup_jobs_lock:
+                        if job_id in active_backup_jobs:
+                            active_backup_jobs[job_id]['phase'] = 'VERIFICATION_FAILED'
+                            active_backup_jobs[job_id]['message'] = f'CRITICAL: {reason}'
+                            active_backup_jobs[job_id]['backing_up'] = False
 
-                # --- Register with File Receipt Monitor ---
-                monitor = get_file_receipt_monitor()
+                monitor = file_monitor
                 if monitor:
                     monitor.register_job(
                         filename=filename_for_thread,
@@ -777,36 +654,37 @@ def api_start_backup_working():
                     server_port=int(server_port)
                 )
 
-                if result and result.get('success'):
-                    update_backup_status('COMPLETED', 'Backup completed successfully!', 100)
-                else:
-                    error_msg = result.get('error', 'Unknown error') if result else 'Backup executor returned None'
-                    update_backup_status('FAILED', f'Backup failed: {error_msg}')
+                with active_backup_jobs_lock:
+                    if job_id in active_backup_jobs:
+                        if result and result.get('success'):
+                            active_backup_jobs[job_id]['phase'] = 'COMPLETED'
+                            active_backup_jobs[job_id]['message'] = 'Backup completed successfully!'
+                            active_backup_jobs[job_id]['progress']['percentage'] = 100
+                        else:
+                            error_msg = result.get('error', 'Unknown error') if result else 'Backup executor returned None'
+                            active_backup_jobs[job_id]['phase'] = 'FAILED'
+                            active_backup_jobs[job_id]['message'] = f'Backup failed: {error_msg}'
+                        active_backup_jobs[job_id]['backing_up'] = False
 
             except Exception as e:
-                update_backup_status('FAILED', f'Backup error: {str(e)}')
+                with active_backup_jobs_lock:
+                    if job_id in active_backup_jobs:
+                        active_backup_jobs[job_id]['phase'] = 'FAILED'
+                        active_backup_jobs[job_id]['message'] = f'Backup error: {str(e)}'
+                        active_backup_jobs[job_id]['backing_up'] = False
                 print(f"[ERROR] Backup thread error: {str(e)}")
             finally:
-                backup_status['backing_up'] = False
-
-                # Cleanup the temporary file and directory
                 if os.path.exists(temp_file_path_for_thread):
                     os.remove(temp_file_path_for_thread)
                 if os.path.exists(temp_dir_for_thread):
                     os.rmdir(temp_dir_for_thread)
                 print(f"[DEBUG] Cleanup successful for: {temp_file_path_for_thread}")
+                update_server_status('READY', 'Ready for new backup.')
 
-                time.sleep(1.0)
-                backup_status = get_default_status()
-                backup_status['connected'] = True
-                update_backup_status('READY', 'Ready for new backup.')
-
-        # Start backup thread, passing the new executor instance
         backup_thread = threading.Thread(target=run_backup, args=(backup_executor, temp_file_path, original_filename, temp_dir))
         backup_thread.daemon = True
         backup_thread.start()
 
-        # Log successful backup initiation with performance metrics
         duration_ms = (time.time() - start_time) * 1000
         structured_logger.info(f"Backup job {job_id} started successfully",
                              operation="start_backup",
@@ -825,12 +703,11 @@ def api_start_backup_working():
             'message': f'Backup started for {original_filename}',
             'filename': original_filename,
             'username': username,
-            'job_id': job_id  # Include job_id in response for client tracking
+            'job_id': job_id
         })
 
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
-        backup_status['backing_up'] = False
         error_msg = f"Backup start error: {str(e)}"
 
         structured_logger.error(error_msg,
@@ -843,14 +720,14 @@ def api_start_backup_working():
                               error=str(e))
 
         print(f"[ERROR] {error_msg}")
-        update_backup_status('ERROR', error_msg)
+        update_server_status('ERROR', error_msg)
         return jsonify({'success': False, 'error': error_msg}), 500
 
 @app.route('/api/check_receipt/<filename>')
 def api_check_file_receipt(filename):
     """Check if a specific file has been received by the server"""
     try:
-        monitor = get_file_receipt_monitor()
+        monitor = file_monitor
         if not monitor:
             return jsonify({
                 'success': False,
@@ -879,7 +756,7 @@ def api_check_file_receipt(filename):
 def api_list_received_files():
     """List all files that have been received by the server"""
     try:
-        monitor = get_file_receipt_monitor()
+        monitor = file_monitor
         if not monitor:
             return jsonify({
                 'success': False,
@@ -901,7 +778,7 @@ def api_list_received_files():
 def api_monitor_status():
     """Get file receipt monitoring status"""
     try:
-        monitor = get_file_receipt_monitor()
+        monitor = file_monitor
         if not monitor:
             return jsonify({
                 'monitoring_active': False,
@@ -976,13 +853,12 @@ if __name__ == "__main__":
 
     print("[ROCKET] Starting Flask API server with WebSocket support...")
 
-    # Initialize file receipt monitoring
+    # Initialize and start the UnifiedFileMonitor
     try:
-        received_files_dir = "received_files"  # Match server's actual file storage location
-        file_receipt_monitor = initialize_file_receipt_monitor(received_files_dir, broadcast_file_receipt)
-        print(f"[OK] File Receipt Monitor: Watching {received_files_dir}")
+        file_monitor.start_monitoring()
+        print(f"[OK] Unified File Monitor: Watching {file_monitor.watched_directory}")
     except Exception as e:
-        print(f"[WARNING] File Receipt Monitor: Failed to initialize - {e}")
+        print(f"[WARNING] Unified File Monitor: Failed to initialize - {e}")
 
     # Ensure only one API server instance runs at a time
     print("Ensuring single API server instance...")
@@ -1009,12 +885,12 @@ if __name__ == "__main__":
         traceback.print_exc()
     finally:
         print("[DEBUG] Entering finally block...")
-        # Cleanup file receipt monitor
+        # Cleanup the unified monitor
         try:
-            stop_file_receipt_monitor()
-            print("[INFO] File receipt monitor stopped")
+            file_monitor.stop_monitoring()
+            print("[INFO] Unified file monitor stopped")
         except Exception as e:
-            print(f"[WARNING] Error stopping file receipt monitor: {e}")
+            print(f"[WARNING] Error stopping unified file monitor: {e}")
         print("[DEBUG] API Server process ending...")
 
 

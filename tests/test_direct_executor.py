@@ -10,7 +10,8 @@ import tempfile
 from pathlib import Path
 
 # Add api_server to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'api_server'))
+from Shared.path_utils import setup_imports
+setup_imports()
 
 from api.real_backup_executor import RealBackupExecutor
 

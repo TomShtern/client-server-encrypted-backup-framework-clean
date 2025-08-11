@@ -4,7 +4,6 @@ Live Log Monitor for CyberBackup 3.0
 Provides real-time monitoring of server log files with filtering and colored output
 """
 
-import os
 import sys
 import time
 import argparse

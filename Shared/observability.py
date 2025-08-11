@@ -8,7 +8,7 @@ import json
 import time
 import threading
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List, Callable
 from dataclasses import dataclass, field, asdict
 from collections import defaultdict, deque
@@ -107,7 +107,7 @@ class StructuredLogger:
     def _log(self, level: LogLevel, message: str, **kwargs):
         """Internal logging method"""
         entry = StructuredLogEntry(
-            timestamp=f"{datetime.utcnow().isoformat()}Z",
+            timestamp=f"{datetime.now(timezone.utc).isoformat()}Z",
             level=level.value,
             component=self.component,
             message=message,

@@ -2916,10 +2916,8 @@ def launch_standalone():
     provides a stable entry so running `python ServerGUI.py` opens the window.
     """
     try:
-        # Ensure project root is on sys.path so relative imports work
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
+        from Shared.path_utils import setup_imports
+        setup_imports()
         print("[INFO] Launching Server GUI (standalone mode)...")
 
         # Instantiate GUI (don't pass tk root; initialize() creates it internally)

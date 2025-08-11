@@ -101,7 +101,7 @@ def _before_send_filter(event, hint):
     """
     # Filter out common non-critical errors
     if 'exc_info' in hint:
-        exc_type, exc_value, tb = hint['exc_info']
+        _exc_type, exc_value, _tb = hint['exc_info']
         
         # Filter out expected network timeouts
         if isinstance(exc_value, (ConnectionResetError, BrokenPipeError)):

@@ -8,6 +8,9 @@ import subprocess
 from pathlib import Path
 
 def main():
+    # Get project root before any other operations
+    project_root = Path(__file__).parent.resolve()
+    
     # Setup standardized import paths
     from Shared.path_utils import setup_imports
     setup_imports()

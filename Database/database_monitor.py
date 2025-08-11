@@ -21,7 +21,8 @@ from typing import Dict, Any
 # Setup standardized import paths
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from Shared.path_utils import setup_imports
+setup_imports()
 from Shared.path_utils import setup_imports
 setup_imports()
 

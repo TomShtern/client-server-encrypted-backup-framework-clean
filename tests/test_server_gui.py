@@ -7,7 +7,8 @@ import sys
 import os
 
 # Add server directory to path
-sys.path.append('server')
+from Shared.path_utils import setup_imports
+setup_imports()
 
 try:
     from ServerGUI import ServerGUI

@@ -6,7 +6,8 @@ def test_gui_queries():
     """Test the exact queries that the server-gui uses"""
     try:
         # Add server directory to path
-        sys.path.append('server')
+        from Shared.path_utils import setup_imports
+setup_imports()
         
         # Test database connection
         db_path = "server/defensive.db"
