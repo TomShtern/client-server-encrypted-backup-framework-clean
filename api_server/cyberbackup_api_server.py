@@ -75,6 +75,9 @@ from python_server.server.server_singleton import ensure_single_server_instance
 # Import file receipt monitoring
 from python_server.server.file_receipt_monitor import initialize_file_receipt_monitor, get_file_receipt_monitor, stop_file_receipt_monitor
 
+# Define PROJECT_ROOT for consistent path resolution
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 app = Flask(__name__)
 CORS(app)  # Enable CORS for local development
 
@@ -297,9 +300,21 @@ def serve_client_assets(filename):
 def serve_progress_config():
     """Serve the progress configuration file"""
     try:
-        return send_file('progress_config.json')
+        # Check for progress_config.json in python_server directory
+        progress_config_path = os.path.join(PROJECT_ROOT, 'python_server', 'progress_config.json')
+        if os.path.exists(progress_config_path):
+            return send_file(progress_config_path)
+        else:
+            # Fallback to root directory
+            return send_file('progress_config.json')
     except FileNotFoundError:
         return jsonify({'error': 'progress_config.json not found'}), 404
+
+@app.route('/favicon.ico')
+def serve_favicon():
+    """Serve favicon to prevent 404 errors"""
+    # Return empty response to prevent 500 errors  
+    return '', 204
 
 # API Endpoints for CyberBackup 3.0
 

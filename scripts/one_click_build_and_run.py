@@ -18,14 +18,69 @@ import subprocess
 import time
 import contextlib
 import json
-import psutil
+import logging
+import traceback
 from pathlib import Path
 
+try:
+    import psutil
+except ImportError:
+    print("[WARNING] psutil not available - process cleanup may be limited")
+    psutil = None
+
+def setup_logging():
+    """Setup basic logging for the build script"""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('logs/build_script.log', mode='a'),
+            logging.StreamHandler()  # Also log to console
+        ]
+    )
+    # Ensure logs directory exists
+    Path('logs').mkdir(exist_ok=True)
+
+def setup_unicode_console():
+    """Enhanced Unicode console setup for Windows emoji support"""
+    if os.name == 'nt':  # Windows only
+        with contextlib.suppress(Exception):
+            # Set UTF-8 codepage
+            os.system("chcp 65001 >nul 2>&1")
+            # Reconfigure Python stdout for UTF-8 (Python 3.7+)
+            # Use getattr to avoid Pylance errors on reconfigure method
+            if hasattr(sys.stdout, 'reconfigure'):
+                getattr(sys.stdout, 'reconfigure')(encoding='utf-8', errors='replace')
+                getattr(sys.stderr, 'reconfigure')(encoding='utf-8', errors='replace')
+                logging.info("Unicode console setup completed successfully")
+
+def supports_emojis():
+    """Quick test for emoji support in current console"""
+    try:
+        # Test with a simple emoji to stdout
+        test_str = "🚀"
+        # Try to encode it with current stdout encoding
+        test_str.encode(sys.stdout.encoding or 'utf-8')
+        return True
+    except (UnicodeEncodeError, LookupError, AttributeError):
+        return False
+
+def safe_print(message, fallback=None):
+    """Print with emoji support and automatic fallback"""
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        # Use provided fallback or strip non-ASCII characters
+        fallback_msg = fallback or message.encode('ascii', 'ignore').decode()
+        print(fallback_msg)
+
 def print_phase(phase_num, total_phases, title):
-    """Print phase header"""
+    """Print phase header with timestamp"""
+    import datetime
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
     print()
-    print(f"[PHASE {phase_num}/{total_phases}] {title}...")
-    print("-" * 40)
+    print(f"[{timestamp}] [PHASE {phase_num}/{total_phases}] {title}...")
+    print("-" * 50)
 
 def handle_error_and_exit(error_message, wait_for_input=True):
     """Print error message and exit with status 1"""
@@ -126,17 +181,33 @@ def check_port_available(port=9090):
         return False
 
 def check_python_dependencies():
-    """Check if required Python dependencies are available"""
-    required_modules = ['flask', 'flask_cors', 'psutil']
+    """Check if required Python dependencies are available with version info"""
+    required_modules = {
+        'flask': 'Flask web framework',
+        'flask_cors': 'CORS support for Flask API',
+        'psutil': 'System process management',
+        'sentry_sdk': 'Error monitoring (optional)',
+        'cryptography': 'Cryptographic operations',
+        'watchdog': 'File system monitoring'
+    }
     missing_modules = []
+    optional_missing = []
 
-    for module in required_modules:
+    for module, description in required_modules.items():
         try:
-            __import__(module)
+            imported_module = __import__(module)
+            # Try to get version if available
+            version = getattr(imported_module, '__version__', 'unknown version')
+            print(f"[OK] {module} ({description}): {version}")
         except ImportError:
-            missing_modules.append(module)
+            if module in ['sentry_sdk', 'watchdog']:
+                optional_missing.append((module, description))
+                print(f"[INFO] {module} ({description}): Not installed (optional)")
+            else:
+                missing_modules.append((module, description))
+                print(f"[ERROR] {module} ({description}): Missing (required)")
 
-    return missing_modules
+    return missing_modules, optional_missing
 
 def check_and_fix_vcpkg_dependencies():
     """Check and fix vcpkg dependencies, especially boost-iostreams"""
@@ -155,9 +226,7 @@ def check_and_fix_vcpkg_dependencies():
         required_deps = ["boost-asio", "boost-beast", "boost-iostreams", "cryptopp", "zlib"]
         current_deps = vcpkg_config.get("dependencies", [])
 
-        missing_deps = [dep for dep in required_deps if dep not in current_deps]
-
-        if missing_deps:
+        if missing_deps := [dep for dep in required_deps if dep not in current_deps]:
             print(f"[WARNING] Missing vcpkg dependencies: {', '.join(missing_deps)}")
             print("Updating vcpkg.json...")
 
@@ -168,10 +237,10 @@ def check_and_fix_vcpkg_dependencies():
                 json.dump(vcpkg_config, f, indent=2)
 
             print("[OK] vcpkg.json updated with missing dependencies")
-            return True
         else:
             print("[OK] All required vcpkg dependencies are present")
-            return True
+        
+        return True
 
     except Exception as e:
         print(f"[ERROR] Failed to check vcpkg dependencies: {e}")
@@ -197,23 +266,37 @@ def force_vcpkg_reinstall():
     return run_command("vcpkg\\vcpkg.exe install --triplet x64-windows --recurse", timeout=600)
 
 def wait_for_server_startup(host='127.0.0.1', port=9090, max_wait=30, check_interval=1):
-    """Wait for server to start with progress feedback"""
+    """Wait for server to start with enhanced progress feedback and diagnostics"""
     print(f"Waiting for API server to start on {host}:{port}...")
     elapsed = 0
+    last_error = None
     
     while elapsed < max_wait:
-        if check_api_server_status(host, port):
-            print(f"[OK] API server is responsive after {elapsed}s")
-            return True
+        try:
+            if check_api_server_status(host, port):
+                print(f"[OK] API server is responsive after {elapsed}s")
+                return True
+        except Exception as e:
+            last_error = str(e)
         
-        # Show progress every 5 seconds
-        if elapsed % 5 == 0 and elapsed > 0:
+        # Show progress with more frequent updates
+        if elapsed % 3 == 0 and elapsed > 0:
             print(f"[INFO] Still waiting... ({elapsed}s/{max_wait}s)")
         
         time.sleep(check_interval)
         elapsed += check_interval
     
     print(f"[ERROR] API server failed to start within {max_wait} seconds")
+    if last_error:
+        print(f"[DEBUG] Last connection error: {last_error}")
+    
+    # Additional diagnostic information
+    print("[DIAGNOSTIC] Checking system status...")
+    if check_port_available(port):
+        print(f"[DEBUG] Port {port} appears to be available (no process bound)")
+    else:
+        print(f"[DEBUG] Port {port} is in use by another process")
+    
     return False
 
 def check_backup_server_status():
@@ -228,18 +311,48 @@ def check_backup_server_status():
     except Exception:
         return False
 
-def cleanup_existing_processes():
-    """Clean up existing CyberBackup processes before starting new ones"""
+def _report_terminated_processes(terminated_processes):
+    """Report terminated processes and wait for cleanup"""
+    if terminated_processes:
+        print(f"Successfully terminated {len(terminated_processes)} processes:")
+        for process_info in terminated_processes:
+            print(f"  - {process_info}")
+        print()
+        # Brief pause to allow processes to fully clean up
+        import time
+        time.sleep(1)
+    else:
+        print("No CyberBackup processes found running.")
+        print()
+
+def cleanup_existing_processes():  # sourcery skip: low-code-quality
+    """Clean up existing CyberBackup processes with improved reliability"""
+    if not psutil:
+        print("[WARNING] psutil not available - cannot perform automatic process cleanup")
+        print("Please manually close any existing CyberBackup processes")
+        return
+        
     print("Cleaning up existing CyberBackup processes...")
     print()
     
     terminated_processes = []
     
+    # Define process patterns to look for
+    process_patterns = {
+        "API Server": ["cyberbackup_api_server.py", "api_server"],
+        "Backup Server": ["python_server/server/server.py", "server.py", "backup_server"],
+        "C++ Client": ["encryptedbackupclient.exe", "EncryptedBackupClient.exe"],
+        "Server GUI": ["ServerGUI.py", "server_gui"]
+    }
+    
     try:
-        # Get list of all running processes
-        for process in psutil.process_iter(['pid', 'name', 'cmdline']):
+        # Get list of all running processes with better error handling
+        for process in psutil.process_iter(['pid', 'name', 'cmdline', 'connections']):
             try:
-                cmdline = process.info['cmdline']
+                process_info = process.info
+                cmdline = process_info.get('cmdline', [])
+                name = process_info.get('name', '').lower()
+                
                 if not cmdline:
                     continue
                 
@@ -247,21 +360,27 @@ def cleanup_existing_processes():
                 should_terminate = False
                 process_type = ""
                 
-                # Check for CyberBackup related processes
-                if 'cyberbackup_api_server.py' in cmdline_str:
-                    should_terminate = True
-                    process_type = "API Server"
-                elif 'python_server.server.server' in cmdline_str or 'python_server\\server\\server' in cmdline_str:
-                    should_terminate = True
-                    process_type = "Backup Server"
-                elif 'encryptedbackupclient.exe' in cmdline_str:
-                    should_terminate = True
-                    process_type = "C++ Client"
-                elif any(port_check in cmdline_str for port_check in ['port 9090', 'port 1256', ':9090', ':1256']):
-                    # Additional check for processes using our ports
-                    if 'python' in cmdline_str and ('flask' in cmdline_str or 'server' in cmdline_str):
+                # Check against each pattern
+                for ptype, patterns in process_patterns.items():
+                    if any(pattern.lower() in cmdline_str for pattern in patterns):
                         should_terminate = True
-                        process_type = "Port-bound Server"
+                        process_type = ptype
+                        break
+                
+                # Additional port-based detection with safer connection checking
+                if not should_terminate:
+                    with contextlib.suppress(AttributeError, psutil.AccessDenied, psutil.NoSuchProcess):
+                        # Use psutil.net_connections() for port checking
+                        for conn in psutil.net_connections():
+                            if (hasattr(conn, 'laddr') and conn.laddr and 
+                                hasattr(conn, 'pid') and conn.pid == process_info['pid']):
+                                port = (conn.laddr.port if hasattr(conn.laddr, 'port') else 
+                                       (conn.laddr[1] if isinstance(conn.laddr, tuple) and len(conn.laddr) >= 2 else None))
+                                if (port in [9090, 1256] and conn.status == psutil.CONN_LISTEN and 
+                                    ('python' in name or 'flask' in cmdline_str)):
+                                        should_terminate = True
+                                        process_type = f"Port-bound Server ({port})"
+                                        break
                 
                 if should_terminate:
                     print(f"Terminating {process_type} (PID: {process.info['pid']})")
@@ -280,64 +399,71 @@ def cleanup_existing_processes():
                         terminated_processes.append(f"{process_type} (PID: {process.info['pid']}) - Already terminated")
                         
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                # Process may have disappeared or we don't have access
-                continue
+                continue  # Process may have disappeared or we don't have access
                 
     except Exception as e:
         print(f"[WARNING] Error during process cleanup: {e}")
     
-    if terminated_processes:
-        print()
-        print("Terminated processes:")
-        for proc in terminated_processes:
-            print(f"  - {proc}")
-        print()
-        print("Waiting for processes to fully terminate...")
-        time.sleep(2)  # Give processes time to clean up
-    else:
-        print("[INFO] No existing CyberBackup processes found")
-        print()
+    _report_terminated_processes(terminated_processes)
     
-    # Additional port cleanup - kill any processes still using our ports
-    ports_to_clean = [9090, 1256]
-    for port in ports_to_clean:
-        try:
-            for conn in psutil.net_connections():
-                # Handle both tuple and named attribute formats for laddr
-                conn_port = None
-                if hasattr(conn, 'laddr') and conn.laddr:
-                    if hasattr(conn.laddr, 'port'):
-                        # Named attribute format (newer psutil versions)
-                        conn_port = conn.laddr.port
-                    elif isinstance(conn.laddr, tuple) and len(conn.laddr) >= 2:
-                        # Tuple format (host, port) - older psutil versions
-                        conn_port = conn.laddr[1]
+    # Additional port cleanup with improved error handling
+    if psutil:
+        ports_to_clean = [9090, 1256]
+        for port in ports_to_clean:
+            try:
+                print(f"Checking for processes on port {port}...")
+                port_processes = []
                 
-                if conn_port == port and conn.status == psutil.CONN_LISTEN:
+                for conn in psutil.net_connections():
+                    conn_port = None
+                    if hasattr(conn, 'laddr') and conn.laddr:
+                        if hasattr(conn.laddr, 'port'):
+                            conn_port = conn.laddr.port
+                        elif isinstance(conn.laddr, tuple) and len(conn.laddr) >= 2:
+                            conn_port = conn.laddr[1]
+                    
+                    if conn_port == port and conn.status == psutil.CONN_LISTEN and conn.pid:
+                        port_processes.append(conn.pid)
+                
+                for pid in port_processes:
                     with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
-                        process = psutil.Process(conn.pid)
-                        print(f"Killing process using port {port}: {process.name()} (PID: {conn.pid})")
+                        process = psutil.Process(pid)
+                        process_name = process.name()
+                        print(f"Terminating process using port {port}: {process_name} (PID: {pid})")
                         process.terminate()
-                        time.sleep(1)
-                        if process.is_running():
+                        
+                        # Give process time to terminate gracefully
+                        try:
+                            process.wait(timeout=3)
+                            print(f"Process {pid} terminated gracefully")
+                        except psutil.TimeoutExpired:
+                            print(f"Force killing process {pid}")
                             process.kill()
-        except Exception as e:
-            print(f"[WARNING] Error cleaning port {port}: {e}")
+                            
+            except Exception as e:
+                print(f"[WARNING] Error cleaning port {port}: {e}")
     
     print("[OK] Process cleanup completed!")
     print()
 
 def main():
-    # Set UTF-8 encoding for emoji support
-    with contextlib.suppress(Exception):
-        os.system("chcp 65001 > nul")
+    # Setup logging first
+    setup_logging()
+    logging.info("Starting CyberBackup 3.0 build and deployment process")
+    
+    # Enhanced Unicode console setup
+    setup_unicode_console()
+    
+    # Check if emojis are supported
+    emoji_support = supports_emojis()
+    logging.info(f"Emoji support detected: {emoji_support}")
     
     print()
     print("=" * 72)
-    try:
-        print("   🚀 ONE-CLICK BUILD AND RUN - CyberBackup 3.0")
-    except UnicodeEncodeError:
-        print("   ONE-CLICK BUILD AND RUN - CyberBackup 3.0")
+    if emoji_support:
+        safe_print("   🚀 ONE-CLICK BUILD AND RUN - CyberBackup 3.0")
+    else:
+        safe_print("   ONE-CLICK BUILD AND RUN - CyberBackup 3.0")
     print("=" * 72)
     print()
     print("Starting complete build and deployment process...")
@@ -462,14 +588,25 @@ def main():
             except (EOFError, KeyboardInterrupt):
                 handle_error_and_exit("\nExiting...", wait_for_input=False)
         
-        # Verify the executable was created
+        # Verify the executable was created with fallback locations
         exe_path = Path("build/Release/EncryptedBackupClient.exe")
-        if not exe_path.exists():
+        alt_exe_path = Path("build/EncryptedBackupClient.exe") 
+        client_exe_path = Path("Client/EncryptedBackupClient.exe")
+        
+        if exe_path.exists():
+            print(f"[OK] C++ client found: {exe_path}")
+        elif alt_exe_path.exists():
+            print(f"[OK] C++ client found at alternative location: {alt_exe_path}")
+        elif client_exe_path.exists():
+            print(f"[OK] C++ client found at legacy location: {client_exe_path}")
+        else:
             print("[ERROR] EncryptedBackupClient.exe was not created!")
-            print(f"Expected location: {exe_path}")
-            with contextlib.suppress(EOFError):
-                input("Press Enter to exit...")
-            sys.exit(1)
+            print(f"Checked locations:")
+            print(f"  - {exe_path}")
+            print(f"  - {alt_exe_path}")
+            print(f"  - {client_exe_path}")
+            print("\nWeb uploads may not work without the C++ client.")
+            print("Continuing with server-only mode...")
         
         print()
         print("[OK] C++ client built successfully!")
@@ -483,18 +620,26 @@ def main():
         print()
         
         print_phase(3, 7, "Checking Existing C++ Client")
-        exe_path = Path("build/Release/EncryptedBackupClient.exe")
-        if exe_path.exists():
-            print(f"[OK] Found existing C++ client: {exe_path}")
-        else:
-            alt_path = Path("client/EncryptedBackupClient.exe")
-            if alt_path.exists():
-                print(f"[OK] Found existing C++ client: {alt_path}")
-            else:
-                print("[WARNING] No C++ client found - web uploads may not work")
-                print("Available locations checked:")
-                print(f"  - {exe_path}")
-                print(f"  - {alt_path}")
+        exe_locations = [
+            Path("build/Release/EncryptedBackupClient.exe"),
+            Path("build/EncryptedBackupClient.exe"),
+            Path("Client/EncryptedBackupClient.exe"),
+            Path("client/EncryptedBackupClient.exe")
+        ]
+        
+        found_exe = None
+        for exe_path in exe_locations:
+            if exe_path.exists():
+                found_exe = exe_path
+                print(f"[OK] Found existing C++ client: {found_exe}")
+                break
+        
+        if not found_exe:
+            print("[WARNING] No C++ client found - web uploads may not work")
+            print("Checked locations:")
+            for path in exe_locations:
+                print(f"  - {path}")
+            print("\nRecommendation: Run cmake --build build --config Release")
         print()
     
     # ========================================================================
@@ -519,9 +664,17 @@ def main():
         print("Installing basic dependencies manually...")
         run_command("pip install cryptography pycryptodome psutil flask", check_exit=False, timeout=180)
     
-    # Install additional GUI dependencies
-    print("Installing GUI-specific dependencies...")
-    run_command("pip install sentry-sdk flask-cors", check_exit=False, timeout=120)
+    # Install additional dependencies with better error handling
+    print("Installing additional dependencies...")
+    additional_deps = ["sentry-sdk", "flask-cors", "watchdog"]
+    
+    for dep in additional_deps:
+        print(f"Installing {dep}...")
+        success = run_command(f"pip install {dep}", check_exit=False, timeout=60)
+        if success:
+            print(f"[OK] {dep} installed successfully")
+        else:
+            print(f"[WARNING] Failed to install {dep} - continuing anyway")
     
     print()
     
@@ -578,13 +731,22 @@ def main():
     
     print("Starting Python Backup Server (python_server.server.server module)...")
     server_path = Path("python_server/server/server.py")
+    
+    # Validate server path exists with proper error handling
+    if not server_path.exists():
+        print(f"[ERROR] Server file not found: {server_path}")
+        print("Expected location: python_server/server/server.py")
+        print("Please verify the server components are installed correctly.")
+        print("\nTrying alternative server startup...")
+        # Continue execution to attempt other startup methods
+    
     if server_path.exists():
         # Check if AppMap is available for recording
         appmap_available = check_appmap_available()
 
         if appmap_available:
             print("[INFO] AppMap detected - enabling execution recording")
-            # Start backup server with AppMap recording
+            # Start backup server with AppMap recording using -m module syntax
             server_command = [
                 "appmap-python", "--record", "process", 
                 "python", "-m", "python_server.server.server"
@@ -592,11 +754,11 @@ def main():
             print("Command: appmap-python --record process python -m python_server.server.server")
         else:
             print("[INFO] AppMap not available - starting server normally")
-            # Start backup server normally
+            # Start backup server normally using -m module syntax
             server_command = [sys.executable, "-m", "python_server.server.server"]
             print(f"Command: {sys.executable} -m python_server.server.server")
         
-        # Start backup server as a module from project root in new console window
+        # Start backup server directly from project root in new console window
         server_env = os.environ.copy()
         # GUI Mode Selection:
         # By default we NOW keep the embedded GUI enabled (more reliable startup)
@@ -624,32 +786,33 @@ def main():
         # Wait for backup server to actually start listening on port 1256
         print("Waiting for backup server to start listening...")
         backup_server_ready = False
-        for attempt in range(15):  # Try for 15 seconds
+        for attempt in range(30):  # Try for 30 seconds (extended for GUI initialization)
             if check_backup_server_status():
                 backup_server_ready = True
                 print(f"[OK] Backup server is listening on port 1256 after {attempt + 1} seconds")
                 break
-            print(f"  Attempt {attempt + 1}/15: Waiting for backup server...")
+            print(f"  Attempt {attempt + 1}/30: Waiting for backup server...")
             time.sleep(1)
         
         if not backup_server_ready:
-            print("[ERROR] Backup server failed to start within 15 seconds")
+            print("[ERROR] Backup server failed to start within 30 seconds")
             print("The API server may fail to connect to the backup server.")
         else:
             print("[OK] Backup server is ready!")
 
-        # Decide whether to launch standalone GUI
-        # Conditions: embedded disabled OR explicit force standalone
-        if disable_embedded == "1" or force_standalone == "1":
-            reason = "embedded disabled" if disable_embedded == "1" else "force flag set"
-            print(f"[INFO] Launching standalone Server GUI ({reason})")
+        # Launch standalone Server GUI based on environment variable configuration
+        # Respect the GUI control settings calculated above
+        should_launch_standalone = (disable_embedded == "1" or force_standalone == "1")
+        
+        if should_launch_standalone:
+            print("[INFO] Launching standalone Server GUI (required by environment configuration)")
             server_gui_path = Path("python_server/server_gui/ServerGUI.py")
             if server_gui_path.exists():
                 try:
                     gui_env = os.environ.copy()
                     gui_env["CYBERBACKUP_SERVERGUI_MODE"] = "standalone"
                     gui_proc = subprocess.Popen(
-                        [sys.executable, str(server_gui_path)],
+                        [sys.executable, "-m", "python_server.server_gui.ServerGUI"],
                         creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0,
                         env=gui_env
                     )
@@ -660,9 +823,7 @@ def main():
                         time.sleep(3)
                         if not _ps.pid_exists(gui_proc.pid):
                             print("[WARNING] Standalone Server GUI process exited early. Falling back guidance:")
-                            print("          Run manually: python python_server\\server_gui\\ServerGUI.py")
-                            if disable_embedded == "0":
-                                print("          (Embedded GUI should still attempt to appear inside server console)")
+                            print("          Run manually: python -m python_server.server_gui.ServerGUI")
                     except Exception:
                         pass
                 except Exception as e:
@@ -670,9 +831,25 @@ def main():
             else:
                 print(f"[WARNING] Standalone Server GUI not found: {server_gui_path}")
         else:
-            print("[INFO] Using embedded Server GUI only (no standalone launch)")
+            print("[INFO] Standalone Server GUI launch skipped (embedded GUI is enabled)")
+            print("       - Use CYBERBACKUP_DISABLE_INTEGRATED_GUI=1 to disable embedded GUI")
+            print("       - Use CYBERBACKUP_STANDALONE_GUI=1 to force standalone GUI launch")
     else:
         print(f"[WARNING] Server file not found: {server_path}")
+        # Try alternative server locations
+        alt_locations = [
+            Path("src/server/server.py"),
+            Path("server.py"),
+            Path("backup_server.py")
+        ]
+        print("Checking alternative server locations:")
+        for alt_path in alt_locations:
+            if alt_path.exists():
+                print(f"[INFO] Found alternative server: {alt_path}")
+                print(f"Consider updating the script to use the correct path.")
+                break
+            else:
+                print(f"  - {alt_path}: Not found")
     
     # ========================================================================
     # ENHANCED API SERVER STARTUP WITH ROBUST VERIFICATION
@@ -680,21 +857,34 @@ def main():
     
     print("Preparing API Bridge Server (cyberbackup_api_server.py)...")
     
-    # Step 1: Check Python dependencies
+    # Step 1: Check Python dependencies with enhanced reporting
     print("\nChecking Python dependencies...")
-    if missing_deps := check_python_dependencies():
-        print(f"[ERROR] Missing required Python modules: {', '.join(missing_deps)}")
-        print("Please install missing dependencies:")
-        for dep in missing_deps:
+    missing_deps, optional_missing = check_python_dependencies()
+    
+    if missing_deps:
+        print(f"\n[ERROR] Missing required Python modules:")
+        for dep, desc in missing_deps:
+            print(f"  - {dep}: {desc}")
+        print("\nInstall missing dependencies:")
+        for dep, desc in missing_deps:
             if dep == 'flask_cors':
                 print("  pip install flask-cors")
             else:
                 print(f"  pip install {dep}")
+        print("\nOr install all at once:")
+        dep_names = [dep for dep, _ in missing_deps]
+        print(f"  pip install {' '.join(dep_names)}")
         print()
         with contextlib.suppress(EOFError):
             input("Press Enter to continue anyway (may cause startup failure)...")
     else:
-        print("[OK] All required Python dependencies are available")
+        print("\n[OK] All required Python dependencies are available")
+    
+    if optional_missing:
+        print(f"\n[INFO] Optional dependencies not installed:")
+        for dep, desc in optional_missing:
+            print(f"  - {dep}: {desc}")
+        print("These are optional but recommended for full functionality.")
     
     # Step 2: Check port availability
     print("\nChecking port availability...")
@@ -715,7 +905,13 @@ def main():
     api_process = None
     server_started_successfully = False
     
-    if api_server_path.exists():
+    # Validate API server path exists
+    if not api_server_path.exists():
+        print(f"[ERROR] API server file not found: {api_server_path}")
+        print("Expected location: api_server/cyberbackup_api_server.py")
+        print("Please verify the API server is installed correctly.")
+        server_started_successfully = False
+    elif api_server_path.exists():
         print(f"\nStarting API Bridge Server: {api_server_path}")
         
         try:
@@ -743,8 +939,27 @@ def main():
             print(f"[ERROR] Failed to start API server: {str(e)}")
             server_started_successfully = False
     else:
-        print(f"[ERROR] API server file not found: {api_server_path}")
-        server_started_successfully = False
+        # Try alternative API server locations
+        alt_api_locations = [
+            Path("cyberbackup_api_server.py"),
+            Path("src/api/cyberbackup_api_server.py"),
+            Path("api/cyberbackup_api_server.py")
+        ]
+        
+        found_alt_api = None
+        for alt_path in alt_api_locations:
+            if alt_path.exists():
+                found_alt_api = alt_path
+                print(f"[INFO] Found alternative API server: {alt_path}")
+                api_server_path = alt_path
+                break
+        
+        if not found_alt_api:
+            print(f"[ERROR] API server file not found in any expected location:")
+            print(f"  - {api_server_path}")
+            for alt_path in alt_api_locations:
+                print(f"  - {alt_path}")
+            server_started_successfully = False
     
     # Step 5: Open Web GUI only if server started successfully
     if server_started_successfully:
@@ -772,15 +987,15 @@ def main():
     print()
     print("=" * 72)
     if server_started_successfully:
-        try:
-            print("   ✅ ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!")
-        except UnicodeEncodeError:
-            print("   ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!")
+        if emoji_support:
+            safe_print("   ✅ ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!", "   [SUCCESS] ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!")
+        else:
+            safe_print("   [SUCCESS] ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!")
     else:
-        try:
-            print("   ⚠️  ONE-CLICK BUILD AND RUN COMPLETED WITH ISSUES")
-        except UnicodeEncodeError:
-            print("   ONE-CLICK BUILD AND RUN COMPLETED WITH ISSUES")
+        if emoji_support:
+            safe_print("   ⚠️  ONE-CLICK BUILD AND RUN COMPLETED WITH ISSUES", "   [WARNING] ONE-CLICK BUILD AND RUN COMPLETED WITH ISSUES")
+        else:
+            safe_print("   [WARNING] ONE-CLICK BUILD AND RUN COMPLETED WITH ISSUES")
     print("=" * 72)
     print()
     print("CyberBackup 3.0 System Status:")
@@ -819,20 +1034,23 @@ def main():
     print()
     print("General commands:")
     print("   Tests: python scripts\\testing\\master_test_suite.py")
+    print("   Quick test: python scripts\\testing\\quick_validation.py")
     print("   Stop services: Close the console windows or press Ctrl+C")
+    print("   Logs: Check logs/ directory for detailed error information")
+    print("   Manual cleanup: python -c \"import psutil; [p.terminate() for p in psutil.process_iter() if 'cyberbackup' in ' '.join(p.cmdline()).lower()]\"")
     if check_appmap_available():
         print("   View AppMap data: Use AppMap tools after stopping the server")
     print()
     if server_started_successfully and api_server_running:
-        try:
-            print("Have a great backup session! 🚀")
-        except UnicodeEncodeError:
-            print("Have a great backup session!")
+        if emoji_support:
+            safe_print("Have a great backup session! 🚀", "Have a great backup session!")
+        else:
+            safe_print("Have a great backup session!")
     else:
-        try:
-            print("Please check the troubleshooting steps above 🔧")
-        except UnicodeEncodeError:
-            print("Please check the troubleshooting steps above")
+        if emoji_support:
+            safe_print("Please check the troubleshooting steps above 🔧", "Please check the troubleshooting steps above")
+        else:
+            safe_print("Please check the troubleshooting steps above")
     print("=" * 72)
 
 if __name__ == "__main__":
@@ -840,9 +1058,23 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print("\n\n[INFO] Build process interrupted by user")
+        print("Attempting to clean up any started processes...")
+        try:
+            cleanup_existing_processes()
+        except Exception as cleanup_error:
+            print(f"[WARNING] Error during cleanup: {cleanup_error}")
         sys.exit(1)
     except Exception as e:
         print(f"\n\n[ERROR] An unexpected error occurred: {e}")
+        print(f"[DEBUG] Error type: {type(e).__name__}")
+        import traceback
+        print(f"[DEBUG] Stack trace:")
+        traceback.print_exc()
+        print("\nFor troubleshooting:")
+        print("1. Check that all dependencies are installed: pip install -r requirements.txt")
+        print("2. Verify Python and CMake are in PATH")
+        print("3. Run individual components manually to isolate the issue")
+        print("4. Check logs in the logs/ directory")
         with contextlib.suppress(EOFError):
             input("Press Enter to exit...")
         sys.exit(1)

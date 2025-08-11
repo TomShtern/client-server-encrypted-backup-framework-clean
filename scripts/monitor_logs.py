@@ -105,14 +105,13 @@ def get_log_files(logs_dir: str = "logs") -> List[Dict]:
 
 def follow_file(file_path: str, lines_from_end: int = 50):
     """Generator that yields new lines from a file as they're added"""
-    file_path = Path(file_path)
+    file_path_obj = Path(file_path)
     
     # Read existing lines if requested
-    if lines_from_end > 0 and file_path.exists():
+    if lines_from_end > 0 and file_path_obj.exists():
         try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                lines = f.readlines()
-                if lines:
+            with open(file_path_obj, 'r', encoding='utf-8', errors='ignore') as f:
+                if (lines := f.readlines()):
                     # Yield the last N lines
                     for line in lines[-lines_from_end:]:
                         yield line.rstrip('\n\r')
@@ -120,14 +119,14 @@ def follow_file(file_path: str, lines_from_end: int = 50):
             yield f"[ERROR] Could not read existing content: {e}"
     
     # Follow new lines
-    last_size = file_path.stat().st_size if file_path.exists() else 0
+    last_size = file_path_obj.stat().st_size if file_path_obj.exists() else 0
     
     while True:
         try:
-            if file_path.exists():
-                current_size = file_path.stat().st_size
+            if file_path_obj.exists():
+                current_size = file_path_obj.stat().st_size
                 if current_size > last_size:
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    with open(file_path_obj, 'r', encoding='utf-8', errors='ignore') as f:
                         f.seek(last_size)
                         for line in f:
                             yield line.rstrip('\n\r')
@@ -135,7 +134,7 @@ def follow_file(file_path: str, lines_from_end: int = 50):
                 elif current_size < last_size:
                     # File was truncated or recreated
                     last_size = 0
-                    yield f"[INFO] Log file was truncated or recreated"
+                    yield "[INFO] Log file was truncated or recreated"
             
             time.sleep(0.1)  # Small delay to avoid high CPU usage
             
@@ -148,7 +147,7 @@ def follow_file(file_path: str, lines_from_end: int = 50):
 
 def monitor_single_file(file_path: str, server_type: str, color: str, 
                        filter_level: Optional[str] = None, 
-                       filter_keywords: List[str] = None,
+                       filter_keywords: Optional[List[str]] = None,
                        show_colors: bool = True,
                        tail_lines: int = 50):
     """Monitor a single log file"""
@@ -179,9 +178,8 @@ def monitor_single_file(file_path: str, server_type: str, color: str,
                     continue
             
             # Apply keyword filter
-            if filter_keywords:
-                if not any(keyword.lower() in line.lower() for keyword in filter_keywords):
-                    continue
+            if filter_keywords and all(keyword.lower() not in line.lower() for keyword in filter_keywords):
+                continue
             
             # Format and display line
             timestamp = datetime.now().strftime('%H:%M:%S')
@@ -197,7 +195,7 @@ def monitor_single_file(file_path: str, server_type: str, color: str,
 
 def monitor_multiple_files(log_files: List[Dict], 
                           filter_level: Optional[str] = None,
-                          filter_keywords: List[str] = None,
+                          filter_keywords: Optional[List[str]] = None,
                           show_colors: bool = True,
                           tail_lines: int = 50):
     """Monitor multiple log files concurrently"""

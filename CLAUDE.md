@@ -59,20 +59,21 @@ cmake --build build --config Release
 #### Quick System Startup (RECOMMENDED)
 ```bash
 # Single command to start entire system
-python launch_gui.py
+python scripts/launch_gui.py
 # Starts Flask API server + opens browser to http://localhost:9090/
 # Automatically handles port checking and server readiness
 
-python one_click_build_and_run.py  # Full build + deploy + launch
+python scripts/one_click_build_and_run.py  # Full build + deploy + launch
+# Enhanced one-click script with error tracking, process management, and GUI modes
 ```
 
 #### Manual Service Management
 ```bash
 # 1. Start Python backup server (must start FIRST)
-python src/server/server.py    # Port 1256
+python python_server/server/server.py    # Port 1256
 
 # 2. Start Flask API bridge  
-python cyberbackup_api_server.py    # Port 9090
+python api_server/cyberbackup_api_server.py    # Port 9090
 
 # 3. Build C++ client (after any C++ changes)
 cmake --build build --config Release
@@ -84,8 +85,13 @@ cmake --build build --config Release
 netstat -an | findstr ":9090\|:1256"  # Both ports should show LISTENING
 tasklist | findstr "python"           # Should show multiple Python processes
 
+# Monitor system logs and performance
+python scripts/monitor_logs.py        # Real-time log monitoring with filtering
+python scripts/check_dependencies.py  # Verify all dependencies are installed
+
 # Verify file transfers
 dir "received_files"                  # Check for actual transferred files
+python scripts/create_test_file.py    # Create test files for verification
 ```
 
 ### Testing & Verification
@@ -104,6 +110,11 @@ python scripts/testing/quick_validation.py
 # Validate specific fixes
 python scripts/testing/validate_null_check_fixes.py
 python scripts/testing/validate_server_gui.py
+
+# New specialized tests
+python scripts/test_emoji_support.py        # Test Unicode/emoji handling
+python scripts/test_one_click_dry_run.py    # Test build process without execution
+python scripts/test_one_click_fixes.py      # Validate one-click script fixes
 
 # Verify real file transfers (CRITICAL verification pattern)
 # Check: received_files/ for actual transferred files
@@ -161,7 +172,7 @@ def _verify_file_transfer(self, original_file, username):
 ### Verification Points
 - **Success Verification**: Check `received_files/` for actual file transfers (exit codes are unreliable)
 - **Port Availability**: Ensure ports 9090 and 1256 are free
-- **Dependencies**: Flask-cors is commonly missing from fresh installs
+- **Dependencies**: Common missing packages include flask-cors, sentry-sdk, flask-socketio, watchdog
 - **Hash Verification**: Always compare SHA256 hashes of original vs transferred files
 - **Network Activity**: Verify TCP connections to port 1256 during transfers
 
@@ -175,12 +186,14 @@ def _verify_file_transfer(self, original_file, username):
 
 ### Core Components
 - **Real Backup Executor** (`src/api/real_backup_executor.py`): Manages C++ client subprocess execution with sophisticated multi-layer progress monitoring
-- **Network Server** (`src/server/network_server.py`): Multi-threaded TCP server handling encrypted file transfers  
-- **Crypto Wrappers** (`src/wrappers/`): RSA/AES encryption abstractions for C++ client
+- **Network Server** (`python_server/server/server.py`): Multi-threaded TCP server handling encrypted file transfers  
+- **Flask API Bridge** (`api_server/cyberbackup_api_server.py`): HTTP API server with Sentry integration for error tracking
+- **Crypto Wrappers** (`Client/wrappers/`): RSA/AES encryption abstractions for C++ client
 - **Protocol Implementation**: 23-byte binary headers + encrypted payload with CRC32 verification
-- **Shared Utils** (`src/shared/utils/`): Common utilities including file lifecycle management, error handling, and process monitoring
+- **Shared Utilities** (`Shared/`): Common utilities including observability, logging, file lifecycle management, error handling, and process monitoring
+- **Observability Framework** (`Shared/observability.py`): Comprehensive structured logging with metrics collection, system monitoring, and timed operation tracking
 - **Progress Monitoring System**: Multi-layer progress tracking with StatisticalProgressTracker, TimeBasedEstimator, BasicProcessingIndicator, and DirectFilePoller
-- **WebSocket Broadcasting**: Real-time progress updates via SocketIO (currently experiencing connectivity issues)
+- **WebSocket Broadcasting**: Real-time progress updates via SocketIO with enhanced job management and cancellation support
 
 ### Key Integration Points
 - **Subprocess Communication**: Flask API → RealBackupExecutor → C++ client (with `--batch` flag)
@@ -208,19 +221,20 @@ def _verify_file_transfer(self, original_file, username):
 4. Monitor ports 9090 and 1256 for conflicts
 5. Check both `build/Release/` and `client/` directories for executables
 
-## Current System Status (2025-08-08)
+## Current System Status (2025-08-11)
 
 **✅ FULLY OPERATIONAL & DEPLOYED** - File transfer, registration, and progress reporting working
 **🚀 DATABASE ENHANCED** - Advanced database system with connection pooling, migrations, and analytics ready
-**🚀 REPOSITORY STATUS**: All 45 commits successfully pushed to GitHub (client-server-encrypted-backup-framework-clean)
-**🔧 LATEST UPDATE**: **CRITICAL FIXES APPLIED** - Connection drops and database verification issues resolved
+**🚀 REPOSITORY STATUS**: All commits successfully pushed to GitHub (client-server-encrypted-backup-framework-clean)
+**🔧 LATEST UPDATES**: **SENTRY INTEGRATION & ENHANCED OBSERVABILITY** - Error tracking and comprehensive monitoring added
 **🆕 PROVEN FUNCTIONALITY**: Files now visible in server GUI with proper username registration, 66KB file transfers confirmed working
-**✅ RECENT FIXES (2025-08-08)**:
-- **Fixed "connection broken by peer" errors**: Removed buggy `transferFileEnhanced` implementations causing client crashes
-- **Fixed database verification**: Updated existing files to `verified=1` status so they appear in server GUI
-- **Fixed compilation errors**: Removed undefined classes (`CRC32Stream`, `ProperDynamicBufferManager`) causing build failures  
-- **Implemented enhanced dynamic per-file buffer sizing**: 7-tier buffer system (1KB→2KB→4KB→8KB→16KB→32KB→64KB) 
-- **Optimized for realistic file sizes**: From tiny 1KB configs to 1000MB+ media files, each gets optimal buffer allocation
+**✅ RECENT ENHANCEMENTS (2025-08-11)**:
+- **Sentry Integration**: Added comprehensive error tracking with traces_sample_rate at 0.5 for API server monitoring
+- **Enhanced Observability Framework**: Comprehensive structured logging system with metrics collection, system monitoring, and timed operation tracking
+- **Improved Build System**: Enhanced one-click build script with better error handling, process management, and GUI mode options
+- **Expanded Test Suite**: Added specialized tests for Unicode/emoji handling, dry-run validation, and build process verification  
+- **WebSocket Improvements**: Enhanced real-time progress updates with job management, cancellation support, and performance monitoring endpoints
+- **Project Restructuring**: Better organization with dedicated api_server/, python_server/, Client/, and Shared/ directories
 
 ### Enhanced Dynamic Buffer System
 **Realistic File Size Optimization**: Each file gets its optimal buffer size calculated once at transfer start, then uses that buffer consistently throughout the entire transfer. Supports files from tiny configs to 1GB+ media files.

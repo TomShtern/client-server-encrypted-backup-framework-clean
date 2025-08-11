@@ -15,6 +15,7 @@ from collections import defaultdict, deque
 from enum import Enum
 import psutil
 import os
+from contextlib import suppress
 
 
 class MetricType(Enum):
@@ -106,7 +107,7 @@ class StructuredLogger:
     def _log(self, level: LogLevel, message: str, **kwargs):
         """Internal logging method"""
         entry = StructuredLogEntry(
-            timestamp=datetime.utcnow().isoformat() + "Z",
+            timestamp=f"{datetime.utcnow().isoformat()}Z",
             level=level.value,
             component=self.component,
             message=message,
@@ -132,7 +133,7 @@ class StructuredLogger:
             human_msg += f" {entry.context}"
             
         # Send to appropriate log level
-        if level == LogLevel.TRACE or level == LogLevel.DEBUG:
+        if level in (LogLevel.TRACE, LogLevel.DEBUG):
             self.base_logger.debug(f"STRUCTURED: {json_log}")
             self.base_logger.debug(human_msg)
         elif level == LogLevel.INFO:
@@ -175,7 +176,7 @@ class MetricsCollector:
         self.lock = threading.RLock()
         self.start_time = time.time()
         
-    def record_counter(self, name: str, value: float = 1.0, tags: Dict[str, str] = None):
+    def record_counter(self, name: str, value: float = 1.0, tags: Optional[Dict[str, str]] = None):
         """Record a counter metric (cumulative)"""
         metric = Metric(
             name=name,
@@ -187,7 +188,7 @@ class MetricsCollector:
         with self.lock:
             self.metrics[name].append(metric)
             
-    def record_gauge(self, name: str, value: float, tags: Dict[str, str] = None):
+    def record_gauge(self, name: str, value: float, tags: Optional[Dict[str, str]] = None):
         """Record a gauge metric (current value)"""
         metric = Metric(
             name=name,
@@ -199,7 +200,7 @@ class MetricsCollector:
         with self.lock:
             self.metrics[name].append(metric)
             
-    def record_timer(self, name: str, duration_ms: float, tags: Dict[str, str] = None):
+    def record_timer(self, name: str, duration_ms: float, tags: Optional[Dict[str, str]] = None):
         """Record a timer metric"""
         metric = Metric(
             name=name,
@@ -273,13 +274,10 @@ class SystemMonitor:
     def _monitor_loop(self):
         """Main monitoring loop"""
         while self.running:
-            try:
+            with suppress(Exception):
                 metrics = self._collect_system_metrics()
                 with self.lock:
                     self.metrics_history.append(metrics)
-            except Exception as e:
-                # Don't let monitoring failures crash the system
-                pass
                 
             time.sleep(self.collection_interval)
             
@@ -356,7 +354,7 @@ class TimedOperation:
     """Context manager for timing operations and recording metrics"""
     
     def __init__(self, operation_name: str, logger: StructuredLogger, 
-                 tags: Dict[str, str] = None):
+                 tags: Optional[Dict[str, str]] = None):
         self.operation_name = operation_name
         self.logger = logger
         self.tags = tags or {}
@@ -369,6 +367,11 @@ class TimedOperation:
         return self
         
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.start_time is None:
+            # Should not happen in normal flow, but handle gracefully
+            self.logger.error(f"Timer not properly initialized for {self.operation_name}")
+            return
+            
         duration_ms = (time.time() - self.start_time) * 1000
         
         # Record timing metric
@@ -390,3 +393,4 @@ class TimedOperation:
                             duration_ms=duration_ms,
                             error_code=exc_type.__name__,
                             tags=self.tags)
+                          
