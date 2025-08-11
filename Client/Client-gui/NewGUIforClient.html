@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CyberBackup Pro - v3.0 (API Driven)</title>
+    
+    <!-- Sentry JavaScript SDK for error tracking -->
+    <script
+        src="https://js.sentry.io/7.96.0/bundle.tracing.min.js"
+        integrity="sha384-6dGzKI0R4jYF3KXfOmzwK4k8pBJWOHggNhm6+ZtSL5w4j2V2TGe8A3E1J8EZzH8+"
+        crossorigin="anonymous">
+    </script>
+    
     <style>
         /* CRITICAL FIX: Move @import to top */
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono:wght@400&display=swap');
@@ -2562,6 +2570,52 @@
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
     
     <script>
+        // === SENTRY INITIALIZATION ===
+        console.log('Initializing Sentry error tracking...');
+        try {
+            Sentry.init({
+                dsn: "https://1676bfc28540fa5c2bcdb72d402125fd@o4509746411470848.ingest.us.sentry.io/4509747877773312",
+                environment: window.location.hostname === 'localhost' ? 'development' : 'production',
+                integrations: [
+                    new Sentry.BrowserTracing(),
+                    new Sentry.BrowserProfilingIntegration(),
+                ],
+                // Performance Monitoring
+                tracesSampleRate: 0.1, // 10% of transactions for performance monitoring
+                profilesSampleRate: 0.1, // 10% of transactions for profiling
+                
+                // Additional configuration
+                debug: window.location.hostname === 'localhost',
+                beforeSend(event, hint) {
+                    // Filter out common non-critical errors
+                    if (hint.originalException) {
+                        const error = hint.originalException;
+                        // Filter out WebSocket connection errors (expected during network issues)
+                        if (error.message && error.message.includes('WebSocket connection')) {
+                            return null;
+                        }
+                        // Filter out fetch abort errors (expected during navigation)
+                        if (error.name === 'AbortError') {
+                            return null;
+                        }
+                    }
+                    return event;
+                },
+            });
+            
+            // Set user context
+            Sentry.setTag('component', 'web-gui');
+            Sentry.setTag('framework', 'cyberbackup');
+            Sentry.setContext('browser', {
+                name: navigator.userAgent,
+                url: window.location.href
+            });
+            
+            console.log('✅ Sentry initialized successfully for CyberBackup Web GUI');
+        } catch (error) {
+            console.warn('⚠️ Failed to initialize Sentry:', error);
+        }
+        
         // === IMMEDIATE TEST ===
         console.log('JavaScript is working! Script started loading...');
         

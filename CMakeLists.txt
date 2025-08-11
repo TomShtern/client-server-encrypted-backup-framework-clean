@@ -64,6 +64,7 @@ endif()
 
 find_package(cryptopp CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
+find_package(sentry CONFIG REQUIRED)
 
 # 7. Link Libraries: Include both external and Windows system libraries
 target_link_libraries(EncryptedBackupClient PRIVATE
@@ -72,6 +73,7 @@ target_link_libraries(EncryptedBackupClient PRIVATE
     Boost::iostreams
     cryptopp::cryptopp
     ZLIB::ZLIB
+    sentry::sentry
 )
 
 # 8. Windows-specific libraries (minimal set for networking)

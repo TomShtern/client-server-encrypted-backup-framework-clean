@@ -13,6 +13,7 @@ Features:
 - WebSocket support for real-time communication
 - File receipt monitoring and health checks
 - Singleton management and comprehensive error handling
+- Sentry error tracking and monitoring
 
 Usage:
 - Direct: python cyberbackup_api_server.py
@@ -42,6 +43,10 @@ from flask import Flask, request, jsonify, send_from_directory, send_file, sessi
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from Shared.logging_utils import setup_dual_logging, create_log_monitor_info
+
+# Initialize Sentry error tracking
+from Shared.sentry_config import init_sentry, capture_error, capture_message
+sentry_initialized = init_sentry("api-server", traces_sample_rate=0.5)
 
 # Configure enhanced dual logging (console + file) with observability
 logger, api_log_file = setup_dual_logging(
@@ -79,6 +84,36 @@ socketio = SocketIO(app, cors_allowed_origins=["http://localhost:9090", "http://
 # Setup enhanced observability middleware - FIXED VERSION
 observability_middleware = setup_observability_for_flask(app, "api-server")
 structured_logger = create_enhanced_logger("api-server", logger)
+
+# Add Sentry error handlers
+if sentry_initialized:
+    @app.errorhandler(500)
+    def handle_internal_error(error):
+        """Handle internal server errors with Sentry"""
+        capture_error(error, "api-server", {
+            "endpoint": request.endpoint,
+            "method": request.method,
+            "url": request.url
+        })
+        return jsonify({
+            "error": "Internal server error",
+            "message": "An error occurred while processing your request"
+        }), 500
+    
+    @app.errorhandler(Exception)
+    def handle_unexpected_error(error):
+        """Handle unexpected errors with Sentry"""
+        capture_error(error, "api-server", {
+            "endpoint": request.endpoint,
+            "method": request.method,
+            "url": request.url,
+            "user_agent": request.headers.get("User-Agent")
+        })
+        logger.error(f"Unexpected error in {request.endpoint}: {error}")
+        return jsonify({
+            "error": "Unexpected error",
+            "message": "An unexpected error occurred"
+        }), 500
 
 # Performance monitoring singleton
 from Shared.utils.performance_monitor import get_performance_monitor
