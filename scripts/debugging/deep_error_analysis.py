@@ -9,9 +9,9 @@ import ast
 import traceback
 from typing import List, Dict, Any
 
-# Add server directory to path
-server_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'python_server', 'server')
-sys.path.insert(0, server_dir)
+# Setup standardized import paths
+from Shared.path_utils import setup_imports
+setup_imports()
 
 def analyze_python_file(filepath: str) -> Dict[str, Any]:
     """Analyze a Python file for various issues"""

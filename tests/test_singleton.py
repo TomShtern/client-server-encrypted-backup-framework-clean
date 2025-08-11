@@ -9,8 +9,9 @@ import time
 import subprocess
 from pathlib import Path
 
-# Add server directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'server'))
+# Setup standardized import paths
+from Shared.path_utils import setup_imports
+setup_imports()
 
 def test_singleton_functionality():
     """Test the singleton server functionality"""

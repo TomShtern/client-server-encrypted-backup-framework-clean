@@ -11,8 +11,9 @@ import time
 import tempfile
 from pathlib import Path
 
-# Add project root to path to import our modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+# Setup standardized import paths
+from Shared.path_utils import setup_imports
+setup_imports()
 
 def test_file_receipt_tracker():
     """Test the FileReceiptProgressTracker functionality"""

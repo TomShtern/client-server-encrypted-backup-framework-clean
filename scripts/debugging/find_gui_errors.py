@@ -3,8 +3,9 @@ import sys
 import os
 import traceback
 
-# Add server directory
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'python_server', 'server'))
+# Setup standardized import paths
+from Shared.path_utils import setup_imports
+setup_imports()
 
 def find_errors():
     print("=== ServerGUI Error Detection ===")

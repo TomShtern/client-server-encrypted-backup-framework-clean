@@ -42,7 +42,8 @@ def test_server_module():
         # Change to project root
         project_root = Path(__file__).parent
         os.chdir(project_root)
-        sys.path.insert(0, str(project_root))
+        from Shared.path_utils import setup_imports
+        setup_imports()
         
         print(f"Working directory: {os.getcwd()}")
         

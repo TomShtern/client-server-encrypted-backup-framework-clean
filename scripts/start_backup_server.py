@@ -17,10 +17,9 @@ This file will be removed in a future version.
 import sys
 import os
 
-# Add the project root to Python path to fix import issues
-project_root = os.path.dirname(os.path.abspath(__file__))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+# Setup standardized import paths
+from Shared.path_utils import setup_imports
+setup_imports()
 
 def main():
     """DEPRECATED: Use official server entry point instead"""

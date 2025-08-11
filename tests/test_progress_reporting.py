@@ -9,8 +9,9 @@ import os
 import time
 from datetime import datetime
 
-# Add the project root to Python path
-sys.path.insert(0, os.path.dirname(__file__))
+# Setup standardized import paths
+from Shared.path_utils import setup_imports
+setup_imports()
 
 from api_server.real_backup_executor import RealBackupExecutor
 

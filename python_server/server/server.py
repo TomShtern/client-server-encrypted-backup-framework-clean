@@ -57,9 +57,9 @@ RSA_PUBLIC_KEY_SIZE = 160 # Bytes, X.509 format (for 1024-bit RSA - per protocol
 AES_KEY_SIZE_BYTES = 32 # 256-bit AES
 
 # Enhanced Logging Configuration with dual output
-# Add the project root to path to access shared utilities
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-sys.path.insert(0, project_root)
+# Setup standardized import paths
+from Shared.path_utils import setup_imports
+setup_imports()
 from Shared.logging_utils import setup_dual_logging, create_log_monitor_info
 
 # Initialize Sentry error tracking for backup server

@@ -18,8 +18,12 @@ except ImportError:
 from datetime import datetime, timedelta
 from typing import Dict, Any
 
-# Add server modules to path
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'python_server', 'server'))
+# Setup standardized import paths
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from Shared.path_utils import setup_imports
+setup_imports()
 
 # Configure logging
 logging.basicConfig(

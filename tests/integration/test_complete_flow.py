@@ -34,9 +34,9 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 import psutil
 
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
+# Setup standardized import paths
+from Shared.path_utils import setup_imports
+setup_imports()
 
 from Shared.observability import get_metrics_collector, get_system_monitor
 from Shared.logging_utils import setup_dual_logging

@@ -5,12 +5,13 @@ import sys
 import os
 from pathlib import Path
 
-# Add the scripts directory to the path so we can import the module
-sys.path.insert(0, str(Path(__file__).parent))
+# Setup standardized import paths
+from Shared.path_utils import setup_imports
+setup_imports()
 
 try:
     # Import the module to test
-    import one_click_build_and_run as build_script
+    from . import one_click_build_and_run as build_script
     print("[OK] Successfully imported one_click_build_and_run module")
 except Exception as e:
     print(f"[ERROR] Failed to import module: {e}")

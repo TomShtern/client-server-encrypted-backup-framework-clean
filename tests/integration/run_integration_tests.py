@@ -28,9 +28,9 @@ from pathlib import Path
 from typing import Dict, Any, List
 import subprocess
 
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
+# Setup standardized import paths
+from Shared.path_utils import setup_imports
+setup_imports()
 
 from Shared.logging_utils import setup_dual_logging
 

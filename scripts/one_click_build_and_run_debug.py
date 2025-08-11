@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 # Import the original functions
-from one_click_build_and_run import (
+from .one_click_build_and_run import (
     check_api_server_status, check_backup_server_status, 
     check_python_dependencies, cleanup_existing_processes,
     print_phase

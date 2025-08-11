@@ -24,8 +24,9 @@ import json
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Setup standardized import paths
+from Shared.path_utils import setup_imports
+setup_imports()
 
 # Import the components we're testing
 from Shared.utils.file_lifecycle import SynchronizedFileManager, create_transfer_info_managed

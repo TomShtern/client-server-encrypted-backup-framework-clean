@@ -40,8 +40,8 @@ from typing import Optional
 from flask import Flask, request, jsonify, send_from_directory, send_file, session
 
 # Import enhanced logging utilities
-import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from Shared.path_utils import setup_imports
+setup_imports()
 from Shared.logging_utils import setup_dual_logging, create_log_monitor_info
 
 # Initialize Sentry error tracking
@@ -312,9 +312,22 @@ def serve_progress_config():
 
 @app.route('/favicon.ico')
 def serve_favicon():
-    """Serve favicon to prevent 404 errors"""
-    # Return empty response to prevent 500 errors  
-    return '', 204
+    """Serve favicon with better error handling"""
+    try:
+        # Try to serve favicon from Client-gui directory if it exists
+        current_file_abs = os.path.abspath(__file__)
+        api_server_dir = os.path.dirname(current_file_abs)
+        project_root = os.path.dirname(api_server_dir)
+        favicon_path = os.path.join(project_root, 'Client', 'Client-gui', 'favicon.ico')
+        
+        if os.path.exists(favicon_path):
+            return send_file(favicon_path)
+        
+        # If no favicon file exists, return empty 204 response to prevent errors
+        return '', 204
+    except Exception as e:
+        logger.debug(f"Favicon serving error (non-critical): {e}")
+        return '', 204
 
 # API Endpoints for CyberBackup 3.0
 
@@ -326,27 +339,64 @@ def api_test():
 
 @app.route('/api/status')
 def api_status():
-    """Get current backup status with proper connection state management"""
+    """Get current backup status with proper connection state management and timeout protection"""
+    import signal
+    from contextlib import contextmanager
+    
+    @contextmanager
+    def timeout_handler(timeout_seconds=3):
+        """Context manager to prevent API status calls from hanging"""
+        def timeout_signal_handler(signum, frame):
+            raise TimeoutError(f"API status call timed out after {timeout_seconds} seconds")
+        
+        if os.name != 'nt':  # Unix-like systems
+            old_handler = signal.signal(signal.SIGALRM, timeout_signal_handler)
+            signal.alarm(timeout_seconds)
+        try:
+            yield
+        except TimeoutError:
+            logger.warning("API status call timed out - returning cached status")
+            raise
+        finally:
+            if os.name != 'nt':
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+    
     try:
-        global last_known_status, active_backup_jobs
+        with timeout_handler(3):  # 3 second timeout for status calls
+            global last_known_status, active_backup_jobs
 
-        job_id = request.args.get('job_id')
-        status = active_backup_jobs.get(job_id, last_known_status)
+            job_id = request.args.get('job_id')
+            status = active_backup_jobs.get(job_id, last_known_status)
 
-        # Always provide the latest connection status
-        status['connected'] = check_backup_server_status() and connection_established
-        status['isConnected'] = status['connected']
+            # Always provide the latest connection status
+            status['connected'] = check_backup_server_status() and connection_established
+            status['isConnected'] = status['connected']
 
-        # Clear events after reading them
-        events_to_send = status.get('events', [])
-        if job_id and job_id in active_backup_jobs:
-            active_backup_jobs[job_id]['events'] = []
+            # Clear events after reading them
+            events_to_send = status.get('events', [])
+            if job_id and job_id in active_backup_jobs:
+                active_backup_jobs[job_id]['events'] = []
 
-        response = status.copy()
-        response['events'] = events_to_send
+            response = status.copy()
+            response['events'] = events_to_send
 
-        return jsonify(response)
+            return jsonify(response)
 
+    except TimeoutError as e:
+        print(f"[TIMEOUT] API status call timed out: {str(e)}")
+        # Return cached status to prevent client-side timeouts
+        cached_response = {
+            'connected': False,
+            'isConnected': False,
+            'status': 'timeout',
+            'message': 'API status check timed out - server may be busy',
+            'phase': 'TIMEOUT',
+            'last_updated': datetime.now().isoformat(),
+            'cached': True
+        }
+        return jsonify(cached_response), 200
+    
     except Exception as e:
         print(f"[ERROR] Exception in api_status: {str(e)}")
         error_response = {
@@ -355,20 +405,48 @@ def api_status():
             'status': 'error',
             'message': f'API Error: {str(e)}',
             'phase': 'ERROR',
-            'last_updated': datetime.now().isoformat()
+            'last_updated': datetime.now().isoformat(),
+            'error_type': type(e).__name__
         }
         return jsonify(error_response), 500
 
 @app.route('/health')
 def health_check():
-    """Health check endpoint"""
-    server_running = check_backup_server_status()
-    return jsonify({
-        'status': 'healthy' if server_running else 'degraded',
-        'backup_server': 'running' if server_running else 'not_running',
-        'api_server': 'running',
-        'timestamp': datetime.now().isoformat()
-    })
+    """Enhanced health check endpoint with timeout protection"""
+    import psutil
+    try:
+        # Quick health check with timeout protection
+        server_running = check_backup_server_status()
+        
+        # Get system metrics
+        try:
+            cpu_usage = psutil.cpu_percent(interval=0.1)
+            memory_usage = psutil.virtual_memory().percent
+            active_connections = len(connected_clients) if 'connected_clients' in globals() else 0
+        except Exception:
+            cpu_usage = memory_usage = active_connections = 0
+        
+        return jsonify({
+            'status': 'healthy' if server_running else 'degraded',
+            'backup_server': 'running' if server_running else 'not_running',
+            'api_server': 'running',
+            'system_metrics': {
+                'cpu_usage_percent': cpu_usage,
+                'memory_usage_percent': memory_usage,
+                'active_websocket_connections': active_connections,
+                'active_backup_jobs': len(active_backup_jobs) if 'active_backup_jobs' in globals() else 0
+            },
+            'timestamp': datetime.now().isoformat(),
+            'uptime_info': 'API server responsive'
+        })
+    except Exception as e:
+        # Even health check can fail - provide minimal response
+        return jsonify({
+            'status': 'error',
+            'api_server': 'running_with_errors',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
 
 @app.route('/api/connect', methods=['POST'])
 def api_connect():

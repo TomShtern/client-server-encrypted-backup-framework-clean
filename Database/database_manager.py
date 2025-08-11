@@ -10,8 +10,12 @@ import argparse
 import json
 from datetime import datetime
 
-# Add server modules to path
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'python_server', 'server'))
+# Setup standardized import paths
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from Shared.path_utils import setup_imports
+setup_imports()
 
 def print_header(title):
     """Print a formatted header."""

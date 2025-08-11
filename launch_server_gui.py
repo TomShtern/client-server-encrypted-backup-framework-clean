@@ -8,9 +8,9 @@ import subprocess
 from pathlib import Path
 
 def main():
-    # Initialize Sentry early for error tracking
-    project_root = Path(__file__).parent.absolute()
-    sys.path.insert(0, str(project_root))
+    # Setup standardized import paths
+    from Shared.path_utils import setup_imports
+    setup_imports()
     
     try:
         from Shared.sentry_config import init_sentry, capture_error

@@ -5,11 +5,12 @@ import sys
 import os
 from pathlib import Path
 
-# Add the scripts directory to the path
-sys.path.insert(0, str(Path(__file__).parent))
+# Setup standardized import paths
+from Shared.path_utils import setup_imports
+setup_imports()
 
 try:
-    from one_click_build_and_run import setup_unicode_console, supports_emojis, safe_print
+    from .one_click_build_and_run import setup_unicode_console, supports_emojis, safe_print
     print("[OK] Successfully imported emoji support functions")
 except Exception as e:
     print(f"[ERROR] Failed to import: {e}")

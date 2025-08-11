@@ -6,10 +6,11 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-# Add the scripts directory to the path
-sys.path.insert(0, str(Path(__file__).parent))
+# Setup standardized import paths
+from Shared.path_utils import setup_imports
+setup_imports()
 
-import one_click_build_and_run as build_script
+from . import one_click_build_and_run as build_script
 
 def test_dry_run():
     """Test the script phases without actually starting servers"""

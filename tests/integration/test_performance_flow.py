@@ -24,9 +24,9 @@ from pathlib import Path
 from typing import Dict, Any, List, Tuple
 import statistics
 
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
+# Setup standardized import paths
+from Shared.path_utils import setup_imports
+setup_imports()
 
 from tests.integration.test_complete_flow import IntegrationTestFramework
 from Shared.observability import get_metrics_collector, get_system_monitor
