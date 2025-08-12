@@ -2,6 +2,7 @@
 # GUI Integration Module
 # Extracted from monolithic server.py for better modularity
 
+import os
 import threading
 import logging
 from typing import Optional, Dict, Any
@@ -23,16 +24,28 @@ class GUIManager:
         self.gui_lock = threading.Lock()
         
         # Try to import GUI components
-        try:
-            # Import ServerGUI from sibling package server_gui (adjusted path)
-            from python_server.server_gui.ServerGUI import ServerGUI
-            self.ServerGUI = ServerGUI
-            self.gui_available = True
-            logger.info("GUI components available for initialization")
-        except ImportError as e:
-            logger.info(f"GUI components not available: {e}")
+        # Check environment variable to disable GUI
+        gui_disabled = os.environ.get('CYBERBACKUP_DISABLE_GUI', '').lower() in ('1', 'true', 'yes')
+        
+        if gui_disabled:
+            logger.info("GUI disabled via CYBERBACKUP_DISABLE_GUI environment variable")
             self.ServerGUI = None
             self.gui_available = False
+        else:
+            try:
+                # Import ServerGUI from sibling package server_gui (adjusted path)
+                from python_server.server_gui.ServerGUI import ServerGUI
+                self.ServerGUI = ServerGUI
+                self.gui_available = True
+                logger.info("GUI components available for initialization")
+            except ImportError as e:
+                logger.info(f"GUI components not available: {e}")
+                self.ServerGUI = None
+                self.gui_available = False
+            except Exception as e:
+                logger.warning(f"GUI components failed to load: {e} - continuing without GUI")
+                self.ServerGUI = None
+                self.gui_available = False
     
     def initialize_gui(self) -> bool:
         """

@@ -340,6 +340,8 @@ private:
     // Endianness and validation utilities (CRITICAL FIXES)
     static uint16_t hostToLittleEndian16(uint16_t value);
     static uint32_t hostToLittleEndian32(uint32_t value);
+    static uint16_t littleEndianToHost16(const uint8_t* bytes);
+    static uint32_t littleEndianToHost32(const uint8_t* bytes);
     static bool isSystemLittleEndian();
     static size_t validateAndAlignBufferSize(size_t requestedSize, size_t fileSize);
     static bool validateFileSizeForTransfer(size_t fileSize);

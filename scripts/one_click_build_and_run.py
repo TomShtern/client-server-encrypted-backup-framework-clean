@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """One-click build and run orchestrator for CyberBackup 3.0.
 
 This script:
@@ -44,31 +45,15 @@ def setup_logging():
     Path('logs').mkdir(exist_ok=True)
 
 def setup_unicode_console():
-    """Enhanced Unicode console setup for Windows emoji support"""
+    """UTF-8 console setup - enforces UTF-8 encoding exclusively"""
     if os.name == 'nt':  # Windows only
         with contextlib.suppress(Exception):
             # Set UTF-8 codepage
-            os.system("chcp 65001 >nul 2>&1")
-            # Reconfigure Python stdout for UTF-8 (Python 3.7+)
-            # Use getattr to avoid Pylance errors on reconfigure method
-            if hasattr(sys.stdout, 'reconfigure'):
-                getattr(sys.stdout, 'reconfigure')(encoding='utf-8', errors='replace')
-                getattr(sys.stderr, 'reconfigure')(encoding='utf-8', errors='replace')
-                logging.info("Unicode console setup completed successfully")
-
-def supports_emojis():
-    """Quick test for emoji support in current console"""
-    try:
-        # Test with a simple emoji to stdout
-        test_str = "🚀"
-        # Try to encode it with current stdout encoding
-        test_str.encode(sys.stdout.encoding or 'utf-8')
-        return True
-    except (UnicodeEncodeError, LookupError, AttributeError):
-        return False
+            os.system("chcp 65001 >nul 2>&1")            
+            logging.info("UTF-8 console setup completed - UTF-8 mode enforced")
 
 def safe_print(message, fallback=None):
-    """Print with emoji support and automatic fallback"""
+    """Print with automatic fallback for encoding issues"""
     try:
         print(message)
     except UnicodeEncodeError:
@@ -164,6 +149,17 @@ def print_api_start_failure():
     print("[ERROR] API Bridge Server failed to start properly")
     print_api_server_troubleshooting()
 
+def print_backup_server_failure():
+    """Standardized message when Python Backup Server fails to start"""
+    print("[ERROR] Python Backup Server failed to start properly")
+    print("The server is not responding on the expected port.")
+    print("\nTroubleshooting steps:")
+    print("1. Check if port 1256 is being used by another application")
+    print("2. Verify Python dependencies are installed: pip install -r requirements.txt")
+    print("3. Try running manually: python python_server/server/server.py")
+    print("4. Check the server console window for error messages")
+    print("5. Ensure RSA keys exist in the data/ directory")
+
 def handle_error_and_exit(error_message, wait_for_input=True):
     """Print error message and exit with status 1"""
     print(error_message)
@@ -217,7 +213,15 @@ def check_command_exists(command):
     """Check if a command exists"""
     # Special case for Python - if we're running this script, Python exists
     if command == "python":
-        return True, f"Python {sys.version.split()[0]}"
+        # Check Python version requirement (3.13+)
+        python_version = sys.version_info
+        if python_version.major == 3 and python_version.minor >= 13:
+            return True, f"Python {sys.version.split()[0]}"
+        elif python_version.major == 3 and python_version.minor >= 8:
+            logging.warning(f"Python {python_version.major}.{python_version.minor} detected - Python 3.13+ recommended")
+            return True, f"Python {sys.version.split()[0]} (upgrade recommended)"
+        else:
+            return False, f"Python {python_version.major}.{python_version.minor} is too old - requires 3.13+"
     
     try:
         result = subprocess.run(f"{command} --version", shell=True, 
@@ -275,8 +279,15 @@ def check_python_dependencies():
     for module, description in required_modules.items():
         try:
             imported_module = __import__(module)
-            # Try to get version if available
-            version = getattr(imported_module, '__version__', 'unknown version')
+            # Try to get version if available (use modern method for Flask)
+            if module == 'flask':
+                try:
+                    import importlib.metadata
+                    version = importlib.metadata.version('flask')
+                except Exception:
+                    version = 'unknown version'
+            else:
+                version = getattr(imported_module, '__version__', 'unknown version')
             print(f"[OK] {module} ({description}): {version}")
         except ImportError:
             if module in ['sentry_sdk', 'watchdog']:
@@ -449,7 +460,7 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
     
     try:
         # Get list of all running processes with better error handling
-        for process in psutil.process_iter(['pid', 'name', 'cmdline', 'connections']):
+        for process in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
                 process_info = process.info
                 cmdline = process_info.get('cmdline', [])
@@ -478,11 +489,10 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
                                 hasattr(conn, 'pid') and conn.pid == process_info['pid']):
                                 # Safely get port from connection info
                                 port = None
-                                if hasattr(conn, 'laddr') and conn.laddr:
-                                    if hasattr(conn.laddr, 'port'):
-                                        port = conn.laddr.port
-                                    elif isinstance(conn.laddr, tuple) and len(conn.laddr) >= 2:
-                                        port = conn.laddr[1]
+                                if hasattr(conn.laddr, 'port'):
+                                    port = conn.laddr.port
+                                elif isinstance(conn.laddr, tuple) and len(conn.laddr) >= 2:
+                                    port = conn.laddr[1]
                                 
                                 if (port in [9090, 1256] and 
                                     hasattr(conn, 'status') and conn.status == psutil.CONN_LISTEN and 
@@ -566,16 +576,9 @@ def main():
     # Enhanced Unicode console setup
     setup_unicode_console()
     
-    # Check if emojis are supported
-    emoji_support = supports_emojis()
-    logging.info(f"Emoji support detected: {emoji_support}")
-    
     print()
     print("=" * 72)
-    if emoji_support:
-        safe_print("   🚀 ONE-CLICK BUILD AND RUN - CyberBackup 3.0")
-    else:
-        safe_print("   ONE-CLICK BUILD AND RUN - CyberBackup 3.0")
+    safe_print("   [LAUNCH] ONE-CLICK BUILD AND RUN - CyberBackup 3.0")
     print("=" * 72)
     print()
     print("Starting complete build and deployment process...")
@@ -602,8 +605,8 @@ def main():
     # Check Python
     exists, version = check_command_exists("python")
     if not exists:
-        handle_error_and_exit("[ERROR] Python is not installed or not in PATH\nPlease install Python 3.x and add it to your PATH")
-    print(f"[OK] Python found: {version.split()[1] if version else 'Unknown version'}")
+        handle_error_and_exit("[ERROR] Python 3.13+ is not installed or not in PATH\nPlease install Python 3.13+ and add it to your PATH")
+    print(f"[OK] Python found: {version.split()[1] if 'Python' in version else version}")
     
     # Check CMake
     exists, version = check_command_exists("cmake")
@@ -722,7 +725,7 @@ def main():
     
     requirements_file = Path("requirements.txt")
     if requirements_file.exists():
-        if not (result := run_command("pip install -r requirements.txt", check_exit=False, timeout=180)):
+        if not run_command("pip install -r requirements.txt", check_exit=False, timeout=180):
             print("[WARNING] Some Python dependencies failed to install")
             print("This may cause issues with the API server or GUI")
             print()
@@ -739,7 +742,7 @@ def main():
     
     for dep in additional_deps:
         print(f"Installing {dep}...")
-        if (success := run_command(f"pip install {dep}", check_exit=False, timeout=60)):
+        if run_command(f"pip install {dep}", check_exit=False, timeout=60):
             print(f"[OK] {dep} installed successfully")
         else:
             print(f"[WARNING] Failed to install {dep} - continuing anyway")
@@ -849,8 +852,7 @@ def main():
             time.sleep(1)
         
         if not backup_server_ready:
-            print("[ERROR] Backup server failed to start within 30 seconds")
-            print("The API server may fail to connect to the backup server.")
+            print_backup_server_failure()
             print("Check the server console window for error messages.")
         else:
             print("[OK] Backup server with integrated GUI is ready!")
@@ -883,7 +885,7 @@ def main():
     missing_deps, optional_missing = check_python_dependencies()
     
     if missing_deps:
-        print(f"\n[ERROR] Missing required Python modules:")
+        print("\n[ERROR] Missing required Python modules:")
         for dep, desc in missing_deps:
             print(f"  - {dep}: {desc}")
         print("\nInstall missing dependencies:")
@@ -902,7 +904,7 @@ def main():
         print("\n[OK] All required Python dependencies are available")
     
     if optional_missing:
-        print(f"\n[INFO] Optional dependencies not installed:")
+        print("\n[INFO] Optional dependencies not installed:")
         for dep, desc in optional_missing:
             print(f"  - {dep}: {desc}")
         print("These are optional but recommended for full functionality.")
@@ -992,12 +994,7 @@ def main():
     print()
     print("=" * 72)
     if server_started_successfully:
-        if emoji_support:
-            safe_print("   ✅ ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!", "   [SUCCESS] ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!")
-        else:
-            safe_print("   [SUCCESS] ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!")
-    elif emoji_support:
-        safe_print("   ⚠️  ONE-CLICK BUILD AND RUN COMPLETED WITH ISSUES", "   [WARNING] ONE-CLICK BUILD AND RUN COMPLETED WITH ISSUES")
+        safe_print("   [SUCCESS] ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!")
     else:
         safe_print("   [WARNING] ONE-CLICK BUILD AND RUN COMPLETED WITH ISSUES")
     print("=" * 72)
@@ -1022,7 +1019,7 @@ def main():
     print()
     
     if server_started_successfully and api_server_running and backup_server_running:
-        print("✨ SUCCESS! All components are running properly:")
+        print("[SUCCESS] All components are running properly:")
         print("   1. The web interface should have opened automatically")
         print("   2. The server GUI should be visible in a separate window") 
         print("   3. You can upload files through either interface")
@@ -1030,13 +1027,13 @@ def main():
         if check_appmap_available():
             print("   5. AppMap traces will be generated when services stop")
     elif server_started_successfully and api_server_running:
-        print("⚠️  Web interface is working, but server may have issues:")
+        print("[WARNING] Web interface is working, but server may have issues:")
         print("   1. The web interface should work for basic operations")
         print("   2. Check the server console window for error messages")
         print("   3. File uploads may not work properly")
         print("   4. Restart the script if server issues persist")
     else:
-        print("❌ System has issues - troubleshooting needed:")
+        print("[ERROR] System has issues - troubleshooting needed:")
         print("   1. Check console windows for error messages")
         print("   2. Verify all dependencies: pip install -r requirements.txt")  
         print("   3. Try manual startup: python python_server/server/server.py")
@@ -1044,7 +1041,7 @@ def main():
         print("   5. Restart the script after fixing issues")
     print()
     
-    print("💡 Available commands:")
+    print("[INFO] Available commands:")
     print("   • Run tests: python scripts\\testing\\master_test_suite.py")
     print("   • Quick validation: python scripts\\testing\\quick_validation.py")
     print("   • Stop all services: Close console windows or press Ctrl+C")
@@ -1054,12 +1051,7 @@ def main():
     print()
     
     if server_started_successfully and api_server_running and backup_server_running:
-        if emoji_support:
-            safe_print("🎉 Ready for secure backup operations! �", "Ready for secure backup operations!")
-        else:
-            safe_print("Ready for secure backup operations!")
-    elif emoji_support:
-        safe_print("🔧 Please check the troubleshooting steps above", "Please check the troubleshooting steps above")
+        safe_print("Ready for secure backup operations!")
     else:
         safe_print("Please check the troubleshooting steps above")
     print("=" * 72)

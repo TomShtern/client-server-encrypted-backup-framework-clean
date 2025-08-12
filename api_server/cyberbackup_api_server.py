@@ -738,7 +738,7 @@ def api_start_backup_working():
                     expected_hash = hashlib.sha256(f.read()).hexdigest()
                 logger.info(f"[Job {job_id}] Calculated verification data: Size={expected_size}, Hash={expected_hash[:8]}...")
 
-                def on_completion():
+                def on_completion(result):
                     logger.info(f"[Job {job_id}] Received VERIFIED COMPLETION signal for '{filename_for_thread}'. Forcing 100%.")
                     with active_backup_jobs_lock:
                         if job_id in active_backup_jobs:

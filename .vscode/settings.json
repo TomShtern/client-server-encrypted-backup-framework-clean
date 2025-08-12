@@ -9,5 +9,20 @@
     "cmake.configureOnOpen": true,
     "C_Cpp.intelliSenseEngine": "Default",
     "C_Cpp.errorSquiggles": "Enabled",
-    "github.copilot.nextEditSuggestions.enabled": true
+    "github.copilot.nextEditSuggestions.enabled": true,
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/.hg/store/**": true,
+        "**/node_modules/**": true,
+        "**/__pycache__/**": true,
+        "**/build/**": true,
+        "**/logs/**": true,
+        "**/*.log": true,
+        "**/received_files/**": true,
+        "**/data/**": true,
+        "**/dist/**": true,
+        "**/.git/**": true,
+        "**/.vscode/**": true
+    }
 }

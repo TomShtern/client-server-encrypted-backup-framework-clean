@@ -1201,7 +1201,9 @@ class ServerGUI:
         except Exception as e:
             print(f"GUI initialization failed: {e}")
             import traceback
-# Cleaned up duplicate import
+import sys
+sys.stdin.reconfigure(encoding="utf-8")
+sys.stdout.reconfigure(encoding="utf-8")
             traceback.print_exc()
             return False
     
@@ -1316,7 +1318,9 @@ class ServerGUI:
         except Exception as e:
             print(f"Modern GUI main loop error: {e}")
             import traceback
-# Cleaned up duplicate import
+import sys
+sys.stdin.reconfigure(encoding="utf-8")
+sys.stdout.reconfigure(encoding="utf-8")
             traceback.print_exc()
         finally:
             self.gui_enabled = False
@@ -2094,7 +2098,9 @@ class ServerGUI:
     def _start_server(self):
         """Start the backup server."""
         from python_server.server.server import BackupServer # Local import to avoid circular dependency # type: ignore
-# Cleaned up duplicate import
+import sys
+sys.stdin.reconfigure(encoding="utf-8")
+sys.stdout.reconfigure(encoding="utf-8")
         
         if not self.server:
             if self.toast_system:
@@ -2575,7 +2581,9 @@ class ServerGUI:
             except AttributeError:
                 # os.startfile is only available on Windows. For other platforms, we can use other commands.
                 import subprocess
-# Cleaned up duplicate import
+import sys
+sys.stdin.reconfigure(encoding="utf-8")
+sys.stdout.reconfigure(encoding="utf-8")
                 if sys.platform == "darwin": # macOS
                     subprocess.call(["open", file_path])
                 elif sys.platform == "linux2": # Linux
@@ -2630,7 +2638,9 @@ class ServerGUI:
                 # Since the CRC calculation is in file_transfer, we need to access it from there.
                 # This is not ideal, but it's the quickest way to implement this feature.
                 from python_server.server.file_transfer import FileTransferManager
-# Cleaned up duplicate import
+import sys
+sys.stdin.reconfigure(encoding="utf-8")
+sys.stdout.reconfigure(encoding="utf-8")
                 calculated_crc = FileTransferManager(self.server)._calculate_crc(file_data)
 
                 if stored_crc == calculated_crc:
@@ -2894,7 +2904,9 @@ def launch_standalone():
     """
     try:
         from Shared.path_utils import setup_imports
-# Cleaned up duplicate import
+import sys
+sys.stdin.reconfigure(encoding="utf-8")
+sys.stdout.reconfigure(encoding="utf-8")
         setup_imports()
         print("[INFO] Launching Server GUI (standalone mode)...")
 
@@ -2904,7 +2916,9 @@ def launch_standalone():
         except Exception as e:
             print(f"[FATAL] Failed to construct ServerGUI object: {e}")
             import traceback; traceback.print_exc()
-# Cleaned up duplicate import
+import sys
+sys.stdin.reconfigure(encoding="utf-8")
+sys.stdout.reconfigure(encoding="utf-8")
             return 1
 
         # Initialize (spawns GUI thread which builds full window & enters mainloop)
@@ -2926,7 +2940,9 @@ def launch_standalone():
     except Exception as e:
         print(f"[FATAL] Unhandled exception launching Server GUI: {e}")
         import traceback; traceback.print_exc()
-# Cleaned up duplicate import
+import sys
+sys.stdin.reconfigure(encoding="utf-8")
+sys.stdout.reconfigure(encoding="utf-8")
         return 1
 
 

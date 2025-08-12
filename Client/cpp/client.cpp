@@ -767,9 +767,11 @@ bool Client::sendRequest(uint16_t code, const std::vector<uint8_t>& payload) {
         header.code = hostToLittleEndian16(code);
         header.payload_size = hostToLittleEndian32(payload_size_val);
 
-        // Serialize struct to bytes
-        std::vector<uint8_t> headerBytes(sizeof(RequestHeader));
-        std::memcpy(headerBytes.data(), &header, sizeof(RequestHeader));
+        // Serialize struct to bytes using exact protocol size
+        // Protocol header is 23 bytes: 16 bytes client_id + 1 byte version + 2 bytes code + 4 bytes payload_size
+        const size_t PROTOCOL_REQUEST_HEADER_SIZE = 16 + 1 + 2 + 4; // 23 bytes
+        std::vector<uint8_t> headerBytes(PROTOCOL_REQUEST_HEADER_SIZE);
+        std::memcpy(headerBytes.data(), &header, PROTOCOL_REQUEST_HEADER_SIZE);
 
         // Debug: show header values for important requests
         if (code == REQ_REGISTER || code == REQ_RECONNECT || code == REQ_SEND_PUBLIC_KEY) {
@@ -886,7 +888,12 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
 
         // Synchronously receive header with timeout
         displayStatus("Waiting for server response", true, "Max wait: 25 seconds");
-        std::size_t headerBytes = boost::asio::read(*socket, boost::asio::buffer(&header, sizeof(header)), ec);
+        
+        // Read raw header bytes first to handle endianness properly
+        // Protocol header is 7 bytes: 1 byte version + 2 bytes code + 4 bytes payload_size
+        const size_t PROTOCOL_HEADER_SIZE = 1 + 2 + 4; // 7 bytes
+        std::vector<uint8_t> rawHeaderBytes(PROTOCOL_HEADER_SIZE);
+        std::size_t headerBytes = boost::asio::read(*socket, boost::asio::buffer(rawHeaderBytes), ec);
 
         if (ec) {
             if (ec == boost::asio::error::timed_out || ec == boost::asio::error::operation_aborted) {
@@ -897,18 +904,23 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
             return false;
         }
 
-        if (headerBytes != sizeof(header)) {
-            displayError("Failed to receive complete header: got " + std::to_string(headerBytes) + " bytes, expected " + std::to_string(sizeof(header)), ErrorType::NETWORK);
+        if (headerBytes != PROTOCOL_HEADER_SIZE) {
+            displayError("Failed to receive complete header: got " + std::to_string(headerBytes) + " bytes, expected " + std::to_string(PROTOCOL_HEADER_SIZE), ErrorType::NETWORK);
             return false;
         }
 
         // Debug: show raw header bytes received
-        uint8_t* rawBytes = reinterpret_cast<uint8_t*>(&header);
         std::stringstream hexStream;
-        for (size_t i = 0; i < sizeof(header); i++) {
-            hexStream << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(rawBytes[i]) << " ";
+        for (size_t i = 0; i < rawHeaderBytes.size(); i++) {
+            hexStream << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(rawHeaderBytes[i]) << " ";
         }
         displayStatus("Debug: Raw header bytes", true, hexStream.str());
+
+        // Parse header with proper endianness conversion
+        // Response format from server: <BHI (version: 1 byte, code: 2 bytes LE, payload_size: 4 bytes LE)
+        header.version = rawHeaderBytes[0];
+        header.code = littleEndianToHost16(&rawHeaderBytes[1]);
+        header.payload_size = littleEndianToHost32(&rawHeaderBytes[3]);
 
         // Debug: show interpreted header values
         displayStatus("Debug: Response received", true,
@@ -1131,6 +1143,24 @@ bool Client::isSystemLittleEndian() {
     // Check system endianness by examining byte order of a test value
     uint16_t endian_test = 1;
     return *reinterpret_cast<uint8_t*>(&endian_test) == 1;
+}
+
+// Convert little-endian bytes to host byte order (16-bit)
+uint16_t Client::littleEndianToHost16(const uint8_t* bytes) {
+    // Read bytes in little-endian order and convert to host byte order
+    // bytes[0] is least significant byte, bytes[1] is most significant byte
+    return (static_cast<uint16_t>(bytes[1]) << 8) | 
+           static_cast<uint16_t>(bytes[0]);
+}
+
+// Convert little-endian bytes to host byte order (32-bit)
+uint32_t Client::littleEndianToHost32(const uint8_t* bytes) {
+    // Read bytes in little-endian order and convert to host byte order
+    // bytes[0] is least significant byte, bytes[3] is most significant byte
+    return (static_cast<uint32_t>(bytes[3]) << 24) |
+           (static_cast<uint32_t>(bytes[2]) << 16) |
+           (static_cast<uint32_t>(bytes[1]) << 8) |
+           static_cast<uint32_t>(bytes[0]);
 }
 
 size_t Client::validateAndAlignBufferSize(size_t requestedSize, size_t fileSize) {
