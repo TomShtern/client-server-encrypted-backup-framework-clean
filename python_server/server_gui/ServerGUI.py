@@ -591,8 +591,7 @@ class ModernTable(tk.Frame):
 
     def _apply_filter(self):
         """Apply search filter to data"""
-        search_text = self.search_var.get().lower()
-        if search_text:
+        if search_text := self.search_var.get().lower():
             self.filtered_data = []
             for item in self.data:
                 # Check if search text is in any column
@@ -870,9 +869,8 @@ class SettingsDialog:
 
     def _browse_directory(self):
         """Browse for storage directory"""
-        directory = filedialog.askdirectory(parent=self.dialog,
-                                          initialdir=self.storage_var.get())
-        if directory:
+        if directory := filedialog.askdirectory(parent=self.dialog,
+                                          initialdir=self.storage_var.get()):
             self.storage_var.set(directory)
 
     def _save_settings(self):
@@ -918,7 +916,7 @@ class SettingsDialog:
                 
         except Exception as e:
             messagebox.showerror("Settings Error", f"Failed to save settings: {str(e)}", 
-                               parent=self.dialog if self.dialog else self.parent)
+                               parent=self.dialog or self.parent)
 
     def _persist_settings_to_file(self):
         """Persist settings to configuration file"""
@@ -1153,9 +1151,9 @@ class ServerGUI:
                     
                     print(f"Settings loaded from {settings_file}")
                 else:
-                    print(f"Invalid settings file format, using defaults")
+                    print("Invalid settings file format, using defaults")
             else:
-                print(f"Settings file not found, using defaults")
+                print("Settings file not found, using defaults")
                 
         except Exception as e:
             print(f"Failed to load settings from file: {e}, using defaults")
@@ -2092,34 +2090,37 @@ class ServerGUI:
 
     def _create_modern_button(self, parent, text, command, bg_color):
         """Helper to create a modern button."""
-        btn = tk.Button(parent, text=text, command=command,
+        return tk.Button(parent, text=text, command=command,
                         bg=bg_color, fg=ModernTheme.TEXT_PRIMARY,
                         font=(ModernTheme.FONT_FAMILY, 10, 'bold'),
                         relief="flat", bd=0, padx=15, pady=8)
-        return btn
 
     def _start_server(self):
         """Start the backup server."""
         from python_server.server.server import BackupServer # Local import to avoid circular dependency # type: ignore
-        if self.server and not self.server.running:
-            try:
-                # The server's start method is already designed to run in threads
-                self.server.start()
-                if self.toast_system:
-                    self.toast_system.show_toast("Server starting...", "info")
-                self._add_activity_log("Server start command issued.")
-                # The server will update its own status, which will be reflected in the GUI
-            except Exception as e:
-                if self.toast_system:
-                    self.toast_system.show_toast(f"Failed to start server: {e}", "error")
-                self._add_activity_log(f"Error starting server: {e}")
-        elif self.server and self.server.running:
-            if self.toast_system:
-                self.toast_system.show_toast("Server is already running.", "warning")
-        else:
+        
+        if not self.server:
             if self.toast_system:
                 self.toast_system.show_toast("Server instance not available. Please start the server using 'python server.py'", "error")
             self._add_activity_log("[ERROR] Server instance not available. Use 'python server.py' to start properly.")
+            return
+            
+        if self.server.running:
+            if self.toast_system:
+                self.toast_system.show_toast("Server is already running.", "warning")
+            return
+            
+        try:
+            # The server's start method is already designed to run in threads
+            self.server.start()
+            if self.toast_system:
+                self.toast_system.show_toast("Server starting...", "info")
+            self._add_activity_log("Server start command issued.")
+            # The server will update its own status, which will be reflected in the GUI
+        except Exception as e:
+            if self.toast_system:
+                self.toast_system.show_toast(f"Failed to start server: {e}", "error")
+            self._add_activity_log(f"Error starting server: {e}")
 
     def _stop_server(self):
         """Stop the backup server."""
@@ -2136,9 +2137,8 @@ class ServerGUI:
         elif self.server:
             if self.toast_system:
                 self.toast_system.show_toast("Server is not running.", "warning")
-        else:
-            if self.toast_system:
-                self.toast_system.show_toast("Server instance not available.", "error")
+        elif self.toast_system:
+            self.toast_system.show_toast("Server instance not available.", "error")
 
     def _restart_server(self):
         """Restart the server."""
@@ -2150,16 +2150,14 @@ class ServerGUI:
             time.sleep(1)
             self.server.start()
             self._add_activity_log("Server restarted.")
-        else:
-            if self.toast_system:
-                self.toast_system.show_toast("Server instance not available.", "warning")
+        elif self.toast_system:
+            self.toast_system.show_toast("Server instance not available.", "warning")
 
     def _show_settings(self):
         """Show settings dialog."""
         if self.server:
             dialog = SettingsDialog(self.root, self.settings)
-            new_settings = dialog.show()
-            if new_settings:
+            if new_settings := dialog.show():
                 self.settings = new_settings
                 # Apply new settings to server if it's running
                 if self.server.running:
@@ -2167,12 +2165,10 @@ class ServerGUI:
                 if self.toast_system:
                     self.toast_system.show_toast("Settings saved and applied!", "success")
                 self._add_activity_log("Server settings updated.")
-            else:
-                if self.toast_system:
-                    self.toast_system.show_toast("Settings dialog cancelled.", "info")
-        else:
-            if self.toast_system:
-                self.toast_system.show_toast("Server instance not available to configure.", "error")
+            elif self.toast_system:
+                self.toast_system.show_toast("Settings dialog cancelled.", "info")
+        elif self.toast_system:
+            self.toast_system.show_toast("Server instance not available to configure.", "error")
 
     def _export_clients(self):
         """Export client data to CSV."""
@@ -2184,10 +2180,9 @@ class ServerGUI:
                         self.toast_system.show_toast("No client data to export.", "warning")
                     return
 
-                file_path = filedialog.asksaveasfilename(defaultextension=".csv",
+                if file_path := filedialog.asksaveasfilename(defaultextension=".csv",
                                                        filetypes=[("CSV files", "*.csv")],
-                                                       title="Export Clients to CSV")
-                if file_path:
+                                                       title="Export Clients to CSV"):
                     with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
                         fieldnames = ['id', 'name', 'last_seen']
                         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -2201,9 +2196,8 @@ class ServerGUI:
                 if self.toast_system:
                     self.toast_system.show_toast(f"Error exporting clients: {e}", "error")
                 self._add_activity_log(f"Error exporting clients: {e}")
-        else:
-            if self.toast_system:
-                self.toast_system.show_toast("Server or database not available.", "error")
+        elif self.toast_system:
+            self.toast_system.show_toast("Server or database not available.", "error")
 
     def _export_files(self):
         """Export file data to CSV."""
@@ -2215,10 +2209,9 @@ class ServerGUI:
                         self.toast_system.show_toast("No file data to export.", "warning")
                     return
 
-                file_path = filedialog.asksaveasfilename(defaultextension=".csv",
+                if file_path := filedialog.asksaveasfilename(defaultextension=".csv",
                                                        filetypes=[("CSV files", "*.csv")],
-                                                       title="Export Files to CSV")
-                if file_path:
+                                                       title="Export Files to CSV"):
                     with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
                         fieldnames = ['filename', 'client', 'size', 'date', 'verified', 'path']
                         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -2232,16 +2225,14 @@ class ServerGUI:
                 if self.toast_system:
                     self.toast_system.show_toast(f"Error exporting files: {e}", "error")
                 self._add_activity_log(f"Error exporting files: {e}")
-        else:
-            if self.toast_system:
-                self.toast_system.show_toast("Server or database not available.", "error")
+        elif self.toast_system:
+            self.toast_system.show_toast("Server or database not available.", "error")
 
     def _backup_database(self):
         """Create a backup of the SQLite database."""
         if self.server and self.server.db_manager:
             try:
-                backup_dir = filedialog.askdirectory(title="Select Backup Directory")
-                if backup_dir:
+                if backup_dir := filedialog.askdirectory(title="Select Backup Directory"):
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     backup_filename = f"defensive_backup_{timestamp}.db"
                     backup_path = os.path.join(backup_dir, backup_filename)
@@ -2253,9 +2244,8 @@ class ServerGUI:
                 if self.toast_system:
                     self.toast_system.show_toast(f"Error backing up database: {e}", "error")
                 self._add_activity_log(f"Error backing up database: {e}")
-        else:
-            if self.toast_system:
-                self.toast_system.show_toast("Server or database not available.", "error")
+        elif self.toast_system:
+            self.toast_system.show_toast("Server or database not available.", "error")
 
     def _exit_server(self):
         """Exit the application."""
@@ -2342,9 +2332,7 @@ class ServerGUI:
                 # Find the disk usage for the drive where the script is running
                 try:
                     script_path = os.path.abspath(sys.argv[0])
-                    disk_path = os.path.splitdrive(script_path)[0]
-                    if not disk_path:  # Unix-like systems
-                        disk_path = '/'
+                    disk_path = os.path.splitdrive(script_path)[0] or '/'
                     disk_usage = psutil.disk_usage(disk_path)
                     disk_usage_percent = disk_usage.percent
                 except Exception as disk_error:
@@ -2494,9 +2482,8 @@ class ServerGUI:
             # For now, just show a message box with the client info
             client_info = selected[0]
             messagebox.showinfo("Client Details", json.dumps(client_info, indent=2))
-        else:
-            if self.toast_system:
-                self.toast_system.show_toast("Client table not initialized.", "error")
+        elif self.toast_system:
+            self.toast_system.show_toast("Client table not initialized.", "error")
 
     def _disconnect_client(self):
         """Disconnect a selected client."""
@@ -2516,15 +2503,12 @@ class ServerGUI:
                         self.toast_system.show_toast("Client disconnected successfully.", "success")
                     self._add_activity_log(f"Disconnected client: {client_id_hex}")
                     self._refresh_client_table()
-                else:
-                    if self.toast_system:
-                        self.toast_system.show_toast("Failed to disconnect client (might be offline).", "error")
-            else:
-                if self.toast_system:
-                    self.toast_system.show_toast("Server is not running.", "error")
-        else:
-            if self.toast_system:
-                self.toast_system.show_toast("Client table not initialized.", "error")
+                elif self.toast_system:
+                    self.toast_system.show_toast("Failed to disconnect client (might be offline).", "error")
+            elif self.toast_system:
+                self.toast_system.show_toast("Server is not running.", "error")
+        elif self.toast_system:
+            self.toast_system.show_toast("Client table not initialized.", "error")
 
     def _refresh_file_table(self):
         """Refresh the file table with data from the database."""
@@ -2550,9 +2534,8 @@ class ServerGUI:
                 self._add_activity_log(f"Error refreshing file table: {e}")
                 if self.toast_system:
                     self.toast_system.show_toast(f"Failed to refresh files: {e}", "error")
-        else:
-            if self.toast_system:
-                self.toast_system.show_toast("File table not initialized.", "error")
+        elif self.toast_system:
+            self.toast_system.show_toast("File table not initialized.", "error")
 
     def _on_file_selected(self, selected_item):
         """Handle file selection in the table."""
@@ -2570,9 +2553,8 @@ class ServerGUI:
             
             file_info = selected[0]
             messagebox.showinfo("File Details", json.dumps(file_info, indent=2))
-        else:
-            if self.toast_system:
-                self.toast_system.show_toast("File table not initialized.", "error")
+        elif self.toast_system:
+            self.toast_system.show_toast("File table not initialized.", "error")
 
     def _view_file_content(self):
         """View the content of the selected file."""
@@ -2600,16 +2582,14 @@ class ServerGUI:
                     subprocess.call(["open", file_path])
                 elif sys.platform == "linux2": # Linux
                     subprocess.call(["xdg-open", file_path])
-                else:
-                    if self.toast_system:
-                        self.toast_system.show_toast("Viewing files is not supported on this platform.", "error")
+                elif self.toast_system:
+                    self.toast_system.show_toast("Viewing files is not supported on this platform.", "error")
             except Exception as e:
                 if self.toast_system:
                     self.toast_system.show_toast(f"Error opening file: {e}", "error")
                 self._add_activity_log(f"Error opening file: {e}")
-        else:
-            if self.toast_system:
-                self.toast_system.show_toast("File table not initialized.", "error")
+        elif self.toast_system:
+            self.toast_system.show_toast("File table not initialized.", "error")
 
     def _verify_file(self):
         """Verify the selected file."""
@@ -2666,9 +2646,8 @@ class ServerGUI:
             else:
                 if self.toast_system:
                     self.toast_system.show_toast("Server is not running.", "error")
-        else:
-            if self.toast_system:
-                self.toast_system.show_toast("File table not initialized.", "error")
+        elif self.toast_system:
+            self.toast_system.show_toast("File table not initialized.", "error")
 
     def _delete_file(self):
         """Delete the selected file."""
@@ -2701,15 +2680,12 @@ class ServerGUI:
                         self.toast_system.show_toast(f"File '{filename}' deleted successfully.", "success")
                     self._add_activity_log(f"Deleted file: {filename}")
                     self._refresh_file_table()
-                else:
-                    if self.toast_system:
-                        self.toast_system.show_toast(f"Failed to delete file '{filename}'.", "error")
-            else:
-                if self.toast_system:
-                    self.toast_system.show_toast("Server is not running.", "error")
-        else:
-            if self.toast_system:
-                self.toast_system.show_toast("File table not initialized.", "error")
+                elif self.toast_system:
+                    self.toast_system.show_toast(f"Failed to delete file '{filename}'.", "error")
+            elif self.toast_system:
+                self.toast_system.show_toast("Server is not running.", "error")
+        elif self.toast_system:
+            self.toast_system.show_toast("File table not initialized.", "error")
 
     def update_client_stats(self, stats_data: dict):
         """Update client statistics"""
@@ -2903,10 +2879,6 @@ class ServerGUI:
         # Graceful shutdown when window is closed
         if self.root:
             self.root.destroy()
-
-# ---------------------------------------------------------------------------
-# Standalone Launch Support
-# ---------------------------------------------------------------------------
 
 def launch_standalone():
     """Launch the Server GUI when this file is executed directly.

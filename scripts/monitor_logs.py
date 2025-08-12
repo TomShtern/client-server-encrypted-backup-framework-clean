@@ -11,6 +11,16 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Dict
 import threading
+from dataclasses import dataclass
+
+
+@dataclass
+class MonitorConfig:
+    """Configuration for log monitoring"""
+    filter_level: Optional[str] = None
+    filter_keywords: Optional[List[str]] = None
+    show_colors: bool = True
+    tail_lines: int = 50
 
 
 # ANSI color codes for terminal output
@@ -144,46 +154,45 @@ def follow_file(file_path: str, lines_from_end: int = 50):
             time.sleep(1)
 
 
-def monitor_single_file(file_path: str, server_type: str, color: str, 
-                       filter_level: Optional[str] = None, 
-                       filter_keywords: Optional[List[str]] = None,
-                       show_colors: bool = True,
-                       tail_lines: int = 50):
+def should_show_log_line(line: str, config: MonitorConfig) -> bool:
+    """Determine if a log line should be displayed based on filters"""
+    # Apply level filter
+    if config.filter_level:
+        line_upper = line.upper()
+        level_hierarchy = {
+            "DEBUG": [" DEBUG ", " INFO ", " WARNING ", " ERROR ", " CRITICAL "],
+            "INFO": [" INFO ", " WARNING ", " ERROR ", " CRITICAL "],
+            "WARNING": [" WARNING ", " ERROR ", " CRITICAL "],
+            "ERROR": [" ERROR ", " CRITICAL "],
+            "CRITICAL": [" CRITICAL "]
+        }
+        
+        allowed_levels = level_hierarchy.get(config.filter_level.upper(), [])
+        if not allowed_levels or all(level not in line_upper for level in allowed_levels):
+            return False
+    
+    # Apply keyword filter
+    return not (config.filter_keywords and all(keyword.lower() not in line.lower() for keyword in config.filter_keywords))
+
+
+def monitor_single_file(file_path: str, server_type: str, color: str, config: MonitorConfig):
     """Monitor a single log file"""
-    filter_keywords = filter_keywords or []
+    config.filter_keywords = config.filter_keywords or []
     
     print(f"{color}[{server_type}] Monitoring: {file_path}{Colors.RESET}")
-    print(f"{Colors.DIM}Filter Level: {filter_level or 'All'}, Keywords: {filter_keywords or 'None'}{Colors.RESET}")
+    print(f"{Colors.DIM}Filter Level: {config.filter_level or 'All'}, Keywords: {config.filter_keywords or 'None'}{Colors.RESET}")
     print("-" * 80)
     
     try:
-        for line in follow_file(file_path, tail_lines):
-            # Apply level filter
-            if filter_level:
-                level_found = False
-                line_upper = line.upper()
-                if filter_level.upper() == "DEBUG" and any(level in line_upper for level in [" DEBUG ", " INFO ", " WARNING ", " ERROR ", " CRITICAL "]):
-                    level_found = True
-                elif filter_level.upper() == "INFO" and any(level in line_upper for level in [" INFO ", " WARNING ", " ERROR ", " CRITICAL "]):
-                    level_found = True
-                elif filter_level.upper() == "WARNING" and any(level in line_upper for level in [" WARNING ", " ERROR ", " CRITICAL "]):
-                    level_found = True
-                elif filter_level.upper() == "ERROR" and any(level in line_upper for level in [" ERROR ", " CRITICAL "]):
-                    level_found = True
-                elif filter_level.upper() == "CRITICAL" and " CRITICAL " in line_upper:
-                    level_found = True
-                
-                if not level_found:
-                    continue
-            
-            # Apply keyword filter
-            if filter_keywords and all(keyword.lower() not in line.lower() for keyword in filter_keywords):
+        for line in follow_file(file_path, config.tail_lines):
+            # Use the extracted filtering function
+            if not should_show_log_line(line, config):
                 continue
             
             # Format and display line
             timestamp = datetime.now().strftime('%H:%M:%S')
-            if show_colors:
-                colored_line = colorize_log_level(line, show_colors)
+            if config.show_colors:
+                colored_line = colorize_log_level(line, config.show_colors)
                 print(f"{Colors.DIM}[{timestamp}]{Colors.RESET} {color}[{server_type[:3]}]{Colors.RESET} {colored_line}")
             else:
                 print(f"[{timestamp}] [{server_type[:3]}] {line}")
@@ -192,11 +201,7 @@ def monitor_single_file(file_path: str, server_type: str, color: str,
         print(f"\n{color}[{server_type}] Monitoring stopped{Colors.RESET}")
 
 
-def monitor_multiple_files(log_files: List[Dict], 
-                          filter_level: Optional[str] = None,
-                          filter_keywords: Optional[List[str]] = None,
-                          show_colors: bool = True,
-                          tail_lines: int = 50):
+def monitor_multiple_files(log_files: List[Dict], config: MonitorConfig):
     """Monitor multiple log files concurrently"""
     print(f"{Colors.BOLD}Starting multi-file log monitoring...{Colors.RESET}")
     print(f"Files: {len(log_files)}")
@@ -210,8 +215,7 @@ def monitor_multiple_files(log_files: List[Dict],
         for log_file in log_files:
             thread = threading.Thread(
                 target=monitor_single_file,
-                args=(log_file['path'], log_file['server_type'], log_file['color'], 
-                      filter_level, filter_keywords, show_colors, tail_lines),
+                args=(log_file['path'], log_file['server_type'], log_file['color'], config),
                 daemon=True
             )
             threads.append(thread)
@@ -246,7 +250,8 @@ def list_log_files():
         print()
 
 
-def main():
+def parse_arguments() -> argparse.Namespace:
+    """Parse command line arguments"""
     parser = argparse.ArgumentParser(description="Live Log Monitor for CyberBackup 3.0")
     
     # File selection
@@ -271,25 +276,18 @@ def main():
     parser.add_argument('--no-color', action='store_true', help='Disable colored output')
     parser.add_argument('--list', action='store_true', help='List available log files and exit')
     
-    args = parser.parse_args()
-    
-    # Handle list command
-    if args.list:
-        list_log_files()
-        return
-    
-    # Disable colors on Windows if requested or if not a terminal
-    show_colors = not args.no_color and sys.stdout.isatty()
-    
-    # Get available log files
+    return parser.parse_args()
+
+
+def select_files_to_monitor(args: argparse.Namespace) -> List[Dict]:
+    """Select which log files to monitor based on arguments"""
     all_log_files = get_log_files()
     
     if not all_log_files:
         print("No log files found in logs/ directory")
         print("Make sure the servers have been started at least once to generate log files.")
-        return
+        return []
     
-    # Select files to monitor
     files_to_monitor = []
     
     if args.file:
@@ -312,7 +310,7 @@ def main():
             })
         else:
             print(f"File not found: {args.file}")
-            return
+            return []
     else:
         # Filter by server type
         for lf in all_log_files:
@@ -334,21 +332,47 @@ def main():
             if backup_files:
                 files_to_monitor.append(backup_files[0])
     
+    return files_to_monitor
+
+
+def start_monitoring(files_to_monitor: List[Dict], config: MonitorConfig):
+    """Start monitoring the selected files"""
+    if len(files_to_monitor) == 1:
+        lf = files_to_monitor[0]
+        monitor_single_file(
+            lf['path'], lf['server_type'], lf['color'], config
+        )
+    else:
+        monitor_multiple_files(files_to_monitor, config)
+
+
+def main():
+    args = parse_arguments()
+    
+    # Handle list command
+    if args.list:
+        list_log_files()
+        return
+    
+    # Disable colors on Windows if requested or if not a terminal
+    show_colors = not args.no_color and sys.stdout.isatty()
+    
+    # Select files to monitor
+    files_to_monitor = select_files_to_monitor(args)
     if not files_to_monitor:
         print("No matching log files found")
         return
     
+    # Create monitoring configuration
+    config = MonitorConfig(
+        filter_level=args.level,
+        filter_keywords=args.keywords,
+        show_colors=show_colors,
+        tail_lines=args.tail
+    )
+    
     # Start monitoring
-    if len(files_to_monitor) == 1:
-        lf = files_to_monitor[0]
-        monitor_single_file(
-            lf['path'], lf['server_type'], lf['color'],
-            args.level, args.keywords, show_colors, args.tail
-        )
-    else:
-        monitor_multiple_files(
-            files_to_monitor, args.level, args.keywords, show_colors, args.tail
-        )
+    start_monitoring(files_to_monitor, config)
 
 
 if __name__ == "__main__":

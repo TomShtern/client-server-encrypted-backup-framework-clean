@@ -4,6 +4,7 @@ import os
 import time
 import logging
 import sys
+import contextlib
 from datetime import datetime
 from typing import Dict, Optional, Any
 
@@ -347,12 +348,9 @@ class BackupServer:
             # Get total clients from database if available
             total_clients = connected_clients
             if hasattr(self, 'db_manager') and self.db_manager:
-                try:
+                with contextlib.suppress(Exception):
                     total_from_db = len(self.db_manager.get_all_clients())
                     total_clients = max(total_from_db, connected_clients)
-                except Exception:
-                    # Fall back to connected clients count on database error
-                    pass
 
         self.gui_manager.update_client_stats({
             'connected': connected_clients,
@@ -389,7 +387,7 @@ class BackupServer:
         try:
             return actual_string_bytes.decode('utf-8', errors='strict')
         except UnicodeDecodeError as e:
-            raise ProtocolError(f"{field_name}: Invalid UTF-8 encoding: {e}")
+            raise ProtocolError(f"{field_name}: Invalid UTF-8 encoding: {e}") from e
 
     def _load_clients_from_db(self):
         """Loads existing client data from the database into memory at server startup."""
@@ -447,8 +445,7 @@ class BackupServer:
                     if (current_monotonic_time - client_obj.last_seen) > CLIENT_SESSION_TIMEOUT
                 ]
                 for cid in inactive_client_ids_to_remove:
-                    client_obj = self.clients.pop(cid, None)
-                    if client_obj:
+                    if client_obj := self.clients.pop(cid, None):
                         self.clients_by_name.pop(client_obj.name, None)
                         inactive_clients_removed_count += 1
                         logger.info(f"Client '{client_obj.name}' session timed out.")
@@ -461,38 +458,52 @@ class BackupServer:
 
             # --- GUI Status Update ---
             if self.gui_manager.is_gui_ready():
-                # 1. Gather all status information into dictionaries
-                status_data = {
-                    'running': self.running,
-                    'address': self.network_server.host,
-                    'port': self.port,
-                    'uptime': time.time() - self.network_server.start_time if self.running else 0,
-                    'error_message': self.network_server.last_error or ''
-                }
-
-                client_stats_data = {
-                    'connected': self.network_server.get_connection_stats()['active_connections'],
-                    'total': self.db_manager.get_total_clients_count(),
-                    'active_transfers': 0 # Placeholder, needs real logic
-                }
-
-                maintenance_stats_data = {
-                    'files_cleaned': 0, # Placeholder
-                    'partial_files_cleaned': stale_partial_files_cleaned_count,
-                    'clients_cleaned': inactive_clients_removed_count,
-                    'last_cleanup': datetime.now().isoformat()
-                }
-
-                # 2. Put the gathered data into the GUI's queue
-                self.gui_manager.queue_update("status", status_data)
-                self.gui_manager.queue_update("client_stats", client_stats_data)
-                self.gui_manager.queue_update("maintenance_stats", maintenance_stats_data)
+                self._update_gui_with_status_data(inactive_clients_removed_count, stale_partial_files_cleaned_count)
 
         except Exception as e:
             logger.critical(f"Critical error in periodic maintenance job: {e}", exc_info=True)
             if self.gui_manager.is_gui_ready():
                 self.gui_manager.queue_update("log", f"ERROR: Maintenance job failed: {e}")
 
+    def _update_gui_with_status_data(self, inactive_clients_removed_count: int, stale_partial_files_cleaned_count: int):
+        """Extract method to prepare and send status data to GUI."""
+        # 1. Gather all status information into dictionaries
+        status_data = {
+            'running': self.running,
+            'address': self.network_server.host,
+            'port': self.port,
+            'uptime': time.time() - self.network_server.start_time if self.running else 0,
+            'error_message': self.network_server.last_error or ''
+        }
+
+        client_stats_data = {
+            'connected': self.network_server.get_connection_stats()['active_connections'],
+            'total': self.db_manager.get_total_clients_count(),
+            'active_transfers': 0  # Placeholder, needs real logic
+        }
+
+        maintenance_stats_data = {
+            'files_cleaned': 0,  # Placeholder
+            'partial_files_cleaned': stale_partial_files_cleaned_count,
+            'clients_cleaned': inactive_clients_removed_count,
+            'last_cleanup': datetime.now().isoformat()
+        }
+
+        # 2. Put the gathered data into the GUI's queue
+        self.gui_manager.queue_update("status", status_data)
+        self.gui_manager.queue_update("client_stats", client_stats_data)
+        self.gui_manager.queue_update("maintenance_stats", maintenance_stats_data)
+
+    def _handle_startup_system_exit(self, e: SystemExit, start_time: float):
+        """Extract method to handle SystemExit during startup."""
+        duration_ms = (time.time() - start_time) * 1000
+        structured_logger.error(f"Server startup aborted: {e}",
+                              operation="server_start",
+                              duration_ms=duration_ms,
+                              error_code="SystemExit")
+        logger.critical(f"Server startup aborted due to critical error during data loading: {e}")
+        self.running = False
+        self.shutdown_event.set()
 
     def start(self):
         """Starts the server: loads data, and begins listening for connections."""
@@ -518,14 +529,7 @@ class BackupServer:
             metrics_collector.record_counter("server.starts.total")
 
         except SystemExit as e:
-            duration_ms = (time.time() - start_time) * 1000
-            structured_logger.error(f"Server startup aborted: {e}",
-                                  operation="server_start",
-                                  duration_ms=duration_ms,
-                                  error_code="SystemExit")
-            logger.critical(f"Server startup aborted due to critical error during data loading: {e}")
-            self.running = False
-            self.shutdown_event.set()
+            self._handle_startup_system_exit(e, start_time)
             return
 
         # Start the network server in a separate thread
@@ -534,7 +538,7 @@ class BackupServer:
         self.network_thread.start()
 
         duration_ms = (time.time() - start_time) * 1000
-        structured_logger.info(f"Backup server started successfully",
+        structured_logger.info("Backup server started successfully",
                              operation="server_start",
                              duration_ms=duration_ms,
                              context={
@@ -591,7 +595,7 @@ if __name__ == "__main__":
             print(f"  Enhanced Log: {log_monitor_info['file_path']}")
             print(f"  Legacy Log:   {os.path.abspath('server.log')}")
             print(f"  Live Monitor: {log_monitor_info['powershell_cmd']}")
-            print(f"  Console:      Visible in this window (dual output enabled)")
+            print("  Console:      Visible in this window (dual output enabled)")
             print("=====================================================================")
         except Exception as e:
             print(f"  [WARNING] Could not display logging info: {e}")

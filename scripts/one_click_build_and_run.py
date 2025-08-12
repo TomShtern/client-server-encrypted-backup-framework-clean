@@ -84,6 +84,86 @@ def print_phase(phase_num, total_phases, title):
     print(f"[{timestamp}] [PHASE {phase_num}/{total_phases}] {title}...")
     print("-" * 50)
 
+def print_build_failure_help():
+    """Print common build failure solutions (extracted duplicate code)"""
+    print_error_with_newline("[ERROR] C++ client build failed!")
+    print("Check the compiler output above for details.")
+    print()
+    print("Common solutions:")
+    print("1. Missing Boost dependencies:")
+    print("   - Run: vcpkg\\vcpkg.exe install boost-iostreams:x64-windows")
+    print("   - Or delete 'build' folder and run this script again")
+    print("2. Outdated vcpkg cache:")
+    print("   - Delete 'vcpkg_installed' folder and rebuild")
+    print("3. CMake configuration issues:")
+    print("   - Run: cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake")
+    print()
+
+def print_server_not_found_help(server_path, expected_location):
+    """Print server file not found error with common guidance"""
+    print(f"[ERROR] Server file not found: {server_path}")
+    print(f"Expected location: {expected_location}")
+    print("Please verify the server components are installed correctly.")
+
+def print_gui_configuration_help():
+    """Print GUI configuration help (extracted duplicate code)"""
+    print("[INFO] Standalone Server GUI launch skipped (embedded GUI is enabled)")
+    print("       - Use CYBERBACKUP_DISABLE_INTEGRATED_GUI=1 to disable embedded GUI")
+    print("       - Use CYBERBACKUP_STANDALONE_GUI=1 to force standalone GUI launch")
+
+def print_error_with_newline(error_message):
+    """Print error message with preceding newline (extracted duplicate code)"""
+    print()
+    print(error_message)
+
+def wait_for_exit():
+    """Wait for user input before exit (extracted duplicate code)"""
+    with contextlib.suppress(EOFError):
+        input("Press Enter to exit...")
+
+def print_success_with_spacing(success_message):
+    """Print success message with spacing (extracted duplicate code)"""
+    print()
+    print(success_message)
+    print()
+
+def print_build_command_info(description, command):
+    """Print build command information (extracted duplicate code)"""
+    print(description)
+    print(f"Command: {command}")
+
+def print_skip_build_info():
+    """Standard message when CMake build phases are skipped"""
+    print("[INFO] CMake not available - skipping build phases")
+    print("Will use existing C++ client if available")
+
+def print_port_in_use_warning(port: int):
+    """Standardized message when a port appears to be in use"""
+    print(f"[WARNING] Port {port} appears to be in use")
+    print("This may cause the API server to fail to start.")
+    print("You can:")
+    print(f"  1. Close other applications using port {port}")
+    print("  2. Continue anyway (server may fail to start)")
+
+def print_api_server_troubleshooting():
+    """Standard troubleshooting guidance when API server doesn't start"""
+    print("\nTroubleshooting steps:")
+    print("1. Check if port 9090 is being used by another application")
+    print("2. Verify Flask and flask-cors are installed: pip install flask flask-cors")
+    print("3. Try running manually: python api_server/cyberbackup_api_server.py")
+    print("4. Check console windows for error messages")
+
+def open_web_gui(gui_url: str):
+    """Open the Web GUI in the default browser with a standard message"""
+    import webbrowser
+    print(f"\nOpening Web GUI in browser: {gui_url}")
+    webbrowser.open(gui_url)
+
+def print_api_start_failure():
+    """Standardized message when API Bridge Server fails to start"""
+    print("[ERROR] API Bridge Server failed to start properly")
+    print_api_server_troubleshooting()
+
 def handle_error_and_exit(error_message, wait_for_input=True):
     """Print error message and exit with status 1"""
     print(error_message)
@@ -113,8 +193,7 @@ def run_command(command, shell=True, check_exit=True, cwd=None, timeout=60):
         if check_exit and result.returncode != 0:
             print()
             print(f"[ERROR] Command failed with exit code: {result.returncode}")
-            with contextlib.suppress(EOFError):
-                input("Press Enter to exit...")
+            wait_for_exit()
             sys.exit(1)
         
         return result.returncode == 0
@@ -123,16 +202,14 @@ def run_command(command, shell=True, check_exit=True, cwd=None, timeout=60):
         print()
         print(f"[ERROR] Command timed out after {timeout} seconds: {command}")
         if check_exit:
-            with contextlib.suppress(EOFError):
-                input("Press Enter to exit...")
+            wait_for_exit()
             sys.exit(1)
         return False
     except Exception as e:
         print()
         print(f"[ERROR] Failed to run command: {e}")
         if check_exit:
-            with contextlib.suppress(EOFError):
-                input("Press Enter to exit...")
+            wait_for_exit()
             sys.exit(1)
         return False
 
@@ -321,11 +398,34 @@ def _report_terminated_processes(terminated_processes):
             print(f"  - {process_info}")
         print()
         # Brief pause to allow processes to fully clean up
-        import time
         time.sleep(1)
     else:
         print("No CyberBackup processes found running.")
         print()
+
+def check_executable_locations(locations=None, context="C++ client"):
+    """Check multiple potential locations for the EncryptedBackupClient.exe file
+    
+    Args:
+        locations: List of Path objects to check. Uses default locations if None.
+        context: Description of what we're looking for (for error messages)
+    
+    Returns:
+        tuple: (found_path, locations_checked) where found_path is Path object or None
+    """
+    if locations is None:
+        locations = [
+            Path("build/Release/EncryptedBackupClient.exe"),
+            Path("build/EncryptedBackupClient.exe"),
+            Path("Client/EncryptedBackupClient.exe"),
+            Path("client/EncryptedBackupClient.exe")
+        ]
+    
+    for exe_path in locations:
+        if exe_path.exists():
+            return exe_path, locations
+    
+    return None, locations
 
 def cleanup_existing_processes():  # sourcery skip: low-code-quality
     """Clean up existing CyberBackup processes with improved reliability"""
@@ -495,11 +595,7 @@ def main():
     # Check Python
     exists, version = check_command_exists("python")
     if not exists:
-        print("[ERROR] Python is not installed or not in PATH")
-        print("Please install Python 3.x and add it to your PATH")
-        with contextlib.suppress(EOFError):
-            input("Press Enter to exit...")
-        sys.exit(1)
+        handle_error_and_exit("[ERROR] Python is not installed or not in PATH\nPlease install Python 3.x and add it to your PATH")
     print(f"[OK] Python found: {version.split()[1] if version else 'Unknown version'}")
     
     # Check CMake
@@ -531,49 +627,29 @@ def main():
 
         # Check and fix vcpkg dependencies first
         if not check_and_fix_vcpkg_dependencies():
-            print("[ERROR] Failed to verify vcpkg dependencies!")
-            with contextlib.suppress(EOFError):
-                input("Press Enter to exit...")
-            sys.exit(1)
+            handle_error_and_exit("[ERROR] Failed to verify vcpkg dependencies!")
 
         print("Calling scripts\\build\\configure_cmake.bat for CMake + vcpkg setup...")
         print()
         
         if not run_command("scripts\\build\\configure_cmake.bat", timeout=300):
-            print()
-            print("[ERROR] CMake configuration failed!")
+            print_error_with_newline("[ERROR] CMake configuration failed!")
             print("Check the output above for details.")
-            with contextlib.suppress(EOFError):
-                input("Press Enter to exit...")
+            wait_for_exit()
             sys.exit(1)
         
-        print()
-        print("[OK] CMake configuration completed successfully!")
-        print()
+        print_success_with_spacing("[OK] CMake configuration completed successfully!")
         
         # ========================================================================
         # PHASE 3: BUILD C++ CLIENT
         # ========================================================================
         print_phase(3, 7, "Building C++ Client")
         
-        print("Building EncryptedBackupClient.exe with CMake...")
-        print("Command: cmake --build build --config Release")
+        print_build_command_info("Building EncryptedBackupClient.exe with CMake...", "cmake --build build --config Release")
         print()
         
         if not run_command("cmake --build build --config Release", timeout=180):
-            print()
-            print("[ERROR] C++ client build failed!")
-            print("Check the compiler output above for details.")
-            print()
-            print("Common solutions:")
-            print("1. Missing Boost dependencies:")
-            print("   - Run: vcpkg\\vcpkg.exe install boost-iostreams:x64-windows")
-            print("   - Or delete 'build' folder and run this script again")
-            print("2. Outdated vcpkg cache:")
-            print("   - Delete 'vcpkg_installed' folder and rebuild")
-            print("3. CMake configuration issues:")
-            print("   - Run: cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake")
-            print()
+            print_build_failure_help()
 
             # Offer to try automatic fix
             try:
@@ -594,55 +670,37 @@ def main():
                 handle_error_and_exit("\nExiting...", wait_for_input=False)
         
         # Verify the executable was created with fallback locations
-        exe_path = Path("build/Release/EncryptedBackupClient.exe")
-        alt_exe_path = Path("build/EncryptedBackupClient.exe") 
-        client_exe_path = Path("Client/EncryptedBackupClient.exe")
+        found_exe, checked_locations = check_executable_locations()
         
-        if exe_path.exists():
-            print(f"[OK] C++ client found: {exe_path}")
-        elif alt_exe_path.exists():
-            print(f"[OK] C++ client found at alternative location: {alt_exe_path}")
-        elif client_exe_path.exists():
-            print(f"[OK] C++ client found at legacy location: {client_exe_path}")
+        if found_exe:
+            print(f"[OK] C++ client found: {found_exe}")
         else:
             print("[ERROR] EncryptedBackupClient.exe was not created!")
-            print(f"Checked locations:")
-            print(f"  - {exe_path}")
-            print(f"  - {alt_exe_path}")
-            print(f"  - {client_exe_path}")
+            print("Checked locations:")
+            for path in checked_locations:
+                print(f"  - {path}")
             print("\nWeb uploads may not work without the C++ client.")
             print("Continuing with server-only mode...")
         
         print()
         print("[OK] C++ client built successfully!")
-        print(f"   Location: {exe_path}")
+        print(f"   Location: {found_exe}")
         print()
     else:
         print()
         print_phase(2, 7, "Skipping Build System Configuration")
-        print("[INFO] CMake not available - skipping build phases")
-        print("Will use existing C++ client if available")
+        print_skip_build_info()
         print()
-        
+
         print_phase(3, 7, "Checking Existing C++ Client")
-        exe_locations = [
-            Path("build/Release/EncryptedBackupClient.exe"),
-            Path("build/EncryptedBackupClient.exe"),
-            Path("Client/EncryptedBackupClient.exe"),
-            Path("client/EncryptedBackupClient.exe")
-        ]
+        found_exe, checked_locations = check_executable_locations()
         
-        found_exe = None
-        for exe_path in exe_locations:
-            if exe_path.exists():
-                found_exe = exe_path
-                print(f"[OK] Found existing C++ client: {found_exe}")
-                break
-        
-        if not found_exe:
+        if found_exe:
+            print(f"[OK] Found existing C++ client: {found_exe}")
+        else:
             print("[WARNING] No C++ client found - web uploads may not work")
             print("Checked locations:")
-            for path in exe_locations:
+            for path in checked_locations:
                 print(f"  - {path}")
             print("\nRecommendation: Run cmake --build build --config Release")
         print()
@@ -657,8 +715,7 @@ def main():
     
     requirements_file = Path("requirements.txt")
     if requirements_file.exists():
-        result = run_command("pip install -r requirements.txt", check_exit=False, timeout=180)
-        if not result:
+        if not (result := run_command("pip install -r requirements.txt", check_exit=False, timeout=180)):
             print("[WARNING] Some Python dependencies failed to install")
             print("This may cause issues with the API server or GUI")
             print()
@@ -675,8 +732,7 @@ def main():
     
     for dep in additional_deps:
         print(f"Installing {dep}...")
-        success = run_command(f"pip install {dep}", check_exit=False, timeout=60)
-        if success:
+        if (success := run_command(f"pip install {dep}", check_exit=False, timeout=60)):
             print(f"[OK] {dep} installed successfully")
         else:
             print(f"[WARNING] Failed to install {dep} - continuing anyway")
@@ -717,9 +773,7 @@ def main():
             f.write("testuser\n")
             f.write("test_file.txt\n")
     
-    print()
-    print("[OK] Configuration verification completed!")
-    print()
+    print_success_with_spacing("[OK] Configuration verification completed!")
     
     # ========================================================================
     # PHASE 6: LAUNCH SERVICES
@@ -739,9 +793,7 @@ def main():
     
     # Validate server path exists with proper error handling
     if not server_path.exists():
-        print(f"[ERROR] Server file not found: {server_path}")
-        print("Expected location: python_server/server/server.py")
-        print("Please verify the server components are installed correctly.")
+        print_server_not_found_help(server_path, "python_server/server/server.py")
         print("\nTrying alternative server startup...")
         # Continue execution to attempt other startup methods
     
@@ -823,22 +875,18 @@ def main():
                     )
                     print(f"[OK] Standalone Server GUI launched (PID: {gui_proc.pid})")
                     # Quick health check after short delay
-                    try:
+                    with contextlib.suppress(Exception):
                         import psutil as _ps
                         time.sleep(3)
                         if not _ps.pid_exists(gui_proc.pid):
                             print("[WARNING] Standalone Server GUI process exited early. Falling back guidance:")
                             print("          Run manually: python -m python_server.server_gui.ServerGUI")
-                    except Exception:
-                        pass
                 except Exception as e:
                     print(f"[WARNING] Failed to launch standalone Server GUI: {e}")
             else:
                 print(f"[WARNING] Standalone Server GUI not found: {server_gui_path}")
         else:
-            print("[INFO] Standalone Server GUI launch skipped (embedded GUI is enabled)")
-            print("       - Use CYBERBACKUP_DISABLE_INTEGRATED_GUI=1 to disable embedded GUI")
-            print("       - Use CYBERBACKUP_STANDALONE_GUI=1 to force standalone GUI launch")
+            print_gui_configuration_help()
     else:
         print(f"[WARNING] Server file not found: {server_path}")
         # Try alternative server locations
@@ -850,8 +898,8 @@ def main():
         print("Checking alternative server locations:")
         for alt_path in alt_locations:
             if alt_path.exists():
-                print(f"[INFO] Found alternative server: {alt_path}")
-                print(f"Consider updating the script to use the correct path.")
+                print("[INFO] Found alternative server:", alt_path)
+                print("Consider updating the script to use the correct path.")
                 break
             else:
                 print(f"  - {alt_path}: Not found")
@@ -894,11 +942,7 @@ def main():
     # Step 2: Check port availability
     print("\nChecking port availability...")
     if not check_port_available(9090):
-        print("[WARNING] Port 9090 appears to be in use")
-        print("This may cause the API server to fail to start.")
-        print("You can:")
-        print("  1. Close other applications using port 9090")
-        print("  2. Continue anyway (server may fail to start)")
+        print_port_in_use_warning(9090)
         print()
         with contextlib.suppress(EOFError):
             input("Press Enter to continue...")
@@ -912,9 +956,7 @@ def main():
     
     # Validate API server path exists
     if not api_server_path.exists():
-        print(f"[ERROR] API server file not found: {api_server_path}")
-        print("Expected location: api_server/cyberbackup_api_server.py")
-        print("Please verify the API server is installed correctly.")
+        print_server_not_found_help(api_server_path, "api_server/cyberbackup_api_server.py")
         server_started_successfully = False
     elif api_server_path.exists():
         print(f"\nStarting API Bridge Server: {api_server_path}")
@@ -934,12 +976,7 @@ def main():
             if server_started_successfully:
                 print("[OK] API Bridge Server is running and responsive!")
             else:
-                print("[ERROR] API Bridge Server failed to start properly")
-                print("\nTroubleshooting steps:")
-                print("1. Check if port 9090 is being used by another application")
-                print("2. Verify Flask and flask-cors are installed: pip install flask flask-cors")
-                print("3. Try running manually: python api_server/cyberbackup_api_server.py")
-                print("4. Check console windows for error messages")
+                print_api_start_failure()
                 
         except Exception as e:
             print(f"[ERROR] Failed to start API server: {str(e)}")
@@ -961,7 +998,7 @@ def main():
                 break
         
         if not found_alt_api:
-            print(f"[ERROR] API server file not found in any expected location:")
+            print("[ERROR] API server file not found in any expected location:")
             print(f"  - {api_server_path}")
             for alt_path in alt_api_locations:
                 print(f"  - {alt_path}")
@@ -969,10 +1006,7 @@ def main():
     
     # Step 5: Open Web GUI only if server started successfully
     if server_started_successfully:
-        import webbrowser
-        pass
-        print(f"\nOpening Web GUI in browser: {gui_url}")
-        webbrowser.open(gui_url)
+        open_web_gui(gui_url)
     else:
         print("\n[FALLBACK] Manual startup instructions:")
         print("Since automatic startup failed, you can try:")
@@ -984,10 +1018,7 @@ def main():
         with contextlib.suppress(EOFError):
             choice = input("Would you like to try opening the browser anyway? (y/N): ").strip().lower()
             if choice in ['y', 'yes']:
-                import webbrowser
-                pass
-                print(f"Opening Web GUI in browser: {gui_url}")
-                webbrowser.open(gui_url)
+                open_web_gui(gui_url)
     
     # Enhanced success/status message
     print()
@@ -997,11 +1028,10 @@ def main():
             safe_print("   ✅ ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!", "   [SUCCESS] ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!")
         else:
             safe_print("   [SUCCESS] ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!")
+    elif emoji_support:
+        safe_print("   ⚠️  ONE-CLICK BUILD AND RUN COMPLETED WITH ISSUES", "   [WARNING] ONE-CLICK BUILD AND RUN COMPLETED WITH ISSUES")
     else:
-        if emoji_support:
-            safe_print("   ⚠️  ONE-CLICK BUILD AND RUN COMPLETED WITH ISSUES", "   [WARNING] ONE-CLICK BUILD AND RUN COMPLETED WITH ISSUES")
-        else:
-            safe_print("   [WARNING] ONE-CLICK BUILD AND RUN COMPLETED WITH ISSUES")
+        safe_print("   [WARNING] ONE-CLICK BUILD AND RUN COMPLETED WITH ISSUES")
     print("=" * 72)
     print()
     print("CyberBackup 3.0 System Status:")
@@ -1012,13 +1042,13 @@ def main():
     api_server_running = check_api_server_status()
     
     try:
-        print(f"   [SERVER] Backup Server:  {'[OK] Running on port ' + str(server_port) if backup_server_running else '[ERROR] Not responding on port ' + str(server_port)}")
-        print(f"   [API] API Server:     {'[OK] Running on port ' + str(api_port) if api_server_running else '[ERROR] Not responding on port ' + str(api_port)}")
-        print(f"   [GUI] Web GUI:        {'[OK] ' + gui_url if api_server_running else '[ERROR] Not available (API server down)'}")
+        print(f"   [SERVER] Backup Server:  {f'[OK] Running on port {server_port}' if backup_server_running else f'[ERROR] Not responding on port {server_port}'}")
+        print(f"   [API] API Server:     {f'[OK] Running on port {api_port}' if api_server_running else f'[ERROR] Not responding on port {api_port}'}")
+        print(f"   [GUI] Web GUI:        {f'[OK] {gui_url}' if api_server_running else '[ERROR] Not available (API server down)'}")
         print(f"   [GUI] Server GUI:     {'[OK] Started automatically' if backup_server_running else '[ERROR] Check server console'}")
     except UnicodeEncodeError:
-        print(f"   [SERVER] Backup Server:  {'Running on port ' + str(server_port) if backup_server_running else 'Not responding on port ' + str(server_port)}")
-        print(f"   [API] API Server:     {'Running on port ' + str(api_port) if api_server_running else 'Not responding on port ' + str(api_port)}")
+        print(f"   [SERVER] Backup Server:  {f'Running on port {server_port}' if backup_server_running else f'Not responding on port {server_port}'}")
+        print(f"   [API] API Server:     {f'Running on port {api_port}' if api_server_running else f'Not responding on port {api_port}'}")
         print(f"   [GUI] Web GUI:        {gui_url if api_server_running else 'Not available (API server down)'}")
         print(f"   [GUI] Server GUI:     {'Started automatically' if backup_server_running else 'Check server console'}")
     print()
@@ -1052,11 +1082,10 @@ def main():
             safe_print("Have a great backup session! 🚀", "Have a great backup session!")
         else:
             safe_print("Have a great backup session!")
+    elif emoji_support:
+        safe_print("Please check the troubleshooting steps above 🔧", "Please check the troubleshooting steps above")
     else:
-        if emoji_support:
-            safe_print("Please check the troubleshooting steps above 🔧", "Please check the troubleshooting steps above")
-        else:
-            safe_print("Please check the troubleshooting steps above")
+        safe_print("Please check the troubleshooting steps above")
     print("=" * 72)
 
 if __name__ == "__main__":
@@ -1073,8 +1102,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n\n[ERROR] An unexpected error occurred: {e}")
         print(f"[DEBUG] Error type: {type(e).__name__}")
-        import traceback
-        print(f"[DEBUG] Stack trace:")
+        print("[DEBUG] Stack trace:")
         traceback.print_exc()
         print("\nFor troubleshooting:")
         print("1. Check that all dependencies are installed: pip install -r requirements.txt")

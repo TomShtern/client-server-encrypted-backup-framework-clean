@@ -31,12 +31,14 @@ RECEIVED_DIRS = [
 
 def list_dir_safe(path):
     try:
+        # sourcery skip: assign-if-exp, hoist-statement-from-if
         return set(os.listdir(path)) if os.path.exists(path) else set()
-    except Exception:
+    except Exception:  # sourcery skip: raise-specific-error
         return set()
 
 
 def find_new_files(initial_snapshots):
+    # sourcery skip: merge-list-append, list-comprehension
     new_files = []
     for idx, d in enumerate(RECEIVED_DIRS):
         before = initial_snapshots[idx]
@@ -44,6 +46,22 @@ def find_new_files(initial_snapshots):
         if after - before:
             new_files.extend((d, f) for f in sorted(after - before))
     return new_files
+
+
+def print_directory_info(message, directories):
+    """Helper function to print directory information."""
+    print(message)
+    print("   Checked:")
+    for d in directories:
+        print(f"   - {d}")
+
+
+def print_candidates_info(message, candidates):
+    """Helper function to print candidate files information."""
+    print(message)
+    print("   Candidates inspected:")
+    for p in candidates:
+        print(f"   - {p}")
 
 
 def test_filename_acceptance_via_gui_api():
@@ -71,6 +89,7 @@ def test_filename_acceptance_via_gui_api():
     print(f"📡 API status: {resp.status_code}")
     print(f"📄 API response: {getattr(resp, 'text', '')[:500]}")
 
+    # sourcery skip: no-conditionals-in-tests
     if resp.status_code != 200:
         print("❌ API did not accept the upload request.")
         return False
@@ -78,21 +97,19 @@ def test_filename_acceptance_via_gui_api():
     # Wait for processing and check for the new file, up to ~20s
     deadline = time.time() + 20
     found_paths = []
+    # sourcery skip: no-loop-in-tests
     while time.time() < deadline:
         time.sleep(1.0)
-        new_files = find_new_files(initial_snapshots)
-        if new_files:
+        if new_files := find_new_files(initial_snapshots):
             found_paths = new_files
             break
 
     if not found_paths:
-        print("❌ No new files detected in received directories.")
-        print("   Checked:")
-        for d in RECEIVED_DIRS:
-            print(f"   - {d}")
+        print_directory_info("❌ No new files detected in received directories.", RECEIVED_DIRS)
         return False
 
     # Try to locate the uploaded file among new files (filenames on server are usually prefixed)
+    # sourcery skip: merge-list-append, list-comprehension
     matched = [
         os.path.join(d, fname) 
         for d, fname in found_paths 
@@ -105,17 +122,13 @@ def test_filename_acceptance_via_gui_api():
     for path in to_check:
         try:
             with open(path, "r", encoding="utf-8", errors="ignore") as rf:
-                data = rf.read()
-            if unique_sig in data:
-                print(f"✅ Verified uploaded file content at: {path}")
-                return True
-        except Exception as e:
+                if unique_sig in rf.read():
+                    print(f"✅ Verified uploaded file content at: {path}")
+                    return True
+        except Exception as e:  # sourcery skip: raise-specific-error
             print(f"⚠️  Could not read candidate file {path}: {e}")
 
-    print("❌ Uploaded file not found or content did not match unique signature.")
-    print("   Candidates inspected:")
-    for p in to_check:
-        print(f"   - {p}")
+    print_candidates_info("❌ Uploaded file not found or content did not match unique signature.", to_check)
     return False
 
 
@@ -125,10 +138,10 @@ def main():
     print("=" * 60)
     ok = test_filename_acceptance_via_gui_api()
     print("\n" + "=" * 60)
-    if ok:
-        print("🎉 PASS: Filename with punctuation accepted and verified end-to-end.")
-    else:
-        print("💥 FAIL: Filename acceptance test did not pass.")
+    
+    result_msg = ("🎉 PASS: Filename with punctuation accepted and verified end-to-end." 
+                  if ok else "💥 FAIL: Filename acceptance test did not pass.")
+    print(result_msg)
     print("=" * 60)
     return 0 if ok else 1
 
