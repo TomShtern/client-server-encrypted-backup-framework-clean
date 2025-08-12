@@ -1,0 +1,17 @@
+{
+  "client": {
+    "default_server_host": "127.0.0.1",
+    "default_server_port": 1256,
+    "default_username": "TestDebugQuick",
+    "last_file_path": "C:\\WINDOWS\\TEMP\\tmp17ez9h8v_66KB_debug.txt"
+  },
+  "server": {
+    "port": 1256,
+    "host": "127.0.0.1",
+    "file_storage_dir": "received_files",
+    "database_name": "defensive.db"
+  },
+  "api": {
+    "port": 9090
+  }
+}

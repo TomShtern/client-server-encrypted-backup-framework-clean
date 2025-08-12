@@ -37,16 +37,35 @@ import hashlib
 import contextlib
 from datetime import datetime
 from typing import Optional
+
+# Third-party imports
 from flask import Flask, request, jsonify, send_from_directory, send_file, session
+from flask_cors import CORS
+from flask_socketio import SocketIO, emit
 
-# Import enhanced logging utilities
+# First-party imports (ensure_imports() must be called first)
 from Shared.path_utils import setup_imports
-setup_imports()
-from Shared.logging_utils import setup_dual_logging, create_log_monitor_info
+setup_imports() # This must be called before any other first-party imports
 
-# Initialize Sentry error tracking
+from Shared.logging_utils import setup_dual_logging, create_log_monitor_info, create_enhanced_logger, log_performance_metrics
+from Shared.utils.unified_config import get_config
 from Shared.sentry_config import init_sentry, capture_error
-sentry_initialized = init_sentry("api-server", traces_sample_rate=0.5)
+from Shared.observability_middleware import setup_observability_for_flask
+from Shared.unified_monitor import UnifiedFileMonitor
+from Shared.utils.performance_monitor import get_performance_monitor # Moved from api_perf_job()
+
+from python_server.server.server_singleton import ensure_single_server_instance
+from python_server.server.connection_health import get_connection_health_monitor # Moved from global scope
+
+# Define PROJECT_ROOT for consistent path resolution
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Global paths for static file serving
+CLIENT_GUI_PATH = os.path.join(PROJECT_ROOT, 'Client', 'Client-gui')
+PYTHON_SERVER_PATH = os.path.join(PROJECT_ROOT, 'python_server')
+
+# Initialize Sentry error tracking (after all imports)
+SENTRY_INITIALIZED = init_sentry("api-server", traces_sample_rate=0.5)
 
 # Configure enhanced dual logging (console + file) with observability
 logger, api_log_file = setup_dual_logging(
@@ -57,33 +76,26 @@ logger, api_log_file = setup_dual_logging(
     console_format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-# Setup structured logging and observability
-from Shared.observability_middleware import setup_observability_for_flask
-from Shared.logging_utils import create_enhanced_logger, log_performance_metrics
-from flask_cors import CORS
-from flask_socketio import SocketIO, emit
-
-# Import our real backup executor
+# Import our real backup executor (needs to be after setup_imports and logging)
 try:
     from .real_backup_executor import RealBackupExecutor
 except ImportError:
     from real_backup_executor import RealBackupExecutor
 
-# Import singleton manager to prevent multiple API server instances
-from python_server.server.server_singleton import ensure_single_server_instance
+# Performance monitoring singleton
+perf_monitor = get_performance_monitor()
+# Connection health monitoring
+conn_health = get_connection_health_monitor()
 
-from Shared.unified_monitor import UnifiedFileMonitor
-
-# Define PROJECT_ROOT for consistent path resolution
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for local development
 
 # Initialize SocketIO with origin-locked CORS for security
-socketio = SocketIO(app, cors_allowed_origins=["http://localhost:9090", "http://127.0.0.1:9090"])
+api_port = get_config('api.port', 9090)
+socketio = SocketIO(app, cors_allowed_origins=[f"http://localhost:{api_port}", f"http://127.0.0.1:{api_port}"])
 
-# Setup enhanced observability middleware - FIXED VERSION
+# Setup enhanced observability middleware and structured logging (after app creation)
 observability_middleware = setup_observability_for_flask(app, "api-server")
 structured_logger = create_enhanced_logger("api-server", logger)
 
@@ -92,7 +104,7 @@ structured_logger = create_enhanced_logger("api-server", logger)
 file_monitor = UnifiedFileMonitor(os.path.join(PROJECT_ROOT, 'received_files'))
 
 # Add Sentry error handlers
-if sentry_initialized:
+if SENTRY_INITIALIZED:
     @app.errorhandler(500)
     def handle_internal_error(error):
         """Handle internal server errors with Sentry"""
@@ -157,9 +169,9 @@ websocket_enabled = True
 
 # Server configuration
 server_config = {
-    'host': '127.0.0.1',
-    'port': 1256,
-    'username': 'default_user'
+    'host': get_config('server.host', '127.0.0.1'),
+    'port': get_config('server.port', 1256),
+    'username': get_config('client.default_username', 'default_user')
 }
 
 def broadcast_file_receipt(event_type: str, data: dict):
@@ -191,8 +203,8 @@ def check_backup_server_status(host: Optional[str] = None, port: Optional[int] =
     """
     try:
         import socket
-        target_host = host or server_config.get('host', '127.0.0.1')
-        target_port = int(port or server_config.get('port', 1256))
+        target_host = host or server_config.get('host')
+        target_port = int(port or server_config.get('port') or 1256)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(2)
         result = sock.connect_ex((target_host, target_port))
@@ -256,15 +268,9 @@ def serve_client():
     try:
         # Use absolute path to handle working directory issues
         # Get the absolute path to this file, then go up to api_server, then up to project root
-        current_file_abs = os.path.abspath(__file__)
-        api_server_dir = os.path.dirname(current_file_abs)
-        project_root = os.path.dirname(api_server_dir)
-        html_path = os.path.join(project_root, 'Client', 'Client-gui', 'NewGUIforClient.html')
+        html_path = os.path.join(CLIENT_GUI_PATH, 'NewGUIforClient.html')
         
         # Debug logging
-        logger.debug(f"Current file: {current_file_abs}")
-        logger.debug(f"API server dir: {api_server_dir}")
-        logger.debug(f"Project root: {project_root}")
         logger.debug(f"HTML path: {html_path}")
         logger.debug(f"HTML exists: {os.path.exists(html_path)}")
         
@@ -281,10 +287,7 @@ def serve_client_assets(filename):
     """Serve client assets (CSS, JS, images, etc.)"""
     try:
         # Use absolute path to handle working directory issues
-        current_file_abs = os.path.abspath(__file__)
-        api_server_dir = os.path.dirname(current_file_abs)
-        project_root = os.path.dirname(api_server_dir)
-        client_dir = os.path.join(project_root, 'Client', 'Client-gui')
+        client_dir = CLIENT_GUI_PATH
         
         logger.debug(f"Serving asset {filename} from {client_dir}")
         return send_from_directory(client_dir, filename)
@@ -297,7 +300,7 @@ def serve_progress_config():
     """Serve the progress configuration file"""
     try:
         # Check for progress_config.json in python_server directory
-        progress_config_path = os.path.join(PROJECT_ROOT, 'python_server', 'progress_config.json')
+        progress_config_path = os.path.join(PYTHON_SERVER_PATH, 'progress_config.json')
         if os.path.exists(progress_config_path):
             return send_file(progress_config_path)
         else:
@@ -311,16 +314,10 @@ def serve_favicon():
     """Serve favicon with better error handling"""
     try:
         # Try to serve favicon from Client-gui directory if it exists
-        current_file_abs = os.path.abspath(__file__)
-        api_server_dir = os.path.dirname(current_file_abs)
-        project_root = os.path.dirname(api_server_dir)
-        favicon_path = os.path.join(project_root, 'Client', 'Client-gui', 'favicon.ico')
+        favicon_path = os.path.join(CLIENT_GUI_PATH, 'favicon.ico')
         
-        if os.path.exists(favicon_path):
-            return send_file(favicon_path)
-        
-        # If no favicon file exists, return empty 204 response to prevent errors
-        return '', 204
+        # Return favicon if it exists, otherwise return 204
+        return send_file(favicon_path) if os.path.exists(favicon_path) else ('', 204)
     except Exception as e:
         logger.debug(f"Favicon serving error (non-critical): {e}")
         return '', 204
@@ -341,8 +338,7 @@ def api_status():
 
     if job_id:
         with active_backup_jobs_lock:
-            job_status = active_backup_jobs.get(job_id)
-            if job_status:
+            if job_status := active_backup_jobs.get(job_id):
                 status = job_status.copy()
                 # Clear events after reading them
                 events_to_send = status.get('events', [])
@@ -566,8 +562,8 @@ def api_start_backup_working():
         file.save(temp_file_path)
 
         username = request.form.get('username', server_config.get('username', 'default_user'))
-        server_ip = request.form.get('host') or request.form.get('server') or server_config.get('host', '127.0.0.1')
-        server_port = request.form.get('port', server_config.get('port', 1256))
+        server_ip = request.form.get('host') or request.form.get('server') or server_config.get('host')
+        server_port = request.form.get('port', server_config.get('port'))
 
         def status_handler(phase, data):
             with active_backup_jobs_lock:
@@ -651,7 +647,7 @@ def api_start_backup_working():
                     username=username,
                     file_path=temp_file_path_for_thread,
                     server_ip=server_ip,
-                    server_port=int(server_port)
+                    server_port=int(server_port or 1256)
                 )
 
                 with active_backup_jobs_lock:
@@ -870,8 +866,8 @@ if __name__ == "__main__":
         print("[DEBUG] About to call socketio.run()...")
         socketio.run(
             app,
-            host='127.0.0.1',
-            port=9090,
+            host=get_config('api.host', '127.0.0.1'),
+            port=get_config('api.port', 9090),
             debug=False,
             allow_unsafe_werkzeug=True,  # Allow threading with SocketIO
             use_reloader=False

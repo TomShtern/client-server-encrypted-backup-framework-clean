@@ -14,12 +14,13 @@ import hashlib
 import subprocess
 import tempfile
 import logging
-from pathlib import Path
-from typing import Optional, Dict, Any, Callable
+import threading
+# from pathlib import Path  # Not used, removing to clean up hints
+from typing import Optional, Dict, Any, Callable, Union
 
 from Shared.utils.file_lifecycle import SynchronizedFileManager
 from Shared.utils.error_handler import handle_subprocess_error, ErrorSeverity
-from Shared.utils.process_monitor import stop_process
+from Shared.unified_monitor import UnifiedFileMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +38,7 @@ class RealBackupExecutor:
                 r"build\Release\EncryptedBackupClient.exe",
                 r"EncryptedBackupClient.exe"
             ]
-            self.client_exe = next((path for path in possible_paths if os.path.exists(path)), None)
-            if not self.client_exe:
-                self.client_exe = os.path.join(project_root, "build", "Release", "EncryptedBackupClient.exe")
+            self.client_exe = next((path for path in possible_paths if os.path.exists(path)), None) or os.path.join(project_root, "build", "Release", "EncryptedBackupClient.exe")
         else:
             self.client_exe = client_exe_path
 
@@ -48,6 +47,7 @@ class RealBackupExecutor:
         self.status_callback: Optional[Callable] = None
         self.file_manager = SynchronizedFileManager(self.temp_dir)
         self.process_id: Optional[int] = None
+        self.server_received_files = "received_files"
 
     def is_running(self) -> bool:
         """Return True if a backup subprocess is currently running"""
@@ -61,7 +61,18 @@ class RealBackupExecutor:
 
         self._log_status("CANCEL", f"Cancelling backup process (PID: {self.process_id}) - {reason}")
         try:
-            return stop_process(self.process_id, timeout=5.0)
+            # Terminate the subprocess gracefully
+            self.backup_process.terminate()
+            try:
+                # Wait for graceful termination
+                self.backup_process.wait(timeout=5.0)
+                self._log_status("CANCEL", "Backup process terminated gracefully")
+                return True
+            except subprocess.TimeoutExpired:
+                # Force kill if graceful termination fails
+                self.backup_process.kill()
+                self._log_status("CANCEL", "Backup process force-killed after timeout")
+                return True
         except Exception as e:
             self._log_status("ERROR", f"Cancellation error: {e}")
             return False
@@ -76,19 +87,52 @@ class RealBackupExecutor:
         if self.status_callback:
             self.status_callback(phase, {'message': message})
 
-    def _generate_transfer_info(self, server_ip: str, server_port: int, username: str, file_path: str) -> str:
+    def _generate_transfer_info(self, server_ip: str, server_port: int, username: str, file_path: str) -> tuple[str, str]:
         """Generate managed transfer.info file for the C++ client"""
         absolute_file_path = os.path.abspath(file_path)
         content = f"{server_ip}:{server_port}\n{username}\n{absolute_file_path}"
         self._log_status("CONFIG", f"transfer.info content:\n---\n{content}---")
         
-        transfer_info_path = self.file_manager.create_managed_file("transfer.info", content)
+        file_id, transfer_info_path = self.file_manager.create_managed_file("transfer.info", content)
         self._log_status("CONFIG", f"Generated managed transfer.info: {transfer_info_path}")
-        return transfer_info_path
+        return file_id, transfer_info_path
+
+    def _clear_cached_credentials_if_username_changed(self, username: str) -> None:
+        """Clear cached credentials if username has changed from previous backup."""
+        # Simple implementation - could be extended to actually cache credentials
+        # For now, just log the username change check
+        self._log_status("AUTH", f"Checking credentials for username: {username}")
+
+    def _execute_client_subprocess(self, client_cwd: str, timeout: int = 120) -> Dict[str, Any]:
+        """Execute the C++ client subprocess and return results."""
+        self._log_status("EXECUTION", f"Starting C++ client: {self.client_exe} with --batch flag")
+        self.backup_process = subprocess.Popen(
+            [str(self.client_exe), "--batch"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=client_cwd
+        )
+        self.process_id = self.backup_process.pid
+
+        stdout, stderr = self.backup_process.communicate(timeout=timeout)
+        return_code = self.backup_process.returncode
+
+        self._log_status("COMPLETION", f"C++ client finished with exit code: {return_code}")
+        if stdout:
+            logger.debug(f"C++ Client STDOUT:\n{stdout}")
+        if stderr:
+            logger.warning(f"C++ Client STDERR:\n{stderr}")
+
+        return {
+            'return_code': return_code,
+            'stdout': stdout,
+            'stderr': stderr
+        }
 
     def execute_real_backup(self, username: str, file_path: str, server_ip: str, server_port: int) -> Dict[str, Any]:
         """Executes the C++ client, waits for it to complete, and returns the result."""
-        if not os.path.exists(self.client_exe):
+        if not self.client_exe or not os.path.exists(self.client_exe):
             error_msg = f"C++ client not found at {self.client_exe}"
             self._log_status("ERROR", error_msg)
             return {'success': False, 'error': error_msg}
@@ -98,24 +142,10 @@ class RealBackupExecutor:
             file_id, transfer_info_path = self._generate_transfer_info(server_ip, server_port, username, file_path)
             client_cwd = os.path.dirname(transfer_info_path)
 
-            self._log_status("EXECUTION", f"Starting C++ client: {self.client_exe} with --batch flag")
-            self.backup_process = subprocess.Popen(
-                [self.client_exe, "--batch"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                cwd=client_cwd
-            )
-            self.process_id = self.backup_process.pid
-
-            stdout, stderr = self.backup_process.communicate(timeout=120) # 2-minute timeout
-            return_code = self.backup_process.returncode
-
-            self._log_status("COMPLETION", f"C++ client finished with exit code: {return_code}")
-            if stdout:
-                logger.debug(f"C++ Client STDOUT:\n{stdout}")
-            if stderr:
-                logger.warning(f"C++ Client STDERR:\n{stderr}")
+            # Execute the C++ client subprocess
+            subprocess_result = self._execute_client_subprocess(client_cwd, timeout=120)
+            return_code = subprocess_result['return_code']
+            stderr = subprocess_result['stderr']
 
             if return_code != 0:
                 handle_subprocess_error(
@@ -137,7 +167,7 @@ class RealBackupExecutor:
             return {'success': False, 'error': f"An unexpected error occurred: {e}"}
         finally:
             if file_id:
-                self.file_manager.cleanup_managed_file(file_id)
+                self.file_manager.safe_cleanup(file_id)
             self.backup_process = None
             self.process_id = None
 
@@ -162,7 +192,7 @@ class RealBackupExecutor:
         }
 
         start_time = time.time()
-        monitor: Optional[RobustProgressMonitor] = None
+        monitor: Optional[UnifiedFileMonitor] = None
         file_id: Optional[str] = None
         transfer_info_path: Optional[str] = None
         stdout: Union[bytes, str] = b''  # predefine
@@ -171,11 +201,11 @@ class RealBackupExecutor:
         try:
             # --- Pre-flight validation ---
             if not os.path.exists(file_path):
-                handle_file_transfer_error(
+                handle_subprocess_error(
                     message="Source file not found for backup",
                     details=f"File path: {file_path}",
                     component="pre_flight_check",
-                    severity=ErrorSeverity.HIGH
+                    severity=ErrorSeverity.CRITICAL
                 )
                 raise FileNotFoundError(file_path)
 
@@ -210,95 +240,96 @@ class RealBackupExecutor:
                 with contextlib.suppress(Exception):
                     self.file_manager.mark_in_subprocess_use(file_id)
 
-            # --- Subprocess launch via registry ---
+            # --- Subprocess launch (simplified) ---
             client_working_dir = client_dir
-            process_id = f"backup_client_{int(time.time())}"
             command = [str(self.client_exe), '--batch']
-            self._log_status('LAUNCH', f"Starting subprocess with process registry: {' '.join(command)}")
+            self._log_status('LAUNCH', f"Starting subprocess: {' '.join(command)}")
             try:
-                registry = get_process_registry()
-                register_process(
-                    process_id=process_id,
-                    name='EncryptedBackupClient',
-                    command=command,
-                    cwd=client_working_dir,
-                    auto_restart=False,
-                    max_restarts=0
+                # Launch C++ client subprocess with --batch flag
+                self.backup_process = subprocess.Popen(
+                    command,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    cwd=client_working_dir
                 )
-                if not start_process(process_id,
-                                     stdin=subprocess.PIPE,
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE,
-                                     text=False):
-                    self._log_status('ERROR', f'Failed to start backup process {process_id}')
-                    raise RuntimeError(f'Failed to start backup process {process_id}')
-                self.backup_process = registry.subprocess_handles[process_id]
-                self.process_id = process_id
+                self.process_id = self.backup_process.pid
             except Exception as launch_err:
                 raise RuntimeError(f'Subprocess launch failed: {launch_err}')
 
-            self._log_status('PROCESS', f'Started backup client (ID: {process_id}, PID: {self.backup_process.pid})')
+            self._log_status('PROCESS', f'Started backup client (ID: {self.process_id}, PID: {self.backup_process.pid})')
 
-            # --- Progress monitoring ---
-            monitor = RobustProgressMonitor(self.server_received_files)
-            monitor.set_status_callback(self.status_callback or self._log_status)
-            monitor.start_monitoring({
-                'file_size': os.path.getsize(file_path) if os.path.exists(file_path) else 0,
-                'original_filename': os.path.basename(file_path),
-                'process': self.backup_process
-            })
+            # --- Monitoring Setup ---
+            monitor = UnifiedFileMonitor(self.server_received_files)
+            monitor.start_monitoring()
 
-            # --- Active polling (non-blocking) ---
+            job_completed = threading.Event()
+            verification_result = {}
+
+            def on_complete(data):
+                nonlocal verification_result
+                self._log_status("MONITOR_COMPLETE", f"Verification successful: {data}")
+                verification_result.update(data)
+                job_completed.set()
+
+            def on_failure(data):
+                nonlocal verification_result
+                self._log_status("MONITOR_FAILURE", f"Verification failed: {data}")
+                verification_result.update(data)
+                job_completed.set()
+
+            # --- Job Registration ---
+            expected_size = os.path.getsize(file_path)
+            with open(file_path, 'rb') as f:
+                expected_hash = hashlib.sha256(f.read()).hexdigest()
+            
+            job_id = f"backup_{username}_{os.path.basename(file_path)}"
+            
+            monitor.register_job(
+                filename=os.path.basename(file_path),
+                job_id=job_id,
+                expected_size=expected_size,
+                expected_hash=expected_hash,
+                completion_callback=on_complete,
+                failure_callback=on_failure
+            )
+
+            # --- Process Execution ---
+            self._log_status('PROCESS', f'Waiting for C++ client (PID: {self.backup_process.pid}) to complete.')
             try:
-                stdout, stderr = self._monitor_with_active_polling(monitor, timeout)
+                stdout, stderr = self.backup_process.communicate(timeout=timeout)
+                result['process_exit_code'] = self.backup_process.returncode
+                if stdout: self._log_status('CLIENT_STDOUT', str(stdout))
+                if stderr: self._log_status('CLIENT_STDERR', str(stderr))
             except subprocess.TimeoutExpired:
-                self._log_status('TIMEOUT', 'Terminating backup process due to timeout')
-                if self.backup_process:
-                    with contextlib.suppress(Exception):
-                        self.backup_process.kill()
-                stdout, stderr = (b'', b'')
-                result['process_exit_code'] = -1
+                self._log_status('TIMEOUT', 'C++ client process timed out.')
+                self.cancel("Timeout")
                 result['error'] = 'Process timed out'
+                result['process_exit_code'] = -1
+
+            # --- Wait for Verification ---
+            self._log_status('VERIFICATION', 'Waiting for file verification to complete...')
+            job_completed.wait(timeout=30) # Wait up to 30s for verification
+            
+            result['verification'] = verification_result
+            result['success'] = verification_result.get('status') == 'complete'
+
+            if not result['success'] and not result['error']:
+                result['error'] = verification_result.get('reason', 'Verification failed or timed out.')
+
+            if result['success']:
+                 self._log_status('SUCCESS', 'REAL backup completed and verified!')
             else:
-                result['process_exit_code'] = self.backup_process.returncode if self.backup_process else None
+                 self._log_status('FAILURE', result['error'])
 
-            # --- Decode & finalize output ---
-            decoded_stdout = stdout.decode('utf-8', errors='replace') if isinstance(stdout, (bytes, bytearray)) else str(stdout or '')
-            decoded_stderr = stderr.decode('utf-8', errors='replace') if isinstance(stderr, (bytes, bytearray)) else str(stderr or '')
-            if decoded_stdout and monitor:
-                monitor.finalize_with_output(decoded_stdout)
-            if decoded_stdout:
-                self._log_status('CLIENT_STDOUT', decoded_stdout[:4000])
-            if decoded_stderr:
-                self._log_status('CLIENT_STDERR', decoded_stderr[:4000])
-                result['error'] = result['error'] or decoded_stderr
-
-            # --- Verification ---
-            verification = self._verify_file_transfer(file_path, username)
-            result['verification'] = verification
-            process_success = (result.get('process_exit_code') == 0)
-            verification_success = verification.get('transferred', False)
-
-            if monitor:
-                monitor.finalize_progress(process_success, verification_success)
-                monitor.stop_monitoring()
-
-            if verification_success:
-                result['success'] = True
-                if process_success:
-                    self._log_status('SUCCESS', 'REAL backup completed and verified!')
-                else:
-                    self._log_status('SUCCESS', 'Backup verified though process exit code was non-zero')
-            else:
-                result['error'] = result['error'] or 'No file transfer detected - backup may have failed'
-                self._log_status('FAILURE', result['error'])
+            monitor.stop_monitoring()
 
         except Exception as e:
             result['error'] = str(e)
             self._log_status('ERROR', f'Backup execution failed: {e}')
             with contextlib.suppress(Exception):
                 if monitor:
-                    monitor.finalize_progress(False, False)
                     monitor.stop_monitoring()
         finally:
             result['duration'] = time.time() - start_time
@@ -343,7 +374,7 @@ def main():
     print(f"File: {file_path}")
     print()
 
-    result = executor.execute_real_backup(username, file_path)
+    result = executor.execute_real_backup(username, file_path, "127.0.0.1", 1256)
 
     print("\n" + "="*50)
     print("BACKUP EXECUTION RESULTS:")

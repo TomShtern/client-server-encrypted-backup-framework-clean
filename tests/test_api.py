@@ -5,11 +5,17 @@ Test script to debug the API endpoints directly
 
 import requests
 import json
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from Shared.utils.unified_config import get_config
+
+base_url = f"http://{get_config('api.host', '127.0.0.1')}:{get_config('api.port', 9090)}"
 
 def test_api_status():
     """Test the /api/status endpoint"""
     try:
-        response = requests.get('http://127.0.0.1:9090/api/status')
+        response = requests.get(f'{base_url}/api/status')
         print(f"Status endpoint: {response.status_code}")
         print(f"Response: {response.json()}")
         return True
@@ -21,11 +27,11 @@ def test_api_connect():
     """Test the /api/connect endpoint"""
     try:
         data = {
-            "host": "127.0.0.1",
-            "port": 1256,
+            "host": get_config('server.host', '127.0.0.1'),
+            "port": get_config('server.port', 1256),
             "username": "testuser"
         }
-        response = requests.post('http://127.0.0.1:9090/api/connect', 
+        response = requests.post(f'{base_url}/api/connect', 
                                json=data,
                                headers={'Content-Type': 'application/json'})
         print(f"Connect endpoint: {response.status_code}")
@@ -45,11 +51,11 @@ def test_api_upload():
         files = {'file': open('test_upload_file.txt', 'rb')}
         data = {
             'username': 'testuser',
-            'server': '127.0.0.1',
-            'port': '1256'
+            'server': get_config('server.host', '127.0.0.1'),
+            'port': get_config('server.port', 1256)
         }
         
-        response = requests.post('http://127.0.0.1:9090/api/start_backup',
+        response = requests.post(f'{base_url}/api/start_backup',
                                files=files,
                                data=data)
         print(f"Upload endpoint: {response.status_code}")

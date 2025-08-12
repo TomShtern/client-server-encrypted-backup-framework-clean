@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 You have access to a "think" tool that provides a dedicated space for structured reasoning. Using this tool significantly improves your performance on complex tasks. 
 
 ## When to use the think tool 
-Before taking any action or responding to the user after receiving tool results, use the think tool as a scratchpad to: 
+Before taking any action or responding to the user after receiving tool results, use the think tool as a scratchpad to:
 - List the specific rules that apply to the current request 
 - Check if all required information is collected 
 - Verify that the planned action complies with all policies 
@@ -26,7 +26,7 @@ When using the think tool:
 
 ## Project Overview
 
-A **4-layer Client-Server Encrypted Backup Framework** implementing secure file transfer with RSA-1024 + AES-256-CBC encryption. The system is fully functional with evidence of successful file transfers in `received_files/`.
+- A **4-layer Client-Server Encrypted Backup Framework** implementing secure file transfer with RSA-1024 + AES-256-CBC encryption. The system is fully functional with evidence of successful file transfers in `received_files/`.
 
 ### Architecture Layers
 
@@ -89,7 +89,7 @@ python scripts/monitor_logs.py        # Real-time log monitoring with filtering
 python scripts/check_dependencies.py  # Verify all dependencies are installed
 
 # Verify file transfers
-dir "received_files"                  # Check for actual transferred files
+dir "received_files"
 python scripts/create_test_file.py    # Create test files for verification
 ```
 
@@ -122,11 +122,12 @@ python scripts/test_one_click_fixes.py      # Validate one-click script fixes
 
 ## Critical Operating Knowledge
 
-### Configuration Requirements
-- **transfer.info**: Must contain exactly 3 lines: `server:port`, `username`, `filepath`
-- **Working Directory**: C++ client MUST run from directory containing `transfer.info`
-- **Batch Mode**: Use `--batch` flag to prevent C++ client hanging in subprocess
-- **Progress Configuration**: `progress_config.json` defines phase timing, weights, and calibration data
+### Configuration Management
+The system now uses a **UnifiedConfigurationManager** to manage all configuration from a central `config.json` file. This replaces the scattered `transfer.info` and other configuration files.
+
+- **`config.json`**: The central configuration file. It contains settings for the server, API server, cryptography, and protocol.
+- **`get_config()`**: The `Shared.utils.unified_config.get_config()` function should be used to access all configuration values.
+- **Legacy Support**: The `UnifiedConfigurationManager` can still read legacy `.info` files and hardcoded values and migrate them to the new `config.json` format.
 
 ### Essential Integration Patterns
 
@@ -171,7 +172,7 @@ def _verify_file_transfer(self, original_file, username):
 ### Verification Points
 - **Success Verification**: Check `received_files/` for actual file transfers (exit codes are unreliable)
 - **Port Availability**: Ensure ports 9090 and 1256 are free
-- **Dependencies**: Common missing packages include flask-cors, sentry-sdk, flask-socketio, watchdog
+- **Dependencies**: Ensure all dependencies from `requirements.txt` are installed. Key dependencies include `Flask`, `flask-cors`, `flask-socketio`, `psutil`, `pycryptodome`, `sentry-sdk`, and `watchdog`.
 - **Hash Verification**: Always compare SHA256 hashes of original vs transferred files
 - **Network Activity**: Verify TCP connections to port 1256 during transfers
 
@@ -184,24 +185,22 @@ def _verify_file_transfer(self, original_file, username):
 ## Architecture Details
 
 ### Core Components
-- **Real Backup Executor** (`src/api/real_backup_executor.py`): Manages C++ client subprocess execution with sophisticated multi-layer progress monitoring
-- **Network Server** (`python_server/server/server.py`): Multi-threaded TCP server handling encrypted file transfers  
-- **Flask API Bridge** (`api_server/cyberbackup_api_server.py`): HTTP API server with Sentry integration for error tracking
-- **Crypto Wrappers** (`Client/wrappers/`): RSA/AES encryption abstractions for C++ client
-- **Protocol Implementation**: 23-byte binary headers + encrypted payload with CRC32 verification
-- **Shared Utilities** (`Shared/`): Common utilities including observability, logging, file lifecycle management, error handling, and process monitoring
-- **Observability Framework** (`Shared/observability.py`): Comprehensive structured logging with metrics collection, system monitoring, and timed operation tracking
-- **Progress Monitoring System**: Multi-layer progress tracking with StatisticalProgressTracker, TimeBasedEstimator, BasicProcessingIndicator, and DirectFilePoller
-- **WebSocket Broadcasting**: Real-time progress updates via SocketIO with enhanced job management and cancellation support
+- **Real Backup Executor** (`api_server/real_backup_executor.py`): Manages the C++ client subprocess execution.
+- **Network Server** (`python_server/server/server.py`): Multi-threaded TCP server handling encrypted file transfers.
+- **Flask API Bridge** (`api_server/cyberbackup_api_server.py`): HTTP API server with Sentry integration for error tracking.
+- **UnifiedFileMonitor** (`Shared/unified_monitor.py`): A centralized, robust, and efficient file monitoring and verification system.
+- **UnifiedConfigurationManager** (`Shared/utils/unified_config.py`): A centralized configuration manager that handles all configuration from a central `config.json` file.
+- **Shared Utilities** (`Shared/`): Common utilities including logging, path management, and error handling.
+- **WebSocket Broadcasting**: Real-time progress updates via SocketIO.
 
 ### Key Integration Points
 - **Subprocess Communication**: Flask API → RealBackupExecutor → C++ client (with `--batch` flag)
 - **File Lifecycle**: SynchronizedFileManager prevents race conditions in file creation/cleanup
 - **Progress Flow**: RealBackupExecutor.status_callback → API server status_handler → WebSocket socketio.emit → Web GUI
-- **Error Propagation**: C++ client logs → subprocess stdout → RealBackupExecutor → Flask API → Web UI
+- **Error Propagation**: C++ client logs → subprocess stdout → RealBackupExecutor → Flask API → Web GUI
 - **Configuration**: Centralized through `transfer.info` and `progress_config.json`
 - **WebSocket Broadcasting**: Real-time progress updates via SocketIO with CallbackMultiplexer for concurrent request routing
-- **File Receipt Override**: FileReceiptProgressTracker provides ground truth completion by monitoring actual file data
+- **File Receipt Override**: FileReceiptProgressTracker provides ground truth completion by monitoring actual file arrival
 
 ### Security Considerations
 - **Current Encryption**: RSA-1024 + AES-256-CBC (functional but has known vulnerabilities)
@@ -232,7 +231,7 @@ def _verify_file_transfer(self, original_file, username):
 - **Callback System Enhancement**: Updated UnifiedFileMonitor to support dual callbacks (`completion_callback`, `failure_callback`) and legacy single callback mode
 - **Import System Validation**: Eliminated all import errors, fixed syntax error in `real_backup_executor.py`
 - **Complete Integration Testing**: All 4 architectural layers validated working together (Web UI → Flask API → C++ Client → Python Server)
-- **System Health Verification**: Zero import errors across all critical modules, 67 files in `received_files/` directory confirms active usage
+- **System Health Verification**: Zero import errors across all critical modules, 67 files in received_files/ directory confirms active usage
 **✅ PREVIOUS ENHANCEMENTS (2025-08-11)**:
 - **Sentry Integration**: Added comprehensive error tracking with traces_sample_rate at 0.5 for API server monitoring
 - **Enhanced Observability Framework**: Comprehensive structured logging system with metrics collection, system monitoring, and timed operation tracking
@@ -288,7 +287,7 @@ def _verify_file_transfer(self, original_file, username):
 8. **Process Management**: Robust subprocess handling with timeout protection and proper cleanup
 9. **Advanced Progress System**: Multi-layer progress monitoring (FileReceiptProgressTracker, OutputProgressTracker, StatisticalProgressTracker, TimeBasedEstimator, DirectFilePoller) with WebSocket real-time updates
 10. **Ground Truth Progress**: FileReceiptProgressTracker immediately signals 100% completion when file is detected on server, overriding all other progress estimates
-11. **Production Validation**: 67 successful file transfers in `received_files/` directory demonstrate active production usage
+11. **Production Validation**: 67 successful file transfers in received_files/ directory demonstrate active production usage
 12. **Integration Validated**: All 4 architectural layers tested and confirmed working together seamlessly
 
 
@@ -516,45 +515,23 @@ Status: System is OPERATIONAL and READY
 - **Evidence of Success**: Check `received_files/` directory for actual file transfers (67 files demonstrate active production usage)
 - **`working with protection.md`**: GitHub's official guide for handling secret scanning push protection
 
-## File Receipt Override System (NEW 2025-08-03)
+## Unified Monitoring System
 
-The **FileReceiptProgressTracker** provides ground truth progress completion by monitoring the server's file storage directory in real-time.
+The system now uses a **UnifiedFileMonitor** for all file monitoring and verification tasks. This replaces the previous fragmented monitoring systems.
 
 ### Key Features
 
-1. **Real-Time File Monitoring**: Uses watchdog library with polling fallback for Windows compatibility
-2. **File Stability Detection**: Ensures files are completely written before signaling completion
-3. **Progress Override**: Immediately signals 100% completion when file appears on server
-4. **Ground Truth Verification**: Overrides all other progress estimates with actual file presence
+1.  **Centralized Monitoring:** A single `UnifiedFileMonitor` instance handles all file watching.
+2.  **Efficient Threading:** Uses a `ThreadPoolExecutor` to prevent creating a new thread for each file, improving performance and stability.
+3.  **Job-Based Callbacks:** Provides detailed, job-specific callbacks for progress, completion, and failure.
+4.  **Robust Verification:** Verifies files based on size, stability (last modification time), and SHA256 hash.
+5.  **Real-time Events:** Uses the `watchdog` library for efficient, real-time file system eventing.
 
 ### How It Works
 
-```
-File Transfer → File Appears in received_files/ → FileReceiptProgressTracker detects file → 
-Verifies file stability → Triggers override signal → RobustProgressMonitor forces 100% completion → 
-Web GUI immediately shows "✅ File received on server - Backup complete!"
-```
+1.  The `RealBackupExecutor` creates a `UnifiedFileMonitor` instance, pointing to the `received_files` directory.
+2.  Before starting a backup, it registers a job with the monitor, providing the expected filename, size, hash, and callback functions.
+3.  The `UnifiedFileMonitor` watches for file creation and modification events.
+4.  When a file event occurs, the monitor verifies the file against the registered job's expectations.
+5.  Once the file is fully received and verified, the monitor calls the appropriate completion or failure callback.
 
-### Critical Fix (2025-08-03)
-
-**Issue**: FileReceiptProgressTracker was monitoring wrong directory (`src\server\received_files`) while server saves files to project root (`received_files`), causing progress to never reach 100%.
-
-**Solution**: Updated monitoring path to match server's actual file storage location:
-```python
-self.server_received_files = "received_files"  # Server saves files to project root/received_files
-```
-
-### Technical Implementation
-
-- **Location**: `src/api/real_backup_executor.py` (FileReceiptProgressTracker class, lines 473-663)
-- **Priority**: Highest priority tracker (layer 0) in RobustProgressMonitor
-- **Override Mechanism**: Returns `{"progress": 100, "override": True}` when file detected
-- **Integration**: Connected through CallbackMultiplexer for proper routing to all job handlers
-- **Failsafe Design**: Provides completion signal even if other progress trackers fail
-
-### Benefits
-
-- **Eliminates False Negatives**: File on server = 100% complete, regardless of progress estimation errors
-- **User Confidence**: Immediate visual confirmation when backup actually succeeds
-- **Debugging Aid**: Clearly distinguishes between transfer completion and progress tracking issues
-- **Robust Fallback**: Works even when C++ client output parsing fails

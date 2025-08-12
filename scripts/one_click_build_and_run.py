@@ -14,6 +14,8 @@ Corrupted header block was repaired on 2025-08-11 after accidental paste.
 
 import os
 import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from Shared.utils.unified_config import get_config
 import subprocess
 import time
 import contextlib
@@ -157,7 +159,7 @@ def check_appmap_available():
     except Exception:
         return False
 
-def check_api_server_status(host='127.0.0.1', port=9090, timeout=2):
+def check_api_server_status(host=get_config('api.host', '127.0.0.1'), port=get_config('api.port', 9090), timeout=2):
     """Check if the Flask API server is running and responsive"""
     try:
         import socket
@@ -169,7 +171,7 @@ def check_api_server_status(host='127.0.0.1', port=9090, timeout=2):
     except Exception:
         return False
 
-def check_port_available(port=9090):
+def check_port_available(port=get_config('api.port', 9090)):
     """Check if a port is available (not in use)"""
     try:
         import socket
@@ -265,7 +267,7 @@ def force_vcpkg_reinstall():
     print("Running vcpkg install...")
     return run_command("vcpkg\\vcpkg.exe install --triplet x64-windows --recurse", timeout=600)
 
-def wait_for_server_startup(host='127.0.0.1', port=9090, max_wait=30, check_interval=1):
+def wait_for_server_startup(host=get_config('api.host', '127.0.0.1'), port=get_config('api.port', 9090), max_wait=30, check_interval=1):
     """Wait for server to start with enhanced progress feedback and diagnostics"""
     print(f"Waiting for API server to start on {host}:{port}...")
     elapsed = 0
@@ -305,7 +307,7 @@ def check_backup_server_status():
         import socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(2)
-        result = sock.connect_ex(('127.0.0.1', 1256))
+        result = sock.connect_ex((get_config('server.host', '127.0.0.1'), get_config('server.port', 1256)))
         sock.close()
         return result == 0
     except Exception:
@@ -408,7 +410,7 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
     
     # Additional port cleanup with improved error handling
     if psutil:
-        ports_to_clean = [9090, 1256]
+        ports_to_clean = [get_config('api.port', 9090), get_config('server.port', 1256)]
         for port in ports_to_clean:
             try:
                 print(f"Checking for processes on port {port}...")
@@ -449,6 +451,9 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
 def main():
     # Setup logging first
     setup_logging()
+    server_port = get_config('server.port', 1256)
+    api_port = get_config('api.port', 9090)
+    gui_url = f"http://{get_config('api.host', '127.0.0.1')}:{api_port}/"
     logging.info("Starting CyberBackup 3.0 build and deployment process")
     
     # Enhanced Unicode console setup
@@ -708,7 +713,7 @@ def main():
     else:
         print("[WARNING] Creating default transfer.info...")
         with open(transfer_info, 'w') as f:
-            f.write("127.0.0.1:1256\n")
+            f.write(f"{get_config('server.host', '127.0.0.1')}:{get_config('server.port', 1256)}\n")
             f.write("testuser\n")
             f.write("test_file.txt\n")
     
@@ -916,8 +921,9 @@ def main():
         
         try:
             # Start API server in new console window with visible output
+            # Fixed: Use module syntax to avoid circular import issues
             api_process = subprocess.Popen(
-                [sys.executable, str(api_server_path)],
+                [sys.executable, "-m", "api_server.cyberbackup_api_server"],
                 creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
             )
             print(f"API Bridge Server started with PID: {api_process.pid}")
@@ -964,7 +970,7 @@ def main():
     # Step 5: Open Web GUI only if server started successfully
     if server_started_successfully:
         import webbrowser
-        gui_url = "http://127.0.0.1:9090/"
+        pass
         print(f"\nOpening Web GUI in browser: {gui_url}")
         webbrowser.open(gui_url)
     else:
@@ -973,13 +979,13 @@ def main():
         print("1. Open a new terminal/command prompt")
         print("2. Navigate to this directory")
         print("3. Run: python api_server/cyberbackup_api_server.py")
-        print("4. Wait for server to start, then open: http://127.0.0.1:9090/")
+        print(f"4. Wait for server to start, then open: {gui_url}")
         print()
         with contextlib.suppress(EOFError):
             choice = input("Would you like to try opening the browser anyway? (y/N): ").strip().lower()
             if choice in ['y', 'yes']:
                 import webbrowser
-                gui_url = "http://127.0.0.1:9090/"
+                pass
                 print(f"Opening Web GUI in browser: {gui_url}")
                 webbrowser.open(gui_url)
     
@@ -1006,14 +1012,14 @@ def main():
     api_server_running = check_api_server_status()
     
     try:
-        print(f"   [SERVER] Backup Server:  {'[OK] Running on port 1256' if backup_server_running else '[ERROR] Not responding on port 1256'}")
-        print(f"   [API] API Server:     {'[OK] Running on port 9090' if api_server_running else '[ERROR] Not responding on port 9090'}")
-        print(f"   [GUI] Web GUI:        {'[OK] http://localhost:9090' if api_server_running else '[ERROR] Not available (API server down)'}")
+        print(f"   [SERVER] Backup Server:  {'[OK] Running on port ' + str(server_port) if backup_server_running else '[ERROR] Not responding on port ' + str(server_port)}")
+        print(f"   [API] API Server:     {'[OK] Running on port ' + str(api_port) if api_server_running else '[ERROR] Not responding on port ' + str(api_port)}")
+        print(f"   [GUI] Web GUI:        {'[OK] ' + gui_url if api_server_running else '[ERROR] Not available (API server down)'}")
         print(f"   [GUI] Server GUI:     {'[OK] Started automatically' if backup_server_running else '[ERROR] Check server console'}")
     except UnicodeEncodeError:
-        print(f"   [SERVER] Backup Server:  {'Running on port 1256' if backup_server_running else 'Not responding on port 1256'}")
-        print(f"   [API] API Server:     {'Running on port 9090' if api_server_running else 'Not responding on port 9090'}")
-        print(f"   [GUI] Web GUI:        {'http://localhost:9090' if api_server_running else 'Not available (API server down)'}")
+        print(f"   [SERVER] Backup Server:  {'Running on port ' + str(server_port) if backup_server_running else 'Not responding on port ' + str(server_port)}")
+        print(f"   [API] API Server:     {'Running on port ' + str(api_port) if api_server_running else 'Not responding on port ' + str(api_port)}")
+        print(f"   [GUI] Web GUI:        {gui_url if api_server_running else 'Not available (API server down)'}")
         print(f"   [GUI] Server GUI:     {'Started automatically' if backup_server_running else 'Check server console'}")
     print()
     if server_started_successfully and api_server_running:

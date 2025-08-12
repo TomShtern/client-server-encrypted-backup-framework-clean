@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 You have access to a "think" tool that provides a dedicated space for structured reasoning. Using this tool significantly improves your performance on complex tasks. 
 
 ## When to use the think tool 
-Before taking any action or responding to the user after receiving tool results, use the think tool as a scratchpad to: 
+Before taking any action or responding to the user after receiving tool results, use the think tool as a scratchpad to:
 - List the specific rules that apply to the current request 
 - Check if all required information is collected 
 - Verify that the planned action complies with all policies 
@@ -201,7 +201,7 @@ def _verify_file_transfer(self, original_file, username):
 - **Error Propagation**: C++ client logs → subprocess stdout → RealBackupExecutor → Flask API → Web UI
 - **Configuration**: Centralized through `transfer.info` and `progress_config.json`
 - **WebSocket Broadcasting**: Real-time progress updates via SocketIO with CallbackMultiplexer for concurrent request routing
-- **File Receipt Override**: FileReceiptProgressTracker provides ground truth completion by monitoring actual file data
+- **File Receipt Override**: FileReceiptProgressTracker provides ground truth completion by monitoring actual file arrival
 
 ### Security Considerations
 - **Current Encryption**: RSA-1024 + AES-256-CBC (functional but has known vulnerabilities)
@@ -232,7 +232,7 @@ def _verify_file_transfer(self, original_file, username):
 - **Callback System Enhancement**: Updated UnifiedFileMonitor to support dual callbacks (`completion_callback`, `failure_callback`) and legacy single callback mode
 - **Import System Validation**: Eliminated all import errors, fixed syntax error in `real_backup_executor.py`
 - **Complete Integration Testing**: All 4 architectural layers validated working together (Web UI → Flask API → C++ Client → Python Server)
-- **System Health Verification**: Zero import errors across all critical modules, 67 files in `received_files/` directory confirms active usage
+- **System Health Verification**: Zero import errors across all critical modules, 67 files in received_files/ directory confirms active usage
 **✅ PREVIOUS ENHANCEMENTS (2025-08-11)**:
 - **Sentry Integration**: Added comprehensive error tracking with traces_sample_rate at 0.5 for API server monitoring
 - **Enhanced Observability Framework**: Comprehensive structured logging system with metrics collection, system monitoring, and timed operation tracking
@@ -288,7 +288,7 @@ def _verify_file_transfer(self, original_file, username):
 8. **Process Management**: Robust subprocess handling with timeout protection and proper cleanup
 9. **Advanced Progress System**: Multi-layer progress monitoring (FileReceiptProgressTracker, OutputProgressTracker, StatisticalProgressTracker, TimeBasedEstimator, DirectFilePoller) with WebSocket real-time updates
 10. **Ground Truth Progress**: FileReceiptProgressTracker immediately signals 100% completion when file is detected on server, overriding all other progress estimates
-11. **Production Validation**: 67 successful file transfers in `received_files/` directory demonstrate active production usage
+11. **Production Validation**: 67 successful file transfers in received_files/ directory demonstrate active production usage
 12. **Integration Validated**: All 4 architectural layers tested and confirmed working together seamlessly
 
 
@@ -377,6 +377,7 @@ stability_thread.start()
 ```
 
 **Solution Required**: Implement thread pool or concurrent file monitoring limits
+
 
 ### **FIXED: File Monitor Thread Safety**
 
@@ -493,7 +494,7 @@ Status: System is OPERATIONAL and READY
 - All architectural layers working seamlessly together
 - Zero import errors across all critical modules
 
-### 🎯 NEXT PRIORITIES (Based on Refactoring Report) 
+### 🎯 NEXT PRIORITIES (Based on Refactoring Report)
 
 **IMMEDIATE (Week 1):**
 - Address critical security vulnerabilities (static IV, HMAC implementation)
@@ -516,45 +517,23 @@ Status: System is OPERATIONAL and READY
 - **Evidence of Success**: Check `received_files/` directory for actual file transfers (67 files demonstrate active production usage)
 - **`working with protection.md`**: GitHub's official guide for handling secret scanning push protection
 
-## File Receipt Override System (NEW 2025-08-03)
+## Unified Monitoring System
 
-The **FileReceiptProgressTracker** provides ground truth progress completion by monitoring the server's file storage directory in real-time.
+The system now uses a **UnifiedFileMonitor** for all file monitoring and verification tasks. This replaces the previous fragmented monitoring systems.
 
 ### Key Features
 
-1. **Real-Time File Monitoring**: Uses watchdog library with polling fallback for Windows compatibility
-2. **File Stability Detection**: Ensures files are completely written before signaling completion
-3. **Progress Override**: Immediately signals 100% completion when file appears on server
-4. **Ground Truth Verification**: Overrides all other progress estimates with actual file presence
+1.  **Centralized Monitoring:** A single `UnifiedFileMonitor` instance handles all file watching.
+2.  **Efficient Threading:** Uses a `ThreadPoolExecutor` to prevent creating a new thread for each file, improving performance and stability.
+3.  **Job-Based Callbacks:** Provides detailed, job-specific callbacks for progress, completion, and failure.
+4.  **Robust Verification:** Verifies files based on size, stability (last modification time), and SHA256 hash.
+5.  **Real-time Events:** Uses the `watchdog` library for efficient, real-time file system eventing.
 
 ### How It Works
 
-```
-File Transfer → File Appears in received_files/ → FileReceiptProgressTracker detects file → 
-Verifies file stability → Triggers override signal → RobustProgressMonitor forces 100% completion → 
-Web GUI immediately shows "✅ File received on server - Backup complete!"
-```
+1.  The `RealBackupExecutor` creates a `UnifiedFileMonitor` instance, pointing to the `received_files` directory.
+2.  Before starting a backup, it registers a job with the monitor, providing the expected filename, size, hash, and callback functions.
+3.  The `UnifiedFileMonitor` watches for file creation and modification events.
+4.  When a file event occurs, the monitor verifies the file against the registered job's expectations.
+5.  Once the file is fully received and verified, the monitor calls the appropriate completion or failure callback.
 
-### Critical Fix (2025-08-03)
-
-**Issue**: FileReceiptProgressTracker was monitoring wrong directory (`src\server\received_files`) while server saves files to project root (`received_files`), causing progress to never reach 100%.
-
-**Solution**: Updated monitoring path to match server's actual file storage location:
-```python
-self.server_received_files = "received_files"  # Server saves files to project root/received_files
-```
-
-### Technical Implementation
-
-- **Location**: `src/api/real_backup_executor.py` (FileReceiptProgressTracker class, lines 473-663)
-- **Priority**: Highest priority tracker (layer 0) in RobustProgressMonitor
-- **Override Mechanism**: Returns `{"progress": 100, "override": True}` when file detected
-- **Integration**: Connected through CallbackMultiplexer for proper routing to all job handlers
-- **Failsafe Design**: Provides completion signal even if other progress trackers fail
-
-### Benefits
-
-- **Eliminates False Negatives**: File on server = 100% complete, regardless of progress estimation errors
-- **User Confidence**: Immediate visual confirmation when backup actually succeeds
-- **Debugging Aid**: Clearly distinguishes between transfer completion and progress tracking issues
-- **Robust Fallback**: Works even when C++ client output parsing fails
