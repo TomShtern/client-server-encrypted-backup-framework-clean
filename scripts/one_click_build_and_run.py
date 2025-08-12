@@ -476,9 +476,16 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
                         for conn in psutil.net_connections():
                             if (hasattr(conn, 'laddr') and conn.laddr and 
                                 hasattr(conn, 'pid') and conn.pid == process_info['pid']):
-                                port = (conn.laddr.port if hasattr(conn.laddr, 'port') else 
-                                       (conn.laddr[1] if isinstance(conn.laddr, tuple) and len(conn.laddr) >= 2 else None))
-                                if (port in [9090, 1256] and conn.status == psutil.CONN_LISTEN and 
+                                # Safely get port from connection info
+                                port = None
+                                if hasattr(conn, 'laddr') and conn.laddr:
+                                    if hasattr(conn.laddr, 'port'):
+                                        port = conn.laddr.port
+                                    elif isinstance(conn.laddr, tuple) and len(conn.laddr) >= 2:
+                                        port = conn.laddr[1]
+                                
+                                if (port in [9090, 1256] and 
+                                    hasattr(conn, 'status') and conn.status == psutil.CONN_LISTEN and 
                                     ('python' in name or 'flask' in cmdline_str)):
                                         should_terminate = True
                                         process_type = f"Port-bound Server ({port})"
@@ -788,7 +795,7 @@ def main():
     print("   - Web GUI (Browser interface)")
     print()
     
-    print("Starting Python Backup Server (python_server.server.server module)...")
+    print("Starting Python Backup Server with integrated GUI...")
     server_path = Path("python_server/server/server.py")
     
     # Validate server path exists with proper error handling
@@ -803,7 +810,7 @@ def main():
 
         if appmap_available:
             print("[INFO] AppMap detected - enabling execution recording")
-            # Start backup server with AppMap recording using -m module syntax
+            # Start backup server with AppMap recording using module syntax
             server_command = [
                 "appmap-python", "--record", "process", 
                 "python", "-m", "python_server.server.server"
@@ -811,30 +818,20 @@ def main():
             print("Command: appmap-python --record process python -m python_server.server.server")
         else:
             print("[INFO] AppMap not available - starting server normally")
-            # Start backup server normally using -m module syntax
+            # Start backup server normally using module syntax
             server_command = [sys.executable, "-m", "python_server.server.server"]
             print(f"Command: {sys.executable} -m python_server.server.server")
         
-        # Start backup server directly from project root in new console window
+        # Set up server environment (GUI is integrated, no separate GUI launch needed)
         server_env = os.environ.copy()
-        # GUI Mode Selection:
-        # By default we NOW keep the embedded GUI enabled (more reliable startup)
-        # Set CYBERBACKUP_DISABLE_INTEGRATED_GUI=1 to suppress embedded and use standalone
-        # Set CYBERBACKUP_STANDALONE_GUI=1 to force launching standalone (even if embedded enabled)
-        disable_embedded = os.environ.get("CYBERBACKUP_DISABLE_INTEGRATED_GUI", "0")
-        force_standalone = os.environ.get("CYBERBACKUP_STANDALONE_GUI", "0")
-        if disable_embedded == "1":
-            server_env["CYBERBACKUP_DISABLE_INTEGRATED_GUI"] = "1"
-            print("[GUI] Embedded Server GUI disabled via env var")
-        else:
-            server_env.pop("CYBERBACKUP_DISABLE_INTEGRATED_GUI", None)
-            print("[GUI] Embedded Server GUI enabled (default)")
+        
+        # Start backup server with integrated GUI in new console window
         server_process = subprocess.Popen(
             server_command,
             creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0,
             env=server_env
         )
-        print(f"Python Backup Server started with PID: {server_process.pid}")
+        print(f"Python Backup Server (with integrated GUI) started with PID: {server_process.pid}")
         
         if appmap_available:
             print("[INFO] AppMap recording active - execution traces will be generated")
@@ -854,39 +851,10 @@ def main():
         if not backup_server_ready:
             print("[ERROR] Backup server failed to start within 30 seconds")
             print("The API server may fail to connect to the backup server.")
+            print("Check the server console window for error messages.")
         else:
-            print("[OK] Backup server is ready!")
-
-        # Launch standalone Server GUI based on environment variable configuration
-        # Respect the GUI control settings calculated above
-        should_launch_standalone = (disable_embedded == "1" or force_standalone == "1")
-        
-        if should_launch_standalone:
-            print("[INFO] Launching standalone Server GUI (required by environment configuration)")
-            server_gui_path = Path("python_server/server_gui/ServerGUI.py")
-            if server_gui_path.exists():
-                try:
-                    gui_env = os.environ.copy()
-                    gui_env["CYBERBACKUP_SERVERGUI_MODE"] = "standalone"
-                    gui_proc = subprocess.Popen(
-                        [sys.executable, "-m", "python_server.server_gui.ServerGUI"],
-                        creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0,
-                        env=gui_env
-                    )
-                    print(f"[OK] Standalone Server GUI launched (PID: {gui_proc.pid})")
-                    # Quick health check after short delay
-                    with contextlib.suppress(Exception):
-                        import psutil as _ps
-                        time.sleep(3)
-                        if not _ps.pid_exists(gui_proc.pid):
-                            print("[WARNING] Standalone Server GUI process exited early. Falling back guidance:")
-                            print("          Run manually: python -m python_server.server_gui.ServerGUI")
-                except Exception as e:
-                    print(f"[WARNING] Failed to launch standalone Server GUI: {e}")
-            else:
-                print(f"[WARNING] Standalone Server GUI not found: {server_gui_path}")
-        else:
-            print_gui_configuration_help()
+            print("[OK] Backup server with integrated GUI is ready!")
+            print("[INFO] Server GUI should be visible in a separate window")
     else:
         print(f"[WARNING] Server file not found: {server_path}")
         # Try alternative server locations
@@ -1042,48 +1010,56 @@ def main():
     api_server_running = check_api_server_status()
     
     try:
-        print(f"   [SERVER] Backup Server:  {f'[OK] Running on port {server_port}' if backup_server_running else f'[ERROR] Not responding on port {server_port}'}")
-        print(f"   [API] API Server:     {f'[OK] Running on port {api_port}' if api_server_running else f'[ERROR] Not responding on port {api_port}'}")
-        print(f"   [GUI] Web GUI:        {f'[OK] {gui_url}' if api_server_running else '[ERROR] Not available (API server down)'}")
-        print(f"   [GUI] Server GUI:     {'[OK] Started automatically' if backup_server_running else '[ERROR] Check server console'}")
+        print(f"   [SERVER] Backup Server + GUI:  {f'[OK] Running on port {server_port}' if backup_server_running else f'[ERROR] Not responding on port {server_port}'}")
+        print(f"   [API] API Bridge Server:    {f'[OK] Running on port {api_port}' if api_server_running else f'[ERROR] Not responding on port {api_port}'}")
+        print(f"   [GUI] Web Interface:        {f'[OK] {gui_url}' if api_server_running else '[ERROR] Not available (API server down)'}")
+        print(f"   [GUI] Server GUI:           {'[OK] Integrated with server' if backup_server_running else '[ERROR] Check server console window'}")
     except UnicodeEncodeError:
-        print(f"   [SERVER] Backup Server:  {f'Running on port {server_port}' if backup_server_running else f'Not responding on port {server_port}'}")
-        print(f"   [API] API Server:     {f'Running on port {api_port}' if api_server_running else f'Not responding on port {api_port}'}")
-        print(f"   [GUI] Web GUI:        {gui_url if api_server_running else 'Not available (API server down)'}")
-        print(f"   [GUI] Server GUI:     {'Started automatically' if backup_server_running else 'Check server console'}")
+        print(f"   [SERVER] Backup Server + GUI:  {f'Running on port {server_port}' if backup_server_running else f'Not responding on port {server_port}'}")
+        print(f"   [API] API Bridge Server:    {f'Running on port {api_port}' if api_server_running else f'Not responding on port {api_port}'}")
+        print(f"   [GUI] Web Interface:        {gui_url if api_server_running else 'Not available (API server down)'}")
+        print(f"   [GUI] Server GUI:           {'Integrated with server' if backup_server_running else 'Check server console window'}")
     print()
-    if server_started_successfully and api_server_running:
-        print("Next steps:")
+    
+    if server_started_successfully and api_server_running and backup_server_running:
+        print("✨ SUCCESS! All components are running properly:")
         print("   1. The web interface should have opened automatically")
-        print("   2. You can upload files through the web GUI")
-        print("   3. Monitor transfers in the server GUI window")
-        print("   4. Check logs in the console windows for debugging")
+        print("   2. The server GUI should be visible in a separate window") 
+        print("   3. You can upload files through either interface")
+        print("   4. All components are properly coupled and communicating")
         if check_appmap_available():
-            print("   5. AppMap traces will be generated in appmap.json when server stops")
+            print("   5. AppMap traces will be generated when services stop")
+    elif server_started_successfully and api_server_running:
+        print("⚠️  Web interface is working, but server may have issues:")
+        print("   1. The web interface should work for basic operations")
+        print("   2. Check the server console window for error messages")
+        print("   3. File uploads may not work properly")
+        print("   4. Restart the script if server issues persist")
     else:
-        print("Troubleshooting - If web GUI is not working:")
+        print("❌ System has issues - troubleshooting needed:")
         print("   1. Check console windows for error messages")
-        print("   2. Verify Flask is installed: pip install flask flask-cors")
-        print("   3. Try manual startup: python api_server/cyberbackup_api_server.py")
-        print("   4. Check if port 9090 is blocked by firewall/antivirus")
+        print("   2. Verify all dependencies: pip install -r requirements.txt")  
+        print("   3. Try manual startup: python python_server/server/server.py")
+        print("   4. Check if ports 9090/1256 are blocked by firewall")
         print("   5. Restart the script after fixing issues")
     print()
-    print("General commands:")
-    print("   Tests: python scripts\\testing\\master_test_suite.py")
-    print("   Quick test: python scripts\\testing\\quick_validation.py")
-    print("   Stop services: Close the console windows or press Ctrl+C")
-    print("   Logs: Check logs/ directory for detailed error information")
-    print("   Manual cleanup: python -c \"import psutil; [p.terminate() for p in psutil.process_iter() if 'cyberbackup' in ' '.join(p.cmdline()).lower()]\"")
+    
+    print("💡 Available commands:")
+    print("   • Run tests: python scripts\\testing\\master_test_suite.py")
+    print("   • Quick validation: python scripts\\testing\\quick_validation.py")
+    print("   • Stop all services: Close console windows or press Ctrl+C")
+    print("   • View logs: Check logs/ directory for detailed information")
     if check_appmap_available():
-        print("   View AppMap data: Use AppMap tools after stopping the server")
+        print("   • View AppMap data: Use AppMap tools after stopping services")
     print()
-    if server_started_successfully and api_server_running:
+    
+    if server_started_successfully and api_server_running and backup_server_running:
         if emoji_support:
-            safe_print("Have a great backup session! 🚀", "Have a great backup session!")
+            safe_print("🎉 Ready for secure backup operations! �", "Ready for secure backup operations!")
         else:
-            safe_print("Have a great backup session!")
+            safe_print("Ready for secure backup operations!")
     elif emoji_support:
-        safe_print("Please check the troubleshooting steps above 🔧", "Please check the troubleshooting steps above")
+        safe_print("🔧 Please check the troubleshooting steps above", "Please check the troubleshooting steps above")
     else:
         safe_print("Please check the troubleshooting steps above")
     print("=" * 72)

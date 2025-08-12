@@ -87,13 +87,70 @@ perf_monitor = get_performance_monitor()
 # Connection health monitoring
 conn_health = get_connection_health_monitor()
 
+# Connection management
+MAX_CONNECTIONS = 3  # Reduced - limit total WebSocket connections  
+MAX_CONNECTIONS_PER_IP = 2  # Only 2 connections per IP - one for page, one for WebSocket
+connected_clients = set()  # Track connected client IDs
+connection_locks = {}  # Per-IP connection limits
+ip_connection_counts = {}  # Track connections per IP
+active_sessions = {}  # Track active sessions per IP to prevent multiple browser instances
+
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for local development
 
-# Initialize SocketIO with origin-locked CORS for security
+# Force connection close on all HTTP responses to prevent keepalive
+@app.after_request
+def force_connection_close(response):
+    """Force HTTP connections to close after each request"""
+    response.headers['Connection'] = 'close'
+    response.headers['Keep-Alive'] = 'timeout=1, max=1'
+    return response
+
+# Add per-IP connection limiting middleware
+@app.before_request
+def limit_connections_per_ip():
+    """Limit the number of concurrent connections per IP address"""
+    client_ip = request.remote_addr or '127.0.0.1'
+    
+    # Track connection count per IP (simplified tracking)
+    current_count = ip_connection_counts.get(client_ip, 0)
+    
+    # Allow static file requests and essential endpoints with more lenient limits
+    if request.endpoint in ['serve_client', 'serve_client_assets']:
+        max_allowed = MAX_CONNECTIONS_PER_IP + 2  # Allow a few more for assets
+    else:
+        max_allowed = MAX_CONNECTIONS_PER_IP
+    
+    if current_count >= max_allowed:
+        logger.warning(f"Connection limit exceeded for IP {client_ip}: {current_count}/{max_allowed}")
+        return jsonify({'error': 'Too many concurrent connections'}), 429
+        
+    # Increment counter
+    ip_connection_counts[client_ip] = current_count + 1
+
+@app.after_request  
+def decrement_ip_connections(response):
+    """Decrement connection count after request completes"""
+    client_ip = request.remote_addr or '127.0.0.1'
+    current_count = ip_connection_counts.get(client_ip, 0)
+    if current_count > 0:
+        ip_connection_counts[client_ip] = current_count - 1
+    return response
+
+# Initialize SocketIO with aggressive connection management
 api_port = get_config('api.port', 9090)
-socketio = SocketIO(app, cors_allowed_origins=[f"http://localhost:{api_port}", f"http://127.0.0.1:{api_port}"])
+socketio = SocketIO(
+    app, 
+    cors_allowed_origins=[f"http://localhost:{api_port}", f"http://127.0.0.1:{api_port}"],
+    ping_interval=10,  # More frequent pings to detect disconnections faster
+    ping_timeout=20,   # Shorter timeout to close dead connections quickly
+    async_mode='threading',  # Use threading for better performance
+    logger=False,      # Disable SocketIO debug logging to reduce overhead
+    engineio_logger=False,  # Disable Engine.IO debug logging
+    always_connect=False,   # Don't keep connections alive unnecessarily
+    max_http_buffer_size=1024*1024  # 1MB limit for HTTP buffer
+)
 
 # Setup enhanced observability middleware and structured logging (after app creation)
 observability_middleware = setup_observability_for_flask(app, "api-server")
@@ -164,15 +221,22 @@ last_known_status = get_default_server_status()
 # Other globals
 connection_established = False
 connection_timestamp = None
-connected_clients = set()
 websocket_enabled = True
 
-# Server configuration
-server_config = {
-    'host': get_config('server.host', '127.0.0.1'),
-    'port': get_config('server.port', 1256),
-    'username': get_config('client.default_username', 'default_user')
-}
+# Server configuration with fallback error handling
+try:
+    server_config = {
+        'host': get_config('server.host', '127.0.0.1'),
+        'port': get_config('server.port', 1256),
+        'username': get_config('client.default_username', 'default_user')
+    }
+except Exception as e:
+    logger.warning(f"get_config failed, using fallback values: {e}")
+    server_config = {
+        'host': '127.0.0.1',
+        'port': 1256,
+        'username': 'default_user'
+    }
 
 def broadcast_file_receipt(event_type: str, data: dict):
     """Broadcast file receipt events to all connected clients"""
@@ -217,7 +281,12 @@ def check_backup_server_status(host: Optional[str] = None, port: Optional[int] =
 
 @socketio.on('connect')
 def handle_connect():
-    """Handle WebSocket client connection"""
+    """Handle WebSocket client connection with limits"""
+    # Check connection limit
+    if len(connected_clients) >= MAX_CONNECTIONS:
+        print(f"[WEBSOCKET] Connection rejected - limit reached ({MAX_CONNECTIONS})")
+        return False  # Reject connection
+    
     # Generate a unique client ID and store it in the session
     import uuid as uuid_lib
     client_id = str(uuid_lib.uuid4())
@@ -260,6 +329,48 @@ def handle_status_request(data):
 def handle_ping():
     """Handle WebSocket ping for connection testing"""
     emit('pong', {'timestamp': time.time()})
+
+# Connection cleanup background task
+def cleanup_stale_connections():
+    """Clean up stale connections periodically"""
+    while True:
+        try:
+            # Sleep first to avoid immediate execution
+            time.sleep(15)  # Run every 15 seconds for more aggressive cleanup
+            
+            # Clean up stale clients based on connection count vs active clients
+            initial_count = len(connected_clients)
+            
+            # Force disconnect any clients that exceed our limit
+            if len(connected_clients) > MAX_CONNECTIONS:
+                excess_clients = list(connected_clients)[MAX_CONNECTIONS:]
+                for client_id in excess_clients:
+                    connected_clients.discard(client_id)
+                    print(f"[WEBSOCKET] Removed excess client: {client_id}")
+                    
+            # Also clear out any old clients every few cycles
+            if len(connected_clients) > MAX_CONNECTIONS // 2:  # If more than half our limit
+                # Remove oldest 25% of clients to keep connections fresh
+                clients_to_remove = list(connected_clients)[:len(connected_clients)//4]
+                for client_id in clients_to_remove:
+                    connected_clients.discard(client_id)
+                    print(f"[WEBSOCKET] Removed aging client: {client_id}")
+                    
+            # Clean up IP connection counters (reset periodically to prevent memory leaks)
+            if len(ip_connection_counts) > 50:  # If too many IPs tracked
+                ip_connection_counts.clear()
+                print(f"[HTTP] Cleared IP connection counters")
+                    
+            if len(connected_clients) != initial_count or len(ip_connection_counts) > 10:
+                print(f"[WEBSOCKET] Cleanup complete. Active clients: {len(connected_clients)}, IP counters: {len(ip_connection_counts)}")
+                
+        except Exception as e:
+            print(f"[WEBSOCKET] Cleanup error: {e}")
+
+# Start cleanup thread
+import threading
+cleanup_thread = threading.Thread(target=cleanup_stale_connections, daemon=True)
+cleanup_thread.start()
 
 # Static file serving
 @app.route('/')
@@ -333,6 +444,8 @@ def api_test():
 @app.route('/api/status')
 def api_status():
     """Get current backup status with proper connection state management and timeout protection"""
+    global connection_established
+    
     job_id = request.args.get('job_id')
     status = None
 
@@ -352,7 +465,12 @@ def api_status():
         status['backing_up'] = False # General status is never "backing up"
 
     # Always provide the latest connection status
-    status['connected'] = check_backup_server_status() and connection_established
+    server_reachable = check_backup_server_status()
+    if server_reachable and not connection_established:
+        connection_established = True
+        logger.info("Connection to backup server established via /api/status")
+    
+    status['connected'] = server_reachable and connection_established
     status['isConnected'] = status['connected']
 
     return jsonify(status)
@@ -378,6 +496,7 @@ def health_check():
 
         return jsonify({
             'status': 'healthy' if server_running else 'degraded',
+            'backup_server_status': 'running' if server_running else 'not_running',
             'backup_server': 'running' if server_running else 'not_running',
             'api_server': 'running',
             'system_metrics': {
@@ -397,6 +516,12 @@ def health_check():
             'error': str(e),
             'timestamp': datetime.now().isoformat()
         }), 500
+
+# Add /api/health as an alias to the same function
+@app.route('/api/health')
+def api_health_check():
+    """Alias for health check endpoint that browser expects"""
+    return health_check()
 
 @app.route('/api/connect', methods=['POST'])
 def api_connect():
