@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 def test_client_build():
-    \"\"\"Test that the client builds successfully with our endianness fixes\"\"\"
+    """Test that the client builds successfully with our endianness fixes"""
     print("Testing client build with endianness fixes...")
     
     # Change to project directory
