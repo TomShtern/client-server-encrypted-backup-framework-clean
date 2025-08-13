@@ -5,13 +5,9 @@ Test System Working - ASCII-only validation script
 """
 
 import socket
-import subprocess
-import sys
-import os
-import json
 from pathlib import Path
 
-def test_port(port, name):
+def test_port(port: int, name: str):
     """Test if a port is responding - ASCII only output"""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:

@@ -6,9 +6,9 @@ This will create a real RSA key that PyCryptodome can import successfully
 
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
-import binascii
+from typing import List, Tuple, Optional
 
-def generate_rsa_key_pair():
+def generate_rsa_key_pair() -> Tuple[Optional[bytes], Optional[bytes]]:
     """Generate a valid 1024-bit RSA key pair"""
     print("Generating 1024-bit RSA key pair...")
     
@@ -46,12 +46,12 @@ def generate_rsa_key_pair():
     
     return public_der, private_der
 
-def format_as_cpp_array(data, name):
+def format_as_cpp_array(data: bytes, name: str) -> str:
     """Format binary data as C++ array initialization"""
     hex_values = [f"0x{b:02x}" for b in data]
     
     # Format as C++ array with proper line breaks
-    lines = []
+    lines: List[str] = []
     line = "        std::vector<uint8_t> " + name + " = {"
     
     for i, hex_val in enumerate(hex_values):
@@ -65,19 +65,19 @@ def format_as_cpp_array(data, name):
                 line += " "
             line += hex_val
     
-    line += "\n        };"
+    line += "\n        ";
     lines.append(line)
     
     return "\n".join(lines)
 
-def main():
+def main() -> None:
     print("RSA Key Generation for Client-Server Encrypted Backup Framework")
     print("=" * 70)
     
     # Generate valid RSA key pair
     public_der, private_der = generate_rsa_key_pair()
     
-    if public_der is None:
+    if public_der is None or private_der is None:
         print("[FAIL] Failed to generate valid RSA key pair")
         return
     

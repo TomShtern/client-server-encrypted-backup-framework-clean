@@ -11,7 +11,7 @@ import os
 # Add project root to path
 sys.path.insert(0, os.path.abspath('.'))
 
-def test_port_connection(port, timeout=2):
+def test_port_connection(port: int, timeout: int = 2):
     """Test if port is responding with multiple attempts"""
     print(f"Testing port {port}...")
     for attempt in range(3):

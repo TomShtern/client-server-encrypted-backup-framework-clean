@@ -34,13 +34,12 @@ from .network_server import NetworkServer
 # GUI Integration
 from .gui_integration import GUIManager
 
+# Import protocol constants and configuration (refactored for modularity)
+from .protocol import *  # Protocol constants and utilities
+from .config import *    # Configuration constants
 
-# --- Server Configuration Constants ---
-SERVER_VERSION = 3
-DEFAULT_PORT = 1256
-PORT_CONFIG_FILE = "port.info"
-DATABASE_NAME = "defensive.db"
-FILE_STORAGE_DIR = "received_files" # Directory to store received files
+# Configuration constants now imported from config.py module
+# Remaining server-specific constants:
 
 # Behavior Configuration
 CLIENT_SOCKET_TIMEOUT = 60.0  # Timeout for individual socket operations with a client
@@ -90,25 +89,7 @@ server_log_handler.setFormatter(logging.Formatter(LOG_FORMAT))
 server_log_handler.setLevel(logging.DEBUG)
 logger.addHandler(server_log_handler)
 
-# --- Protocol Codes ---
-# Request codes from client
-REQ_REGISTER = 1025
-REQ_SEND_PUBLIC_KEY = 1026
-REQ_RECONNECT = 1027
-REQ_SEND_FILE = 1028
-REQ_CRC_OK = 1029
-REQ_CRC_INVALID_RETRY = 1030
-REQ_CRC_FAILED_ABORT = 1031
-
-# Response codes to client
-RESP_REG_OK = 1600
-RESP_REG_FAIL = 1601
-RESP_PUBKEY_AES_SENT = 1602
-RESP_FILE_CRC = 1603
-RESP_ACK = 1604
-RESP_RECONNECT_AES_SENT = 1605
-RESP_RECONNECT_FAIL = 1606
-RESP_GENERIC_SERVER_ERROR = 1607
+# Protocol constants now imported from protocol.py module
 
 
 # --- Client Representation ---
@@ -337,11 +318,11 @@ class BackupServer:
         with self.clients_lock:
             return self.clients.get(client_id)
 
-    def _send_response(self, sock: socket.socket, code: int, payload: bytes = b''):
+    def send_response(self, sock: socket.socket, code: int, payload: bytes = b''):
         """Delegates sending a response to the network server."""
-        self.network_server._send_response(sock, code, payload)
+        self.network_server.send_response(sock, code, payload)
 
-    def _update_gui_client_count(self):
+    def _update_gui_client_count(self) -> None:
         """Delegates updating the client count on the GUI."""
         with self.clients_lock:
             connected_clients = len(self.clients)
@@ -362,7 +343,7 @@ class BackupServer:
         """Delegates logging a success message to the GUI."""
         self.gui_manager.queue_update("log", message)
 
-    def _update_gui_transfer_stats(self, bytes_transferred: int = 0, last_activity: str = ""):
+    def _update_gui_transfer_stats(self, bytes_transferred: int = 0, last_activity: str = "") -> None:
         """Delegates updating transfer statistics to the GUI."""
         self.gui_manager.update_transfer_stats(bytes_transferred, last_activity)
 

@@ -10,7 +10,7 @@ import sys
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any, List
 from .observability import create_structured_logger, get_metrics_collector, get_system_monitor
 
 
@@ -106,7 +106,7 @@ def setup_dual_logging(
     return logger, log_file_path
 
 
-def create_log_monitor_info(log_file_path: str, server_type: str) -> dict:
+def create_log_monitor_info(log_file_path: str, server_type: str) -> Dict[str, Any]:
     """
     Create monitoring information for a log file.
     
@@ -130,7 +130,7 @@ def create_log_monitor_info(log_file_path: str, server_type: str) -> dict:
     }
 
 
-def get_all_log_files() -> list:
+def get_all_log_files() -> List[Dict[str, Any]]:
     """Get information about all current log files"""
     logs_dir = Path("logs")
     if not logs_dir.exists():
@@ -162,13 +162,13 @@ def get_all_log_files() -> list:
     return log_files
 
 
-def create_enhanced_logger(component: str, base_logger: logging.Logger):
+def create_enhanced_logger(component: str, base_logger: logging.Logger) -> Any:
     """Create an enhanced structured logger with observability features"""
     return create_structured_logger(component, base_logger)
 
 
 def log_performance_metrics(logger: logging.Logger, operation: str, duration_ms: float,
-                          success: bool = True, **context):
+                          success: bool = True, **context: Any) -> None:
     """Log performance metrics in a structured way"""
     metrics = get_metrics_collector()
 

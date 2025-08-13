@@ -5,10 +5,10 @@ Targeted Import Test - Test specific files that might have issues
 
 import sys
 import importlib.util
-import traceback
 import os
+from typing import List, Tuple
 
-def test_single_import(filepath, module_name):
+def test_single_import(filepath: str, module_name: str) -> bool:
     """Test importing a single file and return result."""
     print(f"Testing: {filepath}")
     
@@ -19,7 +19,7 @@ def test_single_import(filepath, module_name):
     try:
         # Use importlib to load the module
         spec = importlib.util.spec_from_file_location(module_name, filepath)
-        if spec is None:
+        if spec is None or spec.loader is None:
             print(f"  ERROR: Could not create spec for {module_name}")
             return False
             
@@ -49,12 +49,12 @@ def test_single_import(filepath, module_name):
         print(f"  ERROR: {type(e).__name__}: {e}")
         return False
 
-def main():
+def main() -> None:
     print("Targeted Python Import Test")
     print("=" * 40)
     
     # Test specific files that might have issues
-    test_cases = [
+    test_cases: List[Tuple[str, str]] = [
         # Files from the interrupted scan that showed errors
         ('scripts/one_click_build_and_run_debug.py', 'one_click_build_and_run_debug'),
         ('scripts/test_emoji_support.py', 'test_emoji_support'), 
@@ -76,8 +76,7 @@ def main():
         ('launch_server_gui.py', 'launch_server_gui'),
     ]
     
-    failed_files = []
-    missing_dependencies = set()
+    failed_files: List[str] = []
     
     print(f"\nTesting {len(test_cases)} potentially problematic files...\n")
     

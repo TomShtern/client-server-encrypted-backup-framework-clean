@@ -18,6 +18,7 @@ import time
 import socket
 from pathlib import Path
 
+
 def fix_unicode_environment():
     """Fix Unicode encoding issues that prevent server startup"""
     if os.name == 'nt':
@@ -31,8 +32,8 @@ def fix_unicode_environment():
             
             # Reconfigure stdout/stderr if possible
             if hasattr(sys.stdout, 'reconfigure'):
-                sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-                sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+                sys.stdout.reconfigure(encoding='utf-8', errors='replace')  # type: ignore
+                sys.stderr.reconfigure(encoding='utf-8', errors='replace')  # type: ignore
                 
             print("✅ Unicode environment configured")
             return True
@@ -80,21 +81,21 @@ def test_imports():
     print("\n=== Testing Critical Imports ===")
     
     try:
-        from Shared.utils.unified_config import get_config
+        
         print("✅ Shared.utils.unified_config: OK")
     except Exception as e:
         print(f"❌ Shared.utils.unified_config: {e}")
         return False
         
     try:
-        from python_server.server.gui_integration import GUIManager
+        
         print("✅ python_server.server.gui_integration: OK")
     except Exception as e:
         print(f"❌ python_server.server.gui_integration: {e}")
         return False
         
     try:
-        from api_server.cyberbackup_api_server import app
+        
         print("✅ api_server.cyberbackup_api_server: OK")
     except Exception as e:
         print(f"❌ api_server.cyberbackup_api_server: {e}")
@@ -102,7 +103,7 @@ def test_imports():
     
     return True
 
-def check_port(port):
+def check_port(port: int):
     """Check if port is available"""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:

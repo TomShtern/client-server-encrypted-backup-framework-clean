@@ -3,22 +3,20 @@
 Quick targeted error finder - focuses on specific runtime issues
 """
 
-import sys
 import os
 import importlib.util
+from typing import List
 
 # Setup standardized import paths
 from Shared.path_utils import setup_imports
 setup_imports()
 
-def test_server_gui_import():
+def test_server_gui_import() -> bool:
     """Test ServerGUI imports"""
     print("Testing ServerGUI imports...")
     try:
-        from ServerGUI import (
-            ServerGUI, ModernCard, ModernProgressBar, ModernStatusIndicator,
-            ModernTheme, ToastNotification, ModernTable, SettingsDialog,
-            ModernChart, initialize_server_gui, get_server_gui, shutdown_server_gui
+        from python_server.server_gui.ServerGUI import (
+            ServerGUI
         )
         print("✓ All ServerGUI imports successful")
         return True
@@ -28,7 +26,7 @@ def test_server_gui_import():
         traceback.print_exc()
         return False
 
-def test_other_files():
+def test_other_files() -> List[str]:
     """Test other Python files for import issues"""
     files_to_test = [
         'config_manager.py',
@@ -36,16 +34,20 @@ def test_other_files():
         'quick_validation.py'
     ]
     
-    results = []
+    results: List[str] = []
     for file in files_to_test:
         if os.path.exists(file):
             print(f"Testing {file}...")
             try:
                 spec = importlib.util.spec_from_file_location("test_module", file)
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-                print(f"✓ {file} imports successfully")
-                results.append(f"✓ {file}")
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    print(f"✓ {file} imports successfully")
+                    results.append(f"✓ {file}")
+                else:
+                    print(f"? Could not create module spec for {file}")
+                    results.append(f"? {file} spec creation failed")
             except Exception as e:
                 print(f"✗ {file} error: {e}")
                 results.append(f"✗ {file}: {e}")
@@ -55,11 +57,11 @@ def test_other_files():
     
     return results
 
-def test_minimal_functionality():
+def test_minimal_functionality() -> bool:
     """Test minimal ServerGUI functionality"""
     print("\nTesting minimal ServerGUI functionality...")
     try:
-        from ServerGUI import ServerGUI
+        from python_server.server_gui.ServerGUI import ServerGUI
         
         # Create instance
         gui = ServerGUI()
@@ -86,19 +88,22 @@ def test_minimal_functionality():
         
         return True
         
+    except ImportError:
+        print("✗ Could not import ServerGUI. Skipping functionality tests.")
+        return False
     except Exception as e:
         print(f"✗ Functionality test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
-def check_syntax_errors():
+def check_syntax_errors() -> List[str]:
     """Check for syntax errors in Python files"""
     print("\nChecking Python files for syntax errors...")
     import py_compile
     
     python_files = [
-        'server/ServerGUI.py',
+        'python_server/server_gui/ServerGUI.py',
         'config_manager.py',
         'comprehensive_test_suite.py',
         'comprehensive_test_gui.py',
@@ -108,7 +113,7 @@ def check_syntax_errors():
         'test_server_gui.py'
     ]
     
-    results = []
+    results: List[str] = []
     for file in python_files:
         if os.path.exists(file):
             try:
@@ -124,7 +129,7 @@ def check_syntax_errors():
     
     return results
 
-def main():
+def main() -> None: 
     print("🎯 TARGETED ERROR DETECTION")
     print("=" * 50)
     

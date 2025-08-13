@@ -3,14 +3,14 @@
 
 import sys
 import os
-from pathlib import Path
+
 
 # Setup standardized import paths
 from Shared.path_utils import setup_imports
 setup_imports()
 
 try:
-    from .one_click_build_and_run import setup_unicode_console, supports_emojis, safe_print
+    from .one_click_build_and_run import setup_unicode_console, supports_emojis, safe_print  # type: ignore
     print("[OK] Successfully imported emoji support functions")
 except Exception as e:
     print(f"[ERROR] Failed to import: {e}")
@@ -34,7 +34,7 @@ def test_emoji_functions():
     # Test 2: Emoji detection
     print("\n[TEST 2] Testing supports_emojis()...")
     try:
-        emoji_support = supports_emojis()
+        emoji_support: bool = supports_emojis()  # type: ignore
         print(f"[OK] Emoji support detected: {emoji_support}")
         
         # Show what encoding is being used
@@ -101,7 +101,7 @@ def test_integration_simulation():
         print("\n[SIMULATION] Simulating main script startup flow...")
         
         setup_unicode_console()
-        emoji_support = supports_emojis()
+        emoji_support: bool = supports_emojis()  # type: ignore
         
         print(f"\nEmoji support available: {emoji_support}")
         

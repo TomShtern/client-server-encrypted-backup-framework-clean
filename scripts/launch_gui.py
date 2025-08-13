@@ -8,11 +8,12 @@ import os
 import sys
 import time
 import subprocess
-import threading
+
 import webbrowser
 from pathlib import Path
+from typing import Any
 
-def check_port_available(port):
+def check_port_available(port: int):
     """Check if a port is available"""
     import socket
     try:
@@ -22,7 +23,7 @@ def check_port_available(port):
     except OSError:
         return False
 
-def wait_for_server(port, timeout=30):
+def wait_for_server(port: int, timeout: int = 30):
     """Wait for server to be ready"""
     import socket
     start_time = time.time()
@@ -70,13 +71,13 @@ def open_gui():
         print(f"[ERROR] Failed to open GUI: {e}")
         return False
 
-def get_log_monitoring_info():
+def get_log_monitoring_info() -> list[dict[str, Any]] | None:
     """Get information about available log files for monitoring"""
     logs_dir = Path("logs")
     if not logs_dir.exists():
         return None
     
-    log_files = []
+    log_files: list[dict[str, Any]] = []
     for log_file in logs_dir.glob("*.log"):
         if log_file.name.startswith("latest-"):
             continue
@@ -141,7 +142,7 @@ def main():
             for lf in log_files[:2]:  # Show latest 2 files
                 print(f"  - {lf['server_type']}: {lf['path']}")
             print("  - Live Monitor: python scripts/monitor_logs.py --follow")
-            print("  - PowerShell: Get-Content logs\\*.log -Wait -Tail 50")
+            print(r"  - PowerShell: Get-Content logs\*.log -Wait -Tail 50")
             print()
         
         print("Note: Keep this window open while using the GUI")

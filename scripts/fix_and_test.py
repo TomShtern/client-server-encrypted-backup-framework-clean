@@ -27,7 +27,7 @@ project_root = Path(__file__).parent.parent
 os.chdir(project_root)
 print(f"Working directory: {project_root}")
 
-def check_port(port):
+def check_port(port: int) -> bool:
     """Check if a port is listening"""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -161,7 +161,7 @@ def check_configuration():
     except Exception as e:
         print(f"❌ Configuration test: FAILED - {e}")
 
-def run_launcher_test():
+def run_launcher_test() -> subprocess.Popen | None:
     """Test the canonical launcher with proper environment"""
     print("\n=== TESTING CANONICAL LAUNCHER ===")
     print("Running one-click launcher with proper environment setup...")

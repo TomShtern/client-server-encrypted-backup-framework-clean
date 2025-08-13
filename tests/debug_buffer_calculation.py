@@ -3,7 +3,7 @@
 Debug script to test our buffer calculation logic
 """
 
-def calculate_enhanced_buffer_size(file_size):
+def calculate_enhanced_buffer_size(file_size: int) -> int:
     """Python version of our C++ buffer calculation"""
     
     if file_size <= 512:                        # ≤512B files: 512B buffer
@@ -29,11 +29,11 @@ def calculate_enhanced_buffer_size(file_size):
     
     return raw_buffer_size
 
-def should_use_streaming_mode(file_size):
+def should_use_streaming_mode(file_size: int) -> bool:
     """Check if file should use streaming mode"""
     return file_size > 10 * 1024 * 1024  # 10MB threshold
 
-def test_42kb_file():
+def test_42kb_file() -> bool:
     """Test the specific case that's failing"""
     file_size = 42091  # The exact size from the log
     
@@ -64,7 +64,7 @@ def test_42kb_file():
     print("✅ Buffer calculation looks correct")
     return True
 
-def compare_old_vs_new():
+def compare_old_vs_new() -> bool:
     """Compare old vs new buffer calculation for 42KB"""
     file_size = 42091
     

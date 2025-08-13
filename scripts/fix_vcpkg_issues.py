@@ -16,7 +16,7 @@ import shutil
 from pathlib import Path
 
 
-def run_command(command, cwd=None, timeout=300):
+def run_command(command: str | list[str], cwd: str | None = None, timeout: int = 300):
     """Run a command and return success status"""
     print(f"Running: {command}")
     try:
@@ -73,12 +73,12 @@ def update_vcpkg():
         return False
     
     # Update vcpkg
-    if not run_command("git pull", cwd=vcpkg_dir):
+    if not run_command("git pull", cwd=str(vcpkg_dir)):
         print("⚠️  Failed to update vcpkg via git pull")
     
     # Bootstrap vcpkg
     bootstrap_cmd = "bootstrap-vcpkg.bat" if os.name == 'nt' else "./bootstrap-vcpkg.sh"
-    if not run_command(bootstrap_cmd, cwd=vcpkg_dir):
+    if not run_command(bootstrap_cmd, cwd=str(vcpkg_dir)):
         print("❌ Failed to bootstrap vcpkg")
         return False
     

@@ -4,7 +4,7 @@ Debug script to test the process registry system directly
 """
 import requests
 import json
-import time
+
 
 def test_process_registry():
     print("=== DEBUGGING PROCESS REGISTRY SYSTEM ===")

@@ -3,12 +3,12 @@
 Quick script to fix emoji characters in benchmark files for Windows console compatibility
 """
 
-import re
+from typing import Dict
 
-def fix_emojis_in_file(filename):
+def fix_emojis_in_file(filename: str) -> bool:
     """Replace emoji characters with ASCII equivalents"""
     
-    emoji_replacements = {
+    emoji_replacements: Dict[str, str] = {
         '🔨': '[BUILD]',
         '🚀': '[START]',
         '🛑': '[STOP]',

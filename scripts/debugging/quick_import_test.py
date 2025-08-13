@@ -5,10 +5,10 @@ Quick Python Import Error Scanner - Fast version without executing modules
 
 import os
 import ast
-import sys
-from pathlib import Path
+from typing import Any, Dict, List, Set
 
-def check_imports_in_file(filepath):
+
+def check_imports_in_file(filepath: str) -> Dict[str, Any]:
     """
     Parse a Python file and check for import statements without executing it.
     
@@ -24,7 +24,7 @@ def check_imports_in_file(filepath):
         
         # Parse AST to find import statements
         tree = ast.parse(content, filename=filepath)
-        imports = []
+        imports: List[Dict[str, Any]] = []
         
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -65,7 +65,7 @@ def check_imports_in_file(filepath):
             'error_type': type(e).__name__
         }
 
-def check_module_availability(module_name):
+def check_module_availability(module_name: str) -> bool:
     """Check if a module can be imported."""
     try:
         __import__(module_name)
@@ -75,7 +75,7 @@ def check_module_availability(module_name):
     except Exception:
         return False
 
-def main():
+def main() -> None:
     print("Quick Python Import Error Scanner")
     print("=" * 50)
     
@@ -95,9 +95,9 @@ def main():
     ]
     
     # Track problematic imports
-    missing_modules = set()
-    syntax_errors = []
-    problematic_files = []
+    missing_modules: Set[str] = set()
+    syntax_errors: List[Any] = []
+    problematic_files: List[str] = []
     
     print(f"\nScanning {len(core_files)} core files for import issues...\n")
     
@@ -117,22 +117,23 @@ def main():
         print(f"PARSING: {filepath}")
         
         # Check each import
-        file_missing_imports = []
-        for imp in result['imports']:
-            if imp['type'] == 'import':
-                module = imp['module']
-            else:
-                module = imp['module']
-            
-            # Skip relative imports and standard library
-            if module.startswith('.') or not module:
-                continue
+        file_missing_imports: List[str] = []
+        if result['imports']:
+            for imp in result['imports']:
+                if imp['type'] == 'import':
+                    module = imp['module']
+                else:
+                    module = imp['module']
                 
-            # Check common third-party modules
-            if module in ['flask', 'sentry_sdk', 'watchdog', 'tkinter', 'pystray', 'PIL', 'matplotlib']:
-                if not check_module_availability(module):
-                    missing_modules.add(module)
-                    file_missing_imports.append(f"  Line {imp['line']}: {module}")
+                # Skip relative imports and standard library
+                if module.startswith('.') or not module:
+                    continue
+                    
+                # Check common third-party modules
+                if module in ['flask', 'sentry_sdk', 'watchdog', 'tkinter', 'pystray', 'PIL', 'matplotlib']:
+                    if not check_module_availability(module):
+                        missing_modules.add(module)
+                        file_missing_imports.append(f"  Line {imp['line']}: {module}")
         
         if file_missing_imports:
             problematic_files.append(filepath)

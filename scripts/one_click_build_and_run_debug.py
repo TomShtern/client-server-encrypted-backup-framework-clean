@@ -9,17 +9,21 @@ import os
 import sys
 import subprocess
 import time
-import tempfile
+
 from pathlib import Path
+from typing import List
 
 # Import the original functions
 from .one_click_build_and_run import (
     check_api_server_status, check_backup_server_status, 
     check_python_dependencies, cleanup_existing_processes,
-    print_phase
+    print_phase as original_print_phase  # type: ignore
 )
 
-def create_debug_batch_file(command_list, title):
+def print_phase(phase_num: int, total_phases: int, title: str) -> None:
+    original_print_phase(phase_num, total_phases, title)
+
+def create_debug_batch_file(command_list: List[str], title: str):
     """Create a batch file that runs a command and keeps the window open"""
     # Create a temporary batch file
     batch_content = f"""@echo off
@@ -41,6 +45,7 @@ echo.
         batch_content += "\n"
     
     batch_content += """
+
 echo.
 echo ========================================
 if %ERRORLEVEL% EQU 0 (
@@ -54,6 +59,7 @@ pause >nul
 """
     
     # Write to a temporary file
+    import tempfile
     with tempfile.NamedTemporaryFile(mode='w', suffix='.bat', delete=False) as f:
         f.write(batch_content)
         return f.name
@@ -79,10 +85,14 @@ def main():
     
     # Check dependencies
     print_phase(2, 3, "Checking Dependencies")
-    missing_deps = check_python_dependencies()
-    if missing_deps:
-        print(f"[ERROR] Missing dependencies: {', '.join(missing_deps)}")
-        print("Install with: pip install " + " ".join(missing_deps))
+    missing_pip_deps, missing_vcpkg_deps = check_python_dependencies()
+    if missing_pip_deps or missing_vcpkg_deps:
+        if missing_pip_deps:
+            print(f"[ERROR] Missing Python dependencies: {', '.join([dep for dep, _ in missing_pip_deps])}")
+            print("Install with: pip install " + " ".join([dep for dep, _ in missing_pip_deps]))
+        if missing_vcpkg_deps:
+            print(f"[ERROR] Missing VCPKG dependencies: {', '.join([dep for dep, _ in missing_vcpkg_deps])}")
+            print("Install with: vcpkg install " + " ".join([dep for dep, _ in missing_vcpkg_deps]))
         input("Press Enter to continue anyway...")
     
     # Start services with debug console windows
@@ -102,7 +112,7 @@ def main():
     
     # Start backup server
     print("Starting Backup Server in debug window...")
-    backup_process = subprocess.Popen([backup_batch], shell=True)
+    _backup_process = subprocess.Popen([str(backup_batch)], shell=True)
     
     # Wait for backup server to start
     print("Waiting for backup server to initialize...")
@@ -122,7 +132,7 @@ def main():
     
     # Start API server
     print("Starting API Server in debug window...")
-    api_process = subprocess.Popen([api_batch], shell=True)
+    _api_process = subprocess.Popen([str(api_batch)], shell=True)
     
     # Wait for API server to start
     print("Waiting for API server to initialize...")
@@ -167,8 +177,10 @@ def main():
         input("Press Enter to cleanup and exit...")
     finally:
         try:
-            os.unlink(backup_batch)
-            os.unlink(api_batch)
+            if backup_batch:
+                os.unlink(backup_batch)
+            if api_batch:
+                os.unlink(api_batch)
         except:
             pass
 

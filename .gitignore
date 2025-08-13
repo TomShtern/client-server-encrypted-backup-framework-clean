@@ -252,3 +252,7 @@ defensive.db-shm
 .vscode/settings.json
 QWEN.md
 .vscode/settings.json
+pyrightconfig.json
+pyright_output.json
+SYSTEM_REMEDIATION_REPORT.md
+new report14.08.2025.md

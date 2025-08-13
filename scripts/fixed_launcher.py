@@ -24,7 +24,7 @@ import subprocess
 import time
 import socket
 import logging
-import contextlib
+
 from pathlib import Path
 
 # Change to project root
@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 # Ensure logs directory exists
 Path('logs').mkdir(exist_ok=True)
 
-def check_port(host, port, timeout=2):
+def check_port(host: str, port: int, timeout: int = 2):
     """Check if a port is responding"""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -54,7 +54,7 @@ def check_port(host, port, timeout=2):
     except Exception:
         return False
 
-def wait_for_port(host, port, max_wait=30, check_interval=1):
+def wait_for_port(host: str, port: int, max_wait: int = 30, check_interval: int = 1):
     """Wait for a port to become available"""
     logger.info(f"Waiting for {host}:{port} to become available...")
     for attempt in range(max_wait):

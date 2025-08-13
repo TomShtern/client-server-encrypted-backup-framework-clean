@@ -16,7 +16,7 @@ Usage:
 
 import logging
 import os
-from typing import Optional
+from typing import Optional, Any, Dict
 
 # Sentry DSN Configuration
 SENTRY_DSN = "https://094a0bee5d42a7f7e8ec8a78a37c8819@o4509746411470848.ingest.us.sentry.io/4509747877773312"
@@ -94,14 +94,14 @@ def init_sentry(
         return False
 
 
-def _before_send_filter(event, hint):
+def _before_send_filter(event: Any, hint: Any) -> Optional[Any]:
     """
     Filter events before sending to Sentry.
     Can be used to sanitize sensitive data or filter noise.
     """
     # Filter out common non-critical errors
     if 'exc_info' in hint:
-        _exc_type, exc_value, _tb = hint['exc_info']
+        _, exc_value, _ = hint['exc_info']
         
         # Filter out expected network timeouts
         if isinstance(exc_value, (ConnectionResetError, BrokenPipeError)):
@@ -129,14 +129,14 @@ def _get_release_version() -> str:
         )
         if result.returncode == 0:
             return f"cyberbackup@{result.stdout.strip()}"
-    except (Exception):
+    except Exception:
         pass
     
     # Fallback to static version
     return "cyberbackup@3.0.0"
 
 
-def capture_error(error: Exception, component: str, extra_context: Optional[dict] = None):
+def capture_error(error: Exception, component: str, extra_context: Optional[Dict[str, Any]] = None) -> None:
     """
     Capture an error with additional context.
     
@@ -163,7 +163,7 @@ def capture_error(error: Exception, component: str, extra_context: Optional[dict
         logger.error(f"[{component}] Failed to capture error in Sentry: {e}")
 
 
-def capture_message(message: str, level: str = "info", component: str = "unknown", extra_context: Optional[dict] = None):
+def capture_message(message: str, level: str = "info", component: str = "unknown", extra_context: Optional[Dict[str, Any]] = None) -> None:
     """
     Capture a message with additional context.
     
@@ -184,15 +184,8 @@ def capture_message(message: str, level: str = "info", component: str = "unknown
                     scope.set_extra(key, value)
             
             # Map string level to Sentry level
-            from sentry_sdk._types import LogLevelStr
-            level_mapping: dict[str, LogLevelStr] = {
-                "debug": "debug",
-                "info": "info", 
-                "warning": "warning",
-                "error": "error",
-                "fatal": "fatal"
-            }
-            sentry_level = level_mapping.get(level.lower(), "info")
+            # Use string level directly - Sentry accepts string levels
+            sentry_level = level.lower()
             sentry_sdk.capture_message(message, sentry_level)
             
     except ImportError:
@@ -201,7 +194,7 @@ def capture_message(message: str, level: str = "info", component: str = "unknown
         logger.error(f"[{component}] Failed to capture message in Sentry: {e}")
 
 
-def set_user_context(user_id: str, username: Optional[str] = None, ip_address: Optional[str] = None):
+def set_user_context(user_id: str, username: Optional[str] = None, ip_address: Optional[str] = None) -> None:
     """Set user context for Sentry events."""
     try:
         import sentry_sdk
@@ -215,7 +208,7 @@ def set_user_context(user_id: str, username: Optional[str] = None, ip_address: O
 
 
 # Test function for Sentry integration
-def test_sentry_integration(component_name: str):
+def test_sentry_integration(component_name: str) -> bool:
     """Test Sentry integration by sending a test message."""
     try:
         capture_message(

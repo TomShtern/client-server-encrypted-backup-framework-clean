@@ -6,7 +6,7 @@ Test script to verify all fixes are working properly
 import os
 import sys
 import subprocess
-import time
+
 import socket
 from pathlib import Path
 

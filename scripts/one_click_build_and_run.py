@@ -52,7 +52,7 @@ def setup_unicode_console():
             os.system("chcp 65001 >nul 2>&1")            
             logging.info("UTF-8 console setup completed - UTF-8 mode enforced")
 
-def safe_print(message, fallback=None):
+def safe_print(message: str, fallback: str | None = None):
     """Print with automatic fallback for encoding issues"""
     try:
         print(message)
@@ -61,7 +61,7 @@ def safe_print(message, fallback=None):
         fallback_msg = fallback or message.encode('ascii', 'ignore').decode()
         print(fallback_msg)
 
-def print_phase(phase_num, total_phases, title):
+def print_phase(phase_num: int, total_phases: int, title: str):
     """Print phase header with timestamp"""
     import datetime
     timestamp = datetime.datetime.now().strftime("%H:%M:%S")
@@ -84,7 +84,7 @@ def print_build_failure_help():
     print("   - Run: cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake")
     print()
 
-def print_server_not_found_help(server_path, expected_location):
+def print_server_not_found_help(server_path: Path, expected_location: str):
     """Print server file not found error with common guidance"""
     print(f"[ERROR] Server file not found: {server_path}")
     print(f"Expected location: {expected_location}")
@@ -96,7 +96,7 @@ def print_gui_configuration_help():
     print("       - Use CYBERBACKUP_DISABLE_INTEGRATED_GUI=1 to disable embedded GUI")
     print("       - Use CYBERBACKUP_STANDALONE_GUI=1 to force standalone GUI launch")
 
-def print_error_with_newline(error_message):
+def print_error_with_newline(error_message: str):
     """Print error message with preceding newline (extracted duplicate code)"""
     print()
     print(error_message)
@@ -106,13 +106,13 @@ def wait_for_exit():
     with contextlib.suppress(EOFError):
         input("Press Enter to exit...")
 
-def print_success_with_spacing(success_message):
+def print_success_with_spacing(success_message: str):
     """Print success message with spacing (extracted duplicate code)"""
     print()
     print(success_message)
     print()
 
-def print_build_command_info(description, command):
+def print_build_command_info(description: str, command: str):
     """Print build command information (extracted duplicate code)"""
     print(description)
     print(f"Command: {command}")
@@ -160,14 +160,14 @@ def print_backup_server_failure():
     print("4. Check the server console window for error messages")
     print("5. Ensure RSA keys exist in the data/ directory")
 
-def handle_error_and_exit(error_message, wait_for_input=True):
+def handle_error_and_exit(error_message: str, wait_for_input: bool = True):
     """Print error message and exit with status 1"""
     print(error_message)
     if wait_for_input:
         input("Press Enter to exit...")
     sys.exit(1)
 
-def run_command(command, shell=True, check_exit=True, cwd=None, timeout=60):
+def run_command(command: str | List[str], shell: bool = True, check_exit: bool = True, cwd: str | None = None, timeout: int = 60) -> bool:
     """Run a command and handle errors with better timeout and path handling"""
     print(f"Running: {command}")
     print()
@@ -209,7 +209,7 @@ def run_command(command, shell=True, check_exit=True, cwd=None, timeout=60):
             sys.exit(1)
         return False
 
-def check_command_exists(command):
+def check_command_exists(command: str) -> Tuple[bool, str]:
     """Check if a command exists"""
     # Special case for Python - if we're running this script, Python exists
     if command == "python":
@@ -240,7 +240,7 @@ def check_appmap_available():
     except Exception:
         return False
 
-def check_api_server_status(host=get_config('api.host', '127.0.0.1'), port=get_config('api.port', 9090), timeout=2):
+def check_api_server_status(host: str = get_config('api.host', '127.0.0.1'), port: int = get_config('api.port', 9090), timeout: int = 2) -> bool:
     """Check if the Flask API server is running and responsive"""
     try:
         import socket
@@ -252,7 +252,7 @@ def check_api_server_status(host=get_config('api.host', '127.0.0.1'), port=get_c
     except Exception:
         return False
 
-def check_port_available(port=get_config('api.port', 9090)):
+def check_port_available(port: int = get_config('api.port', 9090)) -> bool:
     """Check if a port is available (not in use)"""
     try:
         import socket
@@ -263,7 +263,9 @@ def check_port_available(port=get_config('api.port', 9090)):
     except Exception:
         return False
 
-def check_python_dependencies():
+from typing import List, Tuple, Dict, Any
+
+def check_python_dependencies() -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]]:
     """Check if required Python dependencies are available with version info"""
     required_modules = {
         'flask': 'Flask web framework',
@@ -273,8 +275,8 @@ def check_python_dependencies():
         'cryptography': 'Cryptographic operations',
         'watchdog': 'File system monitoring'
     }
-    missing_modules = []
-    optional_missing = []
+    missing_modules: List[Tuple[str, str]] = []
+    optional_missing: List[Tuple[str, str]] = []
 
     for module, description in required_modules.items():
         try:
@@ -355,7 +357,7 @@ def force_vcpkg_reinstall():
     print("Running vcpkg install...")
     return run_command("vcpkg\\vcpkg.exe install --triplet x64-windows --recurse", timeout=600)
 
-def wait_for_server_startup(host=get_config('api.host', '127.0.0.1'), port=get_config('api.port', 9090), max_wait=30, check_interval=1):
+def wait_for_server_startup(host: str = get_config('api.host', '127.0.0.1'), port: int = get_config('api.port', 9090), max_wait: int = 30, check_interval: int = 1) -> bool:
     """Wait for server to start with enhanced progress feedback and diagnostics"""
     print(f"Waiting for API server to start on {host}:{port}...")
     elapsed = 0
@@ -401,7 +403,7 @@ def check_backup_server_status():
     except Exception:
         return False
 
-def _report_terminated_processes(terminated_processes):
+def _report_terminated_processes(terminated_processes: List[str]):
     """Report terminated processes and wait for cleanup"""
     if terminated_processes:
         print(f"Successfully terminated {len(terminated_processes)} processes:")
@@ -414,7 +416,7 @@ def _report_terminated_processes(terminated_processes):
         print("No CyberBackup processes found running.")
         print()
 
-def check_executable_locations(locations=None, context="C++ client"):
+def check_executable_locations(locations: List[Path] | None = None, context: str = "C++ client") -> Tuple[Path | None, List[Path]]:
     """Check multiple potential locations for the EncryptedBackupClient.exe file
     
     Args:
@@ -448,7 +450,7 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
     print("Cleaning up existing CyberBackup processes...")
     print()
     
-    terminated_processes = []
+    terminated_processes: List[str] = []
     
     # Define process patterns to look for
     process_patterns = {
@@ -460,18 +462,18 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
     
     try:
         # Get list of all running processes with better error handling
-        for process in psutil.process_iter(['pid', 'name', 'cmdline']):
+        for process in psutil.process_iter(['pid', 'name', 'cmdline']):  # type: ignore
             try:
-                process_info = process.info
-                cmdline = process_info.get('cmdline', [])
-                name = process_info.get('name', '').lower()
+                process_info: Dict[str, Any] = process.info
+                cmdline: List[str] = process_info.get('cmdline', [])
+                name: str = process_info.get('name', '').lower()
                 
                 if not cmdline:
                     continue
                 
-                cmdline_str = ' '.join(cmdline).lower()
-                should_terminate = False
-                process_type = ""
+                cmdline_str: str = ' '.join(cmdline).lower()
+                should_terminate: bool = False
+                process_type: str = ""
                 
                 # Check against each pattern
                 for ptype, patterns in process_patterns.items():
@@ -488,10 +490,10 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
                             if (hasattr(conn, 'laddr') and conn.laddr and 
                                 hasattr(conn, 'pid') and conn.pid == process_info['pid']):
                                 # Safely get port from connection info
-                                port = None
+                                port: int | None = None
                                 if hasattr(conn.laddr, 'port'):
                                     port = conn.laddr.port
-                                elif isinstance(conn.laddr, tuple) and len(conn.laddr) >= 2:
+                                elif len(conn.laddr) >= 2:
                                     port = conn.laddr[1]
                                 
                                 if (port in [9090, 1256] and 
@@ -531,14 +533,14 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
         for port in ports_to_clean:
             try:
                 print(f"Checking for processes on port {port}...")
-                port_processes = []
+                port_processes: List[int] = []
                 
                 for conn in psutil.net_connections():
-                    conn_port = None
+                    conn_port: int | None = None
                     if hasattr(conn, 'laddr') and conn.laddr:
                         if hasattr(conn.laddr, 'port'):
                             conn_port = conn.laddr.port
-                        elif isinstance(conn.laddr, tuple) and len(conn.laddr) >= 2:
+                        elif len(conn.laddr) >= 2:
                             conn_port = conn.laddr[1]
                     
                     if conn_port == port and conn.status == psutil.CONN_LISTEN and conn.pid:
@@ -547,7 +549,7 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
                 for pid in port_processes:
                     with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
                         process = psutil.Process(pid)
-                        process_name = process.name()
+                        process_name: str = process.name()
                         print(f"Terminating process using port {port}: {process_name} (PID: {pid})")
                         process.terminate()
                         

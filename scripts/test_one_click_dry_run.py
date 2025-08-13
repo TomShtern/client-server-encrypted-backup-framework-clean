@@ -2,9 +2,7 @@
 """Dry run test of the one_click_build_and_run.py script phases"""
 
 import sys
-import os
 from pathlib import Path
-from unittest.mock import patch
 
 # Setup standardized import paths
 from Shared.path_utils import setup_imports

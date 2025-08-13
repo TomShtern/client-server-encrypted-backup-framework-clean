@@ -198,6 +198,53 @@ conn_health = get_connection_health_monitor()
 
 perf_monitor = get_performance_monitor()
 
+# --- CallbackMultiplexer for concurrent request handling ---
+class CallbackMultiplexer:
+    """Thread-safe callback multiplexer to prevent race conditions in concurrent requests."""
+    
+    def __init__(self):
+        self._job_callbacks = {}
+        self._lock = threading.Lock()
+        self._registered_executor = None
+    
+    def register_job_callback(self, job_id, callback):
+        """Register a callback for a specific job."""
+        with self._lock:
+            self._job_callbacks[job_id] = callback
+            # If this is the first callback and no executor registered yet, set up the multiplexer
+            if self._registered_executor is None and len(self._job_callbacks) == 1:
+                self._setup_global_callback()
+    
+    def remove_job_callback(self, job_id):
+        """Remove callback for a specific job."""
+        with self._lock:
+            self._job_callbacks.pop(job_id, None)
+    
+    def route_callback(self, phase, data):
+        """Route callback to all active jobs (used as the global callback)."""
+        callbacks_copy = {}
+        with self._lock:
+            callbacks_copy = self._job_callbacks.copy()
+        
+        # Call all registered callbacks
+        for job_id, callback in callbacks_copy.items():
+            try:
+                callback(phase, data)
+            except Exception as e:
+                print(f"[CALLBACK_ERROR] Error in callback for job {job_id}: {e}")
+    
+    def set_executor(self, executor):
+        """Set the backup executor for callback registration."""
+        with self._lock:
+            self._registered_executor = executor
+    
+    def _setup_global_callback(self):
+        """Set up the global callback on the registered executor."""
+        if self._registered_executor:
+            self._registered_executor.set_status_callback(self.route_callback)
+
+# Global callback multiplexer instance
+callback_multiplexer = CallbackMultiplexer()
 
 # --- Initialize global variables & Locks ---
 # For job-specific data
@@ -330,13 +377,25 @@ def handle_ping():
     """Handle WebSocket ping for connection testing"""
     emit('pong', {'timestamp': time.time()})
 
-# Connection cleanup background task
-def cleanup_stale_connections():
-    """Clean up stale connections periodically"""
+# Connection cleanup background task with proper shutdown signaling
+def cleanup_stale_connections(stop_event=None):
+    """Clean up stale connections periodically with graceful shutdown support"""
+    logger.info("WebSocket cleanup thread started")
+    
     while True:
         try:
-            # Sleep first to avoid immediate execution
-            time.sleep(15)  # Run every 15 seconds for more aggressive cleanup
+            # Check for shutdown signal
+            if stop_event and stop_event.is_set():
+                logger.info("WebSocket cleanup thread received shutdown signal")
+                break
+            
+            # Sleep with shutdown awareness (15 second intervals)
+            if stop_event:
+                if stop_event.wait(15):  # Wait 15 seconds or until stop signal
+                    logger.info("WebSocket cleanup thread stopping due to shutdown signal")
+                    break
+            else:
+                time.sleep(15)
             
             # Clean up stale clients based on connection count vs active clients
             initial_count = len(connected_clients)
@@ -346,7 +405,7 @@ def cleanup_stale_connections():
                 excess_clients = list(connected_clients)[MAX_CONNECTIONS:]
                 for client_id in excess_clients:
                     connected_clients.discard(client_id)
-                    print(f"[WEBSOCKET] Removed excess client: {client_id}")
+                    logger.debug(f"[WEBSOCKET] Removed excess client: {client_id}")
                     
             # Also clear out any old clients every few cycles
             if len(connected_clients) > MAX_CONNECTIONS // 2:  # If more than half our limit
@@ -354,23 +413,63 @@ def cleanup_stale_connections():
                 clients_to_remove = list(connected_clients)[:len(connected_clients)//4]
                 for client_id in clients_to_remove:
                     connected_clients.discard(client_id)
-                    print(f"[WEBSOCKET] Removed aging client: {client_id}")
+                    logger.debug(f"[WEBSOCKET] Removed aging client: {client_id}")
                     
             # Clean up IP connection counters (reset periodically to prevent memory leaks)
             if len(ip_connection_counts) > 50:  # If too many IPs tracked
                 ip_connection_counts.clear()
-                print(f"[HTTP] Cleared IP connection counters")
+                logger.debug(f"[HTTP] Cleared IP connection counters")
                     
             if len(connected_clients) != initial_count or len(ip_connection_counts) > 10:
-                print(f"[WEBSOCKET] Cleanup complete. Active clients: {len(connected_clients)}, IP counters: {len(ip_connection_counts)}")
+                logger.debug(f"[WEBSOCKET] Cleanup complete. Active clients: {len(connected_clients)}, IP counters: {len(ip_connection_counts)}")
                 
         except Exception as e:
-            print(f"[WEBSOCKET] Cleanup error: {e}")
+            logger.error(f"[WEBSOCKET] Cleanup error: {e}")
+            if stop_event and stop_event.is_set():
+                break
+    
+    logger.info("WebSocket cleanup thread finished")
 
-# Start cleanup thread
+# Start cleanup thread with proper management
 import threading
-cleanup_thread = threading.Thread(target=cleanup_stale_connections, daemon=True)
-cleanup_thread.start()
+try:
+    # Import thread manager for proper shutdown coordination
+    import sys
+    import os
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'Shared', 'utils'))
+    from thread_manager import create_managed_thread
+    
+    def cleanup_websocket_resources():
+        """Cleanup function for WebSocket resources"""
+        logger.info("Performing WebSocket resource cleanup...")
+        try:
+            connected_clients.clear()
+            ip_connection_counts.clear()
+            logger.info("WebSocket resources cleaned up successfully")
+        except Exception as e:
+            logger.error(f"Error during WebSocket cleanup: {e}")
+    
+    # Create managed cleanup thread
+    cleanup_thread_name = create_managed_thread(
+        target=cleanup_stale_connections,
+        name="websocket_cleanup",
+        component="flask_api_server",
+        daemon=True,
+        cleanup_callback=cleanup_websocket_resources,
+        auto_start=True
+    )
+    
+    if cleanup_thread_name:
+        logger.info(f"WebSocket cleanup thread registered as: {cleanup_thread_name}")
+    else:
+        logger.warning("Failed to register WebSocket cleanup thread with thread manager, falling back to basic thread")
+        cleanup_thread = threading.Thread(target=cleanup_stale_connections, daemon=True)
+        cleanup_thread.start()
+        
+except ImportError:
+    logger.warning("Thread manager not available, using basic thread management")
+    cleanup_thread = threading.Thread(target=cleanup_stale_connections, daemon=True)
+    cleanup_thread.start()
 
 # Static file serving
 @app.route('/')
@@ -655,6 +754,9 @@ def api_start_backup_working():
         backup_executor = RealBackupExecutor(client_exe_path)
         with active_backup_jobs_lock:
             active_backup_jobs[job_id]['executor'] = backup_executor
+        
+        # Register executor with callback multiplexer for thread-safe callback routing
+        callback_multiplexer.set_executor(backup_executor)
         print(f"[Job {job_id}] RealBackupExecutor instance created with client: {client_exe_path}")
     except Exception as e:
         return jsonify({
@@ -723,7 +825,8 @@ def api_start_backup_working():
                 except Exception as e:
                     print(f"[WEBSOCKET] Broadcast failed: {e}")
 
-        backup_executor.set_status_callback(status_handler)
+        # Register job-specific callback with multiplexer (prevents race conditions)
+        callback_multiplexer.register_job_callback(job_id, status_handler)
 
         with active_backup_jobs_lock:
             active_backup_jobs[job_id]['backing_up'] = True
@@ -795,6 +898,10 @@ def api_start_backup_working():
                         active_backup_jobs[job_id]['backing_up'] = False
                 print(f"[ERROR] Backup thread error: {str(e)}")
             finally:
+                # Clean up callback registration to prevent memory leaks
+                callback_multiplexer.remove_job_callback(job_id)
+                print(f"[DEBUG] Removed callback for job {job_id}")
+                
                 if os.path.exists(temp_file_path_for_thread):
                     os.remove(temp_file_path_for_thread)
                 if os.path.exists(temp_dir_for_thread):

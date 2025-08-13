@@ -5,8 +5,6 @@ This script will read the existing me.info, extract the real data, and rewrite i
 """
 
 import os
-import base64
-import binascii
 
 def analyze_and_fix_me_info():
     """Analyze and fix the me.info file encoding issues"""

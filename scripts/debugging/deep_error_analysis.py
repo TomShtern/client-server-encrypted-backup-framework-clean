@@ -3,11 +3,10 @@
 Deep analysis script to find all errors in the project
 """
 
-import sys
 import os
 import ast
 import traceback
-from typing import List, Dict, Any
+from typing import Dict, Any, List
 
 # Setup standardized import paths
 from Shared.path_utils import setup_imports
@@ -15,7 +14,7 @@ setup_imports()
 
 def analyze_python_file(filepath: str) -> Dict[str, Any]:
     """Analyze a Python file for various issues"""
-    results = {
+    results: Dict[str, Any] = {
         'file': filepath,
         'syntax_errors': [],
         'import_errors': [],
@@ -45,7 +44,8 @@ def analyze_python_file(filepath: str) -> Dict[str, Any]:
                             if isinstance(first_stmt.value, ast.Constant):
                                 if first_stmt.value.value == Ellipsis or first_stmt.value.value == "...":
                                     results['incomplete_methods'].append(f"Line {node.lineno}: {node.name} - Only ellipsis")
-                            elif isinstance(first_stmt.value, ast.Str):
+                            # Support for Python < 3.8
+                            elif hasattr(ast, 'Str') and isinstance(first_stmt.value, ast.Str):
                                 if first_stmt.value.s in ["...", "TODO", "FIXME"]:
                                     results['incomplete_methods'].append(f"Line {node.lineno}: {node.name} - Placeholder: {first_stmt.value.s}")
                     
@@ -89,13 +89,13 @@ def analyze_python_file(filepath: str) -> Dict[str, Any]:
     
     return results
 
-def test_functionality():
+def test_functionality() -> List[str]:
     """Test actual functionality"""
-    results = []
+    results: List[str] = []
     
     print("Testing ServerGUI functionality...")
     try:
-        from ServerGUI import ServerGUI, ModernCard, ModernProgressBar, ModernStatusIndicator
+        from python_server.server_gui.ServerGUI import ServerGUI, ModernCard, ModernProgressBar, ModernStatusIndicator
         
         # Test basic instantiation
         gui = ServerGUI()
@@ -140,18 +140,20 @@ def test_functionality():
         except Exception as e:
             results.append(f"✗ GUI method error: {e}")
             
+    except ImportError:
+        results.append("✗ Could not import ServerGUI. Skipping functionality tests.")
     except Exception as e:
         results.append(f"✗ Major functionality error: {e}")
         traceback.print_exc()
     
     return results
 
-def main():
+def main() -> None:
     print("🔍 DEEP ERROR ANALYSIS")
     print("=" * 60)
     
     # Find all Python files
-    python_files = []
+    python_files: List[str] = []
     for root, dirs, files in os.walk('.'):
         for file in files:
             if file.endswith('.py'):
@@ -160,7 +162,7 @@ def main():
     print(f"Found {len(python_files)} Python files")
     
     # Analyze each file
-    all_issues = []
+    all_issues: List[Dict[str, Any]] = []
     for filepath in python_files:
         if '__pycache__' in filepath or '.git' in filepath:
             continue

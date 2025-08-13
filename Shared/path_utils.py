@@ -7,10 +7,9 @@ This module eliminates the 25+ scattered sys.path.insert() calls across the code
 by providing a centralized, reliable way to handle Python import paths.
 """
 
-import os
 import sys
 from pathlib import Path
-from typing import Optional, List
+from typing import List
 
 def get_project_root() -> Path:
     """
@@ -100,7 +99,7 @@ def validate_project_structure() -> List[str]:
     Returns:
         List of validation errors (empty if all good)
     """
-    errors = []
+    errors: List[str] = []
     project_root = get_project_root()
     
     # Check for essential directories

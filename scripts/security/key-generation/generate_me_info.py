@@ -36,7 +36,7 @@ def generate_me_info():
         )
         
         # Wait for up to 20 seconds, checking for me.info creation
-        for i in range(200):  # 20 seconds, checking every 0.1s
+        for _ in range(200):  # 20 seconds, checking every 0.1s
             time.sleep(0.1)
             if os.path.exists("client/me.info"):
                 print("✅ me.info file generated!")

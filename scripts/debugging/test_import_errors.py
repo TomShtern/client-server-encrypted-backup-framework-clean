@@ -8,9 +8,9 @@ import os
 import sys
 import importlib.util
 import traceback
-from pathlib import Path
+from typing import Any, Dict, List
 
-def test_import_file(filepath):
+def test_import_file(filepath: str) -> Dict[str, Any]:
     """
     Attempt to import a Python file and return import status.
     
@@ -20,6 +20,7 @@ def test_import_file(filepath):
     Returns:
         dict: {'success': bool, 'error': str, 'error_type': str, 'module_name': str}
     """
+    module_name = ''
     try:
         # Convert file path to module name
         relative_path = os.path.relpath(filepath, '.')
@@ -31,7 +32,7 @@ def test_import_file(filepath):
         
         # Try to load the module using importlib
         spec = importlib.util.spec_from_file_location(module_name, filepath)
-        if spec is None:
+        if spec is None or spec.loader is None:
             return {
                 'success': False,
                 'error': 'Could not create module spec',
@@ -77,7 +78,7 @@ def test_import_file(filepath):
             'traceback': traceback.format_exc()
         }
 
-def categorize_error(result):
+def categorize_error(result: Dict[str, Any]) -> str:
     """Categorize the type of import error."""
     if result['success']:
         return 'SUCCESS'
@@ -101,7 +102,7 @@ def categorize_error(result):
     else:
         return 'OTHER_ERROR'
 
-def main():
+def main() -> None:
     print("Comprehensive Python Import Error Scanner")
     print("=" * 60)
     
@@ -229,8 +230,8 @@ def main():
     all_files = python_files + test_files
     
     # Track results
-    results = []
-    categories = {
+    results: List[Any] = []
+    categories: Dict[str, List[Any]] = {
         'SUCCESS': [],
         'MISSING_DEPENDENCY': [],
         'IMPORT_NAME_ERROR': [],

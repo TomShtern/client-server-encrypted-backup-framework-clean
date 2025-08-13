@@ -138,7 +138,7 @@ class FileTransferManager:
         0xafb010b1, 0xab710d06, 0xa6322bdf, 0xa2f33668, 0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4
     )
     
-    def __init__(self, server_instance):
+    def __init__(self, server_instance: Any) -> None:
         """
         Initialize the FileTransferManager.
         
@@ -674,9 +674,9 @@ class FileTransferManager:
             self.server._send_response(sock, code, payload)
         else:
             # Fallback implementation
-            from .protocol import construct_response
+            from .protocol import create_response
             try:
-                response_data = construct_response(code, payload)
+                response_data = create_response(code, payload)
                 sock.sendall(response_data)
                 logger.debug(f"Sent response code {code} with {len(payload)} bytes payload")
             except socket.error as e:

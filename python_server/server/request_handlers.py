@@ -3,38 +3,32 @@
 # Contains all request processing logic extracted from server.py for better modularity
 
 import socket
-import struct
 import uuid
 import os
 import logging
 import re
-import tempfile
 from datetime import datetime
-from typing import Dict, Optional, Any, Callable
+from typing import Dict, Optional, Any
 
 # Import crypto components through compatibility layer
-from Crypto.Cipher import AES, PKCS1_OAEP
-from Crypto.PublicKey import RSA
-from Crypto.Util.Padding import pad, unpad
+from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Random import get_random_bytes
 from Crypto.Hash import SHA256
 
 # Import custom exceptions
-from .exceptions import ServerError, ProtocolError, ClientError, FileError
+from .exceptions import ServerError, ProtocolError
 
 # Import configuration constants
 from .config import (
-    SERVER_VERSION, FILE_STORAGE_DIR, MAX_CLIENT_NAME_LENGTH,
-    MAX_FILENAME_FIELD_SIZE, MAX_ACTUAL_FILENAME_LENGTH,
-    RSA_PUBLIC_KEY_SIZE, AES_KEY_SIZE_BYTES, MAX_PAYLOAD_READ_LIMIT,
-    MAX_ORIGINAL_FILE_SIZE
+    MAX_CLIENT_NAME_LENGTH, MAX_ACTUAL_FILENAME_LENGTH, FILE_STORAGE_DIR,
+    RSA_PUBLIC_KEY_SIZE, AES_KEY_SIZE_BYTES
 )
 
 # Import protocol constants
 from .protocol import (
     REQ_REGISTER, REQ_SEND_PUBLIC_KEY, REQ_RECONNECT, REQ_SEND_FILE,
     REQ_CRC_OK, REQ_CRC_INVALID_RETRY, REQ_CRC_FAILED_ABORT,
-    RESP_REG_OK, RESP_REG_FAIL, RESP_PUBKEY_AES_SENT, RESP_FILE_CRC,
+    RESP_REG_OK, RESP_REG_FAIL, RESP_PUBKEY_AES_SENT,
     RESP_ACK, RESP_RECONNECT_AES_SENT, RESP_RECONNECT_FAIL,
     RESP_GENERIC_SERVER_ERROR
 )
@@ -51,7 +45,7 @@ class RequestHandler:
     and modularity.
     """
     
-    def __init__(self, server_instance):
+    def __init__(self, server_instance: Any) -> None:
         """
         Initialize the RequestHandler with a reference to the server instance.
         
@@ -66,7 +60,7 @@ class RequestHandler:
         self.file_transfer_manager = FileTransferManager(server_instance)
         
         # Request handler mapping - dispatches requests to appropriate handlers
-        self.handler_map = {
+        self.handler_map: Dict[int, Any] = {
             REQ_REGISTER: self._handle_registration,
             REQ_SEND_PUBLIC_KEY: self._handle_send_public_key,
             REQ_RECONNECT: self._handle_reconnect,
@@ -77,7 +71,7 @@ class RequestHandler:
         }
         
     def process_request(self, sock: socket.socket, client_id_from_header: bytes, 
-                       client: Optional[Any], code: int, payload: bytes):
+                       client: Optional[Any], code: int, payload: bytes) -> None:
         """
         Dispatches a client request to the appropriate handler method based on the request code.
 
@@ -113,7 +107,7 @@ class RequestHandler:
             logger.warning(f"Unknown or unsupported request code {code} received from client '{client_name_for_log}'.")
             self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
 
-    def _handle_registration(self, sock: socket.socket, payload: bytes):
+    def _handle_registration(self, sock: socket.socket, payload: bytes) -> None:
         """
         Handles client registration request (Code 1025).
         Payload: char name[255]; (null-terminated, zero-padded)
@@ -156,7 +150,7 @@ class RequestHandler:
             logger.error(f"Registration protocol error: {e}")
             self._send_response(sock, RESP_REG_FAIL)
 
-    def _handle_send_public_key(self, sock: socket.socket, client: Any, payload: bytes):
+    def _handle_send_public_key(self, sock: socket.socket, client: Any, payload: bytes) -> None:
         """
         Handles client's public key submission (Code 1026).
         Client object is already resolved by ID from request header.
@@ -211,7 +205,7 @@ class RequestHandler:
             logger.critical(f"Unexpected critical error during RSA encryption for client '{client.name}': {e_crypto}", exc_info=True)
             self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
 
-    def _handle_reconnect(self, sock: socket.socket, client: Any, payload: bytes):
+    def _handle_reconnect(self, sock: socket.socket, client: Any, payload: bytes) -> None:
         """
         Handles client reconnection request (Code 1027).
         Client object is already resolved by ID from request header.
@@ -266,10 +260,10 @@ class RequestHandler:
 
     
 
-    def _handle_send_file(self, sock: socket.socket, client: 'Client', payload: bytes):
+    def _handle_send_file(self, sock: socket.socket, client: Any, payload: bytes) -> None:
         self.file_transfer_manager.handle_send_file(sock, client, payload)
 
-    def _handle_crc_ok(self, sock: socket.socket, client: Any, payload: bytes):
+    def _handle_crc_ok(self, sock: socket.socket, client: Any, payload: bytes) -> None:
         """
         Handles client's confirmation that CRC matches (Code 1029).
         Client object is already resolved.
@@ -302,7 +296,7 @@ class RequestHandler:
         # Update the file's record in the database to mark it as verified
         self.server.db_manager.save_file_info_to_db(client.id, filename_str, final_save_path, True, file_size, mod_date)
 
-    def _handle_crc_invalid_retry(self, sock: socket.socket, client: Any, payload: bytes):
+    def _handle_crc_invalid_retry(self, sock: socket.socket, client: Any, payload: bytes) -> None:
         """
         Handles client's report that CRC does not match and they will retry (Code 1030).
         Client object is already resolved.
@@ -334,7 +328,7 @@ class RequestHandler:
         # Send Response 1604 (General ACK)
         self._send_response(sock, RESP_ACK, client.id)
 
-    def _handle_crc_failed_abort(self, sock: socket.socket, client: Any, payload: bytes):
+    def _handle_crc_failed_abort(self, sock: socket.socket, client: Any, payload: bytes) -> None:
         """
         Handles client's report of final CRC failure and aborting transfer (Code 1031).
         Client object is already resolved.
@@ -413,9 +407,9 @@ class RequestHandler:
             except UnicodeDecodeError as e:
                 raise ProtocolError(f"{field_name}: Invalid UTF-8 encoding: {e}")
 
-    def _send_response(self, sock: socket.socket, code: int, payload: bytes = b''):
+    def _send_response(self, sock: socket.socket, code: int, payload: bytes = b'') -> None:
         """
-        Constructs and sends a response to the client socket.
+        Sends a response to the client socket.
 
         Args:
             sock: The client socket to send the response to.
@@ -426,14 +420,14 @@ class RequestHandler:
             TimeoutError: If a socket timeout occurs during send.
         """
         # Delegate to server's existing implementation
-        if hasattr(self.server, '_send_response'):
-            return self.server._send_response(sock, code, payload)
+        if hasattr(self.server, 'send_response'):
+            return self.server.send_response(sock, code, payload)
         else:
             # Fallback implementation using protocol module
-            from .protocol import construct_response
+            from .protocol import create_response
             
             try:
-                response_data = construct_response(code, payload)
+                response_data = create_response(code, payload)
                 sock.sendall(response_data)
                 logger.debug(f"Sent response code {code} with {len(payload)} bytes payload")
             except socket.error as e:

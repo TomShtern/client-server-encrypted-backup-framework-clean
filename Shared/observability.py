@@ -8,13 +8,12 @@ import json
 import time
 import threading
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, Optional, List, Callable
+from datetime import datetime, timezone
+from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field, asdict
 from collections import defaultdict, deque
 from enum import Enum
 import psutil
-import os
 from contextlib import suppress
 
 
@@ -104,7 +103,7 @@ class StructuredLogger:
         new_logger.span_id = span_id or trace_id
         return new_logger
         
-    def _log(self, level: LogLevel, message: str, **kwargs):
+    def _log(self, level: LogLevel, message: str, **kwargs: Any) -> None:
         """Internal logging method"""
         entry = StructuredLogEntry(
             timestamp=f"{datetime.now(timezone.utc).isoformat()}Z",
@@ -149,22 +148,22 @@ class StructuredLogger:
             self.base_logger.critical(f"STRUCTURED: {json_log}")
             self.base_logger.critical(human_msg)
     
-    def trace(self, message: str, **kwargs):
+    def trace(self, message: str, **kwargs: Any) -> None:
         self._log(LogLevel.TRACE, message, **kwargs)
         
-    def debug(self, message: str, **kwargs):
+    def debug(self, message: str, **kwargs: Any) -> None:
         self._log(LogLevel.DEBUG, message, **kwargs)
         
-    def info(self, message: str, **kwargs):
+    def info(self, message: str, **kwargs: Any) -> None:
         self._log(LogLevel.INFO, message, **kwargs)
         
-    def warn(self, message: str, **kwargs):
+    def warn(self, message: str, **kwargs: Any) -> None:
         self._log(LogLevel.WARN, message, **kwargs)
         
-    def error(self, message: str, **kwargs):
+    def error(self, message: str, **kwargs: Any) -> None:
         self._log(LogLevel.ERROR, message, **kwargs)
         
-    def fatal(self, message: str, **kwargs):
+    def fatal(self, message: str, **kwargs: Any) -> None:
         self._log(LogLevel.FATAL, message, **kwargs)
 
 
@@ -172,7 +171,7 @@ class MetricsCollector:
     """Thread-safe metrics collection and aggregation"""
     
     def __init__(self, max_history: int = 1000):
-        self.metrics: Dict[str, deque] = defaultdict(lambda: deque(maxlen=max_history))
+        self.metrics: Dict[str, deque[Metric]] = defaultdict(lambda: deque(maxlen=max_history))
         self.lock = threading.RLock()
         self.start_time = time.time()
         
@@ -253,7 +252,7 @@ class SystemMonitor:
         self.collection_interval = collection_interval
         self.running = False
         self.thread: Optional[threading.Thread] = None
-        self.metrics_history: deque = deque(maxlen=1000)
+        self.metrics_history: deque[SystemMetrics] = deque(maxlen=1000)
         self.lock = threading.RLock()
         
     def start(self):
@@ -295,7 +294,7 @@ class SystemMonitor:
         
         # Process stats
         current_process = psutil.Process()
-        connections = len(current_process.connections())
+        connections = len(current_process.net_connections())
         open_files = len(current_process.open_files())
         
         return SystemMetrics(
@@ -366,7 +365,7 @@ class TimedOperation:
                         operation=self.operation_name, tags=self.tags)
         return self
         
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> None:
         if self.start_time is None:
             # Should not happen in normal flow, but handle gracefully
             self.logger.error(f"Timer not properly initialized for {self.operation_name}")

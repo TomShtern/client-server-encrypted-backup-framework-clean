@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
-import sys
-import os
 import traceback
 
 # Setup standardized import paths
 from Shared.path_utils import setup_imports
 setup_imports()
 
-def find_errors():
+def find_errors() -> bool:
     print("=== ServerGUI Error Detection ===")
     
     try:
         # Test imports
         print("Testing imports...")
-        from ServerGUI import (
-            ServerGUI, ModernCard, ModernProgressBar, ModernStatusIndicator,
-            ModernTheme, ToastNotification, ModernTable
+        from python_server.server_gui.ServerGUI import (
+            ServerGUI, ModernCard, ModernProgressBar, ModernStatusIndicator
         )
         print("✓ All imports successful")
         
@@ -69,6 +66,9 @@ def find_errors():
         print("✅ No errors found!")
         return True
         
+    except ImportError:
+        print("✗ Could not import ServerGUI. Skipping functionality tests.")
+        return False
     except Exception as e:
         print(f"❌ Error found: {e}")
         traceback.print_exc()

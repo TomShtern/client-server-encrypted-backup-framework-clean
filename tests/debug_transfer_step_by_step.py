@@ -6,7 +6,7 @@ Step-by-step debug of the transfer process
 import os
 import subprocess
 import tempfile
-import time
+
 
 def create_tiny_test_file():
     """Create a very small test file"""

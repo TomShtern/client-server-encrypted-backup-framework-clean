@@ -8,8 +8,8 @@ import os
 import socket
 from pathlib import Path
 
-def check_python_deps():
-    """Check Python dependencies"""
+def check_python_deps() -> list[str]:
+    """Check Python dependencies."""
     print("\n📦 Python Dependencies:")
     print("-" * 30)
     

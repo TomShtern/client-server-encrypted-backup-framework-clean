@@ -9,8 +9,10 @@ import time
 import argparse
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 import threading
+
+
 from dataclasses import dataclass
 
 
@@ -71,13 +73,13 @@ def colorize_log_level(line: str, use_colors: bool = True) -> str:
         return line
 
 
-def get_log_files(logs_dir: str = "logs") -> List[Dict]:
+def get_log_files(logs_dir: str = "logs") -> List[Dict[str, Any]]:
     """Get all available log files with metadata"""
     logs_path = Path(logs_dir)
     if not logs_path.exists():
         return []
     
-    log_files = []
+    log_files: List[Dict[str, Any]] = []
     for log_file in logs_path.glob("*.log"):
         if log_file.name.startswith("latest-"):
             continue  # Skip latest symlinks
@@ -123,7 +125,7 @@ def follow_file(file_path: str, lines_from_end: int = 50):
                 if (lines := f.readlines()):
                     # Yield the last N lines
                     for line in lines[-lines_from_end:]:
-                        yield line.rstrip('\n\r')
+                        yield line.rstrip('\\n\\r')
         except Exception as e:
             yield f"[ERROR] Could not read existing content: {e}"
     
@@ -138,7 +140,7 @@ def follow_file(file_path: str, lines_from_end: int = 50):
                     with open(file_path_obj, 'r', encoding='utf-8', errors='ignore') as f:
                         f.seek(last_size)
                         for line in f:
-                            yield line.rstrip('\n\r')
+                            yield line.rstrip('\\n\\r')
                     last_size = current_size
                 elif current_size < last_size:
                     # File was truncated or recreated
@@ -152,6 +154,9 @@ def follow_file(file_path: str, lines_from_end: int = 50):
         except Exception as e:
             yield f"[ERROR] Error following file: {e}"
             time.sleep(1)
+        finally:
+            pass # Ensure the try block has a finally or except clause
+
 
 
 def should_show_log_line(line: str, config: MonitorConfig) -> bool:
@@ -201,7 +206,7 @@ def monitor_single_file(file_path: str, server_type: str, color: str, config: Mo
         print(f"\n{color}[{server_type}] Monitoring stopped{Colors.RESET}")
 
 
-def monitor_multiple_files(log_files: List[Dict], config: MonitorConfig):
+def monitor_multiple_files(log_files: List[Dict[str, Any]], config: MonitorConfig):
     """Monitor multiple log files concurrently"""
     print(f"{Colors.BOLD}Starting multi-file log monitoring...{Colors.RESET}")
     print(f"Files: {len(log_files)}")
@@ -209,7 +214,7 @@ def monitor_multiple_files(log_files: List[Dict], config: MonitorConfig):
         print(f"  - {lf['color']}{lf['server_type']}: {lf['name']}{Colors.RESET}")
     print("-" * 80)
     
-    threads = []
+    threads: List[threading.Thread] = []
     
     try:
         for log_file in log_files:
@@ -279,16 +284,16 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def select_files_to_monitor(args: argparse.Namespace) -> List[Dict]:
+def select_files_to_monitor(args: argparse.Namespace) -> List[Dict[str, Any]]:
     """Select which log files to monitor based on arguments"""
-    all_log_files = get_log_files()
+    all_log_files: List[Dict[str, Any]] = get_log_files()
     
     if not all_log_files:
         print("No log files found in logs/ directory")
         print("Make sure the servers have been started at least once to generate log files.")
         return []
     
-    files_to_monitor = []
+    files_to_monitor: List[Dict[str, Any]] = []
     
     if args.file:
         # Monitor specific file
@@ -323,8 +328,8 @@ def select_files_to_monitor(args: argparse.Namespace) -> List[Dict]:
         
         # If latest flag is set, only keep the most recent file per server type
         if args.latest:
-            api_files = [f for f in files_to_monitor if 'api-server' in f['name']]
-            backup_files = [f for f in files_to_monitor if 'backup-server' in f['name']]
+            api_files: List[Dict[str, Any]] = [f for f in files_to_monitor if 'api-server' in f['name']]
+            backup_files: List[Dict[str, Any]] = [f for f in files_to_monitor if 'backup-server' in f['name']]
             
             files_to_monitor = []
             if api_files:
@@ -335,7 +340,7 @@ def select_files_to_monitor(args: argparse.Namespace) -> List[Dict]:
     return files_to_monitor
 
 
-def start_monitoring(files_to_monitor: List[Dict], config: MonitorConfig):
+def start_monitoring(files_to_monitor: List[Dict[str, Any]], config: MonitorConfig):
     """Start monitoring the selected files"""
     if len(files_to_monitor) == 1:
         lf = files_to_monitor[0]

@@ -48,6 +48,14 @@ class RealBackupExecutor:
         self.file_manager = SynchronizedFileManager(self.temp_dir)
         self.process_id: Optional[int] = None
         self.server_received_files = "received_files"
+        
+        # Adaptive timeout configuration (coordinates with C++ client 25s timeout)
+        self.timeout_config = {
+            'base_timeout': 30,     # Base timeout in seconds (must be > C++ client 25s)
+            'size_multiplier': 2,   # Extra seconds per MB
+            'min_timeout': 45,      # Minimum timeout (ensures margin above C++ client)
+            'max_timeout': 1800,    # Maximum timeout (30 minutes for very large files)
+        }
 
     def is_running(self) -> bool:
         """Return True if a backup subprocess is currently running"""
@@ -86,6 +94,30 @@ class RealBackupExecutor:
         logger.info(f"[{phase}] {message}")
         if self.status_callback:
             self.status_callback(phase, {'message': message})
+    
+    def _calculate_adaptive_timeout(self, file_path: str) -> int:
+        """Calculate adaptive timeout based on file size to prevent client/server timeout mismatches."""
+        try:
+            file_size_bytes = os.path.getsize(file_path)
+            file_size_mb = file_size_bytes / (1024 * 1024)
+            
+            # Calculate timeout: base + (size_in_mb * multiplier)
+            calculated_timeout = self.timeout_config['base_timeout'] + (file_size_mb * self.timeout_config['size_multiplier'])
+            
+            # Apply min/max bounds
+            adaptive_timeout = max(self.timeout_config['min_timeout'], 
+                                 min(calculated_timeout, self.timeout_config['max_timeout']))
+            
+            self._log_status('TIMEOUT_CALC', 
+                           f'File: {file_size_mb:.1f}MB → Timeout: {adaptive_timeout:.0f}s '
+                           f'(base: {self.timeout_config["base_timeout"]}s + '
+                           f'{file_size_mb:.1f}MB × {self.timeout_config["size_multiplier"]}s/MB)')
+            
+            return int(adaptive_timeout)
+            
+        except (OSError, IOError) as e:
+            self._log_status('TIMEOUT_CALC', f'Could not get file size for {file_path}: {e}. Using min timeout.')
+            return self.timeout_config['min_timeout']
 
     def _generate_transfer_info(self, server_ip: str, server_port: int, username: str, file_path: str) -> tuple[str, str]:
         """Generate managed transfer.info file for the C++ client"""
@@ -128,6 +160,72 @@ class RealBackupExecutor:
             'return_code': return_code,
             'stdout': stdout,
             'stderr': stderr
+        }
+
+    def _execute_subprocess_nonblocking(self, timeout: int = 120) -> Dict[str, Any]:
+        """Execute subprocess with non-blocking, progressive timeout pipe reading."""
+        def _read_pipe(pipe, chunks, lock):
+            """Helper to read pipe chunks safely."""
+            try:
+                while True:
+                    chunk = pipe.read(4096)  # Read in small, manageable chunks
+                    if not chunk:
+                        break
+                    with lock:
+                        chunks.append(chunk)
+            except Exception:
+                pass
+            finally:
+                try:
+                    pipe.close()
+                except Exception:
+                    pass
+
+        # Thread-safe data structures
+        stdout_chunks, stderr_chunks = [], []
+        stdout_lock, stderr_lock = threading.Lock(), threading.Lock()
+
+        # Launch non-blocking readers
+        stdout_thread = threading.Thread(target=_read_pipe, 
+            args=(self.backup_process.stdout, stdout_chunks, stdout_lock), daemon=True)
+        stderr_thread = threading.Thread(target=_read_pipe, 
+            args=(self.backup_process.stderr, stderr_chunks, stderr_lock), daemon=True)
+        
+        stdout_thread.start()
+        stderr_thread.start()
+
+        # Progressive timeout with incremental checks
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if self.backup_process.poll() is not None:
+                break
+            time.sleep(1)  # Small sleep to prevent busy waiting
+
+        # Handle timeout scenario
+        if self.backup_process.poll() is None:
+            self._log_status('TIMEOUT', f'Subprocess timeout after {timeout}s, terminating...')
+            self.backup_process.terminate()
+            try:
+                self.backup_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._log_status('FORCE_KILL', 'Process did not respond to terminate, killing...')
+                self.backup_process.kill()
+                self.backup_process.wait()
+            raise subprocess.TimeoutExpired([str(self.client_exe), '--batch'], timeout)
+
+        # Collect results
+        stdout_thread.join(timeout=5)
+        stderr_thread.join(timeout=5)
+
+        with stdout_lock:
+            stdout = ''.join(stdout_chunks)
+        with stderr_lock:
+            stderr = ''.join(stderr_chunks)
+
+        return {
+            'stdout': stdout,
+            'stderr': stderr,
+            'return_code': self.backup_process.returncode
         }
 
     def execute_real_backup(self, username: str, file_path: str, server_ip: str, server_port: int) -> Dict[str, Any]:
@@ -173,14 +271,18 @@ class RealBackupExecutor:
 
     def execute_backup_with_verification(self, username: str, file_path: str, 
                            server_ip: str = "127.0.0.1", server_port: int = 1256,
-                           timeout: int = 120) -> Dict[str, Any]:
+                           timeout: int = None) -> Dict[str, Any]:
         """Execute REAL backup using the C++ client with verification and robust progress.
 
         This rewritten implementation corrects prior indentation corruption and consolidates
         lifecycle management (transfer.info generation, subprocess launch, monitoring,
         verification and cleanup) inside a single well-structured try/except/finally block.
         """
-        self._log_status("START", f"Starting REAL backup for {username}: {file_path}")
+        # Calculate adaptive timeout based on file size (prevents C++ client timeout mismatches)
+        if timeout is None:
+            timeout = self._calculate_adaptive_timeout(file_path)
+        
+        self._log_status("START", f"Starting REAL backup for {username}: {file_path} (timeout: {timeout}s)")
 
         result: Dict[str, Any] = {
             'success': False,
@@ -295,18 +397,37 @@ class RealBackupExecutor:
                 failure_callback=on_failure
             )
 
-            # --- Process Execution ---
+            # --- Process Execution (Non-blocking) ---
             self._log_status('PROCESS', f'Waiting for C++ client (PID: {self.backup_process.pid}) to complete.')
             try:
-                stdout, stderr = self.backup_process.communicate(timeout=timeout)
-                result['process_exit_code'] = self.backup_process.returncode
-                if stdout: self._log_status('CLIENT_STDOUT', str(stdout))
-                if stderr: self._log_status('CLIENT_STDERR', str(stderr))
+                exec_result = self._execute_subprocess_nonblocking(timeout)
+                result['process_exit_code'] = exec_result['return_code']
+                if exec_result['stdout']: 
+                    self._log_status('CLIENT_STDOUT', exec_result['stdout'])
+                if exec_result['stderr']: 
+                    self._log_status('CLIENT_STDERR', exec_result['stderr'])
+                
+                # Signal subprocess completion to file manager (prevents race condition)
+                if file_id:
+                    self.file_manager.release_subprocess_use(file_id)
+                    self._log_status('LIFECYCLE', f'Subprocess completed - released file {file_id}')
+                    
             except subprocess.TimeoutExpired:
                 self._log_status('TIMEOUT', 'C++ client process timed out.')
                 self.cancel("Timeout")
                 result['error'] = 'Process timed out'
                 result['process_exit_code'] = -1
+                # Still release subprocess use on timeout
+                if file_id:
+                    self.file_manager.release_subprocess_use(file_id)
+                    
+            except Exception as exec_error:
+                self._log_status('ERROR', f'Subprocess execution failed: {exec_error}')
+                result['error'] = str(exec_error)
+                result['process_exit_code'] = -1
+                # Release subprocess use on error too
+                if file_id:
+                    self.file_manager.release_subprocess_use(file_id)
 
             # --- Wait for Verification ---
             self._log_status('VERIFICATION', 'Waiting for file verification to complete...')
@@ -333,12 +454,19 @@ class RealBackupExecutor:
                     monitor.stop_monitoring()
         finally:
             result['duration'] = time.time() - start_time
+            
+            # Enhanced file lifecycle cleanup with proper subprocess coordination
             if file_id:
                 with contextlib.suppress(Exception):
-                    self.file_manager.safe_cleanup(file_id, wait_timeout=10.0)
+                    # Wait longer since subprocess completion is now properly signaled
+                    self.file_manager.safe_cleanup(file_id, wait_timeout=30.0)
+                    self._log_status('LIFECYCLE', f'Completed safe cleanup for managed file {file_id}')
+                    
+            # Clean up working directory copy (safe since managed file handles the lifecycle)
             if transfer_info_path and os.path.exists(transfer_info_path):
                 with contextlib.suppress(Exception):
                     os.remove(transfer_info_path)
+                    self._log_status('LIFECYCLE', f'Cleaned up working copy: {transfer_info_path}')
 
         return result
 

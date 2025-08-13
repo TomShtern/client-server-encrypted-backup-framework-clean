@@ -5,7 +5,8 @@ Debug file transfer process step by step
 import requests
 import os
 import tempfile
-from pathlib import Path
+import time
+
 
 def debug_file_transfer():
     print("=== FILE TRANSFER DEBUGGING ===")
@@ -72,7 +73,7 @@ def debug_file_transfer():
                     
                     # Step 5: Monitor progress
                     print("5. Monitoring progress...")
-                    for i in range(10):  # Check for 10 seconds
+                    for _ in range(10):  # Check for 10 seconds
                         try:
                             progress_response = requests.get(f"http://127.0.0.1:9090/api/status?job_id={result['job_id']}", timeout=5)
                             if progress_response.status_code == 200:

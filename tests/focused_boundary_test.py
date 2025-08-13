@@ -9,6 +9,7 @@ import time
 import subprocess
 import random
 import string
+from typing import Tuple, Dict, Any, List
 
 def generate_unique_username():
     """Generate a unique username"""
@@ -16,7 +17,7 @@ def generate_unique_username():
     random_suffix = ''.join(random.choices(string.ascii_lowercase, k=3))
     return f"btest{timestamp % 10000}{random_suffix}"
 
-def create_test_file(size_bytes, name_suffix):
+def create_test_file(size_bytes: int, name_suffix: str) -> str:
     """Create a test file of exact size"""
     content = "T" * size_bytes
     
@@ -26,7 +27,7 @@ def create_test_file(size_bytes, name_suffix):
     
     return temp_path
 
-def test_transfer(file_path, size_bytes):
+def test_transfer(file_path: str, size_bytes: int) -> Tuple[bool, str, str]:
     """Quick transfer test"""
     username = generate_unique_username()
     
@@ -65,7 +66,7 @@ def main():
     print("=" * 40)
     
     # Focus on the critical boundary area
-    test_sizes = [
+    test_sizes: List[int] = [
         63 * 1024,    # 64512 bytes - 63KB
         64 * 1024,    # 65536 bytes - 64KB (should work)
         65 * 1024,    # 66560 bytes - 65KB
@@ -73,7 +74,7 @@ def main():
         67 * 1024,    # 68608 bytes - 67KB
     ]
     
-    results = {}
+    results: Dict[int, Dict[str, Any]] = {}
     
     for size in test_sizes:
         size_kb = size // 1024

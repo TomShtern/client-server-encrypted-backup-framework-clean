@@ -2,7 +2,7 @@
 """Test script to validate the fixes made to one_click_build_and_run.py"""
 
 import sys
-import os
+
 from pathlib import Path
 
 # Setup standardized import paths

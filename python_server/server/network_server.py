@@ -5,19 +5,17 @@
 import socket
 import threading
 import signal
-import struct
 import logging
 import time
 from typing import Tuple, Optional, Callable, Any, Dict
 
 from .config import (
-    CLIENT_SOCKET_TIMEOUT, MAX_PAYLOAD_READ_LIMIT, MAX_CONCURRENT_CLIENTS,
-    SERVER_VERSION
+    CLIENT_SOCKET_TIMEOUT, MAX_CONCURRENT_CLIENTS
 )
 from .exceptions import ProtocolError
 from . import protocol
 from .protocol import (
-    REQ_REGISTER, REQ_RECONNECT, RESP_GENERIC_SERVER_ERROR, RESP_RECONNECT_FAIL
+    RESP_GENERIC_SERVER_ERROR
 )
 
 from .connection_health import get_connection_health_monitor
@@ -31,7 +29,7 @@ class NetworkServer:
     Manages socket operations, client connections, and server lifecycle.
     """
 
-    def __init__(self, port: int, request_handler: Callable, client_resolver: Callable,
+    def __init__(self, port: int, request_handler: Callable[..., Any], client_resolver: Callable[..., Any],
                  shutdown_event: threading.Event):
         """
         Initialize the network server.
@@ -43,8 +41,8 @@ class NetworkServer:
             shutdown_event: Event to signal server shutdown
         """
         self.port = port
-        self.request_handler = request_handler
-        self.client_resolver = client_resolver
+        self.request_handler: Callable[..., Any] = request_handler
+        self.client_resolver: Callable[..., Any] = client_resolver
         self.shutdown_event = shutdown_event
 
         self.server_socket: Optional[socket.socket] = None
@@ -241,7 +239,7 @@ class NetworkServer:
                 'uptime_seconds': int(time.time() - self.start_time)
             }
 
-    def _send_response(self, sock: socket.socket, code: int, payload: bytes = b''):
+    def send_response(self, sock: socket.socket, code: int, payload: bytes = b''):
         """Send a response to the client using the protocol format."""
         try:
             response_bytes = protocol.create_response(code, payload)
@@ -262,7 +260,7 @@ class NetworkServer:
             conn_semaphore: The semaphore used to limit concurrent connections
         """
         client_ip, client_port = client_address
-        active_client_obj = None
+        active_client_obj: Any = None
         log_client_identifier = f"{client_ip}:{client_port}"
 
         try:
