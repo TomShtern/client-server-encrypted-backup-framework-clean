@@ -24,6 +24,7 @@ import json
 import logging
 import traceback
 from pathlib import Path
+from typing import List, Tuple, Dict, Any
 
 try:
     import psutil
@@ -262,8 +263,6 @@ def check_port_available(port: int = get_config('api.port', 9090)) -> bool:
         return True
     except Exception:
         return False
-
-from typing import List, Tuple, Dict, Any
 
 def check_python_dependencies() -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]]:
     """Check if required Python dependencies are available with version info"""
@@ -814,13 +813,10 @@ def main():
         appmap_available = check_appmap_available()
 
         if appmap_available:
-            print("[INFO] AppMap detected - enabling execution recording")
-            # Start backup server with AppMap recording using module syntax
-            server_command = [
-                "appmap-python", "--record", "process", 
-                "python", "-m", "python_server.server.server"
-            ]
-            print("Command: appmap-python --record process python -m python_server.server.server")
+            print("[INFO] AppMap detected but using normal startup for stability")
+            # Use normal startup for better reliability
+            server_command = [sys.executable, "-m", "python_server.server.server"]
+            print(f"Command: {sys.executable} -m python_server.server.server")
         else:
             print("[INFO] AppMap not available - starting server normally")
             # Start backup server normally using module syntax
@@ -829,6 +825,8 @@ def main():
         
         # Set up server environment (GUI is integrated, no separate GUI launch needed)
         server_env = os.environ.copy()
+        # CRITICAL: Set PYTHONPATH so Python can find project modules
+        server_env['PYTHONPATH'] = os.getcwd()
         
         # Start backup server with integrated GUI in new console window
         server_process = subprocess.Popen(
@@ -839,8 +837,8 @@ def main():
         print(f"Python Backup Server (with integrated GUI) started with PID: {server_process.pid}")
         
         if appmap_available:
-            print("[INFO] AppMap recording active - execution traces will be generated")
-            print("       AppMap data will be saved when the server stops")
+            print("[INFO] AppMap available but not used for stability reasons")
+            print("       Run manually with AppMap if needed: appmap-python --record process python -m python_server.server.server")
         
         # Wait for backup server to actually start listening on port 1256
         print("Waiting for backup server to start listening...")
@@ -936,9 +934,15 @@ def main():
         try:
             # Start API server in new console window with visible output
             # Fixed: Use module syntax to avoid circular import issues
+            # Set up API server environment with PYTHONPATH
+            api_env = os.environ.copy()
+            # CRITICAL: Set PYTHONPATH so Python can find project modules
+            api_env['PYTHONPATH'] = os.getcwd()
+            
             api_process = subprocess.Popen(
                 [sys.executable, "-m", "api_server.cyberbackup_api_server"],
-                creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
+                creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0,
+                env=api_env
             )
             print(f"API Bridge Server started with PID: {api_process.pid}")
             

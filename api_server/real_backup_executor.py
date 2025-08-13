@@ -125,7 +125,8 @@ class RealBackupExecutor:
         content = f"{server_ip}:{server_port}\n{username}\n{absolute_file_path}"
         self._log_status("CONFIG", f"transfer.info content:\n---\n{content}---")
         
-        file_id, transfer_info_path = self.file_manager.create_managed_file("transfer.info", content)
+        transfer_info_path = self.file_manager.create_managed_file("transfer.info", content)
+        file_id = f"transfer_{int(time.time())}"  # Generate a simple file ID
         self._log_status("CONFIG", f"Generated managed transfer.info: {transfer_info_path}")
         return file_id, transfer_info_path
 
