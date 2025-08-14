@@ -56,13 +56,19 @@ class DebugLogger {
 
     log(level, category, message) {
         const levelObj = this.levels[level];
-        if (!levelObj || !this.isEnabled) return;
+        if (!levelObj || !this.isEnabled) {
+            return;
+        }
         
         // Check level filtering
-        if (levelObj.value > this.currentLevel.value) return;
+        if (levelObj.value > this.currentLevel.value) {
+            return;
+        }
         
         // Check category filtering
-        if (this.filters.size > 0 && !this.filters.has(category.toUpperCase())) return;
+        if (this.filters.size > 0 && !this.filters.has(category.toUpperCase())) {
+            return;
+        }
 
         const timestamp = new Date().toLocaleTimeString();
         const entry = { timestamp, level, category, message, levelObj };

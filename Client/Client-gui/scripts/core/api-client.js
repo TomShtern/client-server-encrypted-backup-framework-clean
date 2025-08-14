@@ -48,9 +48,8 @@ class ApiClient {
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const data = await response.json();
         // debugLog('Status response:' + JSON.stringify(data), 'API');
-        return data;
+        return await response.json();
     }
 
     async connect(config) {
@@ -173,10 +172,18 @@ class ApiClient {
 
     // Update timeout settings
     updateTimeouts(timeouts) {
-        if (timeouts.default) this.defaultTimeout = timeouts.default;
-        if (timeouts.status) this.statusTimeout = timeouts.status;
-        if (timeouts.connect) this.connectTimeout = timeouts.connect;
-        if (timeouts.upload) this.uploadTimeout = timeouts.upload;
+        if (timeouts.default) {
+            this.defaultTimeout = timeouts.default;
+        }
+        if (timeouts.status) {
+            this.statusTimeout = timeouts.status;
+        }
+        if (timeouts.connect) {
+            this.connectTimeout = timeouts.connect;
+        }
+        if (timeouts.upload) {
+            this.uploadTimeout = timeouts.upload;
+        }
         debugLog('API timeouts updated', 'API');
     }
 }

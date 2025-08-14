@@ -154,14 +154,22 @@ class BackupHistoryManager {
         const hours = Math.floor(diff / 3600000);
         const days = Math.floor(diff / 86400000);
 
-        if (minutes < 1) return 'Just now';
-        if (minutes < 60) return `${minutes}m ago`;
-        if (hours < 24) return `${hours}h ago`;
+        if (minutes < 1) {
+            return 'Just now';
+        }
+        if (minutes < 60) {
+            return `${minutes}m ago`;
+        }
+        if (hours < 24) {
+            return `${hours}h ago`;
+        }
         return `${days}d ago`;
     }
 
     formatBytes(bytes) {
-        if (bytes === 0) return '0 Bytes';
+        if (bytes === 0) {
+            return '0 Bytes';
+        }
         const k = 1024;
         const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -169,14 +177,18 @@ class BackupHistoryManager {
     }
 
     formatDuration(seconds) {
-        if (seconds < 60) return `${seconds.toFixed(1)}s`;
+        if (seconds < 60) {
+            return `${seconds.toFixed(1)}s`;
+        }
         const minutes = Math.floor(seconds / 60);
         const remainingSeconds = seconds % 60;
         return `${minutes}m ${remainingSeconds.toFixed(0)}s`;
     }
 
     formatSpeed(bytesPerSecond) {
-        if (bytesPerSecond === 0) return '0 B/s';
+        if (bytesPerSecond === 0) {
+            return '0 B/s';
+        }
         const k = 1024;
         const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
         const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k));

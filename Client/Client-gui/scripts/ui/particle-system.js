@@ -16,7 +16,9 @@ class ParticleSystem {
     }
 
     init() {
-        if (!this.container || !this.isEnabled) return;
+        if (!this.container || !this.isEnabled) {
+            return;
+        }
         
         this.createInitialParticles();
         this.startAnimation();
@@ -36,7 +38,9 @@ class ParticleSystem {
     }
 
     createParticle() {
-        if (this.particles.length >= this.maxParticles) return null;
+        if (this.particles.length >= this.maxParticles) {
+            return null;
+        }
 
         const particle = document.createElement('div');
         particle.className = 'particle';

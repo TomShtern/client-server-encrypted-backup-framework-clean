@@ -4,15 +4,21 @@ class FormValidator {
         this.validators = {
             required: (value) => value && value.trim().length > 0,
             serverAddress: (value) => {
-                if (!value) return false;
+                if (!value) {
+                    return false;
+                }
                 const parts = value.split(':');
-                if (parts.length !== 2) return false;
+                if (parts.length !== 2) {
+                    return false;
+                }
                 const [ip, port] = parts;
                 const portNum = parseInt(port);
                 return ip.length > 0 && portNum > 0 && portNum <= 65535;
             },
             username: (value) => {
-                if (!value) return false;
+                if (!value) {
+                    return false;
+                }
                 return /^[a-zA-Z0-9_-]{2,32}$/.test(value);
             }
         };
@@ -37,7 +43,9 @@ class FormValidator {
      */
     validateField(fieldId, value) {
         const rules = this.rules.get(fieldId);
-        if (!rules) return { isValid: true, message: '' };
+        if (!rules) {
+            return { isValid: true, message: '' };
+        }
 
         for (const rule of rules) {
             const validator = this.validators[rule.validator];
@@ -57,7 +65,9 @@ class FormValidator {
      * Apply visual validation state to field
      */
     applyValidationState(fieldElement, state) {
-        if (!fieldElement) return;
+        if (!fieldElement) {
+            return;
+        }
 
         // Remove existing states
         fieldElement.classList.remove('valid', 'invalid', 'warning');
@@ -76,7 +86,9 @@ class FormValidator {
      */
     updateValidationUI(fieldElement, state) {
         const container = fieldElement.closest('.form-field') || fieldElement.parentElement;
-        if (!container) return;
+        if (!container) {
+            return;
+        }
 
         // Update or create validation icon
         let icon = container.querySelector('.validation-icon');
@@ -124,10 +136,12 @@ class FormValidator {
      * Setup real-time validation for a field
      */
     setupRealTimeValidation(fieldElement, fieldId) {
-        if (!fieldElement) return;
+        if (!fieldElement) {
+            return;
+        }
 
         const validateAndUpdate = () => {
-            const value = fieldElement.value;
+            const { value } = fieldElement;
             const state = this.validateField(fieldId, value);
             this.applyValidationState(fieldElement, state);
         };

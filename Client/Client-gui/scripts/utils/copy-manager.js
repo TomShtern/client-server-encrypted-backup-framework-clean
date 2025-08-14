@@ -66,7 +66,9 @@ class CopyManager {
      * Show visual feedback on copy button
      */
     showCopyFeedback(button) {
-        if (!button) return;
+        if (!button) {
+            return;
+        }
 
         // Clear any existing timeout
         if (this.copyTimeout) {
@@ -111,7 +113,9 @@ class CopyManager {
      * @param {string} position - Where to place the copy button ('after', 'before', 'inside')
      */
     makeCopyable(element, text = null, position = 'after') {
-        if (!element) return null;
+        if (!element) {
+            return null;
+        }
 
         const textToCopy = text || element.textContent.trim();
         const copyButton = this.createCopyButton(textToCopy);

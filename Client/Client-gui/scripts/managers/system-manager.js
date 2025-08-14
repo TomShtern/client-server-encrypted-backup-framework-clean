@@ -147,7 +147,9 @@ class ConnectionHealthMonitor {
      * Perform a health check (ping simulation using API call)
      */
     async performHealthCheck() {
-        if (!this.isMonitoring || !this.serverAddress) return;
+        if (!this.isMonitoring || !this.serverAddress) {
+            return;
+        }
 
         try {
             const startTime = performance.now();
@@ -213,11 +215,21 @@ class ConnectionHealthMonitor {
      * @returns {string} Quality rating
      */
     calculateConnectionQuality(latency, isConnected) {
-        if (!isConnected || latency === null) return 'offline';
-        if (latency < 50) return 'excellent';
-        if (latency < 150) return 'good';
-        if (latency < 300) return 'fair';
-        if (latency < 1000) return 'poor';
+        if (!isConnected || latency === null) {
+            return 'offline';
+        }
+        if (latency < 50) {
+            return 'excellent';
+        }
+        if (latency < 150) {
+            return 'good';
+        }
+        if (latency < 300) {
+            return 'fair';
+        }
+        if (latency < 1000) {
+            return 'poor';
+        }
         return 'very_poor';
     }
 
@@ -225,7 +237,9 @@ class ConnectionHealthMonitor {
      * Update health indicator UI
      */
     updateHealthUI() {
-        if (!this.healthIndicatorElement || !this.pingDisplayElement) return;
+        if (!this.healthIndicatorElement || !this.pingDisplayElement) {
+            return;
+        }
 
         // Update ping display
         if (this.currentLatency !== null) {
@@ -280,7 +294,9 @@ class ConnectionHealthMonitor {
      */
     getAverageLatency() {
         const validPings = this.healthHistory.filter(h => h.latency !== null);
-        if (validPings.length === 0) return null;
+        if (validPings.length === 0) {
+            return null;
+        }
         
         const sum = validPings.reduce((acc, h) => acc + h.latency, 0);
         return Math.round(sum / validPings.length);

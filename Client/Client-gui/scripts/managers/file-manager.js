@@ -96,7 +96,9 @@ class FileManager {
     }
     
     formatFileSize(bytes) {
-        if (bytes === 0) return '0 B';
+        if (bytes === 0) {
+            return '0 B';
+        }
         const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(1024));
         return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
@@ -130,9 +132,8 @@ class FileManager {
                     multiple: false
                 });
                 
-                const file = await fileHandle.getFile();
                 // console.log('[FileManager] Modern file picker succeeded:', file.name);
-                return file;
+                return await fileHandle.getFile();
             } catch (error) {
                 if (error.name !== 'AbortError') {
                     console.warn('[FileManager] Modern file picker failed:', error);
@@ -341,7 +342,9 @@ class FileMemoryManager {
      * Format bytes for display
      */
     formatBytes(bytes) {
-        if (bytes === 0) return '0 Bytes';
+        if (bytes === 0) {
+            return '0 Bytes';
+        }
         const k = 1024;
         const sizes = ['Bytes', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -358,9 +361,15 @@ class FileMemoryManager {
         const hours = Math.floor(diff / 3600000);
         const days = Math.floor(diff / 86400000);
 
-        if (minutes < 1) return 'Just now';
-        if (minutes < 60) return `${minutes}m ago`;
-        if (hours < 24) return `${hours}h ago`;
+        if (minutes < 1) {
+            return 'Just now';
+        }
+        if (minutes < 60) {
+            return `${minutes}m ago`;
+        }
+        if (hours < 24) {
+            return `${hours}h ago`;
+        }
         return `${days}d ago`;
     }
 
@@ -371,7 +380,9 @@ class FileMemoryManager {
      */
     createRecentFilesUI(container, onFileSelect) {
         const suggestions = this.getFileSuggestions();
-        if (suggestions.length === 0) return;
+        if (suggestions.length === 0) {
+            return;
+        }
 
         const dropdown = document.createElement('div');
         dropdown.className = 'recent-files-dropdown fade-in';

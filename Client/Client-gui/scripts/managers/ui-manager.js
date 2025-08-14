@@ -8,7 +8,9 @@ class NotificationManager {
     }
 
     async requestPermission() {
-        if (!('Notification' in window)) return;
+        if (!('Notification' in window)) {
+            return;
+        }
         const permission = await Notification.requestPermission();
         debugLog(`Notification permission: ${permission}`, 'NOTIFICATIONS');
         return permission;
@@ -71,14 +73,18 @@ class ConfirmModalManager extends ModalManager {
         if (this.confirmOkBtn) {
             this.confirmOkBtn.onclick = null; // Clear any existing onclick
             this.confirmOkBtn.addEventListener('click', () => {
-                if (this.resolve) this.resolve(true);
+                if (this.resolve) {
+                    this.resolve(true);
+                }
                 this.hide();
             });
         }
         if (this.cancelBtn) {
             this.cancelBtn.onclick = null; // Clear any existing onclick
             this.cancelBtn.addEventListener('click', () => {
-                if (this.resolve) this.resolve(false);
+                if (this.resolve) {
+                    this.resolve(false);
+                }
                 this.hide();
             });
         }
@@ -136,7 +142,9 @@ class ButtonStateManager {
     }
 
     setLoading(button, loadingText = null) {
-        if (!button) return;
+        if (!button) {
+            return;
+        }
         
         const buttonId = button.id || button.textContent.trim();
         
@@ -165,7 +173,9 @@ class ButtonStateManager {
     }
 
     setSuccess(button, successText = null, duration = 2000) {
-        if (!button) return;
+        if (!button) {
+            return;
+        }
         
         const buttonId = button.id || this.originalStates.get(button.id)?.text || 'unknown';
         
@@ -189,7 +199,9 @@ class ButtonStateManager {
     }
 
     setError(button, errorText = null, duration = 3000) {
-        if (!button) return;
+        if (!button) {
+            return;
+        }
         
         const buttonId = button.id || this.originalStates.get(button.id)?.text || 'unknown';
         
@@ -214,7 +226,9 @@ class ButtonStateManager {
     }
 
     reset(button) {
-        if (!button) return;
+        if (!button) {
+            return;
+        }
         
         const buttonId = button.id || button.textContent.trim();
         const originalState = this.originalStates.get(buttonId);
@@ -227,13 +241,11 @@ class ButtonStateManager {
             if (iconSpan && textSpan) {
                 iconSpan.textContent = originalState.icon;
                 textSpan.textContent = originalState.text;
-            } else {
+            } else if (originalState.icon) {
                 // Fallback: recreate structure or use plain text
-                if (originalState.icon) {
-                    button.innerHTML = `<span class="btn-icon">${originalState.icon}</span><span class="btn-text">${originalState.text}</span>`;
-                } else {
-                    button.textContent = originalState.text;
-                }
+                button.innerHTML = `<span class="btn-icon">${originalState.icon}</span><span class="btn-text">${originalState.text}</span>`;
+            } else {
+                button.textContent = originalState.text;
             }
 
             button.disabled = originalState.disabled;

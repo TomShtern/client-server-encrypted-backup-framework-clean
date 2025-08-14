@@ -326,7 +326,9 @@ class App {
      */
     showPhaseTransitionNotification(phase, description) {
         // Only show notifications for significant phase changes, not every progress update
-        if (this.lastNotificationPhase === phase) return;
+        if (this.lastNotificationPhase === phase) {
+            return;
+        }
         
         this.lastNotificationPhase = phase;
         
@@ -900,7 +902,9 @@ class App {
      * Format bytes in human readable format
      */
     formatBytes(bytes) {
-        if (bytes === 0) return '0 Bytes';
+        if (bytes === 0) {
+            return '0 Bytes';
+        }
         const k = 1024;
         const sizes = ['Bytes', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -1008,10 +1012,14 @@ class App {
      * Calculate ETA based on current phase and elapsed time
      */
     calculateETA(currentPhase, elapsedMs) {
-        if (!this.progressConfig || !currentPhase) return null;
+        if (!this.progressConfig || !currentPhase) {
+            return null;
+        }
 
         const phaseConfig = this.progressConfig.phases[currentPhase];
-        if (!phaseConfig) return null;
+        if (!phaseConfig) {
+            return null;
+        }
 
         // Calculate total expected duration
         const totalExpectedMs = this.progressConfig.calibration_info.total_avg_duration_ms || 4200;
@@ -1031,15 +1039,21 @@ class App {
      * Get progress within current phase (0.0 to 1.0)
      */
     getPhaseProgress(currentPhase) {
-        if (!this.progressConfig || !currentPhase) return 0;
+        if (!this.progressConfig || !currentPhase) {
+            return 0;
+        }
         
         const phaseConfig = this.progressConfig.phases[currentPhase];
-        if (!phaseConfig || !phaseConfig.progress_range) return 0;
+        if (!phaseConfig || !phaseConfig.progress_range) {
+            return 0;
+        }
         
         const [rangeStart, rangeEnd] = phaseConfig.progress_range;
         const rangeSize = rangeEnd - rangeStart;
         
-        if (rangeSize <= 0) return 1.0;
+        if (rangeSize <= 0) {
+            return 1.0;
+        }
         
         // Calculate progress within this phase based on current overall progress
         const currentProgress = this.state.progress || 0;
@@ -1052,7 +1066,9 @@ class App {
      * Get total completed weight across all phases
      */
     getCompletedWeight(currentPhase, phaseProgress) {
-        if (!this.progressConfig) return 0;
+        if (!this.progressConfig) {
+            return 0;
+        }
         
         let completedWeight = 0;
         const phases = Object.keys(this.progressConfig.phases);
@@ -1077,7 +1093,9 @@ class App {
      * Get rich phase description from configuration
      */
     getPhaseDescription(phase) {
-        if (!this.progressConfig || !phase) return phase;
+        if (!this.progressConfig || !phase) {
+            return phase;
+        }
         
         const phaseConfig = this.progressConfig.phases[phase];
         return phaseConfig ? phaseConfig.description : phase;
@@ -1087,7 +1105,9 @@ class App {
      * Format ETA for display
      */
     formatETA(seconds) {
-        if (!seconds || seconds <= 0) return 'Calculating...';
+        if (!seconds || seconds <= 0) {
+            return 'Calculating...';
+        }
         
         if (seconds < 60) {
             return `${seconds}s remaining`;
@@ -1402,7 +1422,7 @@ class App {
 
     initializeDebugConsole() {
         // Initialize debug console only when needed
-        const debugContent = this.elements.debugContent;
+        const { debugContent } = this.elements;
         if (debugContent && !debugContent.getAttribute('data-initialized')) {
             debugContent.setAttribute('data-initialized', 'true');
             // Additional heavy debug console initialization can go here
@@ -1412,7 +1432,7 @@ class App {
 
     initializeAdvancedSettings() {
         // Initialize advanced settings panel only when accessed
-        const advancedSettings = this.elements.advancedSettings;
+        const { advancedSettings } = this.elements;
         if (advancedSettings && !advancedSettings.getAttribute('data-initialized')) {
             advancedSettings.setAttribute('data-initialized', 'true');
             // Additional heavy settings initialization can go here  
@@ -1654,7 +1674,9 @@ class App {
 
     updateButtonContent(button, icon, text) {
         // Safely update button content while preserving span structure
-        if (!button) return;
+        if (!button) {
+            return;
+        }
 
         const iconSpan = button.querySelector('.btn-icon');
         const textSpan = button.querySelector('.btn-text');
@@ -2074,7 +2096,7 @@ class App {
      */
     getFileTypeInfo(file) {
         const ext = file.name.split('.').pop().toLowerCase();
-        const type = file.type;
+        const { type } = file;
 
         const fileTypes = {
             // Images
@@ -2151,7 +2173,9 @@ class App {
      * Add text file preview
      */
     addTextPreview(container, file) {
-        if (file.size > 50000) return; // Skip large files
+        if (file.size > 50000) {
+            return; // Skip large files
+        }
         
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -2215,7 +2239,9 @@ class App {
     }
 
     _flushPendingLogs() {
-        if (!this._pendingLogs || this._pendingLogs.length === 0) return;
+        if (!this._pendingLogs || this._pendingLogs.length === 0) {
+            return;
+        }
 
         // Process all pending logs
         const fragment = document.createDocumentFragment();
@@ -2271,7 +2297,7 @@ class App {
 
     _cleanupLogEntries() {
         // Limit log entries - batch removal for better performance
-        const logContainer = this.elements.logContainer;
+        const { logContainer } = this.elements;
         const childrenToRemove = logContainer.children.length - 200;
         if (childrenToRemove > 0) {
             // Remove excess children in batch to reduce reflows
@@ -2328,18 +2354,17 @@ class App {
     }
 
     toggleDebugConsole() {
-        const debugPanel = this.elements.debugPanel;
-        const debugContent = this.elements.debugContent;
-        const isExpanded = this.elements.debugToggle.getAttribute('aria-expanded') === 'true';
+        const { debugPanel, debugContent, debugToggle } = this.elements;
+        const isExpanded = debugToggle.getAttribute('aria-expanded') === 'true';
 
         if (isExpanded) {
             debugPanel.style.maxHeight = '0';
             debugContent.classList.remove('show');
-            this.elements.debugToggle.setAttribute('aria-expanded', 'false');
+            debugToggle.setAttribute('aria-expanded', 'false');
         } else {
             debugPanel.style.maxHeight = debugPanel.scrollHeight + 'px'; // Set to actual height
             debugContent.classList.add('show');
-            this.elements.debugToggle.setAttribute('aria-expanded', 'true');
+            debugToggle.setAttribute('aria-expanded', 'true');
             this.loadLazyComponent('debugConsole'); // Lazy load debug console content
         }
     }
@@ -2385,7 +2410,9 @@ class App {
         const closeToast = () => {
             toast.style.animation = 'slideOutRight 0.4s forwards';
             toast.addEventListener('animationend', () => {
-                if (toast.parentNode) toast.remove();
+                if (toast.parentNode) {
+                    toast.remove();
+                }
             });
         };
 
@@ -2408,22 +2435,30 @@ class App {
     }
 
     formatBytes(bytes) {
-        if (bytes === 0) return '0 B';
+        if (bytes === 0) {
+            return '0 B';
+        }
         const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
         const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
         return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
     }
 
     formatBytesPerSecond(bytesPerSecond) {
-        if (bytesPerSecond === 0) return '0 B/s';
+        if (bytesPerSecond === 0) {
+            return '0 B/s';
+        }
         const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s', 'TB/s'];
         const i = parseInt(Math.floor(Math.log(bytesPerSecond) / Math.log(1024)));
         return Math.round(bytesPerSecond / Math.pow(1024, i), 2) + ' ' + sizes[i];
     }
 
     formatTime(seconds) {
-        if (seconds === '--:--') return seconds; // Handle initial state
-        if (seconds < 0) return '--:--';
+        if (seconds === '--:--') {
+            return seconds; // Handle initial state
+        }
+        if (seconds < 0) {
+            return '--:--';
+        }
         const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
         const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
         const s = Math.floor(seconds % 60).toString().padStart(2, '0');
@@ -2501,7 +2536,7 @@ class App {
      * Copy client ID to clipboard
      */
     copyClientId() {
-        const clientId = this.state.clientId;
+        const { clientId } = this.state;
         if (!clientId) {
             this.showToast('No client ID available to copy', 'warning');
             return;
@@ -2633,7 +2668,9 @@ class App {
      * Format bytes for display
      */
     formatBytes(bytes) {
-        if (bytes === 0) return '0 Bytes';
+        if (bytes === 0) {
+            return '0 Bytes';
+        }
         const k = 1024;
         const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -2682,7 +2719,7 @@ class App {
 
             // Clear large log entries to free memory
             if (this.elements && this.elements.logContainer) {
-                const logContainer = this.elements.logContainer;
+                const { logContainer } = this.elements;
                 const childrenToRemove = logContainer.children.length - 10;
                 if (childrenToRemove > 0) {
                     // Batch remove for better performance
