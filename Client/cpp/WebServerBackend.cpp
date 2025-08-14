@@ -180,7 +180,7 @@ public:
         
         if (!html_loaded_) {
             try {
-                std::ifstream file("src/client/NewGUIforClient.html");
+                std::ifstream file("Client/Client-gui/NewGUIforClient.html");
                 if (file.is_open()) {
                     cached_html_ = std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
                     html_loaded_ = true;
@@ -215,6 +215,66 @@ void add_cors_headers(http::response<http::string_body>& res) {
     res.set(http::field::access_control_allow_headers, "Content-Type, Authorization");
 }
 
+// Determine content type based on file extension
+std::string get_content_type(const std::string& path) {
+    // Use C++17 compatible string operations instead of ends_with
+    if (path.length() >= 5 && path.substr(path.length() - 5) == ".html") return "text/html";
+    if (path.length() >= 4 && path.substr(path.length() - 4) == ".css") return "text/css";
+    if (path.length() >= 3 && path.substr(path.length() - 3) == ".js") return "application/javascript";
+    if (path.length() >= 5 && path.substr(path.length() - 5) == ".json") return "application/json";
+    if (path.length() >= 4 && path.substr(path.length() - 4) == ".png") return "image/png";
+    if (path.length() >= 4 && path.substr(path.length() - 4) == ".jpg") return "image/jpeg";
+    if (path.length() >= 5 && path.substr(path.length() - 5) == ".jpeg") return "image/jpeg";
+    if (path.length() >= 4 && path.substr(path.length() - 4) == ".gif") return "image/gif";
+    if (path.length() >= 4 && path.substr(path.length() - 4) == ".svg") return "image/svg+xml";
+    if (path.length() >= 4 && path.substr(path.length() - 4) == ".ico") return "image/x-icon";
+    if (path.length() >= 5 && path.substr(path.length() - 5) == ".woff") return "font/woff";
+    if (path.length() >= 6 && path.substr(path.length() - 6) == ".woff2") return "font/woff2";
+    if (path.length() >= 4 && path.substr(path.length() - 4) == ".ttf") return "font/ttf";
+    if (path.length() >= 4 && path.substr(path.length() - 4) == ".eot") return "application/vnd.ms-fontobject";
+    return "application/octet-stream"; // Default binary type
+}
+
+// Read a file and return its contents as a string
+std::string read_file(const std::string& path) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file.is_open()) {
+        return ""; // Return empty string if file can't be opened
+    }
+    return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+}
+
+// Serve a static file
+http::response<http::string_body> serve_file(const std::string& path) {
+    http::response<http::string_body> res;
+    res.version(11); // HTTP/1.1
+    res.set(http::field::server, "CyberBackup-WebAPI/1.0");
+    res.set(http::field::content_type, get_content_type(path).c_str());
+    
+    try {
+        std::ifstream file(path, std::ios::binary);
+        if (file.is_open()) {
+            // Read file content
+            std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            file.close();
+            
+            res.result(http::status::ok);
+            res.body() = content;
+        } else {
+            // File not found
+            res.result(http::status::not_found);
+            res.body() = "File not found: " + path;
+        }
+    } catch (const std::exception& e) {
+        // Error reading file
+        res.result(http::status::internal_server_error);
+        res.body() = "Error reading file: " + path + " - " + e.what();
+    }
+    
+    res.prepare_payload();
+    return res;
+}
+
 // Handle HTTP requests
 template<class Body, class Allocator>
 http::response<http::string_body>
@@ -223,7 +283,6 @@ handle_request(http::request<Body, http::basic_fields<Allocator>>&& req) {
     http::response<http::string_body> res;
     res.version(req.version());
     res.set(http::field::server, "CyberBackup-WebAPI/1.0");
-    res.set(http::field::content_type, "application/json");
     add_cors_headers(res);
     
     // Handle CORS preflight
@@ -235,6 +294,63 @@ handle_request(http::request<Body, http::basic_fields<Allocator>>&& req) {
     }
     
     auto const target = req.target();
+    
+    // Handle static file requests
+    if (req.method() == http::verb::get) {
+        std::string file_path;
+        
+        // Determine the file path based on the request target
+        std::string target_str(target);
+        if (target_str == "/" || target_str == "/index.html" || target_str == "/NewGUIforClient.html") {
+            // Serve the main HTML file
+            std::string html_content = g_static_cache.getHTML();
+            if (!html_content.empty()) {
+                res.result(http::status::ok);
+                res.set(http::field::content_type, "text/html");
+                res.body() = html_content;
+                res.prepare_payload();
+                return res;
+            } else {
+                // If we can't load the HTML file, return a 404
+                res.result(http::status::not_found);
+                res.set(http::field::content_type, "text/plain");
+                res.body() = "File not found";
+                res.prepare_payload();
+                return res;
+            }
+        } else if (target_str.length() >= 8 && target_str.substr(0, 8) == "/styles/" || 
+                   target_str.length() >= 9 && target_str.substr(0, 9) == "/scripts/") {
+            // Serve CSS and JS files
+            file_path = "Client/Client-gui" + std::string(target);
+            std::string file_content = read_file(file_path);
+            if (!file_content.empty()) {
+                res.result(http::status::ok);
+                res.set(http::field::content_type, get_content_type(file_path).c_str());
+                res.body() = file_content;
+                res.prepare_payload();
+                return res;
+            } else {
+                // If we can't load the file, return a 404
+                res.result(http::status::not_found);
+                res.set(http::field::content_type, "text/plain");
+                res.body() = "File not found";
+                res.prepare_payload();
+                return res;
+            }
+        }
+        // For other static files in the root directory
+        else if (target_str.length() >= 1 && target_str[0] == '/') {
+            file_path = "Client/Client-gui" + std::string(target);
+            std::string file_content = read_file(file_path);
+            if (!file_content.empty()) {
+                res.result(http::status::ok);
+                res.set(http::field::content_type, get_content_type(file_path).c_str());
+                res.body() = file_content;
+                res.prepare_payload();
+                return res;
+            }
+        }
+    }
     
     try {        // GET /api/status - Get current application state
         if (req.method() == http::verb::get && target == "/api/status") {
@@ -620,7 +736,8 @@ handle_request(http::request<Body, http::basic_fields<Allocator>>&& req) {
             response.set("error", "Endpoint not found");
             res.result(http::status::not_found);
             res.body() = response.serialize();
-        }    } catch (const std::exception& e) {
+        }
+    } catch (const std::exception& e) {
         JsonObject response;
         response.set("error", std::string("Server error: ") + e.what());
         res.result(http::status::internal_server_error);

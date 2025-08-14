@@ -89,7 +89,7 @@ conn_health = get_connection_health_monitor()
 
 # Connection management
 MAX_CONNECTIONS = 3  # Reduced - limit total WebSocket connections  
-MAX_CONNECTIONS_PER_IP = 2  # Only 2 connections per IP - one for page, one for WebSocket
+MAX_CONNECTIONS_PER_IP = 6  # Increased to allow more concurrent connections for assets
 connected_clients: Set[str] = set()  # Track connected client IDs
 connection_locks: Dict[str, threading.Lock] = {}  # Per-IP connection limits
 ip_connection_counts: Dict[str, int] = {}  # Track connections per IP
@@ -118,7 +118,7 @@ def limit_connections_per_ip():
     
     # Allow static file requests and essential endpoints with more lenient limits
     if request.endpoint in ['serve_client', 'serve_client_assets']:
-        max_allowed = MAX_CONNECTIONS_PER_IP + 2  # Allow a few more for assets
+        max_allowed = MAX_CONNECTIONS_PER_IP + 4  # Allow more connections for assets
     else:
         max_allowed = MAX_CONNECTIONS_PER_IP
     
@@ -493,13 +493,23 @@ def serve_client():
         logger.error(f"Error serving HTML: {e}")
         return f"<h1>Server Error</h1><p>Error serving client: {e}</p>", 500
 
-@app.route('/client/<path:filename>')
+@app.route('/<path:filename>')
 def serve_client_assets(filename):
     """Serve client assets (CSS, JS, images, etc.)"""
+    # Don't serve the main HTML file through this route
+    if filename in ['NewGUIforClient.html', 'index.html']:
+        return "<h1>Not Found</h1><p>The requested URL was not found on the server.</p>", 404
+        
     try:
         # Use absolute path to handle working directory issues
         client_dir = CLIENT_GUI_PATH
         
+        # Security check: ensure the requested file is within the client directory
+        requested_path = os.path.join(client_dir, filename)
+        if not os.path.abspath(requested_path).startswith(os.path.abspath(client_dir)):
+            logger.error(f"Attempt to access file outside client directory: {filename}")
+            return "<h1>Forbidden</h1><p>Access denied</p>", 403
+            
         logger.debug(f"Serving asset {filename} from {client_dir}")
         return send_from_directory(client_dir, filename)
     except FileNotFoundError:
