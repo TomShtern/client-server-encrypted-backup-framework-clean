@@ -9,33 +9,33 @@ import os
 import argparse
 import json
 from datetime import datetime
+from typing import Any, Optional
 
 # Setup standardized import paths
 import sys
 import os
 from Shared.path_utils import setup_imports
 setup_imports()
-from Shared.path_utils import setup_imports
-setup_imports()
 
-def print_header(title):
+def print_header(title: str) -> None:
     """Print a formatted header."""
     print("\n" + "="*60)
     print(f"  {title}")
     print("="*60)
 
-def print_status(message, status="INFO"):
+def print_status(message: str, status: str = "INFO") -> None:
     """Print a status message."""
     timestamp = datetime.now().strftime("%H:%M:%S")
     print(f"[{timestamp}] {status}: {message}")
 
-def cmd_status(args):
+def cmd_status(args: argparse.Namespace) -> Optional[int]:
     """Show database status and health information."""
     print_header("Database Status")
     
     try:
-        from database import DatabaseManager
-        from database_migrations import DatabaseMigrationManager
+        # Import from python_server.server module with proper path
+        from python_server.server.database import DatabaseManager
+        from python_server.server.database_migrations import DatabaseMigrationManager
         
         # Initialize managers
         db = DatabaseManager(args.database, use_pool=True)
@@ -91,12 +91,12 @@ def cmd_status(args):
     
     return 0
 
-def cmd_migrate(args):
+def cmd_migrate(args: argparse.Namespace) -> Optional[int]:
     """Apply database migrations."""
     print_header("Database Migration")
     
     try:
-        from database_migrations import DatabaseMigrationManager, migrate_database
+        from python_server.server.database_migrations import DatabaseMigrationManager, migrate_database
         
         manager = DatabaseMigrationManager(args.database)
         
@@ -151,12 +151,12 @@ def cmd_migrate(args):
     
     return 0
 
-def cmd_optimize(args):
+def cmd_optimize(args: argparse.Namespace) -> Optional[int]:
     """Optimize database performance."""
     print_header("Database Optimization")
     
     try:
-        from database import DatabaseManager
+        from python_server.server.database import DatabaseManager
         
         db = DatabaseManager(args.database, use_pool=True)
         
@@ -191,12 +191,12 @@ def cmd_optimize(args):
     
     return 0
 
-def cmd_backup(args):
+def cmd_backup(args: argparse.Namespace) -> Optional[int]:
     """Create database backup."""
     print_header("Database Backup")
     
     try:
-        from database import DatabaseManager
+        from python_server.server.database import DatabaseManager
         
         db = DatabaseManager(args.database, use_pool=True)
         
@@ -214,12 +214,12 @@ def cmd_backup(args):
     
     return 0
 
-def cmd_search(args):
+def cmd_search(args: argparse.Namespace) -> Optional[int]:
     """Search files with advanced filters."""
     print_header("Advanced File Search")
     
     try:
-        from database import DatabaseManager
+        from python_server.server.database import DatabaseManager
         
         db = DatabaseManager(args.database, use_pool=True)
         
@@ -264,12 +264,12 @@ def cmd_search(args):
     
     return 0
 
-def cmd_stats(args):
+def cmd_stats(args: argparse.Namespace) -> Optional[int]:
     """Show detailed database statistics."""
     print_header("Database Statistics")
     
     try:
-        from database import DatabaseManager
+        from python_server.server.database import DatabaseManager
         
         db = DatabaseManager(args.database, use_pool=True)
         stats = db.get_storage_statistics()
@@ -354,7 +354,7 @@ Examples:
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
     # Status command
-    status_parser = subparsers.add_parser("status", help="Show database status and health")
+    subparsers.add_parser("status", help="Show database status and health")
     
     # Migration command
     migrate_parser = subparsers.add_parser("migrate", help="Apply database migrations")
@@ -364,7 +364,7 @@ Examples:
     )
     
     # Optimization command
-    optimize_parser = subparsers.add_parser("optimize", help="Optimize database performance")
+    subparsers.add_parser("optimize", help="Optimize database performance")
     
     # Backup command
     backup_parser = subparsers.add_parser("backup", help="Create database backup")

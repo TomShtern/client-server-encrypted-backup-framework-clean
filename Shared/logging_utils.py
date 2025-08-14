@@ -136,7 +136,7 @@ def get_all_log_files() -> List[Dict[str, Any]]:
     if not logs_dir.exists():
         return []
     
-    log_files = []
+    log_files: List[Dict[str, Any]] = []
     for log_file in logs_dir.glob("*.log"):
         if log_file.name.startswith("latest-"):
             continue  # Skip latest symlinks

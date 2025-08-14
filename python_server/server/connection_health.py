@@ -9,7 +9,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Any
 
 
 @dataclass
@@ -49,21 +49,19 @@ class ConnStats:
     def close(self):
         self.closed_ts = time.time()
 
-    def summary(self) -> Dict:
+    def summary(self) -> Dict[str, Any]:
+        """Return a summary dict of this connection's stats."""
         now = time.time()
+        lifetime = (self.closed_ts or now) - self.opened_ts
         return {
-            "client": f"{self.client_addr[0]}:{self.client_addr[1]}",
-            "client_id": self.client_id_hex,
-            "uptime_sec": int((self.closed_ts or now) - self.opened_ts),
-            "idle_read_sec": int(now - self.last_read_ts),
-            "idle_write_sec": int(now - self.last_write_ts),
-            "bytes_in": self.bytes_in,
-            "bytes_out": self.bytes_out,
-            "read_errors": self.read_errors,
-            "write_errors": self.write_errors,
-            "partial_clears": self.partial_clears,
-            "last_error": self.last_error,
-            "closed": self.closed_ts is not None,
+            'client_addr': f"{self.client_addr[0]}:{self.client_addr[1]}",
+            'client_id': self.client_id_hex,
+            'lifetime': round(lifetime, 2),
+            'bytes_in': self.bytes_in,
+            'bytes_out': self.bytes_out,
+            'errors': self.read_errors + self.write_errors,
+            'last_error': self.last_error,
+            'closed': self.closed_ts is not None
         }
 
 

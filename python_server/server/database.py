@@ -33,10 +33,29 @@ from .exceptions import ServerError
 # Import observability framework if available
 try:
     import sys
+    import os
     sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Shared'))
-    from observability import StructuredLogger, MetricsCollector
+    from observability import StructuredLogger as _StructuredLogger, MetricsCollector as _MetricsCollector  # type: ignore
     OBSERVABILITY_AVAILABLE = True
+    StructuredLogger = _StructuredLogger
+    MetricsCollector = _MetricsCollector
 except ImportError:
+    OBSERVABILITY_AVAILABLE = False
+    # Create stub classes when observability is not available
+    class StructuredLogger:
+        def __init__(self, name: str, logger: logging.Logger) -> None:
+            self.logger = logger
+        def info(self, msg: str, **kwargs: Any) -> None:
+            self.logger.info(msg)
+        def error(self, msg: str, **kwargs: Any) -> None:
+            self.logger.error(msg)
+        def debug(self, msg: str, **kwargs: Any) -> None:
+            self.logger.debug(msg)
+    
+    class MetricsCollector:
+        def __init__(self) -> None:
+            pass
+    
     OBSERVABILITY_AVAILABLE = False
 
 # Setup module logger
@@ -114,8 +133,7 @@ class DatabaseConnectionPool:
     def _create_connections(self):
         """Create initial pool of database connections with monitoring."""
         for i in range(self.pool_size):
-            conn = self._create_monitored_connection(f"initial_{i}")
-            if conn:
+            if conn := self._create_monitored_connection(f"initial_{i}"):
                 self.pool.put(conn)
                 self.metrics.total_connections += 1
                 self.metrics.connections_created += 1
@@ -165,29 +183,47 @@ class DatabaseConnectionPool:
                 import os
                 shared_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Shared', 'utils')
                 sys.path.append(shared_path)
-                from thread_manager import create_managed_thread
-                
-                def cleanup_database_resources():
-                    """Cleanup function for database monitoring resources"""
-                    logger.info("Performing database monitoring cleanup...")
-                    self._monitoring_enabled = False
-                
-                # Create managed thread
-                thread_name = create_managed_thread(
-                    target=self._monitoring_loop,
-                    name=f"database_pool_monitor_{id(self)}",
-                    component="database_manager",
-                    daemon=True,
-                    cleanup_callback=cleanup_database_resources,
-                    auto_start=True
-                )
-                
-                if thread_name:
-                    logger.info(f"Database monitoring thread registered as: {thread_name}")
-                    # Store reference for compatibility
-                    self._cleanup_thread = threading.current_thread()  # Placeholder
-                else:
-                    raise ImportError("Thread manager registration failed")
+                try:
+                    from Shared.utils.thread_manager import create_managed_thread
+                    
+                    def cleanup_database_resources():
+                        """Cleanup function for database monitoring resources"""
+                        logger.info("Performing database monitoring cleanup...")
+                        self._monitoring_enabled = False
+                    
+                    # Create managed thread
+                    thread_name = create_managed_thread(
+                        target=self._monitoring_loop,
+                        name=f"database_pool_monitor_{id(self)}",
+                        component="database_manager",
+                        daemon=True,
+                        cleanup_callback=cleanup_database_resources,
+                        auto_start=True
+                    )
+                    
+                    if thread_name:
+                        logger.info(f"Database monitoring thread registered as: {thread_name}")
+                        # Store reference for compatibility
+                        self._cleanup_thread = threading.current_thread()  # Placeholder
+                    else:
+                        raise ImportError("Thread manager registration failed")
+                        
+                except ImportError:
+                    # Fallback to standard threading
+                    logger.warning("Thread manager not available, using standard threading")
+                    
+                    def cleanup_database_resources():
+                        """Cleanup function for database monitoring resources"""
+                        logger.info("Performing database monitoring cleanup...")
+                        self._monitoring_enabled = False
+                    
+                    self._cleanup_thread = threading.Thread(
+                        target=self._monitoring_loop,
+                        name=f"database_pool_monitor_{id(self)}",
+                        daemon=True
+                    )
+                    self._cleanup_thread.start()
+                    logger.info(f"Database monitoring thread started: {self._cleanup_thread.name}")
                     
             except ImportError:
                 logger.debug("Thread manager not available, using basic thread management")
@@ -199,7 +235,7 @@ class DatabaseConnectionPool:
                 self._cleanup_thread.start()
                 logger.info("Database connection pool monitoring thread started")
     
-    def _monitoring_loop(self, stop_event=None):
+    def _monitoring_loop(self, stop_event: Optional[threading.Event] = None):
         """Background monitoring and cleanup loop with shutdown awareness."""
         logger.info("Database connection pool monitoring loop started")
         
@@ -257,7 +293,7 @@ class DatabaseConnectionPool:
             
             # Log structured information
             if structured_logger:
-                structured_logger.info(
+                structured_logger.info(  # type: ignore
                     "Database connection acquired",
                     connection_id=conn_id,
                     wait_time_ms=(time.time() - start_time) * 1000,
@@ -280,7 +316,7 @@ class DatabaseConnectionPool:
                     self.metrics.connections_created += 1
                 return emergency_conn
             else:
-                raise Exception("Failed to create emergency database connection")
+                raise ServerError("Failed to create emergency database connection")
     
     def _handle_pool_exhaustion(self):
         """Handle connection pool exhaustion with alerts and cleanup."""
@@ -296,7 +332,7 @@ class DatabaseConnectionPool:
             
             # Structured logging with detailed context
             if structured_logger:
-                structured_logger.error(
+                structured_logger.error(  # type: ignore
                     "Connection pool exhaustion detected",
                     pool_size=self.pool_size,
                     active_connections=self.metrics.active_connections,
@@ -329,7 +365,7 @@ class DatabaseConnectionPool:
             self.pool.put_nowait(conn)
             
             if structured_logger:
-                structured_logger.debug(
+                structured_logger.debug(  # type: ignore
                     "Database connection returned to pool",
                     connection_id=conn_id,
                     active_connections=self.metrics.active_connections,
@@ -363,7 +399,7 @@ class DatabaseConnectionPool:
     def _perform_cleanup(self):
         """Perform regular cleanup of stale connections."""
         current_time = time.time()
-        stale_connections = []
+        stale_connections: List[int] = []
         
         with self.lock:
             for conn_id, info in self.connection_info.items():
@@ -390,7 +426,7 @@ class DatabaseConnectionPool:
         """Clean up a specific stale connection."""
         try:
             # Try to find and remove connection from pool
-            temp_connections = []
+            temp_connections: List[sqlite3.Connection] = []
             found = False
             
             # Remove all connections from pool temporarily
@@ -419,7 +455,7 @@ class DatabaseConnectionPool:
     def _force_cleanup_stale_connections(self) -> int:
         """Force cleanup of all stale connections during pool exhaustion."""
         current_time = time.time()
-        stale_connections = []
+        stale_connections: List[int] = []
         
         with self.lock:
             for conn_id, info in self.connection_info.items():
@@ -457,7 +493,7 @@ class DatabaseConnectionPool:
         current_time = time.time()
         
         # Check for potential issues
-        issues = []
+        issues: List[str] = []
         
         # Check pool utilization
         if self.metrics.active_connections > (self.pool_size * 0.8):
@@ -484,8 +520,8 @@ class DatabaseConnectionPool:
     def _get_connection_ages_summary(self) -> Dict[str, Any]:
         """Get summary of connection ages for monitoring."""
         current_time = time.time()
-        ages = []
-        idle_times = []
+        ages: List[float] = []
+        idle_times: List[float] = []
         
         with self.lock:
             for info in self.connection_info.values():
@@ -1113,8 +1149,9 @@ class DatabaseManager:
     def get_total_clients_count(self) -> int:
         """Returns the total number of registered clients."""
         try:
-            result = self.execute("SELECT COUNT(*) FROM clients", fetchone=True)
-            if result:
+            if result := self.execute(
+                "SELECT COUNT(*) FROM clients", fetchone=True
+            ):
                 return result[0] if result[0] is not None else 0
             return 0
         except Exception as e:
@@ -1388,7 +1425,7 @@ class DatabaseManager:
             'size_before_mb': 0,
             'size_after_mb': 0,
             'space_saved_mb': 0,
-            'errors': []  # type: List[str]
+            'errors': []
         }
         
         try:
@@ -1477,7 +1514,7 @@ class DatabaseManager:
             'table_count': 0,
             'index_count': 0,
             'connection_pool_healthy': False,
-            'issues': []  # type: List[str]
+            'issues': []
         }
         
         try:
@@ -1540,8 +1577,8 @@ class DatabaseManager:
             }
         
         status = self.connection_pool.get_pool_status()
-        recommendations = []
-        warnings = []
+        recommendations: List[str] = []
+        warnings: List[str] = []
         
         # Analyze pool status and generate recommendations
         pool_utilization = status["active_connections"] / status["pool_size"] if status["pool_size"] > 0 else 0
@@ -1602,7 +1639,7 @@ class DatabaseManager:
             
             # Log to structured logger if available
             if structured_logger:
-                structured_logger.info(
+                structured_logger.info(  # type: ignore
                     "Database connection pool force cleanup completed",
                     **result
                 )
@@ -1627,7 +1664,7 @@ class DatabaseManager:
         
         # Check for exhaustion indicators
         exhaustion_risk = "low"
-        issues = []
+        issues: List[str] = []
         
         pool_utilization = status["active_connections"] / status["pool_size"] if status["pool_size"] > 0 else 0
         
@@ -1661,7 +1698,7 @@ class DatabaseManager:
     
     def _get_exhaustion_recommendations(self, risk_level: str, issues: List[str]) -> List[str]:
         """Get recommendations based on exhaustion risk level."""
-        recommendations = []
+        recommendations: List[str] = []
         
         if risk_level == "critical":
             recommendations.extend([
@@ -1765,7 +1802,8 @@ def check_database_permissions():
 def get_connection_pool_status(db_name: Optional[str] = None) -> Dict[str, Any]:
     """Get connection pool status for monitoring."""
     db_manager = DatabaseManager(db_name)
-    return db_manager.get_connection_pool_metrics()
+    result = db_manager.get_connection_pool_metrics()
+    return result if result is not None else {}
 
 
 def monitor_database_connections(db_name: Optional[str] = None) -> Dict[str, Any]:

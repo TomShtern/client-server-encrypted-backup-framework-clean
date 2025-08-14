@@ -15,7 +15,7 @@ import tempfile
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 logger = logging.getLogger(__name__)
 
@@ -92,12 +92,10 @@ class SynchronizedFileManager:
                 
             except Exception as e:
                 # Cleanup on failure
-                try:
+                with suppress(Exception):
                     if os.path.exists(temp_dir):
                         import shutil
                         shutil.rmtree(temp_dir)
-                except Exception:
-                    pass
                 raise OSError(f"Failed to create managed file {filename}: {e}") from e
     
     def copy_to_locations(self, file_id: str, target_locations: List[str]) -> List[str]:
@@ -120,13 +118,12 @@ class SynchronizedFileManager:
             
             file_info = self.managed_files[file_id]
             source_path = file_info['file_path']
-            successful_copies = []
+            successful_copies: List[str] = []
             
             try:
                 for target_path in target_locations:
                     # Ensure target directory exists
-                    target_dir = os.path.dirname(target_path)
-                    if target_dir:
+                    if target_dir := os.path.dirname(target_path):
                         os.makedirs(target_dir, exist_ok=True)
                     
                     # Copy file content
@@ -140,18 +137,17 @@ class SynchronizedFileManager:
                     logger.debug(f"Copied managed file {file_id} to: {target_path}")
                 
                 # Update managed file info with copy locations
-                file_info['copy_locations'] = successful_copies
+                if isinstance(file_info, dict):
+                    file_info['copy_locations'] = successful_copies
                 
                 return successful_copies
                 
             except Exception as e:
                 # Cleanup any partial copies on failure
                 for copy_path in successful_copies:
-                    try:
+                    with suppress(Exception):
                         if os.path.exists(copy_path):
                             os.remove(copy_path)
-                    except Exception:
-                        pass
                 raise OSError(f"Failed to copy file {file_id} to locations: {e}") from e
     
     def mark_in_subprocess_use(self, file_id: str) -> bool:
@@ -297,13 +293,10 @@ class SynchronizedFileManager:
         """
         with self.lock:
             file_ids = list(self.managed_files.keys())
-            cleaned_count = 0
             
             logger.info(f"Cleaning up {len(file_ids)} managed files")
             
-            for file_id in file_ids:
-                if self.safe_cleanup(file_id, wait_timeout):
-                    cleaned_count += 1
+            cleaned_count = sum(self.safe_cleanup(file_id, wait_timeout) for file_id in file_ids)
             
             logger.info(f"Cleanup completed: {cleaned_count}/{len(file_ids)} files cleaned successfully")
             return cleaned_count
@@ -349,10 +342,8 @@ class SynchronizedFileManager:
         """
         with self.lock:
             file_info = self.managed_files.get(file_id)
-            if file_info:
-                # Return a copy to prevent external modification
-                return dict(file_info)
-            return None
+            # Return a copy to prevent external modification, or None if not found
+            return dict(file_info) if file_info else None
     
     def list_managed_files(self) -> List[str]:
         """
@@ -409,7 +400,7 @@ def test_synchronized_file_manager():
     manager = SynchronizedFileManager()
     
     # Test basic file creation and cleanup
-    with manager.managed_file_context("test.txt", "Hello World") as (file_id, file_path, copies):
+    with manager.managed_file_context("test.txt", "Hello World") as (file_id, file_path, _copies):
         print(f"Created managed file: {file_path}")
         assert os.path.exists(file_path)
         
@@ -422,6 +413,7 @@ def test_synchronized_file_manager():
         copy_locations = manager.copy_to_locations(file_id, target_locations)
         print(f"Copied to: {copy_locations}")
         
+# sourcery skip: no-loop-in-tests
         for copy_path in copy_locations:
             assert os.path.exists(copy_path)
         

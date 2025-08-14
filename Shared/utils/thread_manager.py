@@ -243,7 +243,7 @@ class ThreadManager:
                         except Exception as e:
                             logger.error(f"Cleanup callback failed for thread '{name}': {e}")
         
-        successful_stops = sum(1 for success in results.values() if success)
+        successful_stops = sum(success for success in results.values() if success)
         total_threads = len(results)
         
         logger.info(f"Thread shutdown completed: {successful_stops}/{total_threads} threads stopped gracefully")
@@ -258,7 +258,7 @@ class ThreadManager:
             Dictionary with thread status information
         """
         with self.lock:
-            status = {
+            status: Dict[str, Any] = {
                 'total_threads': len(self.threads),
                 'threads': {},
                 'by_state': {},
@@ -347,11 +347,10 @@ class ThreadManager:
                     # Check if we have a stop event
                     stop_event = getattr(threading.current_thread(), 'stop_event', None)
                     
-                    if stop_event:
-                        # Call original target with stop_event awareness
-                        if hasattr(target, '__code__') and 'stop_event' in target.__code__.co_varnames:
-                            kwargs = kwargs or {}
-                            kwargs['stop_event'] = stop_event
+                    # Call original target with stop_event awareness if needed
+                    if stop_event and hasattr(target, '__code__') and 'stop_event' in target.__code__.co_varnames:
+                        kwargs = kwargs or {}
+                        kwargs['stop_event'] = stop_event
                     
                     return target(*args, **kwargs)
                     
@@ -420,9 +419,9 @@ class ThreadManager:
                 logger.warning(f"Cannot unregister unknown thread '{name}'")
                 return False
     
-    def _signal_handler(self, signum, frame):
+    def _signal_handler(self, signum: int, frame: Any) -> None:
         """Handle system signals for graceful shutdown."""
-        signal_names = {signal.SIGINT: 'SIGINT', signal.SIGTERM: 'SIGTERM'}
+        signal_names: Dict[int, str] = {signal.SIGINT: 'SIGINT', signal.SIGTERM: 'SIGTERM'}
         signal_name = signal_names.get(signum, f'Signal {signum}')
         
         logger.info(f"Received {signal_name} - initiating graceful shutdown")
@@ -460,7 +459,7 @@ def create_managed_thread(target: Callable, name: str, component: str = "unknown
                          args: tuple = (), kwargs: Optional[Dict[str, Any]] = None,
                          auto_start: bool = True) -> Optional[str]:
     """Create a managed thread with the global thread manager."""
-    return get_thread_manager().create_managed_thread(
+    return get_thread_manager().create_managed_thread(  # type: ignore
         target, name, component, daemon, cleanup_callback, args, kwargs, auto_start
     )
 

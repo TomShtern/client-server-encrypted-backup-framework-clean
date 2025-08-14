@@ -218,7 +218,7 @@ class ClientManager:
         self.clients: Dict[bytes, Client] = {}  # In-memory store: client_id_bytes -> Client object
         self.clients_by_name: Dict[str, bytes] = {}  # In-memory store: client_name_str -> client_id_bytes
         self.clients_lock: threading.Lock = threading.Lock()  # Protects access to clients and clients_by_name
-        self.maintenance_stats = {
+        self.maintenance_stats: Dict[str, Any] = {
             'last_cleanup': None,
             'clients_removed_total': 0,
             'partial_files_cleaned_total': 0
@@ -244,7 +244,7 @@ class ClientManager:
             self.clients_by_name.clear()
             loaded_count = 0
             if rows:  # Check if any rows were returned
-                for row_id, name, pk_bytes, last_seen_iso_utc in rows:
+                for row_id, name, pk_bytes, _last_seen_iso_utc in rows:
                     try:
                         client = Client(row_id, name, pk_bytes)  # Create Client object
                         # last_seen_iso_utc is from DB. Internal client.last_seen is monotonic for session timeout.
@@ -332,8 +332,7 @@ class ClientManager:
             The Client object if found, None otherwise.
         """
         with self.clients_lock:
-            client_id = self.clients_by_name.get(name)
-            if client_id:
+            if client_id := self.clients_by_name.get(name):
                 client = self.clients.get(client_id)
                 if client:
                     client.update_last_seen()
@@ -348,8 +347,7 @@ class ClientManager:
             client_id: The client's unique ID.
         """
         with self.clients_lock:
-            client = self.clients.get(client_id)
-            if client:
+            if client := self.clients.get(client_id):
                 client.update_last_seen()
 
     def remove_client(self, client_id: bytes) -> bool:
@@ -363,8 +361,7 @@ class ClientManager:
             True if client was removed, False if not found.
         """
         with self.clients_lock:
-            client = self.clients.pop(client_id, None)
-            if client:
+            if client := self.clients.pop(client_id, None):
                 self.clients_by_name.pop(client.name, None)
                 logger.info(f"Removed client '{client.name}' (ID: {client_id.hex()}) from active memory pool.")
                 return True
@@ -377,20 +374,21 @@ class ClientManager:
         Returns:
             The number of expired clients removed.
         """
-        expired_clients = []
+        expired_clients: List[bytes] = []
         current_time = time.monotonic()
 
         with self.clients_lock:
             # Identify expired clients
-            for client_id, client in self.clients.items():
-                if current_time - client.last_seen > CLIENT_SESSION_TIMEOUT:
-                    expired_clients.append(client_id)
-
+            expired_clients.extend(
+                client_id
+                for client_id, client in self.clients.items()
+                if current_time - client.last_seen > CLIENT_SESSION_TIMEOUT
+            )
             # Remove expired clients
             removed_count = 0
             for client_id in expired_clients:
                 client = self.clients.pop(client_id, None)
-                if client:
+                if client is not None:
                     self.clients_by_name.pop(client.name, None)
                     removed_count += 1
                     logger.info(f"Client '{client.name}' (ID: {client_id.hex()}) session timed out due to inactivity. Removed from active memory pool.")
@@ -470,8 +468,10 @@ class ClientManager:
             Dictionary containing various client statistics.
         """
         with self.clients_lock:
-            clients_with_keys = sum(1 for client in self.clients.values() if client.has_public_key())
-            clients_with_aes = sum(1 for client in self.clients.values() if client.has_aes_key())
+            clients_with_keys = sum(bool(client.has_public_key())
+                                for client in self.clients.values())
+            clients_with_aes = sum(bool(client.has_aes_key())
+                                for client in self.clients.values())
 
             return {
                 'active_clients': len(self.clients),
@@ -489,7 +489,7 @@ class ClientManager:
             List of dictionaries containing client information.
         """
         with self.clients_lock:
-            client_list = []
+            client_list: List[Dict[str, Any]] = []
             for client in self.clients.values():
                 client_info = {
                     'id': client.id.hex(),

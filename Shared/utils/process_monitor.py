@@ -8,7 +8,7 @@ import time
 import threading
 import subprocess
 import psutil
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any, Callable, Deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from collections import deque
@@ -63,7 +63,7 @@ class ProcessInfo:
     max_restarts: int = 3
     auto_restart: bool = False
     health_check_interval: float = 2.0
-    metrics_history: deque = field(default_factory=lambda: deque(maxlen=100))
+    metrics_history: Deque[ProcessMetrics] = field(default_factory=lambda: deque(maxlen=100))
     last_health_check: Optional[datetime] = None
     error_count: int = 0
     last_error: Optional[str] = None
@@ -74,7 +74,7 @@ class ProcessRegistry:
     
     def __init__(self):
         self.processes: Dict[str, ProcessInfo] = {}
-        self.subprocess_handles: Dict[str, subprocess.Popen] = {}
+        self.subprocess_handles: Dict[str, subprocess.Popen[str]] = {}
         self.monitoring_threads: Dict[str, threading.Thread] = {}
         self.lock = threading.RLock()
         self.running = True
@@ -105,7 +105,7 @@ class ProcessRegistry:
             logger.info(f"Registered process: {process_id} ({name})")
             return process_info
     
-    def start_process(self, process_id: str, **popen_kwargs) -> bool:
+    def start_process(self, process_id: str, **popen_kwargs: Any) -> bool:
         """Start a registered process"""
         with self.lock:
             if process_id not in self.processes:
@@ -116,7 +116,7 @@ class ProcessRegistry:
             
             try:
                 # Default subprocess arguments
-                default_kwargs = {
+                default_kwargs: Dict[str, Any] = {
                     'stdout': subprocess.PIPE,
                     'stderr': subprocess.PIPE,
                     'text': True,
@@ -125,7 +125,7 @@ class ProcessRegistry:
                 default_kwargs.update(popen_kwargs)
                 
                 # Start the subprocess
-                popen = subprocess.Popen(process_info.command, **default_kwargs)
+                popen: subprocess.Popen[str] = subprocess.Popen(process_info.command, **default_kwargs)
                 
                 self.subprocess_handles[process_id] = popen
                 process_info.pid = popen.pid
@@ -277,7 +277,7 @@ class ProcessRegistry:
         
         logger.info(f"Stopped monitoring process: {process_id}")
     
-    def _collect_process_metrics(self, popen: subprocess.Popen, 
+    def _collect_process_metrics(self, popen: subprocess.Popen[str], 
                                 process_info: ProcessInfo) -> Optional[ProcessMetrics]:
         """Collect comprehensive process metrics"""
         try:
@@ -312,20 +312,20 @@ class ProcessRegistry:
     
     def _detect_process_warnings(self, metrics: ProcessMetrics) -> List[str]:
         """Detect warning conditions from process metrics"""
-        warnings = []
-        
+        warnings: List[str] = []
+
         if metrics.cpu_percent > 90:
             warnings.append(f"High CPU usage: {metrics.cpu_percent:.1f}%")
-        
+
         if metrics.memory_mb > 1000:  # 1GB
             warnings.append(f"High memory usage: {metrics.memory_mb:.1f}MB")
-        
+
         if metrics.open_files > 100:
             warnings.append(f"Many open files: {metrics.open_files}")
-        
+
         if metrics.num_threads > 50:
             warnings.append(f"Many threads: {metrics.num_threads}")
-        
+
         return warnings
     
     def _check_process_responsiveness(self, metrics: ProcessMetrics) -> bool:
@@ -397,7 +397,7 @@ class ProcessRegistry:
     def _cleanup_dead_processes(self):
         """Clean up processes that are no longer running"""
         with self.lock:
-            dead_processes = []
+            dead_processes: List[str] = []
             
             for process_id, process_info in self.processes.items():
                 if (process_info.state == ProcessState.STOPPED and 

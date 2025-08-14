@@ -1,31 +1,62 @@
 #!/usr/bin/env python3
 """
-Database Monitoring Script for Encrypted Backup Framework
-Provides automated monitoring, alerting, and maintenance scheduling.
+Database monitoring and management module for the encrypted backup system.
 """
 
-import sys
 import os
+import sys
 import time
 import json
 import logging
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional, List, Union, Tuple, TypedDict, Callable
+
+# Handle schedule import with fallback stub
 try:
-    import schedule
+    import schedule as _schedule_module  # type: ignore
     SCHEDULE_AVAILABLE = True
 except ImportError:
     SCHEDULE_AVAILABLE = False
-    schedule = None
-from datetime import datetime, timedelta
-from typing import Dict, Any
+    _schedule_module = None
 
-# Setup standardized import paths
+# Create a proper stub that works with typing
+if SCHEDULE_AVAILABLE:
+    schedule = _schedule_module
+else:
+    class _ScheduleStub:
+        def every(self, interval: int = 1) -> '_ScheduleStub':
+            return self
+        
+        @property
+        def day(self) -> '_ScheduleStub':
+            return self
+            
+        @property
+        def sunday(self) -> '_ScheduleStub':
+            return self
+            
+        @property
+        def minutes(self) -> '_ScheduleStub':
+            return self
+            
+        def at(self, time: str) -> '_ScheduleStub':
+            return self
+            
+        def do(self, func: Callable[..., Any]) -> None:
+            pass
+            
+        def run_pending(self) -> None:
+            pass
+    
+    schedule = _ScheduleStub()
+
+import contextlib
 import sys
-import os
-from Shared.path_utils import setup_imports
-setup_imports()
-from Shared.path_utils import setup_imports
-setup_imports()
-
+# Setup standardized import paths
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'Shared'))
+with contextlib.suppress(ImportError):
+    from path_utils import setup_imports  # type: ignore
+    setup_imports()
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -36,6 +67,46 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+class HealthReport(TypedDict, total=False):
+    """A dictionary containing database health information."""
+    timestamp: str
+    database_healthy: bool
+    connection_pool_healthy: bool
+    tables: int
+    indexes: int
+    issues: List[str]
+    database_size_mb: float
+    connection_pool_enabled: bool
+    storage_files: int
+    storage_size_mb: float
+    total_clients: int
+    clients_with_keys: int
+    avg_days_since_seen: float
+    total_files: int
+    verification_rate: float
+    total_storage_gb: float
+    error: str
+
+class Alert(TypedDict, total=False):
+    """A dictionary containing alert information."""
+    level: str  # 'CRITICAL', 'WARNING', 'INFO'
+    message: str
+    details: List[str]
+
+class MaintenanceReport(TypedDict, total=False):
+    timestamp: str
+    optimization: Optional[Dict[str, Any]]
+    backup_path: Optional[str]
+    post_maintenance_health: Optional[HealthReport]
+    success: bool
+    error: Optional[str]
+
+class WeeklyReport(TypedDict, total=False):
+    report_type: str
+    timestamp: str
+    health_summary: HealthReport
+    recommendations: List[str]
 
 class DatabaseMonitor:
     """Database monitoring and maintenance automation."""
@@ -51,10 +122,10 @@ class DatabaseMonitor:
         }
         self.maintenance_log = "maintenance.log"
         
-    def check_database_health(self) -> Dict[str, Any]:
+    def check_database_health(self) -> HealthReport:
         """Perform comprehensive database health check."""
         try:
-            from database import DatabaseManager
+            from python_server.server.database import DatabaseManager
             
             db = DatabaseManager(self.db_path, use_pool=True)
             
@@ -63,7 +134,7 @@ class DatabaseMonitor:
             stats = db.get_storage_statistics()
             
             # Build health report
-            report = {
+            report: HealthReport = {
                 'timestamp': datetime.now().isoformat(),
                 'database_healthy': health['integrity_check'],
                 'connection_pool_healthy': health['connection_pool_healthy'],
@@ -105,9 +176,9 @@ class DatabaseMonitor:
                 'database_healthy': False
             }
     
-    def check_alerts(self, health_report: Dict[str, Any]) -> list:
+    def check_alerts(self, health_report: HealthReport) -> List[Alert]:
         """Check health report against alert thresholds."""
-        alerts = []
+        alerts: List[Alert] = []
         
         # Database integrity alerts
         if not health_report.get('database_healthy', False):
@@ -157,7 +228,7 @@ class DatabaseMonitor:
         
         return alerts
     
-    def send_alerts(self, alerts: list):
+    def send_alerts(self, alerts: List[Alert]) -> None:
         """Send alerts via configured channels."""
         if not alerts:
             return
@@ -165,8 +236,8 @@ class DatabaseMonitor:
         logger.info(f"Sending {len(alerts)} alerts")
         
         for alert in alerts:
-            level = alert['level']
-            message = alert['message']
+            level = alert.get('level', 'INFO')
+            message = alert.get('message', '')
             details = alert.get('details', [])
             
             log_func = logger.info
@@ -185,12 +256,12 @@ class DatabaseMonitor:
         # self.send_email_alerts(alerts)
         # self.send_slack_alerts(alerts)
     
-    def perform_maintenance(self) -> Dict[str, Any]:
+    def perform_maintenance(self) -> MaintenanceReport:
         """Perform automated database maintenance."""
         logger.info("Starting automated database maintenance")
         
         try:
-            from database import DatabaseManager
+            from python_server.server.database import DatabaseManager
             
             db = DatabaseManager(self.db_path, use_pool=True)
             
@@ -204,18 +275,22 @@ class DatabaseMonitor:
             
             # Health check after maintenance
             health = db.get_database_health()
+            # Ensure health is properly typed as HealthReport
+            health_report: HealthReport = health  # type: ignore
             
-            results = {
+            results: MaintenanceReport = {
                 'timestamp': datetime.now().isoformat(),
                 'optimization': optimization_results,
                 'backup_path': backup_path,
-                'post_maintenance_health': health,
+                'post_maintenance_health': health_report,
                 'success': True
             }
             
             logger.info("Database maintenance completed successfully")
-            logger.info(f"Space saved: {optimization_results.get('space_saved_mb', 0)} MB")
-            logger.info(f"Backup created: {backup_path}")
+            if optimization_results:
+                logger.info(f"Space saved: {optimization_results.get('space_saved_mb', 0)} MB")
+            if backup_path:
+                logger.info(f"Backup created: {backup_path}")
             
             # Log maintenance results
             self.log_maintenance(results)
@@ -224,15 +299,18 @@ class DatabaseMonitor:
             
         except Exception as e:
             logger.error(f"Database maintenance failed: {e}")
-            results = {
+            results: MaintenanceReport = {
                 'timestamp': datetime.now().isoformat(),
                 'error': str(e),
-                'success': False
+                'success': False,
+                'optimization': None,
+                'backup_path': None,
+                'post_maintenance_health': None
             }
             self.log_maintenance(results)
             return results
     
-    def log_maintenance(self, results: Dict[str, Any]):
+    def log_maintenance(self, results: MaintenanceReport) -> None: 
         """Log maintenance results to file."""
         try:
             with open(self.maintenance_log, 'a') as f:
@@ -240,7 +318,7 @@ class DatabaseMonitor:
         except Exception as e:
             logger.error(f"Failed to log maintenance results: {e}")
     
-    def run_monitoring_cycle(self):
+    def run_monitoring_cycle(self) -> Tuple[HealthReport, List[Alert]]:
         """Run a single monitoring cycle."""
         logger.info("Running database monitoring cycle")
         
@@ -264,22 +342,23 @@ class DatabaseMonitor:
         
         return health_report, alerts
     
-    def setup_scheduler(self):
+    def setup_scheduler(self) -> bool:
         """Setup automated monitoring and maintenance schedule."""
-        if not SCHEDULE_AVAILABLE:
+        if not SCHEDULE_AVAILABLE or not schedule:
             logger.error("Schedule module not available. Install with: pip install schedule")
             return False
             
+        assert schedule is not None # Assert schedule is not None for type checker
         logger.info("Setting up monitoring scheduler")
         
         # Health checks every 15 minutes
-        schedule.every(15).minutes.do(self.run_monitoring_cycle)
+        schedule.every(15).minutes.do(self.run_monitoring_cycle)  # type: ignore
         
         # Daily maintenance at 2 AM
-        schedule.every().day.at("02:00").do(self.perform_maintenance)
+        schedule.every().day.at("02:00").do(self.perform_maintenance)  # type: ignore
         
         # Weekly detailed health report on Sunday at 1 AM
-        schedule.every().sunday.at("01:00").do(self.generate_weekly_report)
+        schedule.every().sunday.at("01:00").do(self.generate_weekly_report)  # type: ignore
         
         logger.info("Monitoring scheduler configured:")
         logger.info("  - Health checks: Every 15 minutes")
@@ -287,14 +366,14 @@ class DatabaseMonitor:
         logger.info("  - Weekly reports: Sunday at 1:00 AM")
         return True
     
-    def generate_weekly_report(self):
+    def generate_weekly_report(self) -> None:
         """Generate weekly database health report."""
         logger.info("Generating weekly database report")
         
         try:
             health_report = self.check_database_health()
             
-            report = {
+            report: WeeklyReport = {
                 'report_type': 'weekly',
                 'timestamp': datetime.now().isoformat(),
                 'health_summary': health_report,
@@ -311,9 +390,9 @@ class DatabaseMonitor:
         except Exception as e:
             logger.error(f"Failed to generate weekly report: {e}")
     
-    def generate_recommendations(self, health_report: Dict[str, Any]) -> list:
+    def generate_recommendations(self, health_report: HealthReport) -> List[str]:
         """Generate maintenance and optimization recommendations."""
-        recommendations = []
+        recommendations: List[str] = []
         
         db_size = health_report.get('database_size_mb', 0)
         verification_rate = health_report.get('verification_rate', 100)
@@ -336,7 +415,7 @@ class DatabaseMonitor:
             
         return recommendations
     
-    def run_daemon(self):
+    def run_daemon(self) -> None:
         """Run monitoring daemon."""
         logger.info("Starting database monitoring daemon")
         
@@ -350,7 +429,8 @@ class DatabaseMonitor:
         
         try:
             while True:
-                schedule.run_pending()
+                if schedule:
+                    schedule.run_pending()  # type: ignore
                 time.sleep(60)  # Check every minute
         except KeyboardInterrupt:
             logger.info("Monitoring daemon stopped by user")
@@ -358,7 +438,7 @@ class DatabaseMonitor:
             logger.error(f"Monitoring daemon error: {e}")
 
 
-def main():
+def main() -> int:
     """Main entry point for database monitoring."""
     import argparse
     
@@ -390,7 +470,7 @@ def main():
             if alerts:
                 print(f"\n{len(alerts)} alerts detected:")
                 for alert in alerts:
-                    print(f"  [{alert['level']}] {alert['message']}")
+                    print(f"  [{alert.get('level', 'INFO')}] {alert.get('message', '')}")
             else:
                 print("Database health: OK")
                 

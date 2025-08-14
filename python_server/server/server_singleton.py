@@ -19,8 +19,10 @@ from typing import Optional
 try:
     import psutil
     HAS_PSUTIL = True
+    psutil_module = psutil
 except ImportError:
     HAS_PSUTIL = False
+    psutil_module = None
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +61,7 @@ class ServerSingletonManager:
             else:
                 return True
         
-        return psutil.pid_exists(pid)
+        return psutil_module.pid_exists(pid) if psutil_module else False
 
     def _terminate_process(self, pid: int):
         """Terminates the process with the given PID."""
@@ -69,16 +71,19 @@ class ServerSingletonManager:
 
         logger.warning(f"Terminating existing server process with PID {pid}.")
         try:
-            if HAS_PSUTIL:
-                p = psutil.Process(pid)
+            if HAS_PSUTIL and psutil_module is not None:
+                p = psutil_module.Process(pid)
                 # Try to terminate gracefully first, then kill
                 p.terminate()
                 try:
                     p.wait(timeout=3)
-                except psutil.TimeoutExpired:
-                    logger.warning(f"Process {pid} did not terminate gracefully. Killing it.")
-                    p.kill()
-                    p.wait(timeout=3)
+                except Exception as timeout_ex:  # Use generic Exception since psutil might not be available
+                    if "TimeoutExpired" in str(type(timeout_ex)):
+                        logger.warning(f"Process {pid} did not terminate gracefully. Killing it.")
+                        p.kill()
+                        p.wait(timeout=3)
+                    else:
+                        raise
             else:
                 # Fallback for systems without psutil
                 os.kill(pid, signal.SIGTERM)

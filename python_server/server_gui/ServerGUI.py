@@ -3,25 +3,46 @@
 # Enhanced version with real functionality and advanced features
 
 import sys
-sys.stdin.reconfigure(encoding="utf-8")
-sys.stdout.reconfigure(encoding="utf-8")
+from typing import Any
+
+# Type-safe reconfigure for stdout/stderr
+if hasattr(sys.stdin, 'reconfigure') and callable(getattr(sys.stdin, 'reconfigure', None)):
+    sys.stdin.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+if hasattr(sys.stdout, 'reconfigure') and callable(getattr(sys.stdout, 'reconfigure', None)):
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
 
 # Standard Library Imports
 import os
 import time
 import json
 import csv
-import math
 import shutil
-import zlib
-import socket
 import threading
 import queue
 import logging
-import sqlite3
+import traceback
 from collections import deque
-from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional, Any, Union, Tuple
+from datetime import datetime
+from typing import Dict, List, Optional, Any, Union, Deque, Callable, TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from matplotlib.figure import Figure
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    from Shared.utils.process_monitor_gui import ProcessMonitorWidget
+    from python_server.server.server import BackupServer
+
+# Lightweight structural type to satisfy static type checkers for the server used by the GUI
+@runtime_checkable
+class BackupServerLike(Protocol):
+    running: bool
+    db_manager: Any
+    clients: Dict[bytes, Any]
+    clients_by_name: Dict[str, bytes]
+    network_server: Any
+
+    def start(self) -> None: ...
+    def stop(self) -> None: ...
+    def apply_settings(self, settings: Dict[str, Any]) -> None: ...
 
 # GUI Imports
 import tkinter as tk
@@ -67,8 +88,6 @@ try:
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     from matplotlib.figure import Figure
-    import matplotlib.animation as animation
-    import matplotlib.dates as mdates
     plt.style.use('dark_background')  # Dark theme for charts
     CHARTS_AVAILABLE = True
     print("[OK] Advanced charts available (matplotlib installed)")
@@ -77,8 +96,6 @@ except ImportError as e:
     plt = None
     FigureCanvasTkAgg = None
     Figure = None
-    animation = None
-    mdates = None
     print(f"[WARNING] matplotlib not available: {e}")
     print("[INFO] To enable advanced charts: pip install matplotlib")
 
@@ -92,13 +109,12 @@ except ImportError:
 
 # Import enhanced process monitoring
 try:
-    from Shared.utils.process_monitor_gui import ProcessMonitorWidget, create_process_monitor_tab
+    from Shared.utils.process_monitor_gui import ProcessMonitorWidget
     PROCESS_MONITOR_AVAILABLE = True
     print("[OK] Enhanced process monitoring available")
 except ImportError as e:
     PROCESS_MONITOR_AVAILABLE = False
     ProcessMonitorWidget = None
-    create_process_monitor_tab = None
     print(f"[WARNING] Enhanced process monitoring not available: {e}")
 
 # SENTRY - Initialize error tracking
@@ -184,9 +200,10 @@ class ModernTheme:
 # --- MODERN CUSTOM WIDGETS ---
 class ModernCard(tk.Frame):
     """Modern card widget with rounded corners and shadow effect"""
-    def __init__(self, parent, title="", **kwargs):
+    def __init__(self, parent: Any, title: str = "", **kwargs: Any) -> None:
         super().__init__(parent, bg=ModernTheme.CARD_BG, relief="flat", bd=0, **kwargs)
-        self.title = title
+        self.title: str = title
+        self.content_frame: Optional[tk.Frame] = None
         self._create_card()
 
     def _create_card(self):
@@ -207,7 +224,7 @@ class ModernCard(tk.Frame):
 
 class GlassMorphismCard(tk.Frame):
     """Ultra modern glass morphism card with subtle borders and transparency effects"""
-    def __init__(self, parent, title="", **kwargs):
+    def __init__(self, parent: tk.Widget, title: str = "", **kwargs: Any) -> None:
         # Create outer frame with shadow effect
         super().__init__(parent, bg=ModernTheme.PRIMARY_BG, relief="flat", bd=0, **kwargs)
 
@@ -223,9 +240,10 @@ class GlassMorphismCard(tk.Frame):
         self.inner_frame.pack(fill="both", expand=True, padx=1, pady=1)
 
         self.title = title
+        self.content_frame: Optional[tk.Frame] = None
         self._create_glass_card()
 
-    def _create_glass_card(self):
+    def _create_glass_card(self) -> None:
         # Title bar with glass effect
         if self.title:
             title_frame = tk.Frame(self.inner_frame, bg=ModernTheme.GLASS_HIGHLIGHT, height=35)
@@ -243,17 +261,17 @@ class GlassMorphismCard(tk.Frame):
 
 class ModernProgressBar(tk.Canvas):
     """Modern animated progress bar with gradient effect"""
-    def __init__(self, parent, width=300, height=20, **kwargs):
+    def __init__(self, parent: tk.Widget, width: int = 300, height: int = 20, **kwargs: Any) -> None:
         super().__init__(parent, width=width, height=height,
                         bg=ModernTheme.SECONDARY_BG, highlightthickness=0, **kwargs)
         self.width = width
         self.height = height
-        self.progress = 0
-        self.target_progress = 0
-        self.animation_id = None
+        self.progress = 0.0
+        self.target_progress = 0.0
+        self.animation_id: Optional[str] = None
         self._draw_background()
 
-    def _draw_background(self):
+    def _draw_background(self) -> None:
         self.delete("all")
         # Background
         self.create_rectangle(0, 0, self.width, self.height,
@@ -262,12 +280,12 @@ class ModernProgressBar(tk.Canvas):
         self.create_rectangle(0, 0, self.width, self.height,
                             fill="", outline=ModernTheme.ACCENT_BG, width=1)
 
-    def set_progress(self, value):
+    def set_progress(self, value: float) -> None:
         """Set progress value (0-100) with smooth animation"""
-        self.target_progress = max(0, min(100, value))
+        self.target_progress = max(0.0, min(100.0, value))
         self._animate_to_target()
 
-    def _animate_to_target(self):
+    def _animate_to_target(self) -> None:
         if self.animation_id:
             self.after_cancel(self.animation_id)
 
@@ -281,7 +299,7 @@ class ModernProgressBar(tk.Canvas):
         self._draw_progress()
         self.animation_id = self.after(ModernTheme.ANIMATION_SPEED, self._animate_to_target)
 
-    def _draw_progress(self):
+    def _draw_progress(self) -> None:
         self._draw_background()
         if self.progress > 0:
             progress_width = (self.progress / 100) * (self.width - 2)
@@ -291,17 +309,17 @@ class ModernProgressBar(tk.Canvas):
 
 class ModernStatusIndicator(tk.Canvas):
     """Modern status indicator with pulsing animation"""
-    def __init__(self, parent, size=16, **kwargs):
+    def __init__(self, parent: tk.Widget, size: int = 16, **kwargs: Any) -> None:
         super().__init__(parent, width=size, height=size,
                         bg=ModernTheme.CARD_BG, highlightthickness=0, **kwargs)
-        self.size = size
-        self.status = "offline"  # offline, online, warning, error
-        self.pulse_alpha = 0
-        self.pulse_direction = 1
-        self.animation_id = None
+        self.size: int = size
+        self.status: str = "offline"  # offline, online, warning, error
+        self.pulse_alpha: float = 0.0
+        self.pulse_direction: int = 1
+        self.animation_id: Optional[str] = None
         self._draw_indicator()
 
-    def set_status(self, status):
+    def set_status(self, status: str) -> None:
         """Set status: offline, online, warning, error"""
         self.status = status
         self._draw_indicator()
@@ -310,7 +328,7 @@ class ModernStatusIndicator(tk.Canvas):
         else:
             self._stop_pulse()
 
-    def _draw_indicator(self):
+    def _draw_indicator(self) -> None:
         self.delete("all")
         colors = {
             "offline": ModernTheme.TEXT_SECONDARY,
@@ -326,17 +344,17 @@ class ModernStatusIndicator(tk.Canvas):
                         center + radius, center + radius,
                         fill=color, outline="")
 
-    def _start_pulse(self):
+    def _start_pulse(self) -> None:
         if self.animation_id:
             self.after_cancel(self.animation_id)
         self._pulse_animation()
 
-    def _stop_pulse(self):
+    def _stop_pulse(self) -> None:
         if self.animation_id:
             self.after_cancel(self.animation_id)
             self.animation_id = None
 
-    def _pulse_animation(self):
+    def _pulse_animation(self) -> None:
         self.pulse_alpha += self.pulse_direction * 0.1
         if self.pulse_alpha >= 1:
             self.pulse_alpha = 1
@@ -350,34 +368,34 @@ class ModernStatusIndicator(tk.Canvas):
 
 class AdvancedProgressBar(tk.Canvas):
     """Advanced animated progress bar with gradient and glow effects"""
-    def __init__(self, parent, width=300, height=25, **kwargs):
+    def __init__(self, parent: tk.Widget, width: int = 300, height: int = 25, **kwargs: Any) -> None:
         super().__init__(parent, width=width, height=height,
                         bg=ModernTheme.SECONDARY_BG, highlightthickness=0, **kwargs)
         self.width = width
         self.height = height
-        self.progress = 0
-        self.target_progress = 0
-        self.animation_id = None
-        self.glow_alpha = 0
+        self.progress = 0.0
+        self.target_progress = 0.0
+        self.animation_id: Optional[str] = None
+        self.glow_alpha = 0.0
         self.glow_direction = 1
         self._draw_background()
 
-    def _draw_background(self):
+    def _draw_background(self) -> None:
         self.delete("all")
         # Background with rounded corners effect
         self.create_rectangle(2, 2, self.width-2, self.height-2,
                             fill=ModernTheme.SECONDARY_BG, outline=ModernTheme.ACCENT_BG, width=1)
 
-    def set_progress(self, value, animated=True):
+    def set_progress(self, value: float, animated: bool = True) -> None:
         """Set progress value (0-100) with smooth animation"""
-        self.target_progress = max(0, min(100, value))
+        self.target_progress = max(0.0, min(100.0, value))
         if animated:
             self._animate_to_target()
         else:
             self.progress = self.target_progress
             self._draw_progress()
 
-    def _animate_to_target(self):
+    def _animate_to_target(self) -> None:
         if self.animation_id:
             self.after_cancel(self.animation_id)
 
@@ -391,7 +409,7 @@ class AdvancedProgressBar(tk.Canvas):
         self._draw_progress()
         self.animation_id = self.after(ModernTheme.PROGRESS_ANIMATION_SPEED, self._animate_to_target)
 
-    def _draw_progress(self):
+    def _draw_progress(self) -> None:
         self._draw_background()
         if self.progress > 0:
             progress_width = (self.progress / 100) * (self.width - 6)
@@ -405,12 +423,12 @@ class AdvancedProgressBar(tk.Canvas):
 
 class ToastNotification:
     """Modern toast notification system"""
-    def __init__(self, parent):
+    def __init__(self, parent: tk.Widget) -> None:
         self.parent = parent
-        self.notifications = []
-        self.notification_id = 0
+        self.notifications: List[tk.Toplevel] = []  # List of toast windows
+        self.notification_id: int = 0
 
-    def show_toast(self, message, toast_type="info", duration=3000):
+    def show_toast(self, message: str, toast_type: str = "info", duration: int = 3000) -> None:
         """Show a toast notification"""
         self.notification_id += 1
 
@@ -418,7 +436,7 @@ class ToastNotification:
         toast = tk.Toplevel(self.parent)
         toast.withdraw()  # Hide initially
         toast.overrideredirect(True)  # Remove window decorations
-        toast.attributes('-topmost', True)  # Always on top
+        toast.attributes('-topmost', True)  # type: ignore # Always on top
 
         # Configure toast appearance
         colors = {
@@ -456,7 +474,7 @@ class ToastNotification:
         # Auto-hide after duration
         toast.after(duration, lambda: self._hide_toast(toast))
 
-    def _hide_toast(self, toast):
+    def _hide_toast(self, toast: tk.Toplevel) -> None:
         """Hide and destroy toast notification"""
         if toast in self.notifications:
             self.notifications.remove(toast)
@@ -474,20 +492,47 @@ class ToastNotification:
 # --- ENHANCED TABLE WIDGET ---
 class ModernTooltip:
     """Modern tooltip that appears on hover"""
-    def __init__(self, widget, text):
+    def __init__(self, widget: tk.Widget, text: str) -> None:
         self.widget = widget
-        self.text = text
-        self.tooltip_window = None
-        self.widget.bind("<Enter>", self.show_tooltip)
-        self.widget.bind("<Leave>", self.hide_tooltip)
+        self.text: str = text
+        self.tooltip_window: Optional[tk.Toplevel] = None
+        # Use safe attribute access for bind method
+        if hasattr(self.widget, 'bind') and callable(getattr(self.widget, 'bind', None)):
+            self.widget.bind("<Enter>", self.show_tooltip)
+            self.widget.bind("<Leave>", self.hide_tooltip)
 
-    def show_tooltip(self, event):
+    def show_tooltip(self, event: tk.Event) -> None:
         if self.tooltip_window or not self.text:
             return
 
-        x, y, _, _ = self.widget.bbox("insert")
-        x += self.widget.winfo_rootx() + 25
-        y += self.widget.winfo_rooty() + 25
+        # Use safe attribute access for bbox and winfo methods
+        try:
+            if hasattr(self.widget, 'bbox') and callable(getattr(self.widget, 'bbox', None)):
+                # For text widgets, use "insert" index; for other widgets, use 0 or None
+                try:
+                    bbox_result = self.widget.bbox("insert")  # type: ignore[attr-defined]
+                    if bbox_result and isinstance(bbox_result, (list, tuple)) and len(bbox_result) >= 4:
+                        x, y, _, _ = bbox_result
+                    else:
+                        x, y = 0, 0
+                except (tk.TclError, TypeError, ValueError, AttributeError):
+                    # Fallback for widgets that don't support "insert" index
+                    try:
+                        bbox_result = self.widget.bbox(0)  # type: ignore[attr-defined]
+                        if bbox_result and isinstance(bbox_result, (list, tuple)) and len(bbox_result) >= 4:
+                            x, y, _, _ = bbox_result
+                        else:
+                            x, y = 0, 0
+                    except (tk.TclError, TypeError, ValueError, AttributeError):
+                        x, y = 0, 0
+            else:
+                x, y = 0, 0
+        except (AttributeError, tk.TclError, TypeError, ValueError):
+            x, y = 0, 0
+
+        if hasattr(self.widget, 'winfo_rootx') and hasattr(self.widget, 'winfo_rooty'):
+            x += getattr(self.widget, 'winfo_rootx', lambda: 0)() + 25
+            y += getattr(self.widget, 'winfo_rooty', lambda: 0)() + 25
 
         self.tooltip_window = tw = tk.Toplevel(self.widget)
         tw.wm_overrideredirect(True)
@@ -499,24 +544,24 @@ class ModernTooltip:
                       font=(ModernTheme.FONT_FAMILY, 9, "normal"), padx=8, pady=5)
         label.pack(ipadx=1)
 
-    def hide_tooltip(self, event):
+    def hide_tooltip(self, event: tk.Event) -> None:
         if self.tooltip_window:
             self.tooltip_window.destroy()
         self.tooltip_window = None
 
 class ModernTable(tk.Frame):
     """Modern table widget with sorting, filtering, and selection"""
-    def __init__(self, parent, columns, **kwargs):
+    def __init__(self, parent: tk.Widget, columns: Dict[str, Any], **kwargs: Any) -> None:
         super().__init__(parent, bg=ModernTheme.CARD_BG, **kwargs)
-        self.columns = columns
-        self.data = []
-        self.filtered_data = []
-        self.sort_column = None
-        self.sort_reverse = False
-        self.selection_callback = None
+        self.columns: Dict[str, Any] = columns
+        self.data: List[Dict[str, Any]] = []
+        self.filtered_data: List[Dict[str, Any]] = []
+        self.sort_column: Optional[str] = None
+        self.sort_reverse: bool = False
+        self.selection_callback: Optional[Callable[[Dict[str, Any]], None]] = None
         self._create_table()
 
-    def _create_table(self):
+    def _create_table(self) -> None:
         # Search frame
         search_frame = tk.Frame(self, bg=ModernTheme.CARD_BG)
         search_frame.pack(fill="x", padx=5, pady=5)
@@ -542,16 +587,16 @@ class ModernTable(tk.Frame):
         # Configure style
         style = ttk.Style()
         style.theme_use('clam')
-        style.configure("Treeview", 
+        style.configure("Treeview",   # type: ignore
                        background=ModernTheme.SECONDARY_BG,
                        foreground=ModernTheme.TEXT_PRIMARY,
                        fieldbackground=ModernTheme.SECONDARY_BG,
                        borderwidth=0)
-        style.configure("Treeview.Heading",
+        style.configure("Treeview.Heading",  # type: ignore
                        background=ModernTheme.ACCENT_BG,
                        foreground=ModernTheme.TEXT_PRIMARY,
                        relief="flat")
-        style.map("Treeview",
+        style.map("Treeview",  # type: ignore
                  background=[('selected', ModernTheme.ACCENT_BLUE)])
 
         # Configure columns
@@ -563,8 +608,8 @@ class ModernTable(tk.Frame):
                             command=lambda c=col_id: self._sort_by_column(c))
 
         # Scrollbars
-        v_scroll = ttk.Scrollbar(table_container, orient="vertical", command=self.tree.yview)
-        h_scroll = ttk.Scrollbar(table_container, orient="horizontal", command=self.tree.xview)
+        v_scroll = ttk.Scrollbar(table_container, orient="vertical", command=self.tree.yview)  # type: ignore
+        h_scroll = ttk.Scrollbar(table_container, orient="horizontal", command=self.tree.xview)  # type: ignore
         self.tree.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
 
         # Pack elements
@@ -578,26 +623,27 @@ class ModernTable(tk.Frame):
         # Bind selection event
         self.tree.bind("<<TreeviewSelect>>", self._on_selection_change)
 
-    def set_data(self, data):
+    def set_data(self, data: List[Dict[str, Any]]) -> None:
         """Set table data"""
         self.data = data
         self._apply_filter()
 
-    def _apply_filter(self):
+    def _apply_filter(self) -> None:
         """Apply search filter to data"""
-        if search_text := self.search_var.get().lower():
+        search_text = self.search_var.get().lower() if hasattr(self.search_var, 'get') else ''
+        if search_text:
             self.filtered_data = []
             for item in self.data:
                 # Check if search text is in any column
                 if any(search_text in str(item.get(col, '')).lower() 
-                      for col in self.columns.keys()):
+                      for col in self.columns.keys() if isinstance(item, dict)):
                     self.filtered_data.append(item)
         else:
             self.filtered_data = self.data.copy()
         
         self._refresh_display()
 
-    def _refresh_display(self):
+    def _refresh_display(self) -> None:
         """Refresh the table display"""
         # Clear existing items
         for item in self.tree.get_children():
@@ -605,10 +651,10 @@ class ModernTable(tk.Frame):
 
         # Add filtered items
         for idx, item in enumerate(self.filtered_data):
-            values = [item.get(col, '') for col in self.columns.keys()]
+            values = [item.get(col, '') if isinstance(item, dict) else '' for col in self.columns.keys()]
             self.tree.insert("", "end", text=str(idx + 1), values=values)
 
-    def _sort_by_column(self, column):
+    def _sort_by_column(self, column: str) -> None:
         """Sort table by column"""
         if self.sort_column == column:
             self.sort_reverse = not self.sort_reverse
@@ -616,15 +662,15 @@ class ModernTable(tk.Frame):
             self.sort_column = column
             self.sort_reverse = False
 
-        self.filtered_data.sort(key=lambda x: x.get(column, ''), 
+        self.filtered_data.sort(key=lambda x: x.get(column, '') if isinstance(x, dict) else '', 
                                reverse=self.sort_reverse)
         self._refresh_display()
 
-    def _on_search_change(self, *args):
+    def _on_search_change(self, *args: Any) -> None:
         """Handle search text change"""
         self._apply_filter()
 
-    def _on_selection_change(self, event):
+    def _on_selection_change(self, event: tk.Event) -> None:
         """Handle selection change"""
         selection = self.tree.selection()
         if selection and self.selection_callback:
@@ -633,36 +679,48 @@ class ModernTable(tk.Frame):
             if 0 <= index < len(self.filtered_data):
                 self.selection_callback(self.filtered_data[index])
 
-    def set_selection_callback(self, callback):
+    def set_selection_callback(self, callback: Callable[[Dict[str, Any]], None]) -> None:
         """Set callback for selection changes"""
         self.selection_callback = callback
 
-    def get_selected_items(self):
+    def get_selected_items(self) -> List[Dict[str, Any]]:
         """Get currently selected items"""
-        selected = []
+        selected: List[Dict[str, Any]] = []
         for item_id in self.tree.selection():
             item = self.tree.item(item_id)
-            index = int(item['text']) - 1
-            if 0 <= index < len(self.filtered_data):
-                selected.append(self.filtered_data[index])
+            if item and 'text' in item and item['text']:
+                try:
+                    index = int(item['text']) - 1
+                    if 0 <= index < len(self.filtered_data):
+                        selected.append(self.filtered_data[index])
+                except (ValueError, TypeError):
+                    continue
         return selected
 
 # --- SETTINGS DIALOG ---
 class SettingsDialog:
     """Modern settings dialog"""
-    def __init__(self, parent, current_settings):
+    def __init__(self, parent: Union[tk.Widget, tk.Tk], current_settings: Dict[str, Any]) -> None:
         self.parent = parent
-        self.settings = current_settings.copy()
-        self.dialog = None
-        self.result = None
+        self.settings: Dict[str, Any] = current_settings.copy() if hasattr(current_settings, 'copy') and callable(getattr(current_settings, 'copy', None)) else dict(current_settings) if current_settings else {}
+        self.dialog: Optional[tk.Toplevel] = None
+        self.result: Optional[Dict[str, Any]] = None
 
-    def show(self):
+    def show(self) -> Optional[Dict[str, Any]]:
         """Show the settings dialog"""
         self.dialog = tk.Toplevel(self.parent)
         self.dialog.title("Server Settings")
         self.dialog.geometry("500x600")
         self.dialog.configure(bg=ModernTheme.PRIMARY_BG)
-        self.dialog.transient(self.parent)
+        # Set transient relationship if parent supports it
+        try:
+            if (hasattr(self.dialog, 'transient') and 
+                callable(getattr(self.dialog, 'transient', None)) and
+                hasattr(self.parent, 'winfo_class')):
+                self.dialog.transient(self.parent)  # type: ignore[arg-type]
+        except (tk.TclError, AttributeError, TypeError):
+            # Ignore transient errors - dialog will still work without it
+            pass
         self.dialog.grab_set()
 
         # Center the dialog
@@ -677,7 +735,7 @@ class SettingsDialog:
         self.parent.wait_window(self.dialog)
         return self.result
 
-    def _create_settings_ui(self):
+    def _create_settings_ui(self) -> None:
         """Create settings UI"""
         # Main container
         main_frame = tk.Frame(self.dialog, bg=ModernTheme.PRIMARY_BG)
@@ -691,10 +749,10 @@ class SettingsDialog:
 
         # Create notebook for tabs
         style = ttk.Style()
-        style.configure('Dark.TNotebook', background=ModernTheme.PRIMARY_BG)
-        style.configure('Dark.TNotebook.Tab', background=ModernTheme.CARD_BG,
+        style.configure('Dark.TNotebook', background=ModernTheme.PRIMARY_BG)  # type: ignore
+        style.configure('Dark.TNotebook.Tab', background=ModernTheme.CARD_BG,  # type: ignore
                        foreground=ModernTheme.TEXT_PRIMARY, padding=[20, 10])
-        style.map('Dark.TNotebook.Tab',
+        style.map('Dark.TNotebook.Tab',  # type: ignore
                  background=[('selected', ModernTheme.ACCENT_BG)])
 
         notebook = ttk.Notebook(main_frame, style='Dark.TNotebook')
@@ -731,7 +789,7 @@ class SettingsDialog:
                              relief="flat", bd=0, padx=20, pady=8)
         cancel_btn.pack(side="right")
 
-    def _create_general_settings(self, parent):
+    def _create_general_settings(self, parent: tk.Widget) -> None:
         """Create general settings"""
         # Port setting
         port_frame = tk.Frame(parent, bg=ModernTheme.CARD_BG)
@@ -740,7 +798,8 @@ class SettingsDialog:
         tk.Label(port_frame, text="Server Port:", bg=ModernTheme.CARD_BG,
                 fg=ModernTheme.TEXT_PRIMARY, font=(ModernTheme.FONT_FAMILY, 11)).pack(anchor="w")
         
-        self.port_var = tk.StringVar(value=str(self.settings.get('port', 1256)))
+        port_value = self.settings.get('port', 1256) if isinstance(self.settings, dict) else 1256
+        self.port_var = tk.StringVar(value=str(port_value))
         port_entry = tk.Entry(port_frame, textvariable=self.port_var,
                             bg=ModernTheme.SECONDARY_BG, fg=ModernTheme.TEXT_PRIMARY,
                             font=(ModernTheme.FONT_FAMILY, 11))
@@ -756,7 +815,8 @@ class SettingsDialog:
         storage_subframe = tk.Frame(storage_frame, bg=ModernTheme.CARD_BG)
         storage_subframe.pack(fill="x", pady=(5, 0))
 
-        self.storage_var = tk.StringVar(value=str(self.settings.get('storage_dir', 'received_files')))
+        storage_value = self.settings.get('storage_dir', 'received_files') if isinstance(self.settings, dict) else 'received_files'
+        self.storage_var = tk.StringVar(value=str(storage_value))
         storage_entry = tk.Entry(storage_subframe, textvariable=self.storage_var,
                                bg=ModernTheme.SECONDARY_BG, fg=ModernTheme.TEXT_PRIMARY,
                                font=(ModernTheme.FONT_FAMILY, 11))
@@ -780,7 +840,7 @@ class SettingsDialog:
                                font=(ModernTheme.FONT_FAMILY, 11))
         clients_entry.pack(fill="x", pady=(5, 0))
 
-    def _create_security_settings(self, parent):
+    def _create_security_settings(self, parent: tk.Widget) -> None:
         """Create security settings"""
         # Client timeout
         timeout_frame = tk.Frame(parent, bg=ModernTheme.CARD_BG)
@@ -813,7 +873,7 @@ class SettingsDialog:
             tk.Label(enc_frame, text=info, bg=ModernTheme.CARD_BG,
                     fg=ModernTheme.TEXT_SECONDARY, font=(ModernTheme.FONT_FAMILY, 10)).pack(anchor="w", pady=2)
 
-    def _create_performance_settings(self, parent):
+    def _create_performance_settings(self, parent: tk.Widget) -> None:
         """Create performance settings"""
         # Maintenance interval
         maintenance_frame = tk.Frame(parent, bg=ModernTheme.CARD_BG)
@@ -861,13 +921,13 @@ class SettingsDialog:
                                     selectcolor=ModernTheme.SECONDARY_BG)
         backup_check.pack(anchor="w", pady=(10, 0))
 
-    def _browse_directory(self):
+    def _browse_directory(self) -> None:
         """Browse for storage directory"""
         if directory := filedialog.askdirectory(parent=self.dialog,
                                           initialdir=self.storage_var.get()):
             self.storage_var.set(directory)
 
-    def _save_settings(self):
+    def _save_settings(self) -> None:
         """Save settings to file and close dialog"""
         try:
             # Validate inputs
@@ -912,7 +972,7 @@ class SettingsDialog:
             messagebox.showerror("Settings Error", f"Failed to save settings: {str(e)}", 
                                parent=self.dialog or self.parent)
 
-    def _persist_settings_to_file(self):
+    def _persist_settings_to_file(self) -> None:
         """Persist settings to configuration file"""
         try:
             settings_file = "server_gui_settings.json"
@@ -934,7 +994,7 @@ class SettingsDialog:
             print(f"Failed to save settings to file: {e}")
             raise
 
-    def _cancel(self):
+    def _cancel(self) -> None:
         """Cancel and close dialog"""
         self.result = None
         if self.dialog:
@@ -943,18 +1003,22 @@ class SettingsDialog:
 # --- CHART WIDGET ---
 class ModernChart(tk.Frame):
     """Modern chart widget using matplotlib"""
-    def __init__(self, parent, chart_type="line", **kwargs):
+    def __init__(self, parent: tk.Widget, chart_type: str = "line", **kwargs: Any) -> None:
         super().__init__(parent, bg=ModernTheme.CARD_BG, **kwargs)
         self.chart_type = chart_type
-        self.data = {}
-        self.figure = None
-        self.canvas = None
-        self.ax = None
+        self.data: Dict[str, Any] = {}
+        if TYPE_CHECKING:
+            from matplotlib.figure import Figure
+            from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+            from matplotlib.axes import Axes
+        self.figure: Optional[Any] = None  # Will be Figure when available
+        self.canvas: Optional[Any] = None  # Will be FigureCanvasTkAgg when available
+        self.ax: Optional[Any] = None      # Will be Axes when available
         self._create_chart()
 
-    def _create_chart(self):
+    def _create_chart(self) -> None:
         """Create the chart"""
-        if not CHARTS_AVAILABLE or not Figure:
+        if not CHARTS_AVAILABLE or not Figure or not plt:
             label = tk.Label(self, text="Charts not available\n(matplotlib not installed)",
                            bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_SECONDARY,
                            font=(ModernTheme.FONT_FAMILY, 12))
@@ -962,29 +1026,35 @@ class ModernChart(tk.Frame):
             return
 
         # Create figure with dark background
-        self.figure = Figure(figsize=(6, 4), dpi=100, facecolor=ModernTheme.CARD_BG)
-        self.ax = self.figure.add_subplot(111)
-        self.ax.set_facecolor(ModernTheme.SECONDARY_BG)
+        if Figure:
+            self.figure = Figure(figsize=(6, 4), dpi=100, facecolor=ModernTheme.CARD_BG)
+            self.ax = self.figure.add_subplot(111)
+        else:
+            self.figure = None
+            self.ax = None
+            return
+        if self.ax is not None:
+            self.ax.set_facecolor(ModernTheme.SECONDARY_BG)
 
-        # Style the axes
-        self.ax.spines['bottom'].set_color(ModernTheme.TEXT_SECONDARY)
-        self.ax.spines['top'].set_color(ModernTheme.TEXT_SECONDARY)
-        self.ax.spines['left'].set_color(ModernTheme.TEXT_SECONDARY)
-        self.ax.spines['right'].set_color(ModernTheme.TEXT_SECONDARY)
-        self.ax.tick_params(colors=ModernTheme.TEXT_SECONDARY)
-        self.ax.xaxis.label.set_color(ModernTheme.TEXT_PRIMARY)
-        self.ax.yaxis.label.set_color(ModernTheme.TEXT_PRIMARY)
-        # Fix: Use set_title with color parameter instead of accessing title attribute
-        self.ax.set_title('', color=ModernTheme.TEXT_PRIMARY)
+            # Style the axes
+            self.ax.spines['bottom'].set_color(ModernTheme.TEXT_SECONDARY)
+            self.ax.spines['top'].set_color(ModernTheme.TEXT_SECONDARY)
+            self.ax.spines['left'].set_color(ModernTheme.TEXT_SECONDARY)
+            self.ax.spines['right'].set_color(ModernTheme.TEXT_SECONDARY)
+            self.ax.tick_params(colors=ModernTheme.TEXT_SECONDARY)
+            self.ax.xaxis.label.set_color(ModernTheme.TEXT_PRIMARY)
+            self.ax.yaxis.label.set_color(ModernTheme.TEXT_PRIMARY)
+            # Fix: Use set_title with color parameter instead of accessing title attribute
+            self.ax.set_title('', color=ModernTheme.TEXT_PRIMARY)
 
         # Create canvas
-        if FigureCanvasTkAgg:
+        if FigureCanvasTkAgg and self.figure:
             self.canvas = FigureCanvasTkAgg(self.figure, self)
             self.canvas.get_tk_widget().pack(fill="both", expand=True)
 
-    def update_data(self, data, title="", xlabel="", ylabel=""):
+    def update_data(self, data: Dict[str, Any], title: str = "", xlabel: str = "", ylabel: str = "") -> None:
         """Update chart data"""
-        if not CHARTS_AVAILABLE or not self.ax or not Figure:
+        if not CHARTS_AVAILABLE or not self.ax or not self.figure or not self.canvas:
             return
 
         self.data = data
@@ -998,37 +1068,44 @@ class ModernChart(tk.Frame):
         # Plot based on chart type
         if self.chart_type == "line":
             for label, (x_data, y_data) in data.items():
-                self.ax.plot(x_data, y_data, label=label, linewidth=2)
+                if self.ax and hasattr(self.ax, 'plot'):
+                    self.ax.plot(x_data, y_data, label=label, linewidth=2)
         elif self.chart_type == "bar":
             if data:
                 labels = list(data.keys())
                 values = list(data.values())
                 colors = [ModernTheme.ACCENT_BLUE, ModernTheme.ACCENT_PURPLE, 
                          ModernTheme.ACCENT_GREEN, ModernTheme.ACCENT_ORANGE] * len(labels)
-                self.ax.bar(labels, values, color=colors[:len(labels)])
+                if self.ax and hasattr(self.ax, 'bar'):
+                    self.ax.bar(labels, values, color=colors[:len(labels)])
         elif self.chart_type == "pie":
             if data:
                 labels = list(data.keys())
                 values = list(data.values())
                 colors = [ModernTheme.ACCENT_BLUE, ModernTheme.ACCENT_PURPLE,
                          ModernTheme.ACCENT_GREEN, ModernTheme.ACCENT_ORANGE] * len(labels)
-                self.ax.pie(values, labels=labels, colors=colors[:len(labels)],
-                           autopct='%1.1f%%', textprops={'color': ModernTheme.TEXT_PRIMARY})
+                if self.ax and hasattr(self.ax, 'pie'):
+                    self.ax.pie(values, labels=labels, colors=colors[:len(labels)],
+                               autopct='%1.1f%%', textprops={'color': ModernTheme.TEXT_PRIMARY})
 
         # Configure grid
-        self.ax.grid(True, alpha=0.3, color=ModernTheme.TEXT_SECONDARY, linestyle='--')
+        if self.ax and hasattr(self.ax, 'grid'):
+            self.ax.grid(True, alpha=0.3, color=ModernTheme.TEXT_SECONDARY, linestyle='--')
 
         # Add legend if needed
-        if self.chart_type == "line" and len(data) > 1:
+        if self.chart_type == "line" and len(data) > 1 and self.ax and hasattr(self.ax, 'legend'):
             legend = self.ax.legend(facecolor=ModernTheme.CARD_BG, 
                                   edgecolor=ModernTheme.TEXT_SECONDARY)
-            for text in legend.get_texts():
-                text.set_color(ModernTheme.TEXT_PRIMARY)        # Style the plot
+            if legend and hasattr(legend, 'get_texts'):
+                for text in legend.get_texts():
+                    if hasattr(text, 'set_color'):
+                        text.set_color(ModernTheme.TEXT_PRIMARY)        # Style the plot
         self.ax.set_facecolor(ModernTheme.SECONDARY_BG)
         if self.figure:
             self.figure.tight_layout()
         if self.canvas:
             self.canvas.draw()
+
 
 # --- MAIN GUI CLASS ---
 class ServerGUIStatus:
@@ -1045,7 +1122,7 @@ class ServerGUIStatus:
         self.uptime_seconds = 0
         self.last_activity = ""
         self.error_message = ""
-        self.maintenance_stats = {
+        self.maintenance_stats = {  # type: ignore
             'files_cleaned': 0,
             'partial_files_cleaned': 0,
             'clients_cleaned': 0,
@@ -1055,29 +1132,34 @@ class ServerGUIStatus:
 class ServerGUI:
     """ULTRA MODERN GUI class for the server dashboard - Enhanced version"""
 
-    def __init__(self, server_instance=None):
-        self.server = server_instance
+    def __init__(self, server_instance: Optional[Any] = None) -> None:  # BackupServer when available
+        # Narrow the server to a structural protocol to help type checking without changing runtime
+        self.server: Optional[BackupServerLike] = server_instance  # type: ignore[assignment]
         self.status = ServerGUIStatus()
         self.gui_enabled = False
-        self.root = None
-        self.tray_icon = None
-        self.update_queue = queue.Queue()
+        self.root: Optional[tk.Tk] = None
+        self.tray_icon: Optional[Any] = None  # pystray.Icon when available
+        self.update_queue: queue.Queue[Any] = queue.Queue()
         self.running = False
-        self.gui_thread = None
+        self.gui_thread: Optional[threading.Thread] = None
         self.start_time = time.time()
 
         # GUI update lock
         self.lock = threading.Lock()
 
         # Status widgets references
-        self.status_labels = {}
-        self.progress_vars = {}
+        self.status_labels: Dict[str, tk.Label] = {}
+        self.progress_vars: Dict[str, tk.DoubleVar] = {}
+        # Late-bound widgets (created in builders)
+        self.clock_label: Optional[tk.Label] = None
+        self.header_status_label: Optional[tk.Label] = None
+        self.activity_log_text: Optional[tk.Text] = None
 
         # Advanced UI components
-        self.toast_system = None
-        self.advanced_progress_bars = {}
-        self.activity_log = []
-        self.performance_data = {
+        self.toast_system: Optional[ToastNotification] = None
+        self.advanced_progress_bars: Dict[str, AdvancedProgressBar] = {}
+        self.activity_log: List[str] = []
+        self.performance_data: Dict[str, Deque[Any]] = {
             'cpu_usage': deque(maxlen=60),
             'memory_usage': deque(maxlen=60),
             'network_activity': deque(maxlen=60),
@@ -1087,32 +1169,50 @@ class ServerGUI:
         }
         
         # Current tab tracking
-        self.current_tab = "dashboard"
+        self.current_tab: str = "dashboard"
         
         # Tables for clients and files
-        self.client_table = None
-        self.file_table = None
+        self.client_table: Optional[ModernTable] = None
+        self.file_table: Optional[ModernTable] = None
         
         # Charts
-        self.performance_chart = None
-        self.transfer_chart = None
-        self.client_chart = None
+        self.performance_chart: Optional[ModernChart] = None
+        self.transfer_chart: Optional[ModernChart] = None
+        self.client_chart: Optional[ModernChart] = None
+        
+        # Status indicators  
+        self.header_status_indicator: Optional[ModernStatusIndicator] = None
+        self.tab_buttons: Dict[str, tk.Button] = {}
+        self.tab_contents: Dict[str, tk.Frame] = {}
+        
+        # Additional GUI components with proper typing
+        self.main_frame: Optional[tk.Frame] = None
+        self.header_frame: Optional[tk.Frame] = None
+        self.content_area: Optional[tk.Frame] = None
+        self.dashboard_frame: Optional[tk.Frame] = None
+        self.control_frame: Optional[tk.Frame] = None
+        self.status_frame: Optional[tk.Frame] = None
+        self.process_monitor_widget: Optional[Any] = None  # ProcessMonitorWidget when available
         
         # Server reference is already set in __init__ - don't overwrite it!
         
         # Settings - Load from file or use defaults
-        self.settings = self._load_settings_from_file()
+        self.settings: Dict[str, Any] = self._load_settings_from_file()
         
         # Database path
         self.db_path = "defensive.db"
-        
+
         # Performance monitoring
         self.last_bytes_transferred = 0
         self.network_monitor_start = time.time()
-    
-    def _load_settings_from_file(self):
+        # Network counters cached between updates
+        self.last_network_bytes: Optional[int] = None
+        # Auto-refresh timer cache
+        self._last_file_refresh_time: Optional[float] = None
+        
+    def _load_settings_from_file(self) -> Dict[str, Any]:
         """Load settings from configuration file or return defaults"""
-        default_settings = {
+        default_settings: Dict[str, Any] = {
             'port': 1256,
             'storage_dir': 'received_files',
             'max_clients': 50,
@@ -1154,7 +1254,7 @@ class ServerGUI:
             
         return default_settings
     
-    def _save_current_settings(self):
+    def _save_current_settings(self) -> bool:
         """Save current settings to file (for use during runtime)"""
         try:
             settings_file = "server_gui_settings.json"
@@ -1200,12 +1300,11 @@ class ServerGUI:
 
         except Exception as e:
             print(f"GUI initialization failed: {e}")
-            import traceback
-# Cleaned up duplicate import
+            # Cleaned up duplicate import
             traceback.print_exc()
             return False
     
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Enhanced shutdown with settings persistence and cleanup"""
         print("Starting GUI shutdown process...")
         self.running = False
@@ -1248,7 +1347,7 @@ class ServerGUI:
 
         print("GUI shutdown completed")
 
-    def _gui_main_loop(self):
+    def _gui_main_loop(self) -> None:
         """Main GUI thread loop"""
         try:
             print("Starting enhanced ultra modern GUI main loop...")
@@ -1270,16 +1369,16 @@ class ServerGUI:
                 self.root.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
                 # Force window to front and make it visible
-                self.root.lift()
-                self.root.attributes('-topmost', True)
-                self.root.after(1000, lambda: self.root.attributes('-topmost', False) if self.root else None)
+                self.root.lift()  # type: ignore
+                self.root.attributes('-topmost', True)  # type: ignore
+                self.root.after(1000, lambda: self.root.attributes('-topmost', False) if self.root else None)  # type: ignore
                 self.root.focus_force()
                 self.root.deiconify()  # Ensure window is not minimized
                 self.root.state('normal')  # Ensure window is in normal state
                 
                 # Additional visibility fixes
                 self.root.wm_state('normal')
-                self.root.tkraise()
+                self.root.tkraise()  # type: ignore
                 self.root.grab_set()  # Keep focus initially
                 self.root.after(2000, lambda: self.root.grab_release() if self.root else None)
 
@@ -1322,7 +1421,7 @@ class ServerGUI:
             self.gui_enabled = False
             print("Modern GUI main loop ended")
     
-    def _create_main_window(self):
+    def _create_main_window(self) -> None:
         """Create the enhanced main window with tabs"""
         print("Creating enhanced ultra modern main window...")
 
@@ -1343,7 +1442,10 @@ class ServerGUI:
         self._create_tab_system(main_container)
 
         # Initialize components
-        self.toast_system = ToastNotification(self.root)        # Show welcome toast
+        if self.root is not None:
+            self.toast_system = ToastNotification(self.root)  # type: ignore
+        else:
+            self.toast_system = None        # Show welcome toast
         if self.root and self.toast_system:
             def show_welcome():
                 if self.toast_system:  # Double-check it's still available
@@ -1352,7 +1454,7 @@ class ServerGUI:
 
         print("Enhanced ultra modern main window created successfully!")
 
-    def _create_menu_bar(self):
+    def _create_menu_bar(self) -> None:
         """Create modern menu bar"""
         if not self.root:
             return
@@ -1402,7 +1504,7 @@ class ServerGUI:
         help_menu.add_command(label="📖 Documentation", command=self._show_documentation)
         help_menu.add_command(label="About", command=self._show_about)
 
-    def _create_header(self, parent):
+    def _create_header(self, parent: tk.Widget) -> None:
         """Create header with title and clock"""
         header_frame = tk.Frame(parent, bg=ModernTheme.PRIMARY_BG, height=60)
         header_frame.pack(fill="x", pady=(0, 15))
@@ -1435,7 +1537,7 @@ class ServerGUI:
         self.header_status_indicator = ModernStatusIndicator(status_indicator_frame)
         self.header_status_indicator.pack(side="left")
 
-    def _create_tab_system(self, parent):
+    def _create_tab_system(self, parent: tk.Widget) -> None:
         """Create tab navigation system"""
         # Tab buttons frame
         tab_frame = tk.Frame(parent, bg=ModernTheme.SECONDARY_BG)
@@ -1480,7 +1582,7 @@ class ServerGUI:
         # Show dashboard by default
         self._switch_tab("dashboard")
 
-    def _switch_tab(self, tab_id):
+    def _switch_tab(self, tab_id: str) -> None:
         """Switch between tabs"""
         # Update button appearance
         for tid, btn in self.tab_buttons.items():
@@ -1506,14 +1608,14 @@ class ServerGUI:
             elif tab_id == "analytics":
                 self._update_analytics_charts()
 
-    def _create_dashboard_tab(self):
+    def _create_dashboard_tab(self) -> None:
         """Create dashboard tab content"""
         dashboard = tk.Frame(self.content_area, bg=ModernTheme.PRIMARY_BG)
         self.tab_contents["dashboard"] = dashboard
 
         # Create scrollable container
         canvas = tk.Canvas(dashboard, bg=ModernTheme.PRIMARY_BG, highlightthickness=0)
-        scrollbar = tk.Scrollbar(dashboard, orient="vertical", command=canvas.yview,
+        scrollbar = tk.Scrollbar(dashboard, orient="vertical", command=canvas.yview,  # type: ignore
                                bg=ModernTheme.ACCENT_BG, troughcolor=ModernTheme.SECONDARY_BG)
 
         scrollable_frame = tk.Frame(canvas, bg=ModernTheme.PRIMARY_BG)
@@ -1526,7 +1628,7 @@ class ServerGUI:
         canvas.configure(yscrollcommand=scrollbar.set)
 
         # Bind canvas resize
-        def on_canvas_configure(event):
+        def on_canvas_configure(event: tk.Event) -> None:
             canvas.itemconfig(canvas_window, width=event.width)
         canvas.bind("<Configure>", on_canvas_configure)
 
@@ -1536,7 +1638,7 @@ class ServerGUI:
         # Create dashboard layout
         self._create_compact_two_column_layout(scrollable_frame)
 
-    def _create_clients_tab(self):
+    def _create_clients_tab(self) -> None:
         """Create clients tab content"""
         clients_tab = tk.Frame(self.content_area, bg=ModernTheme.PRIMARY_BG)
         self.tab_contents["clients"] = clients_tab
@@ -1586,11 +1688,12 @@ class ServerGUI:
             'files': {'text': 'Files', 'width': 80}
         }
 
-        self.client_table = ModernTable(client_card.content_frame, columns)
-        self.client_table.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-        self.client_table.set_selection_callback(self._on_client_selected)
+        if client_card.content_frame is not None:
+            self.client_table = ModernTable(client_card.content_frame, columns)
+            self.client_table.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+            self.client_table.set_selection_callback(self._on_client_selected)
 
-    def _create_files_tab(self):
+    def _create_files_tab(self) -> None:
         """Create files tab content"""
         files_tab = tk.Frame(self.content_area, bg=ModernTheme.PRIMARY_BG)
         self.tab_contents["files"] = files_tab
@@ -1655,11 +1758,12 @@ class ServerGUI:
             'path': {'text': 'Path', 'width': 200}
         }
 
-        self.file_table = ModernTable(file_card.content_frame, columns)
-        self.file_table.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-        self.file_table.set_selection_callback(self._on_file_selected)
+        if file_card.content_frame is not None:
+            self.file_table = ModernTable(file_card.content_frame, columns)
+            self.file_table.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+            self.file_table.set_selection_callback(self._on_file_selected)
 
-    def _create_analytics_tab(self):
+    def _create_analytics_tab(self) -> None:
         """Create analytics tab content"""
         analytics_tab = tk.Frame(self.content_area, bg=ModernTheme.PRIMARY_BG)
         self.tab_contents["analytics"] = analytics_tab
@@ -1673,32 +1777,44 @@ class ServerGUI:
         # Performance chart
         perf_card = ModernCard(analytics_tab, title="[PERF] System Performance")
         perf_card.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-        self.performance_chart = ModernChart(perf_card.content_frame, chart_type="line")
-        self.performance_chart.pack(fill="both", expand=True, padx=10, pady=10)
+        if perf_card.content_frame is not None:
+            self.performance_chart = ModernChart(perf_card.content_frame, chart_type="line")
+            self.performance_chart.pack(fill="both", expand=True, padx=10, pady=10)
+        else:
+            self.performance_chart = None
 
         # Transfer volume chart
         transfer_card = ModernCard(analytics_tab, title="📊 Transfer Volume")
         transfer_card.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
-        self.transfer_chart = ModernChart(transfer_card.content_frame, chart_type="line")
-        self.transfer_chart.pack(fill="both", expand=True, padx=10, pady=10)
+        if transfer_card.content_frame is not None:
+            self.transfer_chart = ModernChart(transfer_card.content_frame, chart_type="line")
+            self.transfer_chart.pack(fill="both", expand=True, padx=10, pady=10)
+        else:
+            self.transfer_chart = None
 
         # Client connections chart
         client_card = ModernCard(analytics_tab, title="👥 Client Activity")
         client_card.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
-        self.client_chart = ModernChart(client_card.content_frame, chart_type="bar")
-        self.client_chart.pack(fill="both", expand=True, padx=10, pady=10)
+        if client_card.content_frame is not None:
+            self.client_chart = ModernChart(client_card.content_frame, chart_type="bar")
+            self.client_chart.pack(fill="both", expand=True, padx=10, pady=10)
+        else:
+            self.client_chart = None
 
         # Summary statistics
         stats_card = ModernCard(analytics_tab, title="📈 Summary Statistics")
         stats_card.grid(row=1, column=1, sticky="nsew", padx=5, pady=5)
-        self._create_summary_stats(stats_card.content_frame)
+        if stats_card.content_frame is not None:
+            self._create_summary_stats(stats_card.content_frame)
+        else:
+            print("Warning: Could not create summary stats - content frame is None")
 
-    def _create_summary_stats(self, parent):
+    def _create_summary_stats(self, parent: tk.Widget) -> None:
         """Create summary statistics panel"""
         stats_frame = tk.Frame(parent, bg=ModernTheme.CARD_BG)
         stats_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        self.stats_labels = {}
+        self.stats_labels: Dict[str, tk.Label] = {}
         stats = [
             ('total_files', '📁 Total Files:', '0'),
             ('total_size', '💾 Total Size:', '0 MB'),
@@ -1721,7 +1837,7 @@ class ServerGUI:
             value_label.pack(side="right")
             self.stats_labels[stat_id] = value_label
 
-    def _create_process_monitor_tab(self):
+    def _create_process_monitor_tab(self) -> None:
         """Create process monitoring tab content"""
         if not PROCESS_MONITOR_AVAILABLE:
             return
@@ -1774,7 +1890,7 @@ class ServerGUI:
             )
             error_label.pack(pady=50)
 
-    def _create_compact_two_column_layout(self, parent):
+    def _create_compact_two_column_layout(self, parent: tk.Widget) -> None:
         """Create a compact two-column layout for dashboard"""
         # Main container with two columns
         main_container = tk.Frame(parent, bg=ModernTheme.PRIMARY_BG)
@@ -1805,7 +1921,7 @@ class ServerGUI:
         self._create_compact_activity_log_card(right_column)
         self._create_compact_status_message_card(right_column)
 
-    def _create_compact_server_status_card(self, parent):
+    def _create_compact_server_status_card(self, parent: tk.Widget) -> None:
         """Create compact server status card with glass morphism"""
         card = GlassMorphismCard(parent, title="Server Status")
         card.pack(fill="x", pady=(0, 8), padx=3)
@@ -1841,7 +1957,7 @@ class ServerGUI:
                                               font=(ModernTheme.FONT_FAMILY, 9))
         self.status_labels['uptime'].pack(side="right")
 
-    def _create_compact_client_stats_card(self, parent):
+    def _create_compact_client_stats_card(self, parent: tk.Widget) -> None:
         """Create compact client statistics card with glass morphism"""
         card = GlassMorphismCard(parent, title="👥 Client Statistics")
         card.pack(fill="x", pady=(0, 8), padx=3)
@@ -1871,46 +1987,53 @@ class ServerGUI:
                 font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
         self.status_labels['active_transfers'] = tk.Label(trans_frame, text="0", bg=ModernTheme.GLASS_BG,
                                                          fg=ModernTheme.ACCENT_GREEN, font=(ModernTheme.FONT_FAMILY, 9, 'bold'))
+        self.status_labels['active_transfers'].pack(side="right")
 
-    def _create_compact_transfer_stats_card(self, parent):
+    def _create_compact_transfer_stats_card(self, parent: tk.Widget) -> None:
         """Create compact transfer statistics card with glass morphism"""
         card = GlassMorphismCard(parent, title="📊 Transfer Statistics")
         card.pack(fill="x", pady=(0, 8), padx=3)
 
         # Bytes transferred
-        bytes_frame = tk.Frame(card.content_frame, bg=ModernTheme.CARD_BG)
+        bytes_frame = tk.Frame(card.content_frame, bg=ModernTheme.GLASS_BG)
         bytes_frame.pack(fill="x", padx=10, pady=5)
-        tk.Label(bytes_frame, text="Bytes Transferred:", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_SECONDARY,
+        tk.Label(bytes_frame, text="Bytes Transferred:", bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_SECONDARY,
                 font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
-        self.status_labels['bytes'] = tk.Label(bytes_frame, text="0 B", bg=ModernTheme.CARD_BG,
+        self.status_labels['bytes'] = tk.Label(bytes_frame, text="0 B", bg=ModernTheme.GLASS_BG,
                                               fg=ModernTheme.ACCENT_PURPLE, font=(ModernTheme.FONT_FAMILY, 9, 'bold'))
         self.status_labels['bytes'].pack(side="right")
 
         # Transfer rate
-        rate_frame = tk.Frame(card.content_frame, bg=ModernTheme.CARD_BG)
+        if card.content_frame is not None:
+            rate_frame = tk.Frame(card.content_frame, bg=ModernTheme.GLASS_BG)
+        else:
+            return
         rate_frame.pack(fill="x", padx=10, pady=2)
-        tk.Label(rate_frame, text="Transfer Rate:", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_SECONDARY,
+        tk.Label(rate_frame, text="Transfer Rate:", bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_SECONDARY,
                 font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
-        self.status_labels['transfer_rate'] = tk.Label(rate_frame, text="0 KB/s", bg=ModernTheme.CARD_BG,
+        self.status_labels['transfer_rate'] = tk.Label(rate_frame, text="0 KB/s", bg=ModernTheme.GLASS_BG,
                                                       fg=ModernTheme.ACCENT_ORANGE, font=(ModernTheme.FONT_FAMILY, 9, 'bold'))
         self.status_labels['transfer_rate'].pack(side="right")
 
         # Last activity
-        activity_frame = tk.Frame(card.content_frame, bg=ModernTheme.CARD_BG)
+        activity_frame = tk.Frame(card.content_frame, bg=ModernTheme.GLASS_BG)
         activity_frame.pack(fill="x", padx=10, pady=(2, 8))
-        tk.Label(activity_frame, text="Last Activity:", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_SECONDARY,
+        tk.Label(activity_frame, text="Last Activity:", bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_SECONDARY,
                 font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
-        self.status_labels['activity'] = tk.Label(activity_frame, text="None", bg=ModernTheme.CARD_BG,
+        self.status_labels['activity'] = tk.Label(activity_frame, text="None", bg=ModernTheme.GLASS_BG,
                                                  fg=ModernTheme.TEXT_PRIMARY, font=(ModernTheme.FONT_FAMILY, 9))
         self.status_labels['activity'].pack(side="right")
 
-    def _create_compact_performance_card(self, parent):
+    def _create_compact_performance_card(self, parent: tk.Widget) -> None:
         """Create compact performance monitoring card with real data"""
         card = ModernCard(parent, title="[PERF] Performance Monitor") # Changed to ModernCard
         card.pack(fill="x", pady=(0, 8), padx=3)
 
         # CPU Usage with mini progress bar
-        cpu_frame = tk.Frame(card.content_frame, bg=ModernTheme.CARD_BG) # Changed to card.content_frame
+        if card.content_frame is not None:
+            cpu_frame = tk.Frame(card.content_frame, bg=ModernTheme.CARD_BG)  # Changed to card.content_frame
+        else:
+            return
         cpu_frame.pack(fill="x", padx=10, pady=2)
         tk.Label(cpu_frame, text="CPU:", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_SECONDARY,
                 font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
@@ -1918,11 +2041,15 @@ class ServerGUI:
                                                   fg=ModernTheme.ACCENT_GREEN, font=(ModernTheme.FONT_FAMILY, 9, 'bold'))
         self.status_labels['cpu_usage'].pack(side="right")
 
-        self.advanced_progress_bars['cpu'] = AdvancedProgressBar(card.content_frame, width=200, height=12) # Changed to card.content_frame
+        if card.content_frame is not None:
+            self.advanced_progress_bars['cpu'] = AdvancedProgressBar(card.content_frame, width=200, height=12)  # Changed to card.content_frame
         self.advanced_progress_bars['cpu'].pack(padx=10, pady=(0, 3))
 
         # Memory Usage with mini progress bar
-        mem_frame = tk.Frame(card.content_frame, bg=ModernTheme.CARD_BG) # Changed to card.content_frame
+        if card.content_frame is not None:
+            mem_frame = tk.Frame(card.content_frame, bg=ModernTheme.CARD_BG)  # Changed to card.content_frame
+        else:
+            return
         mem_frame.pack(fill="x", padx=10, pady=2)
         tk.Label(mem_frame, text="Memory:", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_SECONDARY,
                 font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
@@ -1930,7 +2057,8 @@ class ServerGUI:
                                                      fg=ModernTheme.ACCENT_PURPLE, font=(ModernTheme.FONT_FAMILY, 9, 'bold'))
         self.status_labels['memory_usage'].pack(side="right")
 
-        self.advanced_progress_bars['memory'] = AdvancedProgressBar(card.content_frame, width=200, height=12) # Changed to card.content_frame
+        if card.content_frame is not None:
+            self.advanced_progress_bars['memory'] = AdvancedProgressBar(card.content_frame, width=200, height=12)  # Changed to card.content_frame
         self.advanced_progress_bars['memory'].pack(padx=10, pady=(0, 3))
 
         # Disk Usage
@@ -1954,7 +2082,7 @@ class ServerGUI:
                                                          fg=ModernTheme.ACCENT_BLUE, font=(ModernTheme.FONT_FAMILY, 9, 'bold'))
         self.status_labels['network_activity'].pack(side="right")
 
-    def _create_compact_maintenance_card(self, parent):
+    def _create_compact_maintenance_card(self, parent: tk.Widget) -> None:
         """Create compact maintenance statistics card"""
         card = ModernCard(parent, title="Maintenance") # Changed to ModernCard
         card.pack(fill="x", pady=(0, 8), padx=3)
@@ -1995,7 +2123,7 @@ class ServerGUI:
                                                      fg=ModernTheme.TEXT_PRIMARY, font=(ModernTheme.FONT_FAMILY, 9))
         self.status_labels['last_cleanup'].pack(side="right")
 
-    def _create_compact_activity_log_card(self, parent):
+    def _create_compact_activity_log_card(self, parent: Any) -> None:
         """Create compact activity log card"""
         card = ModernCard(parent, title="📋 Activity Log") # Changed to ModernCard
         card.pack(fill="x", pady=(0, 8), padx=3)
@@ -2024,11 +2152,11 @@ class ServerGUI:
                                         fg=ModernTheme.TEXT_PRIMARY, font=(ModernTheme.FONT_FAMILY, 8),
                                         yscrollcommand=scrollbar.set, wrap="word", relief="flat", bd=0)
         self.activity_log_text.pack(side="left", fill="both", expand=True)
-        scrollbar.config(command=self.activity_log_text.yview)
+        scrollbar.config(command=self.activity_log_text.yview)  # type: ignore
 
         self._add_activity_log("[SYSTEM] Enhanced Ultra Modern GUI System Initialized")
 
-    def _create_compact_status_message_card(self, parent):
+    def _create_compact_status_message_card(self, parent: Any) -> None:
         """Create compact status message card"""
         card = ModernCard(parent, title="📢 Status") # Changed to ModernCard
         card.pack(fill="x", pady=(0, 8), padx=3)
@@ -2041,7 +2169,7 @@ class ServerGUI:
                                               fg=ModernTheme.SUCCESS, font=(ModernTheme.FONT_FAMILY, 9))
         self.status_labels['error'].pack(padx=10, pady=(5, 8), anchor="w")
 
-    def _create_enhanced_control_panel(self, parent):
+    def _create_enhanced_control_panel(self, parent: Any) -> None:
         """Create enhanced compact control panel"""
         card = ModernCard(parent, title="🎛️ Control Panel") # Changed to ModernCard
         card.pack(fill="x", pady=(0, 8), padx=3)
@@ -2058,33 +2186,33 @@ class ServerGUI:
         button_frame.rowconfigure(2, weight=1)
 
         # Row 1
-        start_btn = self._create_modern_button(button_frame, "▶️ Start Server", self._start_server, ModernTheme.SUCCESS)
+        start_btn = self._create_modern_button(button_frame, "▶️ Start Server", self._start_server, ModernTheme.SUCCESS)  # type: ignore
         start_btn.grid(row=0, column=0, sticky="nsew", padx=(0, 5), pady=(0,5))
         ModernTooltip(start_btn, "Start the main backup server")
 
-        stop_btn = self._create_modern_button(button_frame, "⏹️ Stop Server", self._stop_server, ModernTheme.ERROR)
+        stop_btn = self._create_modern_button(button_frame, "⏹️ Stop Server", self._stop_server, ModernTheme.ERROR)  # type: ignore
         stop_btn.grid(row=0, column=1, sticky="nsew", padx=(5, 0), pady=(0,5))
         ModernTooltip(stop_btn, "Stop the server gracefully")
 
         # Row 2
-        settings_btn = self._create_modern_button(button_frame, "[SETTINGS] Settings", self._show_settings, ModernTheme.ACCENT_BLUE)
+        settings_btn = self._create_modern_button(button_frame, "[SETTINGS] Settings", self._show_settings, ModernTheme.ACCENT_BLUE)  # type: ignore
         settings_btn.grid(row=1, column=0, sticky="nsew", padx=(0, 5), pady=(5,5))
         ModernTooltip(settings_btn, "Configure server settings")
 
-        restart_btn = self._create_modern_button(button_frame, "🔄 Restart Server", self._restart_server, ModernTheme.WARNING)
+        restart_btn = self._create_modern_button(button_frame, "🔄 Restart Server", self._restart_server, ModernTheme.WARNING)  # type: ignore
         restart_btn.grid(row=1, column=1, sticky="nsew", padx=(5, 0), pady=(5,5))
         ModernTooltip(restart_btn, "Restart the server")
 
         # Row 3
-        analytics_btn = self._create_modern_button(button_frame, "📈 Analytics", lambda: self._switch_tab("analytics"), ModernTheme.ACCENT_PURPLE)
+        analytics_btn = self._create_modern_button(button_frame, "📈 Analytics", lambda: self._switch_tab("analytics"), ModernTheme.ACCENT_PURPLE)  # type: ignore
         analytics_btn.grid(row=2, column=0, sticky="nsew", padx=(0, 5), pady=(5,0))
         ModernTooltip(analytics_btn, "View performance and usage analytics")
 
-        exit_btn = self._create_modern_button(button_frame, "[EXIT] Exit Application", self._exit_server, ModernTheme.TEXT_SECONDARY)
+        exit_btn = self._create_modern_button(button_frame, "[EXIT] Exit Application", self._exit_server, ModernTheme.TEXT_SECONDARY)  # type: ignore
         exit_btn.grid(row=2, column=1, sticky="nsew", padx=(5, 0), pady=(5,0))
         ModernTooltip(exit_btn, "Exit the GUI application")
 
-    def _create_modern_button(self, parent, text, command, bg_color):
+    def _create_modern_button(self, parent: Any, text: str, command: Callable, bg_color: str) -> tk.Button:
         """Helper to create a modern button."""
         return tk.Button(parent, text=text, command=command,
                         bg=bg_color, fg=ModernTheme.TEXT_PRIMARY,
@@ -2102,14 +2230,15 @@ class ServerGUI:
             self._add_activity_log("[ERROR] Server instance not available. Use 'python server.py' to start properly.")
             return
             
-        if self.server.running:
+        if self.server and hasattr(self.server, 'running') and self.server.running:
             if self.toast_system:
                 self.toast_system.show_toast("Server is already running.", "warning")
             return
             
         try:
             # The server's start method is already designed to run in threads
-            self.server.start()
+            if hasattr(self.server, 'start'):
+                self.server.start()
             if self.toast_system:
                 self.toast_system.show_toast("Server starting...", "info")
             self._add_activity_log("Server start command issued.")
@@ -2121,9 +2250,10 @@ class ServerGUI:
 
     def _stop_server(self):
         """Stop the backup server."""
-        if self.server and self.server.running:
+        if self.server and hasattr(self.server, 'running') and self.server.running:
             try:
-                self.server.stop()
+                if hasattr(self.server, 'stop'):
+                    self.server.stop()
                 if self.toast_system:
                     self.toast_system.show_toast("Server stopping...", "info")
                 self._add_activity_log("Server stop command issued.")
@@ -2142,23 +2272,26 @@ class ServerGUI:
         if self.server:
             if self.toast_system:
                 self.toast_system.show_toast("Restarting server...", "info")
-            self.server.stop()
+            if hasattr(self.server, 'stop'):
+                self.server.stop()
             # Give it a moment to truly stop
             time.sleep(1)
-            self.server.start()
+            if hasattr(self.server, 'start'):
+                self.server.start()
             self._add_activity_log("Server restarted.")
         elif self.toast_system:
             self.toast_system.show_toast("Server instance not available.", "warning")
 
     def _show_settings(self):
         """Show settings dialog."""
-        if self.server:
+        if self.server and self.root:
             dialog = SettingsDialog(self.root, self.settings)
             if new_settings := dialog.show():
                 self.settings = new_settings
                 # Apply new settings to server if it's running
-                if self.server.running:
-                    self.server.apply_settings(self.settings) # Assuming BackupServer has apply_settings
+                if (hasattr(self.server, 'running') and self.server.running and 
+                    hasattr(self.server, 'apply_settings')):
+                    self.server.apply_settings(self.settings)  # Assuming BackupServer has apply_settings
                 if self.toast_system:
                     self.toast_system.show_toast("Settings saved and applied!", "success")
                 self._add_activity_log("Server settings updated.")
@@ -2169,7 +2302,8 @@ class ServerGUI:
 
     def _export_clients(self):
         """Export client data to CSV."""
-        if self.server and self.server.db_manager:
+        if (self.server and hasattr(self.server, 'db_manager') and 
+            self.server.db_manager):
             try:
                 clients = self.server.db_manager.get_all_clients()
                 if not clients:
@@ -2198,7 +2332,8 @@ class ServerGUI:
 
     def _export_files(self):
         """Export file data to CSV."""
-        if self.server and self.server.db_manager:
+        if (self.server and hasattr(self.server, 'db_manager') and 
+            self.server.db_manager):
             try:
                 files = self.server.db_manager.get_all_files()
                 if not files:
@@ -2227,7 +2362,8 @@ class ServerGUI:
 
     def _backup_database(self):
         """Create a backup of the SQLite database."""
-        if self.server and self.server.db_manager:
+        if (self.server and hasattr(self.server, 'db_manager') and 
+            self.server.db_manager):
             try:
                 if backup_dir := filedialog.askdirectory(title="Select Backup Directory"):
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -2252,7 +2388,7 @@ class ServerGUI:
     def _clear_activity_log(self):
         """Clear the activity log display."""
         self.activity_log.clear()
-        if hasattr(self, 'activity_log_text') and self.activity_log_text:
+        if self.activity_log_text is not None:
             self.activity_log_text.config(state=tk.NORMAL)
             self.activity_log_text.delete(1.0, tk.END)
             self.activity_log_text.config(state=tk.DISABLED)
@@ -2273,11 +2409,13 @@ class ServerGUI:
         """Add a message to the activity log."""
         timestamp = datetime.now().strftime("%H:%M:%S")
         log_entry = f"[{timestamp}] {message}"
-        self.activity_log.append(log_entry)
-        if hasattr(self, 'activity_log_text') and self.activity_log_text:
+        self.activity_log.append(log_entry)  # type: ignore
+        if (hasattr(self, 'activity_log_text') and self.activity_log_text and 
+            hasattr(self.activity_log_text, 'config') and hasattr(self.activity_log_text, 'insert')):
             self.activity_log_text.config(state=tk.NORMAL)
             self.activity_log_text.insert(tk.END, log_entry + "\n")
-            self.activity_log_text.see(tk.END)
+            if hasattr(self.activity_log_text, 'see'):
+                self.activity_log_text.see(tk.END)
             self.activity_log_text.config(state=tk.DISABLED)
         logging.info(message) # Also log to console/file
 
@@ -2290,11 +2428,11 @@ class ServerGUI:
 
     def _update_clock(self):
         """Update the real-time clock display."""
-        if hasattr(self, 'clock_label') and self.clock_label:
+        if self.clock_label is not None:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.clock_label.config(text=now)
 
-    def _update_performance_metrics(self, performance_data: Optional[dict] = None):
+    def _update_performance_metrics(self, performance_data: Optional[Dict[str, Any]] = None):
         """Update performance metrics on the dashboard."""
         if not SYSTEM_MONITOR_AVAILABLE:
             # Disable performance monitoring entirely when psutil is not available
@@ -2341,7 +2479,7 @@ class ServerGUI:
                 # Add proper bounds checking for psutil
                 if SYSTEM_MONITOR_AVAILABLE and psutil is not None:
                     network_stats = psutil.net_io_counters()
-                    if hasattr(self, 'last_network_bytes'):
+                    if self.last_network_bytes is not None:
                         bytes_diff = (network_stats.bytes_sent + network_stats.bytes_recv) - self.last_network_bytes
                         if bytes_diff > 1024:  # More than 1KB activity
                             network_status = f"Active ({bytes_diff//1024}KB/s)"
@@ -2349,7 +2487,7 @@ class ServerGUI:
                             network_status = "Idle"
                     else:
                         network_status = "Monitoring..."
-                    self.last_network_bytes = network_stats.bytes_sent + network_stats.bytes_recv
+                    self.last_network_bytes = int(network_stats.bytes_sent + network_stats.bytes_recv)
                 else:
                     network_status = "N/A"
             except Exception as net_error:
@@ -2391,9 +2529,12 @@ class ServerGUI:
 
         # Update performance data for charts with real data only
         now = datetime.now()
-        self.performance_data['timestamps'].append(now)
-        self.performance_data['cpu_usage'].append(cpu_percent)
-        self.performance_data['memory_usage'].append(mem_percent)
+        if 'timestamps' in self.performance_data and hasattr(self.performance_data['timestamps'], 'append'):
+            self.performance_data['timestamps'].append(now)
+        if 'cpu_usage' in self.performance_data and hasattr(self.performance_data['cpu_usage'], 'append'):
+            self.performance_data['cpu_usage'].append(cpu_percent)
+        if 'memory_usage' in self.performance_data and hasattr(self.performance_data['memory_usage'], 'append'):
+            self.performance_data['memory_usage'].append(mem_percent)
 
         # Update analytics charts if the tab is active
         if self.current_tab == "analytics":
@@ -2413,7 +2554,8 @@ class ServerGUI:
             self.performance_chart.update_data(chart_data, title="System Performance Over Time", xlabel="Time", ylabel="Usage (%)")
 
         # Transfer Volume Chart
-        if self.transfer_chart and self.server and self.server.db_manager:
+        if (self.transfer_chart and self.server and hasattr(self.server, 'db_manager') and 
+            self.server.db_manager and hasattr(self.server.db_manager, 'get_total_bytes_transferred')):
             total_bytes = self.server.db_manager.get_total_bytes_transferred()
             # This is a single value, so we'll display it as a bar chart.
             chart_data = {
@@ -2442,7 +2584,7 @@ class ServerGUI:
                 # Get online status from the server's in-memory client list
                 online_client_ids = list(self.server.clients.keys())
 
-                table_data = []
+                table_data: List[Dict[str, Any]] = []
                 for client in clients:
                     client_id_bytes = bytes.fromhex(client['id'])
                     status = "🟢 Online" if client_id_bytes in online_client_ids else "[OFFLINE] Offline"
@@ -2459,13 +2601,14 @@ class ServerGUI:
                 self._add_activity_log("Client table refreshed.")
             except Exception as e:
                 self._add_activity_log(f"Error refreshing client table: {e}")
-                if self.toast_system:
+                if self.toast_system is not None:
                     self.toast_system.show_toast(f"Failed to refresh clients: {e}", "error")
 
-    def _on_client_selected(self, selected_item):
+    def _on_client_selected(self, selected_item: Optional[Dict[str, Any]]) -> None:
         """Handle client selection in the table."""
         if selected_item:
-            self._add_activity_log(f"Client selected: {selected_item.get('name')}")
+            name = selected_item.get('name', 'Unknown')
+            self._add_activity_log(f"Client selected: {name}")
 
     def _show_client_details(self):
         """Show details for the selected client."""
@@ -2492,19 +2635,24 @@ class ServerGUI:
                 return
             
             client_id_hex = selected[0].get('id')
+            if not client_id_hex:
+                if self.toast_system:
+                    self.toast_system.show_toast("Invalid client ID", "error")
+                return
             client_id_bytes = bytes.fromhex(client_id_hex)
 
             if self.server and self.server.network_server:
-                if self.server.network_server.disconnect_client(client_id_bytes):
-                    if self.toast_system:
+                disconnect_method = getattr(self.server.network_server, 'disconnect_client', None)
+                if disconnect_method and disconnect_method(client_id_bytes):
+                    if self.toast_system is not None:
                         self.toast_system.show_toast("Client disconnected successfully.", "success")
                     self._add_activity_log(f"Disconnected client: {client_id_hex}")
                     self._refresh_client_table()
-                elif self.toast_system:
+                elif self.toast_system is not None:
                     self.toast_system.show_toast("Failed to disconnect client (might be offline).", "error")
-            elif self.toast_system:
+            elif self.toast_system is not None:
                 self.toast_system.show_toast("Server is not running.", "error")
-        elif self.toast_system:
+        elif self.toast_system is not None:
             self.toast_system.show_toast("Client table not initialized.", "error")
 
     def _refresh_file_table(self):
@@ -2513,7 +2661,7 @@ class ServerGUI:
             try:
                 files = self.server.db_manager.get_all_files()
                 
-                table_data = []
+                table_data: List[Dict[str, Any]] = []
                 for f in files:
                     size_in_mb = f.get('size', 0) / (1024 * 1024) if f.get('size') else 0
                     table_data.append({
@@ -2525,7 +2673,8 @@ class ServerGUI:
                         'path': f['path']
                     })
                 
-                self.file_table.set_data(table_data)
+                if self.file_table is not None:
+                    self.file_table.set_data(table_data)
                 self._add_activity_log("File table refreshed.")
             except Exception as e:
                 self._add_activity_log(f"Error refreshing file table: {e}")
@@ -2534,7 +2683,7 @@ class ServerGUI:
         elif self.toast_system:
             self.toast_system.show_toast("File table not initialized.", "error")
 
-    def _on_file_selected(self, selected_item):
+    def _on_file_selected(self, selected_item: Any) -> None:
         """Handle file selection in the table."""
         if selected_item:
             self._add_activity_log(f"File selected: {selected_item.get('filename')}")
@@ -2564,6 +2713,11 @@ class ServerGUI:
 
             file_info = selected[0]
             file_path = file_info.get('path')
+            
+            if not file_path:
+                if self.toast_system:
+                    self.toast_system.show_toast("No file path available", "error")
+                return
 
             if not os.path.exists(file_path):
                 if self.toast_system:
@@ -2571,7 +2725,7 @@ class ServerGUI:
                 return
 
             try:
-                os.startfile(file_path)
+                os.startfile(file_path)  # type: ignore
             except AttributeError:
                 # os.startfile is only available on Windows. For other platforms, we can use other commands.
                 import subprocess
@@ -2599,16 +2753,17 @@ class ServerGUI:
                 return
 
             file_info = selected[0]
-            filename = file_info.get('filename')
-            client_name = file_info.get('client')
+            filename = file_info.get('filename', '') if isinstance(file_info, dict) else ''
+            client_name = file_info.get('client', '') if isinstance(file_info, dict) else ''
 
-            if self.server and self.server.db_manager:
-                client_id_bytes = self.server.clients_by_name.get(client_name)
+            if (self.server and hasattr(self.server, 'db_manager') and 
+            self.server.db_manager):
+                client_id_bytes = getattr(self.server, 'clients_by_name', {}).get(client_name)
                 if not client_id_bytes:
                     if self.toast_system:
                         self.toast_system.show_toast(f"Could not find client ID for {client_name}", "error")
                     return
-                client_id_hex = client_id_bytes.hex()
+                client_id_hex = client_id_bytes.hex() if isinstance(client_id_bytes, bytes) else str(client_id_bytes)
 
                 db_file_info = self.server.db_manager.get_file_info(client_id_hex, filename)
                 if not db_file_info:
@@ -2616,8 +2771,8 @@ class ServerGUI:
                         self.toast_system.show_toast(f"Could not find file info for {filename}", "error")
                     return
 
-                file_path = db_file_info.get('path')
-                stored_crc = db_file_info.get('crc')
+                file_path = db_file_info.get('path', '') if isinstance(db_file_info, dict) else ''  # type: ignore
+                stored_crc = db_file_info.get('crc') if isinstance(db_file_info, dict) else None  # type: ignore
 
                 if not os.path.exists(file_path):
                     if self.toast_system:
@@ -2637,7 +2792,9 @@ class ServerGUI:
                     if self.toast_system:
                         self.toast_system.show_toast("File verification successful!", "success")
                     # Update the database to mark the file as verified
-                    self.server.db_manager.save_file_info_to_db(client_id_bytes, filename, file_path, True, len(file_data), db_file_info.get('date'), stored_crc)
+                    file_size = len(file_data)
+                    file_date = db_file_info.get('date') if isinstance(db_file_info, dict) else None  # type: ignore
+                    self.server.db_manager.save_file_info_to_db(client_id_bytes, filename, file_path, True, file_size, file_date, stored_crc)
                     self._refresh_file_table()
                 else:
                     if self.toast_system:
@@ -2658,23 +2815,25 @@ class ServerGUI:
                 return
 
             file_info = selected[0]
-            filename = file_info.get('filename')
-            client_name = file_info.get('client')
+            filename = file_info.get('filename', '') if isinstance(file_info, dict) else ''
+            client_name = file_info.get('client', '') if isinstance(file_info, dict) else ''
 
             if not messagebox.askyesno("Delete File", f"Are you sure you want to delete the file '\n{filename}' for client '\n{client_name}'?\n\nThis action cannot be undone."):
                 return
 
-            if self.server and self.server.db_manager:
+            if self.server and hasattr(self.server, 'db_manager') and self.server.db_manager:
                 # We need the client ID to delete the file. We can get it from the client name.
-                client_id_bytes = self.server.clients_by_name.get(client_name)
+                clients_by_name = getattr(self.server, 'clients_by_name', {})
+                client_id_bytes = clients_by_name.get(client_name)
                 if not client_id_bytes:
                     if self.toast_system:
                         self.toast_system.show_toast(f"Could not find client ID for {client_name}", "error")
                     return
 
-                client_id_hex = client_id_bytes.hex()
+                client_id_hex = client_id_bytes.hex() if hasattr(client_id_bytes, 'hex') else str(client_id_bytes)
 
-                if self.server.db_manager.delete_file(client_id_hex, filename):
+                delete_method = getattr(self.server.db_manager, 'delete_file', None)
+                if delete_method and delete_method(client_id_hex, filename):
                     if self.toast_system:
                         self.toast_system.show_toast(f"File '{filename}' deleted successfully.", "success")
                     self._add_activity_log(f"Deleted file: {filename}")
@@ -2686,39 +2845,49 @@ class ServerGUI:
         elif self.toast_system:
             self.toast_system.show_toast("File table not initialized.", "error")
 
-    def update_client_stats(self, stats_data: dict):
+    def update_client_stats(self, stats_data: Dict[str, Any]):
         """Update client statistics"""
         if not self.gui_enabled:
             return
         if 'connected' in self.status_labels:
-            self.status_labels['connected'].config(text=str(stats_data.get('connected', 0)))
+            connected_value = stats_data.get('connected', 0) if isinstance(stats_data, dict) else 0
+            self.status_labels['connected'].config(text=str(connected_value))
         if 'total' in self.status_labels:
-            self.status_labels['total'].config(text=str(stats_data.get('total', 0)))
+            total_value = stats_data.get('total', 0) if isinstance(stats_data, dict) else 0
+            self.status_labels['total'].config(text=str(total_value))
         if 'active_transfers' in self.status_labels:
-            self.status_labels['active_transfers'].config(text=str(stats_data.get('active_transfers', 0)))
+            active_value = stats_data.get('active_transfers', 0) if isinstance(stats_data, dict) else 0
+            self.status_labels['active_transfers'].config(text=str(active_value))
 
-    def update_transfer_stats(self, stats_data: dict):
+    def update_transfer_stats(self, stats_data: Dict[str, Any]):
         """Update transfer statistics"""
         if not self.gui_enabled:
             return
-        bytes_transferred = stats_data.get('bytes_transferred', 0)
+        bytes_transferred = stats_data.get('bytes_transferred', 0) if isinstance(stats_data, dict) else 0
         if 'bytes' in self.status_labels:
-            self.status_labels['bytes'].config(text=f"{bytes_transferred / 1024 / 1024:.2f} MB")
+            bytes_mb = bytes_transferred / 1024 / 1024 if isinstance(bytes_transferred, (int, float)) else 0
+            self.status_labels['bytes'].config(text=f"{bytes_mb:.2f} MB")
         # Other transfer stats can be updated here
 
-    def update_maintenance_stats(self, stats_data: dict):
+    def update_maintenance_stats(self, stats_data: Dict[str, Any]):
         """Update maintenance statistics"""
         if not self.gui_enabled:
             return
         if 'files_cleaned' in self.status_labels:
-            self.status_labels['files_cleaned'].config(text=str(stats_data.get('files_cleaned', 0)))
+            files_value = stats_data.get('files_cleaned', 0) if isinstance(stats_data, dict) else 0
+            self.status_labels['files_cleaned'].config(text=str(files_value))
         if 'partial_cleaned' in self.status_labels:
-            self.status_labels['partial_cleaned'].config(text=str(stats_data.get('partial_files_cleaned', 0)))
+            partial_value = stats_data.get('partial_files_cleaned', 0) if isinstance(stats_data, dict) else 0
+            self.status_labels['partial_cleaned'].config(text=str(partial_value))
         if 'clients_cleaned' in self.status_labels:
-            self.status_labels['clients_cleaned'].config(text=str(stats_data.get('clients_cleaned', 0)))
-        last_cleanup = stats_data.get('last_cleanup', 'Never')
+            clients_value = stats_data.get('clients_cleaned', 0) if isinstance(stats_data, dict) else 0
+            self.status_labels['clients_cleaned'].config(text=str(clients_value))
+        last_cleanup = stats_data.get('last_cleanup', 'Never') if isinstance(stats_data, dict) else 'Never'
         if last_cleanup != 'Never':
-            last_cleanup = datetime.fromisoformat(last_cleanup).strftime('%Y-%m-%d %H:%M:%S')
+            try:
+                last_cleanup = datetime.fromisoformat(str(last_cleanup)).strftime('%Y-%m-%d %H:%M:%S')
+            except (ValueError, TypeError):
+                last_cleanup = 'Never'
         if 'last_cleanup' in self.status_labels:
             self.status_labels['last_cleanup'].config(text=last_cleanup)
 
@@ -2763,14 +2932,14 @@ class ServerGUI:
             print("[DEBUG] 'status' key not found in status_labels")
 
         # Update header status label
-        if hasattr(self, 'header_status_label'):
+        if hasattr(self, 'header_status_label') and self.header_status_label is not None:
             print("[DEBUG] Updating header status label")
             self.header_status_label.config(text=header_text)
         else:
             print("[DEBUG] header_status_label not found")
 
         # Update header status indicator
-        if hasattr(self, 'header_status_indicator'):
+        if hasattr(self, 'header_status_indicator') and self.header_status_indicator is not None and hasattr(self.header_status_indicator, 'set_status'):
             print("[DEBUG] Updating header status indicator")
             self.header_status_indicator.set_status(indicator_status)
         else:
@@ -2820,7 +2989,7 @@ class ServerGUI:
             # This ensures new files appear automatically without manual refresh
             if self.status.running and hasattr(self, '_last_file_refresh_time'):
                 current_time = time.time()
-                if current_time - self._last_file_refresh_time >= 5.0:  # 5 second interval
+                if self._last_file_refresh_time is not None and (current_time - self._last_file_refresh_time) >= 5.0:  # 5 second interval
                     if hasattr(self, 'current_tab') and self.current_tab == 'files':
                         self._refresh_file_table()
                     self._last_file_refresh_time = current_time
@@ -2840,41 +3009,41 @@ class ServerGUI:
             print(f"[DEBUG] Error in _schedule_updates: {e}")
 
         # Schedule next update
-        if self.root:
+        if self.root is not None:
             self.root.after(1000, self._schedule_updates)  # Update every second
 
     def _process_update_queue(self):
         """Process all pending updates from the queue."""
         try:
             while not self.update_queue.empty():
-                update_type, data = self.update_queue.get_nowait()
+                payload = self.update_queue.get_nowait()
+                # Support both tuple(old) and dict(new) payloads safely
+                update_type: Optional[str] = None
+                data: Dict[str, Any] = {}
+                if isinstance(payload, tuple) and len(payload) == 2:
+                    update_type, raw = payload  # type: ignore[misc]
+                    if isinstance(raw, dict):
+                        data = raw
+                elif isinstance(payload, dict):
+                    update_type = payload.get('type')  # type: ignore[assignment]
+                    data = payload  # type: ignore[assignment]
 
                 if update_type == "status":
-                    # Update server status
-                    self.update_server_status(
-                        data.get('running', False),
-                        data.get('address', ''),
-                        data.get('port', 0)
-                    )
+                    running_status = bool(data.get('running', False))
+                    address = str(data.get('address', ''))
+                    port = int(data.get('port', 0))
+                    self.update_server_status(running_status, address, port)
                 elif update_type == "client_stats":
-                    # Update client statistics
                     self.update_client_stats(data)
                 elif update_type == "transfer_stats":
-                    # Update transfer statistics
                     self.update_transfer_stats(data)
                 elif update_type == "maintenance_stats":
-                    # Update maintenance statistics
                     self.update_maintenance_stats(data)
                 elif update_type == "log":
-                    # Add log entry
-                    if hasattr(self, 'activity_log'):
-                        self.activity_log.append({
-                            'timestamp': datetime.now().isoformat(),
-                            'message': str(data)
-                        })
-                        # Keep only last 100 log entries
-                        if len(self.activity_log) > 100:
-                            self.activity_log = self.activity_log[-100:]
+                    timestamp = datetime.now().strftime('%H:%M:%S')
+                    self.activity_log.append(f"[{timestamp}] {str(data)}")
+                    if len(self.activity_log) > 100:
+                        self.activity_log = self.activity_log[-100:]
 
         except Exception as e:
             print(f"[DEBUG] Error processing update queue: {e}")

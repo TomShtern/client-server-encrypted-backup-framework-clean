@@ -36,10 +36,10 @@ import logging
 import hashlib
 import contextlib
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Set, Dict, Any, Callable, cast
 
 # Third-party imports
-from flask import Flask, request, jsonify, send_from_directory, send_file, session
+from flask import Flask, request, jsonify, g, Response, send_file, send_from_directory, session
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 
@@ -90,18 +90,18 @@ conn_health = get_connection_health_monitor()
 # Connection management
 MAX_CONNECTIONS = 3  # Reduced - limit total WebSocket connections  
 MAX_CONNECTIONS_PER_IP = 2  # Only 2 connections per IP - one for page, one for WebSocket
-connected_clients = set()  # Track connected client IDs
-connection_locks = {}  # Per-IP connection limits
-ip_connection_counts = {}  # Track connections per IP
-active_sessions = {}  # Track active sessions per IP to prevent multiple browser instances
+connected_clients: Set[str] = set()  # Track connected client IDs
+connection_locks: Dict[str, threading.Lock] = {}  # Per-IP connection limits
+ip_connection_counts: Dict[str, int] = {}  # Track connections per IP
+active_sessions: Dict[str, Any] = {}  # Track active sessions per IP to prevent multiple browser instances
 
 
-app = Flask(__name__)
+app: Flask = Flask(__name__)
 CORS(app)  # Enable CORS for local development
 
 # Force connection close on all HTTP responses to prevent keepalive
 @app.after_request
-def force_connection_close(response):
+def force_connection_close(response: Response) -> Response:
     """Force HTTP connections to close after each request"""
     response.headers['Connection'] = 'close'
     response.headers['Keep-Alive'] = 'timeout=1, max=1'
@@ -130,7 +130,7 @@ def limit_connections_per_ip():
     ip_connection_counts[client_ip] = current_count + 1
 
 @app.after_request  
-def decrement_ip_connections(response):
+def decrement_ip_connections(response: Response) -> Response:
     """Decrement connection count after request completes"""
     client_ip = request.remote_addr or '127.0.0.1'
     current_count = ip_connection_counts.get(client_ip, 0)
@@ -140,7 +140,7 @@ def decrement_ip_connections(response):
 
 # Initialize SocketIO with aggressive connection management
 api_port = get_config('api.port', 9090)
-socketio = SocketIO(
+socketio: SocketIO = SocketIO(
     app, 
     cors_allowed_origins=[f"http://localhost:{api_port}", f"http://127.0.0.1:{api_port}"],
     ping_interval=10,  # More frequent pings to detect disconnections faster
@@ -158,7 +158,7 @@ structured_logger = create_enhanced_logger("api-server", logger)
 
 # --- Global Singleton Monitor ---
 # This monitor will be shared across all requests.
-file_monitor = UnifiedFileMonitor(os.path.join(PROJECT_ROOT, 'received_files'))
+file_monitor: UnifiedFileMonitor = UnifiedFileMonitor(os.path.join(PROJECT_ROOT, 'received_files'))
 
 # Add Sentry error handlers
 if SENTRY_INITIALIZED:
@@ -194,20 +194,20 @@ if SENTRY_INITIALIZED:
 from Shared.utils.performance_monitor import get_performance_monitor
 # Connection health monitoring
 from python_server.server.connection_health import get_connection_health_monitor
-conn_health = get_connection_health_monitor()
+conn_health: Any = get_connection_health_monitor()
 
-perf_monitor = get_performance_monitor()
+perf_monitor: Any = get_performance_monitor()
 
 # --- CallbackMultiplexer for concurrent request handling ---
 class CallbackMultiplexer:
     """Thread-safe callback multiplexer to prevent race conditions in concurrent requests."""
     
-    def __init__(self):
-        self._job_callbacks = {}
+    def __init__(self) -> None:
+        self._job_callbacks: Dict[str, Callable[[str, Any], None]] = {}
         self._lock = threading.Lock()
-        self._registered_executor = None
+        self._registered_executor: Optional['RealBackupExecutor'] = None
     
-    def register_job_callback(self, job_id, callback):
+    def register_job_callback(self, job_id: str, callback: Callable[[str, Any], None]) -> None:
         """Register a callback for a specific job."""
         with self._lock:
             self._job_callbacks[job_id] = callback
@@ -215,12 +215,12 @@ class CallbackMultiplexer:
             if self._registered_executor is None and len(self._job_callbacks) == 1:
                 self._setup_global_callback()
     
-    def remove_job_callback(self, job_id):
+    def remove_job_callback(self, job_id: str) -> None:
         """Remove callback for a specific job."""
         with self._lock:
             self._job_callbacks.pop(job_id, None)
     
-    def route_callback(self, phase, data):
+    def route_callback(self, phase: str, data: Any) -> None:
         """Route callback to all active jobs (used as the global callback)."""
         callbacks_copy = {}
         with self._lock:
@@ -233,12 +233,12 @@ class CallbackMultiplexer:
             except Exception as e:
                 print(f"[CALLBACK_ERROR] Error in callback for job {job_id}: {e}")
     
-    def set_executor(self, executor):
+    def set_executor(self, executor: 'RealBackupExecutor') -> None:
         """Set the backup executor for callback registration."""
         with self._lock:
             self._registered_executor = executor
     
-    def _setup_global_callback(self):
+    def _setup_global_callback(self) -> None:
         """Set up the global callback on the registered executor."""
         if self._registered_executor:
             self._registered_executor.set_status_callback(self.route_callback)
@@ -248,11 +248,11 @@ callback_multiplexer = CallbackMultiplexer()
 
 # --- Initialize global variables & Locks ---
 # For job-specific data
-active_backup_jobs = {}
+active_backup_jobs: Dict[str, Dict[str, Any]] = {}
 active_backup_jobs_lock = threading.Lock()
 
 # For general, non-job-specific server status
-def get_default_server_status():
+def get_default_server_status() -> Dict[str, Any]:
     return {
         'connected': False,
         'backing_up': False,
@@ -261,18 +261,18 @@ def get_default_server_status():
         'message': 'Ready for backup',
         'last_updated': datetime.now().isoformat()
     }
-server_status = get_default_server_status()
+server_status: Dict[str, Any] = get_default_server_status()
 server_status_lock = threading.Lock()
-last_known_status = get_default_server_status()
+last_known_status: Dict[str, Any] = get_default_server_status()
 
 # Other globals
-connection_established = False
-connection_timestamp = None
-websocket_enabled = True
+connection_established: bool = False
+connection_timestamp: Optional[datetime] = None
+websocket_enabled: bool = True
 
 # Server configuration with fallback error handling
 try:
-    server_config = {
+    server_config: Dict[str, Any] = {
         'host': get_config('server.host', '127.0.0.1'),
         'port': get_config('server.port', 1256),
         'username': get_config('client.default_username', 'default_user')
@@ -289,7 +289,7 @@ def broadcast_file_receipt(event_type: str, data: dict):
     """Broadcast file receipt events to all connected clients"""
     try:
         if websocket_enabled and connected_clients:
-            socketio.emit('file_receipt', {
+            cast(Any, socketio).emit('file_receipt', {
                 'event_type': event_type,
                 'data': data,
                 'timestamp': time.time()
@@ -298,7 +298,7 @@ def broadcast_file_receipt(event_type: str, data: dict):
     except Exception as e:
         print(f"[WEBSOCKET] Error broadcasting file receipt: {e}")
 
-def update_server_status(phase, message):
+def update_server_status(phase: str, message: str) -> None:
     """Update general server status with thread safety"""
     with server_status_lock:
         server_status['phase'] = phase
@@ -314,8 +314,9 @@ def check_backup_server_status(host: Optional[str] = None, port: Optional[int] =
     """
     try:
         import socket
-        target_host = host or server_config.get('host')
-        target_port = int(port or server_config.get('port') or 1256)
+        target_host: str = host or cast(str, server_config.get('host', '127.0.0.1'))
+        port_value: Any = port if port is not None else server_config.get('port', 1256)
+        target_port: int = int(port_value or 1256)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(2)
         result = sock.connect_ex((target_host, target_port))
@@ -357,7 +358,7 @@ def handle_disconnect():
         print(f"[WEBSOCKET] Client disconnected: {client_id} (Total: {len(connected_clients)})")
 
 @socketio.on('request_status')
-def handle_status_request(data):
+def handle_status_request(data: Optional[Dict[str, Any]]) -> None:
     """Handle client status requests via WebSocket"""
     job_id = data.get('job_id') if data else None
     status = active_backup_jobs.get(job_id, last_known_status) if job_id else last_known_status
@@ -378,17 +379,17 @@ def handle_ping():
     emit('pong', {'timestamp': time.time()})
 
 # Connection cleanup background task with proper shutdown signaling
-def cleanup_stale_connections(stop_event=None):
+def cleanup_stale_connections(stop_event: Optional[threading.Event] = None) -> None:
     """Clean up stale connections periodically with graceful shutdown support"""
     logger.info("WebSocket cleanup thread started")
-    
+
     while True:
         try:
             # Check for shutdown signal
             if stop_event and stop_event.is_set():
                 logger.info("WebSocket cleanup thread received shutdown signal")
                 break
-            
+
             # Sleep with shutdown awareness (15 second intervals)
             if stop_event:
                 if stop_event.wait(15):  # Wait 15 seconds or until stop signal
@@ -396,17 +397,17 @@ def cleanup_stale_connections(stop_event=None):
                     break
             else:
                 time.sleep(15)
-            
+
             # Clean up stale clients based on connection count vs active clients
             initial_count = len(connected_clients)
-            
+
             # Force disconnect any clients that exceed our limit
             if len(connected_clients) > MAX_CONNECTIONS:
                 excess_clients = list(connected_clients)[MAX_CONNECTIONS:]
                 for client_id in excess_clients:
                     connected_clients.discard(client_id)
                     logger.debug(f"[WEBSOCKET] Removed excess client: {client_id}")
-                    
+
             # Also clear out any old clients every few cycles
             if len(connected_clients) > MAX_CONNECTIONS // 2:  # If more than half our limit
                 # Remove oldest 25% of clients to keep connections fresh
@@ -414,20 +415,20 @@ def cleanup_stale_connections(stop_event=None):
                 for client_id in clients_to_remove:
                     connected_clients.discard(client_id)
                     logger.debug(f"[WEBSOCKET] Removed aging client: {client_id}")
-                    
+
             # Clean up IP connection counters (reset periodically to prevent memory leaks)
             if len(ip_connection_counts) > 50:  # If too many IPs tracked
                 ip_connection_counts.clear()
-                logger.debug(f"[HTTP] Cleared IP connection counters")
-                    
+                logger.debug("[HTTP] Cleared IP connection counters")
+
             if len(connected_clients) != initial_count or len(ip_connection_counts) > 10:
                 logger.debug(f"[WEBSOCKET] Cleanup complete. Active clients: {len(connected_clients)}, IP counters: {len(ip_connection_counts)}")
-                
+
         except Exception as e:
             logger.error(f"[WEBSOCKET] Cleanup error: {e}")
             if stop_event and stop_event.is_set():
                 break
-    
+
     logger.info("WebSocket cleanup thread finished")
 
 # Start cleanup thread with proper management
@@ -437,7 +438,7 @@ try:
     import sys
     import os
     sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'Shared', 'utils'))
-    from thread_manager import create_managed_thread
+    from Shared.utils.thread_manager import create_managed_thread
     
     def cleanup_websocket_resources():
         """Cleanup function for WebSocket resources"""
@@ -663,7 +664,7 @@ def api_connect():
 
         # Update server configuration
         if config:
-            server_config.update(config)
+            server_config.update(cast(Dict[str, Any], config))
 
         update_server_status('CONNECT', f'Testing connection to {server_config["host"]}:{server_config["port"]}...')
 
@@ -750,19 +751,16 @@ def api_start_backup_working():
         api_server_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(api_server_dir)
         client_exe_path = os.path.join(project_root, "build", "Release", "EncryptedBackupClient.exe")
-        
+
         backup_executor = RealBackupExecutor(client_exe_path)
         with active_backup_jobs_lock:
             active_backup_jobs[job_id]['executor'] = backup_executor
-        
+
         # Register executor with callback multiplexer for thread-safe callback routing
         callback_multiplexer.set_executor(backup_executor)
         print(f"[Job {job_id}] RealBackupExecutor instance created with client: {client_exe_path}")
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': f'Failed to initialize backup executor: {e}'
-        }), 500
+        return jsonify({'success': False, 'error': f'Failed to initialize backup executor: {e}'}), 500
 
     if 'file' not in request.files:
         return jsonify({'success': False, 'error': 'No file uploaded'}), 400
@@ -788,35 +786,37 @@ def api_start_backup_working():
 
         file.save(temp_file_path)
 
-        username = request.form.get('username', server_config.get('username', 'default_user'))
-        server_ip = request.form.get('host') or request.form.get('server') or server_config.get('host')
-        server_port = request.form.get('port', server_config.get('port'))
+        username: str = str(request.form.get('username') or server_config.get('username', 'default_user'))
+        server_ip: str = str(request.form.get('host') or request.form.get('server') or server_config.get('host', '127.0.0.1'))
+        server_port_val: Any = request.form.get('port', server_config.get('port', 1256))
+        server_port: int = int(server_port_val or 1256)
 
-        def status_handler(phase, data):
+        def status_handler(phase: str, data: Any) -> None:
             with active_backup_jobs_lock:
                 if job_id not in active_backup_jobs:
                     return
-                
+
                 job_data = active_backup_jobs[job_id]
                 job_data['events'].append({'phase': phase, 'data': data})
                 job_data['phase'] = phase
                 job_data['last_updated'] = datetime.now().isoformat()
 
                 if isinstance(data, dict):
-                    job_data['message'] = data.get('message', phase)
-                    if 'progress' in data:
-                        job_data['progress']['percentage'] = data['progress']
-                    if 'bytes_transferred' in data:
-                        job_data['progress']['bytes_transferred'] = data['bytes_transferred']
-                    if 'total_bytes' in data:
-                        job_data['progress']['total_bytes'] = data['total_bytes']
+                    data_dict = cast(Dict[str, Any], data)
+                    job_data['message'] = data_dict.get('message', phase)
+                    if 'progress' in data_dict:
+                        job_data['progress']['percentage'] = data_dict['progress']
+                    if 'bytes_transferred' in data_dict:
+                        job_data['progress']['bytes_transferred'] = data_dict['bytes_transferred']
+                    if 'total_bytes' in data_dict:
+                        job_data['progress']['total_bytes'] = data_dict['total_bytes']
                 else:
                     job_data['message'] = data
 
             # Real-time WebSocket broadcasting
             if websocket_enabled and connected_clients:
                 try:
-                    socketio.emit('progress_update', {
+                    cast(Any, socketio).emit('progress_update', {
                         'job_id': job_id,
                         'phase': phase,
                         'data': data,
@@ -834,14 +834,14 @@ def api_start_backup_working():
             active_backup_jobs[job_id]['progress']['current_file'] = original_filename
             active_backup_jobs[job_id]['message'] = f'Starting backup of {original_filename}...'
 
-        def run_backup(executor, temp_file_path_for_thread, filename_for_thread, temp_dir_for_thread):
+        def run_backup(executor: RealBackupExecutor, temp_file_path_for_thread: str, filename_for_thread: str, temp_dir_for_thread: str) -> None:
             try:
                 expected_size = os.path.getsize(temp_file_path_for_thread)
                 with open(temp_file_path_for_thread, 'rb') as f:
                     expected_hash = hashlib.sha256(f.read()).hexdigest()
                 logger.info(f"[Job {job_id}] Calculated verification data: Size={expected_size}, Hash={expected_hash[:8]}...")
 
-                def on_completion(result):
+                def on_completion(result: Any) -> None:
                     logger.info(f"[Job {job_id}] Received VERIFIED COMPLETION signal for '{filename_for_thread}'. Forcing 100%.")
                     with active_backup_jobs_lock:
                         if job_id in active_backup_jobs:
@@ -850,7 +850,7 @@ def api_start_backup_working():
                             active_backup_jobs[job_id]['progress']['percentage'] = 100
                             active_backup_jobs[job_id]['backing_up'] = False
 
-                def on_failure(reason: str):
+                def on_failure(reason: str) -> None:
                     logger.error(f"[Job {job_id}] Received VERIFICATION FAILED signal for '{filename_for_thread}': {reason}")
                     with active_backup_jobs_lock:
                         if job_id in active_backup_jobs:
@@ -875,7 +875,7 @@ def api_start_backup_working():
                     username=username,
                     file_path=temp_file_path_for_thread,
                     server_ip=server_ip,
-                    server_port=int(server_port or 1256)
+                    server_port=server_port
                 )
 
                 with active_backup_jobs_lock:
@@ -901,7 +901,7 @@ def api_start_backup_working():
                 # Clean up callback registration to prevent memory leaks
                 callback_multiplexer.remove_job_callback(job_id)
                 print(f"[DEBUG] Removed callback for job {job_id}")
-                
+
                 if os.path.exists(temp_file_path_for_thread):
                     os.remove(temp_file_path_for_thread)
                 if os.path.exists(temp_dir_for_thread):
@@ -915,44 +915,40 @@ def api_start_backup_working():
 
         duration_ms = (time.time() - start_time) * 1000
         structured_logger.info(f"Backup job {job_id} started successfully",
-                             operation="start_backup",
-                             duration_ms=duration_ms,
-                             context={
-                                 "job_id": job_id,
-                                 "username": username,
-                                 "filename": original_filename
-                             })
+                               operation="start_backup",
+                               duration_ms=duration_ms,
+                               context={
+                                   "job_id": job_id,
+                                   "username": username,
+                                   "filename": original_filename
+                               })
 
-        log_performance_metrics(logger, "start_backup", duration_ms, True,
-                              job_id=job_id, username=username)
+        log_performance_metrics(logger, "start_backup", duration_ms, True, job_id=job_id, username=username)
 
-        return jsonify({
-            'success': True,
-            'message': f'Backup started for {original_filename}',
-            'filename': original_filename,
-            'username': username,
-            'job_id': job_id
-        })
+        return jsonify({'success': True,
+                        'message': f'Backup started for {original_filename}',
+                        'filename': original_filename,
+                        'username': username,
+                        'job_id': job_id})
 
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
         error_msg = f"Backup start error: {str(e)}"
 
         structured_logger.error(error_msg,
-                              operation="start_backup",
-                              duration_ms=duration_ms,
-                              error_code=type(e).__name__,
-                              context={"exception": str(e)})
+                                operation="start_backup",
+                                duration_ms=duration_ms,
+                                error_code=type(e).__name__,
+                                context={"exception": str(e)})
 
-        log_performance_metrics(logger, "start_backup", duration_ms, False,
-                              error=str(e))
+        log_performance_metrics(logger, "start_backup", duration_ms, False, error=str(e))
 
         print(f"[ERROR] {error_msg}")
         update_server_status('ERROR', error_msg)
         return jsonify({'success': False, 'error': error_msg}), 500
 
 @app.route('/api/check_receipt/<filename>')
-def api_check_file_receipt(filename):
+def api_check_file_receipt(filename: str):
     """Check if a specific file has been received by the server"""
     try:
         monitor = file_monitor
@@ -1096,7 +1092,7 @@ if __name__ == "__main__":
     try:
         print("[WEBSOCKET] Starting Flask-SocketIO server with real-time support...")
         print("[DEBUG] About to call socketio.run()...")
-        socketio.run(
+        cast(Any, socketio).run(
             app,
             host=get_config('api.host', '127.0.0.1'),
             port=get_config('api.port', 9090),
@@ -1124,7 +1120,7 @@ if __name__ == "__main__":
 
 # --- Performance Monitoring Endpoints (after primary routes) ---
 @app.route('/api/perf/<job_id>')
-def api_perf_job(job_id):
+def api_perf_job(job_id: str):
     try:
         if not (summary := perf_monitor.get_job_summary(job_id)):
             return jsonify({'success': False, 'error': f'No performance data for job_id={job_id}'}), 404
@@ -1134,7 +1130,7 @@ def api_perf_job(job_id):
 
 # --- Cancellation Endpoint ---
 @app.route('/api/cancel/<job_id>', methods=['POST'])
-def api_cancel_job(job_id):
+def api_cancel_job(job_id: str):
     try:
         if not (job := active_backup_jobs.get(job_id)):
             return jsonify({'success': False, 'error': f'Unknown job_id={job_id}'}), 404
@@ -1143,7 +1139,8 @@ def api_cancel_job(job_id):
             return jsonify({'success': False, 'error': 'No executor associated with this job'}), 400
         ok = False
         try:
-            ok = executor.cancel('API cancellation')
+            # executor is dynamically attached; cast to Any for type checker
+            ok = cast(Any, executor).cancel('API cancellation')
         except Exception as e:
             return jsonify({'success': False, 'error': f'Cancel failed: {e}'}), 500
         # Update job state
@@ -1152,8 +1149,11 @@ def api_cancel_job(job_id):
         # Attach optional cancel reason to job record for UI consumption
         cancel_reason = None
         try:
-            if request and request.is_json and request.json:
-                cancel_reason = request.json.get('reason')
+            if request and request.is_json:
+                if data := cast(
+                    Optional[Dict[str, Any]], request.get_json(silent=True)
+                ):
+                    cancel_reason = data.get('reason')
         except Exception:
             cancel_reason = None
         if cancel_reason:
@@ -1163,7 +1163,7 @@ def api_cancel_job(job_id):
         # Broadcast over WebSocket if enabled
         try:
             if websocket_enabled and connected_clients:
-                socketio.emit('job_cancelled', {
+                cast(Any, socketio).emit('job_cancelled', {
                     'job_id': job_id,
                     'success': ok,
                     'phase': job['phase'],
@@ -1180,20 +1180,20 @@ def api_cancel_job(job_id):
 @app.route('/api/cancel_all', methods=['POST'])
 def api_cancel_all_jobs():
     try:
-        results = {}
+        results: Dict[str, bool] = {}
         for jid, job in list(active_backup_jobs.items()):
             if execu := job.get('executor'):
                 try:
-                    ok = execu.cancel('API cancel all')
+                    ok = cast(Any, execu).cancel('API cancel all')
                     job['phase'] = 'CANCELLED' if ok else job.get('phase', 'UNKNOWN')
                     job['message'] = 'Backup cancelled' if ok else job.get('message', '')
                     results[jid] = ok
-                except Exception as e:
+                except Exception:
                     results[jid] = False
         # Broadcast
         try:
             if websocket_enabled and connected_clients:
-                socketio.emit('jobs_cancelled', {'results': results, 'timestamp': time.time()})
+                cast(Any, socketio).emit('jobs_cancelled', {'results': results, 'timestamp': time.time()})
         except Exception as be:
             print(f"[WEBSOCKET] Cancel-all broadcast failed: {be}")
         return jsonify({'success': True, 'results': results})
@@ -1205,7 +1205,7 @@ def api_cancel_all_jobs():
 @app.route('/api/cancelable_jobs', methods=['GET'])
 def api_cancelable_jobs():
     try:
-        items = []
+        items: list[Dict[str, Any]] = []
         for jid, job in active_backup_jobs.items():
             # A job is cancelable if it has an executor and is in a running phase
             cancelable = bool(job.get('executor')) and job.get('phase') not in ['COMPLETED', 'FAILED', 'ERROR', 'CANCELLED']

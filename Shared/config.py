@@ -48,6 +48,7 @@ class CryptoConfig:
     aes_key_size: int = 256
     private_key_file: str = "priv.key"
     public_key_file: str = "valid_public_key.der"
+    keys_dir: str = "data/keys"
     enable_compression: bool = True
 
 
@@ -136,13 +137,14 @@ class ConfigManager:
             protocol=ProtocolConfig(**config_data.get('protocol', {}))
         )
     
-    def save_config(self):
+    def save_config(self) -> None:
         """Save current configuration to file."""
         try:
-            config_dict = asdict(self._config)
-            with open(self.config_file, 'w') as f:
-                json.dump(config_dict, f, indent=2)
-            logger.info(f"Saved configuration to {self.config_file}")
+            if self._config is not None:
+                config_dict = asdict(self._config)
+                with open(self.config_file, 'w') as f:
+                    json.dump(config_dict, f, indent=2)
+                logger.info(f"Saved configuration to {self.config_file}")
         except Exception as e:
             logger.error(f"Failed to save config to {self.config_file}: {e}")
             raise
@@ -150,11 +152,14 @@ class ConfigManager:
     @property
     def config(self) -> SystemConfig:
         """Get current configuration."""
+        if self._config is None:
+            self._config = self._create_default_config()
         return self._config
     
-    def update_config(self, **kwargs):
+    def update_config(self, **kwargs) -> None:
         """Update configuration parameters."""
-        config_dict = asdict(self._config)
+        config = self.config  # Use property to ensure non-None config
+        config_dict = asdict(config)
         
         for key, value in kwargs.items():
             if '.' in key:
@@ -175,14 +180,15 @@ class ConfigManager:
     def get_value(self, key: str, default: Any = None) -> Any:
         """Get configuration value by key."""
         try:
+            config = self.config  # Use property to ensure non-None config  
             if '.' in key:
                 parts = key.split('.')
-                current = asdict(self._config)
+                current = asdict(config)
                 for part in parts:
                     current = current[part]
                 return current
             else:
-                return getattr(self._config, key, default)
+                return getattr(config, key, default)
         except (KeyError, AttributeError):
             return default
     

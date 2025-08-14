@@ -1,3 +1,13 @@
+import tkinter as tk  
+from tkinter import ttk  
+import threading  
+import time  
+from typing import Dict, List, Optional, Any  
+from datetime import datetime  
+import logging  
+from collections import deque  
+from .process_monitor import get_process_registry, ProcessState, ProcessMetrics  
+logger = logging.getLogger(__name__)  
 """
 GUI Integration for Enhanced Process Monitoring
 Provides visual components for displaying process metrics and health status.
@@ -7,7 +17,7 @@ import tkinter as tk
 from tkinter import ttk
 import threading
 import time
-from typing import Dict, List, Optional, Any, Callable, Union, Tuple
+from typing import Dict, List, Optional, Any, Union, TypedDict
 from datetime import datetime
 import logging
 from collections import deque
@@ -20,7 +30,7 @@ logger = logging.getLogger(__name__)
 class ProcessMonitorWidget:
     """Widget for displaying process monitoring information"""
     
-    def __init__(self, parent: Union[tk.Widget, tk.Tk, tk.Toplevel], title: str = "Process Monitor", update_interval: float = 2.0) -> None:
+    def __init__(self, parent: Any, title: str = "Process Monitor", update_interval: float = 2.0) -> None:
         self.parent = parent
         self.title = title
         self.update_interval = update_interval
@@ -69,7 +79,7 @@ class ProcessMonitorWidget:
                 self.process_tree.column(col, width=200)
         
         # Scrollbar for treeview
-        scrollbar = ttk.Scrollbar(list_container, orient="vertical", command=self.process_tree.yview)  # pyright: ignore
+        scrollbar = ttk.Scrollbar(list_container, orient="vertical", command=self.process_tree.yview)  # type: ignore
         self.process_tree.configure(yscrollcommand=scrollbar.set)
         
         # Pack treeview and scrollbar
@@ -117,8 +127,7 @@ class ProcessMonitorWidget:
         while self.running:
             try:
                 # Schedule GUI update on main thread
-                if hasattr(self.parent, 'after'):
-                    self.parent.after(0, self._update_display)
+                self.parent.after(0, self._update_display)
                 time.sleep(self.update_interval)
             except Exception as e:
                 logger.error(f"Error in process monitor update loop: {e}")
@@ -215,7 +224,7 @@ class ProcessMonitorWidget:
 class ProcessMetricsChart:
     """Chart widget for displaying process metrics over time"""
     
-    def __init__(self, parent: Union[tk.Widget, tk.Tk, tk.Toplevel], process_id: str, title: str = "Process Metrics") -> None:
+    def __init__(self, parent: Any, process_id: str, title: str = "Process Metrics") -> None:
         self.parent = parent
         self.process_id = process_id
         self.title = title
@@ -223,12 +232,17 @@ class ProcessMetricsChart:
         # Create the main frame
         self.frame = ttk.LabelFrame(parent, text=title, padding="10")
         
-        # Metrics data storage
-        self.metrics_data: Dict[str, List[Any]] = {
-            'timestamps': [],
-            'cpu_percent': [],
-            'memory_mb': [],
-            'threads': []
+        # Metrics data storage with proper typing
+        self.timestamps: List[datetime] = []
+        self.cpu_percent: List[float] = []
+        self.memory_mb: List[float] = []
+        self.threads: List[int] = []
+        
+        self.metrics_data: Dict[str, Any] = {
+            'timestamps': self.timestamps,
+            'cpu_percent': self.cpu_percent,
+            'memory_mb': self.memory_mb,
+            'threads': self.threads
         }
         
         # Create the UI
@@ -268,7 +282,7 @@ class ProcessMetricsChart:
         chart_frame.pack(fill="both", expand=True)
         
         self.chart_text = tk.Text(chart_frame, height=10, width=60, font=("Courier", 9))
-        chart_scrollbar = ttk.Scrollbar(chart_frame, orient="vertical", command=self.chart_text.yview)  # pyright: ignore
+        chart_scrollbar = ttk.Scrollbar(chart_frame, orient="vertical", command=self.chart_text.yview)  # type: ignore
         self.chart_text.configure(yscrollcommand=chart_scrollbar.set)
         
         self.chart_text.pack(side="left", fill="both", expand=True)
@@ -310,16 +324,17 @@ class ProcessMetricsChart:
     def _update_chart_data(self, metrics: ProcessMetrics) -> None:
         """Update the chart with new metrics data"""
         # Add new data point
-        self.metrics_data['timestamps'].append(metrics.timestamp)
-        self.metrics_data['cpu_percent'].append(metrics.cpu_percent)
-        self.metrics_data['memory_mb'].append(metrics.memory_mb)
-        self.metrics_data['threads'].append(metrics.num_threads)
+        # Store metrics data in methods that use the typed lists directly
+        self.timestamps.append(metrics.timestamp)
+        self.cpu_percent.append(metrics.cpu_percent)
+        self.memory_mb.append(metrics.memory_mb)
+        self.threads.append(metrics.num_threads)
         
         # Keep only last 50 data points
         max_points = 50
-        for key in self.metrics_data:
-            if len(self.metrics_data[key]) > max_points:
-                self.metrics_data[key] = self.metrics_data[key][-max_points:]
+        for data_list in [self.timestamps, self.cpu_percent, self.memory_mb, self.threads]:
+            if len(data_list) > max_points:
+                data_list[:] = data_list[-max_points:]
         
         # Update text chart
         self._render_text_chart()
@@ -328,7 +343,7 @@ class ProcessMetricsChart:
         """Render a simple text-based chart"""
         self.chart_text.delete(1.0, tk.END)
         
-        if not self.metrics_data['timestamps']:
+        if not self.timestamps:
             self.chart_text.insert(tk.END, "No data available")
             return
         
@@ -337,11 +352,11 @@ class ProcessMetricsChart:
         lines.append("Time        CPU%   Memory(MB)  Threads")
         lines.append("-" * 40)
         
-        for i in range(len(self.metrics_data['timestamps'])):
-            timestamp = self.metrics_data['timestamps'][i]
-            cpu = self.metrics_data['cpu_percent'][i]
-            memory = self.metrics_data['memory_mb'][i]
-            threads = self.metrics_data['threads'][i]
+        for i in range(len(self.timestamps)):
+            timestamp = self.timestamps[i]
+            cpu = self.cpu_percent[i]
+            memory = self.memory_mb[i]
+            threads = self.threads[i]
             
             time_str = timestamp.strftime("%H:%M:%S")
             line = f"{time_str}  {cpu:5.1f}  {memory:8.1f}  {threads:7d}"
@@ -367,22 +382,21 @@ class ProcessMetricsChart:
         self.frame.destroy()
 
 
-def create_process_monitor_tab(notebook: Union[ttk.Notebook, tk.Widget], title: str = "Process Monitor") -> Tuple[ttk.Frame, ProcessMonitorWidget]:
+def create_process_monitor_tab(notebook: Any, title: str = "Process Monitor") -> tuple[Any, ProcessMonitorWidget]:
     """Create a process monitor tab for a notebook widget"""
     # Create tab frame
     tab_frame = ttk.Frame(notebook)
-    if isinstance(notebook, ttk.Notebook):
-        notebook.add(tab_frame, text=title)
+    notebook.add(tab_frame, text=title)
     
     # Create main container with scrollable area
     canvas = tk.Canvas(tab_frame)
-    scrollbar = ttk.Scrollbar(tab_frame, orient="vertical", command=canvas.yview)  # pyright: ignore
+    scrollbar = ttk.Scrollbar(tab_frame, orient="vertical", command=canvas.yview)  # type: ignore
     scrollable_frame = ttk.Frame(canvas)
     
-    def configure_scrollregion(event: Any) -> None:
-        canvas.configure(scrollregion=canvas.bbox("all"))
-    
-    scrollable_frame.bind("<Configure>", configure_scrollregion)
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+    )
     
     canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
     canvas.configure(yscrollcommand=scrollbar.set)
@@ -390,12 +404,6 @@ def create_process_monitor_tab(notebook: Union[ttk.Notebook, tk.Widget], title: 
     # Pack canvas and scrollbar
     canvas.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
-    
-    # Create process monitor widget
-    monitor_widget = ProcessMonitorWidget(scrollable_frame, title="Active Processes")
-    monitor_widget.pack(fill="both", expand=True, pady=(0, 20))
-    
-    return tab_frame, monitor_widget
     
     # Create process monitor widget
     monitor_widget = ProcessMonitorWidget(scrollable_frame, title="Active Processes")

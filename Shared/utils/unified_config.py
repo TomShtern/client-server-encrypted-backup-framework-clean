@@ -164,7 +164,7 @@ class LegacyConfigurationAdapter:
             'me_info': [r'me\.info']
         }
         
-        results = {}
+        results: Dict[str, List[str]] = {}
         source_extensions = ['.py', '.cpp', '.h', '.js', '.html']
         
         for config_key, patterns in hardcoded_patterns.items():
@@ -197,7 +197,7 @@ class LegacyConfigurationAdapter:
         Returns:
             List of ConfigurationMigration objects
         """
-        migrations = []
+        migrations: List[ConfigurationMigration] = []
         
         # Migrate transfer.info
         transfer_config = self.read_transfer_info()
@@ -279,7 +279,7 @@ class UnifiedConfigurationManager:
         """Load configuration from all sources with proper precedence."""
         with self.lock:
             # Start with base JSON configuration
-            self.config_cache = self.base_config.config_data.copy()
+            self.config_cache = dict(self.base_config.config_data)
             
             # Apply legacy configurations (lower precedence)
             self._apply_legacy_configurations()
@@ -420,7 +420,7 @@ class UnifiedConfigurationManager:
             List of completed migrations
         """
         migration_plan = self.legacy_adapter.create_migration_plan()
-        completed_migrations = []
+        completed_migrations: List[ConfigurationMigration] = []
         
         logger.info(f"Starting migration of {len(migration_plan)} configuration items")
         
@@ -478,7 +478,7 @@ class UnifiedConfigurationManager:
         Returns:
             Dictionary with validation results by source
         """
-        results = {
+        results: Dict[str, List[str]] = {
             'json_config': [],
             'legacy_config': [],
             'environment_vars': [],
@@ -492,9 +492,14 @@ class UnifiedConfigurationManager:
         # Validate legacy configurations
         transfer_config = self.legacy_adapter.read_transfer_info()
         if transfer_config:
-            if not (1 <= transfer_config['server_port'] <= 65535):
-                results['legacy_config'].append(f"Invalid server port in transfer.info: {transfer_config['server_port']}")
-            if not transfer_config['username'].strip():
+            try:
+                port = int(transfer_config['server_port'])
+                if not (1 <= port <= 65535):
+                    results['legacy_config'].append(f"Invalid server port in transfer.info: {transfer_config['server_port']}")
+            except (ValueError, TypeError):
+                results['legacy_config'].append(f"Invalid server port format in transfer.info: {transfer_config['server_port']}")
+            
+            if not str(transfer_config.get('username', '')).strip():
                 results['legacy_config'].append("Empty username in transfer.info")
         
         # Check for configuration conflicts
@@ -569,14 +574,12 @@ def test_unified_configuration():
     
     # Test legacy integration
     transfer_config = config.legacy_adapter.read_transfer_info()
-    if transfer_config:
-        print(f"Legacy transfer.info found: {transfer_config}")
+    print(f"Legacy transfer.info found: {transfer_config}" if transfer_config else "No legacy transfer.info found")
     
     # Test hardcoded value detection
     hardcoded = config.legacy_adapter.scan_hardcoded_values()
-    for key, files in hardcoded.items():
-        if files:
-            print(f"Hardcoded {key} found in {len(files)} files")
+    hardcoded_files = [f"Hardcoded {key} found in {len(files)} files" for key, files in hardcoded.items() if files]
+    print("\n".join(hardcoded_files) if hardcoded_files else "No hardcoded values found")
     
     # Test configuration summary
     summary = config.get_configuration_summary()

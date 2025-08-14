@@ -589,7 +589,7 @@ if __name__ == "__main__":
         # Quick check to ensure PyCryptodome is available and basic operations work
         try:
             _ = RSA.generate(1024, randfunc=get_random_bytes) # Test RSA key generation
-            _ = AES.new(get_random_bytes(AES_KEY_SIZE_BYTES), AES.MODE_CBC, iv=get_random_bytes(16)) # Test AES cipher creation
+            _ = AES.new(get_random_bytes(AES_KEY_SIZE_BYTES), AES.MODE_CBC, iv=get_random_bytes(16))  # type: ignore[misc]  # Test AES cipher creation
             logger.info("PyCryptodome library check passed: Basic crypto operations are available.")
         except Exception as e_crypto_check:
             print(f"CRITICAL FAILURE: PyCryptodome library is not installed correctly or is non-functional: {e_crypto_check}", file=sys.stderr)

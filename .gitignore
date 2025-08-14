@@ -256,3 +256,10 @@ pyrightconfig.json
 pyright_output.json
 SYSTEM_REMEDIATION_REPORT.md
 new report14.08.2025.md
+final_errors.json
+temp_errors.json
+zero_errors_verification.json
+type_errors.txt
+temp_errors.txt
+mypy_errors.txt
+gui_errors.txt

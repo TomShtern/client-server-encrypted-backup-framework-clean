@@ -5,7 +5,10 @@
 import os
 import threading
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    from python_server.server_gui.ServerGUI import ServerGUI
 
 logger = logging.getLogger(__name__)
 
@@ -15,12 +18,12 @@ class GUIManager:
     Handles GUI initialization, updates, and cleanup with graceful degradation.
     """
     
-    def __init__(self, server_instance=None):
+    def __init__(self, server_instance: Any = None):
         """Initialize the GUI manager."""
         self.server_instance = server_instance
-        self.gui = None
-        self.gui_ready = threading.Event() # Event to signal GUI is fully initialized
-        self.data_loaded = threading.Event() # Event to signal that initial data is loaded
+        self.gui: Optional['ServerGUI'] = None
+        self.gui_ready = threading.Event()  # Event to signal GUI is fully initialized
+        self.data_loaded = threading.Event()  # Event to signal that initial data is loaded
         self.gui_lock = threading.Lock()
         
         # Try to import GUI components
@@ -104,7 +107,7 @@ class GUIManager:
         """Signal that the initial data from the server has been loaded."""
         self.data_loaded.set()
 
-    def _execute_gui_action(self, action, *args, **kwargs):
+    def _execute_gui_action(self, action: Callable[..., Any], *args: Any, **kwargs: Any) -> bool:
         """A helper to safely execute actions on the GUI thread."""
         if not self.is_gui_ready():
             return False
@@ -116,20 +119,20 @@ class GUIManager:
                 except Exception as e:
                     logger.error(f"Failed to execute GUI action: {e}", exc_info=True)
                     return False
-        return False
+            return False
 
     def update_server_status(self, running: bool, address: str, port: int):
         if self.is_gui_ready() and self.gui is not None:
             self._execute_gui_action(self.gui.update_server_status, running, address, port)
 
-    def update_client_stats(self, stats_data: Optional[dict] = None):
+    def update_client_stats(self, stats_data: Optional[Dict[str, Any]] = None) -> None:
         if self.is_gui_ready() and self.gui is not None:
             self.data_loaded.wait(timeout=5.0)  # Wait for data to be loaded
             if stats_data is None:
                 stats_data = {'connected': 0, 'total': 0, 'active_transfers': 0}
             self._execute_gui_action(self.gui.update_client_stats, stats_data)
 
-    def update_transfer_stats(self, bytes_transferred: int = 0, last_activity: str = ""):
+    def update_transfer_stats(self, bytes_transferred: int = 0, last_activity: str = "") -> None:
         if self.is_gui_ready() and self.gui is not None:
             stats_data = {
                 'bytes_transferred': bytes_transferred,
@@ -137,25 +140,29 @@ class GUIManager:
             }
             self._execute_gui_action(self.gui.update_transfer_stats, stats_data)
 
-    def update_maintenance_stats(self, stats: Dict[str, Any]):
+    def update_maintenance_stats(self, stats: Dict[str, Any]) -> None:
         if self.is_gui_ready() and self.gui is not None:
             self._execute_gui_action(self.gui.update_maintenance_stats, stats)
 
-    def show_error(self, error_message: str):
-        if self.is_gui_ready() and self.gui is not None:
-            self._execute_gui_action(self.gui.show_error, error_message)
+    def show_error(self, error_message: str) -> None:
+        if self.is_gui_ready() and self.gui is not None and hasattr(self.gui, 'show_error'):
+            show_error_method = getattr(self.gui, 'show_error', None)
+            if callable(show_error_method):
+                self._execute_gui_action(show_error_method, error_message)
 
-    def show_success(self, success_message: str):
-        if self.is_gui_ready() and self.gui is not None:
-            self._execute_gui_action(self.gui.show_success, success_message)
+    def show_success(self, success_message: str) -> None:
+        if self.is_gui_ready() and self.gui is not None and hasattr(self.gui, 'show_success'):
+            show_success_method = getattr(self.gui, 'show_success', None)
+            if callable(show_success_method):
+                self._execute_gui_action(show_success_method, success_message)
 
-    def queue_update(self, update_type: str, data: Any):
+    def queue_update(self, update_type: str, data: Any) -> None:
         """Queue an update for the GUI to process safely."""
         if not self.is_gui_ready():
             return
         
         with self.gui_lock:
-            if self.gui is not None:
+            if self.gui is not None and hasattr(self.gui, 'update_queue') and self.gui.update_queue is not None:
                 self.gui.update_queue.put((update_type, data))
 
     def is_gui_running(self) -> bool:
@@ -163,8 +170,9 @@ class GUIManager:
         if self.gui is None:
             return False
         # Check if the GUI thread is alive, or if the root window exists
-        gui_thread_alive = self.gui.gui_thread and self.gui.gui_thread.is_alive()
-        root_window_exists = self.gui.root and self.gui.root.winfo_exists()
+        gui_thread_alive = bool(self.gui.gui_thread and self.gui.gui_thread.is_alive()) if self.gui.gui_thread else False
+        root_window_exists = bool(hasattr(self.gui, 'root') and self.gui.root and 
+                                 hasattr(self.gui.root, 'winfo_exists') and self.gui.root.winfo_exists())
         return gui_thread_alive or root_window_exists
 
     def shutdown(self):

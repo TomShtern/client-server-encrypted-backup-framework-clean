@@ -10,7 +10,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 from datetime import datetime
 
 
@@ -68,7 +68,7 @@ class JobStats:
                 self.stalled_since = None
                 self.last_progress_bytes = s.bytes_transferred
 
-    def summarize(self) -> Dict:
+    def summarize(self) -> Dict[str, Any]:
         now = time.time()
         elapsed = max(0.0, now - self.start_ts)
         last_update_age = now - self.last_ts
@@ -161,12 +161,12 @@ class PerformanceMonitor:
             )
             self._jobs[job_id].record(s)
 
-    def get_job_summary(self, job_id: str) -> Optional[Dict]:
+    def get_job_summary(self, job_id: str) -> Optional[Dict[str, Any]]:
         with self._lock:
             js = self._jobs.get(job_id)
             return js.summarize() if js else None
 
-    def get_all_summaries(self) -> Dict[str, Dict]:
+    def get_all_summaries(self) -> Dict[str, Dict[str, Any]]:
         with self._lock:
             return {jid: js.summarize() for jid, js in self._jobs.items()}
 

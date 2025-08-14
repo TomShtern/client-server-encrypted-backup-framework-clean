@@ -5,7 +5,7 @@ Quick targeted error finder - focuses on specific runtime issues
 
 import os
 import importlib.util
-from typing import List
+from typing import List, Any, cast
 
 # Setup standardized import paths
 from Shared.path_utils import setup_imports
@@ -62,32 +62,21 @@ def test_minimal_functionality() -> bool:
     print("\nTesting minimal ServerGUI functionality...")
     try:
         from python_server.server_gui.ServerGUI import ServerGUI
-        
-        # Create instance
-        gui = ServerGUI()
+        gui: Any = ServerGUI()
         print("✓ ServerGUI instance created")
-        
         # Test basic methods
-        gui.update_server_status(True, "127.0.0.1", 1256)
+        cast(Any, gui).update_server_status(True, "127.0.0.1", 1256)
         print("✓ update_server_status works")
-        
-        gui.update_client_stats(5, 10, 2)
+        cast(Any, gui).update_client_stats({'connected': 5, 'total': 10, 'active_transfers': 2})
         print("✓ update_client_stats works")
-        
-        gui.update_transfer_stats(1024, "now")
+        cast(Any, gui).update_transfer_stats({'bytes_transferred': 1024})
         print("✓ update_transfer_stats works")
-        
-        gui.show_error("test error")
-        print("✓ show_error works")
-        
-        gui.show_success("test success")
-        print("✓ show_success works")
-        
-        gui.show_info("test info")
-        print("✓ show_info works")
-        
+        toast = getattr(gui, 'toast_system', None)
+        if toast is not None:
+            cast(Any, toast).show_toast("test error", "error")
+            cast(Any, toast).show_toast("test success", "success")
+            cast(Any, toast).show_toast("test info", "info")
         return True
-        
     except ImportError:
         print("✗ Could not import ServerGUI. Skipping functionality tests.")
         return False

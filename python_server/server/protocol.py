@@ -5,7 +5,7 @@
 import struct
 import logging
 import socket
-from typing import Tuple
+from typing import Tuple, List
 
 # Import configuration constants
 from .config import SERVER_VERSION, MAX_PAYLOAD_READ_LIMIT
@@ -71,7 +71,7 @@ def read_exact(sock: socket.socket, num_bytes: int) -> bytes:
     if num_bytes > MAX_PAYLOAD_READ_LIMIT:
         raise ProtocolError(f"Requested read of {num_bytes} bytes exceeds limit.")
 
-    parts = []
+    parts: List[bytes] = []
     bytes_read = 0
     while bytes_read < num_bytes:
         try:

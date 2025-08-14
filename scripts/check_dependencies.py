@@ -17,7 +17,7 @@ def check_python_deps() -> list[str]:
         'psutil', 'cryptography', 'flask', 'requests', 'werkzeug',
         'Crypto', 'threading', 'json', 'hashlib', 'base64'
     ]
-    missing = []
+    missing: list[str] = []
     
     for dep in required:
         try:

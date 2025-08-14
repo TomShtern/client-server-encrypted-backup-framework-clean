@@ -16,7 +16,7 @@ Usage:
 
 import logging
 import os
-from typing import Optional, Any, Dict
+from typing import Optional, Dict, Any, Union, Literal
 
 # Sentry DSN Configuration
 SENTRY_DSN = "https://094a0bee5d42a7f7e8ec8a78a37c8819@o4509746411470848.ingest.us.sentry.io/4509747877773312"
@@ -184,9 +184,14 @@ def capture_message(message: str, level: str = "info", component: str = "unknown
                     scope.set_extra(key, value)
             
             # Map string level to Sentry level
-            # Use string level directly - Sentry accepts string levels
-            sentry_level = level.lower()
-            sentry_sdk.capture_message(message, sentry_level)
+            level_lower = level.lower()
+            if level_lower == 'critical':
+                sentry_level = 'fatal'
+            elif level_lower in ('error', 'warning', 'info', 'debug'):
+                sentry_level = level_lower  # type: ignore
+            else:
+                sentry_level = 'info'
+            sentry_sdk.capture_message(message, level=sentry_level)
             
     except ImportError:
         logger.info(f"[{component}] Message: {message} (Sentry not available)")

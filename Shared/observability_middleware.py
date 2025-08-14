@@ -8,8 +8,8 @@ import time
 import functools
 import threading
 import contextlib
-from typing import Callable, Optional
-from flask import Flask, request, g, jsonify
+from typing import Callable, Optional, Dict, Any, List
+from flask import Flask, request, g, jsonify, Response
 from .observability import (
     get_metrics_collector, get_system_monitor, create_structured_logger,
     TimedOperation
@@ -26,12 +26,12 @@ class FlaskObservabilityMiddleware:
         self.component_name = component_name
         self.logger = create_structured_logger(component_name, logging.getLogger(__name__))
         self.metrics = get_metrics_collector()
-        
+
         # Register middleware
         app.before_request(self._before_request)
         app.after_request(self._after_request)
         app.teardown_appcontext(self._teardown_request)
-        
+
         # Add observability endpoints
         self._register_observability_endpoints()
         
@@ -49,7 +49,7 @@ class FlaskObservabilityMiddleware:
                 # Simple metrics without complex tags
                 self.metrics.record_counter("http.requests.total")
         
-    def _after_request(self, response):
+    def _after_request(self, response: Response) -> Response:
         """Called after each request - simplified to avoid deadlocks"""
         with contextlib.suppress(Exception):
             if hasattr(g, 'start_time') and hasattr(g, 'request_logger'):
@@ -64,7 +64,7 @@ class FlaskObservabilityMiddleware:
 
         return response
         
-    def _teardown_request(self, exception):
+    def _teardown_request(self, exception: Optional[BaseException]) -> None:
         """Called when request context is torn down"""
         if exception and hasattr(g, 'request_logger'):
             g.request_logger.error(
@@ -100,7 +100,7 @@ class FlaskObservabilityMiddleware:
                 # Fallback if request context check fails
                 g.request_logger.debug(f"Could not record error metric: {e}") if hasattr(g, 'request_logger') else None
 
-    def _get_response_size(self, response):
+    def _get_response_size(self, response: Response) -> int:
         """Safely get response size without triggering passthrough mode errors"""
         try:
             # Try to get content length from headers first
@@ -127,9 +127,10 @@ class FlaskObservabilityMiddleware:
             latest_metrics = system_monitor.get_latest_metrics()
             
             # Get start time from config instead of private attribute
-            start_time = self.app.config.get('OBSERVABILITY_START_TIME', time.time())
+            config: Dict[str, Any] = self.app.config  # type: ignore[assignment]
+            start_time = float(config['OBSERVABILITY_START_TIME']) if 'OBSERVABILITY_START_TIME' in config else float(time.time())
             
-            health_status = {
+            health_status: Dict[str, Any] = {
                 "status": "healthy",
                 "timestamp": time.time(),
                 "component": self.component_name,
@@ -147,16 +148,18 @@ class FlaskObservabilityMiddleware:
                 # Simple health checks
                 if latest_metrics.cpu_percent > 90:
                     health_status["status"] = "degraded"
-                    health_status["warnings"] = health_status.get("warnings", [])
-                    health_status["warnings"].append("High CPU usage")
+                    warnings: List[str] = health_status.get("warnings", [])  # type: ignore[assignment]
+                    warnings.append("High CPU usage")
+                    health_status["warnings"] = warnings
                     
                 if latest_metrics.memory_percent > 90:
                     health_status["status"] = "degraded"
-                    health_status["warnings"] = health_status.get("warnings", [])
-                    health_status["warnings"].append("High memory usage")
+                    warnings2: List[str] = health_status.get("warnings", [])  # type: ignore[assignment]
+                    warnings2.append("High memory usage")
+                    health_status["warnings"] = warnings2
                     
             return jsonify(health_status)
-            
+        
         @self.app.route('/api/observability/metrics')
         def metrics_summary():  # noqa: F841
             """Metrics summary endpoint"""
@@ -168,7 +171,7 @@ class FlaskObservabilityMiddleware:
                 "timestamp": time.time(),
                 "metrics": summaries
             })
-            
+        
         @self.app.route('/api/observability/system')
         def system_metrics():  # noqa: F841
             """System metrics endpoint"""

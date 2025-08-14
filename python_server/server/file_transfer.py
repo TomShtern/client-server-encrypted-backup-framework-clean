@@ -179,43 +179,7 @@ class FileTransferManager:
             )
 
         try:
-            # Parse and validate the file transfer metadata
-            metadata = self._parse_file_transfer_metadata(payload)
-
-            # Validate the filename for security and storage compatibility
-            if not self._is_valid_filename_for_storage(metadata['filename']):
-                raise FileError(f"Invalid or unsafe filename: '{metadata['filename']}'")
-
-            # Get the client's AES key for decryption
-            aes_key = client.get_aes_key()
-            if not aes_key:
-                raise ClientError(f"Client '{client.name}' has no active AES key for file decryption")
-
-            # Log the file transfer progress with enhanced debugging
-            logger.info(f"Client '{client.name}': Receiving file '{metadata['filename']}', "
-                       f"Packet {metadata['packet_number']}/{metadata['total_packets']} "
-                       f"(EncSize:{metadata['encrypted_size']}, OrigSize:{metadata['original_size']})")
-
-            # DEBUG: Enhanced logging for multi-packet transfers
-            if metadata['total_packets'] > 1:
-                logger.debug(f"MULTI-PACKET DEBUG: Client '{client.name}', File '{metadata['filename']}', "
-                           f"Packet {metadata['packet_number']}/{metadata['total_packets']}, "
-                           f"Content size: {len(metadata['content'])} bytes")
-            
-            # Handle multi-packet reassembly logic
-            is_complete = self._handle_packet_reassembly(client, metadata)
-
-            # DEBUG: Log reassembly status
-            if metadata['total_packets'] > 1:
-                logger.debug(f"REASSEMBLY DEBUG: Client '{client.name}', File '{metadata['filename']}', "
-                           f"Packet {metadata['packet_number']}/{metadata['total_packets']}, "
-                           f"Transfer complete: {is_complete}")
-
-            if is_complete:
-                # All packets received - process the complete file
-                logger.debug(f"COMPLETE TRANSFER: Processing complete file '{metadata['filename']}' for client '{client.name}'")
-                self._process_complete_file(sock, client, metadata['filename'], aes_key)
-
+            self._extracted_from_handle_send_file_28(payload, client, sock)  # type: ignore
         except (ProtocolError, FileError, ClientError) as e:
             logger.error(f"File transfer error for client '{client.name}': {e}")
             self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
@@ -223,6 +187,45 @@ class FileTransferManager:
             logger.critical(f"Unexpected error during file transfer for client '{client.name}': {e}", 
                           exc_info=True)
             self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
+
+    # TODO Rename this here and in `handle_send_file`
+    def _extracted_from_handle_send_file_28(self, payload, client, sock):
+        # Parse and validate the file transfer metadata
+        metadata = self._parse_file_transfer_metadata(payload)
+
+        # Validate the filename for security and storage compatibility
+        if not self._is_valid_filename_for_storage(metadata['filename']):
+            raise FileError(f"Invalid or unsafe filename: '{metadata['filename']}'")
+
+        # Get the client's AES key for decryption
+        aes_key = client.get_aes_key()  # type: ignore
+        if not aes_key:
+            raise ClientError(f"Client '{client.name}' has no active AES key for file decryption")  # type: ignore
+
+        # Log the file transfer progress with enhanced debugging
+        logger.info(f"Client '{client.name}': Receiving file '{metadata['filename']}', "  # type: ignore
+                   f"Packet {metadata['packet_number']}/{metadata['total_packets']} "
+                   f"(EncSize:{metadata['encrypted_size']}, OrigSize:{metadata['original_size']})")
+
+        # DEBUG: Enhanced logging for multi-packet transfers
+        if metadata['total_packets'] > 1:
+            logger.debug(f"MULTI-PACKET DEBUG: Client '{client.name}', File '{metadata['filename']}', "  # type: ignore
+                       f"Packet {metadata['packet_number']}/{metadata['total_packets']}, "
+                       f"Content size: {len(metadata['content'])} bytes")
+
+        # Handle multi-packet reassembly logic
+        is_complete = self._handle_packet_reassembly(client, metadata)
+
+        # DEBUG: Log reassembly status
+        if metadata['total_packets'] > 1:
+            logger.debug(f"REASSEMBLY DEBUG: Client '{client.name}', File '{metadata['filename']}', "  # type: ignore
+                       f"Packet {metadata['packet_number']}/{metadata['total_packets']}, "
+                       f"Transfer complete: {is_complete}")
+
+        if is_complete:
+            # All packets received - process the complete file
+            logger.debug(f"COMPLETE TRANSFER: Processing complete file '{metadata['filename']}' for client '{client.name}'")  # type: ignore
+            self._process_complete_file(sock, client, metadata['filename'], aes_key)
     
     def _parse_file_transfer_metadata(self, payload: bytes) -> Dict[str, Any]:
         """
@@ -494,7 +497,9 @@ class FileTransferManager:
         try:
             logger.debug(f"XFER/DECRYPT: enc_size={len(encrypted_data)}")
             # AES-CBC mode with zero IV (as per protocol specification)
-            cipher = AES.new(aes_key, AES.MODE_CBC, iv=b'\0' * 16)
+            from Crypto.Cipher import AES
+            from Crypto.Util.Padding import unpad
+            cipher = AES.new(aes_key, AES.MODE_CBC, iv=b'\0' * 16)  # type: ignore
             decrypted_data = unpad(cipher.decrypt(encrypted_data), AES.block_size)
             logger.debug(f"XFER/DECRYPT_OK: dec_size={len(decrypted_data)}")
             return decrypted_data
@@ -521,34 +526,51 @@ class FileTransferManager:
         temp_id = uuid.uuid4()
         temp_path = os.path.join(FILE_STORAGE_DIR, f"{filename}.{temp_id}.tmp_EncryptedBackup")
         final_path = os.path.join(FILE_STORAGE_DIR, filename)
-        
-        try:
-            # Ensure storage directory exists (defensive; server should already create it)
-            os.makedirs(FILE_STORAGE_DIR, exist_ok=True)
-            # Write to temporary file first
-            with open(temp_path, 'wb') as f:
-                f.write(data)
-            
-            # Remove existing file if it exists (Windows compatibility)
-            if os.path.exists(final_path):
-                os.remove(final_path)
-                logger.debug(f"Removed existing file '{final_path}' before saving new version")
-            
-            # Atomically rename to final path
-            os.rename(temp_path, final_path)
-            logger.info(f"File '{filename}' saved to storage: '{final_path}'")
-            
-            mod_time = os.path.getmtime(final_path)
-            mod_date = datetime.fromtimestamp(mod_time).isoformat()
 
-            return final_path, mod_date
-            
+        try:
+            return self._perform_atomic_file_save(
+                temp_path, data, final_path, filename
+            )
         except OSError as e:
             # Cleanup temporary file on error
             if os.path.exists(temp_path):
                 with contextlib.suppress(OSError):
                     os.remove(temp_path)
             raise FileError(f"Failed to save file '{filename}': {e}") from e
+
+    def _perform_atomic_file_save(self, temp_path: str, data: bytes, 
+                                 final_path: str, filename: str) -> Tuple[str, str]:
+        """
+        Performs atomic file save operation.
+        
+        Args:
+            temp_path: Path to temporary file
+            data: File data to write
+            final_path: Final destination path
+            filename: Name of the file
+            
+        Returns:
+            Tuple of (final_path, mod_date)
+        """
+        # Ensure storage directory exists (defensive; server should already create it)
+        os.makedirs(FILE_STORAGE_DIR, exist_ok=True)
+        # Write to temporary file first
+        with open(temp_path, 'wb') as f:
+            f.write(data)
+
+        # Remove existing file if it exists (Windows compatibility)
+        if os.path.exists(final_path):
+            os.remove(final_path)
+            logger.debug(f"Removed existing file '{final_path}' before saving new version")
+
+        # Atomically rename to final path
+        os.rename(temp_path, final_path)
+        logger.info(f"File '{filename}' saved to storage: '{final_path}'")
+
+        mod_time = os.path.getmtime(final_path)
+        mod_date = datetime.fromtimestamp(mod_time).isoformat()
+
+        return final_path, mod_date
     
     def _send_file_crc_response(self, sock: socket.socket, client: Any, 
                                filename: str, encrypted_size: int, crc_value: int) -> None:

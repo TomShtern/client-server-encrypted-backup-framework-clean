@@ -15,8 +15,7 @@ import subprocess
 import tempfile
 import logging
 import threading
-# from pathlib import Path  # Not used, removing to clean up hints
-from typing import Optional, Dict, Any, Callable, Union
+from typing import Optional, Dict, Any, Callable, Union, List, Tuple, IO
 
 from Shared.utils.file_lifecycle import SynchronizedFileManager
 from Shared.utils.error_handler import handle_subprocess_error, ErrorSeverity
@@ -43,8 +42,8 @@ class RealBackupExecutor:
             self.client_exe = client_exe_path
 
         self.temp_dir = tempfile.mkdtemp()
-        self.backup_process: Optional[subprocess.Popen] = None
-        self.status_callback: Optional[Callable] = None
+        self.backup_process: Optional[subprocess.Popen[str]] = None
+        self.status_callback: Optional[Callable[..., Any]] = None
         self.file_manager = SynchronizedFileManager(self.temp_dir)
         self.process_id: Optional[int] = None
         self.server_received_files = "received_files"
@@ -119,7 +118,7 @@ class RealBackupExecutor:
             self._log_status('TIMEOUT_CALC', f'Could not get file size for {file_path}: {e}. Using min timeout.')
             return self.timeout_config['min_timeout']
 
-    def _generate_transfer_info(self, server_ip: str, server_port: int, username: str, file_path: str) -> tuple[str, str]:
+    def _generate_transfer_info(self, server_ip: str, server_port: int, username: str, file_path: str) -> Tuple[str, str]:
         """Generate managed transfer.info file for the C++ client"""
         absolute_file_path = os.path.abspath(file_path)
         content = f"{server_ip}:{server_port}\n{username}\n{absolute_file_path}"
@@ -165,8 +164,10 @@ class RealBackupExecutor:
 
     def _execute_subprocess_nonblocking(self, timeout: int = 120) -> Dict[str, Any]:
         """Execute subprocess with non-blocking, progressive timeout pipe reading."""
-        def _read_pipe(pipe, chunks, lock):
+        def _read_pipe(pipe: Optional[IO[str]], chunks: List[str], lock: threading.Lock) -> None:
             """Helper to read pipe chunks safely."""
+            if not pipe:
+                return
             try:
                 while True:
                     chunk = pipe.read(4096)  # Read in small, manageable chunks
@@ -177,16 +178,18 @@ class RealBackupExecutor:
             except Exception:
                 pass
             finally:
-                try:
+                with contextlib.suppress(Exception):
                     pipe.close()
-                except Exception:
-                    pass
 
         # Thread-safe data structures
-        stdout_chunks, stderr_chunks = [], []
+        stdout_chunks: List[str] = []
+        stderr_chunks: List[str] = []
         stdout_lock, stderr_lock = threading.Lock(), threading.Lock()
 
         # Launch non-blocking readers
+        if self.backup_process is None:
+            raise RuntimeError("Backup process is not initialized")
+            
         stdout_thread = threading.Thread(target=_read_pipe, 
             args=(self.backup_process.stdout, stdout_chunks, stdout_lock), daemon=True)
         stderr_thread = threading.Thread(target=_read_pipe, 
@@ -197,12 +200,14 @@ class RealBackupExecutor:
 
         # Progressive timeout with incremental checks
         start_time = time.time()
-        while time.time() - start_time < timeout:
-            if self.backup_process.poll() is not None:
-                break
+        while (time.time() - start_time < timeout and 
+               self.backup_process is not None and 
+               self.backup_process.poll() is None):
             time.sleep(1)  # Small sleep to prevent busy waiting
 
         # Handle timeout scenario
+        if self.backup_process is None:
+            raise RuntimeError("Backup process is not initialized")
         if self.backup_process.poll() is None:
             self._log_status('TIMEOUT', f'Subprocess timeout after {timeout}s, terminating...')
             self.backup_process.terminate()
@@ -226,7 +231,7 @@ class RealBackupExecutor:
         return {
             'stdout': stdout,
             'stderr': stderr,
-            'return_code': self.backup_process.returncode
+            'return_code': self.backup_process.returncode if self.backup_process else -1
         }
 
     def execute_real_backup(self, username: str, file_path: str, server_ip: str, server_port: int) -> Dict[str, Any]:
@@ -272,7 +277,7 @@ class RealBackupExecutor:
 
     def execute_backup_with_verification(self, username: str, file_path: str, 
                            server_ip: str = "127.0.0.1", server_port: int = 1256,
-                           timeout: int = None) -> Dict[str, Any]:
+                           timeout: Optional[int] = None) -> Dict[str, Any]:
         """Execute REAL backup using the C++ client with verification and robust progress.
 
         This rewritten implementation corrects prior indentation corruption and consolidates
@@ -298,8 +303,6 @@ class RealBackupExecutor:
         monitor: Optional[UnifiedFileMonitor] = None
         file_id: Optional[str] = None
         transfer_info_path: Optional[str] = None
-        stdout: Union[bytes, str] = b''  # predefine
-        stderr: Union[bytes, str] = b''
 
         try:
             # --- Pre-flight validation ---
@@ -368,15 +371,15 @@ class RealBackupExecutor:
             monitor.start_monitoring()
 
             job_completed = threading.Event()
-            verification_result = {}
+            verification_result: Dict[str, Any] = {}
 
-            def on_complete(data):
+            def on_complete(data: Dict[str, Any]):
                 nonlocal verification_result
                 self._log_status("MONITOR_COMPLETE", f"Verification successful: {data}")
                 verification_result.update(data)
                 job_completed.set()
 
-            def on_failure(data):
+            def on_failure(data: Dict[str, Any]):
                 nonlocal verification_result
                 self._log_status("MONITOR_FAILURE", f"Verification failed: {data}")
                 verification_result.update(data)
@@ -435,7 +438,7 @@ class RealBackupExecutor:
             job_completed.wait(timeout=30) # Wait up to 30s for verification
             
             result['verification'] = verification_result
-            result['success'] = verification_result.get('status') == 'complete'
+            result['success'] = verification_result.get('status', '') == 'complete'
 
             if not result['success'] and not result['error']:
                 result['error'] = verification_result.get('reason', 'Verification failed or timed out.')
@@ -483,7 +486,7 @@ def main():
 
     executor = RealBackupExecutor()
 
-    def status_update(phase, data):
+    def status_update(phase: str, data: Union[str, Dict[str, Any]]):
         if isinstance(data, dict):
             if 'message' in data:
                 print(f"STATUS: {phase} - {data['message']}")

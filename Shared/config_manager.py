@@ -19,7 +19,7 @@ class ConfigurationManager:
     def __init__(self, config_dir: str = "config", environment: str = "production"):
         self.config_dir = Path(config_dir)
         self.environment = environment
-        self.config_data = {}
+        self.config_data: Dict[str, Any] = {}
         self.logger = logging.getLogger(__name__)
         
         # Ensure config directory exists
@@ -28,7 +28,7 @@ class ConfigurationManager:
         # Load configuration
         self.load_configuration()
     
-    def load_configuration(self):
+    def load_configuration(self) -> None:
         """Load configuration files in order of priority"""
         config_files = [
             "default.json",  # Base configuration
@@ -50,7 +50,7 @@ class ConfigurationManager:
                 except Exception as e:
                     self.logger.error(f"Failed to load configuration from {config_file}: {e}")
     
-    def _deep_merge(self, base: Dict, update: Dict):
+    def _deep_merge(self, base: Dict[str, Any], update: Dict[str, Any]) -> None:
         """Deep merge two dictionaries"""
         for key, value in update.items():
             if key in base and isinstance(base[key], dict) and isinstance(value, dict):
@@ -61,7 +61,7 @@ class ConfigurationManager:
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value using dot notation (e.g., 'server.port')"""
         keys = key.split('.')
-        value = self.config_data
+        value: Any = self.config_data
         
         try:
             for k in keys:
@@ -70,10 +70,10 @@ class ConfigurationManager:
         except (KeyError, TypeError):
             return default
     
-    def set(self, key: str, value: Any):
+    def set(self, key: str, value: Any) -> None:
         """Set configuration value using dot notation"""
         keys = key.split('.')
-        target = self.config_data
+        target: Any = self.config_data
         
         for k in keys[:-1]:
             if k not in target:
@@ -84,7 +84,7 @@ class ConfigurationManager:
     
     def validate_configuration(self) -> List[str]:
         """Validate configuration and return list of errors"""
-        errors = []
+        errors: List[str] = []
         
         # Define required configuration keys and their types
         required_configs = {
@@ -105,20 +105,22 @@ class ConfigurationManager:
             if value is None:
                 errors.append(f"Missing required configuration: {key}")
             elif not isinstance(value, expected_type):
-                errors.append(f"Invalid type for {key}: expected {expected_type.__name__}, got {type(value).__name__}")
+                type_name = getattr(expected_type, '__name__', str(expected_type))
+                actual_type_name = getattr(type(value), '__name__', str(type(value)))
+                errors.append(f"Invalid type for {key}: expected {type_name}, got {actual_type_name}")
         
         # Additional validation
         port = self.get('server.port', 0)
-        if port <= 0 or port > 65535:
+        if isinstance(port, int) and (port <= 0 or port > 65535):
             errors.append(f"Invalid server port: {port} (must be 1-65535)")
         
         max_clients = self.get('server.max_clients', 0)
-        if max_clients <= 0:
+        if isinstance(max_clients, int) and max_clients <= 0:
             errors.append(f"Invalid max_clients: {max_clients} (must be > 0)")
         
         return errors
     
-    def save_configuration(self, filename: str = None):
+    def save_configuration(self, filename: Optional[str] = None) -> None:
         """Save current configuration to a file"""
         if filename is None:
             filename = f"{self.environment}.json"
@@ -131,7 +133,7 @@ class ConfigurationManager:
         except Exception as e:
             self.logger.error(f"Failed to save configuration to {filename}: {e}")
     
-    def create_default_configs(self):
+    def create_default_configs(self) -> None:
         """Create default configuration files"""
         
         # Default configuration

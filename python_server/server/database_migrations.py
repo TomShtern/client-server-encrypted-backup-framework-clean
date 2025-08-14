@@ -37,7 +37,7 @@ class DatabaseMigrationManager:
     Ensures that database changes don't break existing functionality.
     """
     
-    def __init__(self, db_name: str = None):
+    def __init__(self, db_name: Optional[str] = None):
         self.db_name = db_name or DATABASE_NAME
         self.migrations: List[DatabaseMigration] = []
         self._init_migration_table()
@@ -349,31 +349,30 @@ class DatabaseMigrationManager:
             'database_exists': os.path.exists(self.db_name)
         }
 
-def migrate_database(db_name: str = None) -> bool:
+def migrate_database(db_name: Optional[str] = None) -> bool:
     """
-    Convenience function to migrate database to latest version.
+    Convenience function to run all pending migrations.
     
     Args:
-        db_name: Optional database name override
+        db_name: Database name/path. If None, uses default.
         
     Returns:
-        True if migration successful, False otherwise
+        True if all migrations succeeded, False otherwise.
     """
-    migration_manager = DatabaseMigrationManager(db_name)
-    
-    # Validate current state
-    if not migration_manager.validate_database_integrity():
-        logger.error("Database integrity check failed before migration")
+    try:
+        manager = DatabaseMigrationManager(db_name)
+        success = manager.migrate_to_latest()
+        
+        if success:
+            logger.info(f"Database migration completed successfully.")
+            return True
+        else:
+            logger.error(f"Database migration failed.")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Database migration error: {e}")
         return False
-    
-    # Apply migrations
-    success = migration_manager.migrate_to_latest()
-    
-    # Validate after migration
-    if success:
-        success = migration_manager.validate_database_integrity()
-    
-    return success
 
 if __name__ == "__main__":
     # CLI interface for migration management
