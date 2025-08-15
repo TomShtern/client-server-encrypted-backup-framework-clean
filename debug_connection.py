@@ -81,7 +81,7 @@ def check_transfer_info():
     # Check the transfer.info file content
     print("\n=== Transfer Info Check ===")
     try:
-        with open("transfer.info", "r") as f:
+        with open("transfer.info", "r", encoding='utf-8') as f:
             content = f.read()
             print("transfer.info content:")
             print(content)

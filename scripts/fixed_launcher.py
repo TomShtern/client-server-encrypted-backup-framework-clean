@@ -18,14 +18,18 @@ Key Fixes:
 - Validates actual port connectivity, not just process startup
 """
 
+# GLOBAL UTF-8 AUTO-PATCHER: Automatically enables UTF-8 for ALL subprocess calls
 import os
 import sys
-import subprocess
 import time
 import socket
 import logging
-
+import subprocess
 from pathlib import Path
+
+# Enable global UTF-8 support automatically (replaces all manual UTF-8 setup)
+sys.path.insert(0, str(Path(__file__).parent.parent))
+import Shared.utils.utf8_solution  # 🚀 That's it! Global UTF-8 enabled automatically
 
 # Change to project root
 project_root = Path(__file__).parent.parent
@@ -167,11 +171,13 @@ def test_file_transfer():
     try:
         # Check if transfer.info exists and is properly configured
         transfer_info = Path("transfer.info")
+# sourcery skip: no-conditionals-in-tests
         if not transfer_info.exists():
             logger.info("Creating transfer.info for testing...")
             transfer_info.write_text("127.0.0.1:1256\ntestuser\ntest_transfer.txt\n")
         
         # Check if C++ client exists
+# sourcery skip: no-loop-in-tests
         client_exe = None
         for possible_path in [
             Path("build/Release/EncryptedBackupClient.exe"),
@@ -196,10 +202,12 @@ def test_file_transfer():
                 cwd=project_root,
                 timeout=10,
                 capture_output=True,
-                text=True
+                text=True,
+                encoding='utf-8'
             )
             logger.info(f"C++ client test completed with exit code: {result.returncode}")
             
+# sourcery skip: no-conditionals-in-tests
             # Check if file was transferred
             received_files = Path("received_files")
             if received_files.exists():

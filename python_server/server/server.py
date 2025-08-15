@@ -1,12 +1,17 @@
+# GLOBAL UTF-8 AUTO-PATCHER: Automatically enables UTF-8 for ALL subprocess calls
+import os
 import socket
 import threading
-import os
 import time
 import logging
 import sys
 import contextlib
 from datetime import datetime
 from typing import Dict, Optional, Any
+
+# Enable global UTF-8 support automatically (replaces all manual UTF-8 setup)  
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import Shared.auto_utf8  # 🚀 That's it! Global UTF-8 enabled automatically
 
 # Import singleton manager
 from .server_singleton import ensure_single_server_instance

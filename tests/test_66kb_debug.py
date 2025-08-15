@@ -59,6 +59,7 @@ def test_file_transfer(file_path, expected_size):
             timeout=30,
             capture_output=True,
             text=True,
+            encoding='utf-8',
             cwd=os.path.dirname(os.path.abspath(__file__))
         )
         

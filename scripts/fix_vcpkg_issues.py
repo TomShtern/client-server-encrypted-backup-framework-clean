@@ -25,7 +25,8 @@ def run_command(command: str | list[str], cwd: str | None = None, timeout: int =
             shell=True,
             cwd=cwd or os.getcwd(),
             timeout=timeout,
-            text=True
+            text=True,
+            encoding='utf-8'
         )
         return result.returncode == 0
     except subprocess.TimeoutExpired:

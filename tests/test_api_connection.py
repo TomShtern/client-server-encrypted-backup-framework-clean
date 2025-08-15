@@ -34,7 +34,7 @@ def test_api_server():
     # Test 4: Check what ports are listening
     import subprocess
     try:
-        result = subprocess.run(["netstat", "-an"], capture_output=True, text=True, timeout=10)
+        result = subprocess.run(["netstat", "-an"], capture_output=True, text=True, encoding='utf-8', timeout=10)
         listening_ports = [line for line in result.stdout.split('\n') if ':9090' in line or ':1256' in line]
         print("Listening ports:")
         for port in listening_ports:

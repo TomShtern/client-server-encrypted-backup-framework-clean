@@ -13,9 +13,12 @@ This script:
 Corrupted header block was repaired on 2025-08-11 after accidental paste.
 """
 
+# AUTOMATIC UTF-8: sitecustomize.py provides automatic UTF-8 support
+# No imports needed - UTF-8 works automatically for ALL scripts!
 import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from Shared.utils.unified_config import get_config
 import subprocess
 import time
@@ -85,6 +88,18 @@ def print_build_failure_help():
     print("   - Run: cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake")
     print()
 
+def report_executable_status(found_exe, checked_locations):
+    """Report the status of C++ executable search with standardized messaging."""
+    if found_exe:
+        print(f"[OK] C++ client found: {found_exe}")
+    else:
+        print("[ERROR] EncryptedBackupClient.exe was not created!")
+        print("Checked locations:")
+        for path in checked_locations:
+            print(f"  - {path}")
+        print("\nWeb uploads may not work without the C++ client.")
+        print("Continuing with server-only mode...")
+
 def print_server_not_found_help(server_path: Path, expected_location: str):
     """Print server file not found error with common guidance"""
     print(f"[ERROR] Server file not found: {server_path}")
@@ -117,6 +132,42 @@ def print_build_command_info(description: str, command: str):
     """Print build command information (extracted duplicate code)"""
     print(description)
     print(f"Command: {command}")
+
+def print_spacing():
+    """Print empty line for spacing (extracted duplicate code)"""
+    print()
+
+def install_additional_dependencies():
+    """Install additional Python dependencies (extracted from main)"""
+    print("Installing additional dependencies...")
+    additional_deps = ["sentry-sdk", "flask-cors", "watchdog"]
+    
+    for dep in additional_deps:
+        print(f"Installing {dep}...")
+        if run_command(f"pip install {dep}", check_exit=False, timeout=60):
+            print(f"[OK] {dep} installed successfully")
+        else:
+            print(f"[WARNING] Failed to install {dep} - continuing anyway")
+    
+    print_spacing()
+
+
+def install_python_dependencies():
+    """Install Python dependencies from requirements.txt or fall back to a minimal set."""
+    print("Installing Python dependencies from requirements.txt...")
+    print_spacing()
+    requirements_file = Path("requirements.txt")
+    if requirements_file.exists():
+        if not run_command("pip install -r requirements.txt", check_exit=False, timeout=180):
+            print("[WARNING] Some Python dependencies failed to install")
+            print("This may cause issues with the API server or GUI")
+            print()
+        else:
+            print("[OK] Python dependencies installed successfully!")
+    else:
+        print("[WARNING] requirements.txt not found")
+        print("Installing basic dependencies manually...")
+        run_command("pip install cryptography pycryptodome psutil flask", check_exit=False, timeout=180)
 
 def print_skip_build_info():
     """Standard message when CMake build phases are skipped"""
@@ -682,26 +733,17 @@ def main():
         
         # Verify the executable was created with fallback locations
         found_exe, checked_locations = check_executable_locations()
+        report_executable_status(found_exe, checked_locations)
         
-        if found_exe:
-            print(f"[OK] C++ client found: {found_exe}")
-        else:
-            print("[ERROR] EncryptedBackupClient.exe was not created!")
-            print("Checked locations:")
-            for path in checked_locations:
-                print(f"  - {path}")
-            print("\nWeb uploads may not work without the C++ client.")
-            print("Continuing with server-only mode...")
-        
-        print()
+        print_spacing()
         print("[OK] C++ client built successfully!")
         print(f"   Location: {found_exe}")
-        print()
+        print_spacing()
     else:
-        print()
+        print_spacing()
         print_phase(2, 7, "Skipping Build System Configuration")
         print_skip_build_info()
-        print()
+        print_spacing()
 
         print_phase(3, 7, "Checking Existing C++ Client")
         found_exe, checked_locations = check_executable_locations()
@@ -721,58 +763,35 @@ def main():
     # ========================================================================
     print_phase(4, 7, "Setting up Python Environment")
     
-    print("Installing Python dependencies from requirements.txt...")
-    print()
-    
-    requirements_file = Path("requirements.txt")
-    if requirements_file.exists():
-        if not run_command("pip install -r requirements.txt", check_exit=False, timeout=180):
-            print("[WARNING] Some Python dependencies failed to install")
-            print("This may cause issues with the API server or GUI")
-            print()
-        else:
-            print("[OK] Python dependencies installed successfully!")
-    else:
-        print("[WARNING] requirements.txt not found")
-        print("Installing basic dependencies manually...")
-        run_command("pip install cryptography pycryptodome psutil flask", check_exit=False, timeout=180)
-    
+    # Install Python dependencies (uses helper to avoid duplicate logic)
+    install_python_dependencies()
+
     # Install additional dependencies with better error handling
-    print("Installing additional dependencies...")
-    additional_deps = ["sentry-sdk", "flask-cors", "watchdog"]
-    
-    for dep in additional_deps:
-        print(f"Installing {dep}...")
-        if run_command(f"pip install {dep}", check_exit=False, timeout=60):
-            print(f"[OK] {dep} installed successfully")
-        else:
-            print(f"[WARNING] Failed to install {dep} - continuing anyway")
-    
-    print()
+    install_additional_dependencies()
     
     # ========================================================================
     # PHASE 5: CONFIGURATION VERIFICATION
     # ========================================================================
     print_phase(5, 7, "Verifying Configuration")
-    
+
     # Check if RSA keys exist
     data_dir = Path("data")
     data_dir.mkdir(exist_ok=True)
-    
+
     private_key = data_dir / "valid_private_key.der"
     if private_key.exists():
         print("[OK] RSA private key found")
     else:
         print("[WARNING] RSA private key missing - generating keys...")
         run_command("python scripts\\security\\key-generation\\create_working_keys.py", check_exit=False, timeout=60)
-    
+
     public_key = data_dir / "valid_public_key.der"
     if public_key.exists():
         print("[OK] RSA public key found")
     else:
         print("[WARNING] RSA public key missing - generating keys...")
         run_command("python scripts\\security\\key-generation\\create_working_keys.py", check_exit=False, timeout=60)
-    
+
     # Check if transfer.info exists
     transfer_info = data_dir / "transfer.info"
     if transfer_info.exists():
@@ -783,51 +802,51 @@ def main():
             f.write(f"{get_config('server.host', '127.0.0.1')}:{get_config('server.port', 1256)}\n")
             f.write("testuser\n")
             f.write("test_file.txt\n")
-    
+
     print_success_with_spacing("[OK] Configuration verification completed!")
-    
+
     # ========================================================================
     # PHASE 6: LAUNCH SERVICES
     # ========================================================================
     print_phase(6, 7, "Launching Services")
-    
+
     print("Starting the complete CyberBackup 3.0 system...")
     print()
-    print("Services that will be started:")
-    print("   - Backup Server (Port 1256)")
-    print("   - API Bridge Server (Port 9090)")
-    print("   - Web GUI (Browser interface)")
+    print_multiline(
+        "Services that will be started:",
+        "   - Backup Server (Port 1256)",
+        "   - API Bridge Server (Port 9090)",
+        "   - Web GUI (Browser interface)",
+    )
     print()
-    
+
     print("Starting Python Backup Server with integrated GUI...")
-    server_path = Path("python_server/server/server.py")
-    
+    server_path = Path("python_server/server.py")
+
     # Validate server path exists with proper error handling
     if not server_path.exists():
-        print_server_not_found_help(server_path, "python_server/server/server.py")
+        print_server_not_found_help(server_path, "python_server/server.py")
         print("\nTrying alternative server startup...")
         # Continue execution to attempt other startup methods
-    
+
     if server_path.exists():
         # Check if AppMap is available for recording
         appmap_available = check_appmap_available()
 
         if appmap_available:
             print("[INFO] AppMap detected but using normal startup for stability")
-            # Use normal startup for better reliability
-            server_command = [sys.executable, "-m", "python_server.server.server"]
-            print(f"Command: {sys.executable} -m python_server.server.server")
         else:
             print("[INFO] AppMap not available - starting server normally")
-            # Start backup server normally using module syntax
-            server_command = [sys.executable, "-m", "python_server.server.server"]
-            print(f"Command: {sys.executable} -m python_server.server.server")
-        
+
+        # Start backup server normally using module syntax (same for both cases)
+        server_command = [sys.executable, "-m", "python_server.server.server"]
+        print(f"Command: {sys.executable} -m python_server.server.server")
+
         # Set up server environment (GUI is integrated, no separate GUI launch needed)
         server_env = os.environ.copy()
         # CRITICAL: Set PYTHONPATH so Python can find project modules
         server_env['PYTHONPATH'] = os.getcwd()
-        
+
         # Start backup server with integrated GUI in new console window
         server_process = subprocess.Popen(
             server_command,
@@ -835,11 +854,11 @@ def main():
             env=server_env
         )
         print(f"Python Backup Server (with integrated GUI) started with PID: {server_process.pid}")
-        
+
         if appmap_available:
             print("[INFO] AppMap available but not used for stability reasons")
             print("       Run manually with AppMap if needed: appmap-python --record process python -m python_server.server.server")
-        
+
         # Wait for backup server to actually start listening on port 1256
         print("Waiting for backup server to start listening...")
         backup_server_ready = False
@@ -850,7 +869,7 @@ def main():
                 break
             print(f"  Attempt {attempt + 1}/30: Waiting for backup server...")
             time.sleep(1)
-        
+
         if not backup_server_ready:
             print_backup_server_failure()
             print("Check the server console window for error messages.")
@@ -873,23 +892,24 @@ def main():
                 break
             else:
                 print(f"  - {alt_path}: Not found")
-    
+
     # ========================================================================
     # ENHANCED API SERVER STARTUP WITH ROBUST VERIFICATION
     # ========================================================================
-    
+
     print("Preparing API Bridge Server (cyberbackup_api_server.py)...")
-    
+
     # Step 1: Check Python dependencies with enhanced reporting
     print("\nChecking Python dependencies...")
     missing_deps, optional_missing = check_python_dependencies()
-    
+
     if missing_deps:
-        print("\n[ERROR] Missing required Python modules:")
-        for dep, desc in missing_deps:
-            print(f"  - {dep}: {desc}")
-        print("\nInstall missing dependencies:")
-        for dep, desc in missing_deps:
+        print_missing_and_optional_deps(
+            "\n[ERROR] Missing required Python modules:",
+            missing_deps,
+            "\nInstall missing dependencies:",
+        )
+        for dep, _ in missing_deps:
             if dep == 'flask_cors':
                 print("  pip install flask-cors")
             else:
@@ -902,13 +922,13 @@ def main():
             input("Press Enter to continue anyway (may cause startup failure)...")
     else:
         print("\n[OK] All required Python dependencies are available")
-    
+
     if optional_missing:
-        print("\n[INFO] Optional dependencies not installed:")
-        for dep, desc in optional_missing:
-            print(f"  - {dep}: {desc}")
-        print("These are optional but recommended for full functionality.")
-    
+        print_missing_and_optional_deps(
+            "\n[INFO] Optional dependencies not installed:",
+            optional_missing,
+            "These are optional but recommended for full functionality.",
+        )
     # Step 2: Check port availability
     print("\nChecking port availability...")
     if not check_port_available(9090):
@@ -918,19 +938,19 @@ def main():
             input("Press Enter to continue...")
     else:
         print("[OK] Port 9090 is available")
-    
+
     # Step 3: Start API server with enhanced error handling
     api_server_path = Path("api_server/cyberbackup_api_server.py")
     api_process = None
     server_started_successfully = False
-    
+
     # Validate API server path exists
     if not api_server_path.exists():
         print_server_not_found_help(api_server_path, "api_server/cyberbackup_api_server.py")
         server_started_successfully = False
     elif api_server_path.exists():
         print(f"\nStarting API Bridge Server: {api_server_path}")
-        
+
         try:
             # Start API server in new console window with visible output
             # Fixed: Use module syntax to avoid circular import issues
@@ -938,22 +958,22 @@ def main():
             api_env = os.environ.copy()
             # CRITICAL: Set PYTHONPATH so Python can find project modules
             api_env['PYTHONPATH'] = os.getcwd()
-            
+
             api_process = subprocess.Popen(
                 [sys.executable, "-m", "api_server.cyberbackup_api_server"],
                 creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0,
                 env=api_env
             )
             print(f"API Bridge Server started with PID: {api_process.pid}")
-            
+
             # Step 4: Wait for server to become responsive
             server_started_successfully = wait_for_server_startup()
-            
+
             if server_started_successfully:
                 print("[OK] API Bridge Server is running and responsive!")
             else:
                 print_api_start_failure()
-                
+
         except Exception as e:
             print(f"[ERROR] Failed to start API server: {str(e)}")
             server_started_successfully = False
@@ -964,7 +984,7 @@ def main():
             Path("src/api/cyberbackup_api_server.py"),
             Path("api/cyberbackup_api_server.py")
         ]
-        
+
         found_alt_api = None
         for alt_path in alt_api_locations:
             if alt_path.exists():
@@ -972,22 +992,24 @@ def main():
                 print(f"[INFO] Found alternative API server: {alt_path}")
                 api_server_path = alt_path
                 break
-        
+
         if not found_alt_api:
             print("[ERROR] API server file not found in any expected location:")
             print(f"  - {api_server_path}")
             for alt_path in alt_api_locations:
                 print(f"  - {alt_path}")
             server_started_successfully = False
-    
+
     # Step 5: Open Web GUI only if server started successfully
     if server_started_successfully:
         open_web_gui(gui_url)
     else:
-        print("\n[FALLBACK] Manual startup instructions:")
-        print("Since automatic startup failed, you can try:")
-        print("1. Open a new terminal/command prompt")
-        print("2. Navigate to this directory")
+        print_multiline(
+            "\n[FALLBACK] Manual startup instructions:",
+            "Since automatic startup failed, you can try:",
+            "1. Open a new terminal/command prompt",
+            "2. Navigate to this directory",
+        )
         print("3. Run: python api_server/cyberbackup_api_server.py")
         print(f"4. Wait for server to start, then open: {gui_url}")
         print()
@@ -995,7 +1017,7 @@ def main():
             choice = input("Would you like to try opening the browser anyway? (y/N): ").strip().lower()
             if choice in ['y', 'yes']:
                 open_web_gui(gui_url)
-    
+
     # Enhanced success/status message
     print()
     print("=" * 72)
@@ -1007,11 +1029,11 @@ def main():
     print()
     print("CyberBackup 3.0 System Status:")
     print()
-    
+
     # Check actual server status for final report
     backup_server_running = check_backup_server_status()
     api_server_running = check_api_server_status()
-    
+
     try:
         print(f"   [SERVER] Backup Server + GUI:  {f'[OK] Running on port {server_port}' if backup_server_running else f'[ERROR] Not responding on port {server_port}'}")
         print(f"   [API] API Bridge Server:    {f'[OK] Running on port {api_port}' if api_server_running else f'[ERROR] Not responding on port {api_port}'}")
@@ -1023,44 +1045,66 @@ def main():
         print(f"   [GUI] Web Interface:        {gui_url if api_server_running else 'Not available (API server down)'}")
         print(f"   [GUI] Server GUI:           {'Integrated with server' if backup_server_running else 'Check server console window'}")
     print()
-    
+
     if server_started_successfully and api_server_running and backup_server_running:
-        print("[SUCCESS] All components are running properly:")
-        print("   1. The web interface should have opened automatically")
-        print("   2. The server GUI should be visible in a separate window") 
-        print("   3. You can upload files through either interface")
+        print_multiline(
+            "[SUCCESS] All components are running properly:",
+            "   1. The web interface should have opened automatically",
+            "   2. The server GUI should be visible in a separate window",
+            "   3. You can upload files through either interface",
+        )
         print("   4. All components are properly coupled and communicating")
         if check_appmap_available():
             print("   5. AppMap traces will be generated when services stop")
     elif server_started_successfully and api_server_running:
-        print("[WARNING] Web interface is working, but server may have issues:")
-        print("   1. The web interface should work for basic operations")
-        print("   2. Check the server console window for error messages")
-        print("   3. File uploads may not work properly")
+        print_multiline(
+            "[WARNING] Web interface is working, but server may have issues:",
+            "   1. The web interface should work for basic operations",
+            "   2. Check the server console window for error messages",
+            "   3. File uploads may not work properly",
+        )
         print("   4. Restart the script if server issues persist")
     else:
-        print("[ERROR] System has issues - troubleshooting needed:")
-        print("   1. Check console windows for error messages")
-        print("   2. Verify all dependencies: pip install -r requirements.txt")  
-        print("   3. Try manual startup: python python_server/server/server.py")
+        print_multiline(
+            "[ERROR] System has issues - troubleshooting needed:",
+            "   1. Check console windows for error messages",
+            "   2. Verify all dependencies: pip install -r requirements.txt",
+            "   3. Try manual startup: python python_server/server/server.py",
+        )
         print("   4. Check if ports 9090/1256 are blocked by firewall")
         print("   5. Restart the script after fixing issues")
     print()
-    
-    print("[INFO] Available commands:")
-    print("   • Run tests: python scripts\\testing\\master_test_suite.py")
-    print("   • Quick validation: python scripts\\testing\\quick_validation.py")
-    print("   • Stop all services: Close console windows or press Ctrl+C")
+
+    print_multiline(
+        "[INFO] Available commands:",
+        "   • Run tests: python scripts\\testing\\master_test_suite.py",
+        "   • Quick validation: python scripts\\testing\\quick_validation.py",
+        "   • Stop all services: Close console windows or press Ctrl+C",
+    )
     print("   • View logs: Check logs/ directory for detailed information")
     if check_appmap_available():
         print("   • View AppMap data: Use AppMap tools after stopping services")
     print()
-    
+
     if server_started_successfully and api_server_running and backup_server_running:
         safe_print("Ready for secure backup operations!")
     else:
         safe_print("Please check the troubleshooting steps above")
     print("=" * 72)
+
+
+def print_missing_and_optional_deps(header: str, deps: List[Tuple[str, str]], footer: str):
+    """Print missing or optional dependencies in a standardized format."""
+    print(header)
+    for dep, desc in deps:
+        print(f"  - {dep}: {desc}")
+    print(footer)
+
+
+def print_multiline(*lines: str):
+    """Print multiple lines passed as positional args."""
+    for line in lines:
+        print(line)
 
 if __name__ == "__main__":
     try:

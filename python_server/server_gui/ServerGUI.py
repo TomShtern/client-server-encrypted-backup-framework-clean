@@ -985,7 +985,7 @@ class SettingsDialog:
                 }
             }
             
-            with open(settings_file, 'w') as f:
+            with open(settings_file, 'w', encoding='utf-8') as f:
                 json.dump(settings_data, f, indent=2)
                 
             print(f"Settings saved to {settings_file}")
@@ -1226,7 +1226,7 @@ class ServerGUI:
         try:
             settings_file = "server_gui_settings.json"
             if os.path.exists(settings_file):
-                with open(settings_file, 'r') as f:
+                with open(settings_file, 'r', encoding='utf-8') as f:
                     settings_data = json.load(f)
                 
                 # Merge loaded settings with defaults to ensure all keys exist
@@ -1267,7 +1267,7 @@ class ServerGUI:
                 }
             }
             
-            with open(settings_file, 'w') as f:
+            with open(settings_file, 'w', encoding='utf-8') as f:
                 json.dump(settings_data, f, indent=2)
                 
             print(f"Current settings saved to {settings_file}")

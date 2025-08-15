@@ -313,7 +313,7 @@ class DatabaseMonitor:
     def log_maintenance(self, results: MaintenanceReport) -> None: 
         """Log maintenance results to file."""
         try:
-            with open(self.maintenance_log, 'a') as f:
+            with open(self.maintenance_log, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(results) + '\n')
         except Exception as e:
             logger.error(f"Failed to log maintenance results: {e}")
@@ -382,7 +382,7 @@ class DatabaseMonitor:
             
             # Save report
             report_filename = f"weekly_report_{datetime.now().strftime('%Y%m%d')}.json"
-            with open(report_filename, 'w') as f:
+            with open(report_filename, 'w', encoding='utf-8') as f:
                 json.dump(report, f, indent=2)
             
             logger.info(f"Weekly report saved: {report_filename}")

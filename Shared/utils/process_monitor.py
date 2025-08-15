@@ -120,6 +120,7 @@ class ProcessRegistry:
                     'stdout': subprocess.PIPE,
                     'stderr': subprocess.PIPE,
                     'text': True,
+                    'encoding': 'utf-8',
                     'cwd': process_info.cwd
                 }
                 default_kwargs.update(popen_kwargs)

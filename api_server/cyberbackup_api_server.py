@@ -28,7 +28,10 @@ Note: Other API server files have been archived to eliminate duplicates.
 See API_SERVER_UNIFICATION.md for details.
 """
 
+# AUTOMATIC UTF-8: sitecustomize.py provides automatic UTF-8 support
+# No imports needed - UTF-8 works automatically for ALL scripts!
 import os
+import sys
 import time
 import threading
 import tempfile
@@ -37,6 +40,8 @@ import hashlib
 import contextlib
 from datetime import datetime
 from typing import Optional, Set, Dict, Any, Callable, cast
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 # Third-party imports
 from flask import Flask, request, jsonify, g, Response, send_file, send_from_directory, session

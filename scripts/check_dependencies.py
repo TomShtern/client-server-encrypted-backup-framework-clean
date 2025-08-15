@@ -60,7 +60,7 @@ def check_cpp_deps():
     
     # Check CMake
     try:
-        result = subprocess.run(['cmake', '--version'], capture_output=True, text=True, timeout=10)
+        result = subprocess.run(['cmake', '--version'], capture_output=True, text=True, encoding='utf-8', timeout=10)
         if result.returncode == 0:
             version_line = result.stdout.split('\n')[0]
             print(f"✓ CMake - {version_line}")
@@ -76,7 +76,7 @@ def check_cpp_deps():
             print("✓ vcpkg.exe - Found in project")
             
             # Check vcpkg list
-            result = subprocess.run([str(vcpkg_path), 'list'], capture_output=True, text=True, timeout=30)
+            result = subprocess.run([str(vcpkg_path), 'list'], capture_output=True, text=True, encoding='utf-8', timeout=30)
             if result.returncode == 0:
                 required_libs = ['boost-asio', 'boost-beast', 'cryptopp', 'zlib']
                 installed_libs = result.stdout.lower()
@@ -128,7 +128,7 @@ def check_visual_studio():
     
     # Check for cl.exe (MSVC compiler)
     try:
-        result = subprocess.run(['where', 'cl'], capture_output=True, text=True, shell=True, timeout=10)
+        result = subprocess.run(['where', 'cl'], capture_output=True, text=True, encoding='utf-8', shell=True, timeout=10)
         if result.returncode == 0:
             print("✓ MSVC Compiler (cl.exe) - Found")
             print(f"  Path: {result.stdout.strip()}")
@@ -139,7 +139,7 @@ def check_visual_studio():
     
     # Check for MSBuild
     try:
-        result = subprocess.run(['where', 'msbuild'], capture_output=True, text=True, shell=True, timeout=10)
+        result = subprocess.run(['where', 'msbuild'], capture_output=True, text=True, encoding='utf-8', shell=True, timeout=10)
         if result.returncode == 0:
             print("✓ MSBuild - Found")
         else:

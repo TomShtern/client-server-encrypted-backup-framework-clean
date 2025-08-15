@@ -80,7 +80,7 @@ def install_dependencies():
     try:
         result = subprocess.run([
             sys.executable, "-m", "pip", "install", "-r", "requirements.txt"
-        ], check=False, capture_output=True, text=True)
+        ], check=False, capture_output=True, text=True, encoding='utf-8')
         
         if result.returncode == 0:
             print("✅ Dependencies installed successfully")
@@ -104,7 +104,7 @@ def test_server_startup():
         result = subprocess.run([
             sys.executable, "-c", 
             "import sys; sys.path.insert(0, '.'); from python_server.server.server import main; print('Backup server imports OK')"
-        ], capture_output=True, text=True, timeout=10, env=env, cwd=project_root)
+        ], capture_output=True, text=True, encoding='utf-8', timeout=10, env=env, cwd=project_root)
         
         if result.returncode == 0:
             print("✅ Backup server imports: SUCCESS")
@@ -119,7 +119,7 @@ def test_server_startup():
         result = subprocess.run([
             sys.executable, "-c",
             "import sys; sys.path.insert(0, '.'); from api_server.cyberbackup_api_server import app; print('API server imports OK')"
-        ], capture_output=True, text=True, timeout=10, env=env, cwd=project_root)
+        ], capture_output=True, text=True, encoding='utf-8', timeout=10, env=env, cwd=project_root)
         
         if result.returncode == 0:
             print("✅ API server imports: SUCCESS") 

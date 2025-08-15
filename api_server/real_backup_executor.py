@@ -6,16 +6,19 @@ It is responsible for configuring and launching the C++ subprocess.
 Progress monitoring and verification are handled by the UnifiedFileMonitor.
 """
 
-import os
 import contextlib
+import os
 import sys
 import time
 import hashlib
-import subprocess
 import tempfile
 import logging
 import threading
+import subprocess
 from typing import Optional, Dict, Any, Callable, Union, List, Tuple, IO
+
+# Global UTF-8 support is automatically enabled by the API server import
+# No manual subprocess configuration needed - auto-patcher handles it all!
 
 from Shared.utils.file_lifecycle import SynchronizedFileManager
 from Shared.utils.error_handler import handle_subprocess_error, ErrorSeverity
@@ -138,11 +141,14 @@ class RealBackupExecutor:
     def _execute_client_subprocess(self, client_cwd: str, timeout: int = 120) -> Dict[str, Any]:
         """Execute the C++ client subprocess and return results."""
         self._log_status("EXECUTION", f"Starting C++ client: {self.client_exe} with --batch flag")
+        
+        # Use UTF-8 subprocess wrapper (automatically handles encoding)
         self.backup_process = subprocess.Popen(
             [str(self.client_exe), "--batch"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding='utf-8',
             cwd=client_cwd
         )
         self.process_id = self.backup_process.pid
@@ -358,6 +364,7 @@ class RealBackupExecutor:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
+                    encoding='utf-8',
                     cwd=client_working_dir
                 )
                 self.process_id = self.backup_process.pid

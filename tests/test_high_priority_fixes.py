@@ -50,6 +50,7 @@ def test_enhanced_buffer_management():
                 cwd="build/Release",
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
                 timeout=30
             )
             
@@ -99,6 +100,7 @@ def test_streaming_mode():
             cwd="build/Release",
             capture_output=True,
             text=True,
+            encoding='utf-8',
             timeout=60
         )
         
@@ -147,6 +149,7 @@ def test_error_recovery():
             cwd="build/Release",
             capture_output=True,
             text=True,
+            encoding='utf-8',
             timeout=45
         )
         
