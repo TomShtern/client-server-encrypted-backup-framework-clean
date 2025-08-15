@@ -13,6 +13,23 @@ from typing import Dict, Optional, Any
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 import Shared.utils.utf8_solution  # 🚀 UTF-8 support enabled automatically
 
+# Setup standardized import paths BEFORE importing any other Shared modules
+from Shared.path_utils import setup_imports
+setup_imports()
+
+# Now import ALL Shared modules after path setup - consolidate all imports here
+from Shared.logging_utils import setup_dual_logging, create_log_monitor_info, create_enhanced_logger
+from Shared.observability import get_metrics_collector, get_system_monitor
+
+# Try to import Sentry config - handle gracefully if not available
+try:
+    from Shared.sentry_config import init_sentry
+    sentry_available = True
+except ImportError:
+    sentry_available = False
+    def init_sentry(*args, **kwargs) -> bool:
+        return False
+
 # Import singleton manager
 from .server_singleton import ensure_single_server_instance
 
@@ -32,9 +49,6 @@ from .request_handlers import RequestHandler
 
 # Import network server module
 from .network_server import NetworkServer
-
-# Import canonical shared utilities
-# from Shared.crc import calculate_crc32  # Unused currently
 
 # GUI Integration
 from .gui_integration import GUIManager
@@ -62,14 +76,11 @@ RSA_PUBLIC_KEY_SIZE = 160 # Bytes, X.509 format (for 1024-bit RSA - per protocol
 AES_KEY_SIZE_BYTES = 32 # 256-bit AES
 
 # Enhanced Logging Configuration with dual output
-# Setup standardized import paths
-from Shared.path_utils import setup_imports
-setup_imports()
-from Shared.logging_utils import setup_dual_logging, create_log_monitor_info
-
 # Initialize Sentry error tracking for backup server
-from Shared.sentry_config import init_sentry
-sentry_initialized = init_sentry("backup-server", traces_sample_rate=0.1)
+if sentry_available:
+    sentry_initialized = init_sentry("backup-server", traces_sample_rate=0.1)
+else:
+    sentry_initialized = False
 
 # Set up enhanced dual logging with observability features
 logger, backup_log_file = setup_dual_logging(
@@ -81,8 +92,6 @@ logger, backup_log_file = setup_dual_logging(
 )
 
 # Setup structured logging for backup server
-from Shared.logging_utils import create_enhanced_logger
-from Shared.observability import get_metrics_collector, get_system_monitor
 structured_logger = create_enhanced_logger("backup-server", logger)
 metrics_collector = get_metrics_collector()
 system_monitor = get_system_monitor()

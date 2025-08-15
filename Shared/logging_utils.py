@@ -1,66 +1,15 @@
 #!/usr/bin/env python3
 """
-Enhanced Shared logging utilities for CyberBackup 3.0
-Provides dual output (console + file) with live monitoring capabilities
-Enhanced with structured logging and observability features
+Logging Utilities for Client-Server Encrypted Backup Framework
+Provides standardized logging setup, dual output, and enhanced logging capabilities.
 """
 
+import logging
 import os
 import sys
-import logging
+from typing import Tuple, Optional, Dict, Any, Union
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List
-from .observability import create_structured_logger, get_metrics_collector, get_system_monitor
-
-
-def setup_dual_logging_simple(logger_name: str, server_type: str, 
-                             console_level: int = logging.INFO,
-                             file_level: int = logging.DEBUG) -> tuple[logging.Logger, str]:
-    """
-    Simplified dual logging setup using separate handlers (no custom TeeHandler).
-    This approach is more reliable and avoids potential circular logging issues.
-    """
-    
-    # Generate timestamped log filename
-    timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')
-    log_filename = f"{server_type}-{timestamp}.log"
-    log_file_path = os.path.join("logs", log_filename)
-    
-    # Ensure logs directory exists
-    Path("logs").mkdir(exist_ok=True)
-    
-    # Create logger
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.DEBUG)  # Set to lowest level
-    
-    # Clear any existing handlers
-    logger.handlers.clear()
-    
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(console_level)
-    console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', 
-                                         datefmt='%H:%M:%S')
-    console_handler.setFormatter(console_formatter)
-    logger.addHandler(console_handler)
-    
-    # File handler  
-    file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
-    file_handler.setLevel(file_level)
-    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(threadName)s - %(levelname)s - %(message)s',
-                                      datefmt='%Y-%m-%d %H:%M:%S')
-    file_handler.setFormatter(file_formatter)
-    logger.addHandler(file_handler)
-    
-    # Log initialization message
-    logger.info(f"=== {server_type.upper().replace('-', ' ')} LOGGING INITIALIZED ===")
-    logger.info(f"Console Level: {logging.getLevelName(console_level)}")
-    logger.info(f"File Level: {logging.getLevelName(file_level)}")
-    logger.info(f"Log File: {log_file_path}")
-    logger.info("=" * 60)
-    
-    return logger, log_file_path
 
 
 def setup_dual_logging(
@@ -68,162 +17,274 @@ def setup_dual_logging(
     server_type: str,
     console_level: int = logging.INFO,
     file_level: int = logging.DEBUG,
-    console_format: Optional[str] = None,
-    include_timestamp: bool = True
-) -> tuple[logging.Logger, str]:
+    console_format: str = '%(asctime)s - %(threadName)s - %(levelname)s - %(message)s',
+    file_format: Optional[str] = None,
+    log_dir: str = "logs"
+) -> Tuple[logging.Logger, str]:
     """
-    Set up enhanced dual logging (console + file) with observability features.
-    Uses the simplified approach with separate handlers for reliability.
+    Set up dual logging: console and file output with different levels.
+    
+    Args:
+        logger_name: Name for the logger
+        server_type: Type of server (e.g., "backup-server", "api-server")
+        console_level: Logging level for console output
+        file_level: Logging level for file output
+        console_format: Format string for console messages
+        file_format: Format string for file messages (defaults to console_format)
+        log_dir: Directory to store log files
+        
+    Returns:
+        Tuple of (logger, log_file_path)
     """
-
-    # Parameters console_format and include_timestamp are preserved for API compatibility
-    _ = console_format, include_timestamp
-
-    # Use the simplified approach
-    logger, log_file_path = setup_dual_logging_simple(logger_name, server_type, console_level, file_level)
-
-    # Add live monitoring info
-    logger.info(f"Live Monitoring: Get-Content {log_file_path} -Wait -Tail 50")
-
-    # Initialize observability features
-    try:
-        # Start system monitoring for this component
-        system_monitor = get_system_monitor()
-        if not system_monitor.running:
-            system_monitor.start()
-            logger.info("System monitoring started")
-
-        # Record component initialization metric
-        metrics = get_metrics_collector()
-        metrics.record_counter(f"component.{server_type}.initialized", tags={"component": server_type})
-
-        logger.info(f"Enhanced logging initialized for {server_type} with observability features")
-
-    except Exception as e:
-        # Don't fail if observability setup fails
-        logger.warning(f"Failed to initialize observability features: {e}")
-
+    if file_format is None:
+        file_format = console_format
+        
+    # Create logger
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.DEBUG)  # Set to lowest level, handlers will filter
+    
+    # Clear any existing handlers to avoid duplicates
+    logger.handlers.clear()
+    
+    # Create log directory if it doesn't exist
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Generate log file name with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_filename = f"{server_type}_{timestamp}.log"
+    log_file_path = os.path.join(log_dir, log_filename)
+    
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(console_level)
+    console_formatter = logging.Formatter(console_format)
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+    
+    # File handler
+    file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
+    file_handler.setLevel(file_level)
+    file_formatter = logging.Formatter(file_format)
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)
+    
+    # Log the startup message
+    logger.info(f"Dual logging initialized for {server_type}")
+    logger.info(f"Console level: {logging.getLevelName(console_level)}, File level: {logging.getLevelName(file_level)}")
+    logger.info(f"Log file: {log_file_path}")
+    
     return logger, log_file_path
 
 
-def create_log_monitor_info(log_file_path: str, server_type: str) -> Dict[str, Any]:
+def create_log_monitor_info(server_type: str, log_file_path: str) -> Dict[str, Any]:
     """
-    Create monitoring information for a log file.
+    Create monitoring information for log files.
     
     Args:
+        server_type: Type of server
         log_file_path: Path to the log file
-        server_type: Type of server for display
-    
+        
     Returns:
-        Dictionary with monitoring commands and info
+        Dictionary with monitoring information
     """
-    
-    abs_path = os.path.abspath(log_file_path)
-    
     return {
-        'file_path': abs_path,
-        'server_type': server_type,
-        'powershell_cmd': f'Get-Content "{abs_path}" -Wait -Tail 50',
-        'python_cmd': f'python scripts/monitor_logs.py --file="{abs_path}" --follow',
-        'size_bytes': os.path.getsize(abs_path) if os.path.exists(abs_path) else 0,
-        'exists': os.path.exists(abs_path)
+        "server_type": server_type,
+        "log_file": log_file_path,
+        "created_at": datetime.now().isoformat(),
+        "monitor_commands": {
+            "tail_logs": f"tail -f {log_file_path}",
+            "grep_errors": f"grep -i error {log_file_path}",
+            "grep_warnings": f"grep -i warn {log_file_path}"
+        }
     }
 
 
-def get_all_log_files() -> List[Dict[str, Any]]:
-    """Get information about all current log files"""
-    logs_dir = Path("logs")
-    if not logs_dir.exists():
-        return []
+class EnhancedLogger:
+    """
+    Enhanced logger wrapper that provides structured logging capabilities.
+    """
     
-    log_files: List[Dict[str, Any]] = []
-    for log_file in logs_dir.glob("*.log"):
-        if log_file.name.startswith("latest-"):
-            continue  # Skip latest symlinks
-            
-        # Determine server type from filename
-        if "api-server" in log_file.name:
-            server_type = "API Server"
-        elif "backup-server" in log_file.name:
-            server_type = "Backup Server"
-        else:
-            server_type = "Unknown"
+    def __init__(self, component: str, base_logger: logging.Logger):
+        self.component = component
+        self.base_logger = base_logger
+        self._context: Dict[str, Any] = {}
+    
+    def set_context(self, **kwargs: Any) -> None:
+        """Set context variables for this logger."""
+        self._context.update(kwargs)
+    
+    def clear_context(self) -> None:
+        """Clear all context variables."""
+        self._context.clear()
+    
+    def _log_structured(self, level: int, message: str, **kwargs: Any) -> None:
+        """Log a structured message with context."""
+        context = self._context.copy()
+        context.update(kwargs)
         
-        log_files.append({
-            'path': str(log_file),
-            'name': log_file.name,
-            'server_type': server_type,
-            'size': log_file.stat().st_size,
-            'modified': datetime.fromtimestamp(log_file.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
-        })
+        # Log as human-readable for console with context information
+        structured_msg = f"[{self.component}] {message}"
+        if context:
+            structured_msg += f" | Context: {context}"
+            
+        self.base_logger.log(level, structured_msg)
     
-    # Sort by modification time (newest first)
-    log_files.sort(key=lambda x: x['modified'], reverse=True)
-    return log_files
+    def debug(self, message: str, **kwargs: Any) -> None:
+        """Log debug message with context."""
+        self._log_structured(logging.DEBUG, message, **kwargs)
+    
+    def info(self, message: str, **kwargs: Any) -> None:
+        """Log info message with context."""
+        self._log_structured(logging.INFO, message, **kwargs)
+    
+    def warning(self, message: str, **kwargs: Any) -> None:
+        """Log warning message with context."""
+        self._log_structured(logging.WARNING, message, **kwargs)
+    
+    def error(self, message: str, **kwargs: Any) -> None:
+        """Log error message with context."""
+        self._log_structured(logging.ERROR, message, **kwargs)
+    
+    def critical(self, message: str, **kwargs: Any) -> None:
+        """Log critical message with context."""
+        self._log_structured(logging.CRITICAL, message, **kwargs)
 
 
-def create_enhanced_logger(component: str, base_logger: logging.Logger) -> Any:
-    """Create an enhanced structured logger with observability features"""
-    return create_structured_logger(component, base_logger)
+def create_enhanced_logger(component: str, base_logger: logging.Logger) -> EnhancedLogger:
+    """
+    Create an enhanced logger with structured logging capabilities.
+    
+    Args:
+        component: Component name for logging context
+        base_logger: Base Python logger to wrap
+        
+    Returns:
+        Enhanced logger instance
+    """
+    return EnhancedLogger(component, base_logger)
 
 
-def log_performance_metrics(logger: logging.Logger, operation: str, duration_ms: float,
-                          success: bool = True, **context: Any) -> None:
-    """Log performance metrics in a structured way"""
-    metrics = get_metrics_collector()
-
-    # Record timing metric
-    metrics.record_timer(f"operation.{operation}.duration", duration_ms,
-                        tags={"success": str(success)})
-
-    # Record success/failure counter
-    if success:
-        metrics.record_counter(f"operation.{operation}.success")
-    else:
-        metrics.record_counter(f"operation.{operation}.failure")
-
-    # Log structured entry
-    log_data = {
+def log_performance_metrics(logger: logging.Logger, operation: str, duration_ms: float, success: bool = True, **kwargs: Any) -> None:
+    """
+    Log performance metrics for operations.
+    
+    Args:
+        logger: Logger to use
+        operation: Operation name
+        duration_ms: Duration in milliseconds
+        success: Whether the operation was successful
+        **kwargs: Additional context
+    """
+    context: Dict[str, Any] = kwargs.copy()
+    context.update({
         "operation": operation,
         "duration_ms": duration_ms,
         "success": success,
-        **context
-    }
+        "performance_metric": True
+    })
+    
+    status = "completed" if success else "failed"
+    logger.info(f"Performance: {operation} {status} in {duration_ms:.2f}ms", extra=context)
 
-    if success:
-        logger.info(f"Operation {operation} completed in {duration_ms:.2f}ms", extra=log_data)
-    else:
-        logger.warning(f"Operation {operation} failed after {duration_ms:.2f}ms", extra=log_data)
+
+def get_logger(name: str) -> logging.Logger:
+    """
+    Get a logger with standard configuration.
+    
+    Args:
+        name: Logger name
+        
+    Returns:
+        Configured logger
+    """
+    return logging.getLogger(name)
+
+
+def configure_root_logger(level: int = logging.INFO):
+    """
+    Configure the root logger with basic settings.
+    
+    Args:
+        level: Logging level
+    """
+    logging.basicConfig(
+        level=level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
+
+# Convenience functions for quick setup
+def quick_console_logger(name: str, level: int = logging.INFO) -> logging.Logger:
+    """
+    Quickly create a console-only logger.
+    
+    Args:
+        name: Logger name
+        level: Logging level
+        
+    Returns:
+        Console logger
+    """
+    logger = logging.getLogger(name)
+    if not logger.handlers:  # Only add handler if none exist
+        handler = logging.StreamHandler(sys.stdout)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        handler.setLevel(level)
+        logger.addHandler(handler)
+        logger.setLevel(level)
+    return logger
+
+
+def quick_file_logger(name: str, filename: str, level: int = logging.DEBUG) -> logging.Logger:
+    """
+    Quickly create a file-only logger.
+    
+    Args:
+        name: Logger name
+        filename: Log file name
+        level: Logging level
+        
+    Returns:
+        File logger
+    """
+    logger = logging.getLogger(name)
+    if not logger.handlers:  # Only add handler if none exist
+        handler = logging.FileHandler(filename, mode='a', encoding='utf-8')
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        handler.setLevel(level)
+        logger.addHandler(handler)
+        logger.setLevel(level)
+    return logger
 
 
 if __name__ == "__main__":
-    # Test the enhanced dual logging setup
-    print("Testing enhanced dual logging setup...")
-
-    logger, log_path = setup_dual_logging("test_logger", "test-server")
-
-    # Test basic logging
-    logger.debug("This is a debug message")
-    logger.info("This is an info message")
-    logger.warning("This is a warning message")
-    logger.error("This is an error message")
-
-    # Test structured logging
-    structured_logger = create_enhanced_logger("test-component", logger)
-    structured_logger.info("Structured log test", context={"test_id": 123, "user": "test_user"})
-
+    # Test the logging utilities
+    print("Testing logging utilities...")
+    
+    # Test dual logging setup
+    logger, log_file = setup_dual_logging(
+        logger_name="test_logger",
+        server_type="test-server",
+        console_level=logging.INFO,
+        file_level=logging.DEBUG
+    )
+    
+    # Test enhanced logger
+    enhanced = create_enhanced_logger("test-component", logger)
+    enhanced.set_context(user_id="test_user", session_id="test_session")
+    
+    # Test logging
+    logger.info("Standard logger test message")
+    enhanced.info("Enhanced logger test message")
+    enhanced.error("Test error message", error_code="TEST_001")
+    
     # Test performance logging
-    log_performance_metrics(logger, "test_operation", 150.5, True, file_size=1024)
-
-    print(f"\nLog file created at: {log_path}")
-
-    # Display monitoring info
-    monitor_info = create_log_monitor_info(log_path, "Test Server")
-    print(f"PowerShell live monitoring: {monitor_info['powershell_cmd']}")
-
-    # Display metrics summary
-    metrics = get_metrics_collector()
-    summaries = metrics.get_all_summaries()
-    print(f"\nMetrics collected: {len(summaries)} metric types")
-    for name, summary in summaries.items():
-        print(f"  {name}: {summary.get('count', 0)} samples")
+    log_performance_metrics(logger, "test_operation", 123.45, status="success")
+    
+    print("Logging utilities test completed!")
+    print(f"Log file created: {log_file}")
