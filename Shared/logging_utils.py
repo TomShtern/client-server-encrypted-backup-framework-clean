@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Logging Utilities for Client-Server Encrypted Backup Framework
-Provides standardized logging setup, dual output, and enhanced logging capabilities.
+Provides standardized logging setup, dual output, and enhanced logging capabilities
+with emoji and color support integration.
 """
 
 import logging
@@ -11,6 +12,21 @@ from typing import Tuple, Optional, Dict, Any, Union
 from datetime import datetime
 from pathlib import Path
 
+# Try to import enhanced output for emoji/color support
+try:
+    from .utils.enhanced_output import enhance_existing_logger, Emojis
+    ENHANCED_OUTPUT_AVAILABLE = True
+except ImportError:
+    ENHANCED_OUTPUT_AVAILABLE = False
+    # Fallback emoji definitions if enhanced output is not available
+    class Emojis:
+        SUCCESS = "✅"
+        ERROR = "❌"
+        WARNING = "⚠️"
+        INFO = "ℹ️"
+        ROCKET = "🚀"
+        GEAR = "⚙️"
+
 
 def setup_dual_logging(
     logger_name: str,
@@ -19,10 +35,12 @@ def setup_dual_logging(
     file_level: int = logging.DEBUG,
     console_format: str = '%(asctime)s - %(threadName)s - %(levelname)s - %(message)s',
     file_format: Optional[str] = None,
-    log_dir: str = "logs"
+    log_dir: str = "logs",
+    enable_enhanced_output: bool = True
 ) -> Tuple[logging.Logger, str]:
     """
     Set up dual logging: console and file output with different levels.
+    Now with enhanced emoji and color support!
     
     Args:
         logger_name: Name for the logger
@@ -32,6 +50,7 @@ def setup_dual_logging(
         console_format: Format string for console messages
         file_format: Format string for file messages (defaults to console_format)
         log_dir: Directory to store log files
+        enable_enhanced_output: Enable emoji and color output (default: True)
         
     Returns:
         Tuple of (logger, log_file_path)
@@ -54,12 +73,20 @@ def setup_dual_logging(
     log_filename = f"{server_type}_{timestamp}.log"
     log_file_path = os.path.join(log_dir, log_filename)
     
-    # Console handler
+    # Console handler with enhanced output support
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(console_level)
     console_formatter = logging.Formatter(console_format)
     console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
+    
+    # Enhance logger with emoji and color support if available and enabled
+    if enable_enhanced_output and ENHANCED_OUTPUT_AVAILABLE:
+        try:
+            logger = enhance_existing_logger(logger, use_colors=True, use_emojis=True)
+        except Exception:
+            # Fallback to standard logging if enhancement fails
+            pass
     
     # File handler
     file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
@@ -68,10 +95,18 @@ def setup_dual_logging(
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
     
-    # Log the startup message
-    logger.info(f"Dual logging initialized for {server_type}")
-    logger.info(f"Console level: {logging.getLevelName(console_level)}, File level: {logging.getLevelName(file_level)}")
-    logger.info(f"Log file: {log_file_path}")
+    # Enhanced startup messages with emojis and formatting
+    startup_messages = [
+        f"=== {server_type.upper()} LOGGING INITIALIZED ===",
+        f"Console Level: {logging.getLevelName(console_level)}",
+        f"File Level: {logging.getLevelName(file_level)}",  
+        f"Log File: {log_file_path}",
+        "=" * 60,
+        f"Live Monitoring: Get-Content {log_file_path} -Wait -Tail 50"
+    ]
+    
+    for msg in startup_messages:
+        logger.info(msg)
     
     return logger, log_file_path
 
@@ -184,7 +219,7 @@ def log_performance_metrics(logger: logging.Logger, operation: str, duration_ms:
     })
     
     status = "completed" if success else "failed"
-    logger.info(f"Performance: {operation} {status} in {duration_ms:.2f}ms", extra=context)
+    logger.info(f"⚡ Performance: {operation} {status} in {duration_ms:.2f}ms", extra=context)
 
 
 def get_logger(name: str) -> logging.Logger:

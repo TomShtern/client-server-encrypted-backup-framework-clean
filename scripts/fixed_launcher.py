@@ -30,6 +30,7 @@ from pathlib import Path
 # Enable global UTF-8 support automatically (replaces all manual UTF-8 setup)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import Shared.utils.utf8_solution  # 🚀 That's it! Global UTF-8 enabled automatically
+from Shared.utils.utf8_solution import Popen_utf8, run_utf8
 
 # Change to project root
 project_root = Path(__file__).parent.parent
@@ -60,13 +61,13 @@ def check_port(host: str, port: int, timeout: int = 2):
 
 def wait_for_port(host: str, port: int, max_wait: int = 30, check_interval: int = 1):
     """Wait for a port to become available"""
-    logger.info(f"Waiting for {host}:{port} to become available...")
+    logger.info(f"🌐 Waiting for {host}:{port} to become available...")
     for attempt in range(max_wait):
         if check_port(host, port):
-            logger.info(f"Port {port} is ready after {attempt + 1} seconds")
+            logger.info(f"✅ Port {port} is ready after {attempt + 1} seconds")
             return True
-        time.sleep(check_interval)
-    logger.error(f"Port {port} failed to become available within {max_wait} seconds")
+        time.sleep(1)
+    logger.error(f"❌ Port {port} failed to become available within {max_wait} seconds")
     return False
 
 def kill_existing_processes():
@@ -74,8 +75,8 @@ def kill_existing_processes():
     logger.info("Cleaning up existing processes...")
     try:
         # Kill Python processes that might be running our servers
-        subprocess.run("taskkill /F /IM python.exe /FI \"WINDOWTITLE eq *server*\" 2>NUL", shell=True, capture_output=True)
-        subprocess.run("taskkill /F /IM EncryptedBackupClient.exe 2>NUL", shell=True, capture_output=True)
+        run_utf8("taskkill /F /IM python.exe /FI \"WINDOWTITLE eq *server*\" 2>NUL", shell=True, capture_output=True)
+        run_utf8("taskkill /F /IM EncryptedBackupClient.exe 2>NUL", shell=True, capture_output=True)
         time.sleep(2)  # Give processes time to die
     except Exception as e:
         logger.warning(f"Error during cleanup: {e}")
@@ -95,10 +96,9 @@ def start_backup_server():
     env['PYTHONPATH'] = str(project_root)  # Ensure Python can find modules
     
     try:
-        # Start server with direct file path (not module import)
-        process = subprocess.Popen(
+        # Start server with direct file path (not module import) using UTF-8 support
+        process = Popen_utf8(
             [sys.executable, str(server_script)],
-            env=env,
             creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0,
             cwd=project_root
         )
@@ -134,10 +134,9 @@ def start_api_server():
     env['PYTHONPATH'] = str(project_root)  # Ensure Python can find modules
     
     try:
-        # Start API server with direct file path
-        process = subprocess.Popen(
+        # Start API server with direct file path using UTF-8 support
+        process = Popen_utf8(
             [sys.executable, str(api_script)],
-            env=env,
             creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0,
             cwd=project_root
         )
@@ -195,15 +194,13 @@ def test_file_transfer():
         
         logger.info(f"Found C++ client: {client_exe}")
         
-        # Test if we can at least run the client
+        # Test if we can at least run the client with UTF-8 support
         try:
-            result = subprocess.run(
+            result = run_utf8(
                 [str(client_exe), "--batch"],  # CRITICAL: Use --batch flag
                 cwd=project_root,
                 timeout=10,
-                capture_output=True,
-                text=True,
-                encoding='utf-8'
+                capture_output=True
             )
             logger.info(f"C++ client test completed with exit code: {result.returncode}")
             

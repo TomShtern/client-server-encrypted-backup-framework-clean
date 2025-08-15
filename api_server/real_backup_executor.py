@@ -17,14 +17,20 @@ import threading
 import subprocess
 from typing import Optional, Dict, Any, Callable, Union, List, Tuple, IO
 
-# Global UTF-8 support is automatically enabled by the API server import
-# No manual subprocess configuration needed - auto-patcher handles it all!
+# UTF-8 support for subprocess operations with C++ client
+import Shared.utils.utf8_solution  # 🚀 UTF-8 support enabled automatically
+from Shared.utils.utf8_solution import Popen_utf8
+
+# Enhanced output with emojis and colors
+from Shared.utils.enhanced_output import EmojiLogger, Emojis, success_print, error_print, warning_print
 
 from Shared.utils.file_lifecycle import SynchronizedFileManager
 from Shared.utils.error_handler import handle_subprocess_error, ErrorSeverity
 from Shared.unified_monitor import UnifiedFileMonitor
 
 logger = logging.getLogger(__name__)
+# Create enhanced logger for better visual feedback
+enhanced_logger = EmojiLogger.get_logger("backup-executor")
 
 class RealBackupExecutor:
     """
@@ -92,8 +98,59 @@ class RealBackupExecutor:
         self.status_callback = callback
 
     def _log_status(self, phase: str, message: str):
-        """Log status updates via callback"""
-        logger.info(f"[{phase}] {message}")
+        """Log status updates via callback with enhanced emojis and colors"""
+        # Enhanced emoji mapping with more granular operations
+        emoji_map = {
+            # Execution phases
+            'EXECUTION': Emojis.ROCKET,
+            'LAUNCH': Emojis.LOADING, 
+            'PROCESS': Emojis.GEAR,
+            'START': Emojis.ROCKET,
+            
+            # Completion states
+            'COMPLETION': Emojis.SUCCESS,
+            'MONITOR_COMPLETE': Emojis.TARGET,
+            'COMPLETE': Emojis.COMPLETE,
+            
+            # Error states
+            'MONITOR_FAILURE': Emojis.ERROR,
+            'ERROR': Emojis.ERROR,
+            'TIMEOUT': Emojis.WARNING,
+            'FORCE_KILL': Emojis.ERROR,
+            
+            # Management operations
+            'CANCEL': Emojis.WARNING,
+            'CLEANUP': Emojis.WRENCH,
+            'VERIFICATION': Emojis.DEBUG,
+            
+            # Configuration & setup
+            'CONFIG': Emojis.GEAR,
+            'AUTH': Emojis.LOCK,
+            'TIMEOUT_CALC': Emojis.CLOCK,
+            
+            # File operations
+            'FILE_COPY': Emojis.FILE,
+            'FILE_CREATE': Emojis.DOCUMENT,
+            
+            # Default
+            'DEFAULT': Emojis.INFO
+        }
+        
+        emoji = emoji_map.get(phase, emoji_map['DEFAULT'])
+        
+        # Use enhanced logger for better visual feedback
+        if phase in ['ERROR', 'MONITOR_FAILURE', 'FORCE_KILL']:
+            enhanced_logger.error(f"[{phase}] {message}")
+        elif phase in ['WARNING', 'TIMEOUT', 'CANCEL']:
+            enhanced_logger.warning(f"[{phase}] {message}")
+        elif phase in ['COMPLETION', 'MONITOR_COMPLETE', 'COMPLETE']:
+            enhanced_logger.success(f"[{phase}] {message}")
+        else:
+            enhanced_logger.info(f"[{phase}] {message}")
+        
+        # Also log to original logger for compatibility
+        logger.info(f"{emoji} [{phase}] {message}")
+        
         if self.status_callback:
             self.status_callback(phase, {'message': message})
     
@@ -142,13 +199,11 @@ class RealBackupExecutor:
         """Execute the C++ client subprocess and return results."""
         self._log_status("EXECUTION", f"Starting C++ client: {self.client_exe} with --batch flag")
         
-        # Use UTF-8 subprocess wrapper (automatically handles encoding)
-        self.backup_process = subprocess.Popen(
+        # Use UTF-8 subprocess with proper environment setup for C++ client
+        self.backup_process = Popen_utf8(
             [str(self.client_exe), "--batch"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
-            encoding='utf-8',
             cwd=client_cwd
         )
         self.process_id = self.backup_process.pid
@@ -158,9 +213,9 @@ class RealBackupExecutor:
 
         self._log_status("COMPLETION", f"C++ client finished with exit code: {return_code}")
         if stdout:
-            logger.debug(f"C++ Client STDOUT:\n{stdout}")
+            logger.debug(f"💬 C++ Client STDOUT:\n{stdout}")
         if stderr:
-            logger.warning(f"C++ Client STDERR:\n{stderr}")
+            logger.warning(f"⚠️ C++ Client STDERR:\n{stderr}")
 
         return {
             'return_code': return_code,
@@ -273,7 +328,7 @@ class RealBackupExecutor:
             self.cancel("Timeout")
             return {'success': False, 'error': 'Process timed out'}
         except Exception as e:
-            logger.critical(f"An unexpected error occurred during backup execution: {e}", exc_info=True)
+            logger.critical(f"🔥 An unexpected error occurred during backup execution: {e}", exc_info=True)
             return {'success': False, 'error': f"An unexpected error occurred: {e}"}
         finally:
             if file_id:
@@ -357,14 +412,12 @@ class RealBackupExecutor:
             command = [str(self.client_exe), '--batch']
             self._log_status('LAUNCH', f"Starting subprocess: {' '.join(command)}")
             try:
-                # Launch C++ client subprocess with --batch flag
-                self.backup_process = subprocess.Popen(
+                # Launch C++ client with UTF-8 environment and subprocess support
+                self.backup_process = Popen_utf8(
                     command,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    text=True,
-                    encoding='utf-8',
                     cwd=client_working_dir
                 )
                 self.process_id = self.backup_process.pid

@@ -1,0 +1,384 @@
+#!/usr/bin/env python3
+"""
+Enhanced Output System - Consistent Emojis and Colors for CyberBackup Framework
+
+Provides centralized emoji definitions and color-enhanced logging that integrates
+with the existing logging infrastructure. Safe fallbacks ensure compatibility.
+
+USAGE:
+    from Shared.utils.enhanced_output import EmojiLogger, Emojis, Colors
+    
+    # Enhanced logging with emojis and colors
+    logger = EmojiLogger.get_logger("my-component")
+    logger.success("Backup completed successfully")  # ✅ in green
+    logger.error("Connection failed")               # ❌ in red
+    logger.warning("Low disk space")                # ⚠️ in yellow
+    
+    # Direct emoji usage
+    print(f"{Emojis.FILE} Processing file: {filename}")
+    print(f"{Emojis.NETWORK} Connecting to server...")
+"""
+
+import os
+import sys
+import logging
+import platform
+from typing import Optional, Dict, Any, Union
+from enum import Enum
+
+# Try to detect terminal color support
+def _supports_color() -> bool:
+    """Detect if terminal supports ANSI color codes."""
+    try:
+        # Check environment variables
+        if os.getenv('NO_COLOR'):
+            return False
+        if os.getenv('FORCE_COLOR'):
+            return True
+            
+        # Check if we're in a terminal
+        if not hasattr(sys.stdout, 'isatty') or not sys.stdout.isatty():
+            return False
+            
+        # Windows 10+ supports ANSI colors
+        if platform.system() == 'Windows':
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            # Enable ANSI color support on Windows
+            kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+            return True
+            
+        # Most Unix terminals support colors
+        return True
+    except:
+        return False
+
+class Colors:
+    """ANSI color codes with safe fallbacks."""
+    
+    _SUPPORTS_COLOR = _supports_color()
+    
+    # ANSI Color Codes
+    RED = '\033[91m' if _SUPPORTS_COLOR else ''
+    GREEN = '\033[92m' if _SUPPORTS_COLOR else ''
+    YELLOW = '\033[93m' if _SUPPORTS_COLOR else ''
+    BLUE = '\033[94m' if _SUPPORTS_COLOR else ''
+    MAGENTA = '\033[95m' if _SUPPORTS_COLOR else ''
+    CYAN = '\033[96m' if _SUPPORTS_COLOR else ''
+    WHITE = '\033[97m' if _SUPPORTS_COLOR else ''
+    GRAY = '\033[90m' if _SUPPORTS_COLOR else ''
+    
+    # Background colors
+    BG_RED = '\033[101m' if _SUPPORTS_COLOR else ''
+    BG_GREEN = '\033[102m' if _SUPPORTS_COLOR else ''
+    BG_YELLOW = '\033[103m' if _SUPPORTS_COLOR else ''
+    BG_BLUE = '\033[104m' if _SUPPORTS_COLOR else ''
+    
+    # Text styles
+    BOLD = '\033[1m' if _SUPPORTS_COLOR else ''
+    DIM = '\033[2m' if _SUPPORTS_COLOR else ''
+    UNDERLINE = '\033[4m' if _SUPPORTS_COLOR else ''
+    
+    # Reset
+    RESET = '\033[0m' if _SUPPORTS_COLOR else ''
+    
+    @classmethod
+    def colorize(cls, text: str, color: str, bold: bool = False) -> str:
+        """Apply color and optional bold to text."""
+        if not cls._SUPPORTS_COLOR:
+            return text
+        
+        style = cls.BOLD if bold else ''
+        return f"{style}{color}{text}{cls.RESET}"
+    
+    @classmethod
+    def success(cls, text: str, bold: bool = False) -> str:
+        """Format text as success (green)."""
+        return cls.colorize(text, cls.GREEN, bold)
+    
+    @classmethod
+    def error(cls, text: str, bold: bool = True) -> str:
+        """Format text as error (red, bold by default)."""
+        return cls.colorize(text, cls.RED, bold)
+    
+    @classmethod
+    def warning(cls, text: str, bold: bool = False) -> str:
+        """Format text as warning (yellow)."""
+        return cls.colorize(text, cls.YELLOW, bold)
+    
+    @classmethod
+    def info(cls, text: str, bold: bool = False) -> str:
+        """Format text as info (blue)."""
+        return cls.colorize(text, cls.BLUE, bold)
+    
+    @classmethod
+    def debug(cls, text: str, bold: bool = False) -> str:
+        """Format text as debug (gray)."""
+        return cls.colorize(text, cls.GRAY, bold)
+
+class Emojis:
+    """Centralized emoji definitions for consistent usage across the project."""
+    
+    # Status Emojis
+    SUCCESS = "✅"
+    ERROR = "❌"
+    WARNING = "⚠️"
+    INFO = "ℹ️"
+    DEBUG = "🔍"
+    
+    # Operation Emojis
+    LOADING = "🔄"
+    ROCKET = "🚀"
+    GEAR = "⚙️"
+    WRENCH = "🔧"
+    HAMMER = "🔨"
+    
+    # File & Storage Emojis
+    FILE = "📁"
+    DOCUMENT = "📄"
+    SAVE = "💾"
+    UPLOAD = "📤"
+    DOWNLOAD = "📥"
+    BACKUP = "💿"
+    ARCHIVE = "🗄️"
+    
+    # Network & Communication Emojis
+    NETWORK = "🌐"
+    WIFI = "📶"
+    CONNECT = "🔗"
+    DISCONNECT = "⛓️‍💥"
+    SERVER = "🖥️"
+    DATABASE = "🗃️"
+    API = "🔌"
+    
+    # Security Emojis
+    LOCK = "🔒"
+    UNLOCK = "🔓"
+    KEY = "🔑"
+    SHIELD = "🛡️"
+    CRYPTO = "🔐"
+    
+    # Process & System Emojis
+    PROCESS = "⚡"
+    MEMORY = "🧠"
+    CPU = "🔥"
+    DISK = "💽"
+    MONITOR = "📊"
+    
+    # User Interface Emojis
+    BUTTON = "🔘"
+    MENU = "📋"
+    WINDOW = "🪟"
+    CURSOR = "👆"
+    
+    # Time & Progress Emojis
+    CLOCK = "🕐"
+    TIMER = "⏱️"
+    PROGRESS = "📈"
+    COMPLETE = "🏁"
+    
+    # Communication Emojis
+    MESSAGE = "💬"
+    MAIL = "📧"
+    NOTIFICATION = "🔔"
+    LOG = "📝"
+    
+    # Special Status Emojis
+    THUMBS_UP = "👍"
+    THUMBS_DOWN = "👎"
+    PARTY = "🎉"
+    TARGET = "🎯"
+    FIRE = "🔥"
+    STAR = "⭐"
+
+class LogLevel(Enum):
+    """Enhanced log levels with emoji and color mappings."""
+    
+    SUCCESS = ("SUCCESS", Emojis.SUCCESS, Colors.GREEN)
+    ERROR = ("ERROR", Emojis.ERROR, Colors.RED)
+    WARNING = ("WARNING", Emojis.WARNING, Colors.YELLOW)
+    INFO = ("INFO", Emojis.INFO, Colors.BLUE)
+    DEBUG = ("DEBUG", Emojis.DEBUG, Colors.GRAY)
+    
+    # Special operation levels
+    STARTUP = ("STARTUP", Emojis.ROCKET, Colors.CYAN)
+    SHUTDOWN = ("SHUTDOWN", Emojis.COMPLETE, Colors.MAGENTA)
+    NETWORK = ("NETWORK", Emojis.NETWORK, Colors.CYAN)
+    FILE_OP = ("FILE", Emojis.FILE, Colors.BLUE)
+    SECURITY = ("SECURITY", Emojis.LOCK, Colors.MAGENTA)
+    PERFORMANCE = ("PERF", Emojis.PROGRESS, Colors.GREEN)
+
+class EmojiFormatter(logging.Formatter):
+    """Custom formatter that adds emojis and colors to log messages."""
+    
+    LEVEL_MAPPING = {
+        logging.DEBUG: LogLevel.DEBUG,
+        logging.INFO: LogLevel.INFO,
+        logging.WARNING: LogLevel.WARNING,
+        logging.ERROR: LogLevel.ERROR,
+        logging.CRITICAL: LogLevel.ERROR,
+    }
+    
+    def __init__(self, fmt=None, datefmt=None, use_colors=True, use_emojis=True):
+        super().__init__(fmt, datefmt)
+        self.use_colors = use_colors and Colors._SUPPORTS_COLOR
+        self.use_emojis = use_emojis
+        
+    def format(self, record):
+        # Get emoji and color for this log level
+        log_level = self.LEVEL_MAPPING.get(record.levelno, LogLevel.INFO)
+        level_name, emoji, color = log_level.value
+        
+        # Add emoji to the beginning of the message if enabled
+        if self.use_emojis:
+            record.msg = f"{emoji} {record.msg}"
+        
+        # Format the record normally first
+        formatted = super().format(record)
+        
+        # Apply color if enabled
+        if self.use_colors:
+            formatted = Colors.colorize(formatted, color)
+            
+        return formatted
+
+class EmojiLogger:
+    """Enhanced logger with emoji and color support."""
+    
+    _loggers: Dict[str, logging.Logger] = {}
+    
+    @classmethod
+    def get_logger(cls, name: str, use_colors: bool = True, use_emojis: bool = True) -> logging.Logger:
+        """Get or create an enhanced logger with emoji and color support."""
+        
+        if name in cls._loggers:
+            return cls._loggers[name]
+        
+        logger = logging.getLogger(f"emoji_{name}")
+        logger.setLevel(logging.DEBUG)
+        
+        # Clear any existing handlers
+        logger.handlers.clear()
+        
+        # Create console handler with emoji formatter
+        handler = logging.StreamHandler()
+        formatter = EmojiFormatter(
+            fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            use_colors=use_colors,
+            use_emojis=use_emojis
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        
+        # Add convenience methods
+        cls._add_convenience_methods(logger)
+        
+        cls._loggers[name] = logger
+        return logger
+    
+    @classmethod
+    def _add_convenience_methods(cls, logger):
+        """Add convenience methods to logger for common operations."""
+        
+        def success(msg, *args, **kwargs):
+            logger.info(f"{Emojis.SUCCESS} {msg}", *args, **kwargs)
+        
+        def failure(msg, *args, **kwargs):
+            logger.error(f"{Emojis.ERROR} {msg}", *args, **kwargs)
+        
+        def network(msg, *args, **kwargs):
+            logger.info(f"{Emojis.NETWORK} {msg}", *args, **kwargs)
+        
+        def file_op(msg, *args, **kwargs):
+            logger.info(f"{Emojis.FILE} {msg}", *args, **kwargs)
+        
+        def security(msg, *args, **kwargs):
+            logger.info(f"{Emojis.LOCK} {msg}", *args, **kwargs)
+        
+        def startup(msg, *args, **kwargs):
+            logger.info(f"{Emojis.ROCKET} {msg}", *args, **kwargs)
+        
+        def progress(msg, *args, **kwargs):
+            logger.info(f"{Emojis.LOADING} {msg}", *args, **kwargs)
+        
+        # Add methods to logger instance
+        logger.success = success
+        logger.failure = failure
+        logger.network = network
+        logger.file_op = file_op
+        logger.security = security
+        logger.startup = startup
+        logger.progress = progress
+
+def enhanced_print(message: str, level: LogLevel = LogLevel.INFO, prefix: str = "") -> None:
+    """Enhanced print function with emoji and color support."""
+    level_name, emoji, color = level.value
+    
+    if prefix:
+        full_message = f"[{prefix}] {emoji} {message}"
+    else:
+        full_message = f"{emoji} {message}"
+    
+    if Colors._SUPPORTS_COLOR:
+        full_message = Colors.colorize(full_message, color)
+    
+    print(full_message)
+
+def success_print(message: str, prefix: str = "") -> None:
+    """Print success message with green color and checkmark emoji."""
+    enhanced_print(message, LogLevel.SUCCESS, prefix)
+
+def error_print(message: str, prefix: str = "") -> None:
+    """Print error message with red color and X emoji."""
+    enhanced_print(message, LogLevel.ERROR, prefix)
+
+def warning_print(message: str, prefix: str = "") -> None:
+    """Print warning message with yellow color and warning emoji."""
+    enhanced_print(message, LogLevel.WARNING, prefix)
+
+def info_print(message: str, prefix: str = "") -> None:
+    """Print info message with blue color and info emoji."""
+    enhanced_print(message, LogLevel.INFO, prefix)
+
+def startup_print(message: str, prefix: str = "") -> None:
+    """Print startup message with cyan color and rocket emoji."""
+    enhanced_print(message, LogLevel.STARTUP, prefix)
+
+def network_print(message: str, prefix: str = "") -> None:
+    """Print network message with cyan color and network emoji."""
+    enhanced_print(message, LogLevel.NETWORK, prefix)
+
+# Integration with existing logging infrastructure
+def enhance_existing_logger(logger: logging.Logger, use_colors: bool = True, use_emojis: bool = True) -> logging.Logger:
+    """Enhance an existing logger with emoji and color support."""
+    
+    # Find console handlers and enhance them
+    for handler in logger.handlers:
+        if isinstance(handler, logging.StreamHandler) and handler.stream == sys.stdout:
+            # Replace formatter with emoji formatter
+            handler.setFormatter(EmojiFormatter(
+                fmt=handler.formatter._fmt if handler.formatter else None,
+                use_colors=use_colors,
+                use_emojis=use_emojis
+            ))
+    
+    # Add convenience methods
+    EmojiLogger._add_convenience_methods(logger)
+    
+    return logger
+
+# Export commonly used items
+__all__ = [
+    'EmojiLogger',
+    'Emojis', 
+    'Colors',
+    'LogLevel',
+    'enhanced_print',
+    'success_print',
+    'error_print', 
+    'warning_print',
+    'info_print',
+    'startup_print',
+    'network_print',
+    'enhance_existing_logger'
+]

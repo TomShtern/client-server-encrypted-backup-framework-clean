@@ -1,7 +1,35 @@
 #!/usr/bin/env python3
 """
 Simple Server Launcher
-Starts the backup server and API server in separate console windows
+Starts the backup serv        # Start backup server         # Start API server with UTF-8 support
+        startup_print("Starting API Bridge Server...", "API")
+        api_server = Popen_utf8(
+            [sys.executable, '-m', 'api_server.cyberbackup_api_server'],
+            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
+        )
+        success_print(f"API server started with PID: {api_server.pid}", "PID")
+        
+        # Wait for API server to be ready
+        info_print("Waiting for API server to be ready...", "WAIT")
+        if wait_for_server(9090, timeout=30):
+            success_print("API server is ready on port 9090", "API")
+        else:
+            error_print("API server failed to start on port 9090", "API")
+            return 1ort
+        startup_print("Starting Python Backup Server...", "SERVER")
+        backup_server = Popen_utf8(
+            [sys.executable, '-m', 'python_server.server.server'],
+            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
+        )
+        success_print(f"Backup server started with PID: {backup_server.pid}", "PID")
+        
+        # Wait for backup server to be ready
+        info_print("Waiting for backup server to be ready...", "WAIT")
+        if wait_for_server(1256, timeout=30):
+            success_print("Backup server is ready on port 1256", "SERVER")
+        else:
+            error_print("Backup server failed to start on port 1256", "SERVER")
+            return 1er in separate console windows
 """
 
 import sys
@@ -12,6 +40,16 @@ import webbrowser
 
 # Add current directory to Python path
 sys.path.insert(0, os.getcwd())
+
+# UTF-8 support for subprocess operations
+import Shared.utils.utf8_solution  # 🚀 UTF-8 support enabled automatically
+from Shared.utils.utf8_solution import Popen_utf8
+
+# Enhanced output with emojis and colors
+from Shared.utils.enhanced_output import (
+    success_print, error_print, warning_print, info_print, 
+    startup_print, network_print, Emojis
+)
 
 def check_port_available(port):
     """Check if a port is available"""
@@ -41,31 +79,30 @@ def wait_for_server(port, timeout=30):
 
 def main():
     print("=" * 50)
-    print("    CyberBackup Server Launcher")
+    startup_print("CyberBackup Server Launcher", "LAUNCHER")
     print("=" * 50)
     
     # Check if ports are available
     if not check_port_available(1256):
-        print("ERROR: Port 1256 is in use. Please close other applications using this port.")
+        error_print("Port 1256 is in use. Please close other applications using this port.", "PORT")
         return 1
     
     if not check_port_available(9090):
-        print("ERROR: Port 9090 is in use. Please close other applications using this port.")
+        error_print("Port 9090 is in use. Please close other applications using this port.", "PORT")
         return 1
     
-    print("✓ Ports 1256 and 9090 are available")
+    success_print("Ports 1256 and 9090 are available", "PORT")
     
     # Set up environment with Python path
     env = os.environ.copy()
     env['PYTHONPATH'] = os.getcwd()
     
     try:
-        # Start backup server
+        # Start backup server with UTF-8 support
         print("\n1. Starting Python Backup Server...")
-        backup_server = subprocess.Popen(
+        backup_server = Popen_utf8(
             [sys.executable, '-m', 'python_server.server.server'],
-            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0,
-            env=env
+            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
         )
         print(f"   Backup server started with PID: {backup_server.pid}")
         
@@ -77,12 +114,11 @@ def main():
             print("   ✗ Backup server failed to start on port 1256")
             return 1
         
-        # Start API server
+        # Start API server with UTF-8 support
         print("\n2. Starting API Bridge Server...")
-        api_server = subprocess.Popen(
+        api_server = Popen_utf8(
             [sys.executable, '-m', 'api_server.cyberbackup_api_server'],
-            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0,
-            env=env
+            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
         )
         print(f"   API server started with PID: {api_server.pid}")
         
@@ -96,25 +132,25 @@ def main():
         
         # Open web browser
         gui_url = "http://127.0.0.1:9090/"
-        print(f"\n3. Opening Web GUI: {gui_url}")
+        info_print(f"Opening Web GUI: {gui_url}", "BROWSER")
         webbrowser.open(gui_url)
         
         print("\n" + "=" * 50)
-        print("🎉 SUCCESS! All servers are running:")
-        print(f"   • Backup Server: Port 1256 (PID: {backup_server.pid})")
-        print(f"   • API Server: Port 9090 (PID: {api_server.pid})")
-        print(f"   • Web GUI: {gui_url}")
+        success_print("SUCCESS! All servers are running:", "COMPLETE")
+        print(f"   {Emojis.SERVER} Backup Server: Port 1256 (PID: {backup_server.pid})")
+        print(f"   {Emojis.API} API Server: Port 9090 (PID: {api_server.pid})")
+        print(f"   {Emojis.NETWORK} Web GUI: {gui_url}")
         print("=" * 50)
         
-        print("\nServers are running in separate console windows.")
-        print("Close the console windows to stop the servers.")
-        print("Press Enter to exit this launcher...")
+        info_print("Servers are running in separate console windows.", "INFO")
+        warning_print("Close the console windows to stop the servers.", "WARNING")
+        info_print("Press Enter to exit this launcher...", "INPUT")
         input()
         
         return 0
         
     except Exception as e:
-        print(f"\nERROR: Failed to start servers: {e}")
+        error_print(f"Failed to start servers: {e}", "EXCEPTION")
         return 1
 
 if __name__ == "__main__":

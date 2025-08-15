@@ -23,6 +23,8 @@ SOLVES:
 - 'charmap' codec errors
 """
 
+
+import contextlib
 import os
 import sys
 import subprocess
@@ -104,13 +106,10 @@ class UTF8Support:
         cls.setup()
 
         try:
-            env = dict(os.environ) if base_env is None else dict(base_env)
-            # Critical environment variables for UTF-8 support
-            env.update({
+            env = (dict(os.environ) if base_env is None else dict(base_env)) | {
                 'PYTHONIOENCODING': 'utf-8',
-                'PYTHONUTF8': '1'
-            })
-
+                'PYTHONUTF8': '1',
+            }
             return env
         except Exception:
             # Fallback to minimal environment
@@ -124,12 +123,10 @@ class UTF8Support:
         """Restore original console code pages (cleanup method)."""
         if (sys.platform == 'win32' and ctypes is not None and 
             cls._original_console_cp is not None):
-            try:
+            with contextlib.suppress(Exception):
                 kernel32 = ctypes.windll.kernel32
                 kernel32.SetConsoleCP(cls._original_console_cp)
                 kernel32.SetConsoleOutputCP(cls._original_console_output_cp)
-            except Exception:
-                pass
 
 # Convenience functions that match the CyberBackup Framework patterns
 def get_env(base_env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
@@ -189,16 +186,14 @@ def test_utf8() -> bool:
     """Test UTF-8 capability with Hebrew and emoji characters."""
     try:
         test_content = "Hebrew: בדיקה | Emoji: 🎉✅❌ | Mixed: קובץ_עברי_🔧_test.txt"
-        
+
         # Test encoding/decoding cycle
         encoded = test_content.encode('utf-8')
         decoded = encoded.decode('utf-8')
-        
+
         # Verify round-trip integrity
         return test_content == decoded
-        
-    except (UnicodeEncodeError, UnicodeDecodeError, AttributeError):
-        return False
+
     except Exception:
         return False
 
@@ -214,6 +209,22 @@ def safe_print(message: str) -> None:
         except Exception:
             print("UTF-8 Solution: Message encoding failed")
 
+def enhanced_safe_print(message: str, use_emoji: bool = True) -> None:
+    """Enhanced safe print with emoji support."""
+    try:
+        # Try to use enhanced output if available
+        from .enhanced_output import success_print
+        if use_emoji:
+            success_print(message, "UTF-8")
+        else:
+            print(f"UTF-8: {message}")
+    except ImportError:
+        # Fallback to basic safe print
+        safe_print(f"UTF-8: {message}")
+    except Exception:
+        # Last resort fallback
+        safe_print(message)
+
 # Export key functions for CyberBackup Framework usage
 __all__ = [
     'get_env',           # Main function for subprocess environment
@@ -221,7 +232,8 @@ __all__ = [
     'Popen_utf8',        # UTF-8 enabled subprocess.Popen  
     'test_utf8',         # Test UTF-8 capability
     'UTF8Support',       # Main class
-    'safe_print'         # Safe printing function
+    'safe_print',        # Safe printing function
+    'enhanced_safe_print' # Enhanced safe printing with emoji support
 ]
 
 # Automatic setup when imported (with error handling)
@@ -230,18 +242,16 @@ def _initialize_module():
     try:
         success = UTF8Support.setup()
         test_success = test_utf8()
-        
+
         if success and test_success:
-            safe_print("🎯 UTF-8 Solution: Ready for Hebrew+emoji content in subprocess calls!")
+            enhanced_safe_print("UTF-8 Solution: Ready for Hebrew+emoji content in subprocess calls!")
         elif success:
-            safe_print("⚠️ UTF-8 Solution: Basic UTF-8 support activated")
+            enhanced_safe_print("UTF-8 Solution: Basic UTF-8 support activated", use_emoji=False)
         else:
-            safe_print("⚠️ UTF-8 Solution: Limited support mode")
+            enhanced_safe_print("UTF-8 Solution: Limited support mode", use_emoji=False)
     except Exception:
-        try:
+        with contextlib.suppress(Exception):
             print("⚠️ UTF-8 Solution: Activated with basic support")
-        except Exception:
-            pass  # Silent fallback
 
 # Safe module initialization
 if __name__ != '__main__':
