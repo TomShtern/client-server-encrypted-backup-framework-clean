@@ -23,8 +23,19 @@ import os
 import sys
 import logging
 import platform
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, Callable, Protocol
 from enum import Enum
+
+# Protocol for enhanced logger with custom methods
+class EnhancedLogger(Protocol):
+    """Protocol for logger with enhanced methods."""
+    def success(self, msg: str, *args, **kwargs) -> None: ...
+    def failure(self, msg: str, *args, **kwargs) -> None: ...
+    def network(self, msg: str, *args, **kwargs) -> None: ...
+    def file_op(self, msg: str, *args, **kwargs) -> None: ...
+    def security(self, msg: str, *args, **kwargs) -> None: ...
+    def startup(self, msg: str, *args, **kwargs) -> None: ...
+    def progress(self, msg: str, *args, **kwargs) -> None: ...
 
 # Try to detect terminal color support
 def _supports_color() -> bool:
@@ -227,7 +238,7 @@ class EmojiFormatter(logging.Formatter):
     def format(self, record):
         # Get emoji and color for this log level
         log_level = self.LEVEL_MAPPING.get(record.levelno, LogLevel.INFO)
-        level_name, emoji, color = log_level.value
+        _, emoji, color = log_level.value  # Unpack but ignore level_name
         
         # Add emoji to the beginning of the message if enabled
         if self.use_emojis:
@@ -277,42 +288,42 @@ class EmojiLogger:
         return logger
     
     @classmethod
-    def _add_convenience_methods(cls, logger):
+    def _add_convenience_methods(cls, logger: logging.Logger) -> None:
         """Add convenience methods to logger for common operations."""
         
-        def success(msg, *args, **kwargs):
+        def success(msg: str, *args: Any, **kwargs: Any) -> None:
             logger.info(f"{Emojis.SUCCESS} {msg}", *args, **kwargs)
         
-        def failure(msg, *args, **kwargs):
+        def failure(msg: str, *args: Any, **kwargs: Any) -> None:
             logger.error(f"{Emojis.ERROR} {msg}", *args, **kwargs)
         
-        def network(msg, *args, **kwargs):
+        def network(msg: str, *args: Any, **kwargs: Any) -> None:
             logger.info(f"{Emojis.NETWORK} {msg}", *args, **kwargs)
         
-        def file_op(msg, *args, **kwargs):
+        def file_op(msg: str, *args: Any, **kwargs: Any) -> None:
             logger.info(f"{Emojis.FILE} {msg}", *args, **kwargs)
         
-        def security(msg, *args, **kwargs):
+        def security(msg: str, *args: Any, **kwargs: Any) -> None:
             logger.info(f"{Emojis.LOCK} {msg}", *args, **kwargs)
         
-        def startup(msg, *args, **kwargs):
+        def startup(msg: str, *args: Any, **kwargs: Any) -> None:
             logger.info(f"{Emojis.ROCKET} {msg}", *args, **kwargs)
         
-        def progress(msg, *args, **kwargs):
+        def progress(msg: str, *args: Any, **kwargs: Any) -> None:
             logger.info(f"{Emojis.LOADING} {msg}", *args, **kwargs)
         
         # Add methods to logger instance
-        logger.success = success
-        logger.failure = failure
-        logger.network = network
-        logger.file_op = file_op
-        logger.security = security
-        logger.startup = startup
-        logger.progress = progress
+        setattr(logger, 'success', success)
+        setattr(logger, 'failure', failure)
+        setattr(logger, 'network', network)
+        setattr(logger, 'file_op', file_op)
+        setattr(logger, 'security', security)
+        setattr(logger, 'startup', startup)
+        setattr(logger, 'progress', progress)
 
 def enhanced_print(message: str, level: LogLevel = LogLevel.INFO, prefix: str = "") -> None:
     """Enhanced print function with emoji and color support."""
-    level_name, emoji, color = level.value
+    _, emoji, color = level.value  # Unpack but ignore level_name
     
     if prefix:
         full_message = f"[{prefix}] {emoji} {message}"
@@ -354,13 +365,23 @@ def enhance_existing_logger(logger: logging.Logger, use_colors: bool = True, use
     
     # Find console handlers and enhance them
     for handler in logger.handlers:
-        if isinstance(handler, logging.StreamHandler) and handler.stream == sys.stdout:
-            # Replace formatter with emoji formatter
-            handler.setFormatter(EmojiFormatter(
-                fmt=handler.formatter._fmt if handler.formatter else None,
-                use_colors=use_colors,
-                use_emojis=use_emojis
-            ))
+        if isinstance(handler, logging.StreamHandler):
+            # Check if this is a stdout handler
+            try:
+                if getattr(handler, 'stream', None) == sys.stdout:
+                    # Replace formatter with emoji formatter
+                    original_fmt = None
+                    if handler.formatter and hasattr(handler.formatter, '_fmt'):
+                        original_fmt = handler.formatter._fmt
+                    
+                    handler.setFormatter(EmojiFormatter(
+                        fmt=original_fmt,
+                        use_colors=use_colors,
+                        use_emojis=use_emojis
+                    ))
+            except (AttributeError, TypeError):
+                # Skip if we can't determine the stream
+                continue
     
     # Add convenience methods
     EmojiLogger._add_convenience_methods(logger)

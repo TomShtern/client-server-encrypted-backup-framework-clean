@@ -138,13 +138,17 @@ class RealBackupExecutor:
         
         emoji = emoji_map.get(phase, emoji_map['DEFAULT'])
         
-        # Use enhanced logger for better visual feedback
-        if phase in ['ERROR', 'MONITOR_FAILURE', 'FORCE_KILL']:
+        # Use enhanced logger for better visual feedback  
+        if phase in {'ERROR', 'MONITOR_FAILURE', 'FORCE_KILL'}:
             enhanced_logger.error(f"[{phase}] {message}")
-        elif phase in ['WARNING', 'TIMEOUT', 'CANCEL']:
+        elif phase in {'WARNING', 'TIMEOUT', 'CANCEL'}:
             enhanced_logger.warning(f"[{phase}] {message}")
-        elif phase in ['COMPLETION', 'MONITOR_COMPLETE', 'COMPLETE']:
-            enhanced_logger.success(f"[{phase}] {message}")
+        elif phase in {'COMPLETION', 'MONITOR_COMPLETE', 'COMPLETE'}:
+            # Use dynamic attribute access for enhanced methods
+            if hasattr(enhanced_logger, 'success'):
+                enhanced_logger.success(f"[{phase}] {message}")  # type: ignore
+            else:
+                enhanced_logger.info(f"✅ [{phase}] {message}")
         else:
             enhanced_logger.info(f"[{phase}] {message}")
         

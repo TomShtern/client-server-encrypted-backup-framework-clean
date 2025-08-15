@@ -12,12 +12,20 @@ from typing import Tuple, Optional, Dict, Any, Union
 from datetime import datetime
 from pathlib import Path
 
-# Try to import enhanced output for emoji/color support
+# Try to import enhanced output for emoji/color support  
 try:
-    from .utils.enhanced_output import enhance_existing_logger, Emojis
+    from .utils.enhanced_output import enhance_existing_logger
+    from .utils.enhanced_output import Emojis as EnhancedEmojis
     ENHANCED_OUTPUT_AVAILABLE = True
 except ImportError:
     ENHANCED_OUTPUT_AVAILABLE = False
+    enhance_existing_logger = None
+    EnhancedEmojis = None
+
+# Define emoji interface that works with both enhanced and fallback
+if ENHANCED_OUTPUT_AVAILABLE and EnhancedEmojis is not None:
+    Emojis = EnhancedEmojis  # type: ignore
+else:
     # Fallback emoji definitions if enhanced output is not available
     class Emojis:
         SUCCESS = "✅"
@@ -81,9 +89,10 @@ def setup_dual_logging(
     logger.addHandler(console_handler)
     
     # Enhance logger with emoji and color support if available and enabled
-    if enable_enhanced_output and ENHANCED_OUTPUT_AVAILABLE:
+    if enable_enhanced_output and ENHANCED_OUTPUT_AVAILABLE and enhance_existing_logger is not None:
         try:
-            logger = enhance_existing_logger(logger, use_colors=True, use_emojis=True)
+            # Enhance the logger in place but keep it as logging.Logger type
+            enhance_existing_logger(logger, use_colors=True, use_emojis=True)
         except Exception:
             # Fallback to standard logging if enhancement fails
             pass

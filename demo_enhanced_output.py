@@ -74,11 +74,32 @@ def main():
     # 7. Enhanced logging demonstration
     print(f"\n{Emojis.TARGET} 7. ENHANCED LOGGING:")
     logger = EmojiLogger.get_logger("demo-system")
-    logger.success("Demo completed successfully")
-    logger.network("Connection status: Active")
-    logger.file_op("Processing file operations")
-    logger.security("Security validation passed")
-    logger.startup("System initialization complete")
+    
+    # Test dynamic methods with type safety
+    if hasattr(logger, 'success'):
+        logger.success("Demo completed successfully")  # type: ignore
+    else:
+        logger.info("✅ Demo completed successfully")
+        
+    if hasattr(logger, 'network'):
+        logger.network("Connection status: Active")  # type: ignore
+    else:
+        logger.info("🌐 Connection status: Active")
+        
+    if hasattr(logger, 'file_op'):
+        logger.file_op("Processing file operations")  # type: ignore
+    else:
+        logger.info("📁 Processing file operations")
+        
+    if hasattr(logger, 'security'):
+        logger.security("Security validation passed")  # type: ignore
+    else:
+        logger.info("🔒 Security validation passed")
+        
+    if hasattr(logger, 'startup'):
+        logger.startup("System initialization complete")  # type: ignore
+    else:
+        logger.info("🚀 System initialization complete")
     
     print(f"\n{Emojis.PARTY} {Colors.success('DEMONSTRATION COMPLETE!', bold=True)}")
     print(f"{Emojis.STAR} The enhanced output system is now available across all project files!")
