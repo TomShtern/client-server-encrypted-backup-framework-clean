@@ -29,14 +29,11 @@ import subprocess
 import threading
 from typing import Dict, Optional, Any
 
-# Import ctypes only on Windows with proper error handling
-_ctypes_available = False
-if sys.platform == 'win32':
-    try:
-        import ctypes
-        _ctypes_available = True
-    except ImportError:
-        _ctypes_available = False
+# Import ctypes with proper error handling for Windows
+try:
+    import ctypes
+except ImportError:
+    ctypes = None
 
 class UTF8Support:
     """Simple UTF-8 environment support for subprocess operations."""
@@ -69,7 +66,7 @@ class UTF8Support:
     @classmethod
     def _setup_windows_console(cls) -> None:
         """Configure Windows console for UTF-8."""
-        if sys.platform != 'win32' or not _ctypes_available:
+        if sys.platform != 'win32' or ctypes is None:
             return
         
         try:
@@ -105,19 +102,15 @@ class UTF8Support:
         """
         # Ensure setup (ignore return value for backward compatibility)
         cls.setup()
-        
+
         try:
-            if base_env is None:
-                env = dict(os.environ)  # Safer copy method
-            else:
-                env = dict(base_env)
-            
+            env = dict(os.environ) if base_env is None else dict(base_env)
             # Critical environment variables for UTF-8 support
             env.update({
                 'PYTHONIOENCODING': 'utf-8',
                 'PYTHONUTF8': '1'
             })
-            
+
             return env
         except Exception:
             # Fallback to minimal environment
@@ -129,7 +122,7 @@ class UTF8Support:
     @classmethod
     def restore_console(cls) -> None:
         """Restore original console code pages (cleanup method)."""
-        if (sys.platform == 'win32' and _ctypes_available and 
+        if (sys.platform == 'win32' and ctypes is not None and 
             cls._original_console_cp is not None):
             try:
                 kernel32 = ctypes.windll.kernel32

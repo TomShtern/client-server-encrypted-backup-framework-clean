@@ -26,6 +26,10 @@ import contextlib
 import json
 import logging
 import traceback
+import datetime
+import socket
+import webbrowser
+import shutil
 from pathlib import Path
 from typing import List, Tuple, Dict, Any
 
@@ -37,16 +41,22 @@ except ImportError:
 
 def setup_logging():
     """Setup basic logging for the build script"""
+    # Determine project root directory (parent of scripts directory)
+    script_dir = Path(__file__).parent
+    project_root = script_dir.parent
+    logs_dir = project_root / 'logs'
+    
+    # Ensure logs directory exists BEFORE creating file handler
+    logs_dir.mkdir(exist_ok=True)
+    
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler('logs/build_script.log', mode='a'),
+            logging.FileHandler(logs_dir / 'build_script.log', mode='a'),
             logging.StreamHandler()  # Also log to console
         ]
     )
-    # Ensure logs directory exists
-    Path('logs').mkdir(exist_ok=True)
 
 def setup_unicode_console():
     """UTF-8 console setup - enforces UTF-8 encoding exclusively"""
@@ -821,11 +831,11 @@ def main():
     print()
 
     print("Starting Python Backup Server with integrated GUI...")
-    server_path = Path("python_server/server.py")
+    server_path = Path("python_server/server/server.py")
 
     # Validate server path exists with proper error handling
     if not server_path.exists():
-        print_server_not_found_help(server_path, "python_server/server.py")
+        print_server_not_found_help(server_path, "python_server/server/server.py")
         print("\nTrying alternative server startup...")
         # Continue execution to attempt other startup methods
 

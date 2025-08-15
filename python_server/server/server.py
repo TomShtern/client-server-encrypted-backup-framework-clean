@@ -11,7 +11,7 @@ from typing import Dict, Optional, Any
 
 # Enable global UTF-8 support automatically (replaces all manual UTF-8 setup)  
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-import Shared.auto_utf8  # 🚀 That's it! Global UTF-8 enabled automatically
+import Shared.utils.utf8_solution  # 🚀 UTF-8 support enabled automatically
 
 # Import singleton manager
 from .server_singleton import ensure_single_server_instance

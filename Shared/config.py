@@ -181,14 +181,13 @@ class ConfigManager:
         """Get configuration value by key."""
         try:
             config = self.config  # Use property to ensure non-None config  
-            if '.' in key:
-                parts = key.split('.')
-                current = asdict(config)
-                for part in parts:
-                    current = current[part]
-                return current
-            else:
+            if '.' not in key:
                 return getattr(config, key, default)
+            parts = key.split('.')
+            current = asdict(config)
+            for part in parts:
+                current = current[part]
+            return current
         except (KeyError, AttributeError):
             return default
     
