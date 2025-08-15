@@ -13,16 +13,26 @@ This script:
 Corrupted header block was repaired on 2025-08-11 after accidental paste.
 """
 
-# AUTOMATIC UTF-8: sitecustomize.py provides automatic UTF-8 support
-# No imports needed - UTF-8 works automatically for ALL scripts!
+# IMMEDIATE UTF-8 SETUP - Must be FIRST to prevent Unicode errors
+import contextlib
 import os
 import sys
+
+# Apply UTF-8 console setup before any other imports
+if sys.platform == 'win32':
+    with contextlib.suppress(Exception):
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        kernel32.SetConsoleCP(65001)
+        kernel32.SetConsoleOutputCP(65001)
+        os.environ['PYTHONIOENCODING'] = 'utf-8'
+        os.environ['PYTHONUTF8'] = '1'
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from Shared.utils.unified_config import get_config
 import subprocess
 import time
-import contextlib
 import json
 import logging
 import traceback

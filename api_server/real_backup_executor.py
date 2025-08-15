@@ -7,6 +7,7 @@ Progress monitoring and verification are handled by the UnifiedFileMonitor.
 """
 
 import contextlib
+import json
 import os
 import sys
 import time
@@ -64,6 +65,13 @@ class RealBackupExecutor:
             'min_timeout': 45,      # Minimum timeout (ensures margin above C++ client)
             'max_timeout': 1800,    # Maximum timeout (30 minutes for very large files)
         }
+        
+        # Progress simulation configuration
+        self.progress_config = self._load_progress_config()
+        self.progress_thread: Optional[threading.Thread] = None
+        self.progress_stop_event = threading.Event()
+        self.current_phase = "READY"
+        self.phase_start_time = 0.0
 
     def is_running(self) -> bool:
         """Return True if a backup subprocess is currently running"""
@@ -157,6 +165,106 @@ class RealBackupExecutor:
         
         if self.status_callback:
             self.status_callback(phase, {'message': message})
+    
+    def _load_progress_config(self) -> Dict[str, Any]:
+        """Load progress configuration from JSON file"""
+        try:
+            # Try to find progress_config.json in python_server directory
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)
+            config_path = os.path.join(project_root, 'python_server', 'progress_config.json')
+            
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load progress config: {e}")
+        
+        # Fallback default configuration
+        return {
+            "phases": {
+                "CONNECTING": {"weight": 0.10, "description": "Connecting to backup server..."},
+                "AUTHENTICATING": {"weight": 0.15, "description": "Authenticating user credentials..."},
+                "ENCRYPTING": {"weight": 0.30, "description": "Encrypting file with AES-256..."},
+                "TRANSFERRING": {"weight": 0.35, "description": "Transferring encrypted data..."},
+                "VERIFYING": {"weight": 0.10, "description": "Verifying transfer integrity..."}
+            }
+        }
+    
+    def _start_progress_simulation(self):
+        """Start progress simulation thread"""
+        if self.progress_thread and self.progress_thread.is_alive():
+            return
+            
+        self.progress_stop_event.clear()
+        self.progress_thread = threading.Thread(target=self._progress_simulation_worker, daemon=True)
+        self.progress_thread.start()
+    
+    def _stop_progress_simulation(self):
+        """Stop progress simulation thread"""
+        self.progress_stop_event.set()
+        if self.progress_thread:
+            self.progress_thread.join(timeout=1.0)
+    
+    def _progress_simulation_worker(self):
+        """Worker thread for progress simulation"""
+        phases = ["CONNECTING", "AUTHENTICATING", "ENCRYPTING", "TRANSFERRING", "VERIFYING"]
+        phase_weights: Dict[str, float] = {}
+        total_weight = 0.0
+        
+        # Calculate weights from config
+        for phase in phases:
+            weight = self.progress_config.get("phases", {}).get(phase, {}).get("weight", 0.2)
+            phase_weights[phase] = float(weight) if weight is not None else 0.2
+            total_weight += phase_weights[phase]
+        
+        # Normalize weights to sum to 1.0
+        if total_weight > 0:
+            for phase in phase_weights:
+                phase_weights[phase] /= total_weight
+        
+        current_progress = 0.0
+        for i, phase in enumerate(phases):
+            if self.progress_stop_event.is_set():
+                return
+                
+            self.current_phase = phase
+            phase_weight = phase_weights.get(phase, 0.2)
+            phase_duration = 2.0 + (i * 0.5)  # Vary duration by phase
+            
+            # Update phase description
+            phase_description = self.progress_config.get("phases", {}).get(phase, {}).get("description", f"{phase}...")
+            if self.status_callback:
+                self.status_callback(phase, {'message': phase_description, 'progress': current_progress})
+            
+            # Simulate progress within this phase
+            steps = 20
+            for step in range(steps):
+                if self.progress_stop_event.is_set():
+                    return
+                    
+                step_progress = (step / steps) * phase_weight * 100
+                total_progress = current_progress + step_progress
+                
+                if self.status_callback:
+                    self.status_callback(phase, {
+                        'message': phase_description,
+                        'progress': min(total_progress, 100.0)
+                    })
+                
+                time.sleep(phase_duration / steps)
+            
+            current_progress += phase_weight * 100
+        
+        # Final completion
+        if not self.progress_stop_event.is_set() and self.status_callback:
+            self.status_callback("COMPLETED", {'message': 'Backup completed successfully!', 'progress': 100.0})
+    
+    def _log_status_with_progress(self, phase: str, message: str, progress: Optional[float] = None):
+        """Enhanced log status with progress information"""
+        self._log_status(phase, message)
+        if progress is not None and self.status_callback:
+            self.status_callback(phase, {'message': message, 'progress': progress})
     
     def _calculate_adaptive_timeout(self, file_path: str) -> int:
         """Calculate adaptive timeout based on file size to prevent client/server timeout mismatches."""
@@ -354,6 +462,9 @@ class RealBackupExecutor:
             timeout = self._calculate_adaptive_timeout(file_path)
         
         self._log_status("START", f"Starting REAL backup for {username}: {file_path} (timeout: {timeout}s)")
+        
+        # Start progress simulation
+        self._start_progress_simulation()
 
         result: Dict[str, Any] = {
             'success': False,
@@ -521,6 +632,9 @@ class RealBackupExecutor:
                 if monitor:
                     monitor.stop_monitoring()
         finally:
+            # Stop progress simulation
+            self._stop_progress_simulation()
+            
             result['duration'] = time.time() - start_time
             
             # Enhanced file lifecycle cleanup with proper subprocess coordination

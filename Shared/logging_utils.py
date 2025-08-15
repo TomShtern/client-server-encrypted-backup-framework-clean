@@ -5,6 +5,7 @@ Provides standardized logging setup, dual output, and enhanced logging capabilit
 with emoji and color support integration.
 """
 
+import contextlib
 import logging
 import os
 import sys
@@ -90,12 +91,10 @@ def setup_dual_logging(
     
     # Enhance logger with emoji and color support if available and enabled
     if enable_enhanced_output and ENHANCED_OUTPUT_AVAILABLE and enhance_existing_logger is not None:
-        try:
-            # Enhance the logger in place but keep it as logging.Logger type
-            enhance_existing_logger(logger, use_colors=True, use_emojis=True)
-        except Exception:
-            # Fallback to standard logging if enhancement fails
-            pass
+        with contextlib.suppress(Exception):
+            # Disable emojis on Windows to prevent Unicode encoding errors with cp1255
+            use_emojis = sys.platform != 'win32'
+            enhance_existing_logger(logger, use_colors=True, use_emojis=use_emojis)
     
     # File handler
     file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
@@ -219,13 +218,12 @@ def log_performance_metrics(logger: logging.Logger, operation: str, duration_ms:
         success: Whether the operation was successful
         **kwargs: Additional context
     """
-    context: Dict[str, Any] = kwargs.copy()
-    context.update({
+    context: Dict[str, Any] = kwargs | {
         "operation": operation,
         "duration_ms": duration_ms,
         "success": success,
         "performance_metric": True
-    })
+    }
     
     status = "completed" if success else "failed"
     logger.info(f"⚡ Performance: {operation} {status} in {duration_ms:.2f}ms", extra=context)

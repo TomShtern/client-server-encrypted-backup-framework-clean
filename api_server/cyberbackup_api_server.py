@@ -28,8 +28,7 @@ Note: Other API server files have been archived to eliminate duplicates.
 See API_SERVER_UNIFICATION.md for details.
 """
 
-# AUTOMATIC UTF-8: sitecustomize.py provides automatic UTF-8 support
-# No imports needed - UTF-8 works automatically for ALL scripts!
+# Standard library imports
 import os
 import sys
 import time
@@ -41,7 +40,9 @@ import contextlib
 from datetime import datetime
 from typing import Optional, Set, Dict, Any, Callable, cast
 
+# CRITICAL: Set up paths and UTF-8 encoding before any other imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import Shared.utils.utf8_solution  # Enable UTF-8 console encoding for emoji logging
 
 # Third-party imports
 from flask import Flask, request, jsonify, g, Response, send_file, send_from_directory, session
@@ -93,8 +94,8 @@ perf_monitor = get_performance_monitor()
 conn_health = get_connection_health_monitor()
 
 # Connection management
-MAX_CONNECTIONS = 3  # Reduced - limit total WebSocket connections  
-MAX_CONNECTIONS_PER_IP = 6  # Increased to allow more concurrent connections for assets
+MAX_CONNECTIONS = 10  # Increased - allow more WebSocket connections for better UX
+MAX_CONNECTIONS_PER_IP = 12  # Increased to allow more concurrent connections for assets
 connected_clients: Set[str] = set()  # Track connected client IDs
 connection_locks: Dict[str, threading.Lock] = {}  # Per-IP connection limits
 ip_connection_counts: Dict[str, int] = {}  # Track connections per IP
@@ -436,14 +437,13 @@ def cleanup_stale_connections(stop_event: Optional[threading.Event] = None) -> N
 
     logger.info("WebSocket cleanup thread finished")
 
-# Start cleanup thread with proper management
-import threading
-try:
-    # Import thread manager for proper shutdown coordination
-    import sys
-    import os
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'Shared', 'utils'))
-    from Shared.utils.thread_manager import create_managed_thread
+# WebSocket cleanup thread will be started in main execution block to avoid import-time race conditions
+cleanup_thread_name = None
+cleanup_thread = None
+
+def start_websocket_cleanup_thread():
+    """Start the WebSocket cleanup thread after full initialization"""
+    global cleanup_thread_name, cleanup_thread
     
     def cleanup_websocket_resources():
         """Cleanup function for WebSocket resources"""
@@ -455,27 +455,34 @@ try:
         except Exception as e:
             logger.error(f"Error during WebSocket cleanup: {e}")
     
-    # Create managed cleanup thread
-    cleanup_thread_name = create_managed_thread(
-        target=cleanup_stale_connections,
-        name="websocket_cleanup",
-        component="flask_api_server",
-        daemon=True,
-        cleanup_callback=cleanup_websocket_resources,
-        auto_start=True
-    )
-    
-    if cleanup_thread_name:
-        logger.info(f"WebSocket cleanup thread registered as: {cleanup_thread_name}")
-    else:
-        logger.warning("Failed to register WebSocket cleanup thread with thread manager, falling back to basic thread")
+    try:
+        # Import thread manager for proper shutdown coordination
+        import sys
+        import os
+        sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'Shared', 'utils'))
+        from Shared.utils.thread_manager import create_managed_thread
+        
+        # Create managed cleanup thread
+        cleanup_thread_name = create_managed_thread(
+            target=cleanup_stale_connections,
+            name="websocket_cleanup",
+            component="flask_api_server",
+            daemon=True,
+            cleanup_callback=cleanup_websocket_resources,
+            auto_start=True
+        )
+        
+        if cleanup_thread_name:
+            logger.info(f"WebSocket cleanup thread registered as: {cleanup_thread_name}")
+        else:
+            logger.warning("Failed to register WebSocket cleanup thread with thread manager, falling back to basic thread")
+            cleanup_thread = threading.Thread(target=cleanup_stale_connections, daemon=True)
+            cleanup_thread.start()
+            
+    except ImportError:
+        logger.warning("Thread manager not available, using basic thread management")
         cleanup_thread = threading.Thread(target=cleanup_stale_connections, daemon=True)
         cleanup_thread.start()
-        
-except ImportError:
-    logger.warning("Thread manager not available, using basic thread management")
-    cleanup_thread = threading.Thread(target=cleanup_stale_connections, daemon=True)
-    cleanup_thread.start()
 
 # Static file serving
 @app.route('/')
@@ -499,13 +506,46 @@ def serve_client():
         return f"<h1>Server Error</h1><p>Error serving client: {e}</p>", 500
 
 @app.route('/<path:filename>')
-def serve_client_assets(filename):
+def serve_client_assets(filename: str):
     """Serve client assets (CSS, JS, images, etc.)"""
     # Don't serve the main HTML file through this route
-    if filename in ['NewGUIforClient.html', 'index.html']:
+    if filename in {'NewGUIforClient.html', 'index.html'}:
         return "<h1>Not Found</h1><p>The requested URL was not found on the server.</p>", 404
         
     try:
+        # Handle favicon requests specially - check both locations
+        if (filename.startswith('favicon_stuff/') or 
+            filename.startswith('favicon') or 
+            filename.endswith('.ico') or 
+            filename.endswith('.svg') or
+            'favicon' in filename):
+            
+            # If it's a favicon_stuff path, extract just the filename
+            if filename.startswith('favicon_stuff/'):
+                actual_filename = filename.replace('favicon_stuff/', '')
+                favicon_dir = os.path.join(PROJECT_ROOT, 'favicon_stuff')
+                favicon_path = os.path.join(favicon_dir, actual_filename)
+                if os.path.exists(favicon_path):
+                    logger.debug(f"Serving favicon {actual_filename} from favicon_stuff")
+                    return send_from_directory(favicon_dir, actual_filename)
+            else:
+                # First try favicon_stuff directory (project root)
+                favicon_dir = os.path.join(PROJECT_ROOT, 'favicon_stuff')
+                favicon_path = os.path.join(favicon_dir, filename)
+                if os.path.exists(favicon_path):
+                    logger.debug(f"Serving favicon {filename} from favicon_stuff")
+                    return send_from_directory(favicon_dir, filename)
+            
+            # Then try client directory
+            client_path = os.path.join(CLIENT_GUI_PATH, filename)
+            if os.path.exists(client_path):
+                logger.debug(f"Serving favicon {filename} from client-gui")
+                return send_from_directory(CLIENT_GUI_PATH, filename)
+            
+            # If not found, return a proper 404 without logging as error
+            logger.debug(f"Favicon not found: {filename}")
+            return "", 404  # Return 404 instead of 204 for missing favicons
+        
         # Use absolute path to handle working directory issues
         client_dir = CLIENT_GUI_PATH
         
@@ -518,22 +558,34 @@ def serve_client_assets(filename):
         logger.debug(f"Serving asset {filename} from {client_dir}")
         return send_from_directory(client_dir, filename)
     except FileNotFoundError:
-        logger.error(f"Asset not found: {filename}")
-        return f"<h1>Asset not found: {filename}</h1>", 404
+        logger.debug(f"Asset not found: {filename}")  # Changed from error to debug
+        return "", 404
+    except Exception as e:
+        logger.debug(f"Error serving asset {filename}: {e}")  # Debug level to reduce noise
+        return "", 404  # Return 404 instead of 500 for missing assets
 
 @app.route('/progress_config.json')
 def serve_progress_config():
     """Serve the progress configuration file"""
     try:
-        # Check for progress_config.json in python_server directory
+        # Check for progress_config.json in python_server directory first
         progress_config_path = os.path.join(PYTHON_SERVER_PATH, 'progress_config.json')
         if os.path.exists(progress_config_path):
             return send_file(progress_config_path)
-        else:
-            # Fallback to root directory
+        
+        # Then check project root directory
+        root_config_path = os.path.join(PROJECT_ROOT, 'progress_config.json')
+        if os.path.exists(root_config_path):
+            return send_file(root_config_path)
+        
+        # Fallback to current directory
+        if os.path.exists('progress_config.json'):
             return send_file('progress_config.json')
+            
     except FileNotFoundError:
-        return jsonify({'error': 'progress_config.json not found'}), 404
+        pass
+        
+    return jsonify({'error': 'progress_config.json not found'}), 404
 
 @app.route('/favicon.ico')
 def serve_favicon():
@@ -1057,8 +1109,8 @@ if __name__ == "__main__":
     # Display logging information
     log_monitor_info = create_log_monitor_info(api_log_file, "API Server")
     print("* Logging Information:")
-    print(f"* Log File: {log_monitor_info['file_path']}")
-    print(f"* Live Monitor (PowerShell): {log_monitor_info['powershell_cmd']}")
+    print(f"* Log File: {log_monitor_info.get('file_path', api_log_file)}")
+    print(f"* Live Monitor (PowerShell): {log_monitor_info.get('powershell_cmd', 'N/A')}")
     print("* Console Output: Visible in this window (dual output enabled)")
     print()
 
@@ -1103,6 +1155,10 @@ if __name__ == "__main__":
     print("Ensuring single API server instance...")
     ensure_single_server_instance("APIServer", 9090)
     print("Singleton lock acquired for API server")
+
+    # Start WebSocket cleanup thread after full initialization
+    print("Starting WebSocket cleanup thread...")
+    start_websocket_cleanup_thread()
 
     try:
         print("[WEBSOCKET] Starting Flask-SocketIO server with real-time support...")

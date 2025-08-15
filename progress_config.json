@@ -1,0 +1,46 @@
+{
+  "phases": {
+    "CONNECTING": {
+      "weight": 0.10,
+      "avg_duration_ms": 450,
+      "description": "Connecting to backup server...",
+      "progress_range": [0, 10]
+    },
+    "AUTHENTICATING": {
+      "weight": 0.15,
+      "avg_duration_ms": 650,
+      "description": "Authenticating user credentials...",
+      "progress_range": [10, 25]
+    },
+    "ENCRYPTING": {
+      "weight": 0.30,
+      "avg_duration_ms": 1200,
+      "description": "Encrypting file with AES-256...",
+      "progress_range": [25, 55]
+    },
+    "TRANSFERRING": {
+      "weight": 0.35,
+      "avg_duration_ms": 1500,
+      "description": "Transferring encrypted data...",
+      "progress_range": [55, 90]
+    },
+    "VERIFYING": {
+      "weight": 0.10,
+      "avg_duration_ms": 400,
+      "description": "Verifying transfer integrity...",
+      "progress_range": [90, 100]
+    },
+    "COMPLETED": {
+      "weight": 0.00,
+      "avg_duration_ms": 0,
+      "description": "Backup completed successfully!",
+      "progress_range": [100, 100]
+    }
+  },
+  "calibration_info": {
+    "basis": "Simulated progress for demo - reflects actual backup phases",
+    "total_avg_duration_ms": 4200,
+    "created_date": "2025-08-16",
+    "version": "1.1.0"
+  }
+}

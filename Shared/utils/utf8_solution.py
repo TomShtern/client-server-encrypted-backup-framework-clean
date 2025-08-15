@@ -106,11 +106,10 @@ class UTF8Support:
         cls.setup()
 
         try:
-            env = (dict(os.environ) if base_env is None else dict(base_env)) | {
+            return (dict(os.environ) if base_env is None else dict(base_env)) | {
                 'PYTHONIOENCODING': 'utf-8',
                 'PYTHONUTF8': '1',
             }
-            return env
         except Exception:
             # Fallback to minimal environment
             return {
@@ -239,20 +238,10 @@ __all__ = [
 # Automatic setup when imported (with error handling)
 def _initialize_module():
     """Initialize module safely without side effects."""
-    try:
-        success = UTF8Support.setup()
-        test_success = test_utf8()
+    with contextlib.suppress(Exception):
+        UTF8Support.setup()
+        # Silent initialization - no console output that could cause encoding errors
 
-        if success and test_success:
-            enhanced_safe_print("UTF-8 Solution: Ready for Hebrew+emoji content in subprocess calls!")
-        elif success:
-            enhanced_safe_print("UTF-8 Solution: Basic UTF-8 support activated", use_emoji=False)
-        else:
-            enhanced_safe_print("UTF-8 Solution: Limited support mode", use_emoji=False)
-    except Exception:
-        with contextlib.suppress(Exception):
-            print("⚠️ UTF-8 Solution: Activated with basic support")
-
-# Safe module initialization
+# Safe module initialization - SILENT to prevent console encoding errors
 if __name__ != '__main__':
     _initialize_module()
