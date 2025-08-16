@@ -9,17 +9,24 @@ import logging
 import traceback
 from collections import deque
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Union, Deque, Callable, TYPE_CHECKING, Protocol, runtime_checkable, Type, cast
-from functools import partial
+from typing import Dict, List, Optional, Any, Union, Deque, Callable, TYPE_CHECKING, Protocol, runtime_checkable, cast
 from contextlib import suppress
+import time
+import queue
+import json
+import csv
+import shutil
 
 # UTF-8 support for international characters and emojis
 try:
     import Shared.utils.utf8_solution  # 🚀 UTF-8 support enabled automatically
+    # Keep a reference to avoid 'imported but unused' linters; module is imported for side-effects
+    _utf8_solution = Shared.utils.utf8_solution
 except ImportError:
     # Fallback for when running from within python_server directory
     sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
     import Shared.utils.utf8_solution  # 🚀 UTF-8 support enabled automatically
+    _utf8_solution = Shared.utils.utf8_solution
 
 # Type-safe reconfigure for stdout/stderr (guarded for analyzers)
 def _safe_reconfigure_stream(stream: Any) -> None:
@@ -188,6 +195,17 @@ class ModernTheme:
     ERROR = "#DA3633"
     INFO = "#1F6FEB"
     ACCENT_BLUE = "#58A6FF"
+    ACCENT_PURPLE = "#7C4DFF"
+    ACCENT_GREEN = "#2DD4BF"
+    ACCENT_ORANGE = "#FF8A00"
+    # Spacing / animation constants used by widgets
+    PADDING_MEDIUM = 12
+    ANIMATION_SPEED = 30
+    PROGRESS_ANIMATION_SPEED = 30
+    # Glass morphism colors
+    GLASS_BG = "#1B2430"
+    GLASS_BORDER = "#2A3646"
+    GLASS_HIGHLIGHT = "#233044"
     FONT_FAMILY = "Segoe UI"
     FONT_SIZE_MEDIUM = 12
     FONT_SIZE_SMALL = 10
@@ -707,9 +725,8 @@ class ModernTable(tk.Frame):
         if not self.context_menu:
             return
 
-        # Select row under cursor
-        iid = self.tree.identify_row(event.y)
-        if iid:
+        # Select row under cursor using named expression
+        if iid := self.tree.identify_row(event.y):
             self.tree.selection_set(iid)
             self.context_menu.post(event.x_root, event.y_root)
 
@@ -717,23 +734,6 @@ class ModernTable(tk.Frame):
         """Set the context menu for the table."""
         self.context_menu = menu
         self.tree.bind("<Button-3>", self._show_context_menu) # Right-click
-
-        self.context_menu = None
-
-    def _show_context_menu(self, event: tk.Event) -> None:
-        """Show context menu on right-click."""
-        if not self.context_menu:
-            return
-
-        # Select row under cursor
-        iid = self.tree.identify_row(event.y)
-        if iid:
-            self.tree.selection_set(iid)
-            self.context_menu.post(event.x_root, event.y_root)
-
-    def set_context_menu(self, menu: tk.Menu) -> None:
-        """Set the context menu for the table."""
-        self.context_menu = menu
 
     def set_data(self, data: List[Dict[str, Any]]) -> None:
         """Set table data"""
@@ -825,14 +825,11 @@ class SettingsDialog:
         self.dialog.geometry("500x600")
         self.dialog.configure(bg=ModernTheme.PRIMARY_BG)
         # Set transient relationship if parent supports it
-        try:
+        with suppress(tk.TclError, AttributeError, TypeError):
             if (hasattr(self.dialog, 'transient') and 
                 callable(getattr(self.dialog, 'transient', None)) and
                 hasattr(self.parent, 'winfo_class')):
                 self.dialog.transient(self.parent)  # type: ignore[arg-type]
-        except (tk.TclError, AttributeError, TypeError):
-            # Ignore transient errors - dialog will still work without it
-            pass
         self.dialog.grab_set()
 
         # Center the dialog
@@ -1137,32 +1134,33 @@ class ModernChart(tk.Frame):
             label.pack(expand=True)
             return
 
-        # Create figure with dark background
-        if Figure:
-            self.figure = Figure(figsize=(6, 4), dpi=100, facecolor=ModernTheme.CARD_BG)
-            self.ax = self.figure.add_subplot(111)
-        else:
-            self.figure = None
-            self.ax = None
-            return
+        # Create figure with dark background 
+        self.figure = Figure(figsize=(6, 4), dpi=100, facecolor=ModernTheme.CARD_BG)
+        self.ax = self.figure.add_subplot(111)
+        
+        # Style the axes (with safety check)
         if self.ax is not None:
-            self.ax.set_facecolor(ModernTheme.SECONDARY_BG)
-
-            # Style the axes
-            self.ax.spines['bottom'].set_color(ModernTheme.TEXT_SECONDARY)
-            self.ax.spines['top'].set_color(ModernTheme.TEXT_SECONDARY)
-            self.ax.spines['left'].set_color(ModernTheme.TEXT_SECONDARY)
-            self.ax.spines['right'].set_color(ModernTheme.TEXT_SECONDARY)
-            self.ax.tick_params(colors=ModernTheme.TEXT_SECONDARY)
-            self.ax.xaxis.label.set_color(ModernTheme.TEXT_PRIMARY)
-            self.ax.yaxis.label.set_color(ModernTheme.TEXT_PRIMARY)
-            # Fix: Use set_title with color parameter instead of accessing title attribute
-            self.ax.set_title('', color=ModernTheme.TEXT_PRIMARY)
+            self._configure_chart_axes()
 
         # Create canvas
         if FigureCanvasTkAgg and self.figure:
             self.canvas = FigureCanvasTkAgg(self.figure, self)
             self.canvas.get_tk_widget().pack(fill="both", expand=True)
+
+    def _configure_chart_axes(self) -> None:
+        """Configure chart axes styling for dark theme."""
+        if self.ax is None:
+            return
+        self.ax.set_facecolor(ModernTheme.SECONDARY_BG)
+        self.ax.spines['bottom'].set_color(ModernTheme.TEXT_SECONDARY)
+        self.ax.spines['top'].set_color(ModernTheme.TEXT_SECONDARY)
+        self.ax.spines['left'].set_color(ModernTheme.TEXT_SECONDARY)
+        self.ax.spines['right'].set_color(ModernTheme.TEXT_SECONDARY)
+        self.ax.tick_params(colors=ModernTheme.TEXT_SECONDARY)
+        self.ax.xaxis.label.set_color(ModernTheme.TEXT_PRIMARY)
+        self.ax.yaxis.label.set_color(ModernTheme.TEXT_PRIMARY)
+        # Fix: Use set_title with color parameter instead of accessing title attribute
+        self.ax.set_title('', color=ModernTheme.TEXT_PRIMARY)
 
     def update_data(self, data: Dict[str, Any], title: str = "", xlabel: str = "", ylabel: str = "") -> None:
         """Update chart data"""
@@ -1279,24 +1277,31 @@ class ServerGUI:
             'timestamps': deque(maxlen=60),
             'bytes_transferred': deque(maxlen=60)
         }
-        
         # Current tab tracking
         self.current_tab: str = "dashboard"
-        
+
         # Tables for clients and files
         self.client_table: Optional[ModernTable] = None
         self.file_table: Optional[ModernTable] = None
         
+        # Detail panes for tables
+        self.client_detail_pane: Optional['DetailPane'] = None
+        self.file_detail_pane: Optional['DetailPane'] = None
+
         # Charts
         self.performance_chart: Optional[ModernChart] = None
         self.transfer_chart: Optional[ModernChart] = None
         self.client_chart: Optional[ModernChart] = None
-        
-        # Status indicators  
+        # Analytics date entries (may be tk.Entry or tkcalendar.DateEntry)
+        # Use Any to allow access to get/get_date without analyzer complaints
+        self.start_date_entry: Optional[Any] = None
+        self.end_date_entry: Optional[Any] = None
+
+        # Status indicators
         self.header_status_indicator: Optional[ModernStatusIndicator] = None
         self.tab_buttons: Dict[str, tk.Button] = {}
         self.tab_contents: Dict[str, tk.Frame] = {}
-        
+
         # Additional GUI components with proper typing
         self.main_frame: Optional[tk.Frame] = None
         self.header_frame: Optional[tk.Frame] = None
@@ -1305,12 +1310,12 @@ class ServerGUI:
         self.control_frame: Optional[tk.Frame] = None
         self.status_frame: Optional[tk.Frame] = None
         self.process_monitor_widget: Optional[Any] = None  # ProcessMonitorWidget when available
-        
+
         # Server reference is already set in __init__ - don't overwrite it!
-        
+
         # Settings - Load from file or use defaults
         self.settings: Dict[str, Any] = self._load_settings_from_file()
-        
+
         # Database path
         self.db_path = "defensive.db"
 
@@ -1321,6 +1326,21 @@ class ServerGUI:
         self.last_network_bytes: Optional[int] = None
         # Auto-refresh timer cache
         self._last_file_refresh_time: Optional[float] = None
+
+    def _make_date_entry(self, parent: tk.Widget, **kwargs: Any) -> tk.Widget:
+        """Create a date entry widget that falls back to a plain tk.Entry when tkcalendar isn't available.
+
+        This centralizes the conditional creation so static analyzers don't see a possible None call on DateEntry.
+        """
+        if CALENDAR_AVAILABLE and DateEntry is not None:
+            # DateEntry is provided by tkcalendar; cast to a generic Widget for type checkers
+            try:
+                return cast(tk.Widget, DateEntry(parent, **kwargs))  # type: ignore[call-arg]
+            except Exception:
+                # Fall back to standard Entry on any runtime issue
+                return tk.Entry(parent, width=15)
+        # Fallback
+        return tk.Entry(parent, width=15)
         
     def _load_settings_from_file(self) -> Dict[str, Any]:
         """Load settings from configuration file or return defaults"""
@@ -1465,12 +1485,14 @@ class ServerGUI:
             print("Starting enhanced ultra modern GUI main loop...")
             # Initialize tkinter with error handling
             try:
-                if DND_AVAILABLE:
-                    self.root = TkinterDnD.Tk()
+                if DND_AVAILABLE and TkinterDnD is not None:
+                    # Use TkinterDnD if available and not None; cast to tk.Tk for type checkers
+                    self.root = cast(tk.Tk, TkinterDnD.Tk())  # type: ignore[assignment]
                     print("TkinterDnD root created for drag-and-drop support.")
                 else:
-                    self.root = tk.Tk()
-                print("Tkinter root created")
+                    # Create standard Tk root and hint its type for static analyzers
+                    self.root = cast(tk.Tk, tk.Tk())
+                    print("Tkinter root created")
             except Exception as e:
                 print(f"Failed to create Tkinter root: {e}")
                 print("GUI will not be available - continuing in console mode")
@@ -1487,7 +1509,11 @@ class ServerGUI:
                 # Force window to front and make it visible
                 self.root.lift()  # type: ignore
                 self.root.attributes('-topmost', True)  # type: ignore
-                self.root.after(1000, lambda: self.root.attributes('-topmost', False) if self.root else None)  # type: ignore
+                def _clear_topmost() -> None:
+                    if self.root is not None:
+                        with suppress(Exception):
+                            self.root.attributes('-topmost', False)  # type: ignore[attr-defined]
+                self.root.after(1000, _clear_topmost)  # type: ignore
                 self.root.focus_force()
                 self.root.deiconify()  # Ensure window is not minimized
                 self.root.state('normal')  # Ensure window is in normal state
@@ -1496,7 +1522,11 @@ class ServerGUI:
                 self.root.wm_state('normal')
                 self.root.tkraise()  # type: ignore
                 self.root.grab_set()  # Keep focus initially
-                self.root.after(2000, lambda: self.root.grab_release() if self.root else None)
+                def _safe_grab_release() -> None:
+                    if self.root is not None:
+                        with suppress(Exception):
+                            self.root.grab_release()
+                self.root.after(2000, _safe_grab_release)
 
                 print("Root window configured with modern theme")
             except Exception as e:
@@ -1526,7 +1556,8 @@ class ServerGUI:
             self._schedule_updates()
 
             # Run GUI main loop
-            self.root.mainloop()
+            if self.root is not None:
+                self.root.mainloop()
 
         except Exception as e:
             print(f"Modern GUI main loop error: {e}")
@@ -1566,18 +1597,24 @@ class ServerGUI:
 
         # Initialize components
         if self.root is not None:
-            self.toast_system = ToastNotification(self.root)
+            # Cast root to Widget for ToastNotification constructor to satisfy type checkers
+            self.toast_system = ToastNotification(cast(tk.Widget, self.root))
         else:
             self.toast_system = None
             
         # Show welcome toast
         if self.root and self.toast_system:
             def show_welcome():
-                if self.toast_system:
-                    self.toast_system.show_toast("[READY] Enhanced Ultra Modern GUI Ready", "success", 3000)
+                self._safe_toast("[READY] Enhanced Ultra Modern GUI Ready", "success", 3000)
             self.root.after(1000, show_welcome)
 
         print("Enhanced ultra modern main window with sidebar created successfully!")
+
+    def _safe_toast(self, message: str, level: str = "info", duration: int = 3000) -> None:
+        """Safely show a toast if toast system exists. Keeps single-point guard for optional toast_system."""
+        with suppress(Exception):
+            if self.toast_system:
+                self.toast_system.show_toast(message, level, duration)
 
     def _create_menu_bar(self) -> None:
         """Create modern menu bar"""
@@ -1777,7 +1814,9 @@ class ServerGUI:
         # Create dashboard layout
         self.dashboard_content_frame = scrollable_frame
         self._create_compact_two_column_layout(self.dashboard_content_frame)
-        self.root.bind("<Configure>", self._check_layout)
+        # Guard bind call in case root is None to satisfy static analyzers
+        if self.root is not None:
+            self.root.bind("<Configure>", self._check_layout)
 
     def _create_clients_tab(self) -> None:
         """Create clients tab content"""
@@ -1789,7 +1828,7 @@ class ServerGUI:
         client_card.pack(fill="both", expand=True, padx=5, pady=5)
 
         # Paned window for table and detail pane
-        paned_window = tk.PanedWindow(client_card.content_frame, orient=tk.HORIZONTAL, bg=ModernTheme.CARD_BG, sashwidth=8)
+        paned_window = cast(tk.PanedWindow, tk.PanedWindow(client_card.content_frame, orient=tk.HORIZONTAL, bg=ModernTheme.CARD_BG, sashwidth=8))
         paned_window.pack(fill="both", expand=True, padx=10, pady=10)
 
         # Client table
@@ -1802,11 +1841,11 @@ class ServerGUI:
         }
 
         self.client_table = ModernTable(paned_window, columns)
-        paned_window.add(self.client_table, width=800)
+        cast(Any, paned_window).add(self.client_table, width=800)
 
         # Detail Pane
         self.client_detail_pane = DetailPane(paned_window, title="Client Details")
-        paned_window.add(self.client_detail_pane)
+        cast(Any, paned_window).add(self.client_detail_pane)
 
         self.client_table.set_selection_callback(self._on_client_selected)
 
@@ -1820,7 +1859,7 @@ class ServerGUI:
         file_card.pack(fill="both", expand=True, padx=5, pady=5)
 
         # Paned window for table and detail pane
-        paned_window = tk.PanedWindow(file_card.content_frame, orient=tk.HORIZONTAL, bg=ModernTheme.CARD_BG, sashwidth=8)
+        paned_window = cast(tk.PanedWindow, tk.PanedWindow(file_card.content_frame, orient=tk.HORIZONTAL, bg=ModernTheme.CARD_BG, sashwidth=8))
         paned_window.pack(fill="both", expand=True, padx=10, pady=10)
 
         # File table
@@ -1834,11 +1873,11 @@ class ServerGUI:
         }
 
         self.file_table = ModernTable(paned_window, columns)
-        paned_window.add(self.file_table, width=800)
+        cast(Any, paned_window).add(self.file_table, width=800)
 
         # Detail Pane
         self.file_detail_pane = DetailPane(paned_window, title="File Details")
-        paned_window.add(self.file_detail_pane)
+        cast(Any, paned_window).add(self.file_detail_pane)
 
         self.file_table.set_selection_callback(self._on_file_selected)
 
@@ -1852,20 +1891,13 @@ class ServerGUI:
         filter_frame.pack(fill="x", padx=5, pady=5)
 
         tk.Label(filter_frame, text="From:", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_PRIMARY).pack(side="left", padx=(10,5), pady=10)
-        if CALENDAR_AVAILABLE:
-            self.start_date_entry = DateEntry(filter_frame, width=12, background=ModernTheme.ACCENT_BLUE, foreground='white', borderwidth=2)
-            self.start_date_entry.pack(side="left", pady=10)
-        else:
-            self.start_date_entry = tk.Entry(filter_frame, width=15)
-            self.start_date_entry.pack(side="left", pady=10)
+        # Create a safe date entry widget (tkcalendar.DateEntry when available)
+        self.start_date_entry = self._make_date_entry(filter_frame, width=12, background=ModernTheme.ACCENT_BLUE, foreground='white', borderwidth=2)
+        self.start_date_entry.pack(side="left", pady=10)
 
         tk.Label(filter_frame, text="To:", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_PRIMARY).pack(side="left", padx=(20,5), pady=10)
-        if CALENDAR_AVAILABLE:
-            self.end_date_entry = DateEntry(filter_frame, width=12, background=ModernTheme.ACCENT_BLUE, foreground='white', borderwidth=2)
-            self.end_date_entry.pack(side="left", pady=10)
-        else:
-            self.end_date_entry = tk.Entry(filter_frame, width=15)
-            self.end_date_entry.pack(side="left", pady=10)
+        self.end_date_entry = self._make_date_entry(filter_frame, width=12, background=ModernTheme.ACCENT_BLUE, foreground='white', borderwidth=2)
+        self.end_date_entry.pack(side="left", pady=10)
 
         filter_btn = tk.Button(filter_frame, text="Filter", command=self._apply_analytics_filter, bg=ModernTheme.SUCCESS, fg=ModernTheme.TEXT_PRIMARY)
         filter_btn.pack(side="left", padx=20, pady=10)
@@ -2026,31 +2058,27 @@ class ServerGUI:
         self._create_compact_activity_log_card(right_column)
         self._create_compact_status_message_card(right_column)
 
+    def _create_info_row(self, parent: tk.Widget, label_text: str, key: str, default_text: str, text_color: Optional[str] = None) -> None:
+        """Create a consistent info row with label and value."""
+        row_frame = tk.Frame(parent, bg=ModernTheme.GLASS_BG)
+        row_frame.pack(fill="x", padx=10, pady=2)
+        tk.Label(row_frame, text=f"{label_text}:", bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_SECONDARY,
+                font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
+        self.status_labels[key] = tk.Label(row_frame, text=default_text,
+                                          bg=ModernTheme.GLASS_BG, 
+                                          fg=text_color or ModernTheme.TEXT_PRIMARY,
+                                          font=(ModernTheme.FONT_FAMILY, 9, 'bold' if text_color else 'normal'))
+        self.status_labels[key].pack(side="right")
+
     def _create_compact_server_status_card(self, parent: tk.Widget) -> None:
         """Create compact server status card with glass morphism"""
         card = GlassMorphismCard(parent, title="Server Status")
         card.pack(fill="x", pady=(0, 8), padx=3)
 
-        # Status display
-        status_frame = tk.Frame(card.content_frame, bg=ModernTheme.GLASS_BG)
-        status_frame.pack(fill="x", padx=10, pady=5)
-
-        tk.Label(status_frame, text="Status:", bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_SECONDARY,
-                font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
-        self.status_labels['status'] = tk.Label(status_frame, text="🛑 Stopped",
-                                               bg=ModernTheme.GLASS_BG, fg=ModernTheme.ERROR,
-                                               font=(ModernTheme.FONT_FAMILY, 9, 'bold'))
-        self.status_labels['status'].pack(side="right")
-
-        # Address
-        addr_frame = tk.Frame(card.content_frame, bg=ModernTheme.GLASS_BG)
-        addr_frame.pack(fill="x", padx=10, pady=2)
-        tk.Label(addr_frame, text="Address:", bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_SECONDARY,
-                font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
-        self.status_labels['address'] = tk.Label(addr_frame, text="🌐 Not configured",
-                                                bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_PRIMARY,
-                                                font=(ModernTheme.FONT_FAMILY, 9))
-        self.status_labels['address'].pack(side="right")
+        # Create status info rows using helper method
+        if card.content_frame:
+            self._create_info_row(card.content_frame, "Status", 'status', "🛑 Stopped", ModernTheme.ERROR)
+            self._create_info_row(card.content_frame, "Address", 'address', "🌐 Not configured")
 
         # Uptime
         uptime_frame = tk.Frame(card.content_frame, bg=ModernTheme.GLASS_BG)
@@ -2064,7 +2092,7 @@ class ServerGUI:
 
     def _check_layout(self, event: tk.Event) -> None:
         """Check the window size and adjust the layout accordingly."""
-        if not hasattr(self, 'dashboard_content_frame') or not self.dashboard_content_frame.winfo_exists():
+        if self.dashboard_content_frame is None or not self.dashboard_content_frame.winfo_exists():
             return
 
         width = event.width
@@ -2097,32 +2125,11 @@ class ServerGUI:
         card = GlassMorphismCard(parent, title="👥 Client Statistics")
         card.pack(fill="x", pady=(0, 8), padx=3)
 
-        # Connected clients
-        conn_frame = tk.Frame(card.content_frame, bg=ModernTheme.GLASS_BG)
-        conn_frame.pack(fill="x", padx=10, pady=5)
-        tk.Label(conn_frame, text="Connected:", bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_SECONDARY,
-                font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
-        self.status_labels['connected'] = tk.Label(conn_frame, text="0", bg=ModernTheme.GLASS_BG,
-                                                  fg=ModernTheme.ACCENT_BLUE, font=(ModernTheme.FONT_FAMILY, 9, 'bold'))
-        self.status_labels['connected'].pack(side="right")
-
-        # Total registered
-        total_frame = tk.Frame(card.content_frame, bg=ModernTheme.GLASS_BG)
-        total_frame.pack(fill="x", padx=10, pady=2)
-        tk.Label(total_frame, text="Total Registered:", bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_SECONDARY,
-                font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
-        self.status_labels['total'] = tk.Label(total_frame, text="0", bg=ModernTheme.GLASS_BG,
-                                              fg=ModernTheme.TEXT_PRIMARY, font=(ModernTheme.FONT_FAMILY, 9))
-        self.status_labels['total'].pack(side="right")
-
-        # Active transfers
-        trans_frame = tk.Frame(card.content_frame, bg=ModernTheme.GLASS_BG)
-        trans_frame.pack(fill="x", padx=10, pady=(2, 8))
-        tk.Label(trans_frame, text="Active Transfers:", bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_SECONDARY,
-                font=(ModernTheme.FONT_FAMILY, 9)).pack(side="left")
-        self.status_labels['active_transfers'] = tk.Label(trans_frame, text="0", bg=ModernTheme.GLASS_BG,
-                                                         fg=ModernTheme.ACCENT_GREEN, font=(ModernTheme.FONT_FAMILY, 9, 'bold'))
-        self.status_labels['active_transfers'].pack(side="right")
+        # Create client info rows using helper method
+        if card.content_frame:
+            self._create_info_row(card.content_frame, "Connected", 'connected', "0", ModernTheme.ACCENT_BLUE)
+            self._create_info_row(card.content_frame, "Total Registered", 'total', "0")
+            self._create_info_row(card.content_frame, "Active Transfers", 'active_transfers', "0", ModernTheme.ACCENT_GREEN)
 
     def _create_compact_transfer_stats_card(self, parent: tk.Widget) -> None:
         """Create compact transfer statistics card with glass morphism"""
@@ -2164,13 +2171,12 @@ class ServerGUI:
         card = ModernCard(parent, title="⚡ Live Transfers")
         card.pack(fill="x", pady=(0, 8), padx=3)
 
-        columns = {
-            'client': {'text': 'Client', 'width': 120},
-            'file': {'text': 'File', 'width': 180},
-            'progress': {'text': 'Progress', 'width': 100}
-        }
-
         if card.content_frame:
+            columns = {
+                'client': {'text': 'Client', 'width': 120},
+                'file': {'text': 'File', 'width': 180},
+                'progress': {'text': 'Progress', 'width': 100}
+            }
             self.live_transfer_table = ModernTable(card.content_frame, columns)
             self.live_transfer_table.pack(fill="both", expand=True, padx=5, pady=5)
             # We will need a way to update this table with live data later
@@ -2182,7 +2188,6 @@ class ServerGUI:
         if search_query and search_query != "🔍 Search clients, files, logs...":
             print(f"Global search for: {search_query}")
             # Here we would trigger a search across different data sources
-            pass
 
     def _on_search_focus_in(self, event: tk.Event) -> None:
         """Clear placeholder text on focus."""
@@ -2404,9 +2409,8 @@ class ServerGUI:
             self._add_activity_log("[ERROR] Server instance not available. Use 'python server.py' to start properly.")
             return
             
-        if self.server and hasattr(self.server, 'running') and self.server.running:
-            if self.toast_system:
-                self.toast_system.show_toast("Server is already running.", "warning")
+        if hasattr(self.server, 'running') and self.server.running and self.toast_system:
+            self.toast_system.show_toast("Server is already running.", "warning")
             return
             
         try:
@@ -2561,15 +2565,19 @@ class ServerGUI:
         elif self.toast_system:
             self.toast_system.show_toast("Server or database not available.", "error")
 
+    def _create_backup_filename(self, backup_dir: str) -> str:
+        """Create a timestamped backup filename."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"defensive_backup_{timestamp}.db"
+        return os.path.join(backup_dir, backup_filename)
+
     def _backup_database(self):
         """Create a backup of the SQLite database."""
         if (self.server and hasattr(self.server, 'db_manager') and 
             self.server.db_manager):
             try:
                 if backup_dir := filedialog.askdirectory(title="Select Backup Directory"):
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    backup_filename = f"defensive_backup_{timestamp}.db"
-                    backup_path = os.path.join(backup_dir, backup_filename)
+                    backup_path = self._create_backup_filename(backup_dir)
                     shutil.copy2(self.db_path, backup_path)
                     if self.toast_system:
                         self.toast_system.show_toast(f"Database backed up to {backup_path}", "success")
@@ -2611,8 +2619,9 @@ class ServerGUI:
         timestamp = datetime.now().strftime("%H:%M:%S")
         log_entry = f"[{timestamp}] {message}"
         self.activity_log.append(log_entry)  # type: ignore
-        if (hasattr(self, 'activity_log_text') and self.activity_log_text and 
-            hasattr(self.activity_log_text, 'config') and hasattr(self.activity_log_text, 'insert')):
+        if (self.activity_log_text is not None and 
+            hasattr(self.activity_log_text, 'config') and 
+            hasattr(self.activity_log_text, 'insert')):
             self.activity_log_text.config(state=tk.NORMAL)
             self.activity_log_text.insert(tk.END, log_entry + "\n")
             if hasattr(self.activity_log_text, 'see'):
@@ -2632,6 +2641,11 @@ class ServerGUI:
         if self.clock_label is not None:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.clock_label.config(text=now)
+
+    def _update_status_label(self, key: str, text: str) -> None:
+        """Update a status label if it exists."""
+        if key in self.status_labels:
+            self.status_labels[key].config(text=text)
 
     def _update_performance_metrics(self, performance_data: Optional[Dict[str, Any]] = None):
         """Update performance metrics on the dashboard."""
@@ -2698,19 +2712,14 @@ class ServerGUI:
         except Exception as e:
             print(f"Critical error getting system metrics: {e}")
             # If psutil fails completely, disable monitoring
-            if 'cpu_usage' in self.status_labels:
-                self.status_labels['cpu_usage'].config(text="Error")
-            if 'memory_usage' in self.status_labels:
-                self.status_labels['memory_usage'].config(text="Error")
-            if 'disk_usage' in self.status_labels:
-                self.status_labels['disk_usage'].config(text="Error")
-            if 'network_activity' in self.status_labels:
-                self.status_labels['network_activity'].config(text="Error")
+            self._update_status_label('cpu_usage', "Error")
+            self._update_status_label('memory_usage', "Error") 
+            self._update_status_label('disk_usage', "Error")
+            self._update_status_label('network_activity', "Error")
             return
 
         # Update labels with real data only
-        if 'cpu_usage' in self.status_labels:
-            self.status_labels['cpu_usage'].config(text=f"{cpu_percent:.1f}%")
+        self._update_status_label('cpu_usage', f"{cpu_percent:.1f}%")
         if 'memory_usage' in self.status_labels:
             self.status_labels['memory_usage'].config(text=f"{mem_percent:.1f}%")
         if 'disk_usage' in self.status_labels and disk_usage_percent is not None:
@@ -2778,42 +2787,69 @@ class ServerGUI:
 
     def _apply_analytics_filter(self):
         """Apply the selected date range to the analytics charts."""
-        start_date = self.start_date_entry.get_date() if CALENDAR_AVAILABLE else self.start_date_entry.get()
-        end_date = self.end_date_entry.get_date() if CALENDAR_AVAILABLE else self.end_date_entry.get()
+        # start_date_entry/end_date_entry may be DateEntry (has get_date) or Entry (has get)
+        start_date = None
+        end_date = None
+        if self.start_date_entry is not None:
+            if hasattr(self.start_date_entry, 'get_date'):
+                start_date = self.start_date_entry.get_date()
+            elif hasattr(self.start_date_entry, 'get'):
+                start_date = self.start_date_entry.get()
+        if self.end_date_entry is not None:
+            if hasattr(self.end_date_entry, 'get_date'):
+                end_date = self.end_date_entry.get_date()
+            elif hasattr(self.end_date_entry, 'get'):
+                end_date = self.end_date_entry.get()
         self._add_activity_log(f"Filtering analytics from {start_date} to {end_date}")
-        if self.toast_system:
-            self.toast_system.show_toast(f"Filtering data from {start_date} to {end_date}", "info")
+        # Safely show a toast about filtering
+        with suppress(Exception):
+            self._safe_toast(f"Filtering data from {start_date} to {end_date}", "info")
         # Placeholder for actual data filtering and chart updating logic
         self._update_analytics_charts()
 
     def _refresh_client_table(self):
         """Refresh the client table with data from the database."""
-        if self.client_table and self.server:
-            try:
-                clients = self.server.db_manager.get_all_clients()
-                
-                # Get online status from the server's in-memory client list
-                online_client_ids = list(self.server.clients.keys())
+        if not (self.client_table and self.server):
+            return
+        
+        self._populate_client_table()
 
-                table_data: List[Dict[str, Any]] = []
-                for client in clients:
-                    client_id_bytes = bytes.fromhex(client['id'])
-                    status = "🟢 Online" if client_id_bytes in online_client_ids else "[OFFLINE] Offline"
-                    
-                    table_data.append({
-                        'name': client['name'],
-                        'id': client['id'],
-                        'status': status,
-                        'last_seen': client['last_seen'],
-                        'files': 'N/A' # Placeholder
-                    })
+    def _populate_client_table(self):
+        """Populate the client table with current data."""
+        if not (self.server and self.client_table):
+            return
+            
+        try:
+            if not (hasattr(self.server, 'db_manager') and self.server.db_manager):
+                return
                 
-                self.client_table.set_data(table_data)
-                self._add_activity_log("Client table refreshed.")
-            except Exception as e:
-                self._add_activity_log(f"Error refreshing client table: {e}")
-                if self.toast_system is not None:
-                    self.toast_system.show_toast(f"Failed to refresh clients: {e}", "error")
+            clients = self.server.db_manager.get_all_clients()
+            
+            # Get online status from the server's in-memory client list
+            if hasattr(self.server, 'clients'):
+                online_client_ids = list(self.server.clients.keys())
+            else:
+                online_client_ids = []
+
+            table_data: List[Dict[str, Any]] = []
+            for client in clients:
+                client_id_bytes = bytes.fromhex(client['id'])
+                status = "🟢 Online" if client_id_bytes in online_client_ids else "[OFFLINE] Offline"
+                
+                table_data.append({
+                    'name': client['name'],
+                    'id': client['id'],
+                    'status': status,
+                    'last_seen': client['last_seen'],
+                    'files': 'N/A' # Placeholder
+                })
+            
+            self.client_table.set_data(table_data)
+            self._add_activity_log("Client table refreshed.")
+        except Exception as e:
+            self._add_activity_log(f"Error refreshing client table: {e}")
+            if self.toast_system is not None:
+                self.toast_system.show_toast(f"Failed to refresh clients: {e}", "error")
 
     def _on_client_selected(self, selected_item: Optional[Dict[str, Any]]) -> None:
         """Handle client selection in the table."""
@@ -3054,8 +3090,9 @@ class ServerGUI:
                     self._refresh_file_table()
                 elif self.toast_system:
                     self.toast_system.show_toast(f"Failed to delete file '{filename}'.", "error")
-            elif self.toast_system:
-                self.toast_system.show_toast("Server is not running.", "error")
+            else:
+                if self.toast_system:
+                    self.toast_system.show_toast("Server is not running.", "error")
         elif self.toast_system:
             self.toast_system.show_toast("File table not initialized.", "error")
 
@@ -3153,7 +3190,7 @@ class ServerGUI:
             print("[DEBUG] header_status_label not found")
 
         # Update header status indicator
-        if hasattr(self, 'header_status_indicator') and self.header_status_indicator is not None and hasattr(self.header_status_indicator, 'set_status'):
+        if self.header_status_indicator is not None and hasattr(self.header_status_indicator, 'set_status'):
             print("[DEBUG] Updating header status indicator")
             self.header_status_indicator.set_status(indicator_status)
         else:
@@ -3184,10 +3221,8 @@ class ServerGUI:
     
     def _create_system_tray(self):
         """Create system tray icon if available."""
-        # System tray functionality is optional
-        if TRAY_AVAILABLE:
-            # TODO: Implement system tray functionality
-            pass
+        # System tray functionality is optional - TODO: Implement when needed
+        # Currently TRAY_AVAILABLE but no implementation yet
     
     def _schedule_updates(self):
         """Schedule periodic GUI updates."""
@@ -3201,15 +3236,16 @@ class ServerGUI:
             
             # Auto-refresh file table every 5 seconds when server is running
             # This ensures new files appear automatically without manual refresh
-            if self.status.running and hasattr(self, '_last_file_refresh_time'):
-                current_time = time.time()
-                if self._last_file_refresh_time is not None and (current_time - self._last_file_refresh_time) >= 5.0:  # 5 second interval
-                    if hasattr(self, 'current_tab') and self.current_tab == 'files':
-                        self._refresh_file_table()
-                    self._last_file_refresh_time = current_time
-            elif self.status.running and not hasattr(self, '_last_file_refresh_time'):
-                # Initialize refresh timer
-                self._last_file_refresh_time = time.time()
+            if self.status.running:
+                if not hasattr(self, '_last_file_refresh_time'):
+                    # Initialize refresh timer
+                    self._last_file_refresh_time = time.time()
+                else:
+                    current_time = time.time()
+                    if self._last_file_refresh_time is not None and (current_time - self._last_file_refresh_time) >= 5.0:  # 5 second interval
+                        if hasattr(self, 'current_tab') and self.current_tab == 'files':
+                            self._refresh_file_table()
+                        self._last_file_refresh_time = current_time
 
             # Update uptime if server is running
             if self.status.running:
