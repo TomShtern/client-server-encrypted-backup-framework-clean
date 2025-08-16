@@ -7,6 +7,10 @@ class FileManager {
         
         // File validation settings
         this.maxFileSize = 5 * 1024 * 1024 * 1024; // 5GB default
+        
+        // File type icon mappings for comprehensive visual feedback
+        this.fileTypeIcons = this._initializeFileTypeIcons();
+        this.fileCategories = this._initializeFileCategories();
         this.allowedTypes = new Set([
             // Documents
             'application/pdf', 'text/plain', 'text/csv', 'application/json',
@@ -46,6 +50,237 @@ class FileManager {
         ]);
     }
     
+    /**
+     * Initialize comprehensive file type icon mappings
+     * @private
+     * @returns {Map} File extension to icon mapping
+     */
+    _initializeFileTypeIcons() {
+        return new Map([
+            // Documents & Text
+            ['.txt', { icon: '📄', color: '--text-secondary' }],
+            ['.doc', { icon: '📝', color: '--neon-blue' }],
+            ['.docx', { icon: '📝', color: '--neon-blue' }],
+            ['.pdf', { icon: '📕', color: '--neon-red' }],
+            ['.rtf', { icon: '📄', color: '--text-secondary' }],
+            ['.odt', { icon: '📝', color: '--neon-blue' }],
+            
+            // Spreadsheets & Data
+            ['.xls', { icon: '📊', color: '--neon-green' }],
+            ['.xlsx', { icon: '📊', color: '--neon-green' }],
+            ['.csv', { icon: '📈', color: '--cyber-lime' }],
+            ['.ods', { icon: '📊', color: '--neon-green' }],
+            
+            // Presentations
+            ['.ppt', { icon: '📽️', color: '--neon-orange' }],
+            ['.pptx', { icon: '📽️', color: '--neon-orange' }],
+            ['.odp', { icon: '📽️', color: '--neon-orange' }],
+            
+            // Images
+            ['.jpg', { icon: '🖼️', color: '--neon-purple' }],
+            ['.jpeg', { icon: '🖼️', color: '--neon-purple' }],
+            ['.png', { icon: '🖼️', color: '--neon-purple' }],
+            ['.gif', { icon: '🎞️', color: '--plasma-pink' }],
+            ['.bmp', { icon: '🖼️', color: '--neon-purple' }],
+            ['.webp', { icon: '🖼️', color: '--neon-purple' }],
+            ['.svg', { icon: '🎨', color: '--electric-blue' }],
+            ['.ico', { icon: '🔸', color: '--neon-yellow' }],
+            ['.tiff', { icon: '🖼️', color: '--neon-purple' }],
+            ['.tif', { icon: '🖼️', color: '--neon-purple' }],
+            
+            // Audio
+            ['.mp3', { icon: '🎵', color: '--neon-yellow' }],
+            ['.wav', { icon: '🎵', color: '--neon-yellow' }],
+            ['.flac', { icon: '🎶', color: '--neon-orange' }],
+            ['.aac', { icon: '🎵', color: '--neon-yellow' }],
+            ['.ogg', { icon: '🎵', color: '--neon-yellow' }],
+            ['.m4a', { icon: '🎵', color: '--neon-yellow' }],
+            ['.wma', { icon: '🎵', color: '--neon-yellow' }],
+            
+            // Video
+            ['.mp4', { icon: '📹', color: '--neon-red' }],
+            ['.avi', { icon: '📹', color: '--neon-red' }],
+            ['.mov', { icon: '🎬', color: '--plasma-pink' }],
+            ['.wmv', { icon: '📹', color: '--neon-red' }],
+            ['.flv', { icon: '📹', color: '--neon-red' }],
+            ['.mkv', { icon: '🎬', color: '--plasma-pink' }],
+            ['.webm', { icon: '📹', color: '--neon-red' }],
+            ['.m4v', { icon: '📹', color: '--neon-red' }],
+            
+            // Archives
+            ['.zip', { icon: '📦', color: '--neon-blue' }],
+            ['.rar', { icon: '📦', color: '--neon-blue' }],
+            ['.7z', { icon: '📦', color: '--neon-blue' }],
+            ['.tar', { icon: '📦', color: '--neon-blue' }],
+            ['.gz', { icon: '📦', color: '--neon-blue' }],
+            ['.bz2', { icon: '📦', color: '--neon-blue' }],
+            ['.xz', { icon: '📦', color: '--neon-blue' }],
+            
+            // Code & Development
+            ['.js', { icon: '💛', color: '--neon-yellow' }],
+            ['.ts', { icon: '💙', color: '--electric-blue' }],
+            ['.jsx', { icon: '⚛️', color: '--neon-blue' }],
+            ['.tsx', { icon: '⚛️', color: '--electric-blue' }],
+            ['.html', { icon: '🌐', color: '--neon-orange' }],
+            ['.css', { icon: '🎨', color: '--neon-purple' }],
+            ['.scss', { icon: '🎨', color: '--plasma-pink' }],
+            ['.sass', { icon: '🎨', color: '--plasma-pink' }],
+            ['.json', { icon: '📋', color: '--neon-green' }],
+            ['.xml', { icon: '📋', color: '--neon-orange' }],
+            ['.yaml', { icon: '📋', color: '--cyber-lime' }],
+            ['.yml', { icon: '📋', color: '--cyber-lime' }],
+            ['.py', { icon: '🐍', color: '--neon-green' }],
+            ['.java', { icon: '☕', color: '--neon-orange' }],
+            ['.cpp', { icon: '⚙️', color: '--electric-blue' }],
+            ['.c', { icon: '⚙️', color: '--neon-blue' }],
+            ['.cs', { icon: '💜', color: '--neon-purple' }],
+            ['.php', { icon: '🐘', color: '--neon-purple' }],
+            ['.rb', { icon: '💎', color: '--neon-red' }],
+            ['.go', { icon: '🐹', color: '--electric-blue' }],
+            ['.rs', { icon: '🦀', color: '--neon-orange' }],
+            ['.swift', { icon: '🦉', color: '--neon-orange' }],
+            ['.kt', { icon: '🟣', color: '--neon-purple' }],
+            ['.sh', { icon: '💻', color: '--neon-green' }],
+            ['.bat', { icon: '⚡', color: '--neon-yellow' }],
+            ['.ps1', { icon: '💙', color: '--electric-blue' }],
+            
+            // Configuration & System
+            ['.config', { icon: '⚙️', color: '--text-dim' }],
+            ['.ini', { icon: '⚙️', color: '--text-dim' }],
+            ['.cfg', { icon: '⚙️', color: '--text-dim' }],
+            ['.conf', { icon: '⚙️', color: '--text-dim' }],
+            ['.env', { icon: '🔐', color: '--neon-yellow' }],
+            ['.log', { icon: '📜', color: '--text-secondary' }],
+            
+            // Databases
+            ['.sql', { icon: '🗃️', color: '--electric-blue' }],
+            ['.db', { icon: '🗄️', color: '--neon-blue' }],
+            ['.sqlite', { icon: '🗄️', color: '--neon-blue' }],
+            ['.mdb', { icon: '🗄️', color: '--neon-blue' }],
+            
+            // Fonts
+            ['.ttf', { icon: '🔤', color: '--text-primary' }],
+            ['.otf', { icon: '🔤', color: '--text-primary' }],
+            ['.woff', { icon: '🔤', color: '--text-primary' }],
+            ['.woff2', { icon: '🔤', color: '--text-primary' }],
+            
+            // 3D & Design
+            ['.blend', { icon: '🎭', color: '--neon-orange' }],
+            ['.obj', { icon: '🧊', color: '--neon-blue' }],
+            ['.fbx', { icon: '🧊', color: '--neon-blue' }],
+            ['.dae', { icon: '🧊', color: '--neon-blue' }],
+            ['.psd', { icon: '🎨', color: '--neon-purple' }],
+            ['.ai', { icon: '🎨', color: '--neon-orange' }],
+            ['.sketch', { icon: '🎨', color: '--neon-yellow' }],
+            ['.fig', { icon: '🎨', color: '--neon-purple' }],
+            
+            // Default fallback
+            ['default', { icon: '📄', color: '--text-secondary' }]
+        ]);
+    }
+    
+    /**
+     * Initialize file category classifications for enhanced filtering
+     * @private
+     * @returns {Map} Category to extensions mapping
+     */
+    _initializeFileCategories() {
+        return new Map([
+            ['documents', ['.txt', '.doc', '.docx', '.pdf', '.rtf', '.odt']],
+            ['spreadsheets', ['.xls', '.xlsx', '.csv', '.ods']],
+            ['presentations', ['.ppt', '.pptx', '.odp']],
+            ['images', ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico', '.tiff', '.tif']],
+            ['audio', ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma']],
+            ['video', ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv', '.webm', '.m4v']],
+            ['archives', ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz']],
+            ['code', ['.js', '.ts', '.jsx', '.tsx', '.html', '.css', '.scss', '.sass', '.json', '.xml', '.yaml', '.yml', '.py', '.java', '.cpp', '.c', '.cs', '.php', '.rb', '.go', '.rs', '.swift', '.kt', '.sh', '.bat', '.ps1']],
+            ['config', ['.config', '.ini', '.cfg', '.conf', '.env', '.log']],
+            ['database', ['.sql', '.db', '.sqlite', '.mdb']],
+            ['fonts', ['.ttf', '.otf', '.woff', '.woff2']],
+            ['design', ['.blend', '.obj', '.fbx', '.dae', '.psd', '.ai', '.sketch', '.fig']]
+        ]);
+    }
+    
+    /**
+     * Get file type icon and color information
+     * @param {File} file - The file object
+     * @returns {Object} Icon and color information
+     */
+    getFileTypeIcon(file) {
+        const fileName = file.name.toLowerCase();
+        const extension = '.' + fileName.split('.').pop();
+        
+        // Get icon info from mapping or default
+        const iconInfo = this.fileTypeIcons.get(extension) || this.fileTypeIcons.get('default');
+        
+        // Add file category classification
+        const category = this.getFileCategory(extension);
+        
+        return {
+            icon: iconInfo.icon,
+            color: iconInfo.color,
+            extension: extension,
+            category: category,
+            displayName: this.getFileDisplayName(file)
+        };
+    }
+    
+    /**
+     * Get file validation badge with visual status indicators
+     * @param {Object} validationResult - Result from validateFile method
+     * @returns {Object} Badge information with icon, color, and status
+     */
+    getFileValidationBadge(validationResult) {
+        const { isValid, errors, warnings, fileInfo } = validationResult;
+        
+        // Determine overall status
+        let status, icon, color, message;
+        
+        if (!isValid) {
+            status = 'error';
+            icon = '❌';
+            color = '--error';
+            message = `${errors.length} error${errors.length > 1 ? 's' : ''}`;
+        } else if (warnings.length > 0) {
+            // Check for large file specifically
+            const hasLargeFileWarning = warnings.some(w => w.includes('Large file'));
+            if (hasLargeFileWarning) {
+                status = 'large';
+                icon = '⚠️';
+                color = '--warning';
+                message = 'Large file';
+            } else {
+                status = 'warning';
+                icon = '⚠️';
+                color = '--warning';
+                message = `${warnings.length} warning${warnings.length > 1 ? 's' : ''}`;
+            }
+        } else {
+            status = 'valid';
+            icon = '✅';
+            color = '--success';
+            message = 'Valid file';
+        }
+        
+        return {
+            status,
+            icon,
+            color,
+            message,
+            details: {
+                errors: errors.length,
+                warnings: warnings.length,
+                size: fileInfo.size,
+                sizeFormatted: this.formatFileSize(fileInfo.size)
+            }
+        };
+    }
+    
+    /**
+     * Enhanced file validation with improved visual feedback integration
+     * @param {File} file - The file to validate
+     * @returns {Object} Enhanced validation result with UI helpers
+     */
     validateFile(file) {
         const errors = [];
         const warnings = [];
@@ -77,12 +312,15 @@ class FileManager {
             warnings.push('File type could not be determined. Proceed with caution.');
         }
         
-        // Large file warning
-        if (file.size > 100 * 1024 * 1024) { // 100MB
+        // Enhanced size warnings with specific thresholds
+        if (file.size > 1024 * 1024 * 1024) { // 1GB
+            warnings.push(`Very large file detected (${this.formatFileSize(file.size)}). Upload may take considerable time.`);
+        } else if (file.size > 100 * 1024 * 1024) { // 100MB
             warnings.push(`Large file detected (${this.formatFileSize(file.size)}). Upload may take a long time.`);
         }
         
-        return {
+        // Create base validation result
+        const validationResult = {
             isValid: errors.length === 0,
             errors,
             warnings,
@@ -93,6 +331,128 @@ class FileManager {
                 lastModified: new Date(file.lastModified).toLocaleString()
             }
         };
+        
+        // Add enhanced UI helpers
+        validationResult.iconInfo = this.getFileTypeIcon(file);
+        validationResult.badge = this.getFileValidationBadge(validationResult);
+        validationResult.riskLevel = this.assessFileRiskLevel(file, validationResult);
+        
+        return validationResult;
+    }
+    
+    /**
+     * Get file category based on extension
+     * @private
+     * @param {string} extension - File extension
+     * @returns {string} Category name
+     */
+    getFileCategory(extension) {
+        for (const [category, extensions] of this.fileCategories) {
+            if (extensions.includes(extension)) {
+                return category;
+            }
+        }
+        return 'other';
+    }
+    
+    /**
+     * Generate user-friendly display name for file
+     * @private
+     * @param {File} file - File object
+     * @returns {string} Display name
+     */
+    getFileDisplayName(file) {
+        const name = file.name;
+        if (name.length <= 30) {
+            return name;
+        }
+        
+        const extension = '.' + name.split('.').pop();
+        const baseName = name.substring(0, name.lastIndexOf('.'));
+        const maxBaseLength = 30 - extension.length - 3; // 3 for '...'
+        
+        return baseName.substring(0, maxBaseLength) + '...' + extension;
+    }
+    
+    /**
+     * Assess overall file risk level for enhanced security feedback
+     * @private
+     * @param {File} file - File object
+     * @param {Object} validationResult - Validation result
+     * @returns {Object} Risk assessment
+     */
+    assessFileRiskLevel(file, validationResult) {
+        let riskScore = 0;
+        let riskFactors = [];
+        
+        // Size-based risk
+        if (file.size > 1024 * 1024 * 1024) { // 1GB+
+            riskScore += 3;
+            riskFactors.push('Very large file size');
+        } else if (file.size > 100 * 1024 * 1024) { // 100MB+
+            riskScore += 2;
+            riskFactors.push('Large file size');
+        }
+        
+        // Type-based risk
+        if (!file.type) {
+            riskScore += 2;
+            riskFactors.push('Unknown file type');
+        }
+        
+        // Extension-based risk
+        const fileName = file.name.toLowerCase();
+        const extension = '.' + fileName.split('.').pop();
+        const isExecutable = ['.exe', '.msi', '.bat', '.cmd', '.scr'].includes(extension);
+        if (isExecutable) {
+            riskScore += 5;
+            riskFactors.push('Executable file type');
+        }
+        
+        // Error/warning based risk
+        riskScore += validationResult.errors.length * 3;
+        riskScore += validationResult.warnings.length * 1;
+        
+        // Determine risk level
+        let riskLevel, riskColor;
+        if (riskScore >= 7) {
+            riskLevel = 'high';
+            riskColor = '--error';
+        } else if (riskScore >= 4) {
+            riskLevel = 'medium';
+            riskColor = '--warning';
+        } else if (riskScore >= 2) {
+            riskLevel = 'low';
+            riskColor = '--info';
+        } else {
+            riskLevel = 'minimal';
+            riskColor = '--success';
+        }
+        
+        return {
+            level: riskLevel,
+            score: riskScore,
+            color: riskColor,
+            factors: riskFactors,
+            recommendation: this.getRiskRecommendation(riskLevel)
+        };
+    }
+    
+    /**
+     * Get risk-based recommendation for file handling
+     * @private
+     * @param {string} riskLevel - Calculated risk level
+     * @returns {string} User recommendation
+     */
+    getRiskRecommendation(riskLevel) {
+        const recommendations = {
+            'minimal': 'File appears safe to upload',
+            'low': 'Review file before uploading',
+            'medium': 'Use caution - verify file source and content',
+            'high': 'High risk - strongly recommend avoiding upload'
+        };
+        
+        return recommendations[riskLevel] || 'Unknown risk level';
     }
     
     formatFileSize(bytes) {
@@ -102,6 +462,133 @@ class FileManager {
         const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(1024));
         return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+    }
+    
+    /**
+     * Get file type icon and metadata based on file extension and MIME type
+     * @param {File} file - The file object
+     * @returns {Object} Icon information with emoji, color, and category
+     */
+    getFileTypeIcon(file) {
+        const fileName = file.name.toLowerCase();
+        const fileType = file.type.toLowerCase();
+        const extension = fileName.split('.').pop();
+        
+        // File type mappings with cyberpunk-themed colors
+        const fileTypeMap = {
+            // Documents
+            'txt': { icon: '📄', color: 'var(--text-secondary)', category: 'document' },
+            'pdf': { icon: '📕', color: 'var(--neon-red)', category: 'document' },
+            'doc': { icon: '📘', color: 'var(--neon-blue)', category: 'document' },
+            'docx': { icon: '📘', color: 'var(--neon-blue)', category: 'document' },
+            'rtf': { icon: '📄', color: 'var(--text-secondary)', category: 'document' },
+            
+            // Images
+            'jpg': { icon: '🖼️', color: 'var(--neon-purple)', category: 'image' },
+            'jpeg': { icon: '🖼️', color: 'var(--neon-purple)', category: 'image' },
+            'png': { icon: '🖼️', color: 'var(--neon-purple)', category: 'image' },
+            'gif': { icon: '🎞️', color: 'var(--neon-pink)', category: 'image' },
+            'webp': { icon: '🖼️', color: 'var(--neon-purple)', category: 'image' },
+            'svg': { icon: '🎨', color: 'var(--neon-green)', category: 'image' },
+            'bmp': { icon: '🖼️', color: 'var(--neon-purple)', category: 'image' },
+            'ico': { icon: '🏷️', color: 'var(--neon-yellow)', category: 'image' },
+            
+            // Video
+            'mp4': { icon: '📹', color: 'var(--neon-red)', category: 'video' },
+            'avi': { icon: '📹', color: 'var(--neon-red)', category: 'video' },
+            'mov': { icon: '🎬', color: 'var(--neon-red)', category: 'video' },
+            'wmv': { icon: '📹', color: 'var(--neon-red)', category: 'video' },
+            'flv': { icon: '📹', color: 'var(--neon-red)', category: 'video' },
+            'webm': { icon: '📹', color: 'var(--neon-red)', category: 'video' },
+            'mkv': { icon: '📹', color: 'var(--neon-red)', category: 'video' },
+            
+            // Audio
+            'mp3': { icon: '🎵', color: 'var(--neon-yellow)', category: 'audio' },
+            'wav': { icon: '🎵', color: 'var(--neon-yellow)', category: 'audio' },
+            'flac': { icon: '🎶', color: 'var(--neon-yellow)', category: 'audio' },
+            'aac': { icon: '🎵', color: 'var(--neon-yellow)', category: 'audio' },
+            'ogg': { icon: '🎵', color: 'var(--neon-yellow)', category: 'audio' },
+            
+            // Code
+            'js': { icon: '⚡', color: 'var(--electric-blue)', category: 'code' },
+            'html': { icon: '🌐', color: 'var(--neon-orange)', category: 'code' },
+            'css': { icon: '🎨', color: 'var(--neon-blue)', category: 'code' },
+            'json': { icon: '📋', color: 'var(--neon-green)', category: 'code' },
+            'xml': { icon: '📋', color: 'var(--neon-green)', category: 'code' },
+            'py': { icon: '🐍', color: 'var(--neon-green)', category: 'code' },
+            'java': { icon: '☕', color: 'var(--neon-orange)', category: 'code' },
+            'cpp': { icon: '⚙️', color: 'var(--electric-blue)', category: 'code' },
+            'c': { icon: '⚙️', color: 'var(--electric-blue)', category: 'code' },
+            
+            // Archives
+            'zip': { icon: '📦', color: 'var(--neon-blue)', category: 'archive' },
+            'rar': { icon: '📦', color: 'var(--neon-blue)', category: 'archive' },
+            '7z': { icon: '📦', color: 'var(--neon-blue)', category: 'archive' },
+            'tar': { icon: '📦', color: 'var(--neon-blue)', category: 'archive' },
+            'gz': { icon: '📦', color: 'var(--neon-blue)', category: 'archive' },
+            
+            // Spreadsheets
+            'xls': { icon: '📊', color: 'var(--neon-green)', category: 'spreadsheet' },
+            'xlsx': { icon: '📊', color: 'var(--neon-green)', category: 'spreadsheet' },
+            'csv': { icon: '📈', color: 'var(--neon-green)', category: 'spreadsheet' },
+            
+            // Presentations  
+            'ppt': { icon: '📽️', color: 'var(--neon-orange)', category: 'presentation' },
+            'pptx': { icon: '📽️', color: 'var(--neon-orange)', category: 'presentation' }
+        };
+        
+        // Get file info from extension or fallback to generic
+        const fileInfo = fileTypeMap[extension] || { 
+            icon: '📄', 
+            color: 'var(--text-dim)', 
+            category: 'unknown' 
+        };
+        
+        return {
+            ...fileInfo,
+            extension: extension,
+            mimeType: fileType,
+            name: file.name,
+            size: file.size,
+            formattedSize: this.formatFileSize(file.size)
+        };
+    }
+    
+    /**
+     * Create a file validation badge based on validation results
+     * @param {Object} validationResult - Result from validateFile method
+     * @returns {Object} Badge information with icon, color, and message
+     */
+    getFileValidationBadge(validationResult) {
+        const { isValid, errors, warnings } = validationResult;
+        
+        if (errors.length > 0) {
+            return {
+                icon: '❌',
+                color: 'var(--error)',
+                type: 'error',
+                message: errors[0],
+                className: 'validation-badge error'
+            };
+        }
+        
+        if (warnings.length > 0) {
+            return {
+                icon: '⚠️',
+                color: 'var(--warning)',
+                type: 'warning', 
+                message: warnings[0],
+                className: 'validation-badge warning'
+            };
+        }
+        
+        return {
+            icon: '✅',
+            color: 'var(--success)',
+            type: 'valid',
+            message: 'File is ready for upload',
+            className: 'validation-badge success'
+        };
     }
     
     updateValidationSettings(settings) {
