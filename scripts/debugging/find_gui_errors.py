@@ -11,7 +11,7 @@ def find_errors() -> bool:
     try:
         # Test imports
         print("Testing imports...")
-        from python_server.server_gui.ServerGUI import (
+        from python_server.server_gui import (
             ServerGUI, ModernCard, ModernProgressBar, ModernStatusIndicator
         )
         print("✓ All imports successful")

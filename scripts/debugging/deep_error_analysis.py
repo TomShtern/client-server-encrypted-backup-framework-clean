@@ -18,6 +18,58 @@ sys.path.insert(0, project_root)
 from Shared.path_utils import setup_imports
 setup_imports()
 
+def check_syntax_and_incomplete_methods(content: str, filepath: str) -> Dict[str, List[str]]:
+    # sourcery skip: low-code-quality
+    """Check syntax and find incomplete methods"""
+    syntax_errors: List[str] = []
+    incomplete_methods: List[str] = []
+    
+    try:
+        tree = ast.parse(content)
+        # Find incomplete methods
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                # Check for methods with minimal implementation
+                if len(node.body) == 1:
+                    first_stmt = node.body[0]
+                    if isinstance(first_stmt, ast.Pass):
+                        incomplete_methods.append(f"Line {node.lineno}: {node.name} - Only pass statement")
+                    elif isinstance(first_stmt, ast.Expr):
+                        if isinstance(first_stmt.value, ast.Constant):
+                            if first_stmt.value.value in [Ellipsis, "..."]:
+                                incomplete_methods.append(f"Line {node.lineno}: {node.name} - Only ellipsis")
+                        elif hasattr(ast, 'Str') and isinstance(first_stmt.value, ast.Str):
+                            if first_stmt.value.s in ["...", "TODO", "FIXME"]:
+                                incomplete_methods.append(f"Line {node.lineno}: {node.name} - Placeholder: {first_stmt.value.s}")
+                elif len(node.body) == 0:
+                    incomplete_methods.append(f"Line {node.lineno}: {node.name} - Empty method body")
+    except SyntaxError as e:
+        syntax_errors.append(f"Line {e.lineno}: {e.msg}")
+    
+    return {'syntax_errors': syntax_errors, 'incomplete_methods': incomplete_methods}
+
+
+def check_imports(content: str, filepath: str) -> List[str]:
+    """Check for missing imports"""
+    missing_imports: List[str] = []
+    
+    # Test key imports for ServerGUI.py
+    if 'ServerGUI.py' in filepath:
+        test_imports = [
+            'import tkinter as tk',
+            'from tkinter import ttk, messagebox, filedialog',
+            'import threading',
+            'import queue',
+            'from datetime import datetime',
+            'from typing import Dict, List, Optional, Any, Union, Tuple',
+            'from collections import deque'
+        ]
+        
+        missing_imports.extend(f"Missing: {imp}" for imp in test_imports if imp not in content)
+    
+    return missing_imports
+
+
 def analyze_python_file(filepath: str) -> Dict[str, Any]:
     """Analyze a Python file for various issues"""
     results: Dict[str, Any] = {
@@ -34,58 +86,14 @@ def analyze_python_file(filepath: str) -> Dict[str, Any]:
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Check syntax
-        try:
-            tree = ast.parse(content)
-
-            # Find incomplete methods
-            for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef):
-                    # Check for methods with minimal implementation
-                    if len(node.body) == 1:
-                        first_stmt = node.body[0]
-                        if isinstance(first_stmt, ast.Pass):
-                            results['incomplete_methods'].append(f"Line {node.lineno}: {node.name} - Only pass statement")
-                        elif isinstance(first_stmt, ast.Expr):
-                            if isinstance(first_stmt.value, ast.Constant):
-                                if first_stmt.value.value in [Ellipsis, "..."]:
-                                    results['incomplete_methods'].append(f"Line {node.lineno}: {node.name} - Only ellipsis")
-                            elif hasattr(ast, 'Str') and isinstance(first_stmt.value, ast.Str):
-                                if first_stmt.value.s in ["...", "TODO", "FIXME"]:
-                                    results['incomplete_methods'].append(f"Line {node.lineno}: {node.name} - Placeholder: {first_stmt.value.s}")
-
-                    elif len(node.body) == 0:
-                        results['incomplete_methods'].append(f"Line {node.lineno}: {node.name} - Empty method body")
-
-        except SyntaxError as e:
-            results['syntax_errors'].append(f"Line {e.lineno}: {e.msg}")
+        # Check syntax and incomplete methods
+        syntax_results = check_syntax_and_incomplete_methods(content, filepath)
+        results['syntax_errors'] = syntax_results['syntax_errors']
+        results['incomplete_methods'] = syntax_results['incomplete_methods']
 
         # Test imports
         try:
-            # Extract import statements
-            import_names: List[str] = []
-            lines: List[str] = content.split('\n')
-            for line in lines:
-                line = line.strip()
-                if line.startswith('import ') or line.startswith('from '):
-                    import_names.append(line)
-
-            # Test key imports for ServerGUI.py
-            if 'ServerGUI.py' in filepath:
-                test_imports = [
-                    'import tkinter as tk',
-                    'from tkinter import ttk, messagebox, filedialog',
-                    'import threading',
-                    'import queue',
-                    'from datetime import datetime',
-                    'from typing import Dict, List, Optional, Any, Union, Tuple',
-                    'from collections import deque'
-                ]
-
-                for imp in test_imports:
-                    if imp not in content:
-                        results['missing_imports'].append(f"Missing: {imp}")
-
+            results['missing_imports'] = check_imports(content, filepath)
         except Exception as e:
             results['import_errors'].append(f"Import analysis error: {e}")
 
@@ -100,7 +108,7 @@ def test_functionality() -> List[str]:
 
     print("Testing ServerGUI functionality...")
     try:
-        from python_server.server_gui.ServerGUI import ServerGUI, ModernCard, ModernProgressBar, ModernStatusIndicator
+        from python_server.server_gui import ServerGUI, ModernCard, ModernProgressBar, ModernStatusIndicator
 
         # Test basic instantiation
         gui = ServerGUI()

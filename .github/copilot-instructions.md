@@ -38,7 +38,7 @@ High-level agent contract:
     - Use the file lifecycle helpers (`Shared/utils/file_lifecycle.py` / SynchronizedFileManager) to avoid race conditions when creating or copying `transfer.info`.
 
 - Quick developer workflows (examples found in repo):
-    - Fast start (recommended & canonical launcher): `#file:one_click_build_and_run.py` (located at `scripts/one_click_build_and_run.py`) — this script is the canonical launcher for building and starting the full system, running checks, and creating `transfer.info` when missing.
+    - Fast start (recommended & canonical launcher): `scripts/one_click_build_and_run.py` (located at `scripts/one_click_build_and_run.py`) — this script is the canonical launcher for building and starting the full system, running checks, and creating `transfer.info` when missing.
     - Manual: start server first `python python_server/server/server.py` (port 1256), then API `python api_server/cyberbackup_api_server.py` (port 9090).
     - C++ build: use vcpkg toolchain: `cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg\scripts\buildsystems\vcpkg.cmake"` then `cmake --build build --config Release` (output: `build/Release/EncryptedBackupClient.exe`).
 

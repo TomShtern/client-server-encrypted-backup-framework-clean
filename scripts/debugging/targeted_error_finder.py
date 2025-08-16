@@ -15,7 +15,7 @@ def test_server_gui_import() -> bool:
     """Test ServerGUI imports"""
     print("Testing ServerGUI imports...")
     try:
-        from python_server.server_gui.ServerGUI import (
+        from python_server.server_gui import (
             ServerGUI
         )
         print("✓ All ServerGUI imports successful")
@@ -57,25 +57,30 @@ def test_other_files() -> List[str]:
     
     return results
 
+def test_gui_methods(gui: Any) -> None:
+    """Test basic GUI methods"""
+    cast(Any, gui).update_server_status(True, "127.0.0.1", 1256)
+    print("✓ update_server_status works")
+    cast(Any, gui).update_client_stats({'connected': 5, 'total': 10, 'active_transfers': 2})
+    print("✓ update_client_stats works")
+    cast(Any, gui).update_transfer_stats({'bytes_transferred': 1024})
+    print("✓ update_transfer_stats works")
+    toast = getattr(gui, 'toast_system', None)
+    if toast is not None:
+        cast(Any, toast).show_toast("test error", "error")
+        cast(Any, toast).show_toast("test success", "success")
+        cast(Any, toast).show_toast("test info", "info")
+
+
 def test_minimal_functionality() -> bool:
     """Test minimal ServerGUI functionality"""
     print("\nTesting minimal ServerGUI functionality...")
     try:
-        from python_server.server_gui.ServerGUI import ServerGUI
+        from python_server.server_gui import ServerGUI
         gui: Any = ServerGUI()
         print("✓ ServerGUI instance created")
         # Test basic methods
-        cast(Any, gui).update_server_status(True, "127.0.0.1", 1256)
-        print("✓ update_server_status works")
-        cast(Any, gui).update_client_stats({'connected': 5, 'total': 10, 'active_transfers': 2})
-        print("✓ update_client_stats works")
-        cast(Any, gui).update_transfer_stats({'bytes_transferred': 1024})
-        print("✓ update_transfer_stats works")
-        toast = getattr(gui, 'toast_system', None)
-        if toast is not None:
-            cast(Any, toast).show_toast("test error", "error")
-            cast(Any, toast).show_toast("test success", "success")
-            cast(Any, toast).show_toast("test info", "info")
+        test_gui_methods(gui)
         return True
     except ImportError:
         print("✗ Could not import ServerGUI. Skipping functionality tests.")
@@ -118,6 +123,13 @@ def check_syntax_errors() -> List[str]:
     
     return results
 
+def print_results_list(title: str, results: List[str]) -> None:
+    """Print a formatted list of results"""
+    print(f"\n{title}:")
+    for result in results:
+        print(f"  {result}")
+
+
 def main() -> None: 
     print("🎯 TARGETED ERROR DETECTION")
     print("=" * 50)
@@ -132,24 +144,18 @@ def main() -> None:
     other_results = test_other_files()
     
     # Test 4: Test basic functionality (only if import successful)
-    func_success = False
-    if import_success:
-        func_success = test_minimal_functionality()
+    func_success = test_minimal_functionality() if import_success else False
     
     # Summary
     print("\n" + "=" * 50)
     print("SUMMARY")
     print("=" * 50)
     
-    print("\nSyntax check results:")
-    for result in syntax_results:
-        print(f"  {result}")
+    print_results_list("Syntax check results", syntax_results)
     
     print(f"\nServerGUI import: {'✓ SUCCESS' if import_success else '✗ FAILED'}")
     
-    print("\nOther files:")
-    for result in other_results:
-        print(f"  {result}")
+    print_results_list("Other files", other_results)
     
     print(f"\nFunctionality test: {'✓ SUCCESS' if func_success else '✗ FAILED'}")
     

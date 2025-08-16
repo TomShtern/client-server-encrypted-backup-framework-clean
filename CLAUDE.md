@@ -3,26 +3,6 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 
-You have access to a "think" tool that provides a dedicated space for structured reasoning. Using this tool significantly improves your performance on complex tasks. 
-
-## When to use the think tool 
-Before taking any action or responding to the user after receiving tool results, use the think tool as a scratchpad to: 
-- List the specific rules that apply to the current request 
-- Check if all required information is collected 
-- Verify that the planned action complies with all policies 
-- Iterate over tool results for correctness 
-- Analyze complex information from web searches or other tools 
-- Plan multi-step approaches before executing them 
-
-## How to use the think tool effectively 
-When using the think tool: 
-1. Break down complex problems into clearly defined steps 
-2. Identify key facts, constraints, and requirements 
-3. Check for gaps in information and plan how to fill them 
-4. Evaluate multiple approaches before choosing one 
-5. Verify your reasoning for logical errors or biases
-
-
 
 ## Project Overview
 
@@ -128,6 +108,20 @@ python scripts/test_one_click_fixes.py      # Validate one-click script fixes
 - **Batch Mode**: Use `--batch` flag to prevent C++ client hanging in subprocess
 - **Progress Configuration**: `progress_config.json` defines phase timing, weights, and calibration data
 
+### Development Environment Setup
+```bash
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Required packages (if missing): flask-cors, sentry-sdk, flask-socketio, watchdog, psutil
+
+# Verify vcpkg toolchain is configured
+cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
+
+# Check C++ dependencies are installed via vcpkg
+vcpkg list | findstr "boost\|cryptopp\|zlib\|sentry"
+```
+
 ### Essential Integration Patterns
 
 #### Subprocess Management (CRITICAL PATTERN)
@@ -180,9 +174,11 @@ def _verify_file_transfer(self, original_file, username):
 - **False Success**: Zero exit code doesn't guarantee successful transfer
 - **Missing Files**: Always verify actual files appear in `received_files/`
 
-### ✅ RESOLVED ISSUES
-- **Windows Unicode Encoding (RESOLVED 2025-08-15)**: Complete UTF-8 solution implemented for Hebrew filenames + emoji content
-- **Client-GUI Monolith (RESOLVED 2025-08-15)**: 8000+ line web client modularized into organized JavaScript components and CSS modules
+### Security Vulnerabilities (Active Issues)
+- **Static IV**: Zero IV allows pattern analysis (HIGH PRIORITY)
+- **No HMAC**: CRC32 provides no tampering protection (MEDIUM PRIORITY)
+- **Deterministic encryption**: Same plaintext produces same ciphertext
+
 
 ## Architecture Details
 
@@ -225,288 +221,51 @@ def _verify_file_transfer(self, original_file, username):
 4. Monitor ports 9090 and 1256 for conflicts
 5. Check both `build/Release/` and `client/` directories for executables
 
-## Current System Status (2025-08-16)
+## Current System Status
 
-**✅ FULLY OPERATIONAL & PRODUCTION READY** - Complete system integration validated and tested
-**🚀 LATEST UPDATES**: **PROFESSIONAL UI ENHANCEMENT SUITE COMPLETED**
-**🔧 ARCHITECTURAL IMPROVEMENTS**: Advanced UI enhancements with professional polish, tooltip system, form memory, connection monitoring, and enhanced error handling
-**🆕 PROVEN FUNCTIONALITY**: 72+ successful file transfers confirmed, all architectural layers working seamlessly
-**📊 REPOSITORY STATUS**: All commits successfully pushed to GitHub (client-server-encrypted-backup-framework-clean)
-**✅ LATEST UI ENHANCEMENT SUITE (2025-08-16) - PROJECT COMPLETE**:
-- **Professional UI Polish**: 27/27 planned enhancements completed (100% progress) 🎉
-- **Advanced Tooltip System**: Rich metadata display with file information, button shortcuts, and smart positioning
-- **Form Memory & Session Persistence**: localStorage for form values + sessionStorage for session state with 30-day retention
-- **Enhanced Connection Health Monitoring**: Real-time latency monitoring with quality-based visual feedback
-- **Sophisticated Error Management**: Contextual help, suggested solutions, technical details toggle, and actionable buttons
-- **File Type Icon System**: 40+ file type mappings with cyberpunk-themed emoji icons and color coding
-- **Enhanced Button States**: Professional loading animations with shimmer effects and status indicators
-- **Stat Card Animations**: Active state pulsing, number updates, trend indicators, and conditional color coding
-- **Focus & Accessibility**: Enhanced focus rings, screen reader support, and complete keyboard navigation flow
-- **Real-time Validation Suite**: Server address validation with connectivity testing and username character filtering
-- **Tab Order Optimization**: Logical keyboard navigation with focus trap and skip links for screen readers
-- **Performance Optimizations**: GPU-accelerated animations, debounced auto-save, and efficient storage management
-- **Context-Aware Particle System**: State-responsive background effects that adapt to connection/transfer phases
-- **Desktop-Focused Responsive Design**: Optimized layouts for 1440px+ displays with 4K support
+**✅ FULLY OPERATIONAL** - All 4 architectural layers working together
+- 72+ successful file transfers confirmed in `received_files/`
+- Complete UTF-8 support for international filenames
+- Modular web client with professional UI enhancements
+- Zero import errors across all critical modules
 
-**✅ PREVIOUS CLIENT-GUI MODULARIZATION (2025-08-15)**:
-- **Client-GUI Modularization**: Complete restructuring of 8000+ line web client into modular JavaScript components:
-  - `Client/Client-gui/scripts/core/`: Core application logic (api-client.js, app.js, debug-utils.js)
-  - `Client/Client-gui/scripts/managers/`: Feature managers (backup-manager.js, file-manager.js, system-manager.js, ui-manager.js)
-  - `Client/Client-gui/scripts/ui/`: UI components (error-boundary.js, particle-system.js)
-  - `Client/Client-gui/scripts/utils/`: Utilities (copy-manager.js, event-manager.js, form-validator.js)
-  - `Client/Client-gui/styles/`: Separated CSS (animations.css, components.css, layout.css, theme.css)
-- **Enhanced UTF-8 Solution**: Comprehensive Unicode support in `Shared/utils/utf8_solution.py` with:
-  - Automatic subprocess UTF-8 environment setup
-  - Windows console encoding configuration (Code Page 65001)
-  - Hebrew+emoji filename support: `קובץ_עברי_🎉_test.txt`
-  - Safe import-based activation pattern
-- **Improved Project Structure**: Better organization with dedicated `Client/`, `Shared/`, `api_server/`, `python_server/` directories
-- **Enhanced Observability**: Expanded monitoring in `Shared/observability.py` and `Shared/utils/enhanced_output.py`
-**✅ PREVIOUS CORE FIXES (2025-08-12)**:
-- **UnifiedFileMonitor Integration**: Fixed missing `get_file_receipt_monitor()` function, added `check_file_receipt()`, `list_received_files()`, and `get_monitoring_status()` methods
-- **Callback System Enhancement**: Updated UnifiedFileMonitor to support dual callbacks (`completion_callback`, `failure_callback`) and legacy single callback mode
-- **Import System Validation**: Eliminated all import errors, fixed syntax error in `real_backup_executor.py`
-- **Complete Integration Testing**: All 4 architectural layers validated working together (Web UI → Flask API → C++ Client → Python Server)
-- **System Health Verification**: Zero import errors across all critical modules, 72+ files in `received_files/` directory confirms active usage
 
-### Enhanced Dynamic Buffer System
-**Realistic File Size Optimization**: Each file gets its optimal buffer size calculated once at transfer start, then uses that buffer consistently throughout the entire transfer. Supports files from tiny configs to 1GB+ media files.
 
-| File Size Range | Buffer Size | Use Case Examples |
-|------------------|-------------|-------------------|
-| ≤1KB | 1KB | Config files, .env files, small scripts, JSON configs |
-| 1KB-4KB | 2KB | Small configs, text files, small scripts, command files |
-| 4KB-16KB | 4KB | Source code files, small documents, XML/HTML files |
-| 16KB-64KB | 8KB | Large code files, formatted docs, small images, logs |
-| 64KB-512KB | 16KB | PDFs, medium images, compiled binaries, data files |
-| 512KB-10MB | 32KB | Large images, small videos, archives, databases (L1 cache optimized) |
-| >10MB | 64KB | **Large videos, big archives, datasets up to 1GB+** |
 
-**Benefits**: 
-- **Tiny file efficiency**: Minimal waste for small configs and scripts
-- **Gigabyte scale support**: 64KB buffer efficiently handles files up to 1000MB+  
-- **Power-of-2 alignment**: Optimal for memory management and CPU cache performance
-- **Network optimization**: Larger buffers reduce protocol overhead for big files
+## UTF-8 Unicode Support
 
-### Key Achievements
-- **Complete Integration**: Web UI → Flask API → C++ Client → Python Server chain working
-- **Critical Integration Fixes (2025-08-12)**: All refactoring gaps resolved with UnifiedFileMonitor fully integrated
-- **Zero Import Errors**: All critical modules import successfully, syntax errors eliminated
-- **UnifiedFileMonitor Integration**: Replaced missing `get_file_receipt_monitor()` with proper UnifiedFileMonitor usage
-- **Enhanced Callback System**: Dual callback support (`completion_callback`, `failure_callback`) with legacy compatibility
-- **API Method Completion**: Added `check_file_receipt()`, `list_received_files()`, `get_monitoring_status()` methods
-- **Socket Communication**: 25-second timeout fixes prevent subprocess termination
-- **Protocol Compliance**: RSA-1024 X.509 format (160-byte) + AES-256-CBC encryption
-- **Windows Compatibility**: Socket TIME_WAIT and Unicode encoding issues resolved
-- **Advanced Progress Architecture**: Multi-layer progress monitoring with statistical tracking and WebSocket broadcasting
-- **CallbackMultiplexer**: Solves race condition where concurrent requests overwrite each other's progress callbacks
-- **File Receipt Override**: Ground truth system that immediately signals 100% completion when file appears on server
-- **Enhanced Database System**: Connection pooling, migrations, analytics, and monitoring (93 clients, 41 files, 16 indexes)
-- **Database Management Tools**: CLI utilities for migration, optimization, search, and monitoring
-- **Performance Optimizations**: 5-10x faster queries, connection pooling, optimized SQLite settings
+**Complete solution** for international filenames and content across the entire project.
 
-### System Capabilities
-1. **Web Interface Upload**: Users can browse to http://127.0.0.1:9090/, select files, register usernames, and upload files
-2. **Real-Time Server Monitoring**: Server GUI shows live user registrations and file transfers as they happen  
-3. **Secure Encryption**: RSA-1024 key exchange followed by AES-256-CBC file encryption
-4. **Multi-User Support**: Multiple users can register and upload files concurrently
-5. **File Integrity Verification**: CRC32 checksums ensure uploaded files match originals
-6. **Cross-Layer Integration**: All 4 architectural layers working seamlessly
-7. **Windows Console Compatibility**: All Unicode encoding issues resolved for stable operation
-8. **Process Management**: Robust subprocess handling with timeout protection and proper cleanup
-9. **Advanced Progress System**: Multi-layer progress monitoring (FileReceiptProgressTracker, OutputProgressTracker, StatisticalProgressTracker, TimeBasedEstimator, DirectFilePoller) with WebSocket real-time updates
-10. **Ground Truth Progress**: FileReceiptProgressTracker immediately signals 100% completion when file is detected on server, overriding all other progress estimates
-11. **Modular Web Client**: Separated JavaScript components enable maintainable development and easier debugging
-12. **UTF-8 Native Support**: Hebrew filenames with emojis work seamlessly across all system components
-13. **Production Validation**: 72+ successful file transfers in `received_files/` directory demonstrate active production usage
-14. **Integration Validated**: All 4 architectural layers tested and confirmed working together seamlessly
-
-## UTF-8 Unicode Support System (2025-08-15)
-
-**✅ COMPLETE SOLUTION IMPLEMENTED** - Automatic UTF-8 support for Hebrew filenames, emoji content, and international characters across the entire project.
-
-### Problem Solved
-**Original Issue**: `UnicodeDecodeError: 'charmap' codec can't decode byte 0x9e in position 143` when processing Hebrew filenames with emoji content on Windows cp1255 console encoding.
-
-**Root Cause**: Windows Hebrew locale (cp1255) encoding incompatible with Unicode emojis and international characters in subprocess communication between Python components and C++ client.
-
-### Solution Architecture
-
-#### Import-Based UTF-8 Activation
-**New Approach**: Import `Shared.utils.utf8_solution` enables UTF-8 automatically for subprocess operations.
-
+### Quick Implementation
 ```python
-# Entry point scripts (launchers, servers, main scripts):
-import Shared.utils.utf8_solution  # Add this ONE line
+# Entry point scripts - add this ONE line:
+import Shared.utils.utf8_solution  # Auto-enables UTF-8 for all subprocess operations
 
-# ALL subprocess operations now automatically use UTF-8:
+# Now all subprocess calls use UTF-8 automatically:
 import subprocess
-result = subprocess.run([exe, "--batch"], **utf8_solution.get_env())
-# Hebrew+emoji content works everywhere!
+result = subprocess.run([exe, "--batch"], capture_output=True)  # Hebrew+emoji works!
 ```
 
-#### Core Components
+### Core Components
+- **`Shared/utils/utf8_solution.py`** - Main UTF-8 solution
+- **Windows console** automatically set to UTF-8 (Code Page 65001)
+- **Environment variables** configured: `PYTHONIOENCODING=utf-8`, `PYTHONUTF8=1`
+- **Enhanced functions**: `run_utf8()`, `Popen_utf8()`, `get_env()`
 
-**1. UTF-8 Solution (`Shared/utils/utf8_solution.py`)**
-- **Environment setup** for subprocess UTF-8 operations
-- **Windows console encoding** automatically set to UTF-8 (Code Page 65001)
-- **Environment variables** configured automatically (`PYTHONIOENCODING=utf-8`, `PYTHONUTF8=1`)
-- **Convenience functions** (`run_utf8()`, `Popen_utf8()`, `get_env()`)
-- **Thread-safe initialization** with proper error handling
-
-**2. Enhanced Subprocess Functions**
+### Usage Pattern
 ```python
-# Import the solution
-from Shared.utils.utf8_solution import run_utf8, Popen_utf8, get_env
+# For entry point scripts:
+import Shared.utils.utf8_solution  # ONE import enables UTF-8 for entire session
 
-# Use enhanced functions with automatic UTF-8 support
-result = run_utf8([command], capture_output=True)  # UTF-8 automatic!
-process = Popen_utf8([exe, "--batch"], stdout=subprocess.PIPE)  # UTF-8 streams
-
-# Or use manual environment setup
-result = subprocess.run([command], env=get_env(), encoding='utf-8')
+# For library/worker files:
+# NO imports needed - inherits UTF-8 from entry point
 ```
 
-**3. Modular Web Client Structure**
-- **Core Logic** (`Client/Client-gui/scripts/core/`): Application foundation (app.js, api-client.js, debug-utils.js)
-- **Feature Managers** (`Client/Client-gui/scripts/managers/`): Specialized functionality (backup-manager.js, file-manager.js, system-manager.js, ui-manager.js)
-- **UI Components** (`Client/Client-gui/scripts/ui/`): User interface elements (error-boundary.js, particle-system.js)
-- **Utilities** (`Client/Client-gui/scripts/utils/`): Helper functions (copy-manager.js, event-manager.js, form-validator.js)
-- **Styling** (`Client/Client-gui/styles/`): Separated CSS (animations.css, components.css, layout.css, theme.css)
-
-### Technical Implementation
-
-#### Environment Setup
-```python
-# Automatic environment configuration
-os.environ['PYTHONIOENCODING'] = 'utf-8'
-os.environ['PYTHONUTF8'] = '1'
-
-# Windows console encoding (programmatic)
-kernel32.SetConsoleCP(65001)        # Input UTF-8
-kernel32.SetConsoleOutputCP(65001)  # Output UTF-8
-
-# Python stream reconfiguration
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-```
-
-#### Subprocess Patching
-```python
-# Global monkey-patching of subprocess functions
-subprocess.run = utf8_run        # Automatic UTF-8 encoding + environment
-subprocess.Popen = utf8_Popen    # Automatic UTF-8 encoding + environment
-subprocess.call = utf8_call      # Automatic UTF-8 environment
-# + check_call, check_output, etc.
-```
-
-### Usage Patterns
-
-#### For Entry Point Scripts
-```python
-#!/usr/bin/env python3
-import utf8_global  # ONE line enables UTF-8 for entire session
-
-# All subprocess calls now automatically use UTF-8
-import subprocess
-result = subprocess.run(["python", "script.py"], capture_output=True)
-# Hebrew+emoji content in result.stdout works perfectly!
-```
-
-#### For Library/Worker Files
-```python
-# NO UTF-8 imports needed - inherits from entry point
-import subprocess
-
-# Direct subprocess use works automatically
-subprocess.run([command])  # UTF-8 support inherited from entry point
-```
-
-#### For Hebrew+Emoji Content
-```python
-# These work automatically after utf8_global import:
-hebrew_filename = "קובץ_עברי_🎉_גיבוי.txt"
-print(f"Processing: {hebrew_filename}")  # Console output works
-subprocess.run(["process", hebrew_filename])  # Subprocess works
-```
-
-### Test Validation
-
-#### Comprehensive Testing
-- **✅ 4/4 tests passed** - Complete UTF-8 solution validation
-- **✅ Console output** - Hebrew+emoji display correctly
-- **✅ Subprocess communication** - C++ client ↔ Python with Unicode content
-- **✅ Project integration** - RealBackupExecutor + all components working
-- **✅ Real-world scenarios** - Hebrew filenames with emoji characters
-
-#### Test Commands
-```bash
-# Validate UTF-8 solution
-python test_one_import_utf8.py     # Test one-import approach (4/4 PASS)
-python test_ultimate_utf8.py       # Test global patching (4/4 PASS)
-python test_authentic_utf8_problem.py  # Test real problem scenario (2/2 PASS)
-```
-
-### Production Benefits
-
-#### For End Users
-- ✅ **Hebrew filenames work** - Including emoji characters
-- ✅ **Status messages display correctly** - Emojis and international text
-- ✅ **No setup required** - Everything works automatically
-- ✅ **Cross-platform compatibility** - Windows Unicode issues resolved
-
-#### For Developers
-- ✅ **One import per entry point** - Simple and maintainable
-- ✅ **Zero changes to existing code** - Backward compatible
-- ✅ **No manual UTF-8 configuration** - Automatic everywhere
-- ✅ **Reliable subprocess communication** - No more encoding errors
-
-### Files Modified
-
-#### Core UTF-8 Infrastructure
-- ✅ **`Shared/utils/utf8_solution.py`** - Comprehensive UTF-8 solution (NEW)
-- ✅ **`api_server/cyberbackup_api_server.py`** - Enhanced with UTF-8 support
-- ✅ **`python_server/server/server.py`** - Enhanced with UTF-8 support  
-- ✅ **`scripts/one_click_build_and_run.py`** - Enhanced with UTF-8 support
-
-#### Client-GUI Modularization
-- ✅ **`Client/Client-gui/NewGUIforClient.html`** - Main web interface (updated)
-- ✅ **`Client/Client-gui/scripts/core/`** - Core application modules (NEW)
-- ✅ **`Client/Client-gui/scripts/managers/`** - Feature managers (NEW)
-- ✅ **`Client/Client-gui/scripts/ui/`** - UI components (NEW)
-- ✅ **`Client/Client-gui/scripts/utils/`** - Utility modules (NEW)
-- ✅ **`Client/Client-gui/styles/`** - Separated CSS modules (NEW)
-
-#### Testing & Validation
-- ✅ **`test_utf8_comprehensive.py`** - Comprehensive UTF-8 testing
-- ✅ **Testing scripts** - Enhanced validation coverage
-
-### Key Success Metrics
-
-- ✅ **Zero Unicode encoding errors** in production
-- ✅ **Hebrew filenames process correctly** throughout the system
-- ✅ **Emoji status messages work** in all components
-- ✅ **All subprocess calls UTF-8 compliant** automatically
-- ✅ **Windows cp1255 → UTF-8 conversion** transparent
-- ✅ **Original error eliminated**: `'charmap' codec can't decode byte 0x9e`
-
-### Limitations & Considerations
-
-#### What Works Automatically
-- ✅ **Same Python session** - All subprocess calls use UTF-8
-- ✅ **Console output** - Hebrew+emoji display correctly
-- ✅ **Project components** - Inherit UTF-8 from entry point
-- ✅ **C++ client communication** - Unicode content in subprocess I/O
-
-#### What Requires Entry Point Import
-- ❌ **New Python processes** - Each needs its own `import utf8_global`
-- ❌ **Standalone scripts** - Must add import if run independently
-- ❌ **System-wide changes** - Only affects Python processes with import
-
-#### Realistic Scope
-**One import per entry point → UTF-8 works everywhere else in that session**
-
-This approach provides maximum practical Unicode support while remaining maintainable and requiring minimal developer awareness.
+### Key Benefits
+- Hebrew filenames with emojis work: `קובץ_עברי_🎉_test.txt`
+- Zero encoding errors in production
+- Backward compatible - no changes to existing code
+- Automatic subprocess UTF-8 compliance
 
 
 ## Quick Troubleshooting Guide
@@ -521,23 +280,12 @@ This approach provides maximum practical Unicode support while remaining maintai
 - **Solution**: Check both servers are running: NOTE that when you are changing code, the api server will close it self.  `tasklist | findstr "python"`
 - **Windows TIME_WAIT**: Wait 30-60 seconds if recently restarted, or use cleanup commands above
 
-#### One-Click Script API Server Won't Start (RESOLVED 2025-08-01)
-- **Issue**: `one_click_build_and_run.py` runs but API server fails to start
-- **Root Cause**: Subprocess output capture caused pipe blocking + syntax error in API server
-- **Fix Applied**: Removed subprocess pipe capture, added process health monitoring, fixed syntax error
-- **Status**: ✅ **RESOLVED** - Enhanced error diagnostics now provide specific troubleshooting guidance
 
 #### File Transfers Fail
 - **Verify endpoint**: Check `received_files/` for actual files (exit codes are unreliable)
 - **Protocol issues**: Ensure using latest `build/Release/EncryptedBackupClient.exe`
 - **Configuration**: Verify `transfer.info` has exactly 3 lines: `server:port`, `username`, `filepath`
 
-#### Progress Updates Not Working (RESOLVED 2025-08-03)
-- **Issue**: Web GUI progress ring stays at 0%, no real-time updates (known issue since commit 262d224)
-- **Root Cause**: **CRITICAL DIRECTORY MISMATCH** - FileReceiptProgressTracker monitoring `src\server\received_files` while server saves files to project root `received_files`
-- **Fix Applied**: Changed monitoring directory from `src\server\received_files` to `received_files` to match actual server file storage location
-- **Additional Features**: CallbackMultiplexer routes progress callbacks correctly, FileReceiptProgressTracker provides ground truth completion signal
-- **Status**: ✅ **RESOLVED** - Progress monitoring now correctly shows 100% when file arrives on server
 
 #### Build Failures
 - **vcpkg required**: Must use `cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"`
