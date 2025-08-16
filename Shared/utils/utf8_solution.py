@@ -29,7 +29,7 @@ import os
 import sys
 import subprocess
 import threading
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Union, List
 
 # Import ctypes with proper error handling for Windows
 try:
@@ -40,10 +40,10 @@ except ImportError:
 class UTF8Support:
     """Simple UTF-8 environment support for subprocess operations."""
     
-    _initialized = False
-    _original_console_cp = None
-    _original_console_output_cp = None
-    _lock = threading.Lock()
+    _initialized: bool = False
+    _original_console_cp: Optional[int] = None
+    _original_console_output_cp: Optional[int] = None
+    _lock: threading.Lock = threading.Lock()
     
     @classmethod
     def setup(cls) -> bool:
@@ -62,7 +62,8 @@ class UTF8Support:
                 
                 cls._initialized = True
                 return True
-            except Exception:
+            except (OSError, AttributeError, RuntimeError):
+                # More specific exception handling for setup failures
                 return False
     
     @classmethod
@@ -86,11 +87,11 @@ class UTF8Support:
             if current_output_cp != 65001:
                 kernel32.SetConsoleOutputCP(65001)
                 
-        except Exception:
-            # Reset stored values if setup failed
+        except (AttributeError, OSError):
+            # More specific exception handling
             cls._original_console_cp = None
             cls._original_console_output_cp = None
-    
+
     @classmethod
     def get_env(cls, base_env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         """
@@ -106,12 +107,15 @@ class UTF8Support:
         cls.setup()
 
         try:
-            return (dict(os.environ) if base_env is None else dict(base_env)) | {
+            # Use dict.update() for Python 3.8+ compatibility instead of | operator
+            base_dict = dict(os.environ) if base_env is None else dict(base_env)
+            base_dict.update({
                 'PYTHONIOENCODING': 'utf-8',
                 'PYTHONUTF8': '1',
-            }
-        except Exception:
-            # Fallback to minimal environment
+            })
+            return base_dict
+        except (OSError, AttributeError, KeyError):
+            # Fallback to minimal environment for specific errors
             return {
                 'PYTHONIOENCODING': 'utf-8',
                 'PYTHONUTF8': '1'
@@ -122,7 +126,7 @@ class UTF8Support:
         """Restore original console code pages (cleanup method)."""
         if (sys.platform == 'win32' and ctypes is not None and 
             cls._original_console_cp is not None):
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(AttributeError, OSError):
                 kernel32 = ctypes.windll.kernel32
                 kernel32.SetConsoleCP(cls._original_console_cp)
                 kernel32.SetConsoleOutputCP(cls._original_console_output_cp)
@@ -132,54 +136,47 @@ def get_env(base_env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
     """Get UTF-8 environment for subprocess calls."""
     return UTF8Support.get_env(base_env)
 
-def run_utf8(cmd, **kwargs) -> subprocess.CompletedProcess:
+def run_utf8(cmd: Union[str, List[str]], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
     """
     Run subprocess with UTF-8 support.
     
     This is a convenience wrapper that automatically sets up UTF-8 environment
     and encoding parameters for subprocess.run calls.
     """
-    try:
-        # Set UTF-8 defaults only if not explicitly provided
-        if 'encoding' not in kwargs and 'text' not in kwargs:
-            kwargs['encoding'] = 'utf-8'
-            kwargs['text'] = True
-        
-        # Ensure UTF-8 environment
-        if 'env' not in kwargs:
-            kwargs['env'] = get_env()
-        
-        return subprocess.run(cmd, **kwargs)
-    except Exception as e:
-        # Return failed CompletedProcess instead of raising
-        return subprocess.CompletedProcess(
-            args=cmd, 
-            returncode=1, 
-            stdout=f"UTF-8 subprocess error: {e}",
-            stderr=str(e)
-        )
+    # Set UTF-8 defaults only if not explicitly provided
+    if 'encoding' not in kwargs and 'text' not in kwargs:
+        kwargs['encoding'] = 'utf-8'
+        kwargs['text'] = True
+        # Add error handling for invalid UTF-8 bytes from C++ client
+        if 'errors' not in kwargs:
+            kwargs['errors'] = 'replace'  # Replace invalid bytes with replacement character
+    
+    # Ensure UTF-8 environment
+    if 'env' not in kwargs:
+        kwargs['env'] = get_env()
+    
+    return subprocess.run(cmd, **kwargs)
 
-def Popen_utf8(cmd, **kwargs) -> subprocess.Popen:
+def Popen_utf8(cmd: Union[str, List[str]], **kwargs: Any) -> subprocess.Popen[Any]:
     """
     Create Popen with UTF-8 support.
     
     This is a convenience wrapper that automatically sets up UTF-8 environment
     and encoding parameters for subprocess.Popen calls.
     """
-    try:
-        # Set UTF-8 defaults only if not explicitly provided
-        if 'encoding' not in kwargs and 'text' not in kwargs:
-            kwargs['encoding'] = 'utf-8' 
-            kwargs['text'] = True
-        
-        # Ensure UTF-8 environment
-        if 'env' not in kwargs:
-            kwargs['env'] = get_env()
-        
-        return subprocess.Popen(cmd, **kwargs)
-    except Exception:
-        # Fallback Popen without UTF-8 modifications
-        return subprocess.Popen(cmd)
+    # Set UTF-8 defaults only if not explicitly provided
+    if 'encoding' not in kwargs and 'text' not in kwargs:
+        kwargs['encoding'] = 'utf-8' 
+        kwargs['text'] = True
+        # Add error handling for invalid UTF-8 bytes from C++ client
+        if 'errors' not in kwargs:
+            kwargs['errors'] = 'replace'  # Replace invalid bytes with replacement character
+    
+    # Ensure UTF-8 environment
+    if 'env' not in kwargs:
+        kwargs['env'] = get_env()
+    
+    return subprocess.Popen(cmd, **kwargs)
 
 def test_utf8() -> bool:
     """Test UTF-8 capability with Hebrew and emoji characters."""
@@ -193,7 +190,8 @@ def test_utf8() -> bool:
         # Verify round-trip integrity
         return test_content == decoded
 
-    except Exception:
+    except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
+        # Specific exceptions for encoding issues
         return False
 
 def safe_print(message: str) -> None:
@@ -205,23 +203,24 @@ def safe_print(message: str) -> None:
             # Fallback: ASCII with replacement
             safe_message = message.encode('ascii', errors='replace').decode('ascii')
             print(safe_message)
-        except Exception:
+        except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
+            # More specific exception handling
             print("UTF-8 Solution: Message encoding failed")
 
 def enhanced_safe_print(message: str, use_emoji: bool = True) -> None:
     """Enhanced safe print with emoji support."""
+    # Try to import enhanced output function - simplified approach
     try:
-        # Try to use enhanced output if available
-        from .enhanced_output import success_print
+        from Shared.utils.enhanced_output import success_print
         if use_emoji:
             success_print(message, "UTF-8")
         else:
             print(f"UTF-8: {message}")
     except ImportError:
-        # Fallback to basic safe print
+        # Fallback to basic safe print if enhanced_output not available
         safe_print(f"UTF-8: {message}")
-    except Exception:
-        # Last resort fallback
+    except (AttributeError, TypeError):
+        # Handle other specific errors with enhanced_output
         safe_print(message)
 
 # Export key functions for CyberBackup Framework usage
@@ -238,7 +237,7 @@ __all__ = [
 # Automatic setup when imported (with error handling)
 def _initialize_module():
     """Initialize module safely without side effects."""
-    with contextlib.suppress(Exception):
+    with contextlib.suppress(OSError, AttributeError, RuntimeError):
         UTF8Support.setup()
         # Silent initialization - no console output that could cause encoding errors
 

@@ -35,7 +35,38 @@
     <link rel="manifest" href="../../favicon_stuff/manifest.json">
     <meta name="msapplication-TileColor" content="#ffffff">
     <meta name="msapplication-TileImage" content="../../favicon_stuff/ms-icon-144x144.png">
-    <meta name="theme-color" content="#ffffff">
+    <!-- Cross-browser theme integration via CSS custom properties -->
+    <style>
+        /* Theme color integration for all browsers including Opera */
+        :root {
+            --browser-chrome-color: #000000;
+        }
+        
+        /* Apply theme color to browser chrome where supported */
+        html {
+            background-color: var(--browser-chrome-color);
+        }
+        
+        /* Opera-specific viewport styling */
+        @supports (-webkit-appearance: none) and (not (-webkit-text-stroke: initial)) {
+            html {
+                background: linear-gradient(135deg, var(--bg-black) 0%, var(--bg-dark) 100%);
+            }
+        }
+        
+        /* Integration with existing CyberBackup theme variables */
+        [data-theme="cyberpunk"] {
+            --browser-chrome-color: var(--bg-black, #000000);
+        }
+        
+        [data-theme="matrix"] {
+            --browser-chrome-color: #001100;
+        }
+        
+        [data-theme="dark"] {
+            --browser-chrome-color: #111111;
+        }
+    </style>
 </head>
 <body>
     <div class="cyber-grid"></div>
@@ -146,16 +177,58 @@
             <div class="progress-container">
                 <svg class="progress-ring" viewBox="0 0 300 300" role="img" aria-label="Transfer progress">
                     <defs>
+                        <!-- Enhanced gradients for multi-ring system -->
                         <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                             <stop offset="0%" class="gradient-stop-blue" />
                             <stop offset="33%" class="gradient-stop-purple" />
                             <stop offset="66%" class="gradient-stop-pink" />
                             <stop offset="100%" class="gradient-stop-green" />
                         </linearGradient>
+                        
+                        <!-- Data channel gradient for outer ring -->
+                        <linearGradient id="dataChannelGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" class="gradient-stop-data-channel-start" />
+                            <stop offset="50%" class="gradient-stop-data-channel-middle" />
+                            <stop offset="100%" class="gradient-stop-data-channel-end" />
+                        </linearGradient>
+                        
+                        <!-- Phase indicator gradient -->
+                        <linearGradient id="phaseGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" class="gradient-stop-phase-start" />
+                            <stop offset="100%" class="gradient-stop-phase-end" />
+                        </linearGradient>
+                        
+                        <!-- Particle glow filter -->
+                        <filter id="particleGlow">
+                            <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                            <feMerge> 
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
                     </defs>
+                    
+                    <!-- Outer Ring: Data Channel (Static, Rotating) -->
+                    <circle class="data-channel-ring" cx="150" cy="150" r="145" 
+                            fill="none" stroke="url(#dataChannelGradient)" stroke-width="2" 
+                            stroke-dasharray="8,4" id="dataChannelRing"></circle>
+                    
+                    <!-- Background Ring -->
                     <circle class="progress-bg" cx="150" cy="150" r="130" 
                             fill="none" stroke="var(--bg-light)" stroke-width="16"></circle>
+                    
+                    <!-- Middle Ring: Phase Indicator Arc -->
+                    <path class="phase-indicator-arc" id="phaseIndicatorArc" 
+                          fill="none" stroke="url(#phaseGradient)" stroke-width="6" 
+                          stroke-linecap="round"></path>
+                    
+                    <!-- Inner Ring: Progress Fill (Existing) -->
                     <circle class="progress-fill" cx="150" cy="150" r="130" id="progressCircle"></circle>
+                    
+                    <!-- Particle Stream Container -->
+                    <g class="particle-stream" id="particleStream">
+                        <!-- Particles will be dynamically generated here -->
+                    </g>
                 </svg>
                 <div class="progress-text">
                     <div class="progress-percentage neon-text" id="progressPercentage">0%</div>

@@ -210,6 +210,118 @@
     }
 }
 
+/* Data Stream Progress Ring Animations */
+
+@keyframes rotateDataChannel {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes phaseIndicatorPulse {
+    0% {
+        filter: drop-shadow(0 0 8px currentColor);
+        stroke-width: 6;
+    }
+    100% {
+        filter: drop-shadow(0 0 16px currentColor);
+        stroke-width: 8;
+    }
+}
+
+@keyframes particleFlow {
+    0% {
+        opacity: 0;
+        r: 1;
+    }
+    20% {
+        opacity: 1;
+        r: 2;
+    }
+    80% {
+        opacity: 1;
+        r: 2;
+    }
+    100% {
+        opacity: 0;
+        r: 1;
+    }
+}
+
+@keyframes textGlitch {
+    0% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    10% {
+        transform: translateX(-2px);
+        opacity: 0.8;
+        filter: hue-rotate(90deg);
+    }
+    20% {
+        transform: translateX(2px);
+        opacity: 0.6;
+        filter: hue-rotate(180deg);
+    }
+    30% {
+        transform: translateX(-1px);
+        opacity: 0.8;
+        filter: hue-rotate(270deg);
+    }
+    40% {
+        transform: translateX(1px);
+        opacity: 0.9;
+        filter: hue-rotate(360deg);
+    }
+    50% {
+        transform: translateX(0);
+        opacity: 1;
+        filter: none;
+        text-shadow: 
+            -1px 0 var(--neon-pink),
+            1px 0 var(--neon-blue),
+            0 -1px var(--neon-green);
+    }
+    60% {
+        transform: translateX(0);
+        opacity: 1;
+        filter: none;
+        text-shadow: none;
+    }
+    100% {
+        transform: translateX(0);
+        opacity: 1;
+        filter: none;
+    }
+}
+
+/* Phase-specific particle animations */
+@keyframes particleFlowSlow {
+    0% { opacity: 0; }
+    20% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+@keyframes particleFlowFast {
+    0% { opacity: 0; r: 1; }
+    10% { opacity: 1; r: 3; }
+    90% { opacity: 1; r: 3; }
+    100% { opacity: 0; r: 1; }
+}
+
+@keyframes particleFlowBurst {
+    0% { opacity: 0; r: 1; transform: scale(1); }
+    5% { opacity: 1; r: 4; transform: scale(1.2); }
+    15% { opacity: 1; r: 2; transform: scale(1); }
+    85% { opacity: 1; r: 2; transform: scale(1); }
+    95% { opacity: 1; r: 4; transform: scale(1.2); }
+    100% { opacity: 0; r: 1; transform: scale(1); }
+}
+
 /* Hover animations for interactive elements */
 .cyber-btn, .copy-btn, .config-input {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -382,4 +494,30 @@
 .gradient-stop-green {
     stop-color: var(--neon-green);
     stop-opacity: 1;
+}
+
+/* Data Stream Progress Ring gradient stops */
+.gradient-stop-data-channel-start {
+    stop-color: var(--neon-blue);
+    stop-opacity: 0.3;
+}
+
+.gradient-stop-data-channel-middle {
+    stop-color: var(--neon-purple);
+    stop-opacity: 0.6;
+}
+
+.gradient-stop-data-channel-end {
+    stop-color: var(--neon-blue);
+    stop-opacity: 0.3;
+}
+
+.gradient-stop-phase-start {
+    stop-color: var(--neon-pink);
+    stop-opacity: 0.8;
+}
+
+.gradient-stop-phase-end {
+    stop-color: var(--neon-green);
+    stop-opacity: 0.8;
 }

@@ -312,6 +312,7 @@ class RealBackupExecutor:
         self._log_status("EXECUTION", f"Starting C++ client: {self.client_exe} with --batch flag")
         
         # Use UTF-8 subprocess with proper environment setup for C++ client
+        # Note: Popen_utf8 includes errors='replace' to handle invalid UTF-8 bytes from C++ client
         self.backup_process = Popen_utf8(
             [str(self.client_exe), "--batch"],
             stdout=subprocess.PIPE,
@@ -338,7 +339,7 @@ class RealBackupExecutor:
     def _execute_subprocess_nonblocking(self, timeout: int = 120) -> Dict[str, Any]:
         """Execute subprocess with non-blocking, progressive timeout pipe reading."""
         def _read_pipe(pipe: Optional[IO[str]], chunks: List[str], lock: threading.Lock) -> None:
-            """Helper to read pipe chunks safely."""
+            """Helper to read pipe chunks safely with improved error handling."""
             if not pipe:
                 return
             try:
@@ -348,8 +349,14 @@ class RealBackupExecutor:
                         break
                     with lock:
                         chunks.append(chunk)
-            except Exception:
-                pass
+            except UnicodeDecodeError as e:
+                # Specific handling for UTF-8 decode errors from C++ client
+                logger.warning(f"UTF-8 decode error in subprocess pipe: {e}")
+                logger.debug(f"Error details: byte 0x{e.object[e.start:e.end].hex()} at position {e.start}")
+                # Continue reading - the error should be handled by errors='replace' in Popen_utf8
+            except Exception as e:
+                # Log other unexpected errors for debugging
+                logger.warning(f"Unexpected error reading subprocess pipe: {e}")
             finally:
                 with contextlib.suppress(Exception):
                     pipe.close()
@@ -528,6 +535,7 @@ class RealBackupExecutor:
             self._log_status('LAUNCH', f"Starting subprocess: {' '.join(command)}")
             try:
                 # Launch C++ client with UTF-8 environment and subprocess support
+                # Note: Popen_utf8 includes errors='replace' to handle invalid UTF-8 bytes from C++ client
                 self.backup_process = Popen_utf8(
                     command,
                     stdin=subprocess.PIPE,

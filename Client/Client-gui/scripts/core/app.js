@@ -9,6 +9,7 @@ import { ErrorBoundary, ErrorMessageFormatter } from '../ui/error-boundary.js';
 import { ParticleSystem } from '../ui/particle-system.js';
 import { CopyManager } from '../utils/copy-manager.js';
 import { FormValidator } from '../utils/form-validator.js';
+import { InteractiveEffectsManager } from '../managers/interactive-effects-manager.js';
 
 class App {
     constructor() {
@@ -23,6 +24,7 @@ class App {
         this.fileMemoryManager = new FileMemoryManager();
         this.backupHistoryManager = new BackupHistoryManager();
         this.connectionHealthMonitor = new ConnectionHealthMonitor();
+        this.interactiveEffects = new InteractiveEffectsManager();
         
         // Initialize WebSocket connection for real-time updates
         this.socket = null;
@@ -50,6 +52,11 @@ class App {
             progressCircle: document.getElementById('progressCircle'),
             progressPercentage: document.getElementById('progressPercentage'),
             progressStatus: document.getElementById('progressStatus'),
+            // Data Stream Progress Ring elements
+            dataChannelRing: document.getElementById('dataChannelRing'),
+            phaseIndicatorArc: document.getElementById('phaseIndicatorArc'),
+            particleStream: document.getElementById('particleStream'),
+            progressRing: document.querySelector('.progress-ring'),
             speedStat: document.getElementById('speedStat'),
             etaStat: document.getElementById('etaStat'),
             transferredStat: document.getElementById('transferredStat'),
@@ -149,6 +156,10 @@ class App {
         this.phaseStartTime = null; // For ETA calculations
         this.fileReceiptPollingInterval = null; // For file receipt polling fallback
         this.loadProgressConfiguration();
+        
+        // Initialize Data Stream Progress Ring system
+        this.dataStreamProgressRing = new DataStreamProgressRing(this.elements);
+        
         this.connectWebSocket();
         this.addLog('System Initialized', 'success', 'Real-time communication enabled.');
         this.system.notifications.show('CyberBackup Pro', 'Application ready', { type: 'info', silent: true });
@@ -477,6 +488,11 @@ class App {
         this.state.isRunning = false;
         this.state.phaseDescription = null;
         this.phaseStartTime = null;
+        
+        // Reset Data Stream Progress Ring
+        if (this.dataStreamProgressRing) {
+            this.dataStreamProgressRing.reset();
+        }
     }
 
     /**
@@ -560,6 +576,11 @@ class App {
         if (this.elements.progressCircle) {
             this.elements.progressCircle.style.strokeDashoffset = '';
             this.elements.progressCircle.classList.remove('active');
+        }
+        
+        // Reset Data Stream Progress Ring
+        if (this.dataStreamProgressRing) {
+            this.dataStreamProgressRing.reset();
         }
         
         // Clear any file preview blob URLs to prevent memory leaks
@@ -1524,6 +1545,12 @@ class App {
             this.elements.progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
             this.elements.progressCircle.style.strokeDashoffset = offset;
             this.elements.progressCircle.classList.toggle('active', this.state.isRunning);
+
+            // Update Data Stream Progress Ring system
+            if (this.dataStreamProgressRing) {
+                this.dataStreamProgressRing.updatePhase(this.state.phase, this.state.speed);
+                this.dataStreamProgressRing.setActive(this.state.isRunning);
+            }
 
             this.elements.progressPercentage.textContent = `${Math.round(this.state.progress)}%`;
             this.elements.progressStatus.textContent = this.state.log.operation || this.state.message;
@@ -2858,10 +2885,252 @@ document.addEventListener('DOMContentLoaded', () => {
     window.app.particleSystem = particleSystem;
     debugLog('ParticleSystem initialized.');
 
+    // Initialize interactive effects
+    debugLog('Initializing InteractiveEffects...');
+    window.app.interactiveEffects.initialize();
+    debugLog('InteractiveEffects initialized.');
+
     // Initial UI update
     window.app.updateAllUI();
 
     debugLog('=== SCRIPT LOADING COMPLETE ===');
 });
+
+/**
+ * Data Stream Progress Ring System
+ * Manages the multi-ring progress visualization with particle effects
+ */
+class DataStreamProgressRing {
+    constructor(elements) {
+        this.elements = elements;
+        this.particles = [];
+        this.lastPhase = null;
+        this.particleCount = 0;
+        this.maxParticles = 12;
+        this.animationSpeed = 3000; // Base animation duration in ms
+        
+        // Phase position mapping (in degrees, starting from top)
+        this.phasePositions = {
+            'SYSTEM_READY': 0,
+            'CONNECTING': 0,
+            'AUTHENTICATING': 90,
+            'ENCRYPTING': 180,
+            'TRANSFERRING': 270,
+            'VERIFYING': 45,
+            'COMPLETED': 360,
+            'ERROR': 315
+        };
+        
+        this.init();
+    }
+    
+    init() {
+        // Initialize SVG path for progress circle
+        if (this.elements.progressCircle) {
+            const radius = this.elements.progressCircle.r.baseVal.value;
+            this.circleRadius = radius;
+            this.circumference = radius * 2 * Math.PI;
+        }
+        
+        // Create particle template
+        this.createParticleTemplate();
+        
+        console.log('[DataStreamProgressRing] Initialized');
+    }
+    
+    createParticleTemplate() {
+        // Create reusable SVG path for particles to follow
+        this.particlePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        this.particlePath.setAttribute('d', `M 150 ${150 - this.circleRadius} A ${this.circleRadius} ${this.circleRadius} 0 1 1 ${150 - 0.1} ${150 - this.circleRadius}`);
+        this.particlePath.setAttribute('fill', 'none');
+        this.particlePath.setAttribute('stroke', 'none');
+        this.particlePath.setAttribute('id', 'particleMotionPath');
+        
+        // Add path to SVG defs
+        const defs = this.elements.progressRing.querySelector('defs');
+        if (defs && !document.getElementById('particleMotionPath')) {
+            defs.appendChild(this.particlePath);
+        }
+    }
+    
+    updatePhase(phase, speed = 0) {
+        if (this.lastPhase !== phase) {
+            this.animatePhaseTransition(phase);
+            this.lastPhase = phase;
+        }
+        
+        this.updatePhaseIndicator(phase);
+        this.updateParticleSystem(speed, phase);
+        this.updateRingState(phase);
+    }
+    
+    updatePhaseIndicator(phase) {
+        const position = this.phasePositions[phase] || 0;
+        const arcLength = 60; // 60 degree arc
+        
+        // Calculate SVG path for phase indicator arc
+        const startAngle = (position - arcLength / 2) * Math.PI / 180;
+        const endAngle = (position + arcLength / 2) * Math.PI / 180;
+        
+        const radius = this.circleRadius - 10; // Slightly inside the main progress ring
+        const centerX = 150;
+        const centerY = 150;
+        
+        const startX = centerX + radius * Math.sin(startAngle);
+        const startY = centerY - radius * Math.cos(startAngle);
+        const endX = centerX + radius * Math.sin(endAngle);
+        const endY = centerY - radius * Math.cos(endAngle);
+        
+        const largeArcFlag = arcLength > 180 ? 1 : 0;
+        
+        const pathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`;
+        
+        if (this.elements.phaseIndicatorArc) {
+            this.elements.phaseIndicatorArc.setAttribute('d', pathData);
+            this.elements.phaseIndicatorArc.classList.add('active');
+        }
+    }
+    
+    updateParticleSystem(speed, phase) {
+        if (!this.elements.particleStream) {
+            return;
+        }
+        
+        // Adjust particle count and speed based on transfer speed
+        const targetParticleCount = Math.min(this.maxParticles, Math.max(2, Math.floor(speed / 100000))); // 1 particle per 100KB/s
+        const speedMultiplier = Math.max(0.5, Math.min(3, speed / 1000000)); // Speed factor based on MB/s
+        
+        // Generate new particles if needed
+        if (this.particles.length < targetParticleCount && phase === 'TRANSFERRING') {
+            this.generateParticles(targetParticleCount - this.particles.length, speedMultiplier);
+        }
+        
+        // Remove excess particles
+        if (this.particles.length > targetParticleCount) {
+            this.removeParticles(this.particles.length - targetParticleCount);
+        }
+        
+        // Update particle animation speed
+        this.updateParticleSpeed(speedMultiplier, phase);
+    }
+    
+    generateParticles(count, speedMultiplier) {
+        for (let i = 0; i < count; i++) {
+            const particle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            particle.classList.add('data-particle');
+            particle.setAttribute('r', '2');
+            particle.setAttribute('fill', 'var(--neon-blue)');
+            particle.setAttribute('filter', 'url(#particleGlow)');
+            
+            // Create animation
+            const animateMotion = document.createElementNS('http://www.w3.org/2000/svg', 'animateMotion');
+            animateMotion.setAttribute('dur', `${this.animationSpeed / speedMultiplier}ms`);
+            animateMotion.setAttribute('repeatCount', 'indefinite');
+            animateMotion.setAttribute('begin', `${i * 200}ms`); // Stagger particles
+            
+            const mpath = document.createElementNS('http://www.w3.org/2000/svg', 'mpath');
+            mpath.setAttribute('href', '#particleMotionPath');
+            
+            animateMotion.appendChild(mpath);
+            particle.appendChild(animateMotion);
+            
+            this.elements.particleStream.appendChild(particle);
+            this.particles.push({
+                element: particle,
+                animation: animateMotion,
+                id: Date.now() + i
+            });
+        }
+    }
+    
+    removeParticles(count) {
+        for (let i = 0; i < count && this.particles.length > 0; i++) {
+            const particle = this.particles.pop();
+            if (particle.element.parentNode) {
+                particle.element.parentNode.removeChild(particle.element);
+            }
+        }
+    }
+    
+    updateParticleSpeed(speedMultiplier, phase) {
+        const newDuration = this.animationSpeed / speedMultiplier;
+        
+        this.particles.forEach(particle => {
+            if (particle.animation) {
+                particle.animation.setAttribute('dur', `${newDuration}ms`);
+                
+                // Apply phase-specific particle styling
+                if (phase === 'TRANSFERRING') {
+                    particle.element.setAttribute('fill', 'var(--neon-green)');
+                } else if (phase === 'ENCRYPTING') {
+                    particle.element.setAttribute('fill', 'var(--neon-purple)');
+                } else {
+                    particle.element.setAttribute('fill', 'var(--neon-blue)');
+                }
+            }
+        });
+    }
+    
+    updateRingState(phase) {
+        if (!this.elements.progressRing) {
+            return;
+        }
+        
+        // Remove existing phase classes
+        this.elements.progressRing.classList.remove('connecting', 'encrypting', 'transferring');
+        
+        // Add current phase class
+        if (phase === 'CONNECTING' || phase === 'AUTHENTICATING') {
+            this.elements.progressRing.classList.add('connecting');
+        } else if (phase === 'ENCRYPTING') {
+            this.elements.progressRing.classList.add('encrypting');
+        } else if (phase === 'TRANSFERRING') {
+            this.elements.progressRing.classList.add('transferring');
+        }
+    }
+    
+    animatePhaseTransition(newPhase) {
+        // Trigger glitch effect on phase display
+        if (this.elements.progressStatus) {
+            this.elements.progressStatus.classList.add('phase-transition');
+            
+            setTimeout(() => {
+                this.elements.progressStatus.classList.remove('phase-transition');
+            }, 800);
+        }
+        
+        // Reset phase indicator for smooth transition
+        if (this.elements.phaseIndicatorArc) {
+            this.elements.phaseIndicatorArc.classList.remove('active');
+            
+            setTimeout(() => {
+                this.elements.phaseIndicatorArc.classList.add('active');
+            }, 100);
+        }
+    }
+    
+    reset() {
+        // Clear all particles
+        this.removeParticles(this.particles.length);
+        
+        // Reset phase indicator
+        if (this.elements.phaseIndicatorArc) {
+            this.elements.phaseIndicatorArc.classList.remove('active');
+        }
+        
+        // Reset ring state
+        if (this.elements.progressRing) {
+            this.elements.progressRing.classList.remove('connecting', 'encrypting', 'transferring');
+        }
+        
+        this.lastPhase = null;
+    }
+    
+    setActive(isActive) {
+        if (this.elements.progressRing) {
+            this.elements.progressRing.classList.toggle('active', isActive);
+        }
+    }
+}
 
 export { App };

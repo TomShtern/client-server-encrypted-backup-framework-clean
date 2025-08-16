@@ -100,6 +100,9 @@ body {
     background-clip: padding-box;
     /* Material Design elevation 2dp with cyberpunk glow */
     box-shadow: var(--md-elevation-2);
+    /* 3D Transform preparation */
+    transform-style: preserve-3d;
+    perspective: 1000px;
 }
 
 .glass-card::before {
@@ -126,10 +129,19 @@ body {
 }
 
 .glass-card:hover {
-    transform: translateY(-4px); /* Enhanced Material Design lift */
+    transform: translateY(-4px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg)); /* Enhanced Material Design lift with 3D tilt */
     background: var(--surface-04);
     /* Material Design elevation 8dp with enhanced cyberpunk glow */
     box-shadow: var(--md-elevation-8);
+}
+
+/* 3D Floating Cards - Holographic Effect */
+.glass-card.floating {
+    transform: translateY(-8px) rotateX(var(--tilt-x, 5deg)) rotateY(var(--tilt-y, -5deg));
+    box-shadow: 
+        var(--md-elevation-16),
+        0 0 40px rgba(0, 255, 255, 0.3),
+        0 0 80px rgba(255, 0, 255, 0.1);
 }
 
 /* Material Design card variants */
@@ -139,7 +151,7 @@ body {
 
 .glass-card.elevated:hover {
     box-shadow: var(--md-elevation-16);
-    transform: translateY(-6px);
+    transform: translateY(-6px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
 }
 
 .glass-card.outlined {
@@ -384,6 +396,24 @@ body {
     font-size: 1rem;
     transition: var(--transition);
     position: relative;
+    overflow: hidden;
+}
+
+/* CRT Power-On Effect */
+.config-input::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: -100%;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, 
+        transparent 0%, 
+        var(--neon-blue) 50%, 
+        transparent 100%);
+    transform: translateY(-50%);
+    opacity: 0;
+    transition: all 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
 }
 
 .config-input:focus {
@@ -391,6 +421,63 @@ body {
     border-color: var(--neon-blue);
     box-shadow: var(--glow-blue);
     background: rgba(0, 255, 255, 0.05);
+    animation: crt-power-on 0.8s ease-out;
+}
+
+.config-input:focus::before {
+    left: 100%;
+    opacity: 1;
+    animation: crt-scan-line 0.6s ease-out;
+}
+
+/* Custom cursor for CRT effect */
+.config-input:focus {
+    caret-color: var(--neon-blue);
+}
+
+/* CRT Power-On Animation */
+@keyframes crt-power-on {
+    0% {
+        box-shadow: 
+            inset 0 0 0 0 rgba(0, 255, 255, 0),
+            var(--glow-blue);
+        background: var(--bg-black);
+    }
+    20% {
+        box-shadow: 
+            inset 0 -2px 0 0 rgba(0, 255, 255, 0.8),
+            var(--glow-blue);
+    }
+    40% {
+        box-shadow: 
+            inset 0 -100% 0 0 rgba(0, 255, 255, 0.1),
+            var(--glow-blue);
+    }
+    60% {
+        box-shadow: 
+            inset 0 -100% 0 0 rgba(0, 255, 255, 0.05),
+            var(--glow-blue);
+        background: rgba(0, 255, 255, 0.02);
+    }
+    100% {
+        box-shadow: var(--glow-blue);
+        background: rgba(0, 255, 255, 0.05);
+    }
+}
+
+/* CRT Scan Line Animation */
+@keyframes crt-scan-line {
+    0% {
+        left: -100%;
+        opacity: 0;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        left: 100%;
+        opacity: 0;
+    }
 }
 
 .config-input.error {
@@ -535,6 +622,77 @@ body {
     letter-spacing: 1px;
 }
 
+/* Enhanced Data Stream Progress Ring System */
+
+/* Outer Ring: Data Channel */
+.data-channel-ring {
+    opacity: 0.4;
+    animation: rotateDataChannel 8s linear infinite;
+    filter: drop-shadow(0 0 8px var(--neon-blue));
+    transition: opacity 0.3s ease;
+}
+
+.progress-ring.active .data-channel-ring {
+    opacity: 0.8;
+    animation-duration: 4s; /* Faster rotation when active */
+}
+
+/* Middle Ring: Phase Indicator Arc */
+.phase-indicator-arc {
+    opacity: 0;
+    transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    filter: drop-shadow(0 0 12px currentColor);
+    transform-origin: 150px 150px;
+}
+
+.phase-indicator-arc.active {
+    opacity: 1;
+    animation: phaseIndicatorPulse 2s ease-in-out infinite alternate;
+}
+
+/* Particle Stream Effects */
+.particle-stream {
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+.progress-ring.active .particle-stream {
+    opacity: 1;
+}
+
+.data-particle {
+    r: 2;
+    fill: var(--neon-blue);
+    filter: url(#particleGlow);
+    opacity: 0;
+}
+
+.data-particle.active {
+    animation: particleFlow 3s ease-in-out infinite;
+}
+
+/* Phase Text Glitch Effect */
+.progress-label.phase-transition {
+    animation: textGlitch 0.8s ease-out;
+}
+
+/* Enhanced Progress Ring Active State */
+.progress-ring.active {
+    filter: drop-shadow(0 0 20px var(--neon-blue)) drop-shadow(0 0 40px var(--neon-blue));
+}
+
+.progress-ring.transferring {
+    filter: drop-shadow(0 0 25px var(--neon-green)) drop-shadow(0 0 50px var(--neon-green));
+}
+
+.progress-ring.encrypting {
+    filter: drop-shadow(0 0 25px var(--neon-purple)) drop-shadow(0 0 50px var(--neon-purple));
+}
+
+.progress-ring.connecting {
+    filter: drop-shadow(0 0 25px var(--neon-pink)) drop-shadow(0 0 50px var(--neon-pink));
+}
+
 /* Enhanced Control Panel */
 .control-panel {
     display: flex;
@@ -579,6 +737,30 @@ body {
     background: rgba(255, 255, 255, 0.3);
     transform: translate(-50%, -50%);
     transition: width 0.6s, height 0.6s;
+}
+
+/* Magnetic Button Glare Effect */
+.cyber-btn::after {
+    content: '';
+    position: absolute;
+    top: var(--mouse-y, 50%);
+    left: var(--mouse-x, 50%);
+    width: 120px;
+    height: 120px;
+    background: radial-gradient(circle, 
+        rgba(255, 255, 255, 0.8) 0%, 
+        rgba(255, 255, 255, 0.3) 30%, 
+        transparent 70%);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.cyber-btn:hover::after {
+    opacity: 0.6;
 }
 
 .cyber-btn:active::before {
