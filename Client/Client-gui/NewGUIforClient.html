@@ -103,7 +103,7 @@
             <div class="config-section">                <label class="config-label" for="serverInput">Server Address</label>
                 <div class="copy-container">
                     <input type="text" class="config-input copy-content" id="serverInput" 
-                           placeholder="127.0.0.1:1256" value="127.0.0.1:1256" aria-describedby="serverHelp">
+                           placeholder="127.0.0.1:1256" value="127.0.0.1:1256" aria-describedby="serverHelp" tabindex="1">
                     <button type="button" class="copy-btn" id="copyServerAddress" title="Copy Server Address" aria-label="Copy Server Address">📋</button>
                 </div>
                 <div id="serverHelp" class="sr-only">Enter server IP address and port</div>
@@ -112,7 +112,7 @@
             <div class="config-section">
                 <label class="config-label" for="usernameInput">Username</label>
                 <input type="text" class="config-input" id="usernameInput"
-                       placeholder="Enter your username" value="" maxlength="100" aria-describedby="usernameHelp">
+                       placeholder="Enter your username" value="" maxlength="100" aria-describedby="usernameHelp" tabindex="2">
                 <div id="usernameHelp" class="sr-only">Username for authentication (max 100 characters)</div>
             </div>
             
@@ -121,7 +121,7 @@
                 <div class="file-selection-container file-selection-container-positioned">
                     <div class="file-drop-zone" id="fileDropZone">
                         <input type="file" class="file-input" id="fileInput" 
-                               aria-describedby="fileHelp" accept="*/*" 
+                               aria-describedby="fileHelp" accept="*/*" tabindex="3" 
                                title="Select a file to backup" 
                                aria-label="File selection for backup">
                         <div class="file-button">
@@ -235,15 +235,15 @@
                     <div class="progress-label" id="progressStatus">READY</div>
                 </div>
             </div>            <div class="control-panel">
-                <button type="button" class="cyber-btn primary large control-btn" id="primaryAction">
+                <button type="button" class="cyber-btn primary large control-btn" id="primaryAction" tabindex="4">
                     <span class="btn-icon">🚀</span>
                     <span class="btn-text">CONNECT</span>
                 </button>
-                <button type="button" class="cyber-btn secondary large control-btn" id="pauseBtn" disabled>
+                <button type="button" class="cyber-btn secondary large control-btn" id="pauseBtn" disabled tabindex="5">
                     <span class="btn-icon">⏸️</span>
                     <span class="btn-text">PAUSE</span>
                 </button>
-                <button type="button" class="cyber-btn danger large control-btn" id="stopBtn" disabled>
+                <button type="button" class="cyber-btn danger large control-btn" id="stopBtn" disabled tabindex="6">
                     <span class="btn-icon">🛑</span>
                     <span class="btn-text">STOP</span>
                 </button>

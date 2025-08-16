@@ -219,23 +219,144 @@ class ErrorBoundary {
 
     showErrorNotification(errorInfo) {
         try {
-            let message = 'An unexpected error occurred';
+            // Use the enhanced error formatter for better user experience
+            const formatter = new ErrorMessageFormatter();
+            let operation = 'unknown';
             
-            // Provide more specific messages for common errors
+            // Determine operation from error type
             if (errorInfo.type.includes('API')) {
-                message = 'Connection error. Please check your network and try again.';
-            } else if (errorInfo.message.includes('fetch')) {
-                message = 'Network request failed. Please check your connection.';
-            } else if (errorInfo.message.includes('timeout')) {
-                message = 'Operation timed out. Please try again.';
+                if (errorInfo.context?.method) {
+                    operation = errorInfo.context.method.toLowerCase();
+                } else {
+                    operation = 'connection';
+                }
             }
-
+            
+            const formattedError = formatter.formatError(operation, errorInfo.message, errorInfo.context);
+            
+            // Show enhanced error message in UI
+            this.showEnhancedErrorMessage(formattedError, errorInfo);
+            
+            // Also show toast for immediate feedback
             if (this.app && this.app.showToast) {
-                this.app.showToast(message, 'error', 5000);
+                this.app.showToast(formattedError.userMessage, 'error', 5000);
             }
         } catch (notificationError) {
             console.error('[ErrorBoundary] Failed to show notification:', notificationError);
         }
+    }
+
+    /**
+     * Show enhanced error message with contextual help
+     */
+    showEnhancedErrorMessage(formattedError, errorInfo) {
+        try {
+            // Find or create error display container
+            let errorContainer = document.getElementById('enhanced-error-container');
+            if (!errorContainer) {
+                errorContainer = document.createElement('div');
+                errorContainer.id = 'enhanced-error-container';
+                errorContainer.style.cssText = `
+                    position: fixed;
+                    top: var(--space-lg);
+                    right: var(--space-lg);
+                    max-width: 400px;
+                    z-index: 2000;
+                    pointer-events: none;
+                `;
+                document.body.appendChild(errorContainer);
+            }
+            
+            // Create enhanced error message element
+            const errorElement = document.createElement('div');
+            errorElement.className = 'error-message-container';
+            errorElement.style.pointerEvents = 'auto';
+            
+            errorElement.innerHTML = `
+                <div class="error-message-header">
+                    <span class="error-message-icon">⚠️</span>
+                    <h4 class="error-message-title">${formattedError.userMessage}</h4>
+                    <span class="error-message-category">${formattedError.category}</span>
+                </div>
+                
+                <div class="error-message-content">
+                    <p class="error-message-text">${formattedError.userMessage}</p>
+                    
+                    ${formattedError.suggestion ? `
+                    <div class="error-suggestion">
+                        <div class="error-suggestion-header">
+                            <span class="error-suggestion-icon">💡</span>
+                            <h5 class="error-suggestion-title">Suggested Solution</h5>
+                        </div>
+                        <p class="error-suggestion-text">${formattedError.suggestion}</p>
+                    </div>
+                    ` : ''}
+                    
+                    <div class="error-actions">
+                        <button class="error-action-btn primary" onclick="this.closest('.error-message-container').remove()">
+                            <span>✓</span> Got it
+                        </button>
+                        ${this.getContextualActions(formattedError.category)}
+                    </div>
+                    
+                    <div class="error-technical-details">
+                        <button class="error-technical-toggle" onclick="this.nextElementSibling.classList.toggle('expanded')">
+                            <span>🔧</span> Technical Details
+                            <span style="margin-left: auto;">▼</span>
+                        </button>
+                        <div class="error-technical-content">
+                            <strong>Error Type:</strong> ${errorInfo.type}<br>
+                            <strong>Message:</strong> ${formattedError.technical}<br>
+                            <strong>Time:</strong> ${new Date(errorInfo.timestamp).toLocaleString()}<br>
+                            ${errorInfo.context ? `<strong>Context:</strong> ${JSON.stringify(errorInfo.context, null, 2)}` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Add to container
+            errorContainer.appendChild(errorElement);
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => {
+                if (errorElement.parentNode) {
+                    errorElement.style.animation = 'slideOutRight 0.3s ease-out forwards';
+                    setTimeout(() => {
+                        if (errorElement.parentNode) {
+                            errorElement.remove();
+                        }
+                    }, 300);
+                }
+            }, 10000);
+            
+        } catch (displayError) {
+            console.error('[ErrorBoundary] Failed to show enhanced error message:', displayError);
+        }
+    }
+
+    /**
+     * Get contextual action buttons based on error category
+     */
+    getContextualActions(category) {
+        const actions = {
+            connection: `<button class="error-action-btn" onclick="window.location.reload()">
+                <span>🔄</span> Retry Connection
+            </button>`,
+            authentication: `<button class="error-action-btn" onclick="document.getElementById('serverConfig').scrollIntoView()">
+                <span>⚙️</span> Check Config
+            </button>`,
+            fileAccess: `<button class="error-action-btn" onclick="document.getElementById('fileDropZone').click()">
+                <span>📁</span> Select Different File
+            </button>`,
+            serverError: `<button class="error-action-btn" onclick="setTimeout(() => window.location.reload(), 2000)">
+                <span>⏱️</span> Retry in 2s
+            </button>`,
+            timeout: `<button class="error-action-btn" onclick="window.location.reload()">
+                <span>🔄</span> Try Again
+            </button>`
+        };
+        
+        return actions[category] || '';
     }
 
     getErrorStats() {

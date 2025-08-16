@@ -14,11 +14,22 @@ from pathlib import Path
 from typing import List
 
 # Import the original functions
-from .one_click_build_and_run import (
-    check_api_server_status, check_backup_server_status, 
-    check_python_dependencies, cleanup_existing_processes,
-    print_phase as original_print_phase  # type: ignore
-)
+# Try a relative import (when executed as a package). If that fails
+# (script executed directly), fall back to an absolute import so the
+# module can be run with "python scripts/one_click_build_and_run_debug.py".
+try:
+    from .one_click_build_and_run import (
+        check_api_server_status, check_backup_server_status, 
+        check_python_dependencies, cleanup_existing_processes,
+        print_phase as original_print_phase  # type: ignore
+    )
+except (ImportError, SystemError):
+    # Running as a plain script (no package context) - use absolute import
+    from scripts.one_click_build_and_run import (
+        check_api_server_status, check_backup_server_status, 
+        check_python_dependencies, cleanup_existing_processes,
+        print_phase as original_print_phase
+    )
 
 def print_phase(phase_num: int, total_phases: int, title: str) -> None:
     original_print_phase(phase_num, total_phases, title)

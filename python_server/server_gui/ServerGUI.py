@@ -1422,8 +1422,8 @@ class ServerGUI:
             print("Modern GUI main loop ended")
     
     def _create_main_window(self) -> None:
-        """Create the enhanced main window with tabs"""
-        print("Creating enhanced ultra modern main window...")
+        """Create the enhanced main window with a sidebar navigation."""
+        print("Creating enhanced ultra modern main window with sidebar...")
 
         # Configure modern styling
         self._setup_modern_styles()
@@ -1431,28 +1431,37 @@ class ServerGUI:
         # Create menu bar
         self._create_menu_bar()
 
-        # Create main container
-        main_container = tk.Frame(self.root, bg=ModernTheme.PRIMARY_BG, padx=10, pady=10)
+        # Create main container with Grid layout
+        main_container = tk.Frame(self.root, bg=ModernTheme.PRIMARY_BG)
         main_container.pack(fill="both", expand=True)
+        main_container.grid_rowconfigure(1, weight=1)
+        main_container.grid_columnconfigure(1, weight=1)
 
-        # Header with title and real-time clock
+        # Header with title and real-time clock (spans across sidebar and content)
         self._create_header(main_container)
+        if self.header_frame:
+            self.header_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10,0))
 
-        # Create tab system
-        self._create_tab_system(main_container)
+        # Create sidebar navigation
+        self._create_sidebar(main_container)
+
+        # Create content area for pages
+        self._create_content_pages(main_container)
 
         # Initialize components
         if self.root is not None:
-            self.toast_system = ToastNotification(self.root)  # type: ignore
+            self.toast_system = ToastNotification(self.root)
         else:
-            self.toast_system = None        # Show welcome toast
+            self.toast_system = None
+            
+        # Show welcome toast
         if self.root and self.toast_system:
             def show_welcome():
-                if self.toast_system:  # Double-check it's still available
+                if self.toast_system:
                     self.toast_system.show_toast("[READY] Enhanced Ultra Modern GUI Ready", "success", 3000)
             self.root.after(1000, show_welcome)
 
-        print("Enhanced ultra modern main window created successfully!")
+        print("Enhanced ultra modern main window with sidebar created successfully!")
 
     def _create_menu_bar(self) -> None:
         """Create modern menu bar"""
@@ -1506,18 +1515,18 @@ class ServerGUI:
 
     def _create_header(self, parent: tk.Widget) -> None:
         """Create header with title and clock"""
-        header_frame = tk.Frame(parent, bg=ModernTheme.PRIMARY_BG, height=60)
-        header_frame.pack(fill="x", pady=(0, 15))
-        header_frame.pack_propagate(False)
+        self.header_frame = tk.Frame(parent, bg=ModernTheme.PRIMARY_BG, height=60)
+        # self.header_frame.pack(fill="x", pady=(0, 15)) # Changed to grid in _create_main_window
+        self.header_frame.pack_propagate(False)
 
         # Title
-        title_label = tk.Label(header_frame, text="[SECURE] Encrypted Backup Server",
+        title_label = tk.Label(self.header_frame, text="[SECURE] Encrypted Backup Server",
                               bg=ModernTheme.PRIMARY_BG, fg=ModernTheme.TEXT_PRIMARY,
                               font=(ModernTheme.FONT_FAMILY, 22, 'bold'))
         title_label.pack(side="left", padx=10, pady=10)
 
         # Clock and status
-        status_frame = tk.Frame(header_frame, bg=ModernTheme.PRIMARY_BG)
+        status_frame = tk.Frame(self.header_frame, bg=ModernTheme.PRIMARY_BG)
         status_frame.pack(side="right", padx=10, pady=10)
 
         self.clock_label = tk.Label(status_frame, text="",
@@ -1537,75 +1546,74 @@ class ServerGUI:
         self.header_status_indicator = ModernStatusIndicator(status_indicator_frame)
         self.header_status_indicator.pack(side="left")
 
-    def _create_tab_system(self, parent: tk.Widget) -> None:
-        """Create tab navigation system"""
-        # Tab buttons frame
-        tab_frame = tk.Frame(parent, bg=ModernTheme.SECONDARY_BG)
-        tab_frame.pack(fill="x", padx=10)
+    def _create_sidebar(self, parent: tk.Widget) -> None:
+        """Creates the main navigation sidebar."""
+        sidebar_frame = tk.Frame(parent, bg=ModernTheme.SECONDARY_BG, width=200)
+        sidebar_frame.grid(row=1, column=0, sticky="nsw", padx=(10,0), pady=10)
+        sidebar_frame.pack_propagate(False)
 
         self.tab_buttons = {}
-        tabs = [
+        pages = [
             ("dashboard", "🏠 Dashboard"),
             ("clients", "👥 Clients"),
             ("files", "📁 Files"),
             ("analytics", "📈 Analytics")
         ]
 
-        # Add process monitoring tab if available
         if PROCESS_MONITOR_AVAILABLE:
-            tabs.append(("processes", "🔍 Processes"))
+            pages.append(("processes", "🔍 Processes"))
 
-        for tab_id, tab_label in tabs:
-            btn = tk.Button(tab_frame, text=tab_label, 
-                           command=lambda t=tab_id: self._switch_tab(t),
-                           bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_PRIMARY,
+        for page_id, page_label in pages:
+            btn = tk.Button(sidebar_frame, text=page_label, 
+                           command=lambda p=page_id: self._switch_page(p),
+                           bg=ModernTheme.SECONDARY_BG, fg=ModernTheme.TEXT_PRIMARY,
                            font=(ModernTheme.FONT_FAMILY, 12, 'bold'),
-                           relief="flat", bd=0, padx=30, pady=10)
-            btn.pack(side="left", padx=2, pady=2)
-            self.tab_buttons[tab_id] = btn
+                           relief="flat", bd=0, padx=20, pady=15, anchor="w")
+            btn.pack(side="top", fill="x", padx=5, pady=5)
+            self.tab_buttons[page_id] = btn
 
-        # Content area
+    def _create_content_pages(self, parent: tk.Widget) -> None:
+        """Create the content frames for each page."""
         self.content_area = tk.Frame(parent, bg=ModernTheme.PRIMARY_BG)
-        self.content_area.pack(fill="both", expand=True, padx=10, pady=10)
+        self.content_area.grid(row=1, column=1, sticky="nsew", padx=10, pady=10)
 
-        # Create all tab contents
+        # Create all page content frames
         self.tab_contents = {}
         self._create_dashboard_tab()
         self._create_clients_tab()
         self._create_files_tab()
         self._create_analytics_tab()
 
-        # Create process monitoring tab if available
         if PROCESS_MONITOR_AVAILABLE:
             self._create_process_monitor_tab()
 
         # Show dashboard by default
-        self._switch_tab("dashboard")
+        self._switch_page("dashboard")
 
-    def _switch_tab(self, tab_id: str) -> None:
-        """Switch between tabs"""
+    def _switch_page(self, page_id: str) -> None:
+        """Switch between content pages."""
         # Update button appearance
-        for tid, btn in self.tab_buttons.items():
-            if tid == tab_id:
+        for pid, btn in self.tab_buttons.items():
+            if pid == page_id:
                 btn.configure(bg=ModernTheme.ACCENT_BLUE)
             else:
-                btn.configure(bg=ModernTheme.CARD_BG)
+                btn.configure(bg=ModernTheme.SECONDARY_BG)
 
         # Hide all tabs
         for content in self.tab_contents.values():
             content.pack_forget()
 
         # Show selected tab
-        if tab_id in self.tab_contents:
-            self.tab_contents[tab_id].pack(fill="both", expand=True)
-            self.current_tab = tab_id
+        if page_id in self.tab_contents:
+            self.tab_contents[page_id].pack(fill="both", expand=True)
+            self.current_tab = page_id
 
             # Update data for specific tabs
-            if tab_id == "clients":
+            if page_id == "clients":
                 self._refresh_client_table()
-            elif tab_id == "files":
+            elif page_id == "files":
                 self._refresh_file_table()
-            elif tab_id == "analytics":
+            elif page_id == "analytics":
                 self._update_analytics_charts()
 
     def _create_dashboard_tab(self) -> None:

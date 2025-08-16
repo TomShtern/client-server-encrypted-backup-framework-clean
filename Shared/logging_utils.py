@@ -9,19 +9,20 @@ import contextlib
 import logging
 import os
 import sys
-from typing import Tuple, Optional, Dict, Any, Union
+from typing import Tuple, Optional, Dict, Any, Union, Callable, List
 from datetime import datetime
 from pathlib import Path
 
-# Try to import enhanced output for emoji/color support  
+# Try to import enhanced output for emoji/color support
 try:
     from .utils.enhanced_output import enhance_existing_logger
-    from .utils.enhanced_output import Emojis as EnhancedEmojis
+    from .utils.enhanced_output import Emojis as EnhancedEmojis, Colors as EnhancedColors
     ENHANCED_OUTPUT_AVAILABLE = True
 except ImportError:
     ENHANCED_OUTPUT_AVAILABLE = False
     enhance_existing_logger = None
     EnhancedEmojis = None
+    EnhancedColors = None
 
 # Define emoji interface that works with both enhanced and fallback
 if ENHANCED_OUTPUT_AVAILABLE and EnhancedEmojis is not None:
@@ -35,6 +36,43 @@ else:
         INFO = "ℹ️"
         ROCKET = "🚀"
         GEAR = "⚙️"
+
+# Fallback Colors implementation (no-op colorization) when enhanced colors are not available
+if ENHANCED_OUTPUT_AVAILABLE and EnhancedColors is not None:
+    Colors = EnhancedColors  # type: ignore
+else:
+    class Colors:
+        _SUPPORTS_COLOR = False
+
+        # Provide attributes expected by callers (no-op strings)
+        BOLD = ''
+        DIM = ''
+        UNDERLINE = ''
+        RESET = ''
+
+        @classmethod
+        def colorize(cls, text: str, color: str, bold: bool = False) -> str:
+            return text
+
+        @classmethod
+        def success(cls, text: str, bold: bool = False) -> str:
+            return text
+
+        @classmethod
+        def error(cls, text: str, bold: bool = False) -> str:
+            return text
+
+        @classmethod
+        def warning(cls, text: str, bold: bool = False) -> str:
+            return text
+
+        @classmethod
+        def info(cls, text: str, bold: bool = False) -> str:
+            return text
+
+        @classmethod
+        def debug(cls, text: str, bold: bool = False) -> str:
+            return text
 
 
 def setup_dual_logging(
@@ -103,17 +141,75 @@ def setup_dual_logging(
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
     
-    # Enhanced startup messages with emojis and formatting
-    startup_messages = [
+    # Plain startup messages that will be logged to file (no ANSI/color sequences)
+    file_startup_messages = [
         f"=== {server_type.upper()} LOGGING INITIALIZED ===",
         f"Console Level: {logging.getLevelName(console_level)}",
-        f"File Level: {logging.getLevelName(file_level)}",  
+        f"File Level: {logging.getLevelName(file_level)}",
         f"Log File: {log_file_path}",
         "=" * 60,
         f"Live Monitoring: Get-Content {log_file_path} -Wait -Tail 50"
     ]
+
+    # Console-only colored/emoji CODE-MAP (printed to stdout only so file logs remain plain)
+    console_lines: List[str] = []
+    console_lines.append(Colors.info(f"=== {server_type.upper()} LOGGING INITIALIZED ===", bold=True))
+    console_lines.append(Colors.info(f"Console Level: {logging.getLevelName(console_level)}"))
+    console_lines.append(Colors.info(f"File Level: {logging.getLevelName(file_level)}"))
+    console_lines.append(Colors.debug(f"Log File: {log_file_path}"))
+    console_lines.append("" )
+    console_lines.append(Colors.BOLD + Colors.UNDERLINE + "CODE MAP: Common status / progress codes" + Colors.RESET)
+
+    # Helper to build colored code lines with emoji
+    def codeline(code: str, text: str, emoji: str, color_fn: Callable[..., str]) -> str:
+        # color_fn is a Colors.<method> callable that accepts (text, bold=False)
+        return color_fn(f" {emoji} {code} - {text}")
+
+    # 1xx informational
+    console_lines.append(codeline("1xx", "Informational (100 Continue, 101 Switching Protocols)", Emojis.INFO, Colors.info))
+
+    # 2xx success/ok
+    console_lines.append(codeline("200", "OK (Success)", Emojis.SUCCESS, Colors.success))
+    console_lines.append(codeline("201", "Created", Emojis.SUCCESS, Colors.success))
+    console_lines.append(codeline("202", "Accepted", Emojis.INFO, Colors.info))
+    console_lines.append(codeline("204", "No Content", Emojis.INFO, Colors.info))
+
+    # 3xx redirection - informational/neutral
+    console_lines.append(codeline("3xx", "Redirection (301/302)", Emojis.ROCKET, Colors.info))
+
+    # 4xx client issues - varying severity
+    console_lines.append(codeline("400", "Bad Request", Emojis.WARNING, Colors.warning))
+    console_lines.append(codeline("401", "Unauthorized", Emojis.WARNING, Colors.warning))
+    console_lines.append(codeline("403", "Forbidden", Emojis.WARNING, Colors.warning))
+    console_lines.append(codeline("404", "Not Found", Emojis.ERROR, Colors.error))
+    console_lines.append(codeline("408", "Request Timeout", Emojis.WARNING, Colors.warning))
+    console_lines.append(codeline("409", "Conflict", Emojis.WARNING, Colors.warning))
+    console_lines.append(codeline("413", "Payload Too Large", Emojis.WARNING, Colors.warning))
+    console_lines.append(codeline("415", "Unsupported Media Type", Emojis.WARNING, Colors.warning))
+    console_lines.append(codeline("429", "Too Many Requests", Emojis.WARNING, Colors.warning))
+
+    # 5xx server errors - red = bad
+    console_lines.append(codeline("500", "Internal Server Error", Emojis.ERROR, Colors.error))
+    console_lines.append(codeline("502", "Bad Gateway", Emojis.ERROR, Colors.error))
+    console_lines.append(codeline("503", "Service Unavailable", Emojis.ERROR, Colors.error))
+    console_lines.append(codeline("504", "Gateway Timeout", Emojis.ERROR, Colors.error))
+
+    console_lines.append("" )
+    console_lines.append(Colors.debug("=" * 60))
+    console_lines.append(Colors.debug(f"Live Monitoring: Get-Content {log_file_path} -Wait -Tail 50"))
     
-    for msg in startup_messages:
+    # Print the colorful console-only banner (keeps file logs plain)
+    try:
+        for line in console_lines:
+            # Use print so the console shows ANSI/colors when available
+            print(line)
+    except Exception:
+        # Fall back to logging plain lines if printing fails
+        for line in console_lines:
+            logger.info(line)
+
+    # Log startup messages to file (plain text)
+    for msg in file_startup_messages:
         logger.info(msg)
     
     return logger, log_file_path

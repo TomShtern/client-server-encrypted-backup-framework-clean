@@ -957,6 +957,129 @@ class FileMemoryManager {
             document.addEventListener('click', clickOutside);
         }, 100);
     }
+    
+    /**
+     * Create enhanced file preview with icons and validation badges
+     * @param {File} file - The file to preview
+     * @param {HTMLElement} container - Container element for the preview
+     */
+    createEnhancedFilePreview(file, container) {
+        // Clear existing content
+        container.innerHTML = '';
+        
+        const fileTypeInfo = this.getFileTypeIcon(file);
+        const validationResult = this.validateFile(file);
+        const validationBadge = this.getFileValidationBadge(validationResult);
+        
+        // Create enhanced file info container
+        const fileInfoContainer = document.createElement('div');
+        fileInfoContainer.className = 'enhanced-file-info';
+        
+        // File header with icon and details
+        const fileHeader = document.createElement('div');
+        fileHeader.className = 'file-info-header';
+        
+        // File type icon
+        const iconContainer = document.createElement('div');
+        iconContainer.className = 'file-info-icon';
+        const icon = document.createElement('span');
+        icon.className = 'file-type-icon large';
+        icon.textContent = fileTypeInfo.icon;
+        icon.style.color = fileTypeInfo.color;
+        iconContainer.appendChild(icon);
+        
+        // File details
+        const detailsContainer = document.createElement('div');
+        detailsContainer.className = 'file-info-details';
+        
+        const fileName = document.createElement('div');
+        fileName.className = 'file-info-name';
+        fileName.textContent = file.name;
+        fileName.title = file.name; // Tooltip for long names
+        
+        const fileMeta = document.createElement('div');
+        fileMeta.className = 'file-info-meta';
+        
+        const sizeSpan = document.createElement('span');
+        sizeSpan.textContent = fileTypeInfo.formattedSize;
+        
+        const typeSpan = document.createElement('span');
+        typeSpan.textContent = fileTypeInfo.category.toUpperCase();
+        typeSpan.style.color = fileTypeInfo.color;
+        
+        const lastModified = document.createElement('span');
+        lastModified.textContent = new Date(file.lastModified).toLocaleDateString();
+        
+        fileMeta.appendChild(sizeSpan);
+        fileMeta.appendChild(typeSpan);
+        fileMeta.appendChild(lastModified);
+        
+        detailsContainer.appendChild(fileName);
+        detailsContainer.appendChild(fileMeta);
+        
+        fileHeader.appendChild(iconContainer);
+        fileHeader.appendChild(detailsContainer);
+        
+        // Validation badge
+        const badgeContainer = document.createElement('div');
+        badgeContainer.className = 'file-info-badge-container';
+        
+        const badge = document.createElement('div');
+        badge.className = validationBadge.className;
+        badge.style.color = validationBadge.color;
+        badge.innerHTML = `${validationBadge.icon} ${validationBadge.message}`;
+        badge.title = validationBadge.message;
+        
+        badgeContainer.appendChild(badge);
+        
+        // Add file size warning if needed
+        if (file.size > 100 * 1024 * 1024) { // 100MB
+            const warning = document.createElement('div');
+            warning.className = file.size > 1024 * 1024 * 1024 ? 'file-size-warning huge' : 'file-size-warning large';
+            
+            const estimatedTime = this.estimateTransferTime(file.size);
+            warning.innerHTML = `⏱️ Large file: Est. transfer time ${estimatedTime}`;
+            
+            fileInfoContainer.appendChild(warning);
+        }
+        
+        fileInfoContainer.appendChild(fileHeader);
+        fileInfoContainer.appendChild(badgeContainer);
+        
+        // Add fade-in animation
+        fileInfoContainer.style.opacity = '0';
+        fileInfoContainer.style.transform = 'translateY(10px)';
+        container.appendChild(fileInfoContainer);
+        
+        // Animate in
+        requestAnimationFrame(() => {
+            fileInfoContainer.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+            fileInfoContainer.style.opacity = '1';
+            fileInfoContainer.style.transform = 'translateY(0)';
+        });
+        
+        return fileInfoContainer;
+    }
+    
+    /**
+     * Estimate file transfer time based on size
+     * @param {number} fileSize - File size in bytes
+     * @returns {string} Estimated time string
+     */
+    estimateTransferTime(fileSize) {
+        // Assume average transfer speed of 10 MB/s (reasonable for local network)
+        const avgSpeedMBps = 10;
+        const fileSizeMB = fileSize / (1024 * 1024);
+        const timeSeconds = fileSizeMB / avgSpeedMBps;
+        
+        if (timeSeconds < 60) {
+            return `${Math.ceil(timeSeconds)}s`;
+        } else if (timeSeconds < 3600) {
+            return `${Math.ceil(timeSeconds / 60)}m`;
+        } else {
+            return `${Math.ceil(timeSeconds / 3600)}h`;
+        }
+    }
 }
 
 export { FileManager, FileMemoryManager };

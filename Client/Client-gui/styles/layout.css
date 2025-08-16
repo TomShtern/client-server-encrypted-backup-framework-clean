@@ -153,7 +153,7 @@
     display: flex;
     gap: var(--space-sm);
     flex-wrap: wrap;
-    margin-top: var(--space-lg);
+    margin-top: var(--space-md); /* Reduced from space-lg for more compact layout */
 }
 
 /* Enhanced Stats Grid */
@@ -205,6 +205,51 @@
     color: var(--neon-blue);
     margin-bottom: var(--space-sm);
     font-family: 'Share Tech Mono', monospace;
+    transition: var(--transition);
+}
+
+/* Enhanced Stat Card States */
+.stat-card.active {
+    animation: stat-card-active 2s ease-in-out infinite;
+}
+
+.stat-card.updating .stat-value {
+    animation: number-update 0.5s ease-out;
+}
+
+.stat-card.success .stat-value {
+    color: var(--neon-green);
+}
+
+.stat-card.warning .stat-value {
+    color: var(--neon-yellow);
+}
+
+.stat-card.error .stat-value {
+    color: var(--neon-red);
+    animation: pulse-error 1s ease-in-out infinite;
+}
+
+/* Trend Indicators */
+.stat-trend {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: 0.75rem;
+    margin-left: var(--space-xs);
+    opacity: 0.8;
+}
+
+.stat-trend.up {
+    color: var(--neon-green);
+}
+
+.stat-trend.down {
+    color: var(--neon-red);
+}
+
+.stat-trend.stable {
+    color: var(--text-secondary);
 }
 
 .stat-label {
@@ -281,10 +326,10 @@
 /* Theme Selector Improvements */
 .theme-selector {
     display: flex;
-    gap: var(--space-md);
+    gap: var(--space-sm); /* Reduced gap for more compact layout */
     justify-content: center;
     align-items: center;
-    margin-top: var(--space-lg);
+    margin-top: var(--space-md); /* Reduced from space-lg */
 }
 
 .theme-btn {
@@ -464,8 +509,8 @@
     font-size: 1.25rem;
     cursor: pointer;
     padding: 0;
-    width: 24px;
-    height: 24px;
+    width: 32px; /* Increased from 24px for better touch targets */
+    height: 32px; /* Increased from 24px for better touch targets */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -477,6 +522,15 @@
 .toast-close:hover {
     background: rgba(255, 255, 255, 0.1);
     color: var(--text-primary);
+}
+
+/* Mobile touch-friendly sizing for toast close buttons */
+@media (max-width: 768px) {
+    .toast-close {
+        width: 44px; /* WCAG 2.1 AA minimum touch target */
+        height: 44px; /* WCAG 2.1 AA minimum touch target */
+        font-size: 1.5rem; /* Larger for easier tapping */
+    }
 }
 
 /* Enhanced Custom Modal System */
@@ -512,6 +566,34 @@
     -webkit-backdrop-filter: blur(20px);
     backdrop-filter: blur(20px);
     box-shadow: var(--md-elevation-24);
+}
+
+/* Mobile responsive modal improvements */
+@media (max-width: 768px) {
+    .modal {
+        max-width: calc(100% - 2rem); /* Leave 1rem margin on each side */
+        width: calc(100% - 2rem);
+        padding: var(--space-16); /* Reduce padding on mobile */
+        border-radius: 12px; /* Slightly smaller radius on mobile */
+    }
+    
+    .modal-buttons {
+        flex-direction: column; /* Stack buttons vertically on mobile */
+        gap: var(--space-md); /* Reduce gap between buttons */
+    }
+    
+    .modal-buttons .cyber-btn {
+        width: 100%; /* Full width buttons on mobile */
+        min-height: 48px; /* Ensure proper touch targets */
+    }
+}
+
+@media (max-width: 480px) {
+    .modal {
+        max-width: calc(100% - 1rem); /* Even less margin on very small screens */
+        width: calc(100% - 1rem);
+        padding: var(--space-12);
+    }
 }
 
 .modal-header {

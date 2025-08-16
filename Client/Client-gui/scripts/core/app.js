@@ -3,7 +3,7 @@ import { EventListenerManager } from '../utils/event-manager.js';
 import { ApiClient } from './api-client.js';
 import { FileManager, FileMemoryManager } from '../managers/file-manager.js';
 import { SystemManager, ConnectionHealthMonitor } from '../managers/system-manager.js';
-import { NotificationManager, ModalManager, ConfirmModalManager, ThemeManager, ButtonStateManager } from '../managers/ui-manager.js';
+import { NotificationManager, ModalManager, ConfirmModalManager, ThemeManager, ButtonStateManager, ToastManager } from '../managers/ui-manager.js';
 import { BackupHistoryManager } from '../managers/backup-manager.js';
 import { ErrorBoundary, ErrorMessageFormatter } from '../ui/error-boundary.js';
 import { ParticleSystem } from '../ui/particle-system.js';
@@ -18,6 +18,7 @@ class App {
         this.intervals = new IntervalManager();
         this.eventListeners = new EventListenerManager();
         this.buttonStateManager = new ButtonStateManager();
+        this.toastManager = new ToastManager(); // New enhanced toast system
         this.errorMessageFormatter = new ErrorMessageFormatter();
         this.copyManager = new CopyManager();
         this.formValidator = new FormValidator();
@@ -499,11 +500,8 @@ class App {
      * Clear error toast notifications
      */
     clearErrorToasts() {
-        // Find and remove error toasts
-        const errorToasts = document.querySelectorAll('.toast.error');
-        errorToasts.forEach(toast => {
-            toast.remove();
-        });
+        // Use the new ToastManager to dismiss error toasts
+        this.toastManager.dismissByType('error');
     }
     /**
      * Complete application reset to initial state
@@ -2397,68 +2395,34 @@ class App {
     }
 
     showToast(message, type = 'info', duration = 3000) {
-        const toast = document.createElement('div');
-        toast.className = `toast toast-enhanced ${type} fade-in`;
-        toast.setAttribute('role', 'alert');
-        toast.setAttribute('aria-live', 'polite');
-        toast.setAttribute('tabindex', '-1');
-        
-        // Add type-specific icons
-        const icons = {
-            success: '✅',
-            error: '❌',
-            warning: '⚠️',
-            info: 'ℹ️'
-        };
-        
-        toast.innerHTML = `
-            <div class="toast-content">
-                <span class="toast-icon" aria-hidden="true">${icons[type] || icons.info}</span>
-                <span class="toast-message">${message}</span>
-                <button type="button" class="toast-close" aria-label="Close notification" tabindex="0">&times;</button>
-            </div>
-        `;
-        
-        // Enhanced styling
-        toast.style.cssText += `
-            position: relative;
-            margin-bottom: var(--space-xs);
-            border-radius: var(--radius-md);
-            overflow: hidden;
-        `;
-        
-        this.elements.toastContainer.prepend(toast); // Add to top
+        // Use the new enhanced ToastManager for all toast functionality
+        return this.toastManager.show(message, type, duration);
+    }
 
-        // Focus management for accessibility
-        if (type === 'error') {
-            setTimeout(() => toast.focus(), 100);
-        }
+    // Convenience methods for different toast types (backward compatibility)
+    showSuccessToast(message, duration = 3000) {
+        return this.toastManager.success(message, duration);
+    }
 
-        const closeToast = () => {
-            toast.style.animation = 'slideOutRight 0.4s forwards';
-            toast.addEventListener('animationend', () => {
-                if (toast.parentNode) {
-                    toast.remove();
-                }
-            });
-        };
+    showErrorToast(message, duration = 5000) {
+        return this.toastManager.error(message, duration);
+    }
 
-        toast.querySelector('.toast-close').addEventListener('click', closeToast);
+    showWarningToast(message, duration = 4000) {
+        return this.toastManager.warning(message, duration);
+    }
 
-        // Keyboard accessibility
-        toast.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                closeToast();
-            }
-        });
+    showInfoToast(message, duration = 3000) {
+        return this.toastManager.info(message, duration);
+    }
 
-        // Use managed timeout to prevent memory leaks
-        const toastId = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        this.intervals.setTimeout(toastId, () => {
-            if (toast.parentNode) {
-                closeToast();
-            }
-        }, duration);
+    // Additional toast management methods
+    dismissAllToasts() {
+        return this.toastManager.dismissAll();
+    }
+
+    dismissToastsByType(type) {
+        return this.toastManager.dismissByType(type);
     }
 
     formatBytes(bytes) {
