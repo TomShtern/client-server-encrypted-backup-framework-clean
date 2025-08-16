@@ -694,7 +694,75 @@
     overflow-y: auto;
 }
 
-/* Enhanced Mobile Responsiveness */
+/* Desktop-First Responsive Design */
+
+/* Large Desktop (1440px+) - Enhanced layouts */
+@media (min-width: 1440px) {
+    .container {
+        max-width: 2000px;
+        grid-template-columns: minmax(350px, 1fr) minmax(500px, 2fr) minmax(400px, 1fr);
+        gap: var(--space-2xl);
+        padding: var(--space-2xl);
+    }
+    
+    .progress-container {
+        width: 350px;
+        height: 350px;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: var(--space-lg);
+    }
+    
+    .stat-card {
+        padding: var(--space-2xl);
+    }
+    
+    .main-panel {
+        padding: var(--space-2xl);
+    }
+}
+
+/* 4K+ Displays (1920px+) - Maximum real estate utilization */
+@media (min-width: 1920px) {
+    .container {
+        max-width: 2400px;
+        grid-template-columns: minmax(400px, 1fr) minmax(600px, 2fr) minmax(450px, 1fr);
+        gap: var(--space-3xl);
+        padding: var(--space-3xl);
+    }
+    
+    .progress-container {
+        width: 400px;
+        height: 400px;
+    }
+    
+    .phase-display {
+        font-size: 1.75rem;
+        margin-bottom: var(--space-3xl);
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: var(--space-2xl);
+    }
+    
+    .config-panel, .status-panel {
+        padding: var(--space-2xl);
+    }
+    
+    .panel-title {
+        font-size: 1.5rem;
+    }
+    
+    .config-input, .cyber-btn {
+        font-size: 1rem;
+        padding: var(--space-lg);
+    }
+}
+
+/* Medium Desktop breakpoint adjustment */
 @media (max-width: 1200px) {
     .container {
         grid-template-columns: 1fr;

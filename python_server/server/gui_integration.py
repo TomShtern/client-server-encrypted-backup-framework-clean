@@ -3,9 +3,18 @@
 # Extracted from monolithic server.py for better modularity
 
 import os
+import sys
 import threading
 import logging
 from typing import Optional, Dict, Any, TYPE_CHECKING, Callable
+
+# UTF-8 support for international characters and emojis
+try:
+    import Shared.utils.utf8_solution  # 🚀 UTF-8 support enabled automatically
+except ImportError:
+    # Fallback for when running from within python_server directory
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+    import Shared.utils.utf8_solution  # 🚀 UTF-8 support enabled automatically
 
 if TYPE_CHECKING:
     from python_server.server_gui.ServerGUI import ServerGUI
@@ -42,9 +51,16 @@ class GUIManager:
                 self.gui_available = True
                 logger.info("GUI components available for initialization")
             except ImportError as e:
-                logger.info(f"GUI components not available: {e}")
-                self.ServerGUI = None
-                self.gui_available = False
+                # Fallback for when running from within python_server directory
+                try:
+                    from server_gui.ServerGUI import ServerGUI
+                    self.ServerGUI = ServerGUI
+                    self.gui_available = True
+                    logger.info("GUI components available for initialization (fallback import)")
+                except ImportError:
+                    logger.info(f"GUI components not available: {e}")
+                    self.ServerGUI = None
+                    self.gui_available = False
             except Exception as e:
                 logger.warning(f"GUI components failed to load: {e} - continuing without GUI")
                 self.ServerGUI = None
@@ -122,18 +138,18 @@ class GUIManager:
             return False
 
     def update_server_status(self, running: bool, address: str, port: int):
-        if self.is_gui_ready() and self.gui is not None:
+        if self.is_gui_ready() and self.gui:
             self._execute_gui_action(self.gui.update_server_status, running, address, port)
 
     def update_client_stats(self, stats_data: Optional[Dict[str, Any]] = None) -> None:
-        if self.is_gui_ready() and self.gui is not None:
+        if self.is_gui_ready() and self.gui:
             self.data_loaded.wait(timeout=5.0)  # Wait for data to be loaded
             if stats_data is None:
                 stats_data = {'connected': 0, 'total': 0, 'active_transfers': 0}
             self._execute_gui_action(self.gui.update_client_stats, stats_data)
 
     def update_transfer_stats(self, bytes_transferred: int = 0, last_activity: str = "") -> None:
-        if self.is_gui_ready() and self.gui is not None:
+        if self.is_gui_ready() and self.gui:
             stats_data = {
                 'bytes_transferred': bytes_transferred,
                 'last_activity': last_activity
@@ -141,7 +157,7 @@ class GUIManager:
             self._execute_gui_action(self.gui.update_transfer_stats, stats_data)
 
     def update_maintenance_stats(self, stats: Dict[str, Any]) -> None:
-        if self.is_gui_ready() and self.gui is not None:
+        if self.is_gui_ready() and self.gui:
             self._execute_gui_action(self.gui.update_maintenance_stats, stats)
 
     def show_error(self, error_message: str) -> None:

@@ -17,230 +17,39 @@ requests  process management   + transfer.info     TCP Protocol
 - **C++ Client**: Production-ready executable with RSA/AES encryption, CRC verification, and --batch mode for subprocess integration
 - **Both clients** connect to the same Python server but through different pathways (web→Flask→C++→server vs direct C++→server)
 
-## Essential Development Workflows
+## CyberBackup — concise AI agent instructions
 
-### Quick System Startup
-```bash
-# Single command to start entire system (RECOMMENDED)
-python launch_gui.py
-# Starts Flask API server + opens browser to http://localhost:9090/
-# Automatically handles port checking and server readiness
+Purpose: help an AI coding agent be productive quickly. Read linked files before changing behavior.
 
-python one_click_build_and_run.py  # Full build + deploy + launch
-```
+High-level agent contract:
+- Inputs: code, tests, and repository files; environment is Windows with vcpkg/CMake and Python 3.13+ available when running build scripts.
+- Outputs: minimal, runnable changes (small patches or docs), tests or smoke-checks demonstrating the change, and a short verification note showing build/tests status.
+- Error modes: missing C++ build artifacts, port conflicts (9090/1256), transfer.info race conditions. Always surface these explicitly when proposing changes.
 
-### Build System (CMake + vcpkg)
-```bash
-# CRITICAL: Must use vcpkg toolchain - builds fail without it
-cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg\scripts\buildsystems\vcpkg.cmake"
-cmake --build build --config Release
-# Output: build/Release/EncryptedBackupClient.exe
-```
+- Big picture (read these first): `api_server/cyberbackup_api_server.py`, `api_server/real_backup_executor.py`, `python_server/server/server.py`, `scripts/one_click_build_and_run.py`, `Shared/utils/unified_config.py`, `Shared/utils/file_lifecycle.py`, `client/transfer.info`.
 
-### Manual Service Management
-```bash
-# 1. Start Python backup server (must start FIRST)
-python src/server/server.py    # Port 1256
+- Additional reference docs: read `CLAUDE.md` and `GEMINI.md` in the repo for agent-specific notes and past assistant interactions before making behavioral changes.
 
-# 2. Start Flask API bridge  
-python cyberbackup_api_server.py    # Port 9090
+- Architecture (short): Web UI ↔ Flask API bridge (9090) → spawns C++ client (build/Release) in --batch mode → Python backup server listens on 1256. The Flask bridge is the coordination hub.
 
+- Critical patterns to preserve:
+    - transfer.info is a legacy 3-line file (server:port, username, absolute filepath). Many modules search common locations (see `Shared/utils/unified_config.py`).
+    - Subprocess invocation: C++ client must run with `--batch` and cwd set to directory containing `transfer.info` (see `RealBackupExecutor` in `api_server/real_backup_executor.py`).
+    - Use the file lifecycle helpers (`Shared/utils/file_lifecycle.py` / SynchronizedFileManager) to avoid race conditions when creating or copying `transfer.info`.
+
+- Quick developer workflows (examples found in repo):
+    - Fast start (recommended & canonical launcher): `#file:one_click_build_and_run.py` (located at `scripts/one_click_build_and_run.py`) — this script is the canonical launcher for building and starting the full system, running checks, and creating `transfer.info` when missing.
+    - Manual: start server first `python python_server/server/server.py` (port 1256), then API `python api_server/cyberbackup_api_server.py` (port 9090).
+    - C++ build: use vcpkg toolchain: `cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg\scripts\buildsystems\vcpkg.cmake"` then `cmake --build build --config Release` (output: `build/Release/EncryptedBackupClient.exe`).
+
+- Tests and verification to run (repo examples): `tests/integration/test_complete_flow.py`, `tests/test_direct_executor.py`, `tests/test_web_gui_fix.py`. Always verify actual files show up in `server/received_files/` and compare SHA256 hashes.
+
+- Project-specific gotchas (mention before edits):
+    - Missing `--batch` or wrong cwd causes client to hang. Don't rely on subprocess exit code alone—verify file receipt.
+    - Multiple legacy `transfer.info` locations exist; prefer using `unified_config` helpers.
+    - Port conflicts: check ports 9090 and 1256 before starting services.
+
+- When changing integration code, run the minimal smoke test: start server, start API, generate a small test file and run the executor path (or use `one_click_build_and_run.py`). Update tests under `tests/` accordingly.
+
+If anything here is unclear or you'd like more detail on a specific file (example: exact RealBackupExecutor flow or transfer.info lifecycle), tell me which file and I'll expand the section.
 # 3. Build C++ client (after any C++ changes)
-cmake --build build --config Release
-```
-
-### Testing & Verification
-```bash
-# Integration tests (test complete web→API→C++→server chain)
-python tests/test_gui_upload.py      # Full integration test via GUI API
-python tests/test_upload.py          # Direct server test
-python tests/test_client.py          # C++ client validation
-
-# Verify real file transfers (CRITICAL verification pattern)
-# Check: server/received_files/ OR received_files/ for actual transferred files
-# Pattern: {username}_{timestamp}_{filename}
-```
-
-## Critical Integration Patterns
-
-### Subprocess Management (ESSENTIAL PATTERN)
-The system's core integration relies on subprocess execution:
-
-```python
-# RealBackupExecutor launches C++ client with --batch mode
-self.backup_process = subprocess.Popen(
-    [self.client_exe, "--batch"],  # --batch prevents hanging in subprocess
-    stdin=subprocess.PIPE,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE,
-    text=True,
-    cwd=os.path.dirname(os.path.abspath(self.client_exe))  # CRITICAL: Working directory
-)
-```
-
-**Why this matters**: C++ client expects `transfer.info` in working directory. Without `--batch` mode, client waits for user input and hangs the subprocess.
-
-### Configuration Generation Pattern
-```python
-# transfer.info must be generated per operation (3-line format)
-def _generate_transfer_info(self, server_ip, server_port, username, file_path):
-    with open("transfer.info", 'w') as f:
-        f.write(f"{server_ip}:{server_port}\n")  # Line 1: server endpoint
-        f.write(f"{username}\n")                 # Line 2: username  
-        f.write(f"{file_path}\n")                # Line 3: absolute file path
-```
-
-### Web Client Architecture Pattern (CRITICAL)
-The HTML file contains a complete modular JavaScript application:
-
-```javascript
-// Class hierarchy for 8000+ line single-file SPA
-class App {
-    constructor() {
-        this.apiClient = new ApiClient();           // Flask API communication
-        this.system = new SystemManager();          // Core system management
-        this.buttonStateManager = new ButtonStateManager();  // UI state
-        this.particleSystem = new ParticleSystem(); // Visual effects
-        this.errorBoundary = new ErrorBoundary(this); // Error handling
-        // + 10 more manager classes
-    }
-}
-
-// Key JavaScript Classes:
-// - ApiClient: HTTP communication with Flask bridge
-// - FileManager: File validation, preview, drag-drop
-// - ThemeManager: Cyberpunk/Matrix/Dark theme switching
-// - ParticleSystem: Performance-optimized visual effects
-// - ErrorBoundary: Global error handling and recovery
-// - ButtonStateManager: Loading/success/error button states
-```
-
-### File Verification Pattern (CRITICAL)
-Always verify transfers through multiple layers:
-```python
-def _verify_file_transfer(self, original_file, username):
-    # 1. Check server/received_files/ for actual file
-    # 2. Compare file sizes
-    # 3. Compare SHA256 hashes  
-    # 4. Verify network activity on port 1256
-    verification = {
-        'transferred': file_exists_in_server_dir,
-        'size_match': original_size == received_size,
-        'hash_match': original_hash == received_hash,
-        'network_activity': check_port_1256_connections()
-    }
-```
-
-## Binary Protocol & Security
-
-### Custom TCP Protocol (Port 1256)
-- **Protocol Version**: 3 (both client and server)
-- **Request Codes**: `REQ_REGISTER(1025)`, `REQ_SEND_PUBLIC_KEY(1026)`, `REQ_SEND_FILE(1028)`
-- **Response Codes**: `RESP_REG_OK(1600)`, `RESP_PUBKEY_AES_SENT(1602)`, `RESP_FILE_CRC(1603)`
-- **Header Format**: 23-byte requests, 7-byte responses (little-endian)
-- **CRC Verification**: Linux `cksum` compatible CRC32 algorithm
-
-### Security Implementation
-- **RSA-1024**: Key exchange (Crypto++ with OAEP padding)  
-- **AES-256-CBC**: File encryption (32-byte keys)
-- **Fixed IV Issue**: ⚠️ Static zero IV allows pattern analysis (HIGH PRIORITY FIX)
-- **CRC32 vs HMAC**: ⚠️ No tampering protection (MEDIUM PRIORITY FIX)
-
-## Critical Dependencies & Requirements
-
-### Build Dependencies
-- **CMake**: 4.0.3+ (minimum 3.15 required)
-- **vcpkg**: Package manager with boost-asio, boost-beast, cryptopp, zlib
-- **MSVC**: Visual Studio 2022 Build Tools
-- **Python**: 3.8+ with Flask, psutil, cryptography
-
-### Port Usage
-- **9090**: Flask API server (web GUI communication)
-- **1256**: Python backup server (C++ client connections)
-
-### Key File Locations
-```
-build/Release/EncryptedBackupClient.exe    # Main C++ executable
-server/received_files/                     # Backup storage location  
-transfer.info                              # Generated per operation
-client_debug.log                           # C++ client activity log
-server.log                                 # Python server activity log
-```
-
-## Common Issues & Critical Gotchas
-
-### Build System Issues
-- **vcpkg Toolchain**: Builds fail without `-DCMAKE_TOOLCHAIN_FILE="vcpkg\scripts\buildsystems\vcpkg.cmake"`
-- **Windows Defines**: Must include `WIN32_LEAN_AND_MEAN`, `NOMINMAX` for Boost compatibility
-- **Path Spaces**: Use existing `build/` directory; new directories may fail due to path issues
-
-### Process Integration Failures
-- **Missing --batch**: C++ client hangs waiting for user input in subprocess
-- **Wrong Working Directory**: Client must run from directory containing `transfer.info`
-- **Executable Path**: `RealBackupExecutor` searches multiple paths: `build/Release/`, `client/`, etc.
-
-### Configuration Issues
-- **transfer.info Format**: Must be exactly 3 lines: server:port, username, filepath
-- **Port Conflicts**: Check port availability before starting (1256, 9090)
-- **Absolute Paths**: Use absolute file paths to avoid working directory confusion
-
-### Testing & Verification Failures
-- **False Success**: Zero exit code doesn't guarantee successful transfer
-- **Missing Files**: Always verify actual files appear in `server/received_files/`
-- **Hash Verification**: Compare SHA256 hashes of original vs transferred files
-- **Network Activity**: Verify TCP connections to port 1256 during transfers
-
-### Unicode & Console Issues
-- **Windows Console**: Some validation scripts fail with `UnicodeEncodeError`
-- **Workaround**: Run individual tests instead of master test suite
-- **Log Encoding**: Monitor logs through file reads, not console output
-
-## Integration Testing Pattern (CRITICAL)
-```python
-# Always test the complete web→API→C++→server chain
-def test_full_backup_chain():
-    1. Start backup server (python server/server.py)
-    2. Start API server (python cyberbackup_api_server.py)  
-    3. Create test file with unique content
-    4. Upload via /api/start_backup
-    5. Monitor process execution and logs
-    6. Verify file appears in server/received_files/
-    7. Compare file hashes for integrity
-    8. Check network activity and exit codes
-```
-
-**Essential Truth**: Component isolation testing misses critical integration issues. Real verification happens through actual file transfers and hash comparison, not just API responses or exit codes.
-
-## Project-Specific Conventions
-
-- **File Structure**: C++ client expects `transfer.info` in working directory, not executable directory
-- **Batch Mode**: Always use `--batch` flag for C++ client in subprocess to prevent hanging
-- **Port Usage**: Server (1256), API (9090) - check both for conflicts
-- **File Verification**: Success = actual file appears in `received_files/` with correct content
-- **Build Dependencies**: vcpkg toolchain required for C++ build, Flask + flask-cors for API
-- **Process Management**: Use SynchronizedFileManager for `transfer.info` to prevent race conditions
-- **API Communication**: REST endpoints for operations, WebSocket (`/ws`) for real-time progress updates
-- **Error Propagation**: C++ client logs → subprocess stdout → RealBackupExecutor → Flask API → Web UI
-
-## Quick Reference Commands
-```bash
-# Check system health
-netstat -an | findstr ":9090\|:1256"    # Port availability
-tasklist | findstr "python\|Encrypted"   # Process status
-
-# Emergency cleanup
-taskkill /f /im python.exe               # Kill Python processes
-taskkill /f /im EncryptedBackupClient.exe # Kill C++ client
-
-# Verify file transfers  
-dir "server\received_files"              # Check received files
-python -c "import hashlib; print(hashlib.sha256(open('file.txt','rb').read()).hexdigest())"
-
-# Build troubleshooting
-cmake --version                          # Check CMake version
-vcpkg list                              # Check installed packages
-```
-
-When modifying this system, always test the complete integration chain. The unique hybrid architecture means changes in one layer can break communication patterns in unexpected ways.
-
-````
