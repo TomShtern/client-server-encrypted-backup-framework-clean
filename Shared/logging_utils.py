@@ -75,6 +75,69 @@ else:
             return text
 
 
+# Centralized CODE MAPS for maintainability and UI consumption.
+# Each entry is either a section (has 'section') or an entry with code/text/emoji/level.
+CODE_MAPS: Dict[str, List[Dict[str, str]]] = {
+    'api': [
+        {'section': 'HTTP STATUS CODES'},
+        {'code': '1xx', 'text': 'Informational (100 Continue, 101 Switching Protocols)', 'emoji': Emojis.INFO, 'level': 'info'},
+        {'code': '200', 'text': 'OK (Success)', 'emoji': Emojis.SUCCESS, 'level': 'success'},
+        {'code': '201', 'text': 'Created', 'emoji': Emojis.SUCCESS, 'level': 'success'},
+        {'code': '202', 'text': 'Accepted', 'emoji': Emojis.INFO, 'level': 'info'},
+        {'code': '204', 'text': 'No Content', 'emoji': Emojis.INFO, 'level': 'info'},
+        {'code': '3xx', 'text': 'Redirection (301/302)', 'emoji': Emojis.ROCKET, 'level': 'info'},
+        {'code': '400', 'text': 'Bad Request', 'emoji': Emojis.WARNING, 'level': 'warning'},
+        {'code': '401', 'text': 'Unauthorized', 'emoji': Emojis.WARNING, 'level': 'warning'},
+        {'code': '403', 'text': 'Forbidden', 'emoji': Emojis.WARNING, 'level': 'warning'},
+        {'code': '404', 'text': 'Not Found', 'emoji': Emojis.ERROR, 'level': 'error'},
+        {'code': '408', 'text': 'Request Timeout', 'emoji': Emojis.WARNING, 'level': 'warning'},
+        {'code': '409', 'text': 'Conflict', 'emoji': Emojis.WARNING, 'level': 'warning'},
+        {'code': '413', 'text': 'Payload Too Large', 'emoji': Emojis.WARNING, 'level': 'warning'},
+        {'code': '415', 'text': 'Unsupported Media Type', 'emoji': Emojis.WARNING, 'level': 'warning'},
+        {'code': '429', 'text': 'Too Many Requests', 'emoji': Emojis.WARNING, 'level': 'warning'},
+        {'code': '500', 'text': 'Internal Server Error', 'emoji': Emojis.ERROR, 'level': 'error'},
+        {'code': '502', 'text': 'Bad Gateway', 'emoji': Emojis.ERROR, 'level': 'error'},
+        {'code': '503', 'text': 'Service Unavailable', 'emoji': Emojis.ERROR, 'level': 'error'},
+        {'code': '504', 'text': 'Gateway Timeout', 'emoji': Emojis.ERROR, 'level': 'error'},
+    ],
+    'backup': [
+        {'section': 'PROTOCOL & TRANSFER'},
+        {'code': 'PROTOCOL', 'text': 'Protocol Version 3', 'emoji': Emojis.ROCKET, 'level': 'info'},
+        {'section': 'REQUEST CODES (client->server)'},
+        {'code': 'REQ_REGISTER (1025)', 'text': 'Register client with server', 'emoji': Emojis.ROCKET, 'level': 'info'},
+        {'code': 'REQ_SEND_PUBLIC_KEY (1026)', 'text': "Send client's public key to server", 'emoji': Emojis.GEAR, 'level': 'info'},
+        {'code': 'REQ_SEND_FILE (1028)', 'text': 'Begin encrypted file transfer', 'emoji': Emojis.ROCKET, 'level': 'success'},
+        {'section': 'RESPONSE CODES (server->client)'},
+        {'code': 'RESP_REG_OK (1600)', 'text': 'Registration OK', 'emoji': Emojis.SUCCESS, 'level': 'success'},
+        {'code': 'RESP_PUBKEY_AES_SENT (1602)', 'text': 'AES key encrypted with RSA sent', 'emoji': Emojis.GEAR, 'level': 'info'},
+        {'code': 'RESP_FILE_CRC (1603)', 'text': 'File CRC / transfer verification', 'emoji': Emojis.INFO, 'level': 'info'},
+        {'section': 'TRANSFER / ERROR CONDITIONS'},
+        {'code': 'CRC_MISMATCH', 'text': 'CRC mismatch on received file', 'emoji': Emojis.ERROR, 'level': 'error'},
+        {'code': 'FILE_WRITE_ERROR', 'text': 'Server failed to write file to disk', 'emoji': Emojis.ERROR, 'level': 'error'},
+        {'code': 'AUTH_FAIL', 'text': 'Authentication failed', 'emoji': Emojis.WARNING, 'level': 'warning'},
+        {'code': 'AES_DECRYPT_FAIL', 'text': 'AES decryption failed', 'emoji': Emojis.ERROR, 'level': 'error'},
+        {'code': 'DISK_FULL', 'text': 'Insufficient disk space on server', 'emoji': Emojis.WARNING, 'level': 'warning'},
+        {'code': 'PERMISSION_DENIED', 'text': 'Filesystem permission denied', 'emoji': Emojis.WARNING, 'level': 'warning'},
+        {'code': 'TRANSFER_RETRY', 'text': 'Transfer will be retried', 'emoji': Emojis.ROCKET, 'level': 'info'},
+        {'code': 'PARTIAL_UPLOAD', 'text': 'Partial upload received (incomplete)', 'emoji': Emojis.WARNING, 'level': 'warning'},
+        {'section': 'SECURITY & TRANSFER NOTES'},
+        {'note': 'RSA-1024 used for key exchange (OAEP)'},
+        {'note': 'AES-256-CBC used for file encryption (32-byte keys)'},
+        {'note': 'FIXED IV currently used — consider rotating IV per file (security risk)', 'level': 'warning'},
+        {'note': 'CRC32 is used for integrity but not authentication — consider HMAC'},
+    ],
+}
+
+
+def get_code_map(server_type: str) -> List[Dict[str, str]]:
+    """Return the structured CODE MAP for a given server type.
+
+    This makes the data easy to consume from UIs or other tools.
+    """
+    st = server_type.lower()
+    return CODE_MAPS['api'] if 'api' in st else CODE_MAPS['backup']
+
+
 def setup_dual_logging(
     logger_name: str,
     server_type: str,
@@ -157,7 +220,7 @@ def setup_dual_logging(
     console_lines.append(Colors.info(f"Console Level: {logging.getLevelName(console_level)}"))
     console_lines.append(Colors.info(f"File Level: {logging.getLevelName(file_level)}"))
     console_lines.append(Colors.debug(f"Log File: {log_file_path}"))
-    console_lines.append("" )
+    console_lines.append("")
     console_lines.append(Colors.BOLD + Colors.UNDERLINE + "CODE MAP: Common status / progress codes" + Colors.RESET)
 
     # Helper to build colored code lines with emoji
@@ -165,36 +228,28 @@ def setup_dual_logging(
         # color_fn is a Colors.<method> callable that accepts (text, bold=False)
         return color_fn(f" {emoji} {code} - {text}")
 
-    # 1xx informational
-    console_lines.append(codeline("1xx", "Informational (100 Continue, 101 Switching Protocols)", Emojis.INFO, Colors.info))
+    # Render structured CODE_MAP for this server type
+    for entry in get_code_map(server_type):
+        if 'section' in entry:
+            console_lines.append(Colors.BOLD + entry['section'] + Colors.RESET)
+            continue
+        if 'note' in entry:
+            level = entry.get('level')
+            note_text = entry['note']
+            if level == 'warning':
+                console_lines.append(Colors.warning(note_text, bold=True))
+            else:
+                console_lines.append(Colors.info(note_text))
+            continue
+        # Standard code entry (code/text/emoji/level)
+        code = entry.get('code', '')
+        text = entry.get('text', '')
+        emoji = entry.get('emoji', '')
+        lvl = entry.get('level', 'info')
+        color_fn = getattr(Colors, lvl, Colors.info)
+        console_lines.append(codeline(code, text, emoji, color_fn))
 
-    # 2xx success/ok
-    console_lines.append(codeline("200", "OK (Success)", Emojis.SUCCESS, Colors.success))
-    console_lines.append(codeline("201", "Created", Emojis.SUCCESS, Colors.success))
-    console_lines.append(codeline("202", "Accepted", Emojis.INFO, Colors.info))
-    console_lines.append(codeline("204", "No Content", Emojis.INFO, Colors.info))
-
-    # 3xx redirection - informational/neutral
-    console_lines.append(codeline("3xx", "Redirection (301/302)", Emojis.ROCKET, Colors.info))
-
-    # 4xx client issues - varying severity
-    console_lines.append(codeline("400", "Bad Request", Emojis.WARNING, Colors.warning))
-    console_lines.append(codeline("401", "Unauthorized", Emojis.WARNING, Colors.warning))
-    console_lines.append(codeline("403", "Forbidden", Emojis.WARNING, Colors.warning))
-    console_lines.append(codeline("404", "Not Found", Emojis.ERROR, Colors.error))
-    console_lines.append(codeline("408", "Request Timeout", Emojis.WARNING, Colors.warning))
-    console_lines.append(codeline("409", "Conflict", Emojis.WARNING, Colors.warning))
-    console_lines.append(codeline("413", "Payload Too Large", Emojis.WARNING, Colors.warning))
-    console_lines.append(codeline("415", "Unsupported Media Type", Emojis.WARNING, Colors.warning))
-    console_lines.append(codeline("429", "Too Many Requests", Emojis.WARNING, Colors.warning))
-
-    # 5xx server errors - red = bad
-    console_lines.append(codeline("500", "Internal Server Error", Emojis.ERROR, Colors.error))
-    console_lines.append(codeline("502", "Bad Gateway", Emojis.ERROR, Colors.error))
-    console_lines.append(codeline("503", "Service Unavailable", Emojis.ERROR, Colors.error))
-    console_lines.append(codeline("504", "Gateway Timeout", Emojis.ERROR, Colors.error))
-
-    console_lines.append("" )
+    console_lines.append("")
     console_lines.append(Colors.debug("=" * 60))
     console_lines.append(Colors.debug(f"Live Monitoring: Get-Content {log_file_path} -Wait -Tail 50"))
     

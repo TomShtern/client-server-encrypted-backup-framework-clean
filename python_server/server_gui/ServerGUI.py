@@ -48,6 +48,25 @@ class BackupServerLike(Protocol):
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
+# Calendar for date range selection
+try:
+    from tkcalendar import DateEntry
+    CALENDAR_AVAILABLE = True
+    print("[OK] Date entry for analytics available (tkcalendar installed)")
+except ImportError:
+    CALENDAR_AVAILABLE = False
+    print("[WARNING] tkcalendar not available. To enable date range selection: pip install tkcalendar")
+
+# Drag and Drop support
+try:
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+    DND_AVAILABLE = True
+    print("[OK] Drag-and-drop functionality available (tkinterdnd2 installed)")
+except ImportError:
+    DND_AVAILABLE = False
+    print("[WARNING] tkinterdnd2 not available. To enable drag-and-drop: pip install tkinterdnd2")
+
+
 # Import server components for real server control
 try:
     from python_server.server.server import BackupServer # type: ignore
@@ -549,6 +568,31 @@ class ModernTooltip:
             self.tooltip_window.destroy()
         self.tooltip_window = None
 
+class DetailPane(ModernCard):
+    """A card-like pane to display details of a selected item."""
+    def __init__(self, parent: tk.Widget, title: str, **kwargs: Any):
+        super().__init__(parent, title=title, **kwargs)
+        self.detail_labels: Dict[str, tk.Label] = {}
+        if self.content_frame:
+            self.text_area = tk.Text(self.content_frame, bg=ModernTheme.SECONDARY_BG, fg=ModernTheme.TEXT_PRIMARY,
+                                     font=(ModernTheme.FONT_FAMILY, 10), relief="flat", wrap="word", height=10)
+            self.text_area.pack(fill="both", expand=True, padx=10, pady=10)
+            self.text_area.config(state=tk.DISABLED)
+
+    def update_details(self, data: Dict[str, Any]) -> None:
+        """Update the details displayed in the pane."""
+        self.text_area.config(state=tk.NORMAL)
+        self.text_area.delete(1.0, tk.END)
+        formatted_text = json.dumps(data, indent=2)
+        self.text_area.insert(tk.END, formatted_text)
+        self.text_area.config(state=tk.DISABLED)
+
+    def clear_details(self) -> None:
+        """Clear the detail pane."""
+        self.text_area.config(state=tk.NORMAL)
+        self.text_area.delete(1.0, tk.END)
+        self.text_area.config(state=tk.DISABLED)
+
 class ModernTable(tk.Frame):
     """Modern table widget with sorting, filtering, and selection"""
     def __init__(self, parent: tk.Widget, columns: Dict[str, Any], **kwargs: Any) -> None:
@@ -622,6 +666,67 @@ class ModernTable(tk.Frame):
 
         # Bind selection event
         self.tree.bind("<<TreeviewSelect>>", self._on_selection_change)
+        self.tree.bind("<Button-3>", self._show_context_menu) # Right-click
+        self.tree.bind("<ButtonPress-1>", self._on_mouse_press)
+        self.tree.bind("<B1-Motion>", self._on_mouse_drag)
+
+        self.context_menu: Optional[tk.Menu] = None
+        self.drag_start_x = 0
+        self.drag_start_y = 0
+
+    def _on_mouse_press(self, event: tk.Event) -> None:
+        """Record starting position of a potential drag."""
+        self.drag_start_x = event.x
+        self.drag_start_y = event.y
+
+    def _on_mouse_drag(self, event: tk.Event) -> None:
+        """If mouse is dragged significantly, start a drag-and-drop operation."""
+        if not DND_AVAILABLE:
+            return
+
+        distance = ((event.x - self.drag_start_x)**2 + (event.y - self.drag_start_y)**2)**0.5
+        if distance > 10: # Start drag after 10 pixels
+            self._start_drag(event)
+
+    def _start_drag(self, event: tk.Event) -> None:
+        """Initiates the drag and drop operation."""
+        # This is a placeholder for the actual DND logic
+        print("Drag operation started!")
+        # In a real implementation, we would use self.tree.dnd_start() here
+        # with the appropriate data.
+
+    def _show_context_menu(self, event: tk.Event) -> None:
+        """Show context menu on right-click."""
+        if not self.context_menu:
+            return
+
+        # Select row under cursor
+        iid = self.tree.identify_row(event.y)
+        if iid:
+            self.tree.selection_set(iid)
+            self.context_menu.post(event.x_root, event.y_root)
+
+    def set_context_menu(self, menu: tk.Menu) -> None:
+        """Set the context menu for the table."""
+        self.context_menu = menu
+        self.tree.bind("<Button-3>", self._show_context_menu) # Right-click
+
+        self.context_menu = None
+
+    def _show_context_menu(self, event: tk.Event) -> None:
+        """Show context menu on right-click."""
+        if not self.context_menu:
+            return
+
+        # Select row under cursor
+        iid = self.tree.identify_row(event.y)
+        if iid:
+            self.tree.selection_set(iid)
+            self.context_menu.post(event.x_root, event.y_root)
+
+    def set_context_menu(self, menu: tk.Menu) -> None:
+        """Set the context menu for the table."""
+        self.context_menu = menu
 
     def set_data(self, data: List[Dict[str, Any]]) -> None:
         """Set table data"""
@@ -1353,7 +1458,11 @@ class ServerGUI:
             print("Starting enhanced ultra modern GUI main loop...")
             # Initialize tkinter with error handling
             try:
-                self.root = tk.Tk()
+                if DND_AVAILABLE:
+                    self.root = TkinterDnD.Tk()
+                    print("TkinterDnD root created for drag-and-drop support.")
+                else:
+                    self.root = tk.Tk()
                 print("Tkinter root created")
             except Exception as e:
                 print(f"Failed to create Tkinter root: {e}")
@@ -1364,7 +1473,7 @@ class ServerGUI:
             try:
                 self.root.title("[SECURE] ULTRA MODERN Encrypted Backup Server - Enhanced")
                 self.root.geometry("1200x800")
-                self.root.minsize(1000, 700)
+                self.root.minsize(800, 600) # Lowered minsize for better responsiveness
                 self.root.configure(bg=ModernTheme.PRIMARY_BG)
                 self.root.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
@@ -1500,10 +1609,10 @@ class ServerGUI:
                            fg=ModernTheme.TEXT_PRIMARY,
                            activebackground=ModernTheme.ACCENT_BLUE)
         menubar.add_cascade(label="View", menu=view_menu)
-        view_menu.add_command(label="🏠 Dashboard", command=lambda: self._switch_tab("dashboard"))
-        view_menu.add_command(label="👥 Clients", command=lambda: self._switch_tab("clients"))
-        view_menu.add_command(label="📁 Files", command=lambda: self._switch_tab("files"))
-        view_menu.add_command(label="📈 Analytics", command=lambda: self._switch_tab("analytics"))
+        view_menu.add_command(label="🏠 Dashboard", command=lambda: self._switch_page("dashboard"))
+        view_menu.add_command(label="👥 Clients", command=lambda: self._switch_page("clients"))
+        view_menu.add_command(label="📁 Files", command=lambda: self._switch_page("files"))
+        view_menu.add_command(label="📈 Analytics", command=lambda: self._switch_page("analytics"))
 
         # Help menu
         help_menu = tk.Menu(menubar, tearoff=0, bg=ModernTheme.CARD_BG,
@@ -1524,6 +1633,21 @@ class ServerGUI:
                               bg=ModernTheme.PRIMARY_BG, fg=ModernTheme.TEXT_PRIMARY,
                               font=(ModernTheme.FONT_FAMILY, 22, 'bold'))
         title_label.pack(side="left", padx=10, pady=10)
+
+        # Global Search Bar
+        search_frame = tk.Frame(self.header_frame, bg=ModernTheme.PRIMARY_BG)
+        search_frame.pack(side="left", padx=20, fill="x", expand=True)
+
+        self.global_search_var = tk.StringVar()
+        self.global_search_var.trace_add("write", self._on_global_search)
+        search_entry = tk.Entry(search_frame, textvariable=self.global_search_var,
+                               bg=ModernTheme.SECONDARY_BG, fg=ModernTheme.TEXT_PRIMARY,
+                               font=(ModernTheme.FONT_FAMILY, 11), relief="flat", bd=8,
+                               width=50)
+        search_entry.insert(0, "🔍 Search clients, files, logs...")
+        search_entry.bind("<FocusIn>", self._on_search_focus_in)
+        search_entry.bind("<FocusOut>", self._on_search_focus_out)
+        search_entry.pack(side="left", fill="x", expand=True)
 
         # Clock and status
         status_frame = tk.Frame(self.header_frame, bg=ModernTheme.PRIMARY_BG)
@@ -1644,7 +1768,9 @@ class ServerGUI:
         scrollbar.pack(side="right", fill="y")
 
         # Create dashboard layout
-        self._create_compact_two_column_layout(scrollable_frame)
+        self.dashboard_content_frame = scrollable_frame
+        self._create_compact_two_column_layout(self.dashboard_content_frame)
+        self.root.bind("<Configure>", self._check_layout)
 
     def _create_clients_tab(self) -> None:
         """Create clients tab content"""
@@ -1655,37 +1781,9 @@ class ServerGUI:
         client_card = ModernCard(clients_tab, title="👥 Client Management")
         client_card.pack(fill="both", expand=True, padx=5, pady=5)
 
-        # Control buttons
-        control_frame = tk.Frame(client_card.content_frame, bg=ModernTheme.CARD_BG)
-        control_frame.pack(fill="x", padx=10, pady=10)
-
-        refresh_btn = tk.Button(control_frame, text="🔄 Refresh",
-                              command=self._refresh_client_table,
-                              bg=ModernTheme.ACCENT_BLUE, fg=ModernTheme.TEXT_PRIMARY,
-                              font=(ModernTheme.FONT_FAMILY, 10, 'bold'),
-                              relief="flat", bd=0, padx=15, pady=5)
-        refresh_btn.pack(side="left", padx=(0, 5))
-
-        details_btn = tk.Button(control_frame, text="Details",
-                              command=self._show_client_details,
-                              bg=ModernTheme.ACCENT_PURPLE, fg=ModernTheme.TEXT_PRIMARY,
-                              font=(ModernTheme.FONT_FAMILY, 10, 'bold'),
-                              relief="flat", bd=0, padx=15, pady=5)
-        details_btn.pack(side="left", padx=5)
-
-        disconnect_btn = tk.Button(control_frame, text="🔌 Disconnect",
-                                 command=self._disconnect_client,
-                                 bg=ModernTheme.WARNING, fg=ModernTheme.TEXT_PRIMARY,
-                                 font=(ModernTheme.FONT_FAMILY, 10, 'bold'),
-                                 relief="flat", bd=0, padx=15, pady=5)
-        disconnect_btn.pack(side="left", padx=5)
-
-        export_btn = tk.Button(control_frame, text="💾 Export",
-                             command=self._export_clients,
-                             bg=ModernTheme.ACCENT_GREEN, fg=ModernTheme.TEXT_PRIMARY,
-                             font=(ModernTheme.FONT_FAMILY, 10, 'bold'),
-                             relief="flat", bd=0, padx=15, pady=5)
-        export_btn.pack(side="left", padx=5)
+        # Paned window for table and detail pane
+        paned_window = tk.PanedWindow(client_card.content_frame, orient=tk.HORIZONTAL, bg=ModernTheme.CARD_BG, sashwidth=8)
+        paned_window.pack(fill="both", expand=True, padx=10, pady=10)
 
         # Client table
         columns = {
@@ -1696,10 +1794,14 @@ class ServerGUI:
             'files': {'text': 'Files', 'width': 80}
         }
 
-        if client_card.content_frame is not None:
-            self.client_table = ModernTable(client_card.content_frame, columns)
-            self.client_table.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-            self.client_table.set_selection_callback(self._on_client_selected)
+        self.client_table = ModernTable(paned_window, columns)
+        paned_window.add(self.client_table, width=800)
+
+        # Detail Pane
+        self.client_detail_pane = DetailPane(paned_window, title="Client Details")
+        paned_window.add(self.client_detail_pane)
+
+        self.client_table.set_selection_callback(self._on_client_selected)
 
     def _create_files_tab(self) -> None:
         """Create files tab content"""
@@ -1710,51 +1812,9 @@ class ServerGUI:
         file_card = ModernCard(files_tab, title="📁 File Management")
         file_card.pack(fill="both", expand=True, padx=5, pady=5)
 
-        # Control buttons
-        control_frame = tk.Frame(file_card.content_frame, bg=ModernTheme.CARD_BG)
-        control_frame.pack(fill="x", padx=10, pady=10)
-
-        refresh_btn = tk.Button(control_frame, text="🔄 Refresh",
-                              command=self._refresh_file_table,
-                              bg=ModernTheme.ACCENT_BLUE, fg=ModernTheme.TEXT_PRIMARY,
-                              font=(ModernTheme.FONT_FAMILY, 10, 'bold'),
-                              relief="flat", bd=0, padx=15, pady=5)
-        refresh_btn.pack(side="left", padx=(0, 5))
-
-        details_btn = tk.Button(control_frame, text="Details",
-                              command=self._show_file_details,
-                              bg=ModernTheme.ACCENT_PURPLE, fg=ModernTheme.TEXT_PRIMARY,
-                              font=(ModernTheme.FONT_FAMILY, 10, 'bold'),
-                              relief="flat", bd=0, padx=15, pady=5)
-        details_btn.pack(side="left", padx=5)
-
-        view_content_btn = tk.Button(control_frame, text="View Content",
-                                   command=self._view_file_content,
-                                   bg=ModernTheme.ACCENT_PURPLE, fg=ModernTheme.TEXT_PRIMARY,
-                                   font=(ModernTheme.FONT_FAMILY, ModernTheme.FONT_SIZE_SMALL),
-                                   relief="flat", bd=0, padx=15, pady=5)
-        view_content_btn.pack(side="left", padx=2)
-
-        verify_btn = tk.Button(control_frame, text="Verify",
-                             command=self._verify_file,
-                             bg=ModernTheme.SUCCESS, fg=ModernTheme.TEXT_PRIMARY,
-                             font=(ModernTheme.FONT_FAMILY, 10, 'bold'),
-                             relief="flat", bd=0, padx=15, pady=5)
-        verify_btn.pack(side="left", padx=5)
-
-        delete_btn = tk.Button(control_frame, text="Delete",
-                             command=self._delete_file,
-                             bg=ModernTheme.ERROR, fg=ModernTheme.TEXT_PRIMARY,
-                             font=(ModernTheme.FONT_FAMILY, 10, 'bold'),
-                             relief="flat", bd=0, padx=15, pady=5)
-        delete_btn.pack(side="left", padx=5)
-
-        export_btn = tk.Button(control_frame, text="💾 Export",
-                             command=self._export_files,
-                             bg=ModernTheme.ACCENT_GREEN, fg=ModernTheme.TEXT_PRIMARY,
-                             font=(ModernTheme.FONT_FAMILY, 10, 'bold'),
-                             relief="flat", bd=0, padx=15, pady=5)
-        export_btn.pack(side="left", padx=5)
+        # Paned window for table and detail pane
+        paned_window = tk.PanedWindow(file_card.content_frame, orient=tk.HORIZONTAL, bg=ModernTheme.CARD_BG, sashwidth=8)
+        paned_window.pack(fill="both", expand=True, padx=10, pady=10)
 
         # File table
         columns = {
@@ -1766,24 +1826,53 @@ class ServerGUI:
             'path': {'text': 'Path', 'width': 200}
         }
 
-        if file_card.content_frame is not None:
-            self.file_table = ModernTable(file_card.content_frame, columns)
-            self.file_table.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-            self.file_table.set_selection_callback(self._on_file_selected)
+        self.file_table = ModernTable(paned_window, columns)
+        paned_window.add(self.file_table, width=800)
+
+        # Detail Pane
+        self.file_detail_pane = DetailPane(paned_window, title="File Details")
+        paned_window.add(self.file_detail_pane)
+
+        self.file_table.set_selection_callback(self._on_file_selected)
 
     def _create_analytics_tab(self) -> None:
         """Create analytics tab content"""
         analytics_tab = tk.Frame(self.content_area, bg=ModernTheme.PRIMARY_BG)
         self.tab_contents["analytics"] = analytics_tab
 
+        # Add date range filter
+        filter_frame = tk.Frame(analytics_tab, bg=ModernTheme.CARD_BG)
+        filter_frame.pack(fill="x", padx=5, pady=5)
+
+        tk.Label(filter_frame, text="From:", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_PRIMARY).pack(side="left", padx=(10,5), pady=10)
+        if CALENDAR_AVAILABLE:
+            self.start_date_entry = DateEntry(filter_frame, width=12, background=ModernTheme.ACCENT_BLUE, foreground='white', borderwidth=2)
+            self.start_date_entry.pack(side="left", pady=10)
+        else:
+            self.start_date_entry = tk.Entry(filter_frame, width=15)
+            self.start_date_entry.pack(side="left", pady=10)
+
+        tk.Label(filter_frame, text="To:", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_PRIMARY).pack(side="left", padx=(20,5), pady=10)
+        if CALENDAR_AVAILABLE:
+            self.end_date_entry = DateEntry(filter_frame, width=12, background=ModernTheme.ACCENT_BLUE, foreground='white', borderwidth=2)
+            self.end_date_entry.pack(side="left", pady=10)
+        else:
+            self.end_date_entry = tk.Entry(filter_frame, width=15)
+            self.end_date_entry.pack(side="left", pady=10)
+
+        filter_btn = tk.Button(filter_frame, text="Filter", command=self._apply_analytics_filter, bg=ModernTheme.SUCCESS, fg=ModernTheme.TEXT_PRIMARY)
+        filter_btn.pack(side="left", padx=20, pady=10)
+
         # Create grid layout
-        analytics_tab.grid_columnconfigure(0, weight=1)
-        analytics_tab.grid_columnconfigure(1, weight=1)
-        analytics_tab.grid_rowconfigure(0, weight=1)
-        analytics_tab.grid_rowconfigure(1, weight=1)
+        charts_frame = tk.Frame(analytics_tab, bg=ModernTheme.PRIMARY_BG)
+        charts_frame.pack(fill="both", expand=True)
+        charts_frame.grid_columnconfigure(0, weight=1)
+        charts_frame.grid_columnconfigure(1, weight=1)
+        charts_frame.grid_rowconfigure(0, weight=1)
+        charts_frame.grid_rowconfigure(1, weight=1)
 
         # Performance chart
-        perf_card = ModernCard(analytics_tab, title="[PERF] System Performance")
+        perf_card = ModernCard(charts_frame, title="[PERF] System Performance")
         perf_card.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
         if perf_card.content_frame is not None:
             self.performance_chart = ModernChart(perf_card.content_frame, chart_type="line")
@@ -1925,6 +2014,7 @@ class ServerGUI:
 
         # RIGHT COLUMN CONTENT (Secondary Info & Controls)
         self._create_enhanced_control_panel(right_column)
+        self._create_live_transfer_feed(right_column) # New live feed
         self._create_compact_maintenance_card(right_column)
         self._create_compact_activity_log_card(right_column)
         self._create_compact_status_message_card(right_column)
@@ -1964,6 +2054,36 @@ class ServerGUI:
                                               bg=ModernTheme.GLASS_BG, fg=ModernTheme.TEXT_PRIMARY,
                                               font=(ModernTheme.FONT_FAMILY, 9))
         self.status_labels['uptime'].pack(side="right")
+
+    def _check_layout(self, event: tk.Event) -> None:
+        """Check the window size and adjust the layout accordingly."""
+        if not hasattr(self, 'dashboard_content_frame') or not self.dashboard_content_frame.winfo_exists():
+            return
+
+        width = event.width
+        # Clear the dashboard content frame before re-drawing
+        for widget in self.dashboard_content_frame.winfo_children():
+            widget.destroy()
+
+        if width < 900: # Threshold for switching to single column
+            self._create_compact_single_column_layout(self.dashboard_content_frame)
+        else:
+            self._create_compact_two_column_layout(self.dashboard_content_frame)
+
+    def _create_compact_single_column_layout(self, parent: tk.Widget) -> None:
+        """Create a single-column layout for smaller window sizes."""
+        main_container = tk.Frame(parent, bg=ModernTheme.PRIMARY_BG)
+        main_container.pack(fill="both", expand=True, padx=5, pady=5)
+
+        self._create_compact_server_status_card(main_container)
+        self._create_compact_client_stats_card(main_container)
+        self._create_compact_transfer_stats_card(main_container)
+        self._create_compact_performance_card(main_container)
+        self._create_enhanced_control_panel(main_container)
+        self._create_live_transfer_feed(main_container)
+        self._create_compact_maintenance_card(main_container)
+        self._create_compact_activity_log_card(main_container)
+        self._create_compact_status_message_card(main_container)
 
     def _create_compact_client_stats_card(self, parent: tk.Widget) -> None:
         """Create compact client statistics card with glass morphism"""
@@ -2031,6 +2151,45 @@ class ServerGUI:
         self.status_labels['activity'] = tk.Label(activity_frame, text="None", bg=ModernTheme.GLASS_BG,
                                                  fg=ModernTheme.TEXT_PRIMARY, font=(ModernTheme.FONT_FAMILY, 9))
         self.status_labels['activity'].pack(side="right")
+
+    def _create_live_transfer_feed(self, parent: tk.Widget) -> None:
+        """Create the live transfer feed card on the dashboard."""
+        card = ModernCard(parent, title="⚡ Live Transfers")
+        card.pack(fill="x", pady=(0, 8), padx=3)
+
+        columns = {
+            'client': {'text': 'Client', 'width': 120},
+            'file': {'text': 'File', 'width': 180},
+            'progress': {'text': 'Progress', 'width': 100}
+        }
+
+        if card.content_frame:
+            self.live_transfer_table = ModernTable(card.content_frame, columns)
+            self.live_transfer_table.pack(fill="both", expand=True, padx=5, pady=5)
+            # We will need a way to update this table with live data later
+
+    def _on_global_search(self, *args: Any) -> None:
+        """Handle global search text change."""
+        # Placeholder for future search logic implementation
+        search_query = self.global_search_var.get()
+        if search_query and search_query != "🔍 Search clients, files, logs...":
+            print(f"Global search for: {search_query}")
+            # Here we would trigger a search across different data sources
+            pass
+
+    def _on_search_focus_in(self, event: tk.Event) -> None:
+        """Clear placeholder text on focus."""
+        if self.global_search_var.get() == "🔍 Search clients, files, logs...":
+            self.global_search_var.set("")
+            if isinstance(event.widget, tk.Entry):
+                event.widget.config(fg=ModernTheme.TEXT_PRIMARY)
+
+    def _on_search_focus_out(self, event: tk.Event) -> None:
+        """Restore placeholder text if empty."""
+        if not self.global_search_var.get():
+            self.global_search_var.set("🔍 Search clients, files, logs...")
+            if isinstance(event.widget, tk.Entry):
+                event.widget.config(fg=ModernTheme.TEXT_SECONDARY)
 
     def _create_compact_performance_card(self, parent: tk.Widget) -> None:
         """Create compact performance monitoring card with real data"""
@@ -2338,6 +2497,33 @@ class ServerGUI:
         elif self.toast_system:
             self.toast_system.show_toast("Server or database not available.", "error")
 
+    def _export_selected_clients(self):
+        """Export selected client data to CSV."""
+        if not self.client_table:
+            if self.toast_system: self.toast_system.show_toast("Client table not available.", "error")
+            return
+
+        selected_clients = self.client_table.get_selected_items()
+        if not selected_clients:
+            if self.toast_system: self.toast_system.show_toast("No clients selected to export.", "warning")
+            return
+
+        if file_path := filedialog.asksaveasfilename(defaultextension=".csv",
+                                                   filetypes=[("CSV files", "*.csv")],
+                                                   title="Export Selected Clients to CSV"):
+            try:
+                with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
+                    # Note: We are exporting the formatted data from the table directly
+                    fieldnames = list(selected_clients[0].keys())
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                    writer.writeheader()
+                    writer.writerows(selected_clients)
+                if self.toast_system: self.toast_system.show_toast(f"Selected clients exported to {file_path}", "success")
+                self._add_activity_log(f"Exported {len(selected_clients)} clients to {file_path}")
+            except Exception as e:
+                if self.toast_system: self.toast_system.show_toast(f"Error exporting selected clients: {e}", "error")
+                self._add_activity_log(f"Error exporting selected clients: {e}")
+
     def _export_files(self):
         """Export file data to CSV."""
         if (self.server and hasattr(self.server, 'db_manager') and 
@@ -2583,6 +2769,16 @@ class ServerGUI:
             }
             self.client_chart.update_data(chart_data, title="Client Status")
 
+    def _apply_analytics_filter(self):
+        """Apply the selected date range to the analytics charts."""
+        start_date = self.start_date_entry.get_date() if CALENDAR_AVAILABLE else self.start_date_entry.get()
+        end_date = self.end_date_entry.get_date() if CALENDAR_AVAILABLE else self.end_date_entry.get()
+        self._add_activity_log(f"Filtering analytics from {start_date} to {end_date}")
+        if self.toast_system:
+            self.toast_system.show_toast(f"Filtering data from {start_date} to {end_date}", "info")
+        # Placeholder for actual data filtering and chart updating logic
+        self._update_analytics_charts()
+
     def _refresh_client_table(self):
         """Refresh the client table with data from the database."""
         if self.client_table and self.server:
@@ -2614,9 +2810,10 @@ class ServerGUI:
 
     def _on_client_selected(self, selected_item: Optional[Dict[str, Any]]) -> None:
         """Handle client selection in the table."""
-        if selected_item:
-            name = selected_item.get('name', 'Unknown')
-            self._add_activity_log(f"Client selected: {name}")
+        if selected_item and hasattr(self, 'client_detail_pane') and self.client_detail_pane:
+            self.client_detail_pane.update_details(selected_item)
+        elif hasattr(self, 'client_detail_pane') and self.client_detail_pane:
+            self.client_detail_pane.clear_details()
 
     def _show_client_details(self):
         """Show details for the selected client."""
@@ -2693,8 +2890,10 @@ class ServerGUI:
 
     def _on_file_selected(self, selected_item: Any) -> None:
         """Handle file selection in the table."""
-        if selected_item:
-            self._add_activity_log(f"File selected: {selected_item.get('filename')}")
+        if selected_item and hasattr(self, 'file_detail_pane') and self.file_detail_pane:
+            self.file_detail_pane.update_details(selected_item)
+        elif hasattr(self, 'file_detail_pane') and self.file_detail_pane:
+            self.file_detail_pane.clear_details()
 
     def _show_file_details(self):
         """Show details for the selected file."""
