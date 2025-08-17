@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 :root {
     /* Enhanced Cyberpunk Color Palette */
     --neon-pink: #FF00FF;

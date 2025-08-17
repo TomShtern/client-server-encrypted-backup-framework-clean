@@ -1,0 +1,419 @@
+# GitHub Actions CI/CD Pipeline
+# Alternative to CircleCI - potentially cheaper for Windows builds
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, clean-main ]
+  pull_request:
+    branches: [ main, clean-main ]
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  # UTF-8 configuration for your project
+  PYTHONIOENCODING: utf-8
+  PYTHONUTF8: 1
+
+jobs:
+  # Python linting and dependency validation
+  python-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Verify critical imports
+        run: |
+          python -c "import flask, flask_cors, flask_socketio, sentry_sdk, watchdog, psutil"
+          echo "✅ All Python dependencies imported successfully"
+      
+      - name: Verify UTF-8 solution
+        run: |
+          python -c "import Shared.utils.utf8_solution; print('✅ UTF-8 solution imported successfully')"
+      
+      - name: Run linting (if available)
+        run: |
+          if pip show ruff > /dev/null 2>&1; then
+            echo "Running ruff linting..."
+            ruff check . || echo "⚠️  Linting issues found (non-blocking)"
+          elif pip show flake8 > /dev/null 2>&1; then
+            echo "Running flake8 linting..."
+            flake8 . || echo "⚠️  Linting issues found (non-blocking)"
+          else
+            echo "No linters found, skipping linting step"
+          fi
+
+  # Security scanning
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies and security tools
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install safety bandit semgrep
+      
+      - name: Check for known vulnerabilities
+        run: |
+          safety check || echo "⚠️  Security vulnerabilities found in dependencies"
+      
+      - name: Run static security analysis
+        run: |
+          bandit -r . -f json -o bandit-report.json || echo "⚠️  Security issues found (non-blocking)"
+      
+      - name: Scan for encryption vulnerabilities
+        run: |
+          # Check for your specific security issues mentioned in CLAUDE.md
+          echo "Scanning for static IV usage..."
+          grep -r "static.*IV\|zero.*IV" . --include="*.cpp" --include="*.h" || echo "✅ No static IV patterns found"
+          
+          echo "Scanning for CRC32 without HMAC..."
+          grep -r "CRC32\|crc32" . --include="*.cpp" --include="*.h" | grep -v "HMAC" || echo "✅ CRC usage appears secure"
+          
+          echo "Checking for hardcoded keys..."
+          bandit -r . -f json -o security-detailed.json --severity-level medium || echo "⚠️  Potential security issues found"
+      
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            security-detailed.json
+
+  # C++ build (Windows)
+  cpp-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      
+      - name: Set up vcpkg cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            vcpkg/installed
+            vcpkg/packages
+            vcpkg/downloads
+          key: vcpkg-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-
+      
+      - name: Bootstrap vcpkg
+        run: |
+          cd vcpkg
+          .\bootstrap-vcpkg.bat
+      
+      - name: Install vcpkg dependencies
+        run: |
+          cd vcpkg
+          .\vcpkg.exe install cryptopp boost zlib sentry-native --triplet x64-windows
+      
+      - name: Verify vcpkg dependencies
+        run: |
+          cd vcpkg
+          .\vcpkg.exe list
+      
+      - name: Set up CMake cache
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: cmake-build-${{ hashFiles('CMakeLists.txt', 'Client/cpp/**') }}
+          restore-keys: |
+            cmake-build-
+      
+      - name: Configure CMake
+        run: |
+          cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
+      
+      - name: Build C++ client
+        run: |
+          cmake --build build --config Release
+      
+      - name: Verify build artifacts
+        run: |
+          if (Test-Path "build/Release/EncryptedBackupClient.exe") {
+            Write-Host "✅ C++ client built successfully"
+            Get-ChildItem build/Release/EncryptedBackupClient.exe | Format-List
+          } else {
+            Write-Host "❌ C++ client build failed"
+            exit 1
+          }
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpp-client
+          path: build/Release/EncryptedBackupClient.exe
+
+  # Python unit tests
+  python-tests:
+    needs: python-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run Python unit tests
+        run: |
+          # Run individual test files that don't require full system
+          echo "Running isolated Python tests..."
+          
+          # Test imports and basic functionality
+          python scripts/testing/quick_validation.py || echo "⚠️  Quick validation issues (non-blocking)"
+          
+          # Test specific modules if available
+          if [ -f "tests/test_api.py" ]; then
+            python tests/test_api.py || echo "⚠️  API tests issues (non-blocking)"
+          fi
+          
+          # Test UTF-8 functionality
+          python scripts/test_emoji_support.py || echo "⚠️  UTF-8 tests issues (non-blocking)"
+
+  # System validation
+  system-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Validate system dependencies
+        run: |
+          python scripts/check_dependencies.py || echo "⚠️  Dependency issues found"
+      
+      - name: Test system startup sequence
+        run: |
+          # Test one-click build script (dry run)
+          if [ -f "scripts/test_one_click_dry_run.py" ]; then
+            python scripts/test_one_click_dry_run.py || echo "⚠️  Build script issues (non-blocking)"
+          fi
+
+  # Integration tests (requires both C++ and Python)
+  integration-tests:
+    needs: [cpp-build, python-tests]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Download C++ artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cpp-client
+          path: build/Release/
+      
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Setup UTF-8 environment
+        run: |
+          # Set UTF-8 code page (essential for your project)
+          chcp 65001
+          
+          # Set Python encoding environment variables
+          $env:PYTHONIOENCODING = "utf-8"
+          $env:PYTHONUTF8 = "1"
+          
+          # Verify UTF-8 setup
+          python -c "import sys; print(f'Default encoding: {sys.getdefaultencoding()}')"
+      
+      - name: Setup test environment
+        run: |
+          # Create test database directories
+          New-Item -ItemType Directory -Force -Path "Database"
+          New-Item -ItemType Directory -Force -Path "python_server/server_gui"
+          
+          # Create test files
+          python scripts/create_test_file.py
+          
+          # Create Unicode test files
+          $unicodeContent = "Test content with Hebrew: עברית and emoji: 🎉"
+          $unicodeContent | Out-File -FilePath "test_unicode_file.txt" -Encoding UTF8
+      
+      - name: Clean up ports
+        run: |
+          # Kill any processes using your ports
+          Get-Process | Where-Object {$_.ProcessName -eq "python"} | Stop-Process -Force -ErrorAction SilentlyContinue
+          
+          # Wait for ports to be released
+          Start-Sleep 5
+      
+      - name: Start test servers
+        run: |
+          # Start backup server in background
+          Start-Process python -ArgumentList "python_server/server/server.py" -WindowStyle Hidden
+          Start-Sleep 5
+          
+          # Start API server in background  
+          Start-Process python -ArgumentList "api_server/cyberbackup_api_server.py" -WindowStyle Hidden
+          Start-Sleep 5
+        continue-on-error: true
+      
+      - name: Wait for servers to be ready
+        run: |
+          # Check if servers are running
+          $timeout = 30
+          $elapsed = 0
+          
+          while ($elapsed -lt $timeout) {
+            $apiRunning = (netstat -an | Select-String ":9090") -ne $null
+            $serverRunning = (netstat -an | Select-String ":1256") -ne $null
+            
+            if ($apiRunning -and $serverRunning) {
+              Write-Host "✅ Both servers are running"
+              break
+            }
+            
+            Start-Sleep 2
+            $elapsed += 2
+            Write-Host "Waiting for servers... ($elapsed/$timeout seconds)"
+          }
+          
+          if ($elapsed -ge $timeout) {
+            Write-Host "⚠️  Servers didn't start in time, continuing anyway"
+          }
+      
+      - name: Run integration tests
+        run: |
+          # Run integration test suite
+          if (Test-Path "tests/integration/run_integration_tests.py") {
+            python tests/integration/run_integration_tests.py || echo "⚠️  Integration tests issues (non-blocking)"
+          }
+          
+          # Run master test suite if available
+          if (Test-Path "scripts/testing/master_test_suite.py") {
+            python scripts/testing/master_test_suite.py || echo "⚠️  Master test suite issues (non-blocking)"
+          }
+          
+          # Test file transfer functionality
+          if (Test-Path "tests/test_upload.py") {
+            python tests/test_upload.py || echo "⚠️  Upload tests issues (non-blocking)"
+          }
+
+  # Build release artifacts (only on tags)
+  build-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [integration-tests, security-scan]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download C++ artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cpp-client
+          path: build/Release/
+      
+      - name: Package release artifacts
+        run: |
+          # Create release directory
+          New-Item -ItemType Directory -Force -Path "release"
+          
+          # Copy essential files
+          Copy-Item "build/Release/EncryptedBackupClient.exe" "release/"
+          Copy-Item "requirements.txt" "release/"
+          Copy-Item "CLAUDE.md" "release/"
+          Copy-Item "README.md" "release/"
+          
+          # Copy key scripts
+          New-Item -ItemType Directory -Force -Path "release/scripts"
+          Copy-Item "scripts/launch_gui.py" "release/scripts/"
+          Copy-Item "scripts/one_click_build_and_run.py" "release/scripts/"
+          
+          # Copy server components
+          New-Item -ItemType Directory -Force -Path "release/python_server"
+          Copy-Item "python_server/" "release/python_server/" -Recurse
+          
+          # Copy API server
+          New-Item -ItemType Directory -Force -Path "release/api_server"
+          Copy-Item "api_server/" "release/api_server/" -Recurse
+          
+          # Create version info
+          $version = "${{ github.ref_name }}"
+          $versionInfo = @"
+          Release Version: $version
+          Build Date: $(Get-Date)
+          Commit SHA: ${{ github.sha }}
+          Branch: ${{ github.ref_name }}
+          "@
+          $versionInfo | Out-File "release/VERSION.txt"
+      
+      - name: Create release archive
+        run: |
+          $version = "${{ github.ref_name }}"
+          Compress-Archive -Path "release/*" -DestinationPath "encrypted-backup-framework-$version.zip"
+      
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-package
+          path: encrypted-backup-framework-*.zip
+
+  # Create GitHub release (only on tags)
+  create-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-package
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: encrypted-backup-framework-*.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

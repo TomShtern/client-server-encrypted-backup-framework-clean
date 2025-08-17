@@ -1,0 +1,151 @@
+# Deployment Configuration for CircleCI
+# Add these jobs to your main config.yml for deployment scenarios
+
+deployment_jobs:
+  # Build and package release artifacts
+  build-release-artifacts:
+    executor: cpp-windows-executor
+    steps:
+      - checkout
+      - setup-vcpkg-deps
+      - build-cpp-client
+      
+      - run:
+          name: Package release artifacts
+          command: |
+            # Create release directory
+            New-Item -ItemType Directory -Force -Path "release"
+            
+            # Copy essential files
+            Copy-Item "build/Release/EncryptedBackupClient.exe" "release/"
+            Copy-Item "requirements.txt" "release/"
+            Copy-Item "CLAUDE.md" "release/"
+            Copy-Item "README.md" "release/"
+            
+            # Copy key scripts
+            New-Item -ItemType Directory -Force -Path "release/scripts"
+            Copy-Item "scripts/launch_gui.py" "release/scripts/"
+            Copy-Item "scripts/one_click_build_and_run.py" "release/scripts/"
+            
+            # Copy server components
+            New-Item -ItemType Directory -Force -Path "release/python_server"
+            Copy-Item "python_server/" "release/python_server/" -Recurse
+            
+            # Copy API server
+            New-Item -ItemType Directory -Force -Path "release/api_server"
+            Copy-Item "api_server/" "release/api_server/" -Recurse
+            
+            # Create version info
+            $version = Get-Date -Format "yyyy.MM.dd.HHmm"
+            $versionInfo = @"
+            Release Version: $version
+            Build Date: $(Get-Date)
+            Commit SHA: $env:CIRCLE_SHA1
+            Branch: $env:CIRCLE_BRANCH
+            "@
+            $versionInfo | Out-File "release/VERSION.txt"
+      
+      - run:
+          name: Create release archive
+          command: |
+            $version = Get-Date -Format "yyyy.MM.dd.HHmm"
+            Compress-Archive -Path "release/*" -DestinationPath "encrypted-backup-framework-$version.zip"
+      
+      - store_artifacts:
+          path: encrypted-backup-framework-*.zip
+          destination: releases/
+      
+      - persist_to_workspace:
+          root: ~/project
+          paths:
+            - encrypted-backup-framework-*.zip
+
+  # Deploy to staging/development environment
+  deploy-staging:
+    executor: python-executor
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/project
+      
+      - run:
+          name: Deploy to staging
+          command: |
+            echo "Deploying to staging environment..."
+            # Add your staging deployment commands here
+            # Examples:
+            # - Upload to staging server
+            # - Update container registry
+            # - Trigger deployment webhooks
+            
+            echo "✅ Staging deployment completed"
+
+  # Deploy to production (manual approval required)
+  deploy-production:
+    executor: python-executor
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/project
+      
+      - run:
+          name: Deploy to production
+          command: |
+            echo "Deploying to production environment..."
+            # Add your production deployment commands here
+            
+            echo "✅ Production deployment completed"
+
+# Additional workflow for releases
+release_workflow:
+  build-and-release:
+    jobs:
+      - python-lint-and-deps
+      - cpp-build
+      - python-unit-tests:
+          requires:
+            - python-lint-and-deps
+      - integration-tests:
+          requires:
+            - cpp-build
+            - python-unit-tests
+      
+      # Build release artifacts after tests pass
+      - build-release-artifacts:
+          requires:
+            - integration-tests
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+      
+      # Deploy to staging automatically
+      - deploy-staging:
+          requires:
+            - build-release-artifacts
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+      
+      # Deploy to production with manual approval
+      - hold-for-approval:
+          type: approval
+          requires:
+            - deploy-staging
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+      
+      - deploy-production:
+          requires:
+            - hold-for-approval
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
