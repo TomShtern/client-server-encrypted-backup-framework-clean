@@ -632,7 +632,7 @@ class DatabaseManager:
                 fetchone: bool = False, fetchall: bool = False) -> Any:
         """
         Helper function for executing SQLite database operations.
-        Manages connection, cursor, commit, and error handling.
+        Manages connection, cursor, commit, and error handling
 
         Args:
             query: The SQL query string.
@@ -777,7 +777,7 @@ class DatabaseManager:
             
             if pending := migration_manager.get_pending_migrations():
                 logger.info(f"Applying {len(pending)} database migrations...")
-                if success := migration_manager.migrate_to_latest():
+                if migration_manager.migrate_to_latest():
                     logger.info("Database migrations applied successfully")
                 else:
                     logger.warning("Some database migrations failed - system will continue with existing schema")
