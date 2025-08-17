@@ -27,7 +27,7 @@ def _safe_reconfigure_stream(stream: Any) -> None:
 _safe_reconfigure_stream(sys.stdout)
 
 try:
-    import Shared.utils.utf8_solution
+    import Shared.utils.utf8_solution  # this is important, this makes it so its utf-8 all across, very important to not have encoding problems.
 except ImportError:
     sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
     try:
