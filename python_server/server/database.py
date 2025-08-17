@@ -21,6 +21,7 @@ import os
 import queue
 import threading
 import time
+from contextlib import suppress
 from datetime import datetime, timezone
 from typing import Any, Optional, List, Tuple, Dict
 from dataclasses import dataclass, field
@@ -316,7 +317,7 @@ class DatabaseConnectionPool:
                     self.metrics.connections_created += 1
                 return emergency_conn
             else:
-                raise ServerError("Failed to create emergency database connection")
+                raise ServerError("Failed to create emergency database connection") from None
     
     def _handle_pool_exhaustion(self):
         """Handle connection pool exhaustion with alerts and cleanup."""
@@ -411,10 +412,7 @@ class DatabaseConnectionPool:
                     stale_connections.append(conn_id)
         
         # Clean up stale connections
-        cleaned_count = 0
-        for conn_id in stale_connections:
-            if self._cleanup_stale_connection(conn_id):
-                cleaned_count += 1
+        cleaned_count = sum(1 for conn_id in stale_connections if self._cleanup_stale_connection(conn_id))
         
         if cleaned_count > 0:
             self.metrics.cleanup_operations += 1
@@ -465,12 +463,7 @@ class DatabaseConnectionPool:
                 if idle_time > 1800:  # 30 minutes
                     stale_connections.append(conn_id)
         
-        cleaned_count = 0
-        for conn_id in stale_connections:
-            if self._cleanup_stale_connection(conn_id):
-                cleaned_count += 1
-        
-        return cleaned_count
+        return sum(1 for conn_id in stale_connections if self._cleanup_stale_connection(conn_id))
     
     def _update_metrics(self):
         """Update pool metrics."""
@@ -531,9 +524,9 @@ class DatabaseConnectionPool:
         return {
             "connection_count": len(ages),
             "avg_age_seconds": sum(ages) / len(ages) if ages else 0,
-            "max_age_seconds": max(ages) if ages else 0,
+            "max_age_seconds": max(ages, default=0),
             "avg_idle_seconds": sum(idle_times) / len(idle_times) if idle_times else 0,
-            "max_idle_seconds": max(idle_times) if idle_times else 0
+            "max_idle_seconds": max(idle_times, default=0)
         }
     
     def get_pool_status(self) -> Dict[str, Any]:
@@ -683,7 +676,7 @@ class DatabaseManager:
                     # Don't return potentially corrupted connection to pool
                     try:
                         conn.close()
-                    except:
+                    except Exception:
                         pass
                     raise e
             else:
@@ -1196,7 +1189,7 @@ class DatabaseManager:
                 except Exception as e:
                     try:
                         conn.close()
-                    except:
+                    except Exception:
                         pass
                     raise e
             else:
@@ -1270,12 +1263,9 @@ class DatabaseManager:
         extended_columns = ""
         
         # Check if extended columns exist (from migrations)
-        try:
+        with suppress(sqlite3.OperationalError, ServerError):
             self.execute("SELECT FileCategory FROM files LIMIT 1", fetchone=True)
             extended_columns = ", f.FileCategory, f.MimeType, f.FileExtension, f.TransferDuration, f.TransferSpeed"
-        except (sqlite3.OperationalError, ServerError):
-            # Extended columns don't exist yet
-            pass
         
         query = f"""
             SELECT {base_columns}{extended_columns}
@@ -1403,7 +1393,7 @@ class DatabaseManager:
                     'indexes_count': len(index_info) if index_info else 0,
                     'indexes': [idx[0] for idx in index_info] if index_info else []
                 }
-            except:
+            except Exception:
                 stats['performance_info'] = {'indexes_count': 0, 'indexes': []}
                 
         except Exception as e:
@@ -1486,7 +1476,7 @@ class DatabaseManager:
                 except Exception as e:
                     try:
                         conn.close()
-                    except:
+                    except Exception:
                         pass
                     raise e
             else:
@@ -1765,6 +1755,70 @@ class DatabaseManager:
         except OSError as e:
             logger.critical(f"Fatal: Could not create or access file storage directory '{FILE_STORAGE_DIR}': {e}")
             raise  # This is a critical failure, server cannot operate
+
+    def get_table_names(self) -> List[str]:
+        """
+        Get list of all table names in the database.
+        
+        Returns:
+            List of table names for database browser functionality.
+        """
+        try:
+            result = self.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name NOT LIKE 'sqlite_%'
+                ORDER BY name
+            """)
+            if result:
+                return [row[0] for row in result]
+            return []
+        except Exception as e:
+            logger.error(f"Error getting table names: {e}")
+            return []
+
+    def get_table_content(self, table_name: str) -> Tuple[List[str], List[Dict[str, Any]]]:
+        """
+        Get column names and data for a specific table.
+        
+        Args:
+            table_name: Name of the table to query
+            
+        Returns:
+            Tuple of (column_names, data_rows) where:
+            - column_names: List of column names
+            - data_rows: List of dictionaries, each representing a row
+        """
+        try:
+            # First, get column information
+            result = self.execute(f"PRAGMA table_info({table_name})")
+            if not result:
+                return [], []
+                
+            columns = [row[1] for row in result]  # row[1] is the column name
+            
+            # Then get the table data
+            data_result = self.execute(f"SELECT * FROM {table_name} LIMIT 1000")  # Limit for performance
+            if not data_result:
+                return columns, []
+            
+            # Convert to list of dictionaries
+            data_rows: List[Dict[str, Any]] = []
+            for row in data_result:
+                row_dict = {}
+                for i, column in enumerate(columns):
+                    value = row[i]
+                    # Convert bytes to hex string for display
+                    if isinstance(value, bytes):
+                        row_dict[column] = value.hex() if value else ""
+                    else:
+                        row_dict[column] = str(value) if value is not None else ""
+                data_rows.append(row_dict)
+            
+            return columns, data_rows
+            
+        except Exception as e:
+            logger.error(f"Error getting table content for {table_name}: {e}")
+            return [], []
 
 
 # Module-level convenience functions for backward compatibility
