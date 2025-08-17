@@ -177,64 +177,61 @@ class DatabaseConnectionPool:
     
     def _start_monitoring_thread(self):
         """Start background monitoring and cleanup thread with proper management."""
-        if self._cleanup_thread is None or not self._cleanup_thread.is_alive():
+        if self._cleanup_thread is not None and self._cleanup_thread.is_alive():
+            return
+            
+        try:
+            # Try to use managed thread system
+            import sys
+            import os
+            shared_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Shared', 'utils')
+            sys.path.append(shared_path)
             try:
-                # Try to use managed thread system
-                import sys
-                import os
-                shared_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Shared', 'utils')
-                sys.path.append(shared_path)
-                try:
-                    from Shared.utils.thread_manager import create_managed_thread
-                    
-                    def cleanup_database_resources():
-                        """Cleanup function for database monitoring resources"""
-                        logger.info("Performing database monitoring cleanup...")
-                        self._monitoring_enabled = False
-                    
-                    # Create managed thread
-                    thread_name = create_managed_thread(
-                        target=self._monitoring_loop,
-                        name=f"database_pool_monitor_{id(self)}",
-                        component="database_manager",
-                        daemon=True,
-                        cleanup_callback=cleanup_database_resources,
-                        auto_start=True
-                    )
-                    
-                    if thread_name:
-                        logger.info(f"Database monitoring thread registered as: {thread_name}")
-                        # Store reference for compatibility
-                        self._cleanup_thread = threading.current_thread()  # Placeholder
-                    else:
-                        raise ImportError("Thread manager registration failed")
-                        
-                except ImportError:
-                    # Fallback to standard threading
-                    logger.warning("Thread manager not available, using standard threading")
-                    
-                    def cleanup_database_resources():
-                        """Cleanup function for database monitoring resources"""
-                        logger.info("Performing database monitoring cleanup...")
-                        self._monitoring_enabled = False
-                    
-                    self._cleanup_thread = threading.Thread(
-                        target=self._monitoring_loop,
-                        name=f"database_pool_monitor_{id(self)}",
-                        daemon=True
-                    )
-                    self._cleanup_thread.start()
-                    logger.info(f"Database monitoring thread started: {self._cleanup_thread.name}")
+                from Shared.utils.thread_manager import create_managed_thread
+                
+                def cleanup_database_resources():
+                    """Cleanup function for database monitoring resources"""
+                    logger.info("Performing database monitoring cleanup...")
+                    self._monitoring_enabled = False
+                
+                # Create managed thread
+                thread_name = create_managed_thread(
+                    target=self._monitoring_loop,
+                    name=f"database_pool_monitor_{id(self)}",
+                    component="database_manager",
+                    daemon=True,
+                    cleanup_callback=cleanup_database_resources,
+                    auto_start=True
+                )
+                
+                if thread_name:
+                    logger.info(f"Database monitoring thread registered as: {thread_name}")
+                    # Store reference for compatibility
+                    self._cleanup_thread = threading.current_thread()  # Placeholder
+                else:
+                    raise ImportError("Thread manager registration failed")
                     
             except ImportError:
-                logger.debug("Thread manager not available, using basic thread management")
+                # Fallback to standard threading
+                logger.debug("Thread manager not available, falling back to basic threading")
+                
                 self._cleanup_thread = threading.Thread(
                     target=self._monitoring_loop,
-                    daemon=True,
-                    name="DatabasePoolMonitor"
+                    name=f"database_pool_monitor_{id(self)}",
+                    daemon=True
                 )
                 self._cleanup_thread.start()
-                logger.info("Database connection pool monitoring thread started")
+                logger.info(f"Database monitoring thread started: {self._cleanup_thread.name}")
+                
+        except ImportError:
+            logger.debug("Thread manager not available, using basic thread management")
+            self._cleanup_thread = threading.Thread(
+                target=self._monitoring_loop,
+                daemon=True,
+                name="DatabasePoolMonitor"
+            )
+            self._cleanup_thread.start()
+            logger.info("Database connection pool monitoring thread started")
     
     def _monitoring_loop(self, stop_event: Optional[threading.Event] = None):
         """Background monitoring and cleanup loop with shutdown awareness."""
@@ -312,12 +309,12 @@ class DatabaseConnectionPool:
             logger.warning("Connection pool exhausted, creating emergency connection")
             emergency_conn = self._create_monitored_connection(f"emergency_{int(time.time())}")
             
-            if emergency_conn:
-                with self.lock:
-                    self.metrics.connections_created += 1
-                return emergency_conn
-            else:
+            if not emergency_conn:
                 raise ServerError("Failed to create emergency database connection") from None
+                
+            with self.lock:
+                self.metrics.connections_created += 1
+            return emergency_conn
     
     def _handle_pool_exhaustion(self):
         """Handle connection pool exhaustion with alerts and cleanup."""
@@ -412,7 +409,7 @@ class DatabaseConnectionPool:
                     stale_connections.append(conn_id)
         
         # Clean up stale connections
-        cleaned_count = sum(1 for conn_id in stale_connections if self._cleanup_stale_connection(conn_id))
+        cleaned_count = len([conn_id for conn_id in stale_connections if self._cleanup_stale_connection(conn_id)])
         
         if cleaned_count > 0:
             self.metrics.cleanup_operations += 1
@@ -463,7 +460,7 @@ class DatabaseConnectionPool:
                 if idle_time > 1800:  # 30 minutes
                     stale_connections.append(conn_id)
         
-        return sum(1 for conn_id in stale_connections if self._cleanup_stale_connection(conn_id))
+        return len([conn_id for conn_id in stale_connections if self._cleanup_stale_connection(conn_id)])
     
     def _update_metrics(self):
         """Update pool metrics."""
@@ -674,10 +671,8 @@ class DatabaseManager:
                     return result
                 except Exception as e:
                     # Don't return potentially corrupted connection to pool
-                    try:
+                    with suppress(Exception):
                         conn.close()
-                    except Exception:
-                        pass
                     raise e
             else:
                 # Fallback to direct connection
@@ -686,11 +681,7 @@ class DatabaseManager:
                     cursor.execute(query, params)
                     if commit:
                         conn.commit()
-                    if fetchone:
-                        return cursor.fetchone()
-                    if fetchall:
-                        return cursor.fetchall()
-                    return cursor
+                    return cursor.fetchone() if fetchone else cursor.fetchall() if fetchall else cursor
         except sqlite3.OperationalError as e:  # Specific error for "database is locked", "no such table" etc.
             logger.error(f"Database operational error: {e} | Query: {query[:150]}... | Params: {params}")
             # Depending on severity, re-raise or return specific error indicator
@@ -784,11 +775,9 @@ class DatabaseManager:
             from .database_migrations import DatabaseMigrationManager
             migration_manager = DatabaseMigrationManager(self.db_name)
             
-            pending = migration_manager.get_pending_migrations()
-            if pending:
+            if pending := migration_manager.get_pending_migrations():
                 logger.info(f"Applying {len(pending)} database migrations...")
-                success = migration_manager.migrate_to_latest()
-                if success:
+                if success := migration_manager.migrate_to_latest():
                     logger.info("Database migrations applied successfully")
                 else:
                     logger.warning("Some database migrations failed - system will continue with existing schema")
@@ -834,8 +823,7 @@ class DatabaseManager:
         """
         logger.info("Loading existing clients from database...")
         try:
-            rows = self.execute("SELECT ID, Name, PublicKey, LastSeen FROM clients", fetchall=True)
-            if rows:
+            if rows := self.execute("SELECT ID, Name, PublicKey, LastSeen FROM clients", fetchall=True):
                 logger.info(f"Successfully loaded {len(rows)} client(s) from database.")
                 return rows
             else:
@@ -910,9 +898,8 @@ class DatabaseManager:
             Tuple containing (client_id, name, public_key_bytes, last_seen_iso_utc, aes_key) or None if not found.
         """
         try:
-            result = self.execute("SELECT ID, Name, PublicKey, LastSeen, AESKey FROM clients WHERE ID = ?", 
-                                (client_id,), fetchone=True)
-            return result
+            return self.execute("SELECT ID, Name, PublicKey, LastSeen, AESKey FROM clients WHERE ID = ?", 
+                              (client_id,), fetchone=True)
         except ServerError as e:
             logger.error(f"Error retrieving client by ID {client_id.hex()}: {e}")
             return None
@@ -928,9 +915,8 @@ class DatabaseManager:
             Tuple containing (client_id, name, public_key_bytes, last_seen_iso_utc, aes_key) or None if not found.
         """
         try:
-            result = self.execute("SELECT ID, Name, PublicKey, LastSeen, AESKey FROM clients WHERE Name = ?", 
-                                (name,), fetchone=True)
-            return result
+            return self.execute("SELECT ID, Name, PublicKey, LastSeen, AESKey FROM clients WHERE Name = ?", 
+                              (name,), fetchone=True)
         except ServerError as e:
             logger.error(f"Error retrieving client by name '{name}': {e}")
             return None
@@ -1041,18 +1027,15 @@ class DatabaseManager:
         
         try:
             # Count clients
-            result = self.execute("SELECT COUNT(*) FROM clients", fetchone=True)
-            if result:
+            if result := self.execute("SELECT COUNT(*) FROM clients", fetchone=True):
                 stats['total_clients'] = result[0]
             
             # Count files
-            result = self.execute("SELECT COUNT(*) FROM files", fetchone=True)
-            if result:
+            if result := self.execute("SELECT COUNT(*) FROM files", fetchone=True):
                 stats['total_files'] = result[0]
             
             # Count verified files
-            result = self.execute("SELECT COUNT(*) FROM files WHERE Verified = 1", fetchone=True)
-            if result:
+            if result := self.execute("SELECT COUNT(*) FROM files WHERE Verified = 1", fetchone=True):
                 stats['verified_files'] = result[0]
             
             # Get database file size
@@ -1154,8 +1137,7 @@ class DatabaseManager:
     def get_total_bytes_transferred(self) -> int:
         """Returns the total number of bytes transferred."""
         try:
-            result = self.execute("SELECT SUM(FileSize) FROM files WHERE Verified = 1", fetchone=True)
-            if result:
+            if result := self.execute("SELECT SUM(FileSize) FROM files WHERE Verified = 1", fetchone=True):
                 return result[0] if result[0] is not None else 0
             return 0
         except Exception as e:
@@ -1187,10 +1169,8 @@ class DatabaseManager:
                     self.connection_pool.return_connection(conn)
                     return True
                 except Exception as e:
-                    try:
+                    with suppress(Exception):
                         conn.close()
-                    except Exception:
-                        pass
                     raise e
             else:
                 with sqlite3.connect(self.db_name, timeout=10.0) as conn:
@@ -1325,7 +1305,7 @@ class DatabaseManager:
                         for f in os.listdir(FILE_STORAGE_DIR)
                         if os.path.isfile(os.path.join(FILE_STORAGE_DIR, f))
                     )
-                except (OSError, PermissionError) as e:
+                except OSError as e:
                     logger.warning(f"Could not calculate storage directory size: {e}")
                     total_size = 0
                 stats['storage_info'] = {
@@ -1335,15 +1315,13 @@ class DatabaseManager:
                 }
             
             # Client statistics
-            client_stats = self.execute("""
+            if client_stats := self.execute("""
                 SELECT 
                     COUNT(*) as total_clients,
                     COUNT(CASE WHEN PublicKey IS NOT NULL THEN 1 END) as clients_with_keys,
                     AVG(CASE WHEN LastSeen IS NOT NULL THEN julianday('now') - julianday(LastSeen) END) as avg_days_since_seen
                 FROM clients
-            """, fetchone=True)
-            
-            if client_stats:
+            """, fetchone=True):
                 stats['client_stats'] = {
                     'total_clients': client_stats[0] if client_stats[0] is not None else 0,
                     'clients_with_keys': client_stats[1] if client_stats[1] is not None else 0,
@@ -1351,7 +1329,7 @@ class DatabaseManager:
                 }
             
             # File statistics
-            file_stats = self.execute("""
+            if file_stats := self.execute("""
                 SELECT 
                     COUNT(*) as total_files,
                     COUNT(CASE WHEN Verified = 1 THEN 1 END) as verified_files,
@@ -1361,9 +1339,7 @@ class DatabaseManager:
                     MAX(FileSize) as max_size
                 FROM files
                 WHERE FileSize IS NOT NULL
-            """, fetchone=True)
-            
-            if file_stats:
+            """, fetchone=True):
                 total_files = file_stats[0] if file_stats[0] is not None else 0
                 verified_files = file_stats[1] if file_stats[1] is not None else 0
                 avg_file_size = file_stats[2] if file_stats[2] is not None else 0
@@ -1474,10 +1450,8 @@ class DatabaseManager:
                         conn.backup(backup_conn)
                     self.connection_pool.return_connection(conn)
                 except Exception as e:
-                    try:
+                    with suppress(Exception):
                         conn.close()
-                    except Exception:
-                        pass
                     raise e
             else:
                 with sqlite3.connect(self.db_name) as source_conn:
@@ -1516,8 +1490,7 @@ class DatabaseManager:
                 health['issues'].append(f"Integrity check failed: {result[0] if result else 'Unknown error'}")
             
             # Foreign key check
-            fk_results = self.execute("PRAGMA foreign_key_check", fetchall=True)
-            if not fk_results:  # Empty result means no foreign key violations
+            if not (fk_results := self.execute("PRAGMA foreign_key_check", fetchall=True)):  # Empty result means no foreign key violations
                 health['foreign_key_check'] = True
             else:
                 health['issues'].append(f"Foreign key violations found: {len(fk_results)}")
@@ -1624,23 +1597,23 @@ class DatabaseManager:
         """Force cleanup of database connections."""
         logger.info("Force cleanup of database connections requested")
         
-        if self.connection_pool:
-            result = self.connection_pool.force_cleanup()
-            
-            # Log to structured logger if available
-            if structured_logger:
-                structured_logger.info(  # type: ignore
-                    "Database connection pool force cleanup completed",
-                    **result
-                )
-            
-            return result
-        else:
+        if not self.connection_pool:
             return {
                 "cleanup_performed": False,
                 "message": "Connection pooling is disabled",
                 "recommendation": "Enable connection pooling for resource management"
             }
+            
+        result = self.connection_pool.force_cleanup()
+        
+        # Log to structured logger if available
+        if structured_logger:
+            structured_logger.info(  # type: ignore
+                "Database connection pool force cleanup completed",
+                **result
+            )
+        
+        return result
     
     def check_pool_exhaustion(self) -> Dict[str, Any]:
         """Check for pool exhaustion scenarios and potential issues."""
@@ -1769,9 +1742,7 @@ class DatabaseManager:
                 WHERE type='table' AND name NOT LIKE 'sqlite_%'
                 ORDER BY name
             """)
-            if result:
-                return [row[0] for row in result]
-            return []
+            return [row[0] for row in result] if result else []
         except Exception as e:
             logger.error(f"Error getting table names: {e}")
             return []

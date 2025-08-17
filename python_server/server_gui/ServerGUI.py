@@ -467,17 +467,21 @@ class ServerGUI:
         self.root.configure(bg=ModernTheme.PRIMARY_BG)  # type: ignore
         self.root.protocol("WM_DELETE_WINDOW", self._on_window_close)  # type: ignore
 
+    def _setup_gui_components(self) -> None:
+        """Initialize and setup all GUI components."""
+        self._initialize_root_window()
+        self.toast_system = ToastNotification(self.root)  # type: ignore
+        self._setup_modern_styles()
+        self._create_main_window()
+        self._create_system_tray()
+        self._schedule_updates()
+        # Sync current server state with GUI display
+        self.sync_current_server_state()
+        self.root.after(500, lambda: self._show_toast("GUI Ready", "success"))  # type: ignore
+
     def _gui_main_loop(self) -> None:
         try:
-            self._initialize_root_window()
-            self.toast_system = ToastNotification(self.root)  # type: ignore
-            self._setup_modern_styles()
-            self._create_main_window()
-            self._create_system_tray()
-            self._schedule_updates()
-            # Sync current server state with GUI display
-            self.sync_current_server_state()
-            self.root.after(500, lambda: self._show_toast("GUI Ready", "success"))  # type: ignore
+            self._setup_gui_components()
             self.root.mainloop()  # type: ignore
         except Exception as e:
             print(f"GUI main loop error: {e}")
@@ -949,14 +953,20 @@ class ServerGUI:
             return
         table_name = self.db_table_selector.get()
         try:
-            columns, data = db_manager.get_table_content(table_name)
-            table_cols: Dict[str, Dict[str, Any]] = {col: {'text': col, 'width': 120} for col in columns}
-            parent = self.db_table.master  # type: ignore
+            self._rebuild_database_table(db_manager, table_name)
+        except Exception as e: 
+            self._show_toast(f"DB Error: {e}", "error")
+
+    def _rebuild_database_table(self, db_manager: Any, table_name: str) -> None:
+        """Rebuild the database table with new data."""
+        columns, data = db_manager.get_table_content(table_name)
+        table_cols: Dict[str, Dict[str, Any]] = {col: {'text': col, 'width': 120} for col in columns}
+        parent = self.db_table.master  # type: ignore
+        if self.db_table is not None:
             self.db_table.destroy()
-            self.db_table = ModernTable(parent, table_cols)  # type: ignore
-            self.db_table.pack(fill="both", expand=True)
-            self.db_table.set_data(data)
-        except Exception as e: self._show_toast(f"DB Error: {e}", "error")
+        self.db_table = ModernTable(parent, table_cols)  # type: ignore
+        self.db_table.pack(fill="both", expand=True)
+        self.db_table.set_data(data)
 
     def _add_activity_log(self, message: str) -> None:
         if not self.activity_log_text: return
@@ -971,8 +981,7 @@ class ServerGUI:
                     'session_timeout': 10, 'maintenance_interval': 60, 'last_tab': 'dashboard'}
         with suppress(FileNotFoundError, json.JSONDecodeError):
             with open("server_gui_settings.json", 'r') as f:
-                settings = json.load(f)
-                defaults.update(settings)
+                defaults |= json.load(f)
         return defaults
 
     def _backup_database(self) -> None:
