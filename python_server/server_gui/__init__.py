@@ -2,7 +2,7 @@
 Python Server GUI Package
 
 This package provides modern GUI components for the backup server including:
-- ServerGUI: Main server GUI application  
+- EnhancedServerGUI: Main server GUI application  
 - Modern UI components with consistent theming
 - Real-time status monitoring and progress tracking
 """
@@ -26,40 +26,40 @@ except ImportError:
     except ImportError:
         pass  # Continue without UTF-8 support if not available
 
-# Import components from ServerGUI module including the main ServerGUI class
+# Import components from ServerGUI module including the main EnhancedServerGUI class
 from .ServerGUI import (
-    ServerGUI,  # ← REAL ServerGUI class imported here
-    ModernTheme,
-    ModernCard,
-    ModernProgressBar,
-    ModernStatusIndicator,
-    ToastNotification,
-    ModernTable,
+    EnhancedServerGUI,  # ← REAL EnhancedServerGUI class imported here
+    AppSettings,
+    FramelessWindow,
+    BasePage,
+    StatCard,
+    DashboardPage,
+    ClientsPage,
+    AnalyticsPage,
+    SettingsPage,
     CHARTS_AVAILABLE, 
     SYSTEM_MONITOR_AVAILABLE, 
     TRAY_AVAILABLE,
     CALENDAR_AVAILABLE,
-    DND_AVAILABLE,
-    SERVER_CONTROL_AVAILABLE,
     PROCESS_MONITOR_AVAILABLE,
-    BackupServerLike
+    launch_standalone
 )
 
 # Export all components
 __all__ = [
-    "ServerGUI",
-    "ModernTheme", 
-    "ModernCard",
-    "ModernProgressBar", 
-    "ModernStatusIndicator",
-    "ToastNotification",
-    "ModernTable",
+    "EnhancedServerGUI",
+    "AppSettings", 
+    "FramelessWindow",
+    "BasePage", 
+    "StatCard",
+    "DashboardPage",
+    "ClientsPage",
+    "AnalyticsPage",
+    "SettingsPage",
     "CHARTS_AVAILABLE",
     "SYSTEM_MONITOR_AVAILABLE", 
     "TRAY_AVAILABLE",
     "CALENDAR_AVAILABLE",
-    "DND_AVAILABLE",
-    "SERVER_CONTROL_AVAILABLE",
     "PROCESS_MONITOR_AVAILABLE",
-    "BackupServerLike"
+    "launch_standalone"
 ]

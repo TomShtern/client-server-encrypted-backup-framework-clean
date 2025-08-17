@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-# ServerGUI.py - ULTRA MODERN Cross-platform GUI for Encrypted Backup Server
-# Final Version: Fully implemented, refactored, and meticulously type-safe for strict checkers (Python 3.9+).
+# EnhancedServerGUI.py - A modern, feature-rich, cross-platform GUI for the Encrypted Backup Server.
+# This version incorporates a complete UI/UX overhaul based on professional design principles.
+# Built with ttkbootstrap, matplotlib, and a component-based architecture. Python 3.9+ required.
 
 from __future__ import annotations
 import sys
@@ -9,114 +10,164 @@ import threading
 import traceback
 from collections import deque
 from datetime import datetime, timedelta
-from typing import (Dict, List, Optional, Any, Deque, Callable, TYPE_CHECKING, Protocol,
-                    runtime_checkable, cast, Tuple)
+from typing import (Dict, List, Optional, Any, Deque, Callable, TYPE_CHECKING, Tuple)
 from contextlib import suppress
 import time
 import queue
 import json
-import csv
 import shutil
+import tkinter as tk
+from tkinter import font, messagebox, filedialog
+import tkinter.ttk as std_ttk
 
 # --- Dependency and System Setup ---
 def _safe_reconfigure_stream(stream: Any) -> None:
+    """Safely reconfigure a stream to use UTF-8 encoding if possible."""
     if callable(getattr(stream, 'reconfigure', None)):
         with suppress(Exception):
             stream.reconfigure(encoding='utf-8')
 
 _safe_reconfigure_stream(sys.stdout)
+_safe_reconfigure_stream(sys.stderr)
 
 try:
-    import Shared.utils.utf8_solution  # this is important, this makes it so its utf-8 all across, very important to not have encoding problems.
+    import Shared.utils.utf8_solution
 except ImportError:
     sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-    try:
+    with suppress(ImportError):
         import Shared.utils.utf8_solution
-    except ImportError:
-        print("[WARNING] Could not enable UTF-8 solution.")
 
+# --- Type Hinting Setup ---
 if TYPE_CHECKING:
     from Shared.utils.process_monitor_gui import ProcessMonitorWidget
     import pystray
-    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     from matplotlib.figure import Figure
     from matplotlib.axes import Axes
     from matplotlib.lines import Line2D
-else:
-    # Runtime fallbacks for when packages aren't available
-    ProcessMonitorWidget = type(None)
-    pystray = type(None)
-    FigureCanvasTkAgg = type(None)
-    Figure = type(None)
-    Axes = type(None)
-    Line2D = type(None)
-
-@runtime_checkable
-class BackupServerLike(Protocol):
-    running: bool
-    db_manager: Any
-    clients: Dict[bytes, Any]
-    clients_by_name: Dict[str, bytes]
-    network_server: Any
-    file_transfer_manager: Any
-    def start(self) -> None: ...
-    def stop(self) -> None: ...
-    def apply_settings(self, settings: Dict[str, Any]) -> None: ...
-
-# Import DatabaseManager for standalone mode
-try:
-    from python_server.server.database import DatabaseManager
-except ImportError:
-    try:
-        sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-        from server.database import DatabaseManager
-    except ImportError:
-        DatabaseManager = None # type: ignore
-        print("[WARNING] DatabaseManager not available - Database tab will be disabled.")
-
-# --- Optional Dependency Imports with Graceful Fallbacks ---
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, font
+    from server.database import DatabaseManager as ActualDBManager
+    
+# --- Dependency Imports with Graceful Fallbacks ---
+# Enhanced fallback system for ttkbootstrap compatibility
+TTK_BOOTSTRAP_AVAILABLE = False
+ttk_bootstrap = None
+ToastNotification = None
+ToolTip = None
+ScrolledText = None
+ScrolledFrame = None
+TTKWindow = None
 
 try:
-    from tkcalendar import DateEntry as CalDateEntry  # type: ignore
-    CALENDAR_AVAILABLE = True
+    import ttkbootstrap as ttk_bootstrap
+    from ttkbootstrap.constants import *
+    from ttkbootstrap.toast import ToastNotification
+    from ttkbootstrap.tooltip import ToolTip
+    from ttkbootstrap.scrolled import ScrolledText, ScrolledFrame
+    from ttkbootstrap import Window as TTKWindow
+    TTK_BOOTSTRAP_AVAILABLE = True
 except ImportError:
-    CALENDAR_AVAILABLE = False
-    print("[INFO] tkcalendar not available. Fallback to simple Entry widgets.")
+    print("[WARNING] ttkbootstrap not available. Falling back to standard tkinter.")
+    
+    # Create comprehensive fallback module-like object
+    class TTKBootstrapFallback:
+        # Enhanced parameter filtering for ttkbootstrap compatibility
+        @staticmethod
+        def filter_ttkbootstrap_params(kwargs):
+            """Remove ttkbootstrap-specific parameters that aren't compatible with standard tkinter"""
+            ttkbootstrap_params = {
+                'bootstyle', 'themename', 'resizable', 'hdpi', 'padding',
+                # String-type parameters that should be converted  
+                'relief', 'takefocus', 'anchor', 'compound', 'justify', 
+                'default', 'textvariable', 'underline', 'width', 'height',
+                'exportselection', 'validate', 'autohide'
+            }
+            return {k: v for k, v in kwargs.items() if k not in ttkbootstrap_params}
+        
+        class Window(tk.Toplevel):
+            def __init__(self, *args, **kwargs):
+                filtered_kwargs = TTKBootstrapFallback.filter_ttkbootstrap_params(kwargs)
+                super().__init__(*args, **filtered_kwargs)
+        
+        class Frame(std_ttk.Frame):
+            def __init__(self, *args, **kwargs):
+                filtered_kwargs = TTKBootstrapFallback.filter_ttkbootstrap_params(kwargs)
+                super().__init__(*args, **filtered_kwargs)
+        
+        class Label(std_ttk.Label):
+            def __init__(self, *args, **kwargs):
+                filtered_kwargs = TTKBootstrapFallback.filter_ttkbootstrap_params(kwargs)
+                super().__init__(*args, **filtered_kwargs)
+        
+        class Button(std_ttk.Button):
+            def __init__(self, *args, **kwargs):
+                filtered_kwargs = TTKBootstrapFallback.filter_ttkbootstrap_params(kwargs)
+                super().__init__(*args, **filtered_kwargs)
+        
+        class Entry(std_ttk.Entry):
+            def __init__(self, *args, **kwargs):
+                filtered_kwargs = TTKBootstrapFallback.filter_ttkbootstrap_params(kwargs)
+                super().__init__(*args, **filtered_kwargs)
+        
+        class Style:
+            def configure(self, *args, **kwargs):
+                pass  # No-op for fallback
+            def theme_names(self):
+                return ['default']
+            def theme_use(self, theme=None):
+                return 'default'
+            def get_instance(self):
+                return self
+            @property
+            def colors(self):
+                return {'primary': '#007bff', 'secondary': '#6c757d', 'success': '#28a745', 
+                       'info': '#17a2b8', 'warning': '#ffc107', 'danger': '#dc3545',
+                       'light': '#f8f9fa', 'dark': '#343a40'}
+        
+        class Combobox(std_ttk.Combobox):
+            def __init__(self, *args, **kwargs):
+                filtered_kwargs = TTKBootstrapFallback.filter_ttkbootstrap_params(kwargs)
+                super().__init__(*args, **filtered_kwargs)
+        
+        class Checkbutton(std_ttk.Checkbutton):
+            def __init__(self, *args, **kwargs):
+                filtered_kwargs = TTKBootstrapFallback.filter_ttkbootstrap_params(kwargs)
+                super().__init__(*args, **filtered_kwargs)
+        
+        # PhotoImage from tkinter (not ttk)
+        PhotoImage = tk.PhotoImage
+        
+        # Add style attribute
+        style = Style()
+        
+        # Make classes available within class scope
+        def __init__(self):
+            pass
+    
+    # Create fallback instances and add missing attributes
+    ttk_bootstrap = TTKBootstrapFallback()
+    ttk_bootstrap.Combobox = Combobox
+    ttk_bootstrap.Checkbutton = Checkbutton
+    ttk_bootstrap.PhotoImage = PhotoImage
+    ttk_bootstrap.Style = Style
+    TTKWindow = ttk_bootstrap.Window
+    
+    # Fallback classes for missing components
+    class ToastNotificationFallback:
+        def __init__(self, *args, **kwargs):
+            pass
+        def show_toast(self):
+            pass
+    
+    ToastNotification = ToastNotificationFallback
+    ToolTip = None
+    ScrolledText = tk.Text
+    ScrolledFrame = std_ttk.Frame
 
-try:
-    from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
-    DND_AVAILABLE = True
-except ImportError:
-    DND_AVAILABLE = False
-    TkinterDnD = None
-    DND_FILES = 'DND_FILES'
-    print("[INFO] tkinterdnd2 not available. Drag-and-drop will be disabled.")
-
-try:
-    import pystray
-    from PIL import Image, ImageDraw
-    TRAY_AVAILABLE = True
-except ImportError:
-    TRAY_AVAILABLE = False
-    pystray = None # type: ignore
-    print("[INFO] pystray/Pillow not available. System tray will be disabled.")
-
-try:
-    import matplotlib
-    matplotlib.use('TkAgg')
-    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-    from matplotlib.figure import Figure
-    from matplotlib.axes import Axes
-    from matplotlib.lines import Line2D
-    import matplotlib.pyplot as plt  # Import pyplot properly
-    plt.style.use('dark_background')  # type: ignore
-    CHARTS_AVAILABLE = True
-except ImportError:
-    CHARTS_AVAILABLE = False
-    FigureCanvasTkAgg = Figure = Axes = Line2D = None # type: ignore
-    print("[INFO] matplotlib not available. Analytics charts will be disabled.")
+# Create convenience aliases for consistent usage throughout the file
+# Now ttk_bootstrap is always defined (either real or fallback)
+FrameClass = ttk_bootstrap.Frame
+LabelClass = ttk_bootstrap.Label
+ButtonClass = ttk_bootstrap.Button
+EntryClass = ttk_bootstrap.Entry
 
 try:
     import psutil
@@ -127,12 +178,67 @@ except ImportError:
     print("[INFO] psutil not available. System monitoring will be disabled.")
 
 try:
+    import matplotlib
+    matplotlib.use('TkAgg')
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    from matplotlib.figure import Figure
+    import matplotlib.dates as mdates
+    CHARTS_AVAILABLE = True
+except ImportError:
+    FigureCanvasTkAgg = Figure = None # type: ignore
+    CHARTS_AVAILABLE = False
+    print("[INFO] matplotlib not available. Analytics charts will be disabled.")
+    
+try:
+    from tkcalendar import DateEntry
+    CALENDAR_AVAILABLE = True
+except ImportError:
+    DateEntry = None # type: ignore
+    CALENDAR_AVAILABLE = False
+    print("[INFO] tkcalendar not available. Date filtering will be disabled.")
+
+try:
+    import pystray
+    from PIL import Image, ImageDraw
+    TRAY_AVAILABLE = True
+except ImportError:
+    pystray = None # type: ignore
+    TRAY_AVAILABLE = False
+    print("[INFO] pystray/Pillow not available. System tray will be disabled.")
+    
+try:
+    from playsound import playsound
+    PLAYSOUND_AVAILABLE = True
+except ImportError:
+    playsound = None # type: ignore
+    PLAYSOUND_AVAILABLE = False
+    print("[INFO] playsound not available. Audio cues will be disabled.")
+    
+try:
+    import pyperclip
+    PYPERCLIP_AVAILABLE = True
+except ImportError:
+    pyperclip = None # type: ignore
+    PYPERCLIP_AVAILABLE = False
+    print("[INFO] pyperclip not available. Copy-to-clipboard functionality disabled.")
+    
+try:
     from Shared.utils.process_monitor_gui import ProcessMonitorWidget
     PROCESS_MONITOR_AVAILABLE = True
 except ImportError:
     ProcessMonitorWidget = None # type: ignore
     PROCESS_MONITOR_AVAILABLE = False
     print("[INFO] ProcessMonitorWidget not found.")
+    
+try:
+    from server.database import DatabaseManager
+except ImportError:
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+    try:
+        from server.database import DatabaseManager
+    except ImportError:
+        DatabaseManager = None # type: ignore
+        print("[WARNING] DatabaseManager not available - Database tab will be disabled.")
 
 try:
     import sentry_sdk
@@ -145,294 +251,166 @@ try:
 except ImportError:
     SENTRY_AVAILABLE = False
 
-# --- UI Constants & Theme ---
-class ModernTheme:
-    PRIMARY_BG, SECONDARY_BG, CARD_BG, ACCENT_BG = "#0D1117", "#161B22", "#21262D", "#30363D"
-    TEXT_PRIMARY, TEXT_SECONDARY = "#F0F6FC", "#8B949E"
-    SUCCESS, WARNING, ERROR, INFO = "#238636", "#D29922", "#DA3633", "#1F6FEB"
-    ACCENT_BLUE, ACCENT_PURPLE, BORDER_COLOR = "#58A6FF", "#7C4DFF", "#30363D"
-    FONT_FAMILY, FONT_SIZE_MEDIUM, FONT_SIZE_SMALL = "Segoe UI", 11, 9
+# --- Core Application Classes ---
 
-class Icons:
-    ICONS: Dict[str, str] = {"dashboard": "🏠", "clients": "👥", "files": "📁", "analytics": "📊",
-        "database": "🗄️", "logs": "📝", "settings": "⚙️", "processes": "⚙️", "start": "▶️",
-        "stop": "⏹️", "restart": "🔄", "save": "💾", "delete": "🗑️", "info": "ℹ️", "disconnect": "🔌", "exit": "🚪"}
-    @classmethod
-    def get(cls, name: str) -> str: return cls.ICONS.get(name, "🔹")
+class AppSettings:
+    """Manages loading, saving, and accessing application settings."""
+    def __init__(self, settings_file: str = "server_gui_settings.json") -> None:
+        self.settings_file = settings_file
+        self.settings = self._load()
 
-# --- Custom Modern Widgets ---
-class ModernTooltip:
-    def __init__(self, widget: tk.Widget, text: str) -> None:
-        self.widget = widget
-        self.text = text
-        self.tooltip_window: Optional[tk.Toplevel] = None
-        self.widget.bind("<Enter>", self.show_tooltip)
-        self.widget.bind("<Leave>", self.hide_tooltip)
+    def _load(self) -> Dict[str, Any]:
+        defaults: Dict[str, Any] = {
+            'port': 1256,
+            'storage_dir': 'received_files',
+            'max_clients': 50,
+            'session_timeout': 10,
+            'maintenance_interval': 60,
+            'last_tab': 'dashboard',
+            'theme': 'cyborg',
+            'audio_cues': True,
+            'low_disk_threshold': 15
+        }
+        with suppress(FileNotFoundError, json.JSONDecodeError):
+            with open(self.settings_file, 'r', encoding='utf-8') as f:
+                defaults.update(json.load(f))
+        return defaults
 
-    def show_tooltip(self, event: tk.Event) -> None:
-        if self.tooltip_window or not self.text: return
-        x, y = self.widget.winfo_rootx() + 20, self.widget.winfo_rooty() + self.widget.winfo_height() + 5
-        self.tooltip_window = tw = tk.Toplevel(self.widget)
-        tw.wm_overrideredirect(True)
-        tw.wm_geometry(f"+{x}+{y}")
-        tk.Label(tw, text=self.text, justify='left', background=ModernTheme.ACCENT_BG, fg=ModernTheme.TEXT_PRIMARY,
-                 relief='solid', borderwidth=1, font=(ModernTheme.FONT_FAMILY, 9), padx=8, pady=5).pack(ipadx=1)
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.settings.get(key, default)
 
-    def hide_tooltip(self, event: tk.Event) -> None:
-        if self.tooltip_window: self.tooltip_window.destroy()
-        self.tooltip_window = None
+    def set(self, key: str, value: Any) -> None:
+        self.settings[key] = value
 
-class ModernCard(tk.Frame):
-    def __init__(self, parent: tk.Widget, title: str = "", **kwargs: Any) -> None:
-        super().__init__(parent, bg=ModernTheme.CARD_BG, relief="solid", bd=1,
-                         highlightbackground=ModernTheme.BORDER_COLOR, highlightthickness=1, **kwargs)
-        self.content_frame: tk.Frame = self._create_card(title)
+    def save(self) -> bool:
+        try:
+            with open(self.settings_file, 'w', encoding='utf-8') as f:
+                json.dump(self.settings, f, indent=4)
+            return True
+        except (IOError, TypeError) as e:
+            print(f"[ERROR] Failed to save settings: {e}")
+            return False
 
-    def _create_card(self, title: str) -> tk.Frame:
-        if title:
-            title_frame = tk.Frame(self, bg=ModernTheme.ACCENT_BG)
-            title_frame.pack(fill="x", padx=1, pady=1)
-            tk.Label(title_frame, text=title, bg=ModernTheme.ACCENT_BG, fg=ModernTheme.TEXT_PRIMARY,
-                     font=(ModernTheme.FONT_FAMILY, ModernTheme.FONT_SIZE_MEDIUM, "bold")
-                     ).pack(side="left", padx=10, pady=5)
-        content_frame = tk.Frame(self, bg=ModernTheme.CARD_BG)
-        content_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        return content_frame
+class FramelessWindow(TTKWindow if TTK_BOOTSTRAP_AVAILABLE else tk.Toplevel):
+    """A custom frameless window with a draggable title bar and custom controls."""
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.offset_x = 0
+        self.offset_y = 0
 
-class ModernTable(tk.Frame):
-    def __init__(self, parent: tk.Widget, columns: Dict[str, Dict[str, Any]], **kwargs: Any) -> None:
-        super().__init__(parent, bg=ModernTheme.CARD_BG, **kwargs)
-        self.columns = columns
-        self.data: List[Dict[str, Any]] = []
-        self.filtered_data: List[Dict[str, Any]] = []
-        self.sort_column: Optional[str] = None
-        self.sort_reverse: bool = False
-        self.selection_callback: Optional[Callable[[Dict[str, Any]], None]] = None
-        self.context_menu_builder: Optional[Callable[[Dict[str, Any]], tk.Menu]] = None
-        self.search_var = tk.StringVar()
-        self.tree = self._create_table()
+        self.overrideredirect(True)
+        self.after(10, lambda: self.set_app_icon())
 
-    def _create_table(self) -> ttk.Treeview:
-        search_frame = tk.Frame(self, bg=ModernTheme.CARD_BG)
-        search_frame.pack(fill="x", padx=5, pady=5)
-        tk.Label(search_frame, text="🔍", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_SECONDARY,
-                 font=(ModernTheme.FONT_FAMILY, 12)).pack(side="left", padx=(5, 2))
-        self.search_var.trace_add("write", self._on_search_change)
-        tk.Entry(search_frame, textvariable=self.search_var, bg=ModernTheme.SECONDARY_BG, fg=ModernTheme.TEXT_PRIMARY,
-                 font=(ModernTheme.FONT_FAMILY, 10), relief="flat", insertbackground=ModernTheme.TEXT_PRIMARY
-                 ).pack(side="left", fill="x", expand=True, ipady=4)
+        # Create title bar components with fallback styling
+        title_bar_style = {"bootstyle": "secondary"} if TTK_BOOTSTRAP_AVAILABLE else {}
+        self.title_bar = (ttk_bootstrap.Frame if TTK_BOOTSTRAP_AVAILABLE else std_ttk.Frame)(self, **title_bar_style)
+        self.title_bar.pack(fill=tk.X, side=tk.TOP)
 
-        table_container = tk.Frame(self)
-        table_container.pack(fill="both", expand=True)
-        tree = ttk.Treeview(table_container, columns=list(self.columns.keys()), show="headings")
-        v_scroll = ttk.Scrollbar(table_container, orient="vertical", command=tree.yview)  # type: ignore
-        h_scroll = ttk.Scrollbar(table_container, orient="horizontal", command=tree.xview)  # type: ignore
-        tree.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
-        tree.grid(row=0, column=0, sticky="nsew")
-        v_scroll.grid(row=0, column=1, sticky="ns")
-        h_scroll.grid(row=1, column=0, sticky="ew")
-        table_container.grid_rowconfigure(0, weight=1)
-        table_container.grid_columnconfigure(0, weight=1)
+        grip_style = {"bootstyle": "secondary", "cursor": "sizing"} if TTK_BOOTSTRAP_AVAILABLE else {"cursor": "sizing"}
+        self.grip = (ttk_bootstrap.Frame if TTK_BOOTSTRAP_AVAILABLE else std_ttk.Frame)(self, **grip_style)
+        self.grip.place(relx=1.0, rely=1.0, anchor=tk.SE)
 
-        for col_id, col_info in self.columns.items():
-            tree.column(col_id, width=col_info.get('width', 100), anchor=col_info.get('anchor', 'w'))
-            tree.heading(col_id, text=col_info['text'], command=lambda c=col_id: self._sort_by_column(c))
+        label_style = {"bootstyle": "inverse-secondary"} if TTK_BOOTSTRAP_AVAILABLE else {}
+        self.title_label = (ttk_bootstrap.Label if TTK_BOOTSTRAP_AVAILABLE else std_ttk.Label)(
+            self.title_bar, text=self.title(), font="-family {Segoe UI} -size 10", **label_style
+        )
+        self.title_label.pack(side=tk.LEFT, padx=10)
 
-        tree.bind("<<TreeviewSelect>>", self._on_selection_change)
-        tree.bind("<Button-3>", self._show_context_menu)
-        return tree
-
-    def set_data(self, data: List[Dict[str, Any]]) -> None:
-        self.data = data
-        self._apply_filter()
-
-    def _apply_filter(self) -> None:
-        search_text = self.search_var.get().lower()
-        self.filtered_data = [item for item in self.data if not search_text or
-                              any(search_text in str(val).lower() for val in item.values())]
-        self._refresh_display()
-
-    def _refresh_display(self) -> None:
-        self.tree.delete(*self.tree.get_children())
-        for item in self.filtered_data:
-            values = tuple(item.get(col, '') for col in self.columns.keys())
-            item_id = str(item.get('id', str(values)))
-            self.tree.insert("", "end", iid=item_id, values=values)
-
-    def _sort_by_column(self, col: str) -> None:
-        if self.sort_column == col: self.sort_reverse = not self.sort_reverse
-        else: self.sort_column, self.sort_reverse = col, False
-        self.filtered_data.sort(key=lambda x: str(x.get(col, '')), reverse=self.sort_reverse)
-        self._refresh_display()
-
-    def _on_search_change(self, *args: Any) -> None: self._apply_filter()
-
-    def _on_selection_change(self, event: tk.Event) -> None:
-        if not self.selection_callback: return
-        if selection := self.tree.selection():
-            item_id = selection[0]
-            if selected_item := next((item for item in self.filtered_data if str(item.get('id', '')) == item_id), None):
-                self.selection_callback(selected_item)
-
-    def _show_context_menu(self, event: tk.Event) -> None:
-        if not self.context_menu_builder: return
-        if iid := self.tree.identify_row(event.y):
-            self.tree.selection_set(iid)
-            if selected_item := next((item for item in self.filtered_data if str(item.get('id', '')) == iid), None):
-                menu = self.context_menu_builder(selected_item)
-                menu.post(event.x_root, event.y_root)
-
-    def set_selection_callback(self, cb: Callable[[Dict[str, Any]], None]) -> None: self.selection_callback = cb
-    def set_context_menu_builder(self, builder: Callable[[Dict[str, Any]], tk.Menu]) -> None: self.context_menu_builder = builder
-
-class ModernStatusIndicator(tk.Frame):
-    """Modern status indicator with colored LED-style indicator."""
-    def __init__(self, parent: tk.Widget, **kwargs: Any) -> None:
-        super().__init__(parent, bg=ModernTheme.CARD_BG, **kwargs)
-        self.status_label = tk.Label(self, text="●", fg=ModernTheme.ERROR, bg=ModernTheme.CARD_BG, 
-                                   font=(ModernTheme.FONT_FAMILY, 12))
-        self.status_label.pack()
-        
-    def set_status(self, status: str) -> None:
-        """Set the status indicator color based on status."""
-        if status.lower() in {"online", "running", "connected"}:
-            self.status_label.config(fg=ModernTheme.SUCCESS)
-        elif status.lower() in {"warning", "pending"}:
-            self.status_label.config(fg=ModernTheme.WARNING)
-        else:
-            self.status_label.config(fg=ModernTheme.ERROR)
-
-class ModernProgressBar(tk.Frame):
-    """Modern progress bar with percentage display."""
-    def __init__(self, parent: tk.Widget, **kwargs: Any) -> None:
-        super().__init__(parent, bg=ModernTheme.CARD_BG, **kwargs)
-        self.progress_var = tk.DoubleVar()
-        self.progress_bar = ttk.Progressbar(self, variable=self.progress_var, length=200)
-        self.progress_bar.pack(side="left", padx=(0, 10))
-        self.label = tk.Label(self, text="0%", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_PRIMARY,
-                            font=(ModernTheme.FONT_FAMILY, ModernTheme.FONT_SIZE_SMALL))
-        self.label.pack(side="right")
-        
-    def set_progress(self, value: float) -> None:
-        """Set progress value (0-100)."""
-        self.progress_var.set(value)
-        self.label.config(text=f"{value:.1f}%")
-
-class ToastNotification:
-    """Toast notification system for showing temporary messages."""
-    def __init__(self, parent: tk.Widget) -> None:
-        self.parent = parent
-        self.toasts: List[tk.Toplevel] = []
-        
-    def show_toast(self, message: str, level: str = "info") -> None:
-        """Show a toast notification."""
-        colors = {
-            "info": ModernTheme.INFO,
-            "success": ModernTheme.SUCCESS, 
-            "warning": ModernTheme.WARNING,
-            "error": ModernTheme.ERROR
+        button_styles = {
+            "close": {"bootstyle": "danger"} if TTK_BOOTSTRAP_AVAILABLE else {},
+            "maximize": {"bootstyle": "info"} if TTK_BOOTSTRAP_AVAILABLE else {},
+            "minimize": {"bootstyle": "info"} if TTK_BOOTSTRAP_AVAILABLE else {}
         }
         
-        toast = tk.Toplevel(self.parent)
-        toast.withdraw()
-        toast.overrideredirect(True)
-        toast.configure(bg=colors.get(level, ModernTheme.INFO))
-        
-        label = tk.Label(toast, text=message, bg=colors.get(level, ModernTheme.INFO),
-                        fg=ModernTheme.TEXT_PRIMARY, font=(ModernTheme.FONT_FAMILY, 10),
-                        padx=20, pady=10)
-        label.pack()
-        
-        # Position toast
-        toast.update_idletasks()
-        x = self.parent.winfo_rootx() + self.parent.winfo_width() - toast.winfo_width() - 20
-        y = self.parent.winfo_rooty() + 20 + len(self.toasts) * 60
-        toast.geometry(f"+{x}+{y}")
-        toast.deiconify()
-        
-        self.toasts.append(toast)
-        
-        # Auto-hide after 3 seconds
-        def hide_toast() -> None:
-            if toast in self.toasts:
-                self.toasts.remove(toast)
-                toast.destroy()
-        
-        toast.after(3000, hide_toast)
+        # ButtonClass is now defined globally
+        self.close_button = ButtonClass(self.title_bar, text='✕', command=self.destroy, **button_styles["close"])
+        self.maximize_button = ButtonClass(self.title_bar, text='🗖', command=self.toggle_maximize, **button_styles["maximize"])
+        self.minimize_button = ButtonClass(self.title_bar, text='—', command=self.minimize, **button_styles["minimize"])
 
-class DetailPane(ModernCard):
-    """Detail pane for showing detailed information about selected items."""
-    def __init__(self, parent: tk.Widget, title: str = "", **kwargs: Any) -> None:
-        super().__init__(parent, title=title, **kwargs)
-        self.content_text = tk.Text(self.content_frame, bg=ModernTheme.CARD_BG, 
-                                  fg=ModernTheme.TEXT_PRIMARY, wrap=tk.WORD,
-                                  font=(ModernTheme.FONT_FAMILY, ModernTheme.FONT_SIZE_SMALL))
-        self.content_text.pack(fill="both", expand=True)
+        self.close_button.pack(side=tk.RIGHT, fill=tk.Y)
+        self.maximize_button.pack(side=tk.RIGHT, fill=tk.Y)
+        self.minimize_button.pack(side=tk.RIGHT, fill=tk.Y)
         
-    def update_details(self, item: Dict[str, Any]) -> None:
-        """Update the detail pane with information about the selected item."""
-        self.content_text.delete(1.0, tk.END)
-        for key, value in item.items():
-            self.content_text.insert(tk.END, f"{key}: {value}\n")
+        self.title_bar.bind("<Button-1>", self.on_press)
+        self.title_bar.bind("<B1-Motion>", self.on_drag)
+        self.title_label.bind("<Button-1>", self.on_press)
+        self.title_label.bind("<B1-Motion>", self.on_drag)
+        self.grip.bind("<B1-Motion>", self.on_resize)
+        
+        self.is_maximized = False
+        self._geom = '200x200+0+0'
 
-# Constants
-SERVER_CONTROL_AVAILABLE = True
+    def set_app_icon(self) -> None:
+        """Sets the application icon for the taskbar."""
+        with suppress(Exception):
+            # A simple way to create a platform-agnostic icon in memory
+            # This avoids needing a file on disk
+            img_data = b'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGvSURBVHja7Zq9SsRAEIX9/xE9iIiIInir4GEn2Nj5AEtBC1sL/4AgaGHhD/gBFrY+gI2VnSgWFFFEEfE/GDaZZJY3u1uTzAd2ZZOd7O43y87sjpNer9eCgSRfUvYT5PMk++T7JPsj/k06zT4W8PMA23wvgD8A8D8D+I8d2I/x/4F8AWBeADSAsiUMgDwCkAcA8gZA3gDIA4A8AJAHAPIGQN4AyAOAPACOK8sWMM8A+gBAnwDoA4A+ANAHAPoAQB8A6AOAPgDQBwB9AKAPAPQBgD4A0AcA+gBAnwDoA4A+ANAHAPoAQB8A6AOAPgDQBwB9AKAPAPQBgD4A0AcA+gBAnwDoA4A+ANAHAPoAQB8A6AOAPgDQBwB9AKAPAPQBgD4A0AcA+gBAnwDoA4A+ANAHAPoAQB8A6AOAPgDQBwB9AKAPAPQBgD4A0AcA+gBAnwDoA4A+ANAHAPoAQB8A6AOAPgDQBwB9AKAPAPQBgD4A0AcA+gBAnwDoA4A+ANAHAPoAQB8A6AOAPgDQBwB9AKCPAEwzAPMMoA8A9AEAZeUMgDwAkgcAsslgADL/ADyKOzxP0W4OAAAAAElFTkSuQmCC'
+            self.tk.call('wm', 'iconphoto', self._w, tk.PhotoImage(data=img_data))
 
-class ServerGUI:
-    def __init__(self, server_instance: Optional[BackupServerLike] = None) -> None:
+    def on_press(self, event: tk.Event) -> None:
+        self.offset_x = event.x
+        self.offset_y = event.y
+
+    def on_drag(self, event: tk.Event) -> None:
+        x = self.winfo_pointerx() - self.offset_x
+        y = self.winfo_pointery() - self.offset_y
+        self.geometry(f"+{x}+{y}")
+
+    def on_resize(self, event: tk.Event) -> None:
+        new_width = self.winfo_width() + event.x
+        new_height = self.winfo_height() + event.y
+        self.geometry(f"{new_width}x{new_height}")
+
+    def toggle_maximize(self) -> None:
+        if self.is_maximized:
+            self.geometry(self._geom)
+            self.is_maximized = False
+        else:
+            self._geom = self.geometry()
+            self.geometry(f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}+0+0")
+            self.is_maximized = True
+            
+    def minimize(self) -> None:
+        self.withdraw()
+        
+    def set_close_command(self, command: Callable[[], None]) -> None:
+        self.close_button.config(command=command)
+
+class EnhancedServerGUI:
+    def __init__(self, server_instance: Optional[Any] = None) -> None:
         self.server = server_instance
-        self.root: Optional[tk.Tk] = None
+        self.settings = AppSettings()
+        
+        self.root: Optional[FramelessWindow] = None
         self.is_running = False
         self.gui_thread: Optional[threading.Thread] = None
-        self.start_time: float = 0.0
-        self.current_tab = "dashboard"
-        self.settings: Dict[str, Any] = self._load_settings()
-        self.update_queue: queue.Queue[Dict[str, Any]] = queue.Queue()
-        self.toast_system: Optional[ToastNotification] = None
-        self.tray_icon: Any = None
-        self.tab_buttons: Dict[str, tk.Button] = {}
-        self.tab_contents: Dict[str, tk.Frame] = {}
-        self.status_labels: Dict[str, tk.Label] = {}
-        self.header_status_indicator: Optional[ModernStatusIndicator] = None
-        self.clock_label: Optional[tk.Label] = None
-        self.header_status_label: Optional[tk.Label] = None
-        self.activity_log_text: Optional[tk.Text] = None
-        self.client_table: Optional[ModernTable] = None
-        self.client_detail_pane: Optional[DetailPane] = None
-        self.file_table: Optional[ModernTable] = None
-        self.file_detail_pane: Optional[DetailPane] = None
-        self.db_table: Optional[ModernTable] = None
-        self.db_table_selector: Optional[ttk.Combobox] = None
-        self.setting_vars: Dict[str, tk.StringVar] = {}
-        self.performance_chart: Any = None
-        self.ax: Any = None
-        self.cpu_line: Any = None
-        self.mem_line: Any = None
-        self.performance_data: Dict[str, Deque[Any]] = {'cpu': deque(maxlen=60), 'memory': deque(maxlen=60), 'time': deque(maxlen=60)}
-        self._fallback_db_manager: Optional[Any] = None
-
-    @property
-    def effective_db_manager(self) -> Any:
-        """Get database manager from server or create fallback for standalone mode."""
-        if self.server and hasattr(self.server, 'db_manager') and self.server.db_manager:
-            return self.server.db_manager
         
-        # Fallback for standalone mode
-        if DatabaseManager is None:
-            return None
-            
-        if self._fallback_db_manager is None:
-            try:
-                self._fallback_db_manager = DatabaseManager()
-            except Exception as e:
-                print(f"[WARNING] Could not create fallback DatabaseManager: {e}")
-                return None
-        return self._fallback_db_manager
-
+        self.update_queue: queue.Queue[Dict[str, Any]] = queue.Queue()
+        self.toast: Optional[ToastNotification] = None
+        self.tray_icon: Optional[pystray.Icon] = None
+        
+        self.pages: Dict[str, ttk.Frame] = {}
+        self.nav_buttons: Dict[str, ttk.Button] = {}
+        self.current_page_id = self.settings.get('last_tab', 'dashboard')
+        
+        self._fallback_db_manager: Optional[ActualDBManager] = None
+        self.performance_data: Dict[str, Deque[Any]] = {
+            'cpu': deque(maxlen=120), 
+            'memory': deque(maxlen=120), 
+            'time': deque(maxlen=120)
+        }
+    
+    # --- Public API & Lifecycle Methods ---
+    
     def initialize(self) -> bool:
+        """Initializes and starts the GUI in a separate thread."""
         if self.is_running: return True
         try:
-            temp_root = tk.Tk(); temp_root.withdraw(); temp_root.destroy()
+            # Check for display availability before starting thread
+            root_check = tk.Tk()
+            root_check.withdraw()
+            root_check.destroy()
         except tk.TclError:
             print(f"\n{'='*80}\nFATAL: Cannot start GUI - No graphical display available.\n{'='*80}\n")
             return False
@@ -440,638 +418,955 @@ class ServerGUI:
         self.is_running = True
         self.gui_thread = threading.Thread(target=self._gui_main_loop, daemon=True)
         self.gui_thread.start()
+        
+        # Wait for root window to be created
         for _ in range(50):
-            if self.root and self.toast_system:
+            if self.root:
                 print("[OK] GUI initialized successfully!")
                 return True
             time.sleep(0.1)
+            
         print("[ERROR] GUI initialization timed out.")
         self.is_running = False
         return False
-
+    
     def shutdown(self) -> None:
+        """Schedules the destruction of the GUI and stops related components."""
         print("Starting GUI shutdown...")
         self.is_running = False
         if self.tray_icon: self.tray_icon.stop()
-        if self.root: self.root.destroy()
+        if self.root:
+            # Safely destroy from any thread
+            self.root.after(0, self.root.destroy)
         print("GUI shutdown completed.")
-
-    def _initialize_root_window(self) -> None:
-        """Initialize the root window with proper configuration."""
-        self.root = TkinterDnD.Tk() if DND_AVAILABLE and TkinterDnD else tk.Tk()  # type: ignore
-        self.root = cast(tk.Tk, self.root)  # type: ignore
         
-        self.root.title("Encrypted Backup Server")  # type: ignore
-        self.root.geometry("1400x900")  # type: ignore
-        self.root.minsize(1000, 700)  # type: ignore
-        self.root.configure(bg=ModernTheme.PRIMARY_BG)  # type: ignore
-        self.root.protocol("WM_DELETE_WINDOW", self._on_window_close)  # type: ignore
+    def add_log_message(self, message: str, level: str = "INFO") -> None:
+        """Thread-safe method to add a log message to the GUI."""
+        log_data = {'type': 'log', 'data': {'message': message, 'level': level}}
+        self.update_queue.put(log_data)
+        
+    def update_server_status(self, data: Dict[str, Any]) -> None:
+        self.update_queue.put({'type': 'status', 'data': data})
+        
+    def update_client_stats(self, data: Dict[str, Any]) -> None:
+        self.update_queue.put({'type': 'client_stats', 'data': data})
+        
+    def update_transfer_stats(self, data: Dict[str, Any]) -> None:
+        self.update_queue.put({'type': 'transfer_stats', 'data': data})
 
-    def _setup_gui_components(self) -> None:
-        """Initialize and setup all GUI components."""
-        self._initialize_root_window()
-        self.toast_system = ToastNotification(self.root)  # type: ignore
-        self._setup_modern_styles()
-        self._create_main_window()
-        self._create_system_tray()
-        self._schedule_updates()
-        # Sync current server state with GUI display
-        self.sync_current_server_state()
-        self.root.after(500, lambda: self._show_toast("GUI Ready", "success"))  # type: ignore
-
+    def update_maintenance_stats(self, data: Dict[str, Any]) -> None:
+        self.update_queue.put({'type': 'maintenance', 'data': data})
+        
+    # --- Internal GUI Setup & Main Loop ---
+    
     def _gui_main_loop(self) -> None:
+        """The main entry point for the GUI thread."""
         try:
             self._setup_gui_components()
-            self.root.mainloop()  # type: ignore
+            if self.root:
+                self.root.mainloop()
         except Exception as e:
             print(f"GUI main loop error: {e}")
             if SENTRY_AVAILABLE and 'sentry_sdk' in globals(): 
-                sentry_sdk.capture_exception(e)  # type: ignore
+                sentry_sdk.capture_exception(e)
             traceback.print_exc()
         finally:
             self.is_running = False
             print("GUI main loop ended.")
+            
+    def _setup_gui_components(self) -> None:
+        """Initializes the root window and all its components."""
+        if TTK_BOOTSTRAP_AVAILABLE:
+            self.root = FramelessWindow(
+                title="Encrypted Backup Server - Command Center",
+                themename=self.settings.get('theme'),
+                size=(1400, 900),
+                minsize=(1100, 750)
+            )
+        else:
+            self.root = FramelessWindow()
+            self.root.title("Encrypted Backup Server - Command Center")
+            self.root.geometry("1400x900")
+            self.root.minsize(1100, 750)
+        self.root.set_close_command(self._on_window_close)
 
-    def _setup_modern_styles(self) -> None:
+        self._create_main_layout()
+        self._create_system_tray()
+        self._schedule_updates()
+        self.sync_current_server_state()
+        
+        if TTK_BOOTSTRAP_AVAILABLE and ToastNotification:
+            try:
+                self.toast = ToastNotification(
+                    title="Server Notification",
+                    bootstyle="primary",
+                    duration=3000,
+                    position=(20, 20, 'ne'), # Position relative to root window
+                )
+            except Exception:
+                self.toast = None
+        else:
+            self.toast = None
+
+        if self.toast:
+            self.root.after(250, lambda: self.toast.show_toast("GUI Ready", "Server Online"))
+        self._play_audio_cue('startup')
+
+    def _create_main_layout(self) -> None:
+        """Creates the main header, sidebar, and content area."""
         if not self.root: return
-        style = ttk.Style(self.root)
-        style.theme_use('clam')
-        style.configure("Treeview", background=ModernTheme.SECONDARY_BG, foreground=ModernTheme.TEXT_PRIMARY,  # type: ignore
-                        fieldbackground=ModernTheme.SECONDARY_BG, borderwidth=0, rowheight=25)
-        style.configure("Treeview.Heading", background=ModernTheme.ACCENT_BG, foreground=ModernTheme.TEXT_PRIMARY,  # type: ignore
-                        font=(ModernTheme.FONT_FAMILY, 10, 'bold'), relief="flat", padding=5)
-        style.map("Treeview", background=[('selected', ModernTheme.ACCENT_BLUE)])  # type: ignore
-        style.configure("TScrollbar", troughcolor=ModernTheme.SECONDARY_BG, background=ModernTheme.ACCENT_BG,  # type: ignore
-                        bordercolor=ModernTheme.PRIMARY_BG, arrowcolor=ModernTheme.TEXT_PRIMARY)
-        self.root.option_add('*TCombobox*Listbox*Background', ModernTheme.SECONDARY_BG)  # type: ignore
-        self.root.option_add('*TCombobox*Listbox*Foreground', ModernTheme.TEXT_PRIMARY)  # type: ignore
-        style.configure("TCombobox", fieldbackground=ModernTheme.SECONDARY_BG, background=ModernTheme.ACCENT_BG,  # type: ignore
-                        foreground=ModernTheme.TEXT_PRIMARY, bordercolor=ModernTheme.BORDER_COLOR,
-                        arrowcolor=ModernTheme.TEXT_PRIMARY, selectbackground=ModernTheme.ACCENT_BG)
 
-    def _create_main_window(self) -> None:
-        if not self.root: return
-        main_container = tk.Frame(self.root, bg=ModernTheme.PRIMARY_BG)
-        main_container.pack(fill="both", expand=True)
-        main_container.grid_rowconfigure(1, weight=1)
-        main_container.grid_columnconfigure(1, weight=1)
+        # Main container below the custom title bar
+        # FrameClass is now defined globally
+        main_container = FrameClass(self.root)
+        main_container.pack(fill=tk.BOTH, expand=True, side=tk.BOTTOM)
+        
+        # Header
+        header = self._create_header(main_container)
+        header.pack(fill=tk.X, padx=10, pady=(5, 10))
 
-        self._create_header(main_container).grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 0))
-        self._create_sidebar(main_container).grid(row=1, column=0, sticky="nsw", padx=(10, 0), pady=10)
-        content_area = tk.Frame(main_container, bg=ModernTheme.PRIMARY_BG)
-        content_area.grid(row=1, column=1, sticky="nsew", padx=10, pady=10)
+        # Body (Sidebar + Content)
+        body_container = FrameClass(main_container)
+        body_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        
+        sidebar = self._create_sidebar(body_container)
+        sidebar.pack(side=tk.LEFT, fill=tk.Y, pady=(0, 5))
 
-        self._create_all_tabs(content_area)
-        self._switch_page(self.settings.get('last_tab', 'dashboard'))
+        self.content_area = FrameClass(body_container)
+        self.content_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 0))
 
-    def _create_header(self, parent: tk.Widget) -> tk.Frame:
-        header = tk.Frame(parent, bg=ModernTheme.PRIMARY_BG, height=60)
-        header.pack_propagate(False)
-        tk.Label(header, text="Encrypted Backup Server", bg=ModernTheme.PRIMARY_BG, fg=ModernTheme.TEXT_PRIMARY,
-                 font=(ModernTheme.FONT_FAMILY, 18, 'bold')).pack(side="left", padx=20)
-        status_frame = tk.Frame(header, bg=ModernTheme.PRIMARY_BG)
-        status_frame.pack(side="right", padx=20)
-        self.clock_label = tk.Label(status_frame, text="", bg=ModernTheme.PRIMARY_BG, fg=ModernTheme.TEXT_SECONDARY, font=("Segoe UI", 12))
-        self.clock_label.pack(anchor="e")
-        indicator_frame = tk.Frame(status_frame, bg=ModernTheme.PRIMARY_BG)
-        indicator_frame.pack(pady=(5, 0), anchor="e")
-        self.header_status_label = tk.Label(indicator_frame, text="Server Offline", bg=ModernTheme.PRIMARY_BG,
-                                            fg=ModernTheme.TEXT_SECONDARY, font=(ModernTheme.FONT_FAMILY, 10))
-        self.header_status_label.pack(side="left", padx=(0, 5))
-        self.header_status_indicator = ModernStatusIndicator(indicator_frame)
-        self.header_status_indicator.pack(side="left")
+        self._create_pages()
+        self._switch_page(self.current_page_id)
+
+    def _create_header(self, parent: tk.Widget):
+        """Creates the application header with title, search, and status."""
+        # FrameClass is now defined globally
+        # LabelClass is now defined globally
+        # EntryClass is now defined globally
+        
+        header = FrameClass(parent)
+        
+        # Left: App Title
+        title_style = {} if not TTK_BOOTSTRAP_AVAILABLE else {}
+        LabelClass(header, text="Encrypted Backup Server", font="-family {Segoe UI} -size 18 -weight bold", **title_style).pack(side=tk.LEFT, anchor=tk.W)
+
+        # Right: Status and Clock
+        status_frame = FrameClass(header)
+        status_frame.pack(side=tk.RIGHT, anchor=tk.E)
+
+        clock_style = {"bootstyle": "secondary"} if TTK_BOOTSTRAP_AVAILABLE else {}
+        self.clock_label = LabelClass(status_frame, text="", font="-family {Segoe UI} -size 12", **clock_style)
+        self.clock_label.pack(anchor=tk.E)
+        
+        indicator_frame = FrameClass(status_frame)
+        indicator_frame.pack(pady=(5, 0), anchor=tk.E)
+
+        status_label_style = {"bootstyle": "secondary"} if TTK_BOOTSTRAP_AVAILABLE else {}
+        self.header_status_label = LabelClass(indicator_frame, text="Server Offline", font="-family {Segoe UI} -size 10", **status_label_style)
+        self.header_status_label.pack(side=tk.LEFT, padx=(0, 10))
+
+        pill_style = {"bootstyle": "danger-inverse", "padding": (10, 3)} if TTK_BOOTSTRAP_AVAILABLE else {}
+        self.header_status_pill = LabelClass(indicator_frame, text="OFFLINE", font="-family {Segoe UI} -size 8 -weight bold", anchor=tk.CENTER, **pill_style)
+        self.header_status_pill.pack(side=tk.LEFT)
+        self.header_status_pill.winfo_toplevel().after(10, lambda: self._apply_pill_style())
+
+        # Center: Global Search Bar
+        search_frame = FrameClass(header)
+        search_frame.pack(side=tk.RIGHT, anchor=tk.E, padx=30, fill=tk.X, expand=True)
+        self.search_var = tk.StringVar()
+        entry_style = {"bootstyle": "secondary"} if TTK_BOOTSTRAP_AVAILABLE else {}
+        search_entry = EntryClass(search_frame, textvariable=self.search_var, font="-family {Segoe UI} -size 11", **entry_style)
+        search_entry.pack(ipady=5, fill=tk.X)
+        if ToolTip:
+            ToolTip(search_entry, "Global Search (Clients, Logs...) - Coming Soon!")
+        
         return header
 
-    def _create_sidebar(self, parent: tk.Widget) -> tk.Frame:
-        sidebar = tk.Frame(parent, bg=ModernTheme.SECONDARY_BG, width=220)
+    def _apply_pill_style(self) -> None:
+        """Helper to apply a rounded pill style to a label."""
+        if not self.root or not hasattr(self, 'header_status_pill'): return
+        try:
+            if TTK_BOOTSTRAP_AVAILABLE:
+                style = ttk_bootstrap.Style.get_instance()
+                style.configure("Pill.TLabel", borderwidth=5, relief="solid", cornerradius=12)
+                self.header_status_pill.configure(style="Pill.TLabel")
+        except Exception:
+            pass  # Style configuration may fail, continue without styling
+        
+    def _create_sidebar(self, parent: tk.Widget):
+        """Creates the main navigation sidebar."""
+        # FrameClass is now defined globally
+        # ButtonClass is now defined globally
+        
+        sidebar_style = {"bootstyle": "dark"} if TTK_BOOTSTRAP_AVAILABLE else {}
+        sidebar = FrameClass(parent, width=220, **sidebar_style)
         sidebar.pack_propagate(False)
-        pages = [("dashboard", "Dashboard"), ("clients", "Clients"), ("files", "Files"),
-                 ("analytics", "Analytics"), ("database", "Database"), ("logs", "Logs"), ("settings", "Settings")]
-        if PROCESS_MONITOR_AVAILABLE: pages.insert(5, ("processes", "Processes"))
 
-        for page_id, page_name in pages:
-            btn = tk.Button(sidebar, text=f" {Icons.get(page_id)}  {page_name}", command=lambda p=page_id: self._switch_page(p),
-                            bg=ModernTheme.SECONDARY_BG, fg=ModernTheme.TEXT_PRIMARY, font=(ModernTheme.FONT_FAMILY, 12, 'bold'),
-                            relief="flat", bd=0, padx=20, pady=15, anchor="w")
-            btn.pack(side="top", fill="x", padx=10, pady=5)
-            self.tab_buttons[page_id] = btn
+        # Use ttkbootstrap icons (font-based)
+        icons = {"dashboard": "house-door-fill", "clients": "people-fill", "files": "folder-fill", 
+                 "analytics": "graph-up", "database": "stack", "processes": "cpu-fill", 
+                 "logs": "file-earmark-text-fill", "settings": "gear-fill"}
+        
+        pages_config = [("dashboard", "Dashboard"), ("clients", "Clients"), ("files", "Files"), 
+                        ("analytics", "Analytics"), ("database", "Database"), ("logs", "Logs"), ("settings", "Settings")]
+        
+        if PROCESS_MONITOR_AVAILABLE:
+            pages_config.insert(5, ("processes", "Processes"))
+
+        for page_id, page_name in pages_config:
+            icon_char = icons.get(page_id, "app")
+            # Create button with fallback styling
+            button_style = {"bootstyle": "dark", "padding": (20, 15)} if TTK_BOOTSTRAP_AVAILABLE else {}
+            
+            try:
+                # Try to use PhotoImage for icons in ttkbootstrap
+                if TTK_BOOTSTRAP_AVAILABLE:
+                    img = ttk_bootstrap.PhotoImage(f"bi-{icon_char}", width=20, height=20)
+                    btn = ButtonClass(
+                        sidebar,
+                        text=f" {page_name}",
+                        image=img,
+                        compound=tk.LEFT,
+                        command=lambda p=page_id: self._switch_page(p),
+                        **button_style
+                    )
+                    btn.image = img  # Keep a reference
+                else:
+                    # Fallback for standard tkinter
+                    btn = ButtonClass(
+                        sidebar,
+                        text=f" {page_name}",
+                        command=lambda p=page_id: self._switch_page(p)
+                    )
+            except Exception:
+                # Fallback button without icon
+                btn = ButtonClass(
+                    sidebar,
+                    text=f" {page_name}",
+                    command=lambda p=page_id: self._switch_page(p)
+                )
+            
+            btn.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+            self.nav_buttons[page_id] = btn
+
         return sidebar
 
-    def _create_all_tabs(self, content_area: tk.Frame) -> None:
-        for page_id in self.tab_buttons:
-            frame = tk.Frame(content_area, bg=ModernTheme.PRIMARY_BG)
-            self.tab_contents[page_id] = frame
-            creation_method = getattr(self, f"_create_{page_id}_tab", None)
-            if callable(creation_method): creation_method(frame)
+    def _create_pages(self) -> None:
+        """Instantiates all page frames."""
+        if not self.content_area: return
+        # In a real app, you would import these page classes
+        # For this single file, we define them below and instantiate here
+        page_classes = {
+            "dashboard": DashboardPage,
+            "clients": ClientsPage,
+            "analytics": AnalyticsPage,
+            "settings": SettingsPage,
+            # Add other pages here
+        }
+        
+        for page_id, PageClass in page_classes.items():
+            page = PageClass(self.content_area, self)
+            self.pages[page_id] = page
+            # Initially hide all pages
+            page.pack_forget()
 
-    # --- Individual Tab Creators ---
-    def _create_dashboard_tab(self, parent: tk.Frame) -> None:
-        parent.columnconfigure(0, weight=2, uniform="dashboard"); parent.columnconfigure(1, weight=1, uniform="dashboard")
-        parent.rowconfigure(0, weight=1); parent.rowconfigure(1, weight=2)
-        status_panel = tk.Frame(parent, bg=ModernTheme.PRIMARY_BG)
-        status_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 5), pady=(0, 5))
-        status_panel.rowconfigure(0, weight=1); status_panel.rowconfigure(1, weight=1)
-        status_panel.columnconfigure(0, weight=1); status_panel.columnconfigure(1, weight=1)
-        self._create_dashboard_status_cards(status_panel)
-        self._create_dashboard_control_card(parent).grid(row=0, column=1, sticky="nsew", padx=(5, 0), pady=(0, 5))
-        self._create_dashboard_performance_chart(parent).grid(row=1, column=0, sticky="nsew", padx=(0, 5), pady=(5, 0))
-        self._create_dashboard_log_card(parent).grid(row=1, column=1, sticky="nsew", padx=(5, 0), pady=(5, 0))
-
-    def _create_clients_tab(self, parent: tk.Frame) -> None:
-        paned_window = ttk.PanedWindow(parent, orient=tk.HORIZONTAL)
-        paned_window.pack(fill="both", expand=True)
-        table_card = ModernCard(paned_window, title=f"{Icons.get('clients')} Client Management")
-        columns: Dict[str, Dict[str, Any]] = {'name': {'text': 'Name', 'width': 150}, 'id': {'text': 'Client ID', 'width': 250},
-                   'status': {'text': 'Status', 'width': 100}, 'last_seen': {'text': 'Last Seen', 'width': 150}}
-        self.client_table = ModernTable(table_card.content_frame, columns)
-        self.client_table.pack(fill="both", expand=True)
-        self.client_table.set_selection_callback(self._on_client_selected)
-        self.client_table.set_context_menu_builder(self._build_client_context_menu)
-        paned_window.add(table_card, weight=3)  # type: ignore
-        self.client_detail_pane = DetailPane(paned_window, title=f"{Icons.get('info')} Client Details")
-        paned_window.add(self.client_detail_pane, weight=1)  # type: ignore
-
-    def _create_files_tab(self, parent: tk.Frame) -> None:
-        paned_window = ttk.PanedWindow(parent, orient=tk.HORIZONTAL)
-        paned_window.pack(fill="both", expand=True)
-        table_card = ModernCard(paned_window, title=f"{Icons.get('files')} File Management")
-        columns: Dict[str, Dict[str, Any]] = {'filename': {'text': 'File Name', 'width': 250}, 'client_name': {'text': 'Client', 'width': 150},
-                   'size_mb': {'text': 'Size (MB)', 'width': 80, 'anchor': 'e'}, 'date': {'text': 'Date', 'width': 150},
-                   'verified': {'text': 'Verified', 'width': 80, 'anchor': 'center'}}
-        self.file_table = ModernTable(table_card.content_frame, columns)
-        self.file_table.pack(fill="both", expand=True)
-        self.file_table.set_selection_callback(self._on_file_selected)
-        self.file_table.set_context_menu_builder(self._build_file_context_menu)
-        paned_window.add(table_card, weight=3)  # type: ignore
-        if DND_AVAILABLE and self.root:
-            # table_card.drop_target_register(DND_FILES)  # Commented out - method doesn't exist
-            # table_card.dnd_bind('<<Drop>>', self._on_file_drop)  # Commented out
-            ModernTooltip(table_card, "Drag and drop files here to upload")
-        self.file_detail_pane = DetailPane(paned_window, title=f"{Icons.get('info')} File Details")
-        paned_window.add(self.file_detail_pane, weight=1)  # type: ignore
-
-    def _create_analytics_tab(self, parent: tk.Frame) -> None:
-        if not CHARTS_AVAILABLE:
-            tk.Label(parent, text="Analytics require matplotlib: pip install matplotlib",
-                     bg=ModernTheme.PRIMARY_BG, fg=ModernTheme.TEXT_SECONDARY, font=(ModernTheme.FONT_FAMILY, 14)).pack(expand=True)
+    def _switch_page(self, page_id: str) -> None:
+        """Hides the current page and shows the selected one."""
+        if page_id not in self.nav_buttons:
+            print(f"[WARN] Attempted to switch to non-existent page: {page_id}")
             return
-        self._create_dashboard_performance_chart(parent, title="Live System Analytics").pack(fill="both", expand=True)
+            
+        self.current_page_id = page_id
+        self.settings.set('last_tab', page_id)
 
-    def _create_database_tab(self, parent: tk.Frame) -> None:
-        card = ModernCard(parent, title=f"{Icons.get('database')} Database Browser")
-        card.pack(fill="both", expand=True)
-        controls_frame = tk.Frame(card.content_frame, bg=ModernTheme.CARD_BG)
-        controls_frame.pack(fill="x", pady=(0, 10))
-        tk.Label(controls_frame, text="Table:", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_PRIMARY).pack(side="left")
-        self.db_table_selector = ttk.Combobox(controls_frame, state="readonly", style="TCombobox")
-        self.db_table_selector.pack(side="left", padx=10)
-        self.db_table_selector.bind("<<ComboboxSelected>>", self._on_db_table_select)
-        tk.Button(controls_frame, text="Refresh", command=self._refresh_db_tables, relief="flat",
-                  bg=ModernTheme.ACCENT_BG, fg=ModernTheme.TEXT_PRIMARY).pack(side="left")
-        db_table_frame = tk.Frame(card.content_frame, bg=ModernTheme.CARD_BG)
-        db_table_frame.pack(fill="both", expand=True)
-        self.db_table = ModernTable(db_table_frame, columns={})
-        self.db_table.pack(fill="both", expand=True)
+        # Update button styles
+        for pid, btn in self.nav_buttons.items():
+            if TTK_BOOTSTRAP_AVAILABLE:
+                btn.configure(bootstyle="primary" if pid == page_id else "dark")
+            else:
+                # Fallback styling for standard tkinter
+                if pid == page_id:
+                    btn.configure(relief=tk.RAISED, bg='lightblue')
+                else:
+                    btn.configure(relief=tk.FLAT, bg='lightgray')
 
-    def _create_logs_tab(self, parent: tk.Frame) -> None:
-        card = ModernCard(parent, title=f"{Icons.get('logs')} Log Viewer")
-        card.pack(fill="both", expand=True)
-        text_frame = tk.Frame(card.content_frame)
-        text_frame.pack(fill="both", expand=True)
-        self.activity_log_text = tk.Text(text_frame, bg=ModernTheme.SECONDARY_BG, fg=ModernTheme.TEXT_SECONDARY,
-                                       font=("Consolas", 10), wrap="word", relief="flat", state=tk.DISABLED, padx=10, pady=10)
-        v_scroll = ttk.Scrollbar(text_frame, orient="vertical", command=self.activity_log_text.yview)  # type: ignore
-        self.activity_log_text['yscrollcommand'] = v_scroll.set
-        v_scroll.pack(side="right", fill="y")
-        self.activity_log_text.pack(side="left", fill="both", expand=True)
+        # Switch frames
+        for pid, page_frame in self.pages.items():
+            if pid == page_id:
+                page_frame.pack(fill=tk.BOTH, expand=True)
+                # Call an optional `on_show` method if the page has one
+                if hasattr(page_frame, "on_show"):
+                    page_frame.on_show()
+            else:
+                page_frame.pack_forget()
 
-    def _create_processes_tab(self, parent: tk.Frame) -> None:
-        if PROCESS_MONITOR_AVAILABLE and ProcessMonitorWidget:
-            ProcessMonitorWidget(parent, title="Server Processes", update_interval=2.0).pack(fill="both", expand=True)
-        else:
-            tk.Label(parent, text="ProcessMonitorWidget not available.", bg=ModernTheme.PRIMARY_BG,
-                     fg=ModernTheme.TEXT_SECONDARY, font=(ModernTheme.FONT_FAMILY, 14)).pack(expand=True)
+    # --- System Tray & Window Management ---
 
-    def _create_settings_tab(self, parent: tk.Frame) -> None:
-        card = ModernCard(parent, title=f"{Icons.get('settings')} Server Settings")
-        card.pack(fill="both", expand=True)
-        settings_to_display = {'port': "Server Port", 'storage_dir': "Storage Directory", 'max_clients': "Max Clients",
-                               'session_timeout': "Session Timeout (min)", 'maintenance_interval': "Maintenance Interval (sec)"}
-        for key, label in settings_to_display.items():
-            frame = tk.Frame(card.content_frame, bg=ModernTheme.CARD_BG)
-            frame.pack(fill="x", pady=5)
-            tk.Label(frame, text=label, bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_PRIMARY, width=25, anchor="w").pack(side="left")
-            var = tk.StringVar(value=str(self.settings.get(key, '')))
-            self.setting_vars[key] = var
-            tk.Entry(frame, textvariable=var, bg=ModernTheme.SECONDARY_BG, fg=ModernTheme.TEXT_PRIMARY,
-                     relief="flat").pack(side="left", fill="x", expand=True, ipady=4)
-        button_frame = tk.Frame(card.content_frame, bg=ModernTheme.CARD_BG)
-        button_frame.pack(fill="x", pady=20)
-        tk.Button(button_frame, text=f"{Icons.get('save')} Save Settings", command=self._save_settings,
-                  relief="flat", bg=ModernTheme.SUCCESS, fg=ModernTheme.TEXT_PRIMARY,
-                  font=(ModernTheme.FONT_FAMILY, 10, 'bold'), padx=10, pady=5).pack(side="right")
-
-    # --- Dashboard Sub-components ---
-    def _create_dashboard_status_cards(self, parent: tk.Frame) -> None:
-        datasets: List[Tuple[str, List[Tuple[str, str, str]], Tuple[int, int]]] = [
-            ("Server Status", [("Status", 'status', "Stopped"), ("Address", 'address', "N/A"), ("Uptime", 'uptime', "00:00:00")], (0,0)),
-            ("Client Stats", [("Connected", 'connected', "0"), ("Total", 'total', "0"), ("Active Transfers", 'active_transfers', "0")], (0,1)),
-            ("Transfer Stats", [("Total Transferred", 'bytes', "0 MB"), ("Transfer Rate", 'rate', "0 KB/s")], (1,0)),
-            ("Maintenance", [("Last Cleanup", 'last_cleanup', "Never"), ("Files Cleaned", 'files_cleaned', "0")], (1,1))
-        ]
-        for title, data, (row, col) in datasets:
-            card = ModernCard(parent, title=title)
-            card.grid(row=row, column=col, sticky="nsew", padx=5, pady=5)
-            for label, key, default in data:
-                frame = tk.Frame(card.content_frame, bg=ModernTheme.CARD_BG)
-                frame.pack(fill="x", pady=2)
-                tk.Label(frame, text=f"{label}:", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_SECONDARY).pack(side="left")
-                self.status_labels[key] = tk.Label(frame, text=default, bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_PRIMARY, font=(ModernTheme.FONT_FAMILY, 10, 'bold'))
-                self.status_labels[key].pack(side="right")
-
-    def _create_dashboard_control_card(self, parent: tk.Frame) -> ModernCard:
-        card = ModernCard(parent, title="Control Panel")
-        bf = card.content_frame
-        bf.columnconfigure(0, weight=1); bf.columnconfigure(1, weight=1)
-        def create_button(text: str, icon: str, cmd: Callable[[], None], color: str, r: int, c: int, cspan: int = 1) -> None:
-            tk.Button(bf, text=f"{Icons.get(icon)} {text}", command=cmd, bg=color, fg=ModernTheme.TEXT_PRIMARY,
-                      font=(ModernTheme.FONT_FAMILY, 10, 'bold'), relief="flat", padx=10, pady=8
-                      ).grid(row=r, column=c, columnspan=cspan, sticky="nsew", padx=2, pady=2)
-        create_button("Start", "start", self._start_server, ModernTheme.SUCCESS, 0, 0)
-        create_button("Stop", "stop", self._stop_server, ModernTheme.ERROR, 0, 1)
-        create_button("Restart", "restart", self._restart_server, ModernTheme.WARNING, 1, 0, 2)
-        create_button("Backup DB", "save", self._backup_database, ModernTheme.ACCENT_PURPLE, 2, 0)
-        create_button("Exit GUI", "exit", self._on_window_close, ModernTheme.ACCENT_BG, 2, 1)
-        return card
-
-    def _create_dashboard_performance_chart(self, parent: tk.Frame, title: str = "Live System Performance") -> ModernCard:
-        card = ModernCard(parent, title=title)
-        if not all([CHARTS_AVAILABLE, Figure, Line2D]):
-            tk.Label(card.content_frame, text="Charts disabled (matplotlib not found)", bg=ModernTheme.CARD_BG,
-                     fg=ModernTheme.TEXT_SECONDARY).pack(expand=True)
-            return card
-        fig = Figure(figsize=(5, 2), dpi=100, facecolor=ModernTheme.CARD_BG)  # type: ignore
-        self.ax = fig.add_subplot(111)  # type: ignore
-        self.ax.set_facecolor(ModernTheme.SECONDARY_BG)  # type: ignore
-        self.ax.tick_params(colors=ModernTheme.TEXT_SECONDARY, labelsize=8)  # type: ignore
-        for spine in self.ax.spines.values(): spine.set_color(ModernTheme.BORDER_COLOR)  # type: ignore
-        fig.tight_layout(pad=2)  # type: ignore
-        self.cpu_line, = self.ax.plot([], [], color=ModernTheme.ACCENT_BLUE, lw=2, label="CPU %")  # type: ignore
-        self.mem_line, = self.ax.plot([], [], color=ModernTheme.ACCENT_PURPLE, lw=2, label="Memory %")  # type: ignore
-        self.ax.set_ylim(0, 100)  # type: ignore
-        self.ax.legend(loc='upper left', fontsize=8, facecolor=ModernTheme.ACCENT_BG, labelcolor=ModernTheme.TEXT_PRIMARY, frameon=False)  # type: ignore
-        self.performance_chart = FigureCanvasTkAgg(fig, master=card.content_frame)  # type: ignore
-        self.performance_chart.get_tk_widget().pack(fill="both", expand=True)  # type: ignore
-        return card
-
-    def _create_dashboard_log_card(self, parent: tk.Frame) -> ModernCard:
-        card = ModernCard(parent, title="Activity Log")
-        self.activity_log_text = tk.Text(card.content_frame, height=4, bg=ModernTheme.SECONDARY_BG, fg=ModernTheme.TEXT_PRIMARY,
-                                         font=(ModernTheme.FONT_FAMILY, 8), wrap="word", relief="flat", bd=0, state=tk.DISABLED)
-        scrollbar = ttk.Scrollbar(card.content_frame, orient="vertical", command=self.activity_log_text.yview)  # type: ignore
-        self.activity_log_text.config(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side="right", fill="y")
-        self.activity_log_text.pack(side="left", fill="both", expand=True)
-        return card
-
-    # --- System Tray ---
     def _create_system_tray(self) -> None:
-        if not TRAY_AVAILABLE or not pystray:
-            return
-        with suppress(ImportError):
-            from PIL import Image, ImageDraw
-            image = Image.new('RGB', (64, 64), ModernTheme.PRIMARY_BG)
-            ImageDraw.Draw(image).rectangle((10, 10, 54, 54), fill=ModernTheme.ACCENT_BLUE)
-            menu = (pystray.MenuItem('Show/Hide', self._toggle_window, default=True), pystray.MenuItem('Quit', self._quit_app))  # type: ignore
-            self.tray_icon = pystray.Icon("ServerGUI", image, "Server GUI", menu)  # type: ignore
-            threading.Thread(target=self.tray_icon.run, daemon=True).start()  # type: ignore
+        if not TRAY_AVAILABLE or not pystray: return
+        
+        try:
+            image = Image.new('RGB', (64, 64), color=(30, 30, 30))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((10, 10, 54, 54), fill='#0d6efd') # ttkbootstrap primary blue
+            
+            menu = (
+                pystray.MenuItem('Show/Hide Command Center', self._toggle_window, default=True),
+                pystray.MenuItem('Quit Server', self._quit_app)
+            )
+            self.tray_icon = pystray.Icon("ServerGUI", image, "Encrypted Backup Server", menu)
+            threading.Thread(target=self.tray_icon.run, daemon=True).start()
+        except Exception as e:
+            print(f"[ERROR] Failed to create system tray icon: {e}")
 
     def _toggle_window(self) -> None:
         if not self.root: return
-        self.root.deiconify() if self.root.state() == 'withdrawn' else self.root.withdraw()
-
+        if self.root.state() == 'withdrawn':
+            self.root.deiconify()
+        else:
+            self.root.withdraw()
+            
     def _quit_app(self) -> None:
-        if self.tray_icon: self.tray_icon.stop()
-        if self.root: self.root.destroy()
-        self.is_running = False
+        if self.root: self._on_window_close(force=True)
 
-    # --- GUI Update Loop ---
+    def _on_window_close(self, force: bool = False) -> None:
+        is_server_running = self.server and getattr(self.server, 'running', False)
+        
+        if not force and is_server_running:
+            if not messagebox.askyesno(
+                "Confirm Exit", 
+                "The server is currently running. Are you sure you want to stop the server and exit?",
+                parent=self.root
+            ):
+                return
+                
+        if is_server_running and self.server:
+            # Run stop in a thread to avoid blocking GUI shutdown
+            threading.Thread(target=self.server.stop, daemon=True).start()
+        
+        self.shutdown()
+
+    # --- Periodic Update Loop ---
+
     def _schedule_updates(self) -> None:
         if not self.is_running: return
+        
         try:
             self._process_update_queue()
-            self._update_clock()
+            self._update_clock_and_uptime()
             self._update_performance_metrics()
-        except Exception as e: print(f"Error in GUI update loop: {e}")
-        if self.root: self.root.after(1000, self._schedule_updates)
+        except Exception as e:
+            print(f"Error in GUI update loop: {e}")
+            traceback.print_exc()
+            
+        if self.root:
+            self.root.after(1000, self._schedule_updates)
 
     def _process_update_queue(self) -> None:
         while not self.update_queue.empty():
             try:
                 msg = self.update_queue.get_nowait()
                 update_type, data = msg.get("type"), msg.get("data", {})
-                handler = getattr(self, f"_handle_{update_type}_update", None)
-                if callable(handler): handler(data)
-                elif update_type == "log": self._add_activity_log(str(data.get("message", "")))
-            except queue.Empty: break
-            except Exception as e: print(f"Error processing update queue: {e}")
+                
+                # Route the update to the correct page or handler
+                if page := self.pages.get(self.current_page_id):
+                    if hasattr(page, f"handle_{update_type}_update"):
+                        getattr(page, f"handle_{update_type}_update")(data)
+                
+                # Global handlers
+                if update_type == 'log':
+                    if log_page := self.pages.get('logs'):
+                        if hasattr(log_page, "add_log_entry"):
+                            log_page.add_log_entry(data.get("message", ""), data.get("level", "INFO"))
+                elif update_type == 'status':
+                    self._handle_global_status_update(data)
 
-    def _update_clock(self) -> None:
-        if self.clock_label: self.clock_label.config(text=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            except queue.Empty:
+                break
+            except Exception as e:
+                print(f"Error processing update queue: {e}")
+                traceback.print_exc()
 
+    def _update_clock_and_uptime(self) -> None:
+        if self.clock_label:
+            self.clock_label.config(text=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        
+        if dashboard := self.pages.get('dashboard'):
+            if hasattr(dashboard, "update_uptime"):
+                dashboard.update_uptime()
+                 
     def _update_performance_metrics(self) -> None:
-        if not all([SYSTEM_MONITOR_AVAILABLE, psutil, self.ax, self.performance_chart, self.cpu_line, self.mem_line]): return
-        cpu, mem, now = psutil.cpu_percent(), psutil.virtual_memory().percent, datetime.now()  # type: ignore
+        if not SYSTEM_MONITOR_AVAILABLE or not psutil: return
+        
+        now = datetime.now()
+        cpu = psutil.cpu_percent()
+        mem = psutil.virtual_memory().percent
+        
         self.performance_data['cpu'].append(cpu)
         self.performance_data['memory'].append(mem)
         self.performance_data['time'].append(now)
-        times = list(self.performance_data['time'])
-        if len(times) > 1:
-            self.ax.set_xlim(times[0], times[-1])  # type: ignore
-            self.cpu_line.set_data(times, list(self.performance_data['cpu']))  # type: ignore
-            self.mem_line.set_data(times, list(self.performance_data['memory']))  # type: ignore
-            self.performance_chart.draw_idle()  # type: ignore
 
-    def _handle_status_update(self, data: Dict[str, Any]) -> None:
-        self.start_time = data.get('start_time', self.start_time)
+        # Update charts on visible pages
+        try:
+            if self.pages.get('dashboard') and self.pages['dashboard'].winfo_ismapped():
+                self.pages['dashboard'].update_performance_chart(self.performance_data)
+        except (tk.TclError, AttributeError):
+            pass  # Widget may have been destroyed or not mapped
+        try:
+            if self.pages.get('analytics') and self.pages['analytics'].winfo_ismapped():
+                self.pages['analytics'].update_charts(self.performance_data)
+        except (tk.TclError, AttributeError):
+            pass  # Widget may have been destroyed or not mapped
+
+    def _handle_global_status_update(self, data: Dict[str, Any]) -> None:
+        """Updates components that are always visible, like the header."""
         running = data.get('running', False)
-        status_text, color = ("Running", ModernTheme.SUCCESS) if running else ("Stopped", ModernTheme.ERROR)
-        if 'status' in self.status_labels: self.status_labels['status'].config(text=status_text, fg=color)
-        if 'address' in self.status_labels: self.status_labels['address'].config(text=f"{data.get('address', 'N/A')}:{data.get('port', 0)}")
-        if self.header_status_label: self.header_status_label.config(text="Server Online" if running else "Server Offline")
-        if self.header_status_indicator: self.header_status_indicator.set_status("online" if running else "offline")
-        if running and self.start_time > 0 and 'uptime' in self.status_labels:
-            self.status_labels['uptime'].config(text=str(timedelta(seconds=int(time.time() - self.start_time))))
-        elif 'uptime' in self.status_labels: self.status_labels['uptime'].config(text="0:00:00")
-
-    def _handle_client_stats_update(self, data: Dict[str, Any]) -> None:
-        if 'connected' in self.status_labels: self.status_labels['connected'].config(text=str(data.get('connected', 0)))
-        if 'total' in self.status_labels: self.status_labels['total'].config(text=str(data.get('total', 0)))
-        if 'active_transfers' in self.status_labels: self.status_labels['active_transfers'].config(text=str(data.get('active_transfers', 0)))
-        if self.current_tab == 'clients': self._refresh_client_table()
-
-    def _handle_transfer_stats_update(self, data: Dict[str, Any]) -> None:
-        if 'bytes' in self.status_labels: self.status_labels['bytes'].config(text=f"{data.get('bytes_transferred', 0) / (1024*1024):.2f} MB")
-        if 'rate' in self.status_labels: self.status_labels['rate'].config(text=f"{data.get('rate_kbps', 0):.1f} KB/s")
-        if self.current_tab == 'files': self._refresh_file_table()
-
-    def _handle_maintenance_update(self, data: Dict[str, Any]) -> None:
-        last_cleanup = data.get('last_cleanup', 'Never')
-        if last_cleanup != 'Never': last_cleanup = datetime.fromisoformat(last_cleanup).strftime('%Y-%m-%d %H:%M')
-        if 'last_cleanup' in self.status_labels: self.status_labels['last_cleanup'].config(text=last_cleanup)
-        if 'files_cleaned' in self.status_labels: self.status_labels['files_cleaned'].config(text=str(data.get('files_cleaned', 0)))
-
-    def _switch_page(self, page_id: str) -> None:
-        if page_id not in self.tab_buttons: return
-        self.current_tab = page_id
-        self.settings['last_tab'] = page_id
-        for pid, btn in self.tab_buttons.items():
-            btn.configure(bg=ModernTheme.ACCENT_BLUE if pid == page_id else ModernTheme.SECONDARY_BG)
-        for content in self.tab_contents.values(): content.pack_forget()
-        self.tab_contents[page_id].pack(fill="both", expand=True)
-        refresh_map: Dict[str, Callable[[], None]] = {'clients': self._refresh_client_table, 'files': self._refresh_file_table, 'database': self._refresh_db_tables}
-        if page_id in refresh_map: refresh_map[page_id]()
-
-    def _start_server(self) -> None:
-        if not self.server: self._show_toast("Server instance not available", "error"); return
-        if self.server.running: self._show_toast("Server is already running", "warning"); return
-        threading.Thread(target=self.server.start, daemon=True).start()
-        self._show_toast("Server starting...", "info")
-
-    def _stop_server(self) -> None:
-        if not self.server: self._show_toast("Server instance not available", "error"); return
-        if not self.server.running: self._show_toast("Server is not running", "warning"); return
-        threading.Thread(target=self.server.stop, daemon=True).start()
-        self._show_toast("Server stopping...", "info")
-
-    def _restart_server(self) -> None:
-        if not self.server: self._show_toast("Server instance not available", "error"); return
-        self._show_toast("Restarting server...", "info")
-        def do_restart() -> None:
-            if self.server:
-                if self.server.running: self.server.stop(); time.sleep(2)
-                self.server.start()
-        threading.Thread(target=do_restart, daemon=True).start()
-
-    def _save_settings(self) -> None:
-        try:
-            for key, var in self.setting_vars.items(): self.settings[key] = var.get()
-            self.settings['port'] = int(self.settings['port'])
-            self.settings['max_clients'] = int(self.settings['max_clients'])
-            with open("server_gui_settings.json", 'w') as f: json.dump(self.settings, f, indent=4)
-            self._show_toast("Settings saved!", "success")
-            if self.server and self.server.running:
-                self.server.apply_settings(self.settings)
-                self._show_toast("Settings applied to running server.", "info")
-        except (ValueError, TypeError): self._show_toast("Invalid number in settings", "error")
-
-    def _on_window_close(self) -> None:
-        if messagebox.askyesno("Exit", "Exit and stop the server?"):
-            if self.server and self.server.running: self.server.stop()
-            self.shutdown()
-
-    def _on_file_drop(self, event: tk.Event) -> None:
-        if not self.root or not self.server: return
-        filepaths = self.root.tk.splitlist(getattr(event, 'data', ''))  # type: ignore
-        if not filepaths: return
-        file_list = "\n".join(f"- {os.path.basename(p)}" for p in filepaths[:5])
-        if len(filepaths) > 5: file_list += f"\n...and {len(filepaths) - 5} more"
-        if messagebox.askyesno("Upload Files", f"Add the following files?\n\n{file_list}"):
-            if hasattr(self.server, 'file_transfer_manager') and hasattr(self.server.file_transfer_manager, 'add_local_file_for_backup'):
-                for path in filepaths: self.server.file_transfer_manager.add_local_file_for_backup(path)
-                self._show_toast(f"Queued {len(filepaths)} files.", "success")
-            else: self._show_toast("Server cannot handle file drops.", "error")
-
-    def _refresh_client_table(self) -> None:
-        if not self.client_table or not self.server or not self.server.db_manager: return
-        clients_db = self.server.db_manager.get_all_clients()
-        online_ids = list(self.server.clients.keys())
-        for client in clients_db:
-            client['status'] = "Online" if bytes.fromhex(client['id']) in online_ids else "Offline"
-        self.client_table.set_data(clients_db)
-
-    def _on_client_selected(self, item: Dict[str, Any]) -> None:
-        if self.client_detail_pane: self.client_detail_pane.update_details(item)
-
-    def _build_client_context_menu(self, item: Dict[str, Any]) -> tk.Menu:
-        if not self.root: return tk.Menu()
-        menu = tk.Menu(self.root, tearoff=0, bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_PRIMARY, activebackground=ModernTheme.ACCENT_BLUE)
-        if self.client_detail_pane: menu.add_command(label=f"{Icons.get('info')} Show Details", command=lambda: self.client_detail_pane.update_details(item))  # type: ignore
-        if item.get('status') == 'Online': menu.add_command(label=f"{Icons.get('disconnect')} Disconnect", command=lambda: self._disconnect_client(item['id']))
-        return menu
-
-    def _disconnect_client(self, client_id_hex: str) -> None:
-        if self.server and self.server.network_server:
-            if self.server.network_server.disconnect_client(bytes.fromhex(client_id_hex)): self._show_toast("Client disconnected.", "success")
-            else: self._show_toast("Failed to disconnect client.", "error")
-
-    def _refresh_file_table(self) -> None:
-        if not self.file_table or not self.server or not self.server.db_manager: return
-        files_db = self.server.db_manager.get_all_files()
-        for f in files_db:
-            f['size_mb'] = f"{f.get('size_bytes', 0) / (1024*1024):.3f}"
-            f['verified'] = "Yes" if f.get('verified') else "No"
-        self.file_table.set_data(files_db)
-
-    def _on_file_selected(self, item: Dict[str, Any]) -> None:
-        if self.file_detail_pane: self.file_detail_pane.update_details(item)
-
-    def _build_file_context_menu(self, item: Dict[str, Any]) -> tk.Menu:
-        if not self.root: return tk.Menu()
-        menu = tk.Menu(self.root, tearoff=0, bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_PRIMARY, activebackground=ModernTheme.ACCENT_BLUE)
-        if self.file_detail_pane: menu.add_command(label=f"{Icons.get('info')} Show Details", command=lambda: self.file_detail_pane.update_details(item))  # type: ignore
-        menu.add_command(label=f"{Icons.get('delete')} Delete File", command=lambda: self._delete_file(item))
-        return menu
-
-    def _delete_file(self, file_info: Dict[str, Any]) -> None:
-        if not self.server or not self.server.db_manager: return
-        if not messagebox.askyesno("Confirm Delete", f"Permanently delete {file_info['filename']}?"): return
-        if self.server.db_manager.delete_file(file_info['client_id'], file_info['filename']):
-            self._show_toast("File deleted.", "success")
-            self._refresh_file_table()
-        else: self._show_toast("Failed to delete file.", "error")
-
-    def _refresh_db_tables(self) -> None:
-        if not self.db_table_selector: return
-        db_manager = self.effective_db_manager
-        if not db_manager: 
-            self._show_toast("Database not available", "error")
+        if running:
+            self.header_status_label.config(text="Server Online")
+            self.header_status_pill.config(text="ONLINE", bootstyle="success-inverse")
+        else:
+            self.header_status_label.config(text="Server Offline")
+            self.header_status_pill.config(text="OFFLINE", bootstyle="danger-inverse")
+            
+        # Update dashboard regardless of visibility
+        if dashboard := self.pages.get('dashboard'):
+            if hasattr(dashboard, 'handle_status_update'):
+                dashboard.handle_status_update(data)
+             
+    def _play_audio_cue(self, event_name: str) -> None:
+        """Plays a sound effect for a specific event if enabled."""
+        if not PLAYSOUND_AVAILABLE or not self.settings.get('audio_cues'):
             return
-        try:
-            tables = db_manager.get_table_names()
-            self.db_table_selector['values'] = tables
-            if tables:
-                self.db_table_selector.set(tables[0])
-                self._on_db_table_select()
-        except Exception as e: self._show_toast(f"DB Error: {e}", "error")
+            
+        sound_map = {
+            'startup': 'sounds/startup.wav',
+            'success': 'sounds/success.wav',
+            'failure': 'sounds/failure.wav',
+            'connect': 'sounds/connect.wav',
+            'disconnect': 'sounds/disconnect.wav',
+        }
+        
+        if sound_file := sound_map.get(event_name):
+            # Create dummy sound files if they don't exist
+            # In a real app, these would be packaged
+            sounds_dir = "sounds"
+            if not os.path.exists(sounds_dir): os.makedirs(sounds_dir)
+            sound_path = os.path.join(sounds_dir, f"{event_name}.wav")
+            if not os.path.exists(sound_path):
+                print(f"[INFO] Audio file not found: {sound_path}. Skipping.")
+                # You would create a placeholder WAV here if needed for testing
+                return
 
-    def _on_db_table_select(self, event: Optional[tk.Event] = None) -> None:
-        if not self.db_table_selector or not self.db_table: return
-        db_manager = self.effective_db_manager
-        if not db_manager: 
-            self._show_toast("Database not available", "error")
-            return
-        table_name = self.db_table_selector.get()
-        try:
-            self._rebuild_database_table(db_manager, table_name)
-        except Exception as e: 
-            self._show_toast(f"DB Error: {e}", "error")
-
-    def _rebuild_database_table(self, db_manager: Any, table_name: str) -> None:
-        """Rebuild the database table with new data."""
-        columns, data = db_manager.get_table_content(table_name)
-        table_cols: Dict[str, Dict[str, Any]] = {col: {'text': col, 'width': 120} for col in columns}
-        parent = self.db_table.master  # type: ignore
-        if self.db_table is not None:
-            self.db_table.destroy()
-        self.db_table = ModernTable(parent, table_cols)  # type: ignore
-        self.db_table.pack(fill="both", expand=True)
-        self.db_table.set_data(data)
-
-    def _add_activity_log(self, message: str) -> None:
-        if not self.activity_log_text: return
-        log_entry = f"[{datetime.now().strftime('%H:%M:%S')}] {message}\n"
-        self.activity_log_text.config(state=tk.NORMAL)
-        self.activity_log_text.insert(tk.END, log_entry)
-        self.activity_log_text.see(tk.END)
-        self.activity_log_text.config(state=tk.DISABLED)
-
-    def _load_settings(self) -> Dict[str, Any]:
-        defaults: Dict[str, Any] = {'port': 1256, 'storage_dir': 'received_files', 'max_clients': 50,
-                    'session_timeout': 10, 'maintenance_interval': 60, 'last_tab': 'dashboard'}
-        with suppress(FileNotFoundError, json.JSONDecodeError):
-            with open("server_gui_settings.json", 'r') as f:
-                defaults |= json.load(f)
-        return defaults
-
-    def _backup_database(self) -> None:
-        if not self.server or not self.server.db_manager: self._show_toast("Server not available.", "error"); return
-        db_path = self.server.db_manager.db_path
-        if backup_path := filedialog.asksaveasfilename(defaultextension=".db",
-            initialfile=f"backup_{datetime.now().strftime('%Y%m%d')}.db", filetypes=[("Database files", "*.db")]):
             try:
-                shutil.copy2(db_path, backup_path)
-                self._show_toast(f"Database backed up to {backup_path}", "success")
-            except Exception as e: self._show_toast(f"Backup failed: {e}", "error")
-
-    def _show_toast(self, message: str, level: str = "info") -> None:
-        if self.toast_system: self.toast_system.show_toast(message, level)
-
-    # Integration methods required by gui_integration.py
-    def update_server_status(self, running: bool, address: str, port: int) -> None:
-        """Update server status display in the GUI."""
-        data = {
-            'running': running,
-            'address': address,
-            'port': port,
-            'start_time': self.start_time
-        }
-        self._handle_status_update(data)
-        
-    def update_client_stats(self, stats_data: Dict[str, Any]) -> None:
-        """Update client statistics display in the GUI."""
-        # Ensure expected keys exist with defaults
-        processed_data = {
-            'connected': stats_data.get('connected', 0),
-            'total': stats_data.get('total', 0),
-            'active_transfers': stats_data.get('active_transfers', 0)
-        }
-        self._handle_client_stats_update(processed_data)
-        
-    def update_transfer_stats(self, stats_data: Dict[str, Any]) -> None:
-        """Update transfer statistics display in the GUI."""
-        # Process the data to match expected format
-        processed_data = {
-            'bytes_transferred': stats_data.get('bytes_transferred', 0),
-            'rate_kbps': stats_data.get('rate_kbps', 0.0),
-            'last_activity': stats_data.get('last_activity', '')
-        }
-        self._handle_transfer_stats_update(processed_data)
-        
-    def update_maintenance_stats(self, stats: Dict[str, Any]) -> None:
-        """Update maintenance statistics display in the GUI."""
-        # For now, just log maintenance stats as there's no specific handler yet
-        print(f"[GUI] Maintenance stats update: {stats}")
-        # TODO: Implement _handle_maintenance_stats_update if needed
+                # Run in a separate thread to prevent blocking the GUI
+                threading.Thread(target=playsound, args=(sound_path,), daemon=True).start()
+            except Exception as e:
+                print(f"[ERROR] Could not play sound {sound_path}: {e}")
 
     def sync_current_server_state(self) -> None:
         """Synchronize GUI with current server state on initialization."""
-        if not self.server:
-            return
-            
-        # Update server status based on current server state
-        running = getattr(self.server, 'running', False)
-        address = getattr(self.server, 'host', '0.0.0.0')
-        port = getattr(self.server, 'port', 1256)
+        if not self.server: return
         
-        self.update_server_status(running, address, port)
+        status_data = {
+            'running': getattr(self.server, 'running', False),
+            'address': getattr(self.server, 'host', '0.0.0.0'),
+            'port': getattr(self.server, 'port', 1256),
+            'start_time': getattr(self.server, 'start_time', 0)
+        }
+        self.update_server_status(status_data)
         
-        # Update client stats if database is available
-        if hasattr(self.server, 'db_manager') and self.server.db_manager:
+        # Add more state syncs as needed
+    
+    @property
+    def db_manager(self) -> Optional[ActualDBManager]:
+        """Provides access to the database manager, with a fallback for standalone mode."""
+        if self.server and hasattr(self.server, 'db_manager'):
+            return self.server.db_manager
+        
+        if not DatabaseManager: return None
+        
+        if not self._fallback_db_manager:
             try:
-                # Get total clients from database
-                total_clients = len(self.server.db_manager.get_all_clients())
-                connected_clients = len(getattr(self.server, 'client_connections', {}))
-                
-                self.update_client_stats({
-                    'connected': connected_clients,
-                    'total': total_clients,
-                    'active_transfers': 0  # TODO: Get actual active transfers
-                })
+                self._fallback_db_manager = DatabaseManager()
             except Exception as e:
-                print(f"[GUI] Error syncing client stats: {e}")
+                print(f"[ERROR] Could not create fallback DatabaseManager: {e}")
+        return self._fallback_db_manager
+
+
+# --- Page/View Classes ---
+
+FrameBase = ttk_bootstrap.Frame if TTK_BOOTSTRAP_AVAILABLE else std_ttk.Frame
+
+class BasePage(FrameBase):
+    """Base class for all pages to ensure consistency."""
+    def __init__(self, parent: tk.Widget, controller: EnhancedServerGUI) -> None:
+        super().__init__(parent)
+        self.controller = controller
+
+    def on_show(self) -> None:
+        """Called when the page is switched to. Override in subclasses."""
+        pass
+        
+class StatCard(FrameBase):
+    """A reusable card for displaying a title and key-value statistics."""
+    def __init__(self, parent: tk.Widget, title: str, **kwargs: Any) -> None:
+        card_style = {"padding": 15, "bootstyle": "light"} if TTK_BOOTSTRAP_AVAILABLE else {"relief": "raised", "borderwidth": 1}
+        card_style.update(kwargs)
+        super().__init__(parent, **card_style)
+        
+        # LabelClass is now defined globally
+        self.labels: Dict[str, LabelClass] = {}
+        
+        title_style = {"bootstyle": "inverse-light"} if TTK_BOOTSTRAP_AVAILABLE else {"font": "-family {Segoe UI} -size 12 -weight bold"}
+        LabelClass(self, text=title, font="-family {Segoe UI} -size 12 -weight bold", **title_style).pack(fill=tk.X, pady=(0, 10))
+        
+    def add_stat(self, key: str, label_text: str, default_value: str = "N/A") -> None:
+        # FrameClass is now defined globally
+        # LabelClass is now defined globally
+        
+        row_style = {"bootstyle": "light"} if TTK_BOOTSTRAP_AVAILABLE else {}
+        row = FrameClass(self, **row_style)
+        row.pack(fill=tk.X, pady=2)
+        
+        label_style = {"bootstyle": "secondary"} if TTK_BOOTSTRAP_AVAILABLE else {}
+        LabelClass(row, text=f"{label_text}:", **label_style).pack(side=tk.LEFT)
+        
+        self.labels[key] = LabelClass(row, text=default_value, font="-family {Segoe UI} -size 10 -weight bold")
+        self.labels[key].pack(side=tk.RIGHT)
+        
+    def update_stat(self, key: str, value: str, style: Optional[str] = None) -> None:
+        if key in self.labels:
+            self.labels[key].config(text=value)
+            if style and TTK_BOOTSTRAP_AVAILABLE:
+                self.labels[key].config(bootstyle=style)
+            
+            # Flash effect - only for ttkbootstrap
+            if TTK_BOOTSTRAP_AVAILABLE:
+                try:
+                    original_style = self.cget('bootstyle')
+                    self.config(bootstyle="info")
+                    self.after(300, lambda: self.config(bootstyle=original_style))
+                except Exception:
+                    pass  # Skip flash effect if it fails
+
+class DashboardPage(BasePage):
+    def __init__(self, parent: tk.Widget, controller: EnhancedServerGUI) -> None:
+        super().__init__(parent, controller)
+        self.start_time = 0.0
+        self._create_widgets()
+
+    def _create_widgets(self) -> None:
+        # Configure grid layout
+        self.columnconfigure(0, weight=2, uniform="dashboard")
+        self.columnconfigure(1, weight=1, uniform="dashboard")
+        self.rowconfigure(0, weight=1)
+        self.rowconfigure(1, weight=2)
+
+        # Top-Left: Status Cards
+        # FrameClass is now defined globally
+        status_panel = FrameClass(self)
+        status_panel.grid(row=0, column=0, sticky=tk.NSEW, padx=(0, 5), pady=(0, 5))
+        status_panel.rowconfigure(0, weight=1); status_panel.rowconfigure(1, weight=1)
+        status_panel.columnconfigure(0, weight=1); status_panel.columnconfigure(1, weight=1)
+        self._create_status_cards(status_panel)
+
+        # Top-Right: Control Panel
+        self._create_control_panel().grid(row=0, column=1, sticky=tk.NSEW, padx=(5, 0), pady=(0, 5))
+
+        # Bottom-Left: Performance Chart
+        self._create_performance_chart().grid(row=1, column=0, sticky=tk.NSEW, padx=(0, 5), pady=(5, 0))
+
+        # Bottom-Right: Activity Log Ticker
+        self._create_activity_ticker().grid(row=1, column=1, sticky=tk.NSEW, padx=(5, 0), pady=(5, 0))
+        
+    def _create_status_cards(self, parent: ttk.Frame) -> None:
+        self.server_card = StatCard(parent, "Server Status")
+        self.server_card.add_stat("status", "Status", "Stopped")
+        self.server_card.add_stat("address", "Address")
+        self.server_card.add_stat("uptime", "Uptime", "00:00:00")
+        self.server_card.grid(row=0, column=0, sticky=tk.NSEW, padx=5, pady=5)
+        
+        self.client_card = StatCard(parent, "Client Stats")
+        self.client_card.add_stat("connected", "Connected", "0")
+        self.client_card.add_stat("total", "Total", "0")
+        self.client_card.add_stat("active_transfers", "Active Transfers", "0")
+        self.client_card.grid(row=0, column=1, sticky=tk.NSEW, padx=5, pady=5)
+        
+        self.transfer_card = StatCard(parent, "Transfer Stats")
+        self.transfer_card.add_stat("rate", "Transfer Rate", "0 KB/s")
+        self.transfer_card.add_stat("total_transferred", "Total Transferred", "0 MB")
+        self.transfer_card.grid(row=1, column=0, sticky=tk.NSEW, padx=5, pady=5)
+        
+        self.maint_card = StatCard(parent, "Maintenance")
+        self.maint_card.add_stat("last_cleanup", "Last Cleanup", "Never")
+        self.maint_card.add_stat("files_cleaned", "Files Cleaned", "0")
+        self.maint_card.grid(row=1, column=1, sticky=tk.NSEW, padx=5, pady=5)
+
+    def _create_control_panel(self):
+        # FrameClass is now defined globally
+        # LabelClass is now defined globally
+        # ButtonClass is now defined globally
+        
+        card_style = {"padding": 15, "bootstyle": "light"} if TTK_BOOTSTRAP_AVAILABLE else {"relief": "raised", "borderwidth": 1}
+        card = FrameClass(self, **card_style)
+        
+        label_style = {"bootstyle": "inverse-light"} if TTK_BOOTSTRAP_AVAILABLE else {}
+        LabelClass(card, text="Control Panel", font="-family {Segoe UI} -size 12 -weight bold", **label_style).pack(fill=tk.X, pady=(0, 10))
+
+        btn_frame_style = {"bootstyle": "light"} if TTK_BOOTSTRAP_AVAILABLE else {}
+        btn_frame = FrameClass(card, **btn_frame_style)
+        btn_frame.pack(fill=tk.BOTH, expand=True)
+        btn_frame.columnconfigure((0, 1), weight=1)
+        btn_frame.rowconfigure((0, 1, 2), weight=1)
+
+        # Create buttons with conditional styling
+        start_style = {"bootstyle": "success"} if TTK_BOOTSTRAP_AVAILABLE else {"bg": "green", "fg": "white"}
+        stop_style = {"bootstyle": "danger"} if TTK_BOOTSTRAP_AVAILABLE else {"bg": "red", "fg": "white"}
+        restart_style = {"bootstyle": "warning"} if TTK_BOOTSTRAP_AVAILABLE else {"bg": "orange", "fg": "white"}
+        db_style = {"bootstyle": "info-outline"} if TTK_BOOTSTRAP_AVAILABLE else {"bg": "lightblue"}
+        exit_style = {"bootstyle": "secondary-outline"} if TTK_BOOTSTRAP_AVAILABLE else {"bg": "lightgray"}
+        
+        self.start_btn = ButtonClass(btn_frame, text="Start", command=lambda: self._handle_start_server(), **start_style)
+        self.stop_btn = ButtonClass(btn_frame, text="Stop", state=tk.DISABLED, command=lambda: self._handle_stop_server(), **stop_style)
+        self.restart_btn = ButtonClass(btn_frame, text="Restart", state=tk.DISABLED, command=lambda: self._handle_restart_server(), **restart_style)
+        db_btn = ButtonClass(btn_frame, text="Backup DB", command=lambda: self._handle_backup_db(), **db_style)
+        exit_btn = ButtonClass(btn_frame, text="Exit GUI", command=self.controller._on_window_close, **exit_style)
+
+        self.start_btn.grid(row=0, column=0, sticky=tk.NSEW, padx=2, pady=2)
+        self.stop_btn.grid(row=0, column=1, sticky=tk.NSEW, padx=2, pady=2)
+        self.restart_btn.grid(row=1, column=0, columnspan=2, sticky=tk.NSEW, padx=2, pady=2)
+        db_btn.grid(row=2, column=0, sticky=tk.NSEW, padx=2, pady=2)
+        exit_btn.grid(row=2, column=1, sticky=tk.NSEW, padx=2, pady=2)
+        return card
+
+    def _create_performance_chart(self):
+        # FrameClass is now defined globally
+        # LabelClass is now defined globally
+        
+        card_style = {"padding": 15, "bootstyle": "light"} if TTK_BOOTSTRAP_AVAILABLE else {"relief": "raised", "borderwidth": 1}
+        card = FrameClass(self, **card_style)
+        
+        label_style = {"bootstyle": "inverse-light"} if TTK_BOOTSTRAP_AVAILABLE else {}
+        LabelClass(card, text="Live System Performance", font="-family {Segoe UI} -size 12 -weight bold", **label_style).pack(fill=tk.X, pady=(0, 10))
+        
+        if not CHARTS_AVAILABLE or not FigureCanvasTkAgg:
+            fallback_style = {"bootstyle": "secondary"} if TTK_BOOTSTRAP_AVAILABLE else {}
+            LabelClass(card, text="Charts disabled: matplotlib not found.", **fallback_style).pack(expand=True)
+            self.chart_canvas = None
+            return card
+
+        if TTK_BOOTSTRAP_AVAILABLE:
+            style = ttk_bootstrap.Style.get_instance()
+            theme_colors = style.colors
+        else:
+            # Fallback colors for standard tkinter
+            theme_colors = {
+                'light': '#ffffff',
+                'bg': '#f8f9fa',
+                'fg': '#000000',
+                'border': '#dee2e6',
+                'info': '#0dcaf0',
+                'success': '#198754'
+            }
+
+        self.fig = Figure(figsize=(5, 2.5), dpi=100, facecolor=theme_colors.get('light'))
+        self.ax = self.fig.add_subplot(111)
+        
+        self.fig.autofmt_xdate()
+        self.ax.set_facecolor(theme_colors.get('bg'))
+        self.ax.tick_params(colors=theme_colors.get('fg'), labelsize=8)
+        self.ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+
+        for spine in self.ax.spines.values():
+            spine.set_color(theme_colors.get('border'))
+        
+        self.fig.tight_layout(pad=2)
+        
+        self.cpu_line, = self.ax.plot([], [], color=theme_colors.get('info'), lw=2, label="CPU %")
+        self.mem_line, = self.ax.plot([], [], color=theme_colors.get('success'), lw=2, label="Memory %")
+        
+        self.ax.set_ylim(0, 100)
+        self.ax.legend(loc='upper left', fontsize=8, facecolor=theme_colors.get('light'), labelcolor=theme_colors.get('fg'), frameon=False)
+        
+        self.chart_canvas = FigureCanvasTkAgg(self.fig, master=card)
+        self.chart_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        return card
+
+    def _create_activity_ticker(self):
+        # FrameClass is now defined globally
+        # LabelClass is now defined globally
+        
+        card_style = {"padding": 15, "bootstyle": "light"} if TTK_BOOTSTRAP_AVAILABLE else {"relief": "raised", "borderwidth": 1}
+        card = FrameClass(self, **card_style)
+        
+        label_style = {"bootstyle": "inverse-light"} if TTK_BOOTSTRAP_AVAILABLE else {}
+        LabelClass(card, text="Recent Activity", font="-family {Segoe UI} -size 12 -weight bold", **label_style).pack(fill=tk.X, pady=(0, 10))
+        
+        if TTK_BOOTSTRAP_AVAILABLE and ScrolledText:
+            scroll_style = {"padding": 10, "hbar": False, "bootstyle": "round"}
+            self.activity_text = ScrolledText(card, **scroll_style)
+            self.activity_text.pack(fill=tk.BOTH, expand=True)
+            # ttkbootstrap ScrolledText doesn't support state configuration
+            # So we'll disable editing by binding to ignore key events
+            try:
+                self.activity_text.configure(state=tk.DISABLED)
+            except tk.TclError:
+                # If state option not supported, make it read-only by binding events
+                self.activity_text.bind("<Key>", lambda e: "break")
+                self.activity_text.bind("<Button-1>", lambda e: self.activity_text.focus_set())
+        else:
+            # Fallback to standard Text widget with scrollbar
+            text_frame = FrameClass(card)
+            text_frame.pack(fill=tk.BOTH, expand=True)
+            self.activity_text = tk.Text(text_frame, wrap=tk.WORD)
+            scrollbar = std_ttk.Scrollbar(text_frame, orient=tk.VERTICAL, command=self.activity_text.yview)
+            self.activity_text.configure(yscrollcommand=scrollbar.set)
+            self.activity_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            self.activity_text.pack(fill=tk.BOTH, expand=True)
+            self.activity_text.configure(state=tk.DISABLED)
+        return card
+
+    def handle_status_update(self, data: Dict[str, Any]) -> None:
+        self.start_time = data.get('start_time', self.start_time)
+        running = data.get('running', False)
+        status_text, style = ("Running", "success") if running else ("Stopped", "danger")
+        
+        self.server_card.update_stat("status", status_text, style)
+        self.server_card.update_stat("address", f"{data.get('address', 'N/A')}:{data.get('port', 0)}")
+        
+        self.start_btn.config(state=tk.DISABLED if running else tk.NORMAL)
+        self.stop_btn.config(state=tk.NORMAL if running else tk.DISABLED)
+        self.restart_btn.config(state=tk.NORMAL if running else tk.DISABLED)
+        
+        if not running:
+            self.update_uptime()
+
+    def handle_client_stats_update(self, data: Dict[str, Any]) -> None:
+        self.client_card.update_stat("connected", str(data.get('connected', 0)))
+        self.client_card.update_stat("total", str(data.get('total', 0)))
+        self.client_card.update_stat("active_transfers", str(data.get('active_transfers', 0)))
+
+    def handle_transfer_stats_update(self, data: Dict[str, Any]) -> None:
+        rate = data.get('rate_kbps', 0.0)
+        total = data.get('bytes_transferred', 0) / (1024*1024)
+        self.transfer_card.update_stat("rate", f"{rate:.1f} KB/s")
+        self.transfer_card.update_stat("total_transferred", f"{total:.2f} MB")
+        
+    def handle_maintenance_update(self, data: Dict[str, Any]) -> None:
+        last_cleanup = data.get('last_cleanup', 'Never')
+        if isinstance(last_cleanup, str) and last_cleanup != 'Never':
+            try:
+                last_cleanup = datetime.fromisoformat(last_cleanup).strftime('%Y-%m-%d %H:%M')
+            except ValueError:
+                pass # Keep original string if format is unexpected
+        self.maint_card.update_stat("last_cleanup", str(last_cleanup))
+        self.maint_card.update_stat("files_cleaned", str(data.get('files_cleaned', 0)))
+
+    def update_uptime(self) -> None:
+        uptime_str = "00:00:00"
+        is_server_running = self.start_time > 0
+        if is_server_running:
+            delta = timedelta(seconds=int(time.time() - self.start_time))
+            uptime_str = str(delta)
+        self.server_card.update_stat("uptime", uptime_str)
+
+    def update_performance_chart(self, data: Dict[str, Deque[Any]]) -> None:
+        if not self.chart_canvas or not self.ax: return
+        
+        times = list(data['time'])
+        if len(times) > 1:
+            self.ax.set_xlim(times[0], times[-1])
+            self.cpu_line.set_data(times, list(data['cpu']))
+            self.mem_line.set_data(times, list(data['memory']))
+            self.chart_canvas.draw_idle()
+            
+    def _handle_start_server(self) -> None:
+        """Handle start server button click"""
+        self.controller._play_audio_cue("startup")
+        # TODO: Add actual server start logic
+        
+    def _handle_stop_server(self) -> None:
+        """Handle stop server button click"""
+        self.controller._play_audio_cue("disconnect")
+        # TODO: Add actual server stop logic
+        
+    def _handle_restart_server(self) -> None:
+        """Handle restart server button click"""
+        self.controller._play_audio_cue("startup")
+        # TODO: Add actual server restart logic
+        
+    def _handle_backup_db(self) -> None:
+        """Handle backup database button click"""
+        self.controller._play_audio_cue("success")
+        # TODO: Add actual database backup logic
+
+class ClientsPage(BasePage):
+    def __init__(self, parent: tk.Widget, controller: EnhancedServerGUI) -> None:
+        super().__init__(parent, controller)
+        # LabelClass is now defined globally
+        LabelClass(self, text="Clients Page - Content Coming Soon", font="-size 20").pack(expand=True)
+        # TODO: Implement tksheet and Master-Detail view
+        
+    def on_show(self) -> None:
+        print("Switched to Clients Page. Refreshing data...")
+        # self.refresh_client_data()
+
+class AnalyticsPage(BasePage):
+    def __init__(self, parent: tk.Widget, controller: EnhancedServerGUI) -> None:
+        super().__init__(parent, controller)
+        # LabelClass is now defined globally
+        LabelClass(self, text="Analytics Page - Content Coming Soon", font="-size 20").pack(expand=True)
+        # TODO: Implement multiple, larger matplotlib charts
+        
+    def update_charts(self, data: Dict[str, Deque[Any]]) -> None:
+        # Placeholder for updating detailed charts on this page
+        pass
+
+class SettingsPage(BasePage):
+    def __init__(self, parent: tk.Widget, controller: EnhancedServerGUI) -> None:
+        super().__init__(parent, controller)
+        self.setting_vars: Dict[str, tk.StringVar] = {}
+        self._create_widgets()
+
+    def _create_widgets(self) -> None:
+        if TTK_BOOTSTRAP_AVAILABLE and ScrolledFrame:
+            scrolled_frame = ScrolledFrame(self, autohide=True)
+        else:
+            # Fallback to regular frame with scrollbars
+            canvas = tk.Canvas(self)
+            scrollbar = std_ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
+            scrolled_frame = std_ttk.Frame(canvas)
+            canvas.configure(yscrollcommand=scrollbar.set)
+            canvas.create_window((0, 0), window=scrolled_frame, anchor="nw")
+            canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=20, pady=20)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            # For now, just use a simple frame
+            scrolled_frame = (ttk_bootstrap.Frame if TTK_BOOTSTRAP_AVAILABLE else std_ttk.Frame)(self)
+            
+        scrolled_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # General Settings Card
+        # FrameClass is now defined globally
+        # LabelClass is now defined globally
+        # EntryClass is now defined globally
+        # ButtonClass is now defined globally
+        
+        card_style = {"padding": 20, "bootstyle": "light"} if TTK_BOOTSTRAP_AVAILABLE else {"relief": "raised", "borderwidth": 1}
+        general_card = FrameClass(scrolled_frame, **card_style)
+        general_card.pack(fill=tk.X, pady=(0, 15))
+        LabelClass(general_card, text="Server Configuration", font="-size 14 -weight bold").pack(anchor=tk.W, pady=(0, 10))
+        
+        settings_to_display = {
+            'port': "Server Port", 'storage_dir': "Storage Directory", 'max_clients': "Max Clients",
+            'session_timeout': "Session Timeout (min)", 'maintenance_interval': "Maintenance Interval (sec)"
+        }
+        for key, label in settings_to_display.items():
+            self._create_setting_entry(general_card, key, label)
+
+        # UI Settings Card
+        ui_card = FrameClass(scrolled_frame, **card_style)
+        ui_card.pack(fill=tk.X, pady=(0, 15))
+        LabelClass(ui_card, text="Interface Settings", font="-size 14 -weight bold").pack(anchor=tk.W, pady=(0, 10))
+        
+        # Theme Selector
+        theme_frame = FrameClass(ui_card)
+        theme_frame.pack(fill=tk.X, pady=5)
+        LabelClass(theme_frame, text="Theme:", width=25, anchor=tk.W).pack(side=tk.LEFT)
+        theme_names = []
+        theme_names = ['cyborg', 'darkly', 'flatly', 'journal', 'litera']  # default themes
+        if TTK_BOOTSTRAP_AVAILABLE and self.controller.root and hasattr(self.controller.root, 'style'):
+            try:
+                theme_names = self.controller.root.style.theme_names()
+            except Exception:
+                pass  # Use default themes
                 
-        # Update database display if on database tab
-        if self.current_tab == 'database':
-            self._refresh_db_tables()
+        ComboboxClass = ttk_bootstrap.Combobox if TTK_BOOTSTRAP_AVAILABLE else std_ttk.Combobox
+        self.theme_combo = ComboboxClass(theme_frame, values=theme_names, state="readonly")
+        self.theme_combo.set(self.controller.settings.get('theme'))
+        self.theme_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
+        # Audio Cues Toggle
+        self.audio_var = tk.BooleanVar(value=self.controller.settings.get('audio_cues'))
+        CheckbuttonClass = ttk_bootstrap.Checkbutton if TTK_BOOTSTRAP_AVAILABLE else std_ttk.Checkbutton
+        check_style = {"bootstyle": "primary-round-toggle"} if TTK_BOOTSTRAP_AVAILABLE else {}
+        audio_check = CheckbuttonClass(ui_card, variable=self.audio_var, text="Enable Audio Cues", **check_style)
+        audio_check.pack(anchor=tk.W, pady=10)
 
+        # Save Button
+        save_style = {"bootstyle": "success"} if TTK_BOOTSTRAP_AVAILABLE else {"bg": "green", "fg": "white"}
+        save_btn = ButtonClass(scrolled_frame, text="Save Settings", command=self._save_settings, **save_style)
+        save_btn.pack(anchor=tk.E, pady=10)
+
+    def _create_setting_entry(self, parent, key: str, label: str) -> None:
+        # FrameClass is now defined globally
+        # LabelClass is now defined globally
+        # EntryClass is now defined globally
+        
+        frame = FrameClass(parent)
+        frame.pack(fill=tk.X, pady=5)
+        LabelClass(frame, text=f"{label}:", width=25, anchor=tk.W).pack(side=tk.LEFT)
+        
+        var = tk.StringVar(value=str(self.controller.settings.get(key, '')))
+        self.setting_vars[key] = var
+        
+        entry = EntryClass(frame, textvariable=var)
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+    def _save_settings(self) -> None:
+        try:
+            # Save server settings
+            for key, var in self.setting_vars.items():
+                self.controller.settings.set(key, var.get())
+            # Coerce numerical settings
+            self.controller.settings.set('port', int(self.controller.settings.get('port')))
+            self.controller.settings.set('max_clients', int(self.controller.settings.get('max_clients')))
+
+            # Save UI settings
+            self.controller.settings.set('theme', self.theme_combo.get())
+            self.controller.settings.set('audio_cues', self.audio_var.get())
+
+            if self.controller.settings.save():
+                if self.controller.toast:
+                    self.controller.toast.show_toast("Settings Saved!", "Settings have been successfully saved.")
+                else:
+                    print("[INFO] Settings saved successfully.")
+                # Apply theme change if different
+                current_theme = None
+                if self.controller.root and hasattr(self.controller.root, 'style') and self.controller.root.style:
+                    try:
+                        current_theme = self.controller.root.style.theme_use()
+                    except Exception:
+                        current_theme = None
+                if self.controller.root and current_theme and current_theme != self.theme_combo.get():
+                    messagebox.showinfo("Theme Change", "Theme will be applied on next application restart.", parent=self.controller.root)
+            else:
+                if self.controller.toast:
+                    try:
+                        self.controller.toast.show_toast("Error Saving", "Could not save settings to file.", bootstyle="danger")
+                    except Exception:
+                        print("[ERROR] Could not save settings to file.")
+                else:
+                    print("[ERROR] Could not save settings to file.")
+
+        except (ValueError, TypeError) as e:
+            if self.controller.toast:
+                try:
+                    self.controller.toast.show_toast("Invalid Input", f"Please check your settings. Error: {e}", bootstyle="danger")
+                except Exception:
+                    print(f"[ERROR] Invalid input in settings: {e}")
+            else:
+                print(f"[ERROR] Invalid input in settings: {e}")
+
+# --- Standalone Execution ---
 def launch_standalone() -> None:
     print("[INFO] Launching Server GUI in standalone mode...")
-    gui = ServerGUI()
+    gui = EnhancedServerGUI()
     if gui.initialize():
         try:
-            if gui.gui_thread: gui.gui_thread.join()
+            # The main thread waits for the GUI thread to finish
+            if gui.gui_thread:
+                gui.gui_thread.join()
         except KeyboardInterrupt:
             print("\n[INFO] Shutdown signal received.")
             gui.shutdown()
@@ -1080,4 +1375,5 @@ def launch_standalone() -> None:
     print("[INFO] Application has exited.")
 
 if __name__ == "__main__":
+    # Ensure this runs only when the script is executed directly
     launch_standalone()
