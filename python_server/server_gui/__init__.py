@@ -1,12 +1,18 @@
+# -*- coding: utf-8 -*-
 """
-Python Server GUI Package
+server_gui - A modern, modular GUI package for the Encrypted Backup Server.
+this init path is :C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\python_server\server_gui\__init__.py
+This package provides the main application shell and all related UI components
+for monitoring and managing the backup server.
 
-This package provides modern GUI components for the backup server including:
-- EnhancedServerGUI: Main server GUI application  
-- Modern UI components with consistent theming
-- Real-time status monitoring and progress tracking
+The primary public component is the `ServerGUI` class, which can be
+imported directly from this package:
+
+    from server_gui import ServerGUI
+
+    gui = ServerGUI(server_instance)
+    gui.run()
 """
-
 import tkinter as tk
 from tkinter import ttk
 from typing import Optional, Callable, Any, Dict, List, Union
@@ -14,6 +20,9 @@ import threading
 import time
 from datetime import datetime
 
+# --- Critical: Ensure UTF-8 Support ---
+# This import is crucial for consistent encoding across the application,
+# especially when handling file paths, logs, and international characters.
 # Import UTF-8 support for international characters and emojis
 try:
     import Shared.utils.utf8_solution  # 🚀 UTF-8 support enabled automatically
@@ -21,45 +30,18 @@ except ImportError:
     try:
         import sys
         import os
+          # Add the project root to the path to find the 'Shared' module
         sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
         import Shared.utils.utf8_solution  # 🚀 UTF-8 support enabled automatically
     except ImportError:
-        pass  # Continue without UTF-8 support if not available
+        print("[WARNING] Could not enable the project-wide UTF-8 solution.")
+        
+# --- Public API ---
+# We only expose the main ServerGUI class from the top level of the package.
+# All other components (pages, widgets) are considered internal implementation details.
+from .ServerGUI import ServerGUI
 
-# Import components from ServerGUI module including the main EnhancedServerGUI class
-from .ServerGUI import (
-    EnhancedServerGUI,  # ← REAL EnhancedServerGUI class imported here
-    AppSettings,
-    FramelessWindow,
-    BasePage,
-    StatCard,
-    DashboardPage,
-    ClientsPage,
-    AnalyticsPage,
-    SettingsPage,
-    CHARTS_AVAILABLE, 
-    SYSTEM_MONITOR_AVAILABLE, 
-    TRAY_AVAILABLE,
-    CALENDAR_AVAILABLE,
-    PROCESS_MONITOR_AVAILABLE,
-    launch_standalone
-)
-
-# Export all components
+# The __all__ list defines the public API of the package.
 __all__ = [
-    "EnhancedServerGUI",
-    "AppSettings", 
-    "FramelessWindow",
-    "BasePage", 
-    "StatCard",
-    "DashboardPage",
-    "ClientsPage",
-    "AnalyticsPage",
-    "SettingsPage",
-    "CHARTS_AVAILABLE",
-    "SYSTEM_MONITOR_AVAILABLE", 
-    "TRAY_AVAILABLE",
-    "CALENDAR_AVAILABLE",
-    "PROCESS_MONITOR_AVAILABLE",
-    "launch_standalone"
+    "ServerGUI",
 ]
