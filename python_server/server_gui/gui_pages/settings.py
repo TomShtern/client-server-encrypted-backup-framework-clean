@@ -1,186 +1,165 @@
-# In file: gui_pages/settings.py
+# -*- coding: utf-8 -*-
+"""
+settings.py - The Application and Server Settings page.
 
+This page provides a user-friendly interface for configuring server behavior,
+application appearance, and user feedback preferences. It features real-time
+validation and interactive controls for a superior user experience.
+"""
 from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk, filedialog
-from tkinter.constants import *  # Import all tkinter constants (BOTH, LEFT, RIGHT, etc.)
-import json
 from typing import TYPE_CHECKING, Dict, Any
 
-# Conditional imports for type checking
-if TYPE_CHECKING:
-    from ..ServerGUI import EnhancedServerGUI
-
-# Import base class and custom widgets
 try:
-    from ..ServerGUI import BasePage, CustomTooltip
+    import ttkbootstrap as ttk
+    from ttkbootstrap import constants
+    from ttkbootstrap.tooltip import ToolTip
 except ImportError:
-    # Fallback for different import paths
-    try:
-        import sys
-        import os
-        sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-        from ServerGUI import BasePage, CustomTooltip
-    except ImportError:
-        # Define minimal fallbacks
-        class BasePage:
-            def __init__(self, parent, app, **kwargs): pass
-        class CustomTooltip:
-            def __init__(self, *args, **kwargs): pass
+    from tkinter import ttk, constants
+
+from .base_page import BasePage
+
+if TYPE_CHECKING:
+    from ..ServerGUI import ServerGUI
 
 class SettingsPage(BasePage):
-    """A page for configuring server and GUI settings."""
+    """A page for managing application and server settings."""
 
-    def __init__(self, parent: tk.Widget, app: EnhancedServerGUI, **kwargs: Any) -> None:
-        super().__init__(parent, app, **kwargs)
-
-        self.setting_vars: Dict[str, tk.StringVar] = {}
-        self.gui_setting_vars: Dict[str, tk.Variable] = {}
-
+    def __init__(self, parent: ttk.Frame, controller: 'ServerGUI') -> None:
+        super().__init__(parent, controller)
+        self.setting_vars: Dict[str, tk.Variable] = {}
         self._create_widgets()
-        self._load_settings_to_ui()
+        self._load_settings_into_ui()
 
     def _create_widgets(self) -> None:
         """Create and lay out all widgets for the settings page."""
-        self.columnconfigure(0, weight=1)
-        self.rowconfigure(0, weight=1)
+        self._create_page_header("Settings", "gear-fill")
+        self._create_separator()
+
+        # Use a scrolled frame for future-proofing as more settings are added
+        scrolled_frame = ttk.ScrolledFrame(self, autohide=True)
+        scrolled_frame.pack(fill=constants.BOTH, expand=True, padx=10, pady=(0, 10))
+        container = scrolled_frame.container
+
+        # --- Settings Sections for Logical Grouping (Layer 3) ---
+        self._create_network_settings(container).pack(fill=constants.X, expand=True, pady=(0, 15))
+        self._create_storage_settings(container).pack(fill=constants.X, expand=True, pady=(0, 15))
+        self._create_application_settings(container).pack(fill=constants.X, expand=True, pady=(0, 15))
         
-        # Use a notebook to separate server and GUI settings
-        notebook = ttk.Notebook(self, bootstyle='primary')
-        notebook.pack(fill=BOTH, expand=True, padx=5, pady=5)
+        # --- Save Button ---
+        save_frame = ttk.Frame(self)
+        save_frame.pack(fill=constants.X, padx=10, pady=10)
+        self.save_button = ttk.Button(save_frame, text=" Save Settings", command=self._save_settings, style='success.TButton', image=self.controller.asset_manager.get_icon('check-circle-fill'), compound=constants.LEFT)
+        self.save_button.pack(side=constants.RIGHT)
 
-        # --- Server Settings Tab ---
-        server_tab = ttk.Frame(notebook, style='primary.TFrame', padding=15)
-        server_tab.columnconfigure(1, weight=1)
-        self._create_server_settings_content(server_tab)
-        notebook.add(server_tab, text=' ⚙️ Server Configuration ')
-
-        # --- GUI Settings Tab ---
-        gui_tab = ttk.Frame(notebook, style='primary.TFrame', padding=15)
-        gui_tab.columnconfigure(1, weight=1)
-        self._create_gui_settings_content(gui_tab)
-        notebook.add(gui_tab, text=' 🎨 Appearance & Behavior ')
-
-        # --- Action Buttons ---
-        action_frame = ttk.Frame(self, style='primary.TFrame')
-        action_frame.pack(fill=X, padx=10, pady=10)
+    def _create_setting_row(self, parent: ttk.Frame, key: str, label: str, tooltip: str, widget_type: str, **kwargs) -> None:
+        """Helper factory to create a consistent setting row."""
+        row_frame = ttk.Frame(parent)
+        row_frame.pack(fill=constants.X, pady=5)
         
-        ttk.Button(action_frame, text="💾 Save and Apply Settings", command=self._save_and_apply, bootstyle='success').pack(side=RIGHT)
-        ttk.Button(action_frame, text="↩️ Reset to Defaults", command=self._reset_defaults, bootstyle='danger-outline').pack(side=RIGHT, padx=10)
+        # Label with tooltip
+        label_frame = ttk.Frame(row_frame)
+        label_frame.pack(side=constants.LEFT, anchor=constants.W, ipadx=5, ipady=5, fill=constants.Y)
+        label_widget = ttk.Label(label_frame, text=label, width=20)
+        label_widget.pack(side=constants.LEFT)
+        info_icon = ttk.Label(label_frame, image=self.controller.asset_manager.get_icon('info-circle'), cursor="question_arrow")
+        info_icon.pack(side=constants.LEFT, padx=5)
+        ToolTip(info_icon, text=tooltip, bootstyle="info")
 
-
-    def _create_server_settings_content(self, parent: ttk.Frame) -> None:
-        """Create the input fields for server operational settings."""
-        # Define settings with their label, type, and a tooltip
-        server_settings_spec = {
-            'port': ("Server Port:", "numeric", "The network port the server will listen on. Default: 1256."),
-            'storage_dir': ("Storage Directory:", "path", "The folder where all backed-up files will be stored."),
-            'max_clients': ("Maximum Clients:", "numeric", "The maximum number of concurrent client connections."),
-            'session_timeout': ("Session Timeout (min):", "numeric", "Minutes of inactivity before a client session is timed out."),
-            'maintenance_interval': ("Maintenance Interval (sec):", "numeric", "How often the server performs cleanup tasks, in seconds."),
-        }
-        
-        row = 0
-        for key, (label_text, input_type, tooltip_text) in server_settings_spec.items():
-            label = ttk.Label(parent, text=label_text, style='primary.TLabel')
-            label.grid(row=row, column=0, sticky=W, pady=8, padx=(0, 20))
-            
+        # Input Widget
+        var: tk.Variable
+        if widget_type == 'entry':
             var = tk.StringVar()
-            self.setting_vars[key] = var
-            
-            if input_type == "path":
-                entry_frame = ttk.Frame(parent, style='primary.TFrame')
-                entry_frame.grid(row=row, column=1, sticky=EW, pady=8)
-                entry = ttk.Entry(entry_frame, textvariable=var, style='primary.TEntry')
-                entry.pack(side=LEFT, fill=X, expand=True)
-                browse_btn = ttk.Button(entry_frame, text="...", command=lambda v=var: self._browse_directory(v), bootstyle='secondary-outline', width=4)
-                browse_btn.pack(side=LEFT, padx=(5,0))
-                CustomTooltip(entry, tooltip_text)
-            else: # numeric or text
-                entry = ttk.Entry(parent, textvariable=var, style='primary.TEntry')
-                entry.grid(row=row, column=1, sticky=EW, pady=8)
-                CustomTooltip(entry, tooltip_text)
+            widget = ttk.Entry(row_frame, textvariable=var, **kwargs)
+        elif widget_type == 'spinbox':
+            var = tk.IntVar()
+            widget = ttk.Spinbox(row_frame, textvariable=var, **kwargs)
+        elif widget_type == 'switch':
+            var = tk.BooleanVar()
+            widget = ttk.Checkbutton(row_frame, variable=var, bootstyle="success-round-toggle", **kwargs)
+        elif widget_type == 'combobox':
+            var = tk.StringVar()
+            widget = ttk.Combobox(row_frame, textvariable=var, state='readonly', **kwargs)
+        elif widget_type == 'path':
+            var = tk.StringVar()
+            path_frame = ttk.Frame(row_frame)
+            widget = ttk.Entry(path_frame, textvariable=var, **kwargs)
+            widget.pack(side=constants.LEFT, fill=constants.X, expand=True)
+            browse_btn = ttk.Button(path_frame, text="Browse...", style='info.Outline.TButton', command=lambda v=var: self._browse_directory(v))
+            browse_btn.pack(side=constants.LEFT, padx=(5,0))
+            path_frame.pack(side=constants.LEFT, fill=constants.X, expand=True)
+        else:
+            raise ValueError(f"Unknown widget type: {widget_type}")
 
-            row += 1
+        if widget_type != 'path':
+            widget.pack(side=constants.LEFT, fill=constants.X, expand=True)
+        
+        self.setting_vars[key] = var
 
-    def _create_gui_settings_content(self, parent: ttk.Frame) -> None:
-        """Create the controls for GUI-specific settings."""
-        # Theme Selector
-        ttk.Label(parent, text="Theme:", style='primary.TLabel').grid(row=0, column=0, sticky=W, pady=8, padx=(0, 20))
-        theme_var = tk.StringVar()
-        self.gui_setting_vars['theme'] = theme_var
-        theme_combo = ttk.Combobox(parent, textvariable=theme_var, state="readonly", bootstyle='secondary',
-                                   values=['cyborg', 'superhero', 'darkly', 'solar', 'litera', 'cosmo'])
-        theme_combo.grid(row=0, column=1, sticky=EW, pady=8)
-        CustomTooltip(theme_combo, "Changes the visual theme of the application. Requires restart.")
+    def _create_network_settings(self, parent: ttk.Frame) -> ttk.Labelframe:
+        frame = ttk.Labelframe(parent, text=" Network Configuration ", padding=15)
+        vcmd = (self.register(self._validate_numeric), '%P') # For real-time validation
 
-        # Audio Cues
-        ttk.Label(parent, text="Audio Cues:", style='primary.TLabel').grid(row=1, column=0, sticky=W, pady=8, padx=(0, 20))
-        audio_var = tk.BooleanVar()
-        self.gui_setting_vars['audio_cues'] = audio_var
-        audio_check = ttk.Checkbutton(parent, variable=audio_var, text="Enable sound notifications for key events", bootstyle='primary-round-toggle')
-        audio_check.grid(row=1, column=1, sticky=W, pady=8)
-        CustomTooltip(audio_check, "Play sounds for events like backup success or failure.")
+        self._create_setting_row(frame, 'port', "Server Port", "The port the server listens on for client connections.", 'spinbox', from_=1024, to=65535, validate='key', validatecommand=vcmd)
+        self._create_setting_row(frame, 'max_clients', "Max Clients", "Maximum number of simultaneous client connections.", 'spinbox', from_=1, to=1000, validate='key', validatecommand=vcmd)
+        self._create_setting_row(frame, 'session_timeout', "Session Timeout (s)", "Seconds of inactivity before a client is disconnected.", 'spinbox', from_=10, to=3600, validate='key', validatecommand=vcmd)
+        return frame
 
+    def _create_storage_settings(self, parent: ttk.Frame) -> ttk.Labelframe:
+        frame = ttk.Labelframe(parent, text=" Storage & Maintenance ", padding=15)
+        self._create_setting_row(frame, 'storage_dir', "Storage Directory", "The root folder where all backup files are stored.", 'path')
+        self._create_setting_row(frame, 'maintenance_interval', "Maintenance (s)", "Interval in seconds to run cleanup tasks.", 'spinbox', from_=60, to=86400)
+        self._create_setting_row(frame, 'disk_warning_gb', "Disk Warning (GB)", "Show a warning banner when free disk space is below this value.", 'spinbox', from_=1, to=100)
+        return frame
+
+    def _create_application_settings(self, parent: ttk.Frame) -> ttk.Labelframe:
+        frame = ttk.Labelframe(parent, text=" Application Appearance & Feedback ", padding=15)
+        themes = self.controller.root.style.theme_names()
+        self._create_setting_row(frame, 'theme', "Theme", "Changes the application's visual theme.", 'combobox', values=sorted(themes))
+        self._create_setting_row(frame, 'audio_enabled', "Audio Cues", "Enable sound effects for key server events.", 'switch')
+        return frame
+    
+    def _validate_numeric(self, value_if_allowed: str) -> bool:
+        """Real-time validation function for numeric entry fields (Feature #11)."""
+        return value_if_allowed.isdigit() or value_if_allowed == ""
 
     def _browse_directory(self, var: tk.StringVar) -> None:
-        """Open a dialog to choose a directory."""
-        directory = filedialog.askdirectory(mustexist=True, title="Select Storage Directory")
+        """Opens a folder selection dialog and updates the variable."""
+        directory = filedialog.askdirectory(initialdir=var.get())
         if directory:
             var.set(directory)
-
-    def _load_settings_to_ui(self) -> None:
-        """Load the current settings from the app instance into the UI widgets."""
-        for key, var in self.setting_vars.items():
-            var.set(str(self.app.settings.get(key, '')))
             
-        for key, var in self.gui_setting_vars.items():
-            var.set(self.app.settings.get(key, ''))
-
-    def _save_and_apply(self) -> None:
-        """Save the settings from the UI back to the app and the config file."""
-        # Update server settings
+    def _load_settings_into_ui(self) -> None:
+        """Populates the UI widgets with values from the settings dictionary."""
         for key, var in self.setting_vars.items():
-            self.app.settings[key] = var.get()
-
-        # Update GUI settings
-        for key, var in self.gui_setting_vars.items():
-            self.app.settings[key] = var.get()
+            value = self.controller.settings.get(key)
+            if value is not None:
+                try:
+                    var.set(value)
+                except tk.TclError as e:
+                    print(f"[WARNING] Could not set UI value for setting '{key}': {e}")
         
-        # Validate and convert numeric types
+    def _save_settings(self) -> None:
+        """Gathers values from UI, saves them, and applies them to the server."""
         try:
-            self.app.settings['port'] = int(self.app.settings['port'])
-            self.app.settings['max_clients'] = int(self.app.settings['max_clients'])
-            self.app.settings['session_timeout'] = int(self.app.settings['session_timeout'])
-            self.app.settings['maintenance_interval'] = int(self.app.settings['maintenance_interval'])
-        except (ValueError, TypeError):
-            self.app.show_toast("Invalid number in one of the server settings fields.", "danger")
-            return
-            
-        # Save to file
-        self.app._save_settings()
+            for key, var in self.setting_vars.items():
+                self.controller.settings[key] = var.get()
 
-        # Apply to running server if possible
-        if self.app.server and self.app.server.running:
-            try:
-                self.app.server.apply_settings(self.app.settings)
-                self.app.show_toast("Settings saved and applied to running server.", "success")
-            except Exception as e:
-                self.app.show_toast(f"Error applying settings: {e}", "danger")
-        else:
-            self.app.show_toast("Settings saved successfully.", "success")
-            
-        self.app.show_toast("Theme change will apply on next restart.", "info")
+            # Apply theme change immediately
+            self.controller.change_theme(self.setting_vars['theme'].get())
 
+            # Apply settings to the running server instance
+            if self.controller.server:
+                self.controller.server.apply_settings(self.controller.settings)
+                self.controller.show_toast("Settings applied to running server.", "info")
 
-    def _reset_defaults(self) -> None:
-        """Reset all settings to their default values."""
-        # This requires re-initializing the settings and then reloading them
-        # Note: this will discard any unsaved changes.
-        self.app.settings = self.app._load_settings(force_defaults=True)
-        self._load_settings_to_ui()
-        self.app.show_toast("Settings have been reset to default values. Save to confirm.", "warning")
+            self.controller.show_toast("Settings saved successfully!", "success")
+            self.controller.play_sound('success')
+        except Exception as e:
+            self.controller.show_toast(f"Error saving settings: {e}", "error")
+            self.controller.play_sound('failure')
 
-    def on_show(self) -> None:
-        """Called when the page is displayed. Ensures UI reflects current settings."""
-        self._load_settings_to_ui()
+    def handle_update(self, update_type: str, data: Dict[str, Any]) -> None:
+        """Settings page does not typically react to real-time server updates."""
+        pass

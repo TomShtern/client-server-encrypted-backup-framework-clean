@@ -1,225 +1,308 @@
-# In file: gui_pages/clients.py
+# -*- coding: utf-8 -*-
+"""
+clients.py - The Client Management page for the Server GUI.
 
+This page provides a powerful and interactive view for monitoring and managing
+all connected and historical clients. It features a master-detail layout,
+real-time filtering, and contextual actions.
+"""
 from __future__ import annotations
 import tkinter as tk
-from tkinter import ttk, messagebox
-from tkinter.constants import *  # Import all tkinter constants (BOTH, LEFT, RIGHT, etc.)
-from typing import TYPE_CHECKING, List, Dict, Any, Optional
+from tkinter import ttk
+from typing import TYPE_CHECKING, Dict, Any, List, Union
 
-# Conditional imports for type checking and runtime
-if TYPE_CHECKING:
-    from ..ServerGUI import EnhancedServerGUI, RoundedFrame
-
-# Import base class and check for dependencies
 try:
-    from ..ServerGUI import BasePage, TKSHEET_AVAILABLE
+    from ttkbootstrap import constants
 except ImportError:
-    # Fallback for different import paths
-    try:
-        import sys
-        import os
-        sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-        from ServerGUI import BasePage, TKSHEET_AVAILABLE
-    except ImportError:
-        # Define minimal fallbacks
-        class BasePage:
-            def __init__(self, parent, app, **kwargs): pass
-        TKSHEET_AVAILABLE = False
+    from tkinter import constants
 
-if TKSHEET_AVAILABLE:
+from .base_page import BasePage
+
+try:
     from tksheet import Sheet
+    TKSHEET_AVAILABLE = True
+except ImportError:
+    Sheet = None
+    TKSHEET_AVAILABLE = False
+
+if TYPE_CHECKING:
+    from ..ServerGUI import ServerGUI
 
 class ClientsPage(BasePage):
-    """A page for viewing and managing connected and historical clients."""
+    """A page for managing and viewing server clients."""
 
-    def __init__(self, parent: tk.Widget, app: EnhancedServerGUI, **kwargs: Any) -> None:
-        super().__init__(parent, app, **kwargs)
-
-        self.all_clients_data: List[Dict[str, Any]] = []
-        self.sheet: Optional[Sheet] = None
-        self.detail_widgets: Dict[str, ttk.Label] = {}
-        self.selected_client_id: Optional[str] = None
-        self.search_var = tk.StringVar()
-
+    def __init__(self, parent: ttk.Frame, controller: 'ServerGUI') -> None:
+        super().__init__(parent, controller)
+        self.clients_data: List[Dict[str, Any]] = []
+        self._current_filtered_data: List[Dict[str, Any]] = []
+        
+        # UI component type annotations
+        self.client_sheet: Union[Any, ttk.Treeview]  # tksheet.Sheet or Treeview fallback
+        self.client_tree: ttk.Treeview
+        self.detail_frame: ttk.Frame
+        self.search_var: tk.StringVar
+        self.status_filter_var: tk.StringVar
+        
         self._create_widgets()
 
     def _create_widgets(self) -> None:
         """Create and lay out all widgets for the clients page."""
-        if not TKSHEET_AVAILABLE:
-            ttk.Label(self, text="tksheet library not found.\nPlease run: pip install tksheet", style='danger.TLabel').pack(expand=True)
-            return
+        self._create_page_header("Client Management", "people-fill")
+        self._create_separator()
 
-        # Use a PanedWindow for resizable master-detail view
-        paned_window = ttk.PanedWindow(self, orient=tk.HORIZONTAL, bootstyle='primary')
-        paned_window.pack(fill=BOTH, expand=True, padx=5, pady=5)
+        # --- Main Layout: Master-Detail using a PanedWindow ---
+        main_pane = ttk.PanedWindow(self, orient=constants.HORIZONTAL)
+        main_pane.pack(fill=constants.BOTH, expand=True, padx=10, pady=(0, 10))
 
-        # --- Master View (Client List) ---
-        master_frame_rounded = self.app.RoundedFrame(paned_window, bg_color=self.app.style.colors.secondary, border_color=self.app.style.colors.border)
-        master_frame = master_frame_rounded.content_frame
-        
-        # Header with Title and Search Bar
-        header = ttk.Frame(master_frame, style='secondary.TFrame')
-        header.pack(fill=X, padx=10, pady=(5, 10))
-        ttk.Label(header, text="👥 Client Roster", font=self.app.Theme.FONT_BOLD, style='secondary.TLabel').pack(side=LEFT)
-        
-        search_entry = ttk.Entry(header, textvariable=self.search_var, style='secondary.TEntry')
-        search_entry.pack(side=RIGHT, fill=X, expand=True, padx=(20, 0))
-        self.search_var.trace_add("write", self._filter_clients)
-        CustomTooltip(search_entry, "Search by any client attribute...")
+        # --- Master View (Left Side): Client List ---
+        master_frame = ttk.Frame(main_pane)
+        self._create_client_list_view(master_frame)
+        main_pane.add(master_frame, weight=3)  # type: ignore[attr-defined]
 
-        # tksheet Table
-        self.sheet = Sheet(master_frame,
-                           headers=["Name", "Status", "Client ID", "Last Seen"],
-                           show_x_scrollbar=False,
-                           show_y_scrollbar=True,
-                           width=550,
-                           height=400)
-        self.sheet.pack(fill=BOTH, expand=True, padx=5, pady=5)
-        self._configure_sheet_styles()
-        self.sheet.enable_bindings("single_select", "row_select", "column_width_resize", "arrowkeys")
-        self.sheet.extra_bindings([("row_select", self._on_client_selected)])
+        # --- Detail View (Right Side): Client Information ---
+        self.detail_frame = ttk.Frame(main_pane)
+        self._create_detail_view_placeholder() # Initially show a placeholder
+        main_pane.add(self.detail_frame, weight=2)  # type: ignore[attr-defined]
 
-        paned_window.add(master_frame_rounded, weight=2)
+    def _create_client_list_view(self, parent: ttk.Frame) -> None:
+        """Creates the controls and table for the main client list."""
+        controls_frame = self._create_list_controls(parent)
+        controls_frame.pack(fill=constants.X, pady=(0, 5))
 
-        # --- Detail View ---
-        detail_frame_rounded = self.app.RoundedFrame(paned_window, bg_color=self.app.style.colors.secondary, border_color=self.app.style.colors.border)
-        self.detail_frame = detail_frame_rounded.content_frame
-        paned_window.add(detail_frame_rounded, weight=1)
-
-        self._create_detail_view_content()
-
-    def _configure_sheet_styles(self) -> None:
-        """Apply the current theme to the tksheet widget."""
-        colors = self.app.style.colors
-        self.sheet.config(
-            background=colors.secondary,
-            foreground=colors.fg,
-            header_background=colors.bg,
-            header_foreground=colors.fg,
-            index_background=colors.bg,
-            index_foreground=colors.fg,
-            row_index_background=colors.bg,
-            row_index_foreground=colors.fg,
-            table_background=colors.secondary,
-            selected_rows_background=colors.info,
-            selected_rows_foreground=colors.light,
-            selected_cells_background=colors.info,
-            selected_cells_foreground=colors.light,
-            header_selected_columns_background=colors.primary,
-            header_selected_rows_background=colors.primary
-        )
-
-    def _create_detail_view_content(self) -> None:
-        """Create the static labels and dynamic value labels for the detail pane."""
-        ttk.Label(self.detail_frame, text="ℹ️ Client Details", font=self.app.Theme.FONT_BOLD, style='secondary.TLabel').pack(anchor=NW, padx=10, pady=5)
-
-        detail_grid = ttk.Frame(self.detail_frame, style='secondary.TFrame')
-        detail_grid.pack(fill=X, expand=True, padx=10, pady=10)
-        detail_grid.columnconfigure(1, weight=1)
-
-        details_to_show = {
-            "name": "Name:", "id": "Client ID:", "status": "Status:", "last_seen": "Last Seen:",
-            "ip_address": "IP Address:", "os_type": "Operating System:", "mac_address": "MAC Address:"
-        }
-        
-        for i, (key, label_text) in enumerate(details_to_show.items()):
-            ttk.Label(detail_grid, text=label_text, style='secondary.TLabel', font=self.app.Theme.FONT_SMALL).grid(row=i, column=0, sticky=W, pady=3)
-            value_label = ttk.Label(detail_grid, text="N/A", style='secondary.TLabel', font=self.app.Theme.FONT_BOLD, anchor=W, wraplength=250)
-            value_label.grid(row=i, column=1, sticky=EW, pady=3, padx=(5,0))
-            self.detail_widgets[key] = value_label
-        
-        # Action Buttons
-        action_frame = ttk.Frame(self.detail_frame, style='secondary.TFrame')
-        action_frame.pack(side=BOTTOM, fill=X, padx=10, pady=10)
-        
-        ttk.Button(action_frame, text="🔄 Refresh List", command=self.refresh_data, bootstyle='info-outline').pack(side=LEFT, expand=True, padx=5)
-        ttk.Button(action_frame, text="🔌 Disconnect", command=self._disconnect_selected_client, bootstyle='danger-outline').pack(side=LEFT, expand=True, padx=5)
-
-
-    def refresh_data(self) -> None:
-        """Fetch the latest client data from the database and update the sheet."""
-        db = self.app.effective_db_manager
-        if not db or not self.sheet:
-            return
-
-        try:
-            self.all_clients_data = db.get_all_clients()
-            online_ids = list(self.app.server.clients.keys()) if self.app.server else []
-            
-            for client in self.all_clients_data:
-                client_id_bytes = bytes.fromhex(client['id']) if isinstance(client.get('id'), str) else client.get('id', b'')
-                client['status'] = "Online" if client_id_bytes in online_ids else "Offline"
-            
-            self._filter_clients() # This will apply search and refresh sheet
-            self.app.show_toast("Client list refreshed.", "success")
-        except Exception as e:
-            self.app.show_toast(f"Failed to load clients: {e}", "danger")
-            print(f"ERROR refreshing client data: {e}")
-
-    def _filter_clients(self, *args: Any) -> None:
-        """Filter client data based on the search query and update the sheet."""
-        if not self.sheet: return
-        
-        query = self.search_var.get().lower()
-        
-        if not query:
-            filtered_data = self.all_clients_data
+        # --- Client Table ---
+        # Using Treeview as a fallback when tksheet is not available
+        if TKSHEET_AVAILABLE and Sheet is not None:
+            self.client_sheet = Sheet(parent,
+                headers=["Status", "Name", "Client ID", "Last Seen"]
+            )
+            self.client_sheet.pack(fill=constants.BOTH, expand=True)
+            # Configure column properties for visual polish
+            self.client_sheet.column_width(column=0, width=80)
+            self.client_sheet.column_width(column=1, width=150)
+            self.client_sheet.column_width(column=2, width=250)
+            self.client_sheet.readonly_columns(columns=[0, 1, 2, 3]) # Make table non-editable
+            self.client_sheet.enable_bindings("single_select", "row_select", "arrowkeys")  # type: ignore[attr-defined]
+            self.client_sheet.bind("<<SelectCellFinal>>", self._on_client_selected)  # type: ignore[attr-defined]
         else:
-            filtered_data = [
-                client for client in self.all_clients_data
-                if any(query in str(val).lower() for val in client.values())
-            ]
+            # Fallback to Treeview when tksheet is not available
+            self.client_tree = ttk.Treeview(parent, 
+                columns=("Status", "Name", "Client ID", "Last Seen"),
+                show='headings'
+            )
+            self.client_tree.pack(fill=constants.BOTH, expand=True)
+            
+            # Configure column headers and widths
+            for col, width in [("Status", 80), ("Name", 150), ("Client ID", 250), ("Last Seen", 120)]:
+                self.client_tree.heading(col, text=col)
+                self.client_tree.column(col, width=width)
+            
+            self.client_tree.bind("<<TreeviewSelect>>", self._on_client_selected)
+            self.client_sheet = self.client_tree  # type: ignore[assignment] # Unify interface
+
+    def _create_list_controls(self, parent: ttk.Frame) -> ttk.Frame:
+        """Creates filtering and search controls for the client list."""
+        frame = ttk.Frame(parent)
         
-        # Prepare data for tksheet
-        display_data = [[c.get('name', ''), c.get('status', ''), c.get('id', ''), c.get('last_seen', '')] for c in filtered_data]
+        # Search Entry
+        search_icon = self.controller.asset_manager.get_icon("search")
+        search_label = ttk.Label(frame, image=search_icon)
+        search_label.pack(side=constants.LEFT, padx=(0, 5))
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add("write", self._apply_filters)  # type: ignore[arg-type]
+        search_entry = ttk.Entry(frame, textvariable=self.search_var, width=40)
+        search_entry.pack(side=constants.LEFT, fill=constants.X, expand=True)
+
+        # Status Filter Buttons (Layer 3 Polish)
+        style = 'Outline.TButton'
+        self.status_filter_var = tk.StringVar(value="All")
+        ttk.Radiobutton(frame, text="All", variable=self.status_filter_var, value="All", command=self._apply_filters, style=style).pack(side=constants.RIGHT, padx=(5, 0))  # type: ignore[arg-type]
+        ttk.Radiobutton(frame, text="Online", variable=self.status_filter_var, value="Online", command=self._apply_filters, style=style).pack(side=constants.RIGHT, padx=(5, 0))  # type: ignore[arg-type]
+        ttk.Radiobutton(frame, text="Offline", variable=self.status_filter_var, value="Offline", command=self._apply_filters, style=style).pack(side=constants.RIGHT, padx=(5, 0))  # type: ignore[arg-type]
+
+        return frame
+
+    def _create_detail_view_placeholder(self) -> None:
+        """Creates a placeholder message for the detail view when no client is selected."""
+        # Clear any existing widgets in the detail frame
+        for widget in self.detail_frame.winfo_children():
+            widget.destroy()
+
+        placeholder = self._create_placeholder(
+            "Select a client to view details", "person-badge"
+        )
+        placeholder.pack(expand=True)
+
+    def _populate_detail_view(self, client_data: Dict[str, Any]) -> None:
+        """Populates the detail view with rich information for the selected client."""
+        # Clear placeholder or previous details
+        for widget in self.detail_frame.winfo_children():
+            widget.destroy()
         
-        # Keep track of original data indices
-        self.sheet.set_sheet_data(data=display_data, reset_highlights=True)
-        self.sheet.user_data = filtered_data # Store full data dicts for selection
+        card = ttk.Frame(self.detail_frame, style='secondary.TFrame', padding=20, borderwidth=1, relief="solid")
+        card.pack(fill=constants.BOTH, expand=True)
 
-    def _on_client_selected(self, event: Any) -> None:
-        """Handle the selection of a client in the tksheet."""
-        if not self.sheet or not event.row: return
-
-        selected_row_index = event.row
+        # Header
+        header_frame = ttk.Frame(card, style='secondary.TFrame')
+        header_frame.pack(fill=constants.X, pady=(0, 15))
+        icon = self.controller.asset_manager.get_icon("person-vcard-fill", size=(32,32))
+        ttk.Label(header_frame, image=icon, style='secondary.TLabel').pack(side=constants.LEFT, padx=(0, 10))
+        ttk.Label(header_frame, text=client_data.get('name', 'Unknown Client'), font=('Segoe UI', 16, 'bold'), style='secondary.TLabel').pack(side=constants.LEFT)
         
-        # Get the full data dict from our stored user_data
-        if hasattr(self.sheet, 'user_data') and len(self.sheet.user_data) > selected_row_index:
-            selected_client = self.sheet.user_data[selected_row_index]
-            self.selected_client_id = selected_client.get('id')
-            self._update_detail_view(selected_client)
+        # Detail Grid
+        details_container = ttk.Frame(card, style='secondary.TFrame')
+        details_container.pack(fill=constants.BOTH, expand=True)
+        details = {
+            "Status": client_data.get('status', 'N/A'),
+            "Client ID": client_data.get('id', 'N/A'),
+            "IP Address": client_data.get('ip_address', 'N/A'),
+            "Last Seen": client_data.get('last_seen', 'N/A'),
+            "OS Version": client_data.get('os_version', 'N/A'),
+            "Joined": client_data.get('join_date', 'N/A'),
+        }
+        for i, (key, value) in enumerate(details.items()):
+            label = ttk.Label(details_container, text=key, font=('Segoe UI', 10, 'bold'), style='secondary.TLabel')
+            label.grid(row=i, column=0, sticky='nw', pady=2)
 
-    def _update_detail_view(self, client_data: Dict[str, Any]) -> None:
-        """Populate the detail view with data from the selected client."""
-        for key, label in self.detail_widgets.items():
-            value = client_data.get(key, "N/A")
-            if key == 'status':
-                style = 'success.TLabel' if value == 'Online' else 'danger.TLabel'
-                label.config(text=value, style=style)
-            else:
-                label.config(text=value)
+            val_label = ttk.Entry(details_container, font=('Consolas', 10), style='secondary.TEntry')
+            val_label.insert(0, str(value))
+            val_label.configure(state='readonly')
+            val_label.grid(row=i, column=1, sticky='nsew', padx=(10, 0), pady=2)
+        details_container.columnconfigure(1, weight=1)
 
-    def _disconnect_selected_client(self) -> None:
-        """Disconnect the currently selected client if they are online."""
-        if not self.selected_client_id:
-            self.app.show_toast("No client selected.", "warning")
-            return
-        
-        client_data = next((c for c in self.all_clients_data if c['id'] == self.selected_client_id), None)
-        if not client_data or client_data.get('status') != 'Online':
-            self.app.show_toast("Selected client is not online.", "info")
-            return
+        # Action Buttons (Layer 3 Innovation)
+        actions_frame = ttk.Frame(card, style='secondary.TFrame')
+        actions_frame.pack(fill=constants.X, pady=(20, 0))
+        ttk.Button(actions_frame, text=" Copy ID", image=self.controller.asset_manager.get_icon("clipboard"), compound=constants.LEFT, style='info.Outline.TButton').pack(side=constants.LEFT)
+        # TODO: Add commands to buttons
+        if client_data.get('status') == 'Online':
+            ttk.Button(actions_frame, text=" Disconnect", image=self.controller.asset_manager.get_icon("power"), compound=constants.LEFT, style='danger.TButton').pack(side=constants.RIGHT)
 
-        if self.app.server and self.app.server.network_server:
-            if messagebox.askyesno("Confirm Disconnect", f"Are you sure you want to disconnect {client_data.get('name', 'this client')}?"):
-                client_id_bytes = bytes.fromhex(self.selected_client_id)
-                if self.app.server.network_server.disconnect_client(client_id_bytes):
-                    self.app.show_toast(f"Client {client_data.get('name')} disconnected.", "success")
-                    self.app.play_sound('disconnect')
-                    self.refresh_data() # Refresh list to show new status
-                else:
-                    self.app.show_toast("Failed to send disconnect signal.", "danger")
-    
+
     def on_show(self) -> None:
-        """Called when the page is displayed. Triggers a data refresh."""
-        self.refresh_data()
+        """Called when the page becomes visible; refreshes client data."""
+        self._refresh_client_data()
+
+    def handle_update(self, update_type: str, data: Dict[str, Any]) -> None:
+        """Handles backend updates relevant to clients."""
+        if update_type in {"client_list_changed", "client_stats_update", "status_update"}:
+            self._refresh_client_data()
+
+    def _refresh_client_data(self) -> None:
+        """Fetches the latest client list from the database and updates the view."""
+        db_manager = self.controller.effective_db_manager  # type: ignore[attr-defined]
+        server_instance = self.controller.server  # type: ignore[attr-defined]
+        if not db_manager or not server_instance:
+            self.clients_data = []
+            self._apply_filters()
+            return
+        
+        try:
+            clients_from_db = db_manager.get_all_clients()  # type: ignore[attr-defined]
+            online_ids = list(getattr(server_instance, 'clients', {}).keys())
+            
+            self.clients_data = [
+                {
+                    **client,
+                    'status': "Online" if bytes.fromhex(client['id']) in online_ids else "Offline"
+                }
+                for client in clients_from_db
+            ]
+            self._apply_filters()
+        except Exception as e:
+            print(f"[ERROR] Failed to refresh client data: {e}")
+            self.clients_data = []
+            self._apply_filters()
+
+    def _apply_filters(self, *_args: Any) -> None:
+        """Filters the client data based on search and status filters, then updates the table."""
+        search_term = self.search_var.get().lower()
+        status_filter = self.status_filter_var.get()
+
+        filtered_data = self.clients_data
+        
+        # Apply status filter
+        if status_filter != "All":
+            filtered_data = [c for c in filtered_data if c['status'] == status_filter]
+        
+        # Apply search filter
+        if search_term:
+            filtered_data = [
+                c for c in filtered_data if
+                search_term in c.get('name', '').lower() or
+                search_term in c.get('id', '').lower() or
+                search_term in c.get('ip_address', '').lower()
+            ]
+
+        # --- Update table with filtered data ---
+        if TKSHEET_AVAILABLE and hasattr(self.client_sheet, 'set_sheet_data'):
+            # Using tksheet
+            table_data: List[List[str]] = []
+            for client in filtered_data:
+                # Data visualization in the table (Layer 3)
+                status_pill = f"● {client['status']}"
+                table_data.append([
+                    status_pill,
+                    client.get('name', ''),
+                    client.get('id', ''),
+                    client.get('last_seen', '')
+                ])
+            
+            self.client_sheet.set_sheet_data(table_data, redraw=True)  # type: ignore[attr-defined]
+            # Apply color coding to the status column
+            for r_idx, client in enumerate(filtered_data):
+                color = "green" if client['status'] == "Online" else "gray"
+                self.client_sheet.highlight_cells(row=r_idx, column=0, bg=color, fg='white')  # type: ignore[attr-defined]
+        else:
+            # Using Treeview fallback
+            # Clear existing items
+            for item in self.client_tree.get_children():
+                self.client_tree.delete(item)
+            
+            # Insert new data
+            for client in filtered_data:
+                status_pill = f"● {client['status']}"
+                item_id = self.client_tree.insert('', 'end', values=(
+                    status_pill,
+                    client.get('name', ''),
+                    client.get('id', ''),
+                    client.get('last_seen', '')
+                ))
+                # Apply color coding (limited in Treeview)
+                if client['status'] == "Online":
+                    self.client_tree.set(item_id, "Status", "🟢 Online")
+                else:
+                    self.client_tree.set(item_id, "Status", "🔴 Offline")
+        
+        # Store filtered data for selection events
+        self._current_filtered_data = filtered_data
+
+    def _on_client_selected(self, _event: Any) -> None:
+        """Callback for when a client is selected in the table."""
+        try:
+            if TKSHEET_AVAILABLE and hasattr(self.client_sheet, 'get_currently_selected'):
+                # tksheet selection handling
+                selection = self.client_sheet.get_currently_selected()  # type: ignore[attr-defined]
+                if selection and selection[0] is not None:
+                    selected_row_index = selection[0]
+                else:
+                    self._create_detail_view_placeholder()
+                    return
+            else:
+                # Treeview selection handling
+                if not hasattr(self.client_tree, 'selection') or not self.client_tree.selection():
+                    self._create_detail_view_placeholder()
+                    return
+                    
+                selected_item = self.client_tree.selection()[0]
+                selected_row_index = self.client_tree.index(selected_item)
+            
+            # Use the stored filtered data
+            if hasattr(self, '_current_filtered_data') and 0 <= selected_row_index < len(self._current_filtered_data):
+                selected_client_data = self._current_filtered_data[selected_row_index]
+                self._populate_detail_view(selected_client_data)
+            else:
+                self._create_detail_view_placeholder()
+                
+        except (IndexError, AttributeError, TypeError) as e:
+            print(f"[DEBUG] Selection event error: {e}")
+            self._create_detail_view_placeholder()
