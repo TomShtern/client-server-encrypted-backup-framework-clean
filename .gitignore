@@ -264,6 +264,6 @@ temp_errors.txt
 mypy_errors.txt
 gui_errors.txt
 CLAUDE.md
-
 .github/copilot-instructions.md
 CLAUDE.md
+.vscode/extensions.json
