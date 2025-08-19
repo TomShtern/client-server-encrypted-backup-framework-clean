@@ -1,0 +1,788 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+setup_kivymd_migration.py - Setup script for migrating to KivyMD
+Handles installation, configuration, and migration utilities
+"""
+
+import os
+import sys
+import subprocess
+import shutil
+from pathlib import Path
+import json
+
+class KivyMDMigrationSetup:
+    """Setup and migration helper for KivyMD GUI"""
+    
+    def __init__(self):
+        self.project_root = Path.cwd()
+        self.kivymd_dir = self.project_root / "kivymd_gui"
+        self.backup_dir = self.project_root / "tkinter_backup"
+        
+    def check_python_version(self):
+        """Ensure Python 3.9+ is installed"""
+        if sys.version_info < (3, 9):
+            print("❌ Python 3.9+ is required for KivyMD 2.0")
+            print(f"   Current version: {sys.version}")
+            return False
+        print(f"✅ Python {sys.version_info.major}.{sys.version_info.minor} detected")
+        return True
+    
+    def install_dependencies(self):
+        """Install KivyMD and required dependencies"""
+        print("\n📦 Installing KivyMD dependencies...")
+        
+        packages = [
+            "kivymd==2.0.1.dev0",  # Material Design 3 support
+            "kivy==2.3.0",
+            "kivy-garden.matplotlib",  # For charts
+            "pillow",  # For image handling
+            "plyer",  # Cross-platform features
+        ]
+        
+        # Keep existing packages
+        existing_packages = [
+            "pycryptodome>=3.15.0",
+            "psutil>=5.8.0",
+            "watchdog>=2.1.0",
+            "pydantic==2.11.7",
+            "matplotlib==3.10.5",
+        ]
+        
+        all_packages = packages + existing_packages
+        
+        for package in all_packages:
+            print(f"   Installing {package}...")
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+                print(f"   ✅ {package} installed")
+            except subprocess.CalledProcessError as e:
+                print(f"   ❌ Failed to install {package}: {e}")
+                return False
+        
+        return True
+    
+    def create_project_structure(self):
+        """Create the KivyMD project structure"""
+        print("\n📁 Creating KivyMD project structure...")
+        
+        directories = [
+            self.kivymd_dir,
+            self.kivymd_dir / "screens",
+            self.kivymd_dir / "components",
+            self.kivymd_dir / "models",
+            self.kivymd_dir / "kv",
+            self.kivymd_dir / "themes",
+            self.kivymd_dir / "assets",
+            self.kivymd_dir / "assets" / "images",
+            self.kivymd_dir / "assets" / "fonts",
+            self.kivymd_dir / "utils",
+        ]
+        
+        for directory in directories:
+            directory.mkdir(parents=True, exist_ok=True)
+            print(f"   ✅ Created {directory.relative_to(self.project_root)}")
+        
+        # Create __init__.py files
+        for directory in directories:
+            if directory.name not in ["assets", "images", "fonts", "kv"]:
+                init_file = directory / "__init__.py"
+                init_file.touch()
+        
+        return True
+    
+    def backup_existing_gui(self):
+        """Backup existing tkinter GUI"""
+        print("\n💾 Backing up existing tkinter GUI...")
+        
+        tkinter_files = [
+            "standard_gui_implementation.py",
+            "ServerGUI.py",
+            "server_gui_settings.json",
+        ]
+        
+        self.backup_dir.mkdir(exist_ok=True)
+        
+        for file in tkinter_files:
+            source = self.project_root / file
+            if source.exists():
+                dest = self.backup_dir / file
+                shutil.copy2(source, dest)
+                print(f"   ✅ Backed up {file}")
+        
+        return True
+    
+    def create_theme_config(self):
+        """Create Material Design 3 theme configuration"""
+        print("\n🎨 Creating MD3 theme configuration...")
+        
+        theme_config = '''# -*- coding: utf-8 -*-
+"""
+custom_theme.py - Material Design 3 theme configuration
+"""
+
+from kivymd.theming import ThemeManager
+
+class CustomTheme:
+    """Custom Material Design 3 theme settings"""
+    
+    # Color schemes
+    THEMES = {
+        "Blue": {
+            "primary": "#1976D2",
+            "secondary": "#00897B",
+            "tertiary": "#7C4DFF",
+            "error": "#B00020",
+            "surface": "#121212",
+            "background": "#000000",
+        },
+        "Green": {
+            "primary": "#2E7D32",
+            "secondary": "#00ACC1",
+            "tertiary": "#9C27B0",
+            "error": "#C62828",
+            "surface": "#121212",
+            "background": "#000000",
+        },
+        "Purple": {
+            "primary": "#6A1B9A",
+            "secondary": "#00897B",
+            "tertiary": "#FF6F00",
+            "error": "#B00020",
+            "surface": "#121212",
+            "background": "#000000",
+        }
+    }
+    
+    # Typography scale
+    TYPOGRAPHY = {
+        "display": {"size": 57, "line_height": 64, "weight": "regular"},
+        "headline": {"size": 32, "line_height": 40, "weight": "regular"},
+        "title": {"size": 22, "line_height": 28, "weight": "medium"},
+        "body": {"size": 16, "line_height": 24, "weight": "regular"},
+        "label": {"size": 14, "line_height": 20, "weight": "medium"},
+    }
+    
+    # Component styles
+    CARD_ELEVATION = 1
+    CARD_RADIUS = 12
+    BUTTON_RADIUS = 20
+    
+    @classmethod
+    def apply_theme(cls, theme_manager: ThemeManager, theme_name: str = "Blue"):
+        """Apply theme to the app"""
+        if theme_name in cls.THEMES:
+            colors = cls.THEMES[theme_name]
+            theme_manager.primary_palette = theme_name
+            # Additional theme customization
+'''
+        
+        theme_file = self.kivymd_dir / "themes" / "custom_theme.py"
+        theme_file.write_text(theme_config)
+        print(f"   ✅ Created custom_theme.py")
+        
+        return True
+    
+    def create_additional_screens(self):
+        """Create additional screen modules"""
+        print("\n📱 Creating additional screens...")
+        
+        # Files Screen
+        files_screen = '''# -*- coding: utf-8 -*-
+"""
+files.py - Files management screen with Material Design 3
+"""
+
+from kivymd.uix.screen import MDScreen
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.label import MDLabel
+from kivymd.uix.card import MDCard
+from kivymd.uix.list import MDList, ThreeLineListItem, IconLeftWidget
+from kivymd.uix.button import MDFabButton
+from kivymd.uix.textfield import MDTextField
+from kivymd.uix.filemanager import MDFileManager
+from kivymd.uix.datatables import MDDataTable
+from kivy.metrics import dp
+from kivy.properties import StringProperty, ListProperty
+
+class FilesScreen(MDScreen):
+    """Material Design 3 Files Management Screen"""
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.name = "files"
+        self.file_manager = None
+        self._build_ui()
+    
+    def _build_ui(self):
+        """Build the files UI with MD3 components"""
+        layout = MDBoxLayout(orientation="vertical", padding=dp(16), spacing=dp(16))
+        
+        # Header with search
+        header = MDBoxLayout(size_hint_y=None, height=dp(56))
+        header.add_widget(MDLabel(
+            text="File Management",
+            font_style="Display",
+            theme_text_color="Primary"
+        ))
+        
+        self.search_field = MDTextField(
+            MDTextFieldLeadingIcon(icon="magnify"),
+            MDTextFieldHintText(text="Search files..."),
+            mode="outlined",
+            size_hint_x=0.3
+        )
+        header.add_widget(self.search_field)
+        layout.add_widget(header)
+        
+        # Files data table
+        self.files_table = MDDataTable(
+            size_hint=(1, 1),
+            use_pagination=True,
+            rows_num=15,
+            column_data=[
+                ("", dp(10)),  # Checkbox
+                ("Icon", dp(10)),
+                ("File Name", dp(50)),
+                ("Client", dp(30)),
+                ("Size", dp(20)),
+                ("Date", dp(30)),
+                ("Status", dp(20)),
+            ],
+            row_data=[],
+            check=True,
+            elevation=2
+        )
+        
+        layout.add_widget(self.files_table)
+        
+        # FAB for file upload
+        fab = MDFabButton(
+            icon="upload",
+            pos_hint={"right": 0.95, "bottom": 0.05},
+            on_release=self.open_file_manager
+        )
+        layout.add_widget(fab)
+        
+        self.add_widget(layout)
+    
+    def open_file_manager(self, *args):
+        """Open file manager for upload"""
+        if not self.file_manager:
+            self.file_manager = MDFileManager(
+                exit_manager=self.exit_manager,
+                select_path=self.select_path,
+                preview=True
+            )
+        self.file_manager.show("/")
+    
+    def select_path(self, path):
+        """Handle file selection"""
+        self.exit_manager()
+        # Process selected file
+        print(f"Selected: {path}")
+    
+    def exit_manager(self, *args):
+        """Close file manager"""
+        if self.file_manager:
+            self.file_manager.close()
+'''
+        
+        # Analytics Screen
+        analytics_screen = '''# -*- coding: utf-8 -*-
+"""
+analytics.py - Analytics screen with charts and metrics
+"""
+
+from kivymd.uix.screen import MDScreen
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.label import MDLabel
+from kivymd.uix.card import MDCard
+from kivymd.uix.segmentedcontrol import MDSegmentedControl, MDSegmentedControlItem
+from kivy.metrics import dp
+
+try:
+    from kivy_garden.matplotlib import FigureCanvasKivyAgg
+    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
+    CHARTS_AVAILABLE = True
+except ImportError:
+    CHARTS_AVAILABLE = False
+
+class AnalyticsScreen(MDScreen):
+    """Material Design 3 Analytics Screen"""
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.name = "analytics"
+        self._build_ui()
+    
+    def _build_ui(self):
+        """Build analytics UI with charts"""
+        layout = MDBoxLayout(orientation="vertical", padding=dp(16), spacing=dp(16))
+        
+        # Header
+        header = MDLabel(
+            text="Analytics & Insights",
+            font_style="Display",
+            theme_text_color="Primary",
+            size_hint_y=None,
+            height=dp(56)
+        )
+        layout.add_widget(header)
+        
+        # Time range selector
+        time_selector = MDSegmentedControl(
+            MDSegmentedControlItem(text="24h"),
+            MDSegmentedControlItem(text="7d", active=True),
+            MDSegmentedControlItem(text="30d"),
+            MDSegmentedControlItem(text="All"),
+            size_hint_y=None,
+            height=dp(48)
+        )
+        layout.add_widget(time_selector)
+        
+        if CHARTS_AVAILABLE:
+            # Charts grid
+            charts_layout = MDBoxLayout(orientation="horizontal", spacing=dp(16))
+            
+            # Transfer volume chart
+            self.transfer_chart = self._create_chart_card(
+                "Transfer Volume",
+                "Area chart showing data transfer over time"
+            )
+            charts_layout.add_widget(self.transfer_chart)
+            
+            # Client activity chart
+            self.activity_chart = self._create_chart_card(
+                "Client Activity",
+                "Bar chart showing client connections"
+            )
+            charts_layout.add_widget(self.activity_chart)
+            
+            layout.add_widget(charts_layout)
+            
+            # Metrics cards
+            metrics_layout = MDBoxLayout(
+                orientation="horizontal",
+                spacing=dp(16),
+                size_hint_y=None,
+                height=dp(120)
+            )
+            
+            for title, value, change in [
+                ("Total Transferred", "1.2 TB", "+15%"),
+                ("Active Clients", "42", "+3"),
+                ("Success Rate", "99.8%", "+0.2%"),
+                ("Avg Speed", "45 MB/s", "+5 MB/s")
+            ]:
+                metrics_layout.add_widget(self._create_metric_card(title, value, change))
+            
+            layout.add_widget(metrics_layout)
+        else:
+            layout.add_widget(MDLabel(
+                text="Charts require kivy-garden.matplotlib",
+                theme_text_color="Secondary",
+                halign="center"
+            ))
+        
+        self.add_widget(layout)
+    
+    def _create_chart_card(self, title, subtitle):
+        """Create a chart card with Material Design styling"""
+        card = MDCard(
+            md_bg_color=self.theme_cls.surfaceVariantColor,
+            elevation=1,
+            radius=dp(12),
+            padding=dp(16)
+        )
+        
+        layout = MDBoxLayout(orientation="vertical")
+        layout.add_widget(MDLabel(text=title, font_style="Title"))
+        layout.add_widget(MDLabel(text=subtitle, font_style="Body", theme_text_color="Secondary"))
+        
+        if CHARTS_AVAILABLE:
+            fig = Figure(figsize=(4, 3), facecolor="none")
+            ax = fig.add_subplot(111)
+            ax.set_facecolor("none")
+            
+            # Sample data
+            import numpy as np
+            x = np.linspace(0, 10, 100)
+            y = np.sin(x) * np.exp(-x/10)
+            ax.plot(x, y, color="#1976D2", linewidth=2)
+            ax.fill_between(x, y, alpha=0.3, color="#1976D2")
+            
+            canvas = FigureCanvasKivyAgg(fig)
+            layout.add_widget(canvas)
+        
+        card.add_widget(layout)
+        return card
+    
+    def _create_metric_card(self, title, value, change):
+        """Create a metric card"""
+        card = MDCard(
+            md_bg_color=self.theme_cls.surfaceVariantColor,
+            elevation=1,
+            radius=dp(12),
+            padding=dp(12)
+        )
+        
+        layout = MDBoxLayout(orientation="vertical")
+        layout.add_widget(MDLabel(
+            text=title,
+            font_style="Label",
+            theme_text_color="Secondary"
+        ))
+        layout.add_widget(MDLabel(
+            text=value,
+            font_style="Headline",
+            theme_text_color="Primary"
+        ))
+        
+        change_color = "green" if change.startswith("+") else "red"
+        layout.add_widget(MDLabel(
+            text=change,
+            font_style="Body",
+            theme_text_color="Custom",
+            text_color=change_color
+        ))
+        
+        card.add_widget(layout)
+        return card
+'''
+        
+        # Database Screen
+        database_screen = '''# -*- coding: utf-8 -*-
+"""
+database.py - Database browser screen
+"""
+
+from kivymd.uix.screen import MDScreen
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.label import MDLabel
+from kivymd.uix.button import MDButton, MDIconButton
+from kivymd.uix.datatables import MDDataTable
+from kivymd.uix.menu import MDDropdownMenu
+from kivy.metrics import dp
+
+class DatabaseScreen(MDScreen):
+    """Material Design 3 Database Browser Screen"""
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.name = "database"
+        self.current_table = None
+        self._build_ui()
+    
+    def _build_ui(self):
+        """Build database browser UI"""
+        layout = MDBoxLayout(orientation="vertical", padding=dp(16), spacing=dp(16))
+        
+        # Header with table selector
+        header = MDBoxLayout(size_hint_y=None, height=dp(56))
+        header.add_widget(MDLabel(
+            text="Database Browser",
+            font_style="Display",
+            theme_text_color="Primary"
+        ))
+        
+        # Table selector button
+        self.table_btn = MDButton(
+            MDButtonText(text="Select Table"),
+            MDButtonIcon(icon="menu-down"),
+            style="outlined",
+            on_release=self.show_table_menu
+        )
+        header.add_widget(self.table_btn)
+        
+        # Refresh button
+        refresh_btn = MDIconButton(
+            icon="refresh",
+            on_release=self.refresh_data
+        )
+        header.add_widget(refresh_btn)
+        
+        layout.add_widget(header)
+        
+        # Data table
+        self.data_table = MDDataTable(
+            size_hint=(1, 1),
+            use_pagination=True,
+            rows_num=20,
+            column_data=[],
+            row_data=[],
+            elevation=2
+        )
+        
+        layout.add_widget(self.data_table)
+        
+        self.add_widget(layout)
+    
+    def show_table_menu(self, caller):
+        """Show table selection menu"""
+        tables = ["clients", "files", "transfers", "logs", "settings"]
+        
+        menu_items = [
+            {
+                "text": table.capitalize(),
+                "on_release": lambda x=table: self.select_table(x)
+            }
+            for table in tables
+        ]
+        
+        self.menu = MDDropdownMenu(
+            caller=caller,
+            items=menu_items,
+            width_mult=3
+        )
+        self.menu.open()
+    
+    def select_table(self, table_name):
+        """Select and load a database table"""
+        self.current_table = table_name
+        self.table_btn.text = f"Table: {table_name.capitalize()}"
+        self.menu.dismiss()
+        self.load_table_data(table_name)
+    
+    def load_table_data(self, table_name):
+        """Load data for the selected table"""
+        # Sample data - replace with actual database queries
+        if table_name == "clients":
+            self.data_table.column_data = [
+                ("ID", dp(40)),
+                ("Name", dp(40)),
+                ("IP Address", dp(30)),
+                ("Status", dp(20)),
+                ("Last Seen", dp(30))
+            ]
+            self.data_table.row_data = [
+                ("1", "Client-001", "192.168.1.100", "Online", "2024-01-15 10:30"),
+                ("2", "Client-002", "192.168.1.101", "Offline", "2024-01-14 15:45"),
+            ]
+        # Add other table configurations
+        
+        self.data_table.update_row_data(
+            self.data_table,
+            self.data_table.row_data
+        )
+    
+    def refresh_data(self, *args):
+        """Refresh current table data"""
+        if self.current_table:
+            self.load_table_data(self.current_table)
+'''
+        
+        # Save screen files
+        screens = {
+            "files.py": files_screen,
+            "analytics.py": analytics_screen,
+            "database.py": database_screen,
+        }
+        
+        for filename, content in screens.items():
+            file_path = self.kivymd_dir / "screens" / filename
+            file_path.write_text(content)
+            print(f"   ✅ Created {filename}")
+        
+        return True
+    
+    def create_integration_module(self):
+        """Create server integration module"""
+        print("\n🔌 Creating server integration module...")
+        
+        integration_code = '''# -*- coding: utf-8 -*-
+"""
+server_integration.py - Integration layer between KivyMD GUI and server
+"""
+
+import threading
+import queue
+from typing import Optional, Dict, Any
+from datetime import datetime
+
+class ServerIntegration:
+    """Bridge between KivyMD GUI and backup server"""
+    
+    def __init__(self, app, server_instance=None):
+        self.app = app
+        self.server = server_instance
+        self.update_thread = None
+        self.running = False
+        
+    def start_monitoring(self):
+        """Start monitoring server status"""
+        self.running = True
+        self.update_thread = threading.Thread(target=self._monitor_loop, daemon=True)
+        self.update_thread.start()
+    
+    def stop_monitoring(self):
+        """Stop monitoring"""
+        self.running = False
+        if self.update_thread:
+            self.update_thread.join(timeout=2)
+    
+    def _monitor_loop(self):
+        """Main monitoring loop"""
+        while self.running:
+            try:
+                if self.server:
+                    # Get server status
+                    status = {
+                        "type": "server_status",
+                        "data": {
+                            "running": getattr(self.server, "running", False),
+                            "port": getattr(self.server, "port", 1256),
+                            "address": getattr(self.server, "host", "0.0.0.0")
+                        }
+                    }
+                    self.app.update_queue.put(status)
+                    
+                    # Get client stats
+                    if hasattr(self.server, "clients"):
+                        client_stats = {
+                            "type": "client_stats",
+                            "data": {
+                                "connected": len(self.server.clients),
+                                "total": len(getattr(self.server, "clients_by_name", {}))
+                            }
+                        }
+                        self.app.update_queue.put(client_stats)
+                
+                # Sleep for update interval
+                import time
+                time.sleep(1.0)
+                
+            except Exception as e:
+                print(f"Monitor error: {e}")
+    
+    def send_command(self, command: str, data: Dict[str, Any] = None):
+        """Send command to server"""
+        if not self.server:
+            return False
+        
+        try:
+            if command == "start":
+                threading.Thread(target=self.server.start, daemon=True).start()
+            elif command == "stop":
+                threading.Thread(target=self.server.stop, daemon=True).start()
+            elif command == "restart":
+                def restart():
+                    if self.server.running:
+                        self.server.stop()
+                        import time
+                        time.sleep(2)
+                    self.server.start()
+                threading.Thread(target=restart, daemon=True).start()
+            elif command == "apply_settings" and data:
+                self.server.apply_settings(data)
+            
+            return True
+        except Exception as e:
+            print(f"Command error: {e}")
+            return False
+'''
+        
+        integration_file = self.kivymd_dir / "utils" / "server_integration.py"
+        integration_file.write_text(integration_code)
+        print(f"   ✅ Created server_integration.py")
+        
+        return True
+    
+    def create_launcher(self):
+        """Create launcher script"""
+        print("\n🚀 Creating launcher script...")
+        
+        launcher_code = '''#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+launch_kivymd.py - Launcher for KivyMD GUI
+"""
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(__file__))
+
+from kivymd_gui.main import main
+
+def launch_with_server():
+    """Launch GUI with server instance"""
+    try:
+        # Try to import server
+        from python_server.server.backup_server import BackupServer
+        server = BackupServer()
+    except ImportError:
+        print("[INFO] Server not available, running in standalone mode")
+        server = None
+    
+    main(server_instance=server)
+
+def launch_standalone():
+    """Launch GUI in standalone mode"""
+    main(server_instance=None)
+
+if __name__ == "__main__":
+    if "--standalone" in sys.argv:
+        launch_standalone()
+    else:
+        launch_with_server()
+'''
+        
+        launcher_file = self.project_root / "launch_kivymd.py"
+        launcher_file.write_text(launcher_code)
+        launcher_file.chmod(0o755)  # Make executable
+        print(f"   ✅ Created launch_kivymd.py")
+        
+        return True
+    
+    def create_config_file(self):
+        """Create KivyMD configuration file"""
+        print("\n⚙️ Creating configuration...")
+        
+        config = {
+            "app": {
+                "title": "Encrypted Backup Server",
+                "version": "2.0.0",
+                "theme": "Dark",
+                "primary_color": "Blue",
+                "material_style": "M3"
+            },
+            "server": {
+                "port": 1256,
+                "host": "0.0.0.0",
+                "storage_dir": "received_files",
+                "max_clients": 50,
+                "session_timeout": 10,
+                "maintenance_interval": 60
+            },
+            "ui": {
+                "window_width": 1400,
+                "window_height": 900,
+                "min_width": 1000,
+                "min_height": 700,
+                "animations": True,
+                "show_tooltips": True
+            }
+        }
+        
+        config_file = self.kivymd_dir / "config.json"
+        with open(config_file, "w") as f:
+            json.dump(config, f, indent=4)
+        print(f"   ✅ Created config.json")
+        
+        return True
+    
+    def run_setup(self):
+        """Run the complete setup process"""
+        print("🚀 KivyMD Migration Setup")
+        print("=" * 50)
+        
+        steps = [
+            ("Checking Python version", self.check_python_version),
+            ("Installing dependencies", self.install_dependencies),
+            ("Creating project structure", self.create_project_structure),
+            ("Backing up existing GUI", self.backup_existing_gui),
+            ("Creating theme configuration", self.create_theme_config),
+            ("Creating additional screens", self.create_additional_screens),
+            ("Creating server integration", self

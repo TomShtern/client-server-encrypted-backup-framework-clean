@@ -1,0 +1,40 @@
+{
+    "app": {
+        "title": "Encrypted Backup Server",
+        "version": "2.0.0",
+        "theme": "Dark",
+        "primary_color": "Blue",
+        "material_style": "M3",
+        "window": {
+            "width": 1400,
+            "height": 900,
+            "min_width": 1000,
+            "min_height": 700
+        }
+    },
+    "server": {
+        "port": 1256,
+        "host": "0.0.0.0",
+        "storage_dir": "received_files",
+        "max_clients": 50,
+        "session_timeout": 10,
+        "maintenance_interval": 60
+    },
+    "ui": {
+        "animations": true,
+        "show_tooltips": true,
+        "auto_refresh_interval": 1.0,
+        "log_max_entries": 100,
+        "table_rows_per_page": 15
+    },
+    "charts": {
+        "enabled": true,
+        "update_interval": 2.0,
+        "data_retention_minutes": 60,
+        "colors": {
+            "cpu": "#1976D2",
+            "memory": "#7C4DFF",
+            "network": "#00897B"
+        }
+    }
+}

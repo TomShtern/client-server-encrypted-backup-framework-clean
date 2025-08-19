@@ -217,7 +217,7 @@ class EnhancedTooltip:
         self.text = text
         self.delay = delay
         self.tooltip_window: Optional[tk.Toplevel] = None
-        self.tooltip_job: Optional[int] = None  # was Optional[str]
+        self.tooltip_job: Optional[int] = None  # Correct type annotation
         
         self.widget.bind("<Enter>", self.on_enter)
         self.widget.bind("<Leave>", self.on_leave)
@@ -232,7 +232,7 @@ class EnhancedTooltip:
 
     def schedule_tooltip(self) -> None:
         self.cancel_tooltip()
-        self.tooltip_job = self.widget.after(self.delay, self.show_tooltip)
+        self.tooltip_job = self.widget.after(self.delay, self.show_tooltip)  # Returns int
 
     def cancel_tooltip(self) -> None:
         if self.tooltip_job:
@@ -1969,14 +1969,14 @@ class EnhancedServerGUI:
                 self.after_cancel(self.animation_job)
             
             diff = self.target_progress - self.progress
-            if abs(diff) < 0.5:
+            if abs(diff) < 0.1:
                 self.progress = self.target_progress
                 self._update_display()
                 return
             
-            self.progress += diff * 0.1
+            self.progress += diff * 0.15
             self._update_display()
-            self.animation_job = self.after(16, self._animate_progress)
+            self.animation_job = self.after(20, self._animate_progress)
 
         def _update_display(self) -> None:
             # Update arc
@@ -2239,6 +2239,9 @@ class EnhancedServerGUI:
                 pystray.MenuItem('🏠 Show Dashboard', lambda: self._show_window_and_switch('dashboard'), default=True),
                 pystray.MenuItem('👥 Client Management', lambda: self._show_window_and_switch('clients')),
                 pystray.MenuItem('📁 File Browser', lambda: self._show_window_and_switch('files')),
+                pystray.MenuItem('📊 Analytics', lambda: self._show_window_and_switch('analytics')),
+                pystray.MenuItem('🗄️ Database', lambda: self._show_window_and_switch('database')),
+                pystray.MenuItem('📝 System Logs', lambda: self._show_window_and_switch('logs')),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem('🚀 Start Server', self._start_server, enabled=lambda item: not getattr(self.server, 'running', False)),
                 pystray.MenuItem('⏹️ Stop Server', self._stop_server, enabled=lambda item: getattr(self.server, 'running', False)),
@@ -3181,26 +3184,3 @@ class EnhancedServerGUI:
                 self.connection_count_label.configure(text=f"Connections: {count}")
         except Exception as e:
             print(f"[WARNING] Error updating status display: {e}")
-
-
-def launch_premium_standalone() -> None:
-    """Launch premium GUI in standalone mode"""
-    print("[INFO] 🚀 Launching Premium Server GUI...")
-    gui = EnhancedServerGUI()
-    
-    if gui.initialize():
-        try:
-            print("[OK] ✨ Premium GUI is running!")
-            if gui.gui_thread:
-                gui.gui_thread.join()
-        except KeyboardInterrupt:
-            print("\n[INFO] 🛑 Shutdown signal received.")
-            gui.shutdown()
-    else:
-        print("[FATAL] ❌ Premium GUI could not be initialized.")
-    
-    print("[INFO] 👋 Premium application has exited.")
-
-
-if __name__ == "__main__":
-    launch_premium_standalone()

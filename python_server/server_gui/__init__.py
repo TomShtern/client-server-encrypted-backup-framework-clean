@@ -36,12 +36,13 @@ except ImportError:
     except ImportError:
         print("[WARNING] Could not enable the project-wide UTF-8 solution. Cross-package imports may fail.")
 
-
-# --- Public API Definition ---
-# We only expose the main ServerGUI class from the top level of the package.
-# All other components (pages, widgets) are considered internal implementation details,
-# promoting strong encapsulation.
-from .ServerGUI import ServerGUI
+try:
+    from .ServerGUI import EnhancedServerGUI as ServerGUI
+except ImportError as e:
+    raise ImportError(
+        "Could not import ServerGUI from ServerGUI.py. "
+        "Ensure that python_server/server_gui/ServerGUI.py exists and defines EnhancedServerGUI."
+    ) from e
 
 # The __all__ list formally declares the public API of the package.
 __all__ = [
