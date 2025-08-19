@@ -210,7 +210,7 @@ class DashboardPage(BasePage):
             self.client_meter = Meter(card, metersize=150, padding=10, amounttotal=1, amountused=0, metertype='semi', subtext="Client Load", interactive=False, bootstyle='primary', textright='/ 50')
             self.client_meter.grid(row=0, column=0, padx=5, pady=5, sticky='nsew')
             
-            self.disk_meter = Meter(card, metersize=150, padding=10, amountused=0, metertype='semi', subtext="Disk Usage", interactive=False, bootstyle='danger', unit='%')
+            self.disk_meter = Meter(card, metersize=150, padding=10, amountused=0, metertype='semi', subtext="Disk Usage", interactive=False, bootstyle='danger', textright='%')
             self.disk_meter.grid(row=0, column=1, padx=5, pady=5, sticky='nsew')
         else:
             # Fallback when Meter is unavailable

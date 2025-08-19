@@ -13,14 +13,13 @@ from typing import TYPE_CHECKING, Dict, Any, List
 
 try:
     from ttkbootstrap import constants
-    from tkcalendar import DateEntry
     CALENDAR_AVAILABLE = True
 except ImportError:
     from tkinter import ttk, constants
     CALENDAR_AVAILABLE = False
-    DateEntry = None  # type: ignore
 
 from .base_page import BasePage
+from ..utils.safe_date_entry import create_safe_date_entry
 from ..utils.tksheet_utils import ModernSheet
 
 if TYPE_CHECKING:
@@ -80,21 +79,17 @@ class FilesPage(BasePage):
         self.client_filter_combo.pack(side=constants.LEFT)
         self.client_filter_combo.bind("<<ComboboxSelected>>", lambda _: self._apply_filters())
 
-        # Date Range Filter
-        if CALENDAR_AVAILABLE and DateEntry is not None:
-            ttk.Label(frame, text="From:").pack(side=constants.LEFT, padx=(15, 5))
-            # Create DateEntry widgets with proper type handling
-            start_date_widget = DateEntry(frame, date_pattern='yyyy-mm-dd')  # type: ignore
-            start_date_widget.pack(side=constants.LEFT)  # type: ignore
-            self.start_date_entry = start_date_widget
-            
-            ttk.Label(frame, text="To:").pack(side=constants.LEFT, padx=(5, 5))
-            end_date_widget = DateEntry(frame, date_pattern='yyyy-mm-dd')  # type: ignore
-            end_date_widget.pack(side=constants.LEFT)  # type: ignore
-            self.end_date_entry = end_date_widget
+        # Date Range Filter - Always available with safe fallback
+        ttk.Label(frame, text="From:").pack(side=constants.LEFT, padx=(15, 5))
+        self.start_date_entry = create_safe_date_entry(frame, date_pattern='yyyy-mm-dd')
+        self.start_date_entry.pack(side=constants.LEFT)  # type: ignore[misc]
+        
+        ttk.Label(frame, text="To:").pack(side=constants.LEFT, padx=(5, 5))
+        self.end_date_entry = create_safe_date_entry(frame, date_pattern='yyyy-mm-dd')
+        self.end_date_entry.pack(side=constants.LEFT)  # type: ignore[misc]
 
-            start_date_widget.bind("<<DateEntrySelected>>", lambda _: self._apply_filters())  # type: ignore
-            end_date_widget.bind("<<DateEntrySelected>>", lambda _: self._apply_filters())  # type: ignore
+        self.start_date_entry.bind("<<DateEntrySelected>>", lambda _: self._apply_filters())
+        self.end_date_entry.bind("<<DateEntrySelected>>", lambda _: self._apply_filters())
         
         ttk.Button(frame, text="Refresh", command=self.on_show, style='info.Outline.TButton').pack(side=constants.RIGHT, padx=(15,0))
         return frame

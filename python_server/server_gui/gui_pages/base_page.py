@@ -55,8 +55,13 @@ class BasePage(ttk.Frame, abc.ABC):
         header_frame = ttk.Frame(self, style='TFrame', padding=(5, 10))
         header_frame.pack(side=constants.TOP, fill=constants.X)
         
-        icon = self.controller.asset_manager.get_icon(icon_name, size=(32, 32))
-        ttk.Label(header_frame, image=icon).pack(side=constants.LEFT, padx=(0, 10))
+        # Safe icon access with fallback
+        if hasattr(self.controller, 'asset_manager') and self.controller.asset_manager:
+            try:
+                icon = self.controller.asset_manager.get_icon(icon_name, size=(32, 32))
+                ttk.Label(header_frame, image=icon).pack(side=constants.LEFT, padx=(0, 10))
+            except Exception:
+                pass  # Skip icon if there's an error
         
         ttk.Label(header_frame, text=title, font=('Segoe UI', 18, 'bold')).pack(side=constants.LEFT, anchor='w')
         
@@ -72,14 +77,28 @@ class BasePage(ttk.Frame, abc.ABC):
         """Creates a standardized, centered placeholder message."""
         placeholder_frame = ttk.Frame(self, style='TFrame')
         
-        icon = self.controller.asset_manager.get_icon(icon_name, size=(64, 64))
-        icon_label = ttk.Label(placeholder_frame, image=icon, style='secondary.TLabel')
-        icon_label.pack(pady=(0, 10))
+        # Safe icon access with fallback
+        if hasattr(self.controller, 'asset_manager') and self.controller.asset_manager:
+            try:
+                icon = self.controller.asset_manager.get_icon(icon_name, size=(64, 64))
+                icon_label = ttk.Label(placeholder_frame, image=icon, style='secondary.TLabel')
+                icon_label.pack(pady=(0, 10))
+            except Exception:
+                pass  # Skip icon if there's an error
         
         text_label = ttk.Label(placeholder_frame, text=text, font=('Segoe UI', 12, 'italic'), style='secondary.TLabel')
         text_label.pack()
         
         return placeholder_frame
+    
+    def _get_safe_icon(self, icon_name: str, size: tuple = (16, 16)):
+        """Safely get an icon from the asset manager with fallback."""
+        if hasattr(self.controller, 'asset_manager') and self.controller.asset_manager:
+            try:
+                return self.controller.asset_manager.get_icon(icon_name, size=size)
+            except Exception:
+                pass
+        return None
 
     # --- Public API for Controller ---
 

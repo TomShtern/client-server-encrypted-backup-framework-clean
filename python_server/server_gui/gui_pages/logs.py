@@ -35,14 +35,8 @@ except ImportError:
     _NORMAL = 'normal'
     _DISABLED = 'disabled'
 
-try:
-    from tkcalendar import DateEntry
-    CALENDAR_AVAILABLE = True
-except ImportError:
-    DateEntry = None
-    CALENDAR_AVAILABLE = False
-
 from .base_page import BasePage
+from ..utils.safe_date_entry import create_safe_date_entry
 
 if TYPE_CHECKING:
     from ..ServerGUI import ServerGUI
@@ -71,19 +65,17 @@ class LogsPage(BasePage):
         level_combo = ttk.Combobox(bar, textvariable=self.level_var, state='readonly', values=["ALL", "INFO", "WARNING", "ERROR", "DEBUG"])
         level_combo.pack(side=_LEFT, padx=(0, 15))
 
-        if CALENDAR_AVAILABLE and DateEntry is not None:
-            ttk.Label(bar, text="From:").pack(side=_LEFT, padx=(0,5))
-            self.start_date_entry = DateEntry(bar, date_pattern='yyyy-mm-dd', firstweekday='sunday', startdate=date.today()-timedelta(days=7))
-            # Type ignore for third-party DateEntry pack method
-            self.start_date_entry.pack(side=_LEFT, padx=(0, 10))  # type: ignore[attr-defined]
-            ttk.Label(bar, text="To:").pack(side=_LEFT, padx=(0,5))
-            self.end_date_entry = DateEntry(bar, date_pattern='yyyy-mm-dd', firstweekday='sunday')
-            # Type ignore for third-party DateEntry pack method  
-            self.end_date_entry.pack(side=_LEFT, padx=(0, 20))  # type: ignore[attr-defined]
-        else:
-            # Fallback when calendar is not available
-            self.start_date_entry = None
-            self.end_date_entry = None
+        # Date filters - Always available with safe fallback
+        ttk.Label(bar, text="From:").pack(side=_LEFT, padx=(0,5))
+        self.start_date_entry = create_safe_date_entry(bar, date_pattern='yyyy-mm-dd', 
+                                                      firstweekday='sunday', 
+                                                      startdate=date.today()-timedelta(days=7))
+        self.start_date_entry.pack(side=_LEFT, padx=(0, 10))
+        
+        ttk.Label(bar, text="To:").pack(side=_LEFT, padx=(0,5))
+        self.end_date_entry = create_safe_date_entry(bar, date_pattern='yyyy-mm-dd', 
+                                                    firstweekday='sunday')
+        self.end_date_entry.pack(side=_LEFT, padx=(0, 20))
         
         ttk.Label(bar, text="Search:").pack(side=_LEFT, padx=(0,5))
         self.search_var = tk.StringVar()
@@ -149,10 +141,9 @@ class LogsPage(BasePage):
 
     def _clear_filters(self):
         self.level_var.set("ALL")
-        if CALENDAR_AVAILABLE and self.start_date_entry is not None and self.end_date_entry is not None:
-            # Type ignore for third-party DateEntry methods
-            self.start_date_entry.set_date(date.today()-timedelta(days=7))  # type: ignore[attr-defined]
-            self.end_date_entry.set_date(date.today())  # type: ignore[attr-defined]
+        # Safe DateEntry objects are always available
+        self.start_date_entry.set_date(date.today()-timedelta(days=7))
+        self.end_date_entry.set_date(date.today())
         self.search_var.set("")
         self._apply_filters()
         
@@ -171,12 +162,9 @@ class LogsPage(BasePage):
 
     def filter_and_display_logs(self):
         level = self.level_var.get()
-        start_dt = (self.start_date_entry.get_date() 
-                   if CALENDAR_AVAILABLE and self.start_date_entry is not None 
-                   else date.min)
-        end_dt = (self.end_date_entry.get_date() 
-                 if CALENDAR_AVAILABLE and self.end_date_entry is not None 
-                 else date.max)
+        # Safe DateEntry objects are always available
+        start_dt = self.start_date_entry.get_date()
+        end_dt = self.end_date_entry.get_date()
         search = self.search_var.get().lower()
 
         filtered_logs = []

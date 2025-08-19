@@ -118,9 +118,14 @@ class AssetManager:
                 resized_img = img.resize(size, Image.Resampling.LANCZOS)
                 photo_image = ImageTk.PhotoImage(resized_img)
         
-        except Exception as e:
-            print(f"[WARNING] {e}. Creating placeholder for icon '{name}'.")
-            photo_image = self._create_placeholder_icon(size)
+        except Exception:
+            # Reduce verbosity - only print once per unique icon name
+            if not hasattr(self, '_warned_icons'):
+                self._warned_icons: set[str] = set()
+            if name not in self._warned_icons:
+                print(f"[INFO] Creating placeholder for icon '{name}'.")
+                self._warned_icons.add(name)
+            photo_image = self._create_placeholder_icon(size, name)
 
         # Store in cache AND in the critical reference holder.
         self._icon_cache[cache_key] = photo_image
@@ -128,16 +133,72 @@ class AssetManager:
         
         return photo_image
 
-    def _create_placeholder_icon(self, size: Tuple[int, int]) -> ImageTk.PhotoImage:
+    def _create_placeholder_icon(self, size: Tuple[int, int], icon_name: str = "unknown") -> ImageTk.PhotoImage:
         """
-        Generates a visible magenta placeholder icon.
+        Generates a themed placeholder icon based on the icon name.
         This is a resilience feature to prevent crashes on missing assets.
         """
-        cache_key = f"placeholder_{size[0]}x{size[1]}"
+        cache_key = f"placeholder_{icon_name}_{size[0]}x{size[1]}"
         if cache_key in self._icon_cache:
             return self._icon_cache[cache_key]
 
-        img = Image.new('RGB', size, 'magenta')
+        img = Image.new('RGBA', size, (0, 0, 0, 0))  # Transparent background
+        draw = ImageDraw.Draw(img)
+        
+        # Choose color and shape based on icon name
+        if 'fill' in icon_name or 'solid' in icon_name:
+            color = '#2563eb'  # Blue
+        elif 'danger' in icon_name or 'error' in icon_name:
+            color = '#dc2626'  # Red
+        elif 'success' in icon_name or 'check' in icon_name:
+            color = '#16a34a'  # Green
+        elif 'warning' in icon_name:
+            color = '#ea580c'  # Orange
+        else:
+            color = '#6b7280'  # Gray
+        
+        # Create a simple geometric shape based on icon name
+        margin = 2
+        if 'circle' in icon_name:
+            draw.ellipse([margin, margin, size[0]-margin, size[1]-margin], 
+                        fill=color, outline=color)
+        elif 'house' in icon_name or 'home' in icon_name:
+            # Simple house shape
+            points = [(size[0]//2, margin), (size[0]-margin, size[1]//2), 
+                     (size[0]-margin, size[1]-margin), (margin, size[1]-margin), 
+                     (margin, size[1]//2)]
+            draw.polygon(points, fill=color)
+        elif 'people' in icon_name or 'person' in icon_name:
+            # Simple person icon
+            head_r = size[0] // 6
+            draw.ellipse([size[0]//2 - head_r, margin, size[0]//2 + head_r, margin + head_r*2], 
+                        fill=color)
+            draw.rectangle([size[0]//2 - head_r, margin + head_r*2, size[0]//2 + head_r, size[1]-margin], 
+                          fill=color)
+        elif 'file' in icon_name or 'document' in icon_name:
+            # Simple document shape
+            draw.rectangle([margin*2, margin, size[0]-margin, size[1]-margin], 
+                          fill=color, outline=color)
+            draw.polygon([(size[0]-margin*3, margin), (size[0]-margin, margin), 
+                         (size[0]-margin, margin*3)], fill='white')
+        elif 'gear' in icon_name or 'settings' in icon_name:
+            # Simple gear shape
+            center = (size[0]//2, size[1]//2)
+            r = min(size) // 3
+            draw.ellipse([center[0]-r, center[1]-r, center[0]+r, center[1]+r], 
+                        fill=color, outline=color)
+        elif 'database' in icon_name:
+            # Simple database cylinders
+            h = size[1] // 4
+            for i in range(3):
+                y = margin + i * h
+                draw.ellipse([margin*2, y, size[0]-margin*2, y+h//2], 
+                           fill=color, outline=color)
+        else:
+            # Default square with rounded corners
+            draw.rounded_rectangle([margin*2, margin*2, size[0]-margin*2, size[1]-margin*2], 
+                                 radius=3, fill=color)
+        
         photo_image = ImageTk.PhotoImage(img)
         
         self._icon_cache[cache_key] = photo_image

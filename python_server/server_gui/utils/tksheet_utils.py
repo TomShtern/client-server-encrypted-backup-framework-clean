@@ -90,7 +90,18 @@ class ModernSheet(Sheet):
 
     def align_column(self, column: int, align: str) -> None:
         """Sets the alignment for all cells in a given column."""
-        self.set_column_options(column=column, align=align)  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+        try:
+            # Try the modern tksheet method first
+            if hasattr(self, 'set_column_options'):
+                self.set_column_options(column=column, align=align)  # type: ignore
+            elif hasattr(self, 'column_options'):
+                # Fallback for older tksheet versions
+                self.column_options(column=column, align=align)  # type: ignore
+            else:
+                # If neither method exists, skip alignment
+                print(f"[WARNING] Column alignment not supported in this tksheet version")
+        except Exception as e:
+            print(f"[WARNING] Could not set column alignment: {e}")
 
     def set_sheet_headers(self, headers: List[str]) -> None:
         """Sets the column headers for the sheet."""

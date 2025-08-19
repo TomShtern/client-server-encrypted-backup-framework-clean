@@ -16,6 +16,16 @@ import sys
 import os
 import traceback
 
+# Import UTF-8 solution FIRST for proper Unicode handling
+try:
+    # Add project root to path temporarily for import
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    import Shared.utils.utf8_solution
+except ImportError:
+    pass  # Will be handled later in main()
+
 def main() -> int:
     """
     Initializes and runs the Server GUI application in standalone mode.

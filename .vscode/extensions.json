@@ -9,6 +9,7 @@
         "mongodb.mongodb-vscode",
         "sourcery.sourcery",
         "supabase.vscode-supabase-extension",
-        "ttoowa.in-your-face-incredible"
+        "ttoowa.in-your-face-incredible",
+        "d-biehl.robotcode"
     ]
 }

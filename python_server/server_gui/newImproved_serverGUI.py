@@ -1640,26 +1640,8 @@ class EnhancedServerGUI:
         log_filter.set("All")
         log_filter.pack(side="left", padx=EnhancedTheme.SPACING_SM)
         
-        # Search section
-        search_frame = tk.Frame(controls_frame, bg=EnhancedTheme.CARD_BG)
-        search_frame.pack(side="left", fill="x", expand=True, padx=EnhancedTheme.SPACING_SM)
-        
-        search_icon = tk.Label(search_frame, text="🔍", 
-                              bg=EnhancedTheme.CARD_BG, fg=EnhancedTheme.TEXT_MUTED)
-        search_icon.pack(side="left", padx=(0, EnhancedTheme.SPACING_XS))
-        
-        self.log_search_var = tk.StringVar()
-        search_entry = tk.Entry(search_frame, textvariable=self.log_search_var,
-                               bg=EnhancedTheme.SECONDARY_BG, 
-                               fg=EnhancedTheme.TEXT_PRIMARY,
-                               relief="flat", bd=0, width=20,
-                               insertbackground=EnhancedTheme.TEXT_PRIMARY)
-        search_entry.pack(side="left", padx=(0, EnhancedTheme.SPACING_SM))
-        
-        # Button frame for action buttons
-        button_frame = tk.Frame(controls_frame, bg=EnhancedTheme.CARD_BG)
-        button_frame.pack(side="right")
-        
+        # Search
+        search
         clear_btn = tk.Button(button_frame, text="🗑️ Clear",
                              command=self._clear_activity_log,
                              bg=EnhancedTheme.ERROR, fg=EnhancedTheme.TEXT_PRIMARY,
