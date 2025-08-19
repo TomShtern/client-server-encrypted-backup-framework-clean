@@ -10,7 +10,8 @@ complex configuration details from the page modules.
 
 from tksheet import Sheet
 import ttkbootstrap as ttk
-from typing import List, Optional, Callable, Dict, Any
+from typing import List, Any, Union, Dict, Optional
+
 
 class ModernSheet(Sheet):
     """
@@ -28,17 +29,18 @@ class ModernSheet(Sheet):
         style = ttk.Style.get_instance()  # type: ignore
         # Defensive: fallback to defaults if style/colors missing
         if style is not None and hasattr(style, "colors"):
-            raw_colors = style.colors
+            raw_colors: Any = style.colors  # type: ignore[reportUnknownMemberType]
             if isinstance(raw_colors, dict):
-                bg = raw_colors.get("bg", "#f0f0f0")
-                fg = raw_colors.get("fg", "#222")
-                border = raw_colors.get("border", "#ccc")
-                secondary = raw_colors.get("secondary", "#0078d7")
-                light = raw_colors.get("light", "#fff")
-                inputbg = raw_colors.get("inputbg", "#fff")
-                primary = raw_colors.get("primary", "#005fa3")
-                selectbg = raw_colors.get("selectbg", "#e0eaff")
-                selectfg = raw_colors.get("selectfg", "#222")
+                colors_dict: Dict[str, Any] = raw_colors  # type: ignore[reportUnknownMemberType]
+                bg = colors_dict.get("bg", "#f0f0f0")  # type: ignore[reportUnknownMemberType]
+                fg = colors_dict.get("fg", "#222")  # type: ignore[reportUnknownMemberType]
+                border = colors_dict.get("border", "#ccc")  # type: ignore[reportUnknownMemberType]
+                secondary = colors_dict.get("secondary", "#0078d7")  # type: ignore[reportUnknownMemberType]
+                light = colors_dict.get("light", "#fff")  # type: ignore[reportUnknownMemberType]
+                inputbg = colors_dict.get("inputbg", "#fff")  # type: ignore[reportUnknownMemberType]
+                primary = colors_dict.get("primary", "#005fa3")  # type: ignore[reportUnknownMemberType]
+                selectbg = colors_dict.get("selectbg", "#e0eaff")  # type: ignore[reportUnknownMemberType]
+                selectfg = colors_dict.get("selectfg", "#222")  # type: ignore[reportUnknownMemberType]
             else:
                 # Assume it's an object with attributes
                 bg = getattr(raw_colors, "bg", "#f0f0f0")
@@ -62,8 +64,8 @@ class ModernSheet(Sheet):
             selectbg = "#e0eaff"
             selectfg = "#222"
 
-        self.set_options(
-            font=("Segoe UI", 10),
+        self.set_options(  # type: ignore[reportUnknownMemberType]
+            font=("Segoe UI", 10, "normal"),
             header_font=("Segoe UI", 10, "bold"),
             background=bg,
             foreground=fg,
@@ -84,34 +86,49 @@ class ModernSheet(Sheet):
             # Disable default tksheet right-click menus for custom implementation
             enable_edit_cell_auto_resize=False,
         )
-        self.readonly(True) # Default to read-only for safety
-        
+        self.readonly(True)  # Default to read-only for safety
+
     def align_column(self, column: int, align: str) -> None:
         """Sets the alignment for all cells in a given column."""
-        self.set_column_options(column=column, align=align)
+        self.set_column_options(column=column, align=align)  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
 
     def set_sheet_headers(self, headers: List[str]) -> None:
         """Sets the column headers for the sheet."""
         self.headers(headers)
 
-    def readonly_columns(self, columns: List[int]) -> None:
+    def readonly_columns(self, columns: Union[List[int], int], readonly: bool = True, redraw: bool = True) -> 'Sheet':
         """Makes a specific set of columns read-only."""
-        super().readonly_columns(columns)
+        return super().readonly_columns(columns, readonly=readonly, redraw=redraw)
 
-    def set_sheet_data(self, data: List[list], redraw: bool = True) -> None:
+    def set_sheet_data(self, data: Optional[Union[List[List[Any]], tuple]] = None, 
+                       reset_col_positions: bool = True, 
+                       reset_row_positions: bool = True, 
+                       redraw: bool = True, 
+                       verify: bool = False, 
+                       reset_highlights: bool = False, 
+                       keep_formatting: bool = True, 
+                       delete_options: bool = False) -> 'Sheet':
         """
         Clears the sheet and populates it with new data.
 
         Args:
-            data (List[list]): A list of lists representing the rows.
-            redraw (bool): Whether to redraw the sheet immediately.
+            data: A list of lists representing the rows or None.
+            reset_col_positions: Whether to reset column positions.
+            reset_row_positions: Whether to reset row positions.
+            redraw: Whether to redraw the sheet immediately.
+            verify: Whether to verify the data.
+            reset_highlights: Whether to reset highlights.
+            keep_formatting: Whether to keep formatting.
+            delete_options: Whether to delete options.
         """
-        # Overriding to provide a simpler, safer interface than the base class
-        current_rows = self.get_total_rows()
-        if current_rows > 0:
-            self.delete_rows(0, current_rows)
-        if data:
-            self.insert_rows(0, data)
-        
-        if redraw:
-            self.redraw()
+        # Call the parent method with all parameters
+        return super().set_sheet_data(  # type: ignore[reportUnknownMemberType]
+            data=data, 
+            reset_col_positions=reset_col_positions,
+            reset_row_positions=reset_row_positions,
+            redraw=redraw,
+            verify=verify,
+            reset_highlights=reset_highlights,
+            keep_formatting=keep_formatting,
+            delete_options=delete_options
+        )

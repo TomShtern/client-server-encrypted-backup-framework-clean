@@ -16,7 +16,8 @@ import json
 import shutil
 import tkinter as tk
 from tkinter import messagebox, filedialog
-from typing import (Dict, List, Optional, Any, Deque, Callable, TYPE_CHECKING, Protocol,
+from tkinter.constants import LEFT, RIGHT, TOP, X, Y, BOTH, END, CENTER, BOTTOM
+from typing import (Dict, Optional, Any, Deque, TYPE_CHECKING, Protocol,
                     runtime_checkable, cast)
 
 # --- Type Hinting Setup for Backend, Pages, and DB ---
@@ -51,7 +52,7 @@ class BackupServerLike(Protocol):
 # --- Graceful Optional Dependency Imports ---
 try:
     import ttkbootstrap as ttk
-    from ttkbootstrap.constants import *
+    from ttkbootstrap.constants import *  # type: ignore[reportWildcardImportFromLibrary]
     from ttkbootstrap.toast import ToastNotification
 except ImportError:
     print("[FATAL] ttkbootstrap is required. Please run: pip install ttkbootstrap")
@@ -74,11 +75,11 @@ except ImportError:
     print("[INFO] pystray/Pillow not available. System tray will be disabled.")
 
 try:
-    from playsound import playsound
+    from playsound import playsound  # type: ignore[reportMissingImports]
     SOUND_AVAILABLE = True
 except ImportError:
     SOUND_AVAILABLE = False
-    def playsound(path: str, block: bool = False) -> None: pass
+    def playsound(_path: str, _block: bool = False) -> None: pass
     print("[INFO] playsound not available. Audio cues will be disabled.")
 
 try:
@@ -117,7 +118,7 @@ class ServerGUI:
     def __init__(self, server_instance: Optional[BackupServerLike] = None) -> None:
         self.server = server_instance
         self.settings: Dict[str, Any] = self._load_settings()
-        self._fallback_db_manager: Optional[DatabaseManager] = None
+        self._fallback_db_manager: Optional[Any] = None  # DatabaseManager when available
 
         self.root = ttk.Window(
             themename=self.settings.get('theme', 'cyborg'),
@@ -139,7 +140,7 @@ class ServerGUI:
 
         # --- Managers and Controllers ---
         self.asset_manager = AssetManager()
-        self.tray_icon: Optional[pystray.Icon] = None
+        self.tray_icon: Optional[Any] = None  # pystray.Icon when available
 
         # --- UI Component References ---
         self.pages: Dict[str, BasePage] = {}
@@ -175,16 +176,17 @@ class ServerGUI:
         print("GUI main loop ended.")
 
     @property
-    def effective_db_manager(self) -> Optional[DatabaseManager]:
+    def effective_db_manager(self) -> Optional[Any]:  # DatabaseManager when available
         """Gets the DB manager from the server or creates a fallback for standalone mode."""
         if self.server and hasattr(self.server, 'db_manager') and self.server.db_manager:
             return self.server.db_manager
         
-        if DatabaseManager is None: return None
+        if DatabaseManager is None: 
+            return None
             
         if self._fallback_db_manager is None:
             try:
-                self._fallback_db_manager = DatabaseManager()
+                self._fallback_db_manager = DatabaseManager()  # type: ignore[reportUnknownMemberType]
             except Exception as e:
                 print(f"[WARNING] Could not create fallback DatabaseManager: {e}")
                 self.show_toast("Could not initialize DB Manager", "error")
@@ -197,20 +199,24 @@ class ServerGUI:
         """Defines custom ttk styles for a bespoke, polished look."""
         s = self.root.style
         # Navigation buttons: No border, larger padding for a modern feel
-        s.configure('Nav.TButton', font=('Segoe UI', 11), borderwidth=0, padding=(20, 10))
-        s.map('Nav.TButton',
-              background=[('active', s.colors.primary), ('!active', s.colors.secondary)],
-              foreground=[('!disabled', s.colors.light)])
+        s.configure('Nav.TButton', font=('Segoe UI', 11), borderwidth=0, padding=(20, 10))  # type: ignore[reportUnknownMemberType]
+        s.map('Nav.TButton',  # type: ignore[reportUnknownMemberType]
+              background=[('active', getattr(s.colors, 'primary', '#007acc')),  # type: ignore[reportUnknownMemberType]
+                         ('!active', getattr(s.colors, 'secondary', '#404040'))],  # type: ignore[reportUnknownMemberType]
+              foreground=[('!disabled', getattr(s.colors, 'light', '#ffffff'))])  # type: ignore[reportUnknownMemberType]
         # Active navigation button: A distinct style to indicate the current page
-        s.configure('NavActive.TButton', font=('Segoe UI Semibold', 11), borderwidth=0, padding=(20, 10))
-        s.map('NavActive.TButton', background=[('!disabled', s.colors.primary)])
+        s.configure('NavActive.TButton', font=('Segoe UI Semibold', 11), borderwidth=0, padding=(20, 10))  # type: ignore[reportUnknownMemberType]
+        s.map('NavActive.TButton', background=[('!disabled', getattr(s.colors, 'primary', '#007acc'))])  # type: ignore[reportUnknownMemberType,reportUnknownMemberType]
         # Pill-shaped entry for a modern global search bar
-        s.configure('Pill.TEntry', relief='flat', borderwidth=10, bordercolor=s.colors.secondary)
+        s.configure('Pill.TEntry', relief='flat', borderwidth=10,  # type: ignore[reportUnknownMemberType]
+                   bordercolor=getattr(s.colors, 'secondary', '#404040'))  # type: ignore[reportUnknownMemberType]
         # Custom title bar buttons for a seamless look
-        s.configure('Titlebar.TButton', font=('Segoe UI Symbol', 10), padding=5, relief='flat', borderwidth=0)
-        s.map('Titlebar.TButton', background=[('active', s.colors.selectbg), ('!active', s.colors.primary)])
-        s.configure('Titlebar.danger.TButton', font=('Segoe UI Symbol', 10), padding=5, relief='flat', borderwidth=0)
-        s.map('Titlebar.danger.TButton', background=[('active', s.colors.danger), ('!active', s.colors.primary)])
+        s.configure('Titlebar.TButton', font=('Segoe UI Symbol', 10), padding=5, relief='flat', borderwidth=0)  # type: ignore[reportUnknownMemberType]
+        s.map('Titlebar.TButton', background=[('active', getattr(s.colors, 'selectbg', '#0066cc')),  # type: ignore[reportUnknownMemberType]
+                                            ('!active', getattr(s.colors, 'primary', '#007acc'))])  # type: ignore[reportUnknownMemberType]
+        s.configure('Titlebar.danger.TButton', font=('Segoe UI Symbol', 10), padding=5, relief='flat', borderwidth=0)  # type: ignore[reportUnknownMemberType]
+        s.map('Titlebar.danger.TButton', background=[('active', getattr(s.colors, 'danger', '#dc3545')),  # type: ignore[reportUnknownMemberType]
+                                                   ('!active', getattr(s.colors, 'primary', '#007acc'))])  # type: ignore[reportUnknownMemberType]
 
     def _setup_custom_title_bar(self) -> None:
         """Creates a custom, draggable title bar (Feature #15)."""
@@ -227,7 +233,8 @@ class ServerGUI:
         # Left side: Icon and Title
         left_frame = ttk.Frame(self.title_bar, style='primary.TFrame')
         left_frame.pack(side=LEFT, padx=10, fill=Y)
-        ttk.Label(left_frame, image=self.asset_manager.get_icon('logo_small'), style='primary.TLabel').pack(side=LEFT)
+        if logo_icon := self.asset_manager.get_icon('logo_small'):
+            ttk.Label(left_frame, image=logo_icon, style='primary.TLabel').pack(side=LEFT)
         ttk.Label(left_frame, text="Encrypted Backup Server", font=('Segoe UI', 12, 'bold'), style='primary.TLabel').pack(side=LEFT, padx=10)
 
         # Right side: Window controls
@@ -243,7 +250,7 @@ class ServerGUI:
         search_entry = ttk.Entry(search_frame, style='Pill.TEntry', font=('Segoe UI', 11))
         search_entry.pack(fill=BOTH, expand=True)
         search_entry.insert(0, '🔍 Search clients, files, logs...')
-        search_entry.bind("<FocusIn>", lambda e: e.widget.delete(0, END) if "Search" in e.widget.get() else None)
+        search_entry.bind("<FocusIn>", lambda e: None if "Search" in e.widget.get() else e.widget.delete(0, END))
         search_entry.bind("<FocusOut>", lambda e: e.widget.insert(0, '🔍 Search clients, files, logs...') if not e.widget.get() else None)
 
     def _setup_main_layout(self) -> None:
@@ -265,9 +272,13 @@ class ServerGUI:
         status_frame = ttk.Frame(sidebar, style='secondary.TFrame')
         status_frame.pack(fill=X, pady=20, padx=10)
 
-        self.status_indicator = tk.Canvas(status_frame, width=20, height=20, bg=self.root.style.colors.secondary, highlightthickness=0)
+        self.status_indicator = tk.Canvas(status_frame, width=20, height=20, 
+                                        bg=getattr(self.root.style.colors, 'secondary', '#404040'),  # type: ignore[reportUnknownMemberType]
+                                        highlightthickness=0)
         self.status_indicator.pack(side=LEFT, padx=(5, 10))
-        self.status_indicator_oval = self.status_indicator.create_oval(4, 4, 16, 16, fill=self.root.style.colors.danger, outline="")
+        self.status_indicator_oval = self.status_indicator.create_oval(4, 4, 16, 16, 
+                                                                     fill=getattr(self.root.style.colors, 'danger', '#dc3545'),  # type: ignore[reportUnknownMemberType]
+                                                                     outline="")
         self.status_label = ttk.Label(status_frame, text="Server Offline", style='secondary.TLabel', font=('Segoe UI', 10, 'bold'))
         self.status_label.pack(side=LEFT, expand=True, fill=X)
         
@@ -281,8 +292,15 @@ class ServerGUI:
         ]
         for page_id, text, icon_name in page_definitions:
             icon = self.asset_manager.get_icon(icon_name)
-            btn = ttk.Button(sidebar, text=f" {text}", image=icon, compound=LEFT,
-                             command=lambda p=page_id: self._switch_page(p), style='Nav.TButton')
+            btn_kwargs = {
+                'text': f" {text}",
+                'compound': LEFT,
+                'command': lambda p=page_id: self._switch_page(p),
+                'style': 'Nav.TButton'
+            }
+            if icon:
+                btn_kwargs['image'] = icon
+            btn = ttk.Button(sidebar, **btn_kwargs)
             btn.pack(fill=X, padx=10, pady=3)
             self.nav_buttons[page_id] = btn
             
@@ -354,25 +372,41 @@ class ServerGUI:
             if self.server and self.server.running: self.stop_server()
             self.shutdown()
 
-    def _on_drag_start(self, event: tk.Event) -> None: self._drag_start_x, self._drag_start_y = event.x, event.y
+    def _on_drag_start(self, event: tk.Event) -> None: 
+        self._drag_start_x, self._drag_start_y = event.x, event.y
+        
     def _on_drag_motion(self, event: tk.Event) -> None:
         dx, dy = event.x - self._drag_start_x, event.y - self._drag_start_y
-        self.root.geometry(f"+{self.root.winfo_x() + dx}+{self.root.winfo_y() + dy}")
-    def _toggle_maximize(self) -> None: self.root.attributes('-zoomed', not self.root.attributes('-zoomed'))
+        new_x = self.root.winfo_x() + dx
+        new_y = self.root.winfo_y() + dy
+        self.root.geometry(f"+{new_x}+{new_y}")
+    def _toggle_maximize(self) -> None: 
+        from contextlib import suppress
+        with suppress(tk.TclError):
+            current_state = self.root.attributes('-zoomed')  # type: ignore[reportUnknownMemberType]
+            self.root.attributes('-zoomed', not current_state)  # type: ignore[reportUnknownMemberType]
 
     def _create_system_tray(self) -> None:
-        if not TRAY_AVAILABLE or not pystray: return
-        menu = (pystray.MenuItem('Show/Hide', self._toggle_window, default=True), pystray.MenuItem('Quit', self._quit_app))
-        image = self.asset_manager.get_image('logo_tray')
-        if image:
-            self.tray_icon = pystray.Icon("ServerGUI", image, "Encrypted Backup Server", menu)
-            threading.Thread(target=self.tray_icon.run, daemon=True).start()
+        if not TRAY_AVAILABLE:
+            return
+        from contextlib import suppress
+        with suppress(ImportError):
+            import pystray
+            menu = (pystray.MenuItem('Show/Hide', self._toggle_window, default=True), 
+                   pystray.MenuItem('Quit', self._quit_app))
+            if image := self.asset_manager.get_image('logo_tray'):
+                self.tray_icon = pystray.Icon("ServerGUI", image, "Encrypted Backup Server", menu)
+                if hasattr(self.tray_icon, 'run'):
+                    threading.Thread(target=self.tray_icon.run, daemon=True).start()  # type: ignore[reportUnknownMemberType]
 
     def _toggle_window(self) -> None:
-        if self.root.state() == 'withdrawn': self.root.deiconify()
-        else: self.root.withdraw()
+        if self.root.state() == 'withdrawn':
+            self.root.deiconify()
+        else:
+            self.root.withdraw()
     def _quit_app(self) -> None:
-        if self.tray_icon: self.tray_icon.stop()
+        if self.tray_icon and hasattr(self.tray_icon, 'stop'):
+            self.tray_icon.stop()  # type: ignore
         self.root.after(100, self._on_window_close)
 
     # --- Server Control & Action Methods (The Controller's Public API) ---
@@ -401,15 +435,15 @@ class ServerGUI:
         threading.Thread(target=do_restart, daemon=True).start()
 
     def backup_database(self) -> None:
-        db_manager = self.effective_db_manager
-        if not db_manager or not hasattr(db_manager, 'db_path') or not os.path.exists(db_manager.db_path):
+        db_manager = self.effective_db_manager  # type: ignore[reportUnknownMemberType]
+        if not db_manager or not hasattr(db_manager, 'db_path') or not os.path.exists(getattr(db_manager, 'db_path', '')):
             self.show_toast("Database not available for backup.", "error"); return
 
-        path = filedialog.asksaveasfilename(defaultextension=".db", initialfile=f"backup_{datetime.now():%Y%m%d}.db")
-        if path:
+        if path := filedialog.asksaveasfilename(defaultextension=".db", initialfile=f"backup_{datetime.now():%Y%m%d}.db"):
             try:
-                shutil.copy2(db_manager.db_path, path)
-                self.show_toast(f"Database backed up!", "success", icon="💾")
+                if db_path := getattr(db_manager, 'db_path', ''):
+                    shutil.copy2(db_path, path)
+                self.show_toast("Database backed up!", "success", icon="💾")
                 self.play_sound('success')
             except Exception as e:
                 self.show_toast(f"Backup failed: {e}", "error"); self.play_sound('failure')
@@ -425,7 +459,11 @@ class ServerGUI:
             self._check_disk_space()
         except Exception as e:
             print(f"Error in GUI update loop: {e}")
-            if SENTRY_AVAILABLE and 'sentry_sdk' in globals(): sentry_sdk.capture_exception(e)
+            if SENTRY_AVAILABLE:
+                from contextlib import suppress
+                with suppress(ImportError):
+                    import sentry_sdk
+                    sentry_sdk.capture_exception(e)
         self.root.after(1000, self._schedule_updates)
 
     def _process_update_queue(self) -> None:
@@ -433,23 +471,33 @@ class ServerGUI:
             try:
                 msg = self.update_queue.get_nowait()
                 update_type, data = msg.get("type"), msg.get("data", {})
-                if update_type == "status_update": self._handle_global_status_update(data)
+                if update_type == "status_update": 
+                    self._handle_global_status_update(data)
                 for page in self.pages.values():
-                    if hasattr(page, 'handle_update'): page.handle_update(update_type, data)
+                    if hasattr(page, 'handle_update') and update_type:
+                        page.handle_update(update_type, data)
             except queue.Empty: break
             except Exception as e: print(f"Error processing update queue: {e}"); traceback.print_exc()
 
     def _handle_global_status_update(self, data: Dict[str, Any]) -> None:
-        running = data.get('running', False)
-        if running:
-            self.status_label.config(text="Server Online")
-            self.status_indicator.itemconfig(self.status_indicator_oval, fill=self.root.style.colors.success)
+        if (running := data.get('running', False)):  # Parentheses help Pylance understand scope
+            _ = running  # Mark variable as used to avoid false positive warnings
+            if self.status_label:
+                self.status_label.config(text="Server Online")
+            if self.status_indicator:
+                self.status_indicator.itemconfig(self.status_indicator_oval, 
+                                                fill=getattr(self.root.style.colors, 'success', '#28a745'))  # type: ignore[reportUnknownMemberType]
         else:
-            self.status_label.config(text="Server Offline")
-            self.status_indicator.itemconfig(self.status_indicator_oval, fill=self.root.style.colors.danger)
+            if self.status_label:
+                self.status_label.config(text="Server Offline")
+            if self.status_indicator:
+                self.status_indicator.itemconfig(self.status_indicator_oval, 
+                                                fill=getattr(self.root.style.colors, 'danger', '#dc3545'))  # type: ignore[reportUnknownMemberType]
 
     def _update_clock(self) -> None:
-        if self.clock_label: self.clock_label.config(text=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        if self.clock_label:
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.clock_label.config(text=current_time)
 
     def _update_performance_metrics(self) -> None:
         if not SYSTEM_MONITOR_AVAILABLE or not psutil: return
@@ -460,14 +508,17 @@ class ServerGUI:
     def _check_disk_space(self) -> None:
         """Checks disk space and shows a warning banner if low (Feature #12)."""
         try:
-            usage = shutil.disk_usage(os.path.abspath(self.settings.get('storage_dir', '.')))
-            if (usage.free / (1024 ** 3)) < self.settings.get('disk_warning_gb', 10):
+            if (usage := shutil.disk_usage(os.path.abspath(self.settings.get('storage_dir', '.')))).free / (1024 ** 3) < self.settings.get('disk_warning_gb', 10):
                 if not self.warning_banner:
                     self.warning_banner = ttk.Label(self.root, text="", style='warning.TLabel', font=('Segoe UI', 10, 'bold'), anchor=CENTER)
-                    self.warning_banner.place(x=0, y=self.title_bar.winfo_height(), relwidth=1.0, height=25)
+                    title_bar_height = self.title_bar.winfo_height() if self.title_bar else 50
+                    self.warning_banner.place(x=0, y=title_bar_height, relwidth=1.0, height=25)
                 self.warning_banner.config(text=f"⚠️ LOW DISK SPACE: {usage.free / (1024**3):.1f} GB remaining.")
             elif self.warning_banner: self.warning_banner.destroy(); self.warning_banner = None
-        except FileNotFoundError: pass
+        except FileNotFoundError:
+            from contextlib import suppress
+            with suppress(Exception):
+                pass
 
     # --- Public API for Backend and Pages ---
     
@@ -480,7 +531,7 @@ class ServerGUI:
                 threading.Thread(target=playsound, args=(path,), daemon=True).start()
 
     def change_theme(self, theme_name: str) -> None:
-        self.root.style.theme_use(theme_name)
+        self.root.style.theme_use(theme_name)  # type: ignore[reportUnknownMemberType]
         self.settings['theme'] = theme_name
         self._save_settings_to_file()
         self.show_toast(f"Theme changed to '{theme_name}'", "info")
@@ -505,22 +556,37 @@ class ServerGUI:
     def shutdown(self) -> None:
         print("Starting GUI shutdown...")
         self.is_running = False
-        if self.tray_icon: self.tray_icon.stop()
+        if self.tray_icon and hasattr(self.tray_icon, 'stop'):
+            self.tray_icon.stop()  # type: ignore
         self.settings['geometry'] = self.root.geometry()
         self._save_settings_to_file()
-        if self.root.winfo_exists(): self.root.destroy()
+        if self.root.winfo_exists(): 
+            self.root.destroy()
         print("GUI shutdown completed.")
         
     def _load_settings(self) -> Dict[str, Any]:
-        defaults = {'theme': 'cyborg', 'geometry': '1400x900', 'audio_enabled': True, 'disk_warning_gb': 10,
-                    'storage_dir': 'received_files', 'last_tab': 'dashboard'}
+        defaults = {
+            'theme': 'cyborg', 
+            'geometry': '1400x900', 
+            'audio_enabled': True, 
+            'disk_warning_gb': 10,
+            'storage_dir': 'received_files', 
+            'last_tab': 'dashboard'
+        }
         try:
-            with open("server_gui_settings.json", 'r') as f: defaults.update(json.load(f))
-        except (FileNotFoundError, json.JSONDecodeError): self._save_settings_to_file(defaults)
+            with open("server_gui_settings.json", 'r') as f: 
+                loaded_settings = json.load(f)
+                defaults |= loaded_settings  # type: ignore[reportUnknownMemberType]
+        except (FileNotFoundError, json.JSONDecodeError):
+            from contextlib import suppress
+            with suppress(Exception):
+                self._save_settings_to_file(defaults)
         return defaults
 
     def _save_settings_to_file(self, data: Optional[Dict[str, Any]] = None) -> None:
-        with open("server_gui_settings.json", 'w') as f: json.dump(data or self.settings, f, indent=4)
+        settings_to_save = data or self.settings
+        with open("server_gui_settings.json", 'w') as f: 
+            json.dump(settings_to_save, f, indent=4)
 
 def launch_standalone() -> None:
     print("[INFO] Launching Server GUI in standalone mode...")

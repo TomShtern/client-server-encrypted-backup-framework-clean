@@ -128,7 +128,7 @@ class DatabasePage(BasePage):
                         formatted_row.append(val)
                 formatted_data.append(formatted_row)
 
-            sheet.set_sheet_data(formatted_data, redraw=True)
+            sheet.set_sheet_data(formatted_data, redraw=True)  # type: ignore[misc]
             sheet.readonly_columns(columns=list(range(len(headers)))) # Make fully read-only
             
             self.status_label.config(text=f"Table '{table_name}' ({len(data)} rows)")

@@ -40,7 +40,7 @@ def main() -> int:
             print(f"[OK]   Project root added to system path: {project_root}")
         
         # Import the ServerGUI class *after* path correction has been applied.
-        from python_server.server.server_gui.ServerGUI import ServerGUI
+        from python_server.server_gui.ServerGUI import ServerGUI
     except ImportError as e:
         print(f"\n{'='*80}\n[FATAL] A critical import failed. This often means the script is not being run\n"
               f"        from the project's root directory ('Client_Server_Encrypted_Backup_Framework').\n"
@@ -51,7 +51,7 @@ def main() -> int:
     try:
         # We pass `server_instance=None` to engage the standalone logic within
         # ServerGUI, such as the fallback database manager.
-        gui = ServerGUI(server_instance=None)
+        gui: ServerGUI = ServerGUI(server_instance=None)
         gui.run()
         
     except Exception:
