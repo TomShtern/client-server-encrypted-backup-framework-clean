@@ -53,6 +53,8 @@ class ServerSettingsCard(MDCard):
     """Card widget for server configuration settings"""
     
     def __init__(self, settings_screen, **kwargs):
+        if not KIVYMD_AVAILABLE:
+            raise ImportError("KivyMD not available")
         super().__init__(**kwargs)
         self.settings_screen = settings_screen
         self.theme_bg_color = "Custom"
@@ -314,6 +316,8 @@ class UISettingsCard(MDCard):
     """Card widget for UI preferences"""
     
     def __init__(self, settings_screen, **kwargs):
+        if not KIVYMD_AVAILABLE:
+            raise ImportError("KivyMD not available")
         super().__init__(**kwargs)
         self.settings_screen = settings_screen
         self.theme_bg_color = "Custom"
@@ -354,14 +358,19 @@ class UISettingsCard(MDCard):
             height=dp(40)
         )
         
+        # Create segmented button items with proper initialization
+        light_item = MDSegmentedButtonItem()
+        dark_item = MDSegmentedButtonItem()
+        
+        # Set text immediately using Clock scheduling for KivyMD 2.0.x compatibility
+        Clock.schedule_once(lambda dt: setattr(light_item, 'text', 'Light'), 0.1)
+        Clock.schedule_once(lambda dt: setattr(dark_item, 'text', 'Dark'), 0.1)
+        
         self.theme_control = MDSegmentedButton(
-            MDSegmentedButtonItem(),
-            MDSegmentedButtonItem(),
+            light_item,
+            dark_item,
             on_active=self.on_theme_changed
         )
-        # Set text for segmented button items
-        self.theme_control.children[1].text = "Light"  # First item (reversed order in children)
-        self.theme_control.children[0].text = "Dark"   # Second item
         self.theme_control.active = "Dark"  # Default
         theme_control_layout.add_widget(self.theme_control)
         
@@ -389,7 +398,7 @@ class UISettingsCard(MDCard):
         animations_desc = MDLabel(
             text="Enable UI animations",
             theme_text_color="Secondary",
-            font_style="Caption",
+            font_style="Body",
             size_hint_y=None,
             height=dp(16)
         )
@@ -398,9 +407,10 @@ class UISettingsCard(MDCard):
         animations_layout.add_widget(animations_info)
         
         self.animations_switch = MDSwitch(
-            active=True,
             on_active=self.on_animations_changed
         )
+        # Set active state after widget creation to avoid KivyMD 2.0.x internal animation issues
+        Clock.schedule_once(lambda dt: setattr(self.animations_switch, 'active', True), 0.1)
         animations_layout.add_widget(self.animations_switch)
         
         settings_list.add_widget(animations_layout)
@@ -424,7 +434,7 @@ class UISettingsCard(MDCard):
         tooltips_desc = MDLabel(
             text="Show helpful tooltips",
             theme_text_color="Secondary",
-            font_style="Caption",
+            font_style="Body",
             size_hint_y=None,
             height=dp(16)
         )
@@ -433,9 +443,10 @@ class UISettingsCard(MDCard):
         tooltips_layout.add_widget(tooltips_info)
         
         self.tooltips_switch = MDSwitch(
-            active=True,
             on_active=self.on_tooltips_changed
         )
+        # Set active state after widget creation to avoid KivyMD 2.0.x internal animation issues
+        Clock.schedule_once(lambda dt: setattr(self.tooltips_switch, 'active', True), 0.1)
         tooltips_layout.add_widget(self.tooltips_switch)
         
         settings_list.add_widget(tooltips_layout)
@@ -463,10 +474,10 @@ class UISettingsCard(MDCard):
         refresh_layout.add_widget(refresh_header)
         
         self.refresh_slider = MDSlider(
-            min=0.5,
-            max=10.0,
-            value=1.0,
-            step=0.5,
+            min=1,
+            max=10,
+            value=1,
+            step=1,
             on_value=self.on_refresh_changed
         )
         refresh_layout.add_widget(self.refresh_slider)
@@ -495,6 +506,13 @@ class UISettingsCard(MDCard):
         
         layout.add_widget(settings_list)
         self.add_widget(layout)
+    
+    def _safe_set_switch_active(self, switch_widget, value: bool, delay: float = 0.1):
+        """Safely set switch active state - KivyMD 2.0.x compatible"""
+        try:
+            Clock.schedule_once(lambda dt: setattr(switch_widget, 'active', value), delay)
+        except Exception as e:
+            print(f"[ERROR] Failed to schedule switch state update: {e}")
     
     def on_theme_changed(self, instance, value):
         """Handle theme changes"""
@@ -526,8 +544,9 @@ class UISettingsCard(MDCard):
     def set_settings(self, settings: Dict[str, Any]):
         """Set UI settings"""
         self.theme_control.active = settings.get("theme", "Dark")
-        self.animations_switch.active = settings.get("animations", True)
-        self.tooltips_switch.active = settings.get("show_tooltips", True)
+        # Use safe setter for switches to avoid KivyMD 2.0.x issues
+        self._safe_set_switch_active(self.animations_switch, settings.get("animations", True))
+        self._safe_set_switch_active(self.tooltips_switch, settings.get("show_tooltips", True))
         self.refresh_slider.value = settings.get("auto_refresh_interval", 1.0)
         self.log_entries_field.text = str(settings.get("log_max_entries", 100))
 
@@ -536,6 +555,8 @@ class SecuritySettingsCard(MDCard):
     """Card widget for security settings"""
     
     def __init__(self, settings_screen, **kwargs):
+        if not KIVYMD_AVAILABLE:
+            raise ImportError("KivyMD not available")
         super().__init__(**kwargs)
         self.settings_screen = settings_screen
         self.theme_bg_color = "Custom"
@@ -659,6 +680,8 @@ class SettingsActionsCard(MDCard):
     """Card widget for settings actions (save/load/reset)"""
     
     def __init__(self, settings_screen, **kwargs):
+        if not KIVYMD_AVAILABLE:
+            raise ImportError("KivyMD not available")
         super().__init__(**kwargs)
         self.settings_screen = settings_screen
         self.theme_bg_color = "Custom"
@@ -745,6 +768,8 @@ class SettingsScreen(MDScreen):
     
     def __init__(self, server_bridge: Optional[ServerIntegrationBridge] = None,
                  config: Optional[Dict[str, Any]] = None, **kwargs):
+        if not KIVYMD_AVAILABLE:
+            raise ImportError("KivyMD not available")
         super().__init__(**kwargs)
         
         # Store references
@@ -952,8 +977,9 @@ class SettingsScreen(MDScreen):
             
             if self.ui_card:
                 self.ui_card.theme_control.active = "Dark"
-                self.ui_card.animations_switch.active = True
-                self.ui_card.tooltips_switch.active = True
+                # Use safe setter for switches to avoid KivyMD 2.0.x issues
+                self.ui_card._safe_set_switch_active(self.ui_card.animations_switch, True)
+                self.ui_card._safe_set_switch_active(self.ui_card.tooltips_switch, True)
                 self.ui_card.refresh_slider.value = 1.0
                 self.ui_card.log_entries_field.text = "100"
             

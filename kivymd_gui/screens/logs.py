@@ -61,9 +61,10 @@ class LogsScreen(MDScreen):
             font_style="Body"
         ))
         self.auto_switch = MDSwitch(
-            active=True,
             on_active=self.toggle_auto_refresh
         )
+        # Set active state after widget creation to avoid KivyMD 2.0.x internal animation issues
+        Clock.schedule_once(lambda dt: setattr(self.auto_switch, 'active', True), 0.1)
         switch_layout.add_widget(self.auto_switch)
         header.add_widget(switch_layout)
         

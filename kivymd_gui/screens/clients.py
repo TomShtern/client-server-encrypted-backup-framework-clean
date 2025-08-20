@@ -232,8 +232,7 @@ class ClientSearchCard(MDCard):
         self.all_chip = MDChip(
             MDChipText(text="All"),
             on_release=lambda x: self.filter_by_status("all"),
-            type="filter",
-            selected=True
+            type="filter"
         )
         filter_layout.add_widget(self.all_chip)
         
@@ -267,17 +266,8 @@ class ClientSearchCard(MDCard):
     
     def filter_by_status(self, status: str):
         """Handle status filter changes"""
-        # Update chip selections
-        chips = [self.all_chip, self.connected_chip, self.disconnected_chip]
-        for chip in chips:
-            chip.selected = False
-        
-        if status == "all":
-            self.all_chip.selected = True
-        elif status == "connected":
-            self.connected_chip.selected = True
-        elif status == "disconnected":
-            self.disconnected_chip.selected = True
+        # In KivyMD 2.0.x, MDChip doesn't have a 'selected' property
+        # Visual feedback for active filter can be handled through theme/color changes if needed
         
         self.current_filter = status
         self.clients_screen.apply_filters()

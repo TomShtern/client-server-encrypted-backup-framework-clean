@@ -78,9 +78,12 @@ class MDStatusCard(MDCard):
         self.secondary_label.text = secondary
         self.status_color = color
         
-        # Animate the update
-        anim = Animation(opacity=0.7, duration=0.15) + Animation(opacity=1, duration=0.15)
-        anim.start(self)
+        # Enhanced Material Design 3 animation - safe opacity-only animation
+        pulse_anim = (
+            Animation(opacity=0.8, duration=0.1, t='out_cubic') + 
+            Animation(opacity=1, duration=0.15, t='out_back')
+        )
+        pulse_anim.start(self)
 
 
 # Legacy compatibility class

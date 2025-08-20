@@ -236,16 +236,18 @@ class EncryptedBackupServerApp(MDApp):
         return main_layout
     
     def create_navigation_panel(self) -> MDBoxLayout:
-        """Create a simple navigation panel using buttons to avoid NavigationRail animation bug"""
+        """Create Material Design 3 navigation panel with enhanced interactions"""
         from kivymd.uix.button import MDIconButton
         from kivymd.uix.label import MDLabel
+        from kivy.animation import Animation
         
         nav_panel = MDBoxLayout(
             orientation="vertical",
             size_hint_x=None,
-            width="80dp",
-            spacing="8dp",
-            padding=["8dp", "16dp", "8dp", "16dp"]
+            width="88dp",  # MD3 standard navigation rail width
+            spacing="4dp",  # Tighter spacing between navigation items
+            padding=["12dp", "24dp", "12dp", "24dp"],  # MD3 navigation padding
+            md_bg_color=self.theme_cls.surfaceColor
         )
         
         # Navigation items
@@ -262,20 +264,54 @@ class EncryptedBackupServerApp(MDApp):
         self.nav_buttons = {}
         
         for screen_name, icon, text in nav_items:
-            # Create icon button for navigation
+            # Create Material Design 3 navigation item container
+            nav_item_container = MDBoxLayout(
+                orientation="vertical",
+                size_hint_y=None,
+                height="72dp",  # MD3 navigation rail item height
+                spacing="4dp",
+                adaptive_width=True,
+                padding=["8dp", "8dp", "8dp", "8dp"]
+            )
+            
+            # Create enhanced Material Design 3 icon button
             nav_button = MDIconButton(
                 icon=icon,
                 theme_icon_color="Custom", 
                 icon_color=self.theme_cls.onSurfaceColor,
-                size_hint_y=None,
-                height="48dp",
-                on_release=lambda x, screen=screen_name: self.navigate_to_screen(screen)
+                size_hint=(None, None),
+                size=("48dp", "48dp"),
+                pos_hint={"center_x": 0.5},
+                radius=[24],  # Material Design 3 rounded corners
+                ripple_scale=0.85,  # Enhanced ripple effect
+                on_release=lambda x, screen=screen_name: self.navigate_to_screen_animated(screen)
             )
             nav_button.screen_name = screen_name
             nav_button.tooltip_text = text
             
+            # Create MD3 navigation label
+            nav_label = MDLabel(
+                text=text,
+                font_style="Label",
+                role="small",
+                theme_text_color="Secondary",
+                size_hint_y=None,
+                height="16dp",
+                halign="center",
+                adaptive_width=True,
+                pos_hint={"center_x": 0.5}
+            )
+            
+            # Add hover effect binding
+            nav_button.bind(on_enter=self.on_nav_button_hover)
+            nav_button.bind(on_leave=self.on_nav_button_leave)
+            
+            # Assemble navigation item
+            nav_item_container.add_widget(nav_button)
+            nav_item_container.add_widget(nav_label)
+            
             self.nav_buttons[screen_name] = nav_button
-            nav_panel.add_widget(nav_button)
+            nav_panel.add_widget(nav_item_container)
         
         return nav_panel
     
@@ -403,6 +439,55 @@ class EncryptedBackupServerApp(MDApp):
                         
         except Exception as e:
             print(f"[WARNING] Navigation state update failed: {e}")
+    
+    def navigate_to_screen_animated(self, screen_name: str) -> None:
+        """Navigate to screen with Material Design 3 animations"""
+        from kivy.animation import Animation
+        
+        try:
+            if self.screen_manager and screen_name in self.screen_manager.screen_names:
+                # Animate screen transition with Material Design 3 motion
+                current_screen = self.screen_manager.current_screen
+                
+                # Ensure opacity is initialized before animation
+                if hasattr(current_screen, 'opacity') and current_screen.opacity is not None:
+                    # Fade out current screen
+                    fade_out = Animation(opacity=0.8, duration=0.15)
+                    fade_out.bind(on_complete=lambda anim, widget: self._complete_navigation(screen_name))
+                    fade_out.start(current_screen)
+                else:
+                    # Direct navigation if opacity not available
+                    self._complete_navigation(screen_name)
+                
+        except Exception as e:
+            print(f"[ERROR] Animated navigation failed: {e}")
+            # Fallback to regular navigation
+            self.navigate_to_screen(screen_name)
+    
+    def _complete_navigation(self, screen_name: str):
+        """Complete the animated navigation transition"""
+        from kivy.animation import Animation
+        
+        # Navigate to new screen
+        self.navigate_to_screen(screen_name)
+        
+        # Fade in new screen with safety check
+        new_screen = self.screen_manager.current_screen
+        if hasattr(new_screen, 'opacity'):
+            new_screen.opacity = 0.8
+            fade_in = Animation(opacity=1, duration=0.15)
+            fade_in.start(new_screen)
+    
+    def on_nav_button_hover(self, button):
+        """Handle navigation button hover with Material Design 3 effects"""
+        if not button.screen_name == self.current_screen:
+            # Change icon color on hover - safer than size animations
+            button.icon_color = self.theme_cls.primaryColor
+    
+    def on_nav_button_leave(self, button):
+        """Handle navigation button leave with smooth transition"""
+        # Return to normal color - safer than size animations
+        button.icon_color = self.theme_cls.onSurfaceColor
     
     def schedule_periodic_updates(self):
         """Schedule periodic updates for real-time data"""

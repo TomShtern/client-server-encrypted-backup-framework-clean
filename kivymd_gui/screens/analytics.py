@@ -9,6 +9,7 @@ from kivymd.uix.label import MDLabel
 from kivymd.uix.card import MDCard
 from kivymd.uix.segmentedbutton import MDSegmentedButton, MDSegmentedButtonItem
 from kivy.metrics import dp
+from kivy.clock import Clock
 import os
 
 try:
@@ -43,16 +44,18 @@ class AnalyticsScreen(MDScreen):
         layout.add_widget(header)
         
         # Time range selector
-        time_selector = MDSegmentedButton(
-            MDSegmentedButtonItem(text="24h"),
-            MDSegmentedButtonItem(text="7d"),
-            MDSegmentedButtonItem(text="30d"),
-            MDSegmentedButtonItem(text="All"),
+        self.time_selector = MDSegmentedButton(
+            MDSegmentedButtonItem(),
+            MDSegmentedButtonItem(),
+            MDSegmentedButtonItem(),
+            MDSegmentedButtonItem(),
             size_hint_y=None,
             height=dp(48)
         )
-        time_selector.active = "7d"  # Set default selection
-        layout.add_widget(time_selector)
+        # Set text for segmented button items - KivyMD 2.0.x compatible
+        self._set_time_selector_text()
+        self.time_selector.active = "7d"  # Set default selection
+        layout.add_widget(self.time_selector)
         
         if CHARTS_AVAILABLE:
             # Charts grid
@@ -246,6 +249,38 @@ class AnalyticsScreen(MDScreen):
         
         card.add_widget(layout)
         return card
+    
+    def _set_time_selector_text(self):
+        """Safely set text for time selector segmented button items - KivyMD 2.0.x compatible"""
+        try:
+            # Schedule text setting after widget tree is built
+            Clock.schedule_once(self._update_time_selector_text, 0.1)
+        except Exception as e:
+            print(f"[ERROR] Failed to schedule time selector text update: {e}")
+    
+    def _update_time_selector_text(self, dt):
+        """Update time selector segmented button text after widget creation"""
+        try:
+            if hasattr(self.time_selector, 'children') and len(self.time_selector.children) >= 4:
+                # Time selector items: ["24h", "7d", "30d", "All"]
+                # In KivyMD 2.0.x, children order is reversed
+                time_labels = ["All", "30d", "7d", "24h"]  # Reversed order for children
+                
+                # Try to set text safely with error handling
+                try:
+                    for i, label in enumerate(time_labels):
+                        if i < len(self.time_selector.children):
+                            self.time_selector.children[i].text = label
+                except (IndexError, AttributeError) as e:
+                    print(f"[WARNING] Could not set time selector text via children access: {e}")
+                    # Alternative approach: iterate through children and set text
+                    for i, child in enumerate(self.time_selector.children):
+                        if hasattr(child, 'text') and i < len(time_labels):
+                            child.text = time_labels[i]
+            else:
+                print(f"[WARNING] Time selector children not available: {getattr(self.time_selector, 'children', 'None')}")
+        except Exception as e:
+            print(f"[ERROR] Failed to update time selector text: {e}")
     
     def on_enter(self):
         """Called when the screen is entered"""

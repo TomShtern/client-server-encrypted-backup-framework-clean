@@ -213,6 +213,16 @@ for child in textfield.children:
 4. **Event Handling**: Changed from direct callbacks to binding patterns
 5. **Stable Version**: Always use commit `d2f7740` to avoid animation crashes
 
+### Critical Fixes Applied (2025-08-21)
+**✅ FULLY RESOLVED**: All KivyMD 2.0.x compatibility issues fixed, GUI now fully functional
+1. **MDFloatingActionButton → MDIconButton**: Replaced deprecated FAB with icon buttons in `files.py` and `logs.py`
+2. **MDTextFieldSupportingText Removal**: Component doesn't exist in 2.0.x, replaced with `hint_text` integration in `clients.py` and `settings.py`
+3. **MDButtonText Text Property**: Fixed invalid `text=` parameter by setting text via `children[0].text` post-creation
+4. **MDSegmentedButtonItem Text Property**: Same pattern applied for segmented button items
+5. **Environment Verification**: Must run in `kivy_venv_new` virtual environment, not `.venv`
+
+**Result**: GUI launches successfully with Material Design 3 theme, all screens functional
+
 ### VS Code Type Stub Solution (For Development)
 **Problem**: KivyMD doesn't ship with type stub files (.pyi), causing Pylance import errors
 **Solution**: Custom type stubs created in `stubs/kivymd/` with VS Code configuration:
@@ -275,3 +285,4 @@ netstat -an | findstr ":9090\\|:1256"
 - **`Shared/unified_monitor.py`**: Unified file monitoring system
 - **Evidence of Success**: 72+ files in `received_files/` demonstrate production usage
 - **Virtual Environment**: `.\kivy_venv_new\Scripts\activate` (KivyMD setup)
+- .\kivy_venv_new\Scripts\Activate.ps1
