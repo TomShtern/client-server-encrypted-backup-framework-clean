@@ -51,7 +51,34 @@
         "colors": {
             "cpu": "#1976D2",
             "memory": "#7C4DFF",
-            "network": "#00897B"
+            "network": "#00897B",
+            "primary": "#1976D2",
+            "secondary": "#00897B",
+            "tertiary": "#7C4DFF"
         }
+    },
+    "monitoring": {
+        "performance_tracking": true,
+        "file_system_monitoring": true,
+        "log_monitoring": true,
+        "auto_cleanup": {
+            "enabled": true,
+            "max_log_age_days": 30,
+            "max_cache_size_mb": 100
+        }
+    },
+    "security": {
+        "enable_https": false,
+        "cert_file": "",
+        "key_file": "",
+        "require_auth": false,
+        "session_timeout_minutes": 30
+    },
+    "advanced": {
+        "developer_mode": false,
+        "debug_logging": false,
+        "experimental_features": false,
+        "backup_config": true,
+        "config_version": "2.0.0"
     }
 }

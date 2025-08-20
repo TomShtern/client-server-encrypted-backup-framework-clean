@@ -294,16 +294,62 @@ class ServerControlManager:
             return False, error_msg
     
     def _terminate_standalone_server(self):
-        """Terminate standalone server process"""
-        # This is a simplified implementation
-        # In production, you might want to store the process PID and terminate it properly
+        """Enhanced standalone server process termination"""
         try:
+            port = self.status_monitor.status.port
+            
             if os.name == 'nt':
-                # Windows
-                os.system(f'taskkill /f /im python.exe')
+                # Windows - more targeted approach
+                try:
+                    # First try to find processes using the specific port
+                    import subprocess
+                    result = subprocess.run(['netstat', '-ano'], capture_output=True, text=True)
+                    lines = result.stdout.split('\n')
+                    
+                    for line in lines:
+                        if f':{port}' in line and 'LISTENING' in line:
+                            parts = line.split()
+                            if len(parts) > 4:
+                                pid = parts[-1]
+                                try:
+                                    subprocess.run(['taskkill', '/F', '/PID', pid], check=True)
+                                    self.logger.info(f"Terminated process {pid} using port {port}")
+                                    return
+                                except subprocess.CalledProcessError:
+                                    continue
+                    
+                    # Fallback to broader termination
+                    subprocess.run(['taskkill', '/f', '/im', 'python.exe'], check=False)
+                    
+                except Exception as e:
+                    self.logger.warning(f"Enhanced termination failed, using fallback: {e}")
+                    os.system('taskkill /f /im python.exe')
             else:
-                # Unix-like
-                os.system('pkill -f "python.*server.py"')
+                # Unix-like systems
+                try:
+                    # Find process using specific port
+                    import subprocess
+                    result = subprocess.run(['lsof', '-ti', f'tcp:{port}'], 
+                                          capture_output=True, text=True)
+                    pids = result.stdout.strip().split()
+                    
+                    for pid in pids:
+                        if pid.isdigit():
+                            try:
+                                subprocess.run(['kill', '-TERM', pid], check=True)
+                                self.logger.info(f"Terminated process {pid} using port {port}")
+                            except subprocess.CalledProcessError:
+                                # Try force kill
+                                subprocess.run(['kill', '-KILL', pid], check=False)
+                    
+                    # Wait and check if processes are gone
+                    time.sleep(1)
+                    
+                except Exception as e:
+                    self.logger.warning(f"Enhanced termination failed: {e}")
+                    # Fallback
+                    os.system('pkill -f "python.*server.py"')
+                    
         except Exception as e:
             self.logger.warning(f"Could not terminate standalone server: {e}")
     
@@ -365,14 +411,37 @@ class ServerControlManager:
 
 
 class ServerDataCollector:
-    """Collects data from server for GUI display"""
+    """Enhanced data collector with caching and performance monitoring"""
     
     def __init__(self, server_control: ServerControlManager):
         self.server_control = server_control
         self.logger = logging.getLogger(__name__)
+        
+        # Performance tracking
+        self._performance_data = {
+            'cpu_usage': [],
+            'memory_usage': [],
+            'network_bytes': [],
+            'timestamps': []
+        }
+        self._max_history = 60  # Keep 60 seconds of data
+        
+        # Data caching
+        self._client_cache = []
+        self._client_cache_time = None
+        self._file_cache = []
+        self._file_cache_time = None
+        self._cache_ttl = 2.0  # Cache TTL in seconds
     
-    def get_client_list(self) -> List[ClientInfo]:
-        """Get list of connected clients"""
+    def get_client_list(self, use_cache: bool = True) -> List[ClientInfo]:
+        """Get list of connected clients with caching support"""
+        now = time.time()
+        
+        # Check cache first
+        if (use_cache and self._client_cache_time and 
+            (now - self._client_cache_time) < self._cache_ttl):
+            return self._client_cache.copy()
+        
         clients = []
         
         try:
@@ -380,19 +449,37 @@ class ServerDataCollector:
             if server and hasattr(server, 'clients'):
                 with server.clients_lock if hasattr(server, 'clients_lock') else contextlib.nullcontext():
                     for client_id, client in server.clients.items():
+                        # Enhanced client information extraction
                         client_info = ClientInfo(
                             client_id=client_id.hex() if isinstance(client_id, bytes) else str(client_id),
-                            username=getattr(client, 'name', 'Unknown'),
-                            ip_address=getattr(client, 'ip_address', 'Unknown'),
+                            username=getattr(client, 'name', getattr(client, 'username', 'Unknown')),
+                            ip_address=getattr(client, 'ip_address', 
+                                             getattr(client, 'address', ['Unknown', 0])[0] if 
+                                             hasattr(client, 'address') else 'Unknown'),
                             last_seen=datetime.fromtimestamp(
-                                getattr(client, 'last_seen', time.time())
+                                getattr(client, 'last_seen', 
+                                       getattr(client, 'connect_time', time.time()))
                             ),
-                            files_transferred=0,  # TODO: Get from database
-                            status='connected' if getattr(client, 'connected', True) else 'disconnected'
+                            files_transferred=getattr(client, 'files_transferred', 0),
+                            status='connected' if getattr(client, 'connected', True) else 'disconnected',
+                            # Additional fields
+                            bytes_transferred=getattr(client, 'bytes_transferred', 0),
+                            connection_time=datetime.fromtimestamp(
+                                getattr(client, 'connect_time', time.time())
+                            ) if hasattr(client, 'connect_time') else None
                         )
                         clients.append(client_info)
+            
+            # Update cache
+            if use_cache:
+                self._client_cache = clients.copy()
+                self._client_cache_time = now
+                
         except Exception as e:
             self.logger.error(f"Error getting client list: {e}")
+            # Return cached data on error if available
+            if self._client_cache:
+                return self._client_cache.copy()
         
         return clients
     
@@ -409,19 +496,70 @@ class ServerDataCollector:
         
         return files
     
+    def update_performance_data(self):
+        """Update performance monitoring data"""
+        try:
+            import psutil
+            
+            now = time.time()
+            cpu_percent = psutil.cpu_percent(interval=None)
+            memory = psutil.virtual_memory()
+            
+            # Add to performance history
+            self._performance_data['timestamps'].append(now)
+            self._performance_data['cpu_usage'].append(cpu_percent)
+            self._performance_data['memory_usage'].append(memory.percent)
+            
+            # Network data (if available)
+            try:
+                net = psutil.net_io_counters()
+                bytes_total = net.bytes_sent + net.bytes_recv
+                self._performance_data['network_bytes'].append(bytes_total)
+            except:
+                self._performance_data['network_bytes'].append(0)
+            
+            # Limit history size
+            for key in self._performance_data:
+                if len(self._performance_data[key]) > self._max_history:
+                    self._performance_data[key] = self._performance_data[key][-self._max_history:]
+                    
+        except ImportError:
+            # psutil not available
+            pass
+        except Exception as e:
+            self.logger.warning(f"Error updating performance data: {e}")
+    
+    def get_performance_data(self) -> Dict[str, Any]:
+        """Get performance monitoring data for charts"""
+        self.update_performance_data()
+        return self._performance_data.copy()
+    
     def get_server_stats(self) -> ServerStats:
-        """Get comprehensive server statistics"""
+        """Get comprehensive server statistics with enhanced data"""
         try:
             status = self.server_control.status_monitor.status
-            client_count = len(self.get_client_list())
+            client_list = self.get_client_list()
+            client_count = len(client_list)
+            
+            # Calculate additional statistics
+            total_client_bytes = sum(getattr(client, 'bytes_transferred', 0) for client in client_list)
+            
+            # Get performance data
+            perf_data = self.get_performance_data()
+            current_cpu = perf_data['cpu_usage'][-1] if perf_data['cpu_usage'] else 0
+            current_memory = perf_data['memory_usage'][-1] if perf_data['memory_usage'] else 0
             
             return ServerStats(
                 uptime=self.server_control._format_uptime(status.uptime_seconds),
                 total_files=status.total_files,
-                total_clients=status.client_count,
+                total_clients=len(client_list),  # Use actual count
                 active_connections=client_count,
-                bytes_transferred=status.bytes_transferred,
-                last_update=datetime.now()
+                bytes_transferred=max(status.bytes_transferred, total_client_bytes),
+                last_update=datetime.now(),
+                # Enhanced statistics
+                cpu_usage=current_cpu,
+                memory_usage=current_memory,
+                performance_data=perf_data
             )
         except Exception as e:
             self.logger.error(f"Error getting server stats: {e}")
@@ -432,7 +570,10 @@ class ServerDataCollector:
                 total_clients=0,
                 active_connections=0,
                 bytes_transferred=0,
-                last_update=datetime.now()
+                last_update=datetime.now(),
+                cpu_usage=0,
+                memory_usage=0,
+                performance_data={}
             )
 
 
@@ -581,9 +722,12 @@ class ServerIntegrationBridge:
     # Public API methods
     
     def add_status_callback(self, callback: Callable[[ServerStatus], None]):
-        """Add a callback for status updates"""
+        """Add a callback for status updates with validation"""
+        if not callable(callback):
+            raise ValueError("Callback must be callable")
         if callback not in self._status_callbacks:
             self._status_callbacks.append(callback)
+            self.logger.debug(f"Added status callback: {callback.__name__ if hasattr(callback, '__name__') else 'anonymous'}")
     
     def remove_status_callback(self, callback: Callable[[ServerStatus], None]):
         """Remove a status update callback"""
@@ -626,8 +770,23 @@ class ServerIntegrationBridge:
             return None
     
     def get_server_info(self) -> Dict[str, Any]:
-        """Get comprehensive server information"""
-        return self.server_control.get_server_info()
+        """Get comprehensive server information with performance data"""
+        info = self.server_control.get_server_info()
+        
+        # Add performance monitoring data
+        try:
+            perf_data = self.data_collector.get_performance_data()
+            info.update({
+                'performance': {
+                    'cpu_usage': perf_data['cpu_usage'][-1] if perf_data['cpu_usage'] else 0,
+                    'memory_usage': perf_data['memory_usage'][-1] if perf_data['memory_usage'] else 0,
+                    'history_length': len(perf_data['timestamps'])
+                }
+            })
+        except Exception as e:
+            self.logger.debug(f"Could not add performance data: {e}")
+        
+        return info
     
     def get_client_list(self) -> List[ClientInfo]:
         """Get list of connected clients"""

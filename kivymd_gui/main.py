@@ -81,6 +81,10 @@ from kivymd_gui.utils.server_integration import get_server_bridge, ServerStatus
 from kivymd_gui.screens.dashboard import DashboardScreen
 from kivymd_gui.screens.clients import ClientsScreen
 from kivymd_gui.screens.settings import SettingsScreen
+from kivymd_gui.screens.files import FilesScreen
+from kivymd_gui.screens.analytics import AnalyticsScreen
+from kivymd_gui.screens.database import DatabaseScreen
+from kivymd_gui.screens.logs import LogsScreen
 
 # Import server instance if available
 try:
@@ -316,11 +320,18 @@ class EncryptedBackupServerApp(MDApp):
             )
             screen_manager.add_widget(settings)
             
-            # TODO: Add other screens as they're implemented
-            # screen_manager.add_widget(FilesScreen(...))
-            # screen_manager.add_widget(AnalyticsScreen(...))
-            # screen_manager.add_widget(DatabaseScreen(...))
-            # screen_manager.add_widget(LogsScreen(...))
+            # Add enhanced screens with Material Design 3 implementations
+            files_screen = FilesScreen(name="files")
+            screen_manager.add_widget(files_screen)
+            
+            analytics_screen = AnalyticsScreen(name="analytics")  
+            screen_manager.add_widget(analytics_screen)
+            
+            database_screen = DatabaseScreen(name="database")
+            screen_manager.add_widget(database_screen)
+            
+            logs_screen = LogsScreen(name="logs")
+            screen_manager.add_widget(logs_screen)
             
         except Exception as e:
             print(f"[ERROR] Failed to create screens: {e}")

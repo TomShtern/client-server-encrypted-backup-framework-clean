@@ -1,0 +1,36 @@
+[tool.pylance]
+# Pylance-specific configuration for KivyMD project
+
+[tool.pyright]
+# Pyright configuration
+include = [
+    "kivymd_gui",
+    "Shared",
+    "python_server", 
+    "api_server"
+]
+
+exclude = [
+    "**/__pycache__",
+    "**/.git",
+    "**/node_modules",
+    "**/build",
+    "**/dist"
+]
+
+stubPath = "./stubs"
+typeshedPath = "./stubs"
+
+typeCheckingMode = "basic"
+reportMissingImports = "warning"
+reportMissingTypeStubs = false
+reportUnknownParameterType = false 
+reportUnknownArgumentType = false
+reportUnknownMemberType = false
+reportGeneralTypeIssues = false
+reportOptionalCall = false
+reportOptionalMemberAccess = false
+
+# KivyMD specific ignores
+reportAttributeAccessIssue = false
+reportCallIssue = false
