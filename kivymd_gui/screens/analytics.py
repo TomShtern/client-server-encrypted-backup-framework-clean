@@ -7,7 +7,7 @@ from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.label import MDLabel
 from kivymd.uix.card import MDCard
-from kivymd.uix.segmentedcontrol import MDSegmentedControl, MDSegmentedControlItem
+from kivymd.uix.segmentedbutton import MDSegmentedButton, MDSegmentedButtonItem
 from kivy.metrics import dp
 import os
 
@@ -43,14 +43,15 @@ class AnalyticsScreen(MDScreen):
         layout.add_widget(header)
         
         # Time range selector
-        time_selector = MDSegmentedControl(
-            MDSegmentedControlItem(text="24h"),
-            MDSegmentedControlItem(text="7d", active=True),
-            MDSegmentedControlItem(text="30d"),
-            MDSegmentedControlItem(text="All"),
+        time_selector = MDSegmentedButton(
+            MDSegmentedButtonItem(text="24h"),
+            MDSegmentedButtonItem(text="7d"),
+            MDSegmentedButtonItem(text="30d"),
+            MDSegmentedButtonItem(text="All"),
             size_hint_y=None,
             height=dp(48)
         )
+        time_selector.active = "7d"  # Set default selection
         layout.add_widget(time_selector)
         
         if CHARTS_AVAILABLE:

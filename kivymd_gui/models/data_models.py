@@ -15,6 +15,10 @@ class ClientInfo:
     last_seen: datetime
     files_transferred: int
     status: str = "offline"
+    bytes_transferred: int = 0
+    connection_time: Optional[datetime] = None
+    last_transfer_time: Optional[datetime] = None
+    transfer_speed: float = 0.0
 
 @dataclass
 class FileInfo:

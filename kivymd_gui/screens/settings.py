@@ -25,7 +25,7 @@ try:
     from kivymd.uix.button import MDButtonText
     from kivymd.uix.scrollview import MDScrollView
     from kivymd.uix.divider import MDDivider
-    from kivymd.uix.textfield import MDTextField, MDTextFieldSupportingText, MDTextFieldHintText
+    from kivymd.uix.textfield import MDTextField, MDTextFieldHintText
     from kivymd.uix.selectioncontrol import MDSwitch
     from kivymd.uix.slider import MDSlider
     from kivymd.uix.segmentedbutton import MDSegmentedButton, MDSegmentedButtonItem
@@ -107,10 +107,9 @@ class ServerSettingsCard(MDCard):
         port_layout.add_widget(port_label)
         
         self.port_field = MDTextField(
-            MDTextFieldSupportingText(text="Default: 1256"),
             mode="outlined",
             text="1256",
-            hint_text="Port number",
+            hint_text="Port number (Default: 1256)",
             input_filter="int",
             on_text_validate=self.validate_port
         )
@@ -129,10 +128,9 @@ class ServerSettingsCard(MDCard):
         host_layout.add_widget(host_label)
         
         self.host_field = MDTextField(
-            MDTextFieldSupportingText(text="0.0.0.0 for all interfaces"),
             mode="outlined",
             text="0.0.0.0",
-            hint_text="Host address",
+            hint_text="Host address (0.0.0.0 for all interfaces)",
             on_text_validate=self.validate_host
         )
         host_layout.add_widget(self.host_field)
@@ -152,10 +150,9 @@ class ServerSettingsCard(MDCard):
         storage_dir_layout = MDBoxLayout(orientation="horizontal", spacing=dp(8))
         
         self.storage_field = MDTextField(
-            MDTextFieldSupportingText(text="Directory for received files"),
             mode="outlined",
             text="received_files",
-            hint_text="Directory path"
+            hint_text="Directory path (for received files)"
         )
         storage_dir_layout.add_widget(self.storage_field)
         
@@ -182,10 +179,9 @@ class ServerSettingsCard(MDCard):
         clients_layout.add_widget(clients_label)
         
         self.max_clients_field = MDTextField(
-            MDTextFieldSupportingText(text="Maximum concurrent connections"),
             mode="outlined",
             text="50",
-            hint_text="Maximum clients",
+            hint_text="Maximum clients (concurrent connections)",
             input_filter="int",
             on_text_validate=self.validate_max_clients
         )
@@ -230,15 +226,10 @@ class ServerSettingsCard(MDCard):
         self.add_widget(layout)
     
     def _update_supporting_text(self, textfield, text: str):
-        """Update supporting text for KivyMD 2.0.x compatibility"""
-        try:
-            # Find MDTextFieldSupportingText child and update its text
-            for child in textfield.children:
-                if hasattr(child, 'text') and hasattr(child, '__class__') and 'SupportingText' in child.__class__.__name__:
-                    child.text = text
-                    break
-        except Exception as e:
-            print(f"[WARNING] Could not update supporting text: {e}")
+        """Update supporting text for KivyMD 2.0.x compatibility - No-op since we moved to hint_text"""
+        # Supporting text functionality moved to hint_text in TextField initialization
+        # This function is kept for compatibility but does nothing
+        pass
     
     def validate_port(self, instance):
         """Validate port number"""
@@ -364,10 +355,13 @@ class UISettingsCard(MDCard):
         )
         
         self.theme_control = MDSegmentedButton(
-            MDSegmentedButtonItem(text="Light"),
-            MDSegmentedButtonItem(text="Dark"),
+            MDSegmentedButtonItem(),
+            MDSegmentedButtonItem(),
             on_active=self.on_theme_changed
         )
+        # Set text for segmented button items
+        self.theme_control.children[1].text = "Light"  # First item (reversed order in children)
+        self.theme_control.children[0].text = "Dark"   # Second item
         self.theme_control.active = "Dark"  # Default
         theme_control_layout.add_widget(self.theme_control)
         
@@ -491,10 +485,9 @@ class UISettingsCard(MDCard):
         log_layout.add_widget(log_label)
         
         self.log_entries_field = MDTextField(
-            MDTextFieldSupportingText(text="Entries to keep in memory"),
             mode="outlined",
             text="100",
-            hint_text="Maximum log entries",
+            hint_text="Maximum log entries (kept in memory)",
             input_filter="int"
         )
         log_layout.add_widget(self.log_entries_field)
@@ -602,10 +595,9 @@ class SecuritySettingsCard(MDCard):
         maintenance_layout.add_widget(maintenance_label)
         
         self.maintenance_field = MDTextField(
-            MDTextFieldSupportingText(text="System cleanup interval"),
             mode="outlined",
             text="60",
-            hint_text="Maintenance interval",
+            hint_text="Maintenance interval (system cleanup)",
             input_filter="int"
         )
         maintenance_layout.add_widget(self.maintenance_field)
@@ -622,17 +614,19 @@ class SecuritySettingsCard(MDCard):
         )
         
         regenerate_keys_button = MDButton(
-            MDButtonText(text="Regenerate Keys"),
+            MDButtonText(),
             on_release=self.regenerate_encryption_keys
         )
+        regenerate_keys_button.children[0].text = "Regenerate Keys"
         regenerate_keys_button.theme_bg_color = "Custom"
         regenerate_keys_button.md_bg_color = self.theme_cls.tertiaryColor
         actions_layout.add_widget(regenerate_keys_button)
         
         clear_cache_button = MDButton(
-            MDButtonText(text="Clear Cache"),
+            MDButtonText(),
             on_release=self.clear_system_cache
         )
+        clear_cache_button.children[0].text = "Clear Cache"
         clear_cache_button.theme_bg_color = "Custom"
         clear_cache_button.md_bg_color = self.theme_cls.errorColor
         actions_layout.add_widget(clear_cache_button)
@@ -697,33 +691,37 @@ class SettingsActionsCard(MDCard):
         )
         
         save_button = MDButton(
-            MDButtonText(text="Save Settings"),
+            MDButtonText(),
             on_release=self.settings_screen.save_settings
         )
+        save_button.children[0].text = "Save Settings"
         save_button.theme_bg_color = "Custom"
         save_button.md_bg_color = self.theme_cls.primaryColor
         buttons_layout.add_widget(save_button)
         
         load_button = MDButton(
-            MDButtonText(text="Load Settings"),
+            MDButtonText(),
             on_release=self.settings_screen.load_settings
         )
+        load_button.children[0].text = "Load Settings"
         load_button.theme_bg_color = "Custom"
         load_button.md_bg_color = self.theme_cls.secondaryColor
         buttons_layout.add_widget(load_button)
         
         reset_button = MDButton(
-            MDButtonText(text="Reset All"),
+            MDButtonText(),
             on_release=self.settings_screen.reset_all_settings
         )
+        reset_button.children[0].text = "Reset All"
         reset_button.theme_bg_color = "Custom"
         reset_button.md_bg_color = self.theme_cls.errorColor
         buttons_layout.add_widget(reset_button)
         
         export_button = MDButton(
-            MDButtonText(text="Export Config"),
+            MDButtonText(),
             on_release=self.settings_screen.export_configuration
         )
+        export_button.children[0].text = "Export Config"
         export_button.theme_bg_color = "Custom"
         export_button.md_bg_color = self.theme_cls.tertiaryColor
         buttons_layout.add_widget(export_button)
@@ -920,20 +918,24 @@ class SettingsScreen(MDScreen):
         """Reset all settings to defaults"""
         try:
             # Show confirmation dialog
+            cancel_button = MDButton(
+                MDButtonText(),
+                on_release=lambda x: dialog.dismiss()
+            )
+            reset_button = MDButton(
+                MDButtonText(),
+                on_release=lambda x: self._perform_reset(dialog)
+            )
+            
             dialog = MDDialog(
                 title="Reset All Settings",
                 text="Are you sure you want to reset all settings to defaults? This action cannot be undone.",
-                buttons=[
-                    MDButton(
-                        MDButtonText(text="Cancel"),
-                        on_release=lambda x: dialog.dismiss()
-                    ),
-                    MDButton(
-                        MDButtonText(text="Reset"),
-                        on_release=lambda x: self._perform_reset(dialog)
-                    )
-                ]
+                buttons=[cancel_button, reset_button]
             )
+            
+            # Set button text after creation
+            cancel_button.children[0].text = "Cancel"
+            reset_button.children[0].text = "Reset"
             dialog.open()
             
         except Exception as e:

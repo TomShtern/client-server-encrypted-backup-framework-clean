@@ -7,7 +7,8 @@ from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.label import MDLabel
 from kivymd.uix.button import MDButton, MDIconButton, MDButtonText, MDButtonIcon
-from kivymd.uix.datatables import MDDataTable
+from kivymd.uix.list import MDList, MDListItem, MDListItemHeadlineText, MDListItemSupportingText, MDListItemLeadingIcon
+from kivymd.uix.scrollview import MDScrollView
 from kivymd.uix.menu import MDDropdownMenu
 from kivy.metrics import dp
 import os
@@ -54,17 +55,12 @@ class DatabaseScreen(MDScreen):
         
         layout.add_widget(header)
         
-        # Data table
-        self.data_table = MDDataTable(
-            size_hint=(1, 1),
-            use_pagination=True,
-            rows_num=20,
-            column_data=[],
-            row_data=[],
-            elevation=2
-        )
+        # Data list container
+        scroll = MDScrollView()
+        self.data_list = MDList()
+        scroll.add_widget(self.data_list)
         
-        layout.add_widget(self.data_table)
+        layout.add_widget(scroll)
         
         self.add_widget(layout)
     
@@ -118,34 +114,39 @@ class DatabaseScreen(MDScreen):
         elif table_name == "system_info":
             self._load_system_info()
         
-        # Update the data table
+        # Update the data list
         try:
-            self.data_table.update_row_data(
-                self.data_table,
-                self.data_table.row_data
-            )
+            # Data is automatically updated when we modify self.data_list
+            pass
         except Exception as e:
-            print(f"Error updating table: {e}")
+            print(f"Error updating list: {e}")
     
     def _load_files_data(self):
         """Load files data from received_files directory"""
         try:
             received_files_dir = os.path.join(os.getcwd(), "received_files")
             
-            self.data_table.column_data = [
-                ("File Name", dp(40)),
-                ("Size (Bytes)", dp(30)),
-                ("Size (Human)", dp(25)),
-                ("Modified", dp(35)),
-                ("Path", dp(50))
-            ]
+            # Clear existing list items
+            self.data_list.clear_widgets()
             
             if not os.path.exists(received_files_dir):
-                self.data_table.row_data = [("No files directory found", "", "", "", "")]
+                item = MDListItem(
+                    MDListItemLeadingIcon(icon="alert-circle"),
+                    MDListItemHeadlineText(text="No files directory found")
+                )
+                self.data_list.add_widget(item)
                 return
             
-            rows = []
-            for filename in os.listdir(received_files_dir):
+            files = os.listdir(received_files_dir)
+            if not files:
+                item = MDListItem(
+                    MDListItemLeadingIcon(icon="file-outline"),
+                    MDListItemHeadlineText(text="No files found")
+                )
+                self.data_list.add_widget(item)
+                return
+            
+            for filename in files:
                 file_path = os.path.join(received_files_dir, filename)
                 if os.path.isfile(file_path):
                     stat = os.stat(file_path)
@@ -153,32 +154,30 @@ class DatabaseScreen(MDScreen):
                     size_human = self._format_file_size(size_bytes)
                     mtime = self._format_date(stat.st_mtime)
                     
-                    rows.append((
-                        filename,
-                        str(size_bytes),
-                        size_human,
-                        mtime,
-                        file_path
-                    ))
-            
-            self.data_table.row_data = rows if rows else [("No files found", "", "", "", "")]
+                    item = MDListItem(
+                        MDListItemLeadingIcon(icon="file"),
+                        MDListItemHeadlineText(text=filename),
+                        MDListItemSupportingText(text=f"{size_human} • Modified: {mtime}")
+                    )
+                    self.data_list.add_widget(item)
             
         except Exception as e:
-            self.data_table.row_data = [(f"Error: {e}", "", "", "", "")]
+            self.data_list.clear_widgets()
+            item = MDListItem(
+                MDListItemLeadingIcon(icon="alert-circle"),
+                MDListItemHeadlineText(text=f"Error: {e}")
+            )
+            self.data_list.add_widget(item)
     
     def _load_config_data(self):
         """Load configuration data"""
         try:
             config_files = ["kivymd_gui/config.json", "config.json", "settings.json"]
             
-            self.data_table.column_data = [
-                ("Key", dp(40)),
-                ("Value", dp(60)),
-                ("Type", dp(20)),
-                ("Source", dp(30))
-            ]
+            # Clear existing list items
+            self.data_list.clear_widgets()
             
-            rows = []
+            items_added = False
             for config_file in config_files:
                 if os.path.exists(config_file):
                     try:
@@ -197,29 +196,41 @@ class DatabaseScreen(MDScreen):
                         
                         flat_data = flatten_dict(data)
                         for key, value in flat_data.items():
-                            rows.append((
-                                key,
-                                str(value),
-                                type(value).__name__,
-                                config_file
-                            ))
+                            item = MDListItem(
+                                MDListItemLeadingIcon(icon="cog"),
+                                MDListItemHeadlineText(text=key),
+                                MDListItemSupportingText(text=f"{str(value)[:50]}{'...' if len(str(value)) > 50 else ''} • {config_file}")
+                            )
+                            self.data_list.add_widget(item)
+                            items_added = True
                     except Exception as e:
-                        rows.append((f"Error reading {config_file}", str(e), "error", config_file))
+                        item = MDListItem(
+                            MDListItemLeadingIcon(icon="alert-circle"),
+                            MDListItemHeadlineText(text=f"Error reading {config_file}"),
+                            MDListItemSupportingText(text=str(e))
+                        )
+                        self.data_list.add_widget(item)
+                        items_added = True
             
-            self.data_table.row_data = rows if rows else [("No config files found", "", "", "")]
+            if not items_added:
+                item = MDListItem(
+                    MDListItemLeadingIcon(icon="file-outline"),
+                    MDListItemHeadlineText(text="No config files found")
+                )
+                self.data_list.add_widget(item)
             
         except Exception as e:
-            self.data_table.row_data = [(f"Error: {e}", "", "", "")]
+            self.data_list.clear_widgets()
+            item = MDListItem(
+                MDListItemLeadingIcon(icon="alert-circle"),
+                MDListItemHeadlineText(text=f"Error: {e}")
+            )
+            self.data_list.add_widget(item)
     
     def _load_transfers_data(self):
         """Load transfer history (simulated)"""
-        self.data_table.column_data = [
-            ("Transfer ID", dp(30)),
-            ("Client", dp(30)),
-            ("File", dp(40)),
-            ("Status", dp(20)),
-            ("Timestamp", dp(30))
-        ]
+        # Clear existing list items
+        self.data_list.clear_widgets()
         
         # This would typically come from a database or log files
         sample_data = [
@@ -228,20 +239,23 @@ class DatabaseScreen(MDScreen):
             ("TXN003", "Client-192.168.1.102", "data.zip", "Failed", "2024-01-15 10:20"),
         ]
         
-        self.data_table.row_data = sample_data
+        for txn_id, client, filename, status, timestamp in sample_data:
+            icon = "check-circle" if status == "Success" else "alert-circle"
+            item = MDListItem(
+                MDListItemLeadingIcon(icon=icon),
+                MDListItemHeadlineText(text=f"{txn_id}: {filename}"),
+                MDListItemSupportingText(text=f"{client} • {status} • {timestamp}")
+            )
+            self.data_list.add_widget(item)
     
     def _load_logs_data(self):
         """Load log data"""
-        self.data_table.column_data = [
-            ("Timestamp", dp(35)),
-            ("Level", dp(15)),
-            ("Source", dp(25)),
-            ("Message", dp(55))
-        ]
+        # Clear existing list items
+        self.data_list.clear_widgets()
         
         # Try to read actual log files
         log_files = ["server.log", "app.log", "kivymd_gui.log"]
-        rows = []
+        items_added = False
         
         for log_file in log_files:
             if os.path.exists(log_file):
@@ -256,44 +270,73 @@ class DatabaseScreen(MDScreen):
                             if len(parts) >= 4:
                                 timestamp = f"{parts[0]} {parts[1]}"
                                 level = parts[2]
-                                source = log_file
                                 message = parts[3]
-                                rows.append((timestamp, level, source, message))
+                                
+                                icon = {
+                                    "ERROR": "alert-circle",
+                                    "WARNING": "alert", 
+                                    "INFO": "information",
+                                    "DEBUG": "bug"
+                                }.get(level, "text-box")
+                                
+                                item = MDListItem(
+                                    MDListItemLeadingIcon(icon=icon),
+                                    MDListItemHeadlineText(text=f"[{level}] {message[:60]}{'...' if len(message) > 60 else ''}"),
+                                    MDListItemSupportingText(text=f"{timestamp} • {log_file}")
+                                )
+                                self.data_list.add_widget(item)
+                                items_added = True
                 except Exception as e:
-                    rows.append(("", "ERROR", log_file, f"Error reading log: {e}"))
+                    item = MDListItem(
+                        MDListItemLeadingIcon(icon="alert-circle"),
+                        MDListItemHeadlineText(text=f"Error reading {log_file}"),
+                        MDListItemSupportingText(text=str(e))
+                    )
+                    self.data_list.add_widget(item)
+                    items_added = True
         
-        if not rows:
-            rows = [("No log files found", "", "", "")]
-        
-        self.data_table.row_data = rows
+        if not items_added:
+            item = MDListItem(
+                MDListItemLeadingIcon(icon="file-outline"),
+                MDListItemHeadlineText(text="No log files found")
+            )
+            self.data_list.add_widget(item)
     
     def _load_system_info(self):
         """Load system information"""
         import psutil
         import platform
         
-        self.data_table.column_data = [
-            ("Property", dp(40)),
-            ("Value", dp(60))
-        ]
+        # Clear existing list items
+        self.data_list.clear_widgets()
         
         try:
-            rows = [
-                ("Platform", platform.platform()),
-                ("Python Version", platform.python_version()),
-                ("CPU Count", str(psutil.cpu_count())),
-                ("CPU Usage", f"{psutil.cpu_percent()}%"),
-                ("Memory Total", self._format_file_size(psutil.virtual_memory().total)),
-                ("Memory Used", f"{psutil.virtual_memory().percent}%"),
-                ("Disk Usage", f"{psutil.disk_usage('/').percent}%"),
-                ("Working Directory", os.getcwd()),
-                ("Process ID", str(os.getpid())),
+            system_info = [
+                ("Platform", platform.platform(), "desktop"),
+                ("Python Version", platform.python_version(), "language-python"),
+                ("CPU Count", str(psutil.cpu_count()), "chip"),
+                ("CPU Usage", f"{psutil.cpu_percent()}%", "speedometer"),
+                ("Memory Total", self._format_file_size(psutil.virtual_memory().total), "memory"),
+                ("Memory Used", f"{psutil.virtual_memory().percent}%", "memory"),
+                ("Disk Usage", f"{psutil.disk_usage('/').percent}%", "harddisk"),
+                ("Working Directory", os.getcwd(), "folder"),
+                ("Process ID", str(os.getpid()), "identifier"),
             ]
             
-            self.data_table.row_data = rows
+            for prop, value, icon in system_info:
+                item = MDListItem(
+                    MDListItemLeadingIcon(icon=icon),
+                    MDListItemHeadlineText(text=prop),
+                    MDListItemSupportingText(text=value)
+                )
+                self.data_list.add_widget(item)
             
         except Exception as e:
-            self.data_table.row_data = [(f"Error: {e}", "")]
+            item = MDListItem(
+                MDListItemLeadingIcon(icon="alert-circle"),
+                MDListItemHeadlineText(text=f"Error: {e}")
+            )
+            self.data_list.add_widget(item)
     
     def _format_file_size(self, size_bytes):
         """Format file size in human readable format"""

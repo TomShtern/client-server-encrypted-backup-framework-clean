@@ -7,10 +7,11 @@ from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.label import MDLabel
 from kivymd.uix.card import MDCard
-from kivymd.uix.button import MDIconButton, MDFabButton
+from kivymd.uix.button import MDIconButton
 from kivymd.uix.textfield import MDTextField, MDTextFieldLeadingIcon, MDTextFieldHintText
 from kivymd.uix.selectioncontrol import MDSwitch
 from kivymd.uix.scrollview import MDScrollView
+from kivymd.uix.relativelayout import MDRelativeLayout
 from kivy.metrics import dp
 from kivy.clock import Clock
 from kivy.properties import StringProperty, BooleanProperty
@@ -101,6 +102,9 @@ class LogsScreen(MDScreen):
         layout.add_widget(filter_layout)
         
         # Log display area
+        # Log display container with FAB
+        log_container = MDRelativeLayout()
+        
         log_card = MDCard(
             md_bg_color=self.theme_cls.surfaceColor,
             elevation=1,
@@ -122,15 +126,17 @@ class LogsScreen(MDScreen):
         )
         scroll.add_widget(self.log_label)
         log_card.add_widget(scroll)
-        layout.add_widget(log_card)
+        log_container.add_widget(log_card)
         
-        # FAB for export
-        fab = MDFabButton(
+        # Export button (replacing FAB with IconButton)
+        fab = MDIconButton(
             icon="download",
             pos_hint={"right": 0.95, "bottom": 0.05},
             on_release=self.export_logs
         )
-        layout.add_widget(fab)
+        log_container.add_widget(fab)
+        
+        layout.add_widget(log_container)
         
         self.add_widget(layout)
         self._load_initial_logs()

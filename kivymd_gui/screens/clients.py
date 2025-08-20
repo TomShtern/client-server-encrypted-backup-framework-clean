@@ -23,7 +23,7 @@ try:
     from kivymd.uix.button import MDButtonText
     from kivymd.uix.scrollview import MDScrollView
     from kivymd.uix.divider import MDDivider
-    from kivymd.uix.textfield import MDTextField, MDTextFieldSupportingText
+    from kivymd.uix.textfield import MDTextField
     from kivymd.uix.list import MDList, MDListItem
     from kivymd.uix.list import MDListItemHeadlineText, MDListItemSupportingText, MDListItemTrailingIcon, MDListItemTrailingSupportingText
     from kivymd.uix.badge import MDBadge
@@ -215,9 +215,8 @@ class ClientSearchCard(MDCard):
         
         # Search field
         self.search_field = MDTextField(
-            MDTextFieldSupportingText(text="Search by username or IP address"),
             mode="outlined",
-            hint_text="Search clients...",
+            hint_text="Search clients (username or IP address)...",
             on_text=self.on_search_text
         )
         self.search_field.size_hint_x = 0.6
