@@ -25,7 +25,7 @@ try:
     from kivymd.uix.button import MDButtonText
     from kivymd.uix.scrollview import MDScrollView
     from kivymd.uix.divider import MDDivider
-    from kivymd.uix.textfield import MDTextField
+    from kivymd.uix.textfield import MDTextField, MDTextFieldSupportingText, MDTextFieldHintText
     from kivymd.uix.selectioncontrol import MDSwitch
     from kivymd.uix.slider import MDSlider
     from kivymd.uix.segmentedbutton import MDSegmentedButton, MDSegmentedButtonItem
@@ -107,10 +107,10 @@ class ServerSettingsCard(MDCard):
         port_layout.add_widget(port_label)
         
         self.port_field = MDTextField(
+            MDTextFieldSupportingText(text="Default: 1256"),
             mode="outlined",
             text="1256",
             hint_text="Port number",
-            helper_text="Default: 1256",
             input_filter="int",
             on_text_validate=self.validate_port
         )
@@ -129,10 +129,10 @@ class ServerSettingsCard(MDCard):
         host_layout.add_widget(host_label)
         
         self.host_field = MDTextField(
+            MDTextFieldSupportingText(text="0.0.0.0 for all interfaces"),
             mode="outlined",
             text="0.0.0.0",
             hint_text="Host address",
-            helper_text="0.0.0.0 for all interfaces",
             on_text_validate=self.validate_host
         )
         host_layout.add_widget(self.host_field)
@@ -152,10 +152,10 @@ class ServerSettingsCard(MDCard):
         storage_dir_layout = MDBoxLayout(orientation="horizontal", spacing=dp(8))
         
         self.storage_field = MDTextField(
+            MDTextFieldSupportingText(text="Directory for received files"),
             mode="outlined",
             text="received_files",
-            hint_text="Directory path",
-            helper_text="Directory for received files"
+            hint_text="Directory path"
         )
         storage_dir_layout.add_widget(self.storage_field)
         
@@ -182,10 +182,10 @@ class ServerSettingsCard(MDCard):
         clients_layout.add_widget(clients_label)
         
         self.max_clients_field = MDTextField(
+            MDTextFieldSupportingText(text="Maximum concurrent connections"),
             mode="outlined",
             text="50",
             hint_text="Maximum clients",
-            helper_text="Maximum concurrent connections",
             input_filter="int",
             on_text_validate=self.validate_max_clients
         )
@@ -229,19 +229,30 @@ class ServerSettingsCard(MDCard):
         
         self.add_widget(layout)
     
+    def _update_supporting_text(self, textfield, text: str):
+        """Update supporting text for KivyMD 2.0.x compatibility"""
+        try:
+            # Find MDTextFieldSupportingText child and update its text
+            for child in textfield.children:
+                if hasattr(child, 'text') and hasattr(child, '__class__') and 'SupportingText' in child.__class__.__name__:
+                    child.text = text
+                    break
+        except Exception as e:
+            print(f"[WARNING] Could not update supporting text: {e}")
+    
     def validate_port(self, instance):
         """Validate port number"""
         try:
             port = int(instance.text)
             if not (1 <= port <= 65535):
                 instance.error = True
-                instance.helper_text = "Port must be between 1 and 65535"
+                self._update_supporting_text(instance, "Port must be between 1 and 65535")
             else:
                 instance.error = False
-                instance.helper_text = "Default: 1256"
+                self._update_supporting_text(instance, "Default: 1256")
         except ValueError:
             instance.error = True
-            instance.helper_text = "Invalid port number"
+            self._update_supporting_text(instance, "Invalid port number")
     
     def validate_host(self, instance):
         """Validate host address"""
@@ -249,13 +260,13 @@ class ServerSettingsCard(MDCard):
             host = instance.text.strip()
             if not host:
                 instance.error = True
-                instance.helper_text = "Host cannot be empty"
+                self._update_supporting_text(instance, "Host cannot be empty")
             else:
                 instance.error = False
-                instance.helper_text = "0.0.0.0 for all interfaces"
+                self._update_supporting_text(instance, "0.0.0.0 for all interfaces")
         except Exception:
             instance.error = True
-            instance.helper_text = "Invalid host address"
+            self._update_supporting_text(instance, "Invalid host address")
     
     def validate_max_clients(self, instance):
         """Validate max clients"""
@@ -263,13 +274,13 @@ class ServerSettingsCard(MDCard):
             max_clients = int(instance.text)
             if not (1 <= max_clients <= 1000):
                 instance.error = True
-                instance.helper_text = "Must be between 1 and 1000"
+                self._update_supporting_text(instance, "Must be between 1 and 1000")
             else:
                 instance.error = False
-                instance.helper_text = "Maximum concurrent connections"
+                self._update_supporting_text(instance, "Maximum concurrent connections")
         except ValueError:
             instance.error = True
-            instance.helper_text = "Invalid number"
+            self._update_supporting_text(instance, "Invalid number")
     
     def on_timeout_changed(self, instance, value):
         """Handle timeout slider changes"""
@@ -480,10 +491,10 @@ class UISettingsCard(MDCard):
         log_layout.add_widget(log_label)
         
         self.log_entries_field = MDTextField(
+            MDTextFieldSupportingText(text="Entries to keep in memory"),
             mode="outlined",
             text="100",
             hint_text="Maximum log entries",
-            helper_text="Entries to keep in memory",
             input_filter="int"
         )
         log_layout.add_widget(self.log_entries_field)
@@ -591,10 +602,10 @@ class SecuritySettingsCard(MDCard):
         maintenance_layout.add_widget(maintenance_label)
         
         self.maintenance_field = MDTextField(
+            MDTextFieldSupportingText(text="System cleanup interval"),
             mode="outlined",
             text="60",
             hint_text="Maintenance interval",
-            helper_text="System cleanup interval",
             input_filter="int"
         )
         maintenance_layout.add_widget(self.maintenance_field)

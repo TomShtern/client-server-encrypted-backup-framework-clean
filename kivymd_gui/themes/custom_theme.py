@@ -4,7 +4,6 @@ custom_theme.py - Material Design 3 Expressive theme configuration for Encrypted
 Implements dynamic theming with Material You color system and adaptive personalization
 """
 
-from kivymd.theming import ThemeManager
 from typing import Dict, Any, Optional, Tuple
 import random
 import math
@@ -286,7 +285,7 @@ class CustomTheme:
             return cls.THEMES["Blue"]  # Fallback to default
     
     @classmethod
-    def apply_theme(cls, theme_manager: ThemeManager, theme_name: str = "Blue", style: str = "Dark", expressive_config: Optional[Dict[str, Any]] = None):
+    def apply_theme(cls, theme_manager: Any, theme_name: str = "Blue", style: str = "Dark", expressive_config: Optional[Dict[str, Any]] = None):
         """
         Apply Material Design 3 Expressive theme to the KivyMD app
         
@@ -395,7 +394,7 @@ class ThemeConfig:
         self.current_theme = config_data.get("app", {}).get("primary_color", "Blue")
         self.current_style = config_data.get("app", {}).get("theme", "Dark")
     
-    def apply_to_app(self, theme_manager: ThemeManager):
+    def apply_to_app(self, theme_manager: Any):
         """Apply configuration to KivyMD app"""
         CustomTheme.apply_theme(
             theme_manager,

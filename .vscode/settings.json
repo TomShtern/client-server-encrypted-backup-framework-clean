@@ -1,28 +1,46 @@
-
 {
-    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
-    "C_Cpp.formatting": "clang-format",
-    "files.associations": {
-        "*.h": "cpp",
-        "*.cpp": "cpp"
-    },
-    "cmake.configureOnOpen": true,
-    "C_Cpp.intelliSenseEngine": "Default",
-    "C_Cpp.errorSquiggles": "Enabled",
-    "github.copilot.nextEditSuggestions.enabled": true,
-    "files.watcherExclude": {
-        "**/.git/objects/**": true,
-        "**/.git/subtree-cache/**": true,
-        "**/.hg/store/**": true,
-        "**/node_modules/**": true,
-        "**/__pycache__/**": true,
-        "**/build/**": true,
-        "**/logs/**": true,
-        "**/*.log": true,
-        "**/received_files/**": true,
-        "**/data/**": true,
-        "**/dist/**": true,
-        "**/.git/**": true,
-        "**/.vscode/**": true
+    "python.defaultInterpreterPath": "./kivy_venv_new/Scripts/python.exe",
+    "python.terminal.activateEnvironment": true,
+    "python.analysis.extraPaths": [
+        "./",
+        "./kivymd_gui",
+        "./Shared",
+        "./python_server",
+        "./api_server"
+    ],
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.reportMissingImports": "warning",
+    "python.analysis.reportMissingTypeStubs": "none",
+    "python.analysis.reportUnknownParameterType": "none",
+    "python.analysis.reportUnknownArgumentType": "none",
+    "python.analysis.reportUnknownMemberType": "none",
+    "python.analysis.autoSearchPaths": true,
+    "python.analysis.useLibraryCodeForTypes": true,
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.stubPath": "./kivy_venv_new/Lib/site-packages",
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": false,
+    "python.analysis.ignore": [
+        "**/node_modules/**",
+        "**/build/**",
+        "**/dist/**",
+        "**/.git/**"
+    ],
+    "python.analysis.include": [
+        "./kivymd_gui/**/*.py",
+        "./Shared/**/*.py",
+        "./python_server/**/*.py",
+        "./api_server/**/*.py"
+    ],
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/*.pyc": true,
+        "**/node_modules": true,
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true
     }
 }

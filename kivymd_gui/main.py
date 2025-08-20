@@ -48,7 +48,7 @@ try:
 except ImportError:
     print("[ERROR] Kivy is not installed in your current environment.")
     print("To fix: Activate your venv and run:")
-    print("  pip install kivy==2.3.0")
+    print("  pip install kivy==2.3.1")
     sys.exit(1)
 Config.set('graphics', 'width', '1400')
 Config.set('graphics', 'height', '900')
@@ -58,13 +58,12 @@ Config.set('graphics', 'minimum_height', '700')
 try:
     from kivymd.app import MDApp
     from kivymd.uix.screenmanager import MDScreenManager
-    # from kivymd.uix.navigationrail import MDNavigationRail, MDNavigationRailItem, MDNavigationRailItemIcon, MDNavigationRailItemLabel
-    from kivymd.uix.navigationdrawer import MDNavigationDrawer, MDNavigationDrawerItem
+    from kivymd.uix.screen import MDScreen
+    # NavigationRail components removed due to animation stability issues in KivyMD 2.0.x
     from kivymd.uix.button import MDIconButton
     from kivymd.uix.boxlayout import MDBoxLayout
     from kivymd.uix.appbar import MDTopAppBar, MDTopAppBarTitle, MDTopAppBarLeadingButtonContainer, MDTopAppBarTrailingButtonContainer, MDActionTopAppBarButton
-    from kivymd.uix.snackbar import MDSnackbar
-    from kivymd.uix.snackbar import MDSnackbarText
+    from kivymd.uix.snackbar import MDSnackbar, MDSnackbarText
     from kivy.clock import Clock
     from kivy.metrics import dp
     from kivy.core.window import Window
@@ -72,7 +71,7 @@ try:
     
 except ImportError as e:
     print(f"[ERROR] KivyMD not available: {e}")
-    print("Please install KivyMD: pip install kivymd==2.0.0")
+    print("Please install KivyMD: pip install git+https://github.com/kivymd/KivyMD.git@d2f7740")
     KIVYMD_AVAILABLE = False
     sys.exit(1)
 
@@ -96,6 +95,20 @@ except ImportError:
 class EncryptedBackupServerApp(MDApp):
     """Main KivyMD Application for Encrypted Backup Server"""
     
+    # Type annotations for instance variables (VS Code Pylance compatibility)
+    screen_manager: Optional[MDScreenManager] = None
+    navigation_panel: Optional[MDBoxLayout] = None 
+    nav_buttons: Optional[Dict[str, Any]] = None
+    top_bar: Optional[MDTopAppBar] = None
+    server_bridge: Optional[Any] = None
+    config_data: Dict[str, Any]
+    theme_config: Optional[Any] = None
+    server_instance: Optional[Any] = None
+    current_screen: str = "dashboard"
+    update_event: Optional[Any] = None
+    update_interval: float = 1.0
+    last_status: Optional[Any] = None
+    
     def __init__(self, server_instance: Optional[Any] = None, **kwargs):
         super().__init__(**kwargs)
         
@@ -105,7 +118,11 @@ class EncryptedBackupServerApp(MDApp):
         
         # Configuration
         self.config_data = self.load_configuration()
-        self.theme_config = ThemeConfig(self.config_data)
+        try:
+            self.theme_config = ThemeConfig(self.config_data)
+        except Exception as e:
+            print(f"[WARNING] Theme configuration failed: {e}")
+            self.theme_config = None
         
         # Apply theme configuration
         self.theme_cls.theme_style = self.config_data.get("app", {}).get("theme", "Dark")
@@ -284,20 +301,20 @@ class EncryptedBackupServerApp(MDApp):
             screen_manager.add_widget(dashboard)
             print("[INFO] Dashboard added to screen manager")
             
-            # TODO: Fix API compatibility issues in other screens
-            # clients = ClientsScreen(
-            #     name="clients", 
-            #     server_bridge=self.server_bridge,
-            #     config=self.config_data
-            # )
-            # screen_manager.add_widget(clients)
+            # Add additional screens with KivyMD 2.0.x compatible initialization
+            clients = ClientsScreen(
+                name="clients", 
+                server_bridge=self.server_bridge,
+                config=self.config_data
+            )
+            screen_manager.add_widget(clients)
             
-            # settings = SettingsScreen(
-            #     name="settings",
-            #     app=self,
-            #     config=self.config_data
-            # )
-            # screen_manager.add_widget(settings)
+            settings = SettingsScreen(
+                name="settings",
+                server_bridge=self.server_bridge,
+                config=self.config_data
+            )
+            screen_manager.add_widget(settings)
             
             # TODO: Add other screens as they're implemented
             # screen_manager.add_widget(FilesScreen(...))
@@ -322,7 +339,7 @@ class EncryptedBackupServerApp(MDApp):
         
         return screen_manager
     
-    def navigate_to_screen(self, screen_name: str):
+    def navigate_to_screen(self, screen_name: str) -> None:
         """Navigate to a specific screen"""
         try:
             if self.screen_manager and screen_name in self.screen_manager.screen_names:
@@ -415,12 +432,12 @@ class EncryptedBackupServerApp(MDApp):
         except Exception as e:
             print(f"[ERROR] Server status update failed: {e}")
     
-    def show_menu(self):
+    def show_menu(self) -> None:
         """Show application menu"""
         # TODO: Implement dropdown menu with options
         self.show_snackbar("Menu functionality coming soon")
     
-    def refresh_data(self):
+    def refresh_data(self) -> None:
         """Refresh all data displays"""
         try:
             # Force immediate update
@@ -438,14 +455,15 @@ class EncryptedBackupServerApp(MDApp):
             print(f"[ERROR] Data refresh failed: {e}")
             self.show_snackbar("Refresh failed")
     
-    def toggle_theme(self):
+    def toggle_theme(self) -> None:
         """Toggle between light and dark theme"""
         try:
             current_style = self.theme_cls.theme_style
             new_style = "Light" if current_style == "Dark" else "Dark"
             
             self.theme_cls.theme_style = new_style
-            self.theme_config.update_theme(self.theme_config.current_theme, new_style)
+            if self.theme_config:
+                self.theme_config.update_theme(self.theme_config.current_theme, new_style)
             
             # Save configuration
             self.save_configuration()
@@ -456,7 +474,7 @@ class EncryptedBackupServerApp(MDApp):
             print(f"[ERROR] Theme toggle failed: {e}")
             self.show_snackbar("Theme change failed")
     
-    def show_snackbar(self, message: str, duration: float = 3.0):
+    def show_snackbar(self, message: str, duration: float = 3.0) -> None:
         """Show a snackbar notification"""
         try:
             snackbar = MDSnackbar(
@@ -472,7 +490,7 @@ class EncryptedBackupServerApp(MDApp):
             # Fallback to console
             print(f"[INFO] {message}")
     
-    def show_startup_message(self):
+    def show_startup_message(self) -> None:
         """Show startup message"""
         if self.server_bridge and hasattr(self.server_bridge, 'is_server_available') and self.server_bridge.is_server_available():
             self.show_snackbar("✅ Server connection established")
@@ -501,7 +519,7 @@ class EncryptedBackupServerApp(MDApp):
                 }
             }
     
-    def save_configuration(self):
+    def save_configuration(self) -> None:
         """Save configuration to JSON file"""
         config_path = Path(__file__).parent / "config.json"
         try:
@@ -514,7 +532,7 @@ class EncryptedBackupServerApp(MDApp):
         except Exception as e:
             print(f"[ERROR] Could not save config: {e}")
     
-    def on_stop(self):
+    def on_stop(self) -> None:
         """Clean up when application stops"""
         try:
             # Cancel scheduled updates
@@ -551,7 +569,7 @@ def create_server_instance():
 def main(server_instance: Optional[Any] = None):
     """Main entry point for the KivyMD application"""
     if not KIVYMD_AVAILABLE:
-        print("[ERROR] KivyMD is not available. Please install it with: pip install kivymd==2.0.0")
+        print("[ERROR] KivyMD is not available. Please install it with: pip install git+https://github.com/kivymd/KivyMD.git@d2f7740")
         return
     
     print("[INFO] Starting KivyMD Encrypted Backup Server GUI...")

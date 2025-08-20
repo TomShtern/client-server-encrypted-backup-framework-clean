@@ -2,7 +2,7 @@
     "app": {
         "title": "Encrypted Backup Server",
         "version": "2.0.0",
-        "theme": "Light",
+        "theme": "Dark",
         "primary_color": "Blue",
         "material_style": "M3",
         "window": {
