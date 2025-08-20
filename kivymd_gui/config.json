@@ -10,6 +10,23 @@
             "height": 900,
             "min_width": 1000,
             "min_height": 700
+        },
+        "expressive_theming": {
+            "enable_dynamic": false,
+            "seed_color": "#1976D2",
+            "harmony": "analogous",
+            "expressive_style": "expressive",
+            "available_harmonies": [
+                "monochromatic",
+                "analogous", 
+                "complementary",
+                "triadic",
+                "split_complementary"
+            ],
+            "available_styles": [
+                "baseline",
+                "expressive"
+            ]
         }
     },
     "server": {

@@ -7,6 +7,22 @@ statistics, and activity monitoring with Material Design 3 styling.
 """
 
 from __future__ import annotations
+import sys
+import os
+from pathlib import Path
+
+# Ensure UTF-8 solution is available
+try:
+    import Shared.utils.utf8_solution
+except ImportError:
+    # Try adding project root to path
+    project_root = Path(__file__).parent.parent.parent
+    sys.path.insert(0, str(project_root))
+    try:
+        import Shared.utils.utf8_solution
+    except ImportError:
+        pass  # Continue without UTF-8 solution
+
 import traceback
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
@@ -22,7 +38,7 @@ try:
     from kivymd.uix.button import MDButtonText
     from kivymd.uix.scrollview import MDScrollView
     from kivymd.uix.divider import MDDivider
-    from kivymd.uix.progressbar import MDProgressBar
+    from kivymd.uix.progressindicator import MDCircularProgressIndicator
     from kivymd.uix.list import MDList, MDListItem
     from kivymd.uix.list import MDListItemHeadlineText, MDListItemSupportingText
     from kivymd.uix.badge import MDBadge

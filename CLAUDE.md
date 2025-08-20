@@ -161,3 +161,5 @@ del transfer.info && python scripts/one_click_build_and_run.py
 - **`refactoring_report.md`**: Comprehensive refactoring work and technical debt analysis
 - **`Shared/unified_monitor.py`**: Unified file monitoring system
 - **Evidence of Success**: Check `received_files/` for actual transfers (67+ files demonstrate production usage)
+- kivy_venv\Scripts\activate
+is the script to activate the venv

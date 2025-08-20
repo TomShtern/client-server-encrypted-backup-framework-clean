@@ -2,7 +2,9 @@
 Enhanced data table component for the KivyMD GUI
 """
 
-from kivymd.uix.datatables import MDDataTable
+# Data tables not available in KivyMD 2.0.x - create custom implementation
+from kivymd.uix.list import MDList, MDListItem
+from kivymd.uix.list import MDListItemHeadlineText, MDListItemSupportingText, MDListItemTrailingSupportingText
 from kivymd.uix.boxlayout import MDBoxLayout
 
 class EnhancedDataTable(MDBoxLayout):
