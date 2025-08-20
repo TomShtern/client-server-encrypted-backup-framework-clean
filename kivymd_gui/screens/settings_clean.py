@@ -32,10 +32,10 @@ try:
     from kivymd.uix.divider import MDDivider
     from kivymd.uix.textfield import MDTextField
     from kivymd.uix.slider import MDSlider
-    from kivymd.uix.switch import MDSwitch
+    from kivymd.uix.selectioncontrol import MDSwitch
     from kivymd.uix.list import MDList, MDListItem
     from kivymd.uix.list import MDListItemHeadlineText, MDListItemSupportingText
-    from kivymd.uix.segmentedcontrol import MDSegmentedControl, MDSegmentedControlItem
+    from kivymd.uix.segmentedbutton import MDSegmentedButton, MDSegmentedButtonItem
     from kivymd.uix.snackbar import MDSnackbar, MDSnackbarText
     from kivymd.uix.dialog import MDDialog
     from kivymd.uix.dialog import MDDialogHeadlineText, MDDialogContentText

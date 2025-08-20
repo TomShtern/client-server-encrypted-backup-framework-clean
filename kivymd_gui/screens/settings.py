@@ -26,12 +26,10 @@ try:
     from kivymd.uix.scrollview import MDScrollView
     from kivymd.uix.divider import MDDivider
     from kivymd.uix.textfield import MDTextField
-    from kivymd.uix.switch import MDSwitch
+    from kivymd.uix.selectioncontrol import MDSwitch
     from kivymd.uix.slider import MDSlider
-    from kivymd.uix.segmentedcontrol import MDSegmentedControl, MDSegmentedControlItem
-    from kivymd.uix.selectioncontrol import MDSelectionControl
+    from kivymd.uix.segmentedbutton import MDSegmentedButton, MDSegmentedButtonItem
     from kivymd.uix.dialog import MDDialog
-    from kivymd.uix.expansionpanel import MDExpansionPanel, MDExpansionPanelOneLine
     from kivymd.uix.list import MDList, MDListItem
     from kivymd.uix.list import MDListItemHeadlineText, MDListItemSupportingText, MDListItemTrailingIcon
     from kivymd.uix.snackbar import MDSnackbar, MDSnackbarText
@@ -354,9 +352,9 @@ class UISettingsCard(MDCard):
             height=dp(40)
         )
         
-        self.theme_control = MDSegmentedControl(
-            MDSegmentedControlItem(text="Light"),
-            MDSegmentedControlItem(text="Dark"),
+        self.theme_control = MDSegmentedButton(
+            MDSegmentedButtonItem(text="Light"),
+            MDSegmentedButtonItem(text="Dark"),
             on_active=self.on_theme_changed
         )
         self.theme_control.active = "Dark"  # Default

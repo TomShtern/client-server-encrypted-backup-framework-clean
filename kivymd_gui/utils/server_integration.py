@@ -644,6 +644,14 @@ class ServerIntegrationBridge:
     def is_server_running(self) -> bool:
         """Check if server is currently running"""
         return self.status_monitor.status.running
+    
+    def cleanup(self):
+        """Cleanup method for application shutdown"""
+        try:
+            self.logger.info("Cleaning up ServerIntegrationBridge...")
+            self.stop_bridge()
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {e}")
 
 
 @contextmanager

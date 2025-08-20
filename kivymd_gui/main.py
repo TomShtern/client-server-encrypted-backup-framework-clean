@@ -12,6 +12,17 @@ import traceback
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+# --- VENV CHECK: Ensure we're running inside kivy_venv_new ---
+expected_venv = "kivy_venv_new"
+venv_path = os.environ.get("VIRTUAL_ENV", "")
+if expected_venv not in venv_path:
+    print(f"[ERROR] You are NOT running inside the '{expected_venv}' virtual environment.")
+    print("To fix: Activate your venv before running this script:")
+    print("  cd C:\\Users\\tom7s\\Desktopp\\Claude_Folder_2\\Client_Server_Encrypted_Backup_Framework")
+    print("  .\\kivy_venv_new\\Scripts\\activate")
+    print("  python kivymd_gui\\main.py")
+    sys.exit(1)
+
 # Add project root to path for imports
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -23,28 +34,42 @@ try:
 except ImportError:
     print("[WARNING] Could not enable UTF-8 solution - encoding issues may occur.")
 
+# Sentry error tracking initialization
+try:
+    from Shared.sentry_config import init_sentry
+    SENTRY_AVAILABLE = True
+except ImportError:
+    print("[WARNING] Sentry configuration not available - error tracking disabled")
+    SENTRY_AVAILABLE = False
+
 # Kivy config - must be set before importing kivy modules
-from kivy.config import Config
+try:
+    from kivy.config import Config
+except ImportError:
+    print("[ERROR] Kivy is not installed in your current environment.")
+    print("To fix: Activate your venv and run:")
+    print("  pip install kivy==2.3.0")
+    sys.exit(1)
 Config.set('graphics', 'width', '1400')
 Config.set('graphics', 'height', '900')
 Config.set('graphics', 'minimum_width', '1000')
 Config.set('graphics', 'minimum_height', '700')
-
 # KivyMD and Kivy imports
 try:
     from kivymd.app import MDApp
     from kivymd.uix.screenmanager import MDScreenManager
-    from kivymd.uix.navigationrail import MDNavigationRail, MDNavigationRailItem
+    # from kivymd.uix.navigationrail import MDNavigationRail, MDNavigationRailItem, MDNavigationRailItemIcon, MDNavigationRailItemLabel
+    from kivymd.uix.navigationdrawer import MDNavigationDrawer, MDNavigationDrawerItem
+    from kivymd.uix.button import MDIconButton
     from kivymd.uix.boxlayout import MDBoxLayout
-    from kivymd.uix.topappbar import MDTopAppBar
+    from kivymd.uix.appbar import MDTopAppBar, MDTopAppBarTitle, MDTopAppBarLeadingButtonContainer, MDTopAppBarTrailingButtonContainer, MDActionTopAppBarButton
     from kivymd.uix.snackbar import MDSnackbar
     from kivymd.uix.snackbar import MDSnackbarText
-    
     from kivy.clock import Clock
     from kivy.metrics import dp
     from kivy.core.window import Window
-    
     KIVYMD_AVAILABLE = True
+    
 except ImportError as e:
     print(f"[ERROR] KivyMD not available: {e}")
     print("Please install KivyMD: pip install kivymd==2.0.0")
@@ -93,7 +118,8 @@ class EncryptedBackupServerApp(MDApp):
         
         # UI components
         self.screen_manager = None
-        self.navigation_rail = None
+        self.navigation_panel = None
+        self.nav_buttons = None
         self.top_bar = None
         
         # Update scheduling
@@ -115,7 +141,8 @@ class EncryptedBackupServerApp(MDApp):
             # Schedule updates
             self.schedule_periodic_updates()
             
-            # Show startup message
+            # Set initial navigation and show startup message
+            Clock.schedule_once(lambda dt: self._set_initial_navigation_state(), 0.5)
             Clock.schedule_once(lambda dt: self.show_startup_message(), 2.0)
             
             return main_layout
@@ -149,21 +176,35 @@ class EncryptedBackupServerApp(MDApp):
         
         # Top app bar
         self.top_bar = MDTopAppBar(
-            title="Server Dashboard",
-            left_action_items=[["menu", lambda x: self.show_menu()]],
-            right_action_items=[
-                ["refresh", lambda x: self.refresh_data()],
-                ["theme-light-dark", lambda x: self.toggle_theme()]
-            ]
+            MDTopAppBarLeadingButtonContainer(
+                MDActionTopAppBarButton(
+                    icon="menu",
+                    on_release=lambda x: self.show_menu()
+                )
+            ),
+            MDTopAppBarTitle(
+                text="Server Dashboard"
+            ),
+            MDTopAppBarTrailingButtonContainer(
+                MDActionTopAppBarButton(
+                    icon="refresh",
+                    on_release=lambda x: self.refresh_data()
+                ),
+                MDActionTopAppBarButton(
+                    icon="theme-light-dark",
+                    on_release=lambda x: self.toggle_theme()
+                )
+            ),
+            type="small"
         )
         main_layout.add_widget(self.top_bar)
         
         # Content area with navigation
         content_layout = MDBoxLayout(orientation="horizontal")
         
-        # Navigation rail
-        self.navigation_rail = self.create_navigation_rail()
-        content_layout.add_widget(self.navigation_rail)
+        # Navigation panel (replacing NavigationRail to avoid animation bug)
+        self.navigation_panel = self.create_navigation_panel()
+        content_layout.add_widget(self.navigation_panel)
         
         # Screen manager
         self.screen_manager = self.create_screen_manager()
@@ -173,18 +214,23 @@ class EncryptedBackupServerApp(MDApp):
         
         return main_layout
     
-    def create_navigation_rail(self) -> MDNavigationRail:
-        """Create the navigation rail with Material Design 3 styling"""
-        nav_rail = MDNavigationRail(
-            anchor="top",
-            type="selected",
-            use_resizeable=True,
+    def create_navigation_panel(self) -> MDBoxLayout:
+        """Create a simple navigation panel using buttons to avoid NavigationRail animation bug"""
+        from kivymd.uix.button import MDIconButton
+        from kivymd.uix.label import MDLabel
+        
+        nav_panel = MDBoxLayout(
+            orientation="vertical",
+            size_hint_x=None,
+            width="80dp",
+            spacing="8dp",
+            padding=["8dp", "16dp", "8dp", "16dp"]
         )
         
         # Navigation items
         nav_items = [
             ("dashboard", "view-dashboard", "Dashboard"),
-            ("clients", "account-group", "Clients"),
+            ("clients", "account-group", "Clients"), 
             ("files", "file-multiple", "Files"),
             ("analytics", "chart-line", "Analytics"),
             ("database", "database", "Database"),
@@ -192,18 +238,35 @@ class EncryptedBackupServerApp(MDApp):
             ("settings", "cog", "Settings")
         ]
         
+        self.nav_buttons = {}
+        
         for screen_name, icon, text in nav_items:
-            nav_item = MDNavigationRailItem(
+            # Create icon button for navigation
+            nav_button = MDIconButton(
                 icon=icon,
-                text=text,
+                theme_icon_color="Custom", 
+                icon_color=self.theme_cls.onSurfaceColor,
+                size_hint_y=None,
+                height="48dp",
                 on_release=lambda x, screen=screen_name: self.navigate_to_screen(screen)
             )
-            # Set first item as active
-            if screen_name == "dashboard":
-                nav_item.active = True
-            nav_rail.add_widget(nav_item)
+            nav_button.screen_name = screen_name
+            nav_button.tooltip_text = text
+            
+            self.nav_buttons[screen_name] = nav_button
+            nav_panel.add_widget(nav_button)
         
-        return nav_rail
+        return nav_panel
+    
+    def _set_initial_navigation_state(self):
+        """Set initial navigation to dashboard after UI is fully loaded"""
+        try:
+            print("[INFO] Setting initial navigation to dashboard")
+            # Navigate to dashboard programmatically
+            Clock.schedule_once(lambda dt: self.navigate_to_screen("dashboard"), 0.1)
+                        
+        except Exception as e:
+            print(f"[WARNING] Initial navigation state setup failed: {e}")
     
     def create_screen_manager(self) -> MDScreenManager:
         """Create and populate the screen manager"""
@@ -211,26 +274,30 @@ class EncryptedBackupServerApp(MDApp):
         
         # Create screens with server bridge
         try:
+            print("[INFO] Creating dashboard screen...")
             dashboard = DashboardScreen(
                 name="dashboard",
                 server_bridge=self.server_bridge,
                 config=self.config_data
             )
+            print(f"[INFO] Dashboard screen created, children count: {len(dashboard.children)}")
             screen_manager.add_widget(dashboard)
+            print("[INFO] Dashboard added to screen manager")
             
-            clients = ClientsScreen(
-                name="clients", 
-                server_bridge=self.server_bridge,
-                config=self.config_data
-            )
-            screen_manager.add_widget(clients)
+            # TODO: Fix API compatibility issues in other screens
+            # clients = ClientsScreen(
+            #     name="clients", 
+            #     server_bridge=self.server_bridge,
+            #     config=self.config_data
+            # )
+            # screen_manager.add_widget(clients)
             
-            settings = SettingsScreen(
-                name="settings",
-                app=self,
-                config=self.config_data
-            )
-            screen_manager.add_widget(settings)
+            # settings = SettingsScreen(
+            #     name="settings",
+            #     app=self,
+            #     config=self.config_data
+            # )
+            # screen_manager.add_widget(settings)
             
             # TODO: Add other screens as they're implemented
             # screen_manager.add_widget(FilesScreen(...))
@@ -241,6 +308,17 @@ class EncryptedBackupServerApp(MDApp):
         except Exception as e:
             print(f"[ERROR] Failed to create screens: {e}")
             traceback.print_exc()
+            
+            # Add a simple fallback screen if dashboard creation fails
+            from kivymd.uix.label import MDLabel
+            fallback_screen = MDScreen(name="dashboard")
+            fallback_screen.add_widget(MDLabel(
+                text="Dashboard Loading...\n\nPlease check console for errors",
+                halign="center",
+                theme_text_color="Primary"
+            ))
+            screen_manager.add_widget(fallback_screen)
+            print("[INFO] Added fallback dashboard screen")
         
         return screen_manager
     
@@ -251,22 +329,26 @@ class EncryptedBackupServerApp(MDApp):
                 self.screen_manager.current = screen_name
                 self.current_screen = screen_name
                 
-                # Update top bar title
-                screen_titles = {
-                    "dashboard": "Server Dashboard",
-                    "clients": "Client Management",
-                    "files": "File Management", 
-                    "analytics": "Analytics & Reports",
-                    "database": "Database Browser",
-                    "logs": "System Logs",
-                    "settings": "Settings & Configuration"
-                }
-                self.top_bar.title = screen_titles.get(screen_name, "Server Control")
+                # Update top bar title if top_bar exists
+                if self.top_bar:
+                    screen_titles = {
+                        "dashboard": "Server Dashboard",
+                        "clients": "Client Management",
+                        "files": "File Management", 
+                        "analytics": "Analytics & Reports",
+                        "database": "Database Browser",
+                        "logs": "System Logs",
+                        "settings": "Settings & Configuration"
+                    }
+                    # Find and update MDTopAppBarTitle component
+                    for child in self.top_bar.children:
+                        if hasattr(child, 'text') and hasattr(child, '__class__') and 'Title' in child.__class__.__name__:
+                            child.text = screen_titles.get(screen_name, "Server Control")
+                            break
                 
-                # Update navigation rail active state
-                for item in self.navigation_rail.children:
-                    if isinstance(item, MDNavigationRailItem):
-                        item.active = (item.text.lower().replace(" ", "_").replace("&", "").replace("_reports", "") == screen_name)
+                # Update navigation panel active state safely  
+                if hasattr(self, 'nav_buttons'):
+                    self._update_navigation_state(screen_name)
                 
                 print(f"[INFO] Navigated to {screen_name}")
             else:
@@ -275,6 +357,24 @@ class EncryptedBackupServerApp(MDApp):
         except Exception as e:
             print(f"[ERROR] Navigation failed: {e}")
             self.show_snackbar("Navigation error occurred")
+    
+    def _update_navigation_state(self, target_screen: str):
+        """Update navigation button states safely"""
+        try:
+            if not hasattr(self, 'nav_buttons'):
+                return
+                
+            # Update button colors to show active state
+            for screen_name, button in self.nav_buttons.items():
+                if screen_name == target_screen:
+                    # Active button - use accent/primary color  
+                    button.icon_color = self.theme_cls.primaryColor
+                else:
+                    # Inactive button - use surface color
+                    button.icon_color = self.theme_cls.onSurfaceColor
+                        
+        except Exception as e:
+            print(f"[WARNING] Navigation state update failed: {e}")
     
     def schedule_periodic_updates(self):
         """Schedule periodic updates for real-time data"""
@@ -295,9 +395,10 @@ class EncryptedBackupServerApp(MDApp):
                 pass
                 
             # Update current screen if it has an update method
-            current_screen = self.screen_manager.current_screen
-            if hasattr(current_screen, 'periodic_update'):
-                current_screen.periodic_update(dt)
+            if self.screen_manager is not None:
+                current_screen = self.screen_manager.current_screen
+                if hasattr(current_screen, 'periodic_update'):
+                    current_screen.periodic_update(dt)
                 
         except Exception as e:
             print(f"[ERROR] Periodic update failed: {e}")
@@ -306,9 +407,10 @@ class EncryptedBackupServerApp(MDApp):
         """Handle server status updates from bridge"""
         try:
             # Update current screen if it handles server status
-            current_screen = self.screen_manager.current_screen
-            if hasattr(current_screen, 'on_server_status_update'):
-                current_screen.on_server_status_update(status)
+            if self.screen_manager is not None:
+                current_screen = self.screen_manager.current_screen
+                if hasattr(current_screen, 'on_server_status_update'):
+                    current_screen.on_server_status_update(status)
                 
         except Exception as e:
             print(f"[ERROR] Server status update failed: {e}")
@@ -325,9 +427,10 @@ class EncryptedBackupServerApp(MDApp):
             self.periodic_update(0)
             
             # Refresh current screen
-            current_screen = self.screen_manager.current_screen
-            if hasattr(current_screen, 'refresh_data'):
-                current_screen.refresh_data()
+            if self.screen_manager is not None:
+                current_screen = self.screen_manager.current_screen
+                if hasattr(current_screen, 'refresh_data'):
+                    current_screen.refresh_data()
             
             self.show_snackbar("Data refreshed")
             
@@ -371,7 +474,7 @@ class EncryptedBackupServerApp(MDApp):
     
     def show_startup_message(self):
         """Show startup message"""
-        if self.server_bridge and self.server_bridge.is_server_available():
+        if self.server_bridge and hasattr(self.server_bridge, 'is_server_available') and self.server_bridge.is_server_available():
             self.show_snackbar("✅ Server connection established")
         else:
             self.show_snackbar("⚠️ Running in standalone mode")
@@ -452,6 +555,16 @@ def main(server_instance: Optional[Any] = None):
         return
     
     print("[INFO] Starting KivyMD Encrypted Backup Server GUI...")
+    
+    # Initialize Sentry error tracking
+    if SENTRY_AVAILABLE:
+        try:
+            init_sentry(component_name="kivymd-server-gui", debug=False)
+            print("[INFO] Sentry error tracking enabled")
+        except Exception as e:
+            print(f"[WARNING] Sentry initialization failed: {e}")
+    else:
+        print("[INFO] Sentry error tracking disabled")
     
     try:
         # Create server instance if not provided
