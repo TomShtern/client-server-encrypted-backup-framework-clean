@@ -54,36 +54,46 @@ except ImportError:
         def __iter__(self):
             return iter(self.data)
 
-# KivyMD imports
+# Critical KivyMD imports (required)
+from kivymd.uix.screen import MDScreen
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.gridlayout import MDGridLayout
+from kivymd.uix.card import MDCard
+from kivymd.uix.label import MDLabel
+from kivymd.uix.button import MDButton, MDIconButton
+from kivymd.uix.button import MDButtonText
+from kivymd.uix.scrollview import MDScrollView
+from kivymd.uix.divider import MDDivider
+from kivymd.uix.progressindicator import MDCircularProgressIndicator
+from kivymd.uix.list import MDList, MDListItem
+from kivymd.uix.list import MDListItemHeadlineText, MDListItemSupportingText
+from kivymd.uix.badge import MDBadge
+from kivymd.uix.tooltip import MDTooltip
+
+# Critical Kivy imports (required)
+from kivy.clock import Clock
+from kivy.metrics import dp
+from kivy.core.window import Window
+from kivy.animation import Animation
+
+# Optional KivyMD components
 try:
-    from kivymd.uix.screen import MDScreen
-    from kivymd.uix.boxlayout import MDBoxLayout
-    from kivymd.uix.gridlayout import MDGridLayout
-    from kivymd.uix.card import MDCard
-    from kivymd.uix.label import MDLabel
-    from kivymd.uix.button import MDButton, MDIconButton
-    from kivymd.uix.button import MDButtonText
-    from kivymd.uix.scrollview import MDScrollView
-    from kivymd.uix.divider import MDDivider
-    from kivymd.uix.progressindicator import MDCircularProgressIndicator
-    from kivymd.uix.list import MDList, MDListItem
-    from kivymd.uix.list import MDListItemHeadlineText, MDListItemSupportingText
-    from kivymd.uix.badge import MDBadge
-    from kivymd.uix.tooltip import MDTooltip
-    
-    from kivy.clock import Clock
-    from kivy.metrics import dp
-    from kivy.core.window import Window
+    from kivymd.uix.spinner import MDSpinner
+    SPINNER_AVAILABLE = True
+except ImportError:
+    SPINNER_AVAILABLE = False
+
+# Optional matplotlib imports
+try:
     from kivy.garden.matplotlib.backend_kivyagg import FigureCanvasKivyAgg
     import matplotlib.pyplot as plt
     import matplotlib.animation as animation
-    
-    KIVYMD_AVAILABLE = True
     MATPLOTLIB_AVAILABLE = True
 except ImportError as e:
-    print(f"[ERROR] KivyMD/Matplotlib not available: {e}")
-    KIVYMD_AVAILABLE = False
+    print(f"[WARNING] Matplotlib not available: {e}")
     MATPLOTLIB_AVAILABLE = False
+
+KIVYMD_AVAILABLE = True
 
 # Local imports
 if KIVYMD_AVAILABLE:
@@ -91,321 +101,1069 @@ if KIVYMD_AVAILABLE:
     from ..models.data_models import ServerStats
 
 
-class ServerStatusCard(MDCard):
-    """Enhanced server status card with comprehensive monitoring"""
+# Loading and Empty State Components
+class MDSkeletonLoader(MDCard):
+    """
+    Material Design 3 skeleton loader with shimmer effect
+    
+    Creates placeholder content that mimics the actual layout while loading,
+    providing visual continuity and reducing perceived loading time.
+    """
+    
+    def __init__(self, skeleton_type="text", height=None, **kwargs):
+        super().__init__(**kwargs)
+        
+        self.skeleton_type = skeleton_type
+        self.theme_bg_color = "Custom"
+        self.md_bg_color = self.theme_cls.surfaceVariantColor
+        self.elevation = 0
+        self.radius = [dp(8)]
+        self.size_hint_y = None
+        self.height = height or dp(24)
+        
+        # Shimmer animation properties
+        self._shimmer_opacity = 0.3
+        self._animation = None
+        
+        self._start_shimmer_animation()
+    
+    def _start_shimmer_animation(self):
+        """Start subtle shimmer animation following MD3 motion principles"""
+        try:
+            # MD3 emphasized easing with gentle shimmer
+            shimmer_anim = Animation(
+                opacity=0.6, 
+                duration=1.2,
+                t='out_cubic'
+            ) + Animation(
+                opacity=0.3, 
+                duration=1.2,
+                t='in_cubic'
+            )
+            shimmer_anim.repeat = True
+            shimmer_anim.start(self)
+            self._animation = shimmer_anim
+        except Exception as e:
+            print(f"[ERROR] Shimmer animation failed: {e}")
+    
+    def stop_shimmer(self):
+        """Stop shimmer animation when content loads"""
+        try:
+            if self._animation:
+                self._animation.stop(self)
+                self._animation = None
+        except Exception as e:
+            print(f"[ERROR] Stop shimmer failed: {e}")
+
+
+class MDLoadingCard(MDCard):
+    """
+    Enhanced loading card with skeleton screen and progress indicators
+    
+    Features:
+    - Skeleton placeholders that match actual content layout
+    - Progressive loading with smooth transitions
+    - Error state handling with retry mechanisms
+    - Accessibility support for screen readers
+    """
+    
+    def __init__(self, card_title="Loading...", loading_type="skeleton", **kwargs):
+        super().__init__(card_type="elevated", **kwargs)
+        
+        self.card_title = card_title
+        self.loading_type = loading_type  # "skeleton", "spinner", "progress"
+        self.current_state = "loading"  # "loading", "loaded", "error", "empty"
+        
+        # Animation references
+        self._fade_animation = None
+        self._skeleton_elements = []
+        
+        self._build_loading_ui()
+    
+    def _build_loading_ui(self):
+        """Build loading state UI with skeleton elements"""
+        self.main_layout = MDBoxLayout(
+            orientation="vertical", 
+            spacing=dp(16),
+            padding=[dp(20), dp(16), dp(20), dp(16)]
+        )
+        
+        # Header with loading indicator
+        header = MDBoxLayout(
+            orientation="horizontal",
+            spacing=dp(12),
+            size_hint_y=None,
+            height=dp(40)
+        )
+        
+        # Title skeleton or text
+        self.title_element = MDLabel(
+            text=self.card_title,
+            theme_text_color="Secondary",
+            font_style="Title",
+            role="medium",
+            adaptive_height=True
+        )
+        header.add_widget(self.title_element)
+        
+        # Loading indicator based on type
+        if self.loading_type == "spinner":
+            spinner = MDCircularProgressIndicator(
+                size_hint=(None, None),
+                size=(dp(24), dp(24)),
+                line_width=dp(3)
+            )
+            header.add_widget(spinner)
+        
+        self.main_layout.add_widget(header)
+        self.main_layout.add_widget(MDDivider())
+        
+        # Content area with skeletons
+        self.content_area = MDBoxLayout(
+            orientation="vertical",
+            spacing=dp(12)
+        )
+        
+        self._create_skeleton_content()
+        self.main_layout.add_widget(self.content_area)
+        self.add_widget(self.main_layout)
+    
+    def _create_skeleton_content(self):
+        """Create skeleton placeholder content"""
+        try:
+            # Create various skeleton elements
+            skeletons = [
+                MDSkeletonLoader(skeleton_type="text", height=dp(16), size_hint_x=0.8),
+                MDSkeletonLoader(skeleton_type="text", height=dp(16), size_hint_x=0.6),
+                MDSkeletonLoader(skeleton_type="text", height=dp(24), size_hint_x=0.9),
+                MDSkeletonLoader(skeleton_type="text", height=dp(16), size_hint_x=0.7)
+            ]
+            
+            for skeleton in skeletons:
+                self.content_area.add_widget(skeleton)
+                self._skeleton_elements.append(skeleton)
+                
+        except Exception as e:
+            print(f"[ERROR] Skeleton creation failed: {e}")
+    
+    def transition_to_content(self, content_widget, duration=0.25):
+        """
+        Smooth transition from loading state to actual content
+        
+        Uses MD3 motion principles for seamless user experience
+        """
+        try:
+            if self.current_state != "loading":
+                return
+            
+            # Stop skeleton animations
+            for skeleton in self._skeleton_elements:
+                skeleton.stop_shimmer()
+            
+            # Create fade transition
+            fade_out = Animation(opacity=0, duration=duration/2, t='out_cubic')
+            
+            def on_fade_complete(animation, widget):
+                # Replace content
+                self.clear_widgets()
+                self.add_widget(content_widget)
+                
+                # Fade in new content
+                content_widget.opacity = 0
+                fade_in = Animation(opacity=1, duration=duration/2, t='in_cubic')
+                fade_in.start(content_widget)
+                
+                self.current_state = "loaded"
+            
+            fade_out.bind(on_complete=on_fade_complete)
+            fade_out.start(self)
+            
+        except Exception as e:
+            print(f"[ERROR] Content transition failed: {e}")
+    
+    def show_error_state(self, error_message="Failed to load", retry_callback=None):
+        """
+        Display error state with retry mechanism
+        """
+        try:
+            self.current_state = "error"
+            
+            # Stop skeleton animations
+            for skeleton in self._skeleton_elements:
+                skeleton.stop_shimmer()
+            
+            # Clear and rebuild for error state
+            self.content_area.clear_widgets()
+            
+            # Error icon and message
+            error_layout = MDBoxLayout(
+                orientation="vertical",
+                spacing=dp(16),
+                adaptive_height=True,
+                size_hint_y=None
+            )
+            
+            error_icon = MDIconButton(
+                icon="alert-circle",
+                theme_icon_color="Custom",
+                icon_color=self.theme_cls.errorColor,
+                size_hint=(None, None),
+                size=(dp(48), dp(48)),
+                disabled=True
+            )
+            error_layout.add_widget(error_icon)
+            
+            error_label = MDLabel(
+                text=error_message,
+                theme_text_color="Error",
+                font_style="Body",
+                role="large",
+                halign="center",
+                adaptive_height=True
+            )
+            error_layout.add_widget(error_label)
+            
+            # Retry button if callback provided
+            if retry_callback:
+                retry_button = MDButton(
+                    MDButtonText(text="Retry"),
+                    style="outlined",
+                    theme_line_color="Custom",
+                    line_color=self.theme_cls.primaryColor,
+                    size_hint=(None, None),
+                    size=(dp(120), dp(40)),
+                    pos_hint={"center_x": 0.5}
+                )
+                retry_button.bind(on_release=lambda x: retry_callback())
+                error_layout.add_widget(retry_button)
+            
+            self.content_area.add_widget(error_layout)
+            
+        except Exception as e:
+            print(f"[ERROR] Error state display failed: {e}")
+
+
+class MDEmptyState(MDCard):
+    """
+    Material Design 3 empty state component with contextual guidance
+    
+    Provides users with clear messaging and actionable next steps
+    when no data is available, following MD3 empty state patterns.
+    """
+    
+    def __init__(self, 
+                 title="No data available",
+                 description="",
+                 icon="inbox",
+                 action_text=None,
+                 action_callback=None,
+                 **kwargs):
+        super().__init__(**kwargs)
+        
+        self.theme_bg_color = "Custom"
+        self.md_bg_color = self.theme_cls.surfaceColor
+        self.elevation = 0
+        self.adaptive_height = True
+        self.size_hint_y = None
+        
+        self._build_empty_state(
+            title=title,
+            description=description,
+            icon=icon,
+            action_text=action_text,
+            action_callback=action_callback
+        )
+    
+    def _build_empty_state(self, title, description, icon, action_text, action_callback):
+        """Build empty state UI with proper MD3 spacing and hierarchy"""
+        layout = MDBoxLayout(
+            orientation="vertical",
+            spacing=dp(24),  # 3 units on 8dp grid
+            padding=[dp(32), dp(40), dp(32), dp(40)],  # Generous padding for empty states
+            adaptive_height=True,
+            size_hint_y=None
+        )
+        
+        # Icon with proper MD3 sizing
+        icon_widget = MDIconButton(
+            icon=icon,
+            theme_icon_color="Custom",
+            icon_color=self.theme_cls.onSurfaceVariantColor,
+            size_hint=(None, None),
+            size=(dp(64), dp(64)),  # Large icon for empty states
+            disabled=True,  # Decorative only
+            pos_hint={"center_x": 0.5}
+        )
+        layout.add_widget(icon_widget)
+        
+        # Title with proper MD3 typography
+        title_label = MDLabel(
+            text=title,
+            font_style="Headline",
+            role="medium",  # MD3 Headline Medium for empty state titles
+            theme_text_color="Primary",
+            halign="center",
+            adaptive_height=True
+        )
+        layout.add_widget(title_label)
+        
+        # Description if provided
+        if description:
+            desc_label = MDLabel(
+                text=description,
+                font_style="Body",
+                role="large",  # MD3 Body Large for descriptions
+                theme_text_color="Secondary",
+                halign="center",
+                adaptive_height=True,
+                text_size=(None, None)  # Allow text wrapping
+            )
+            layout.add_widget(desc_label)
+        
+        # Action button if provided
+        if action_text and action_callback:
+            action_button = MDButton(
+                MDButtonText(text=action_text),
+                style="filled",
+                theme_bg_color="Custom",
+                md_bg_color=self.theme_cls.primaryColor,
+                size_hint=(None, None),
+                size=(dp(160), dp(40)),
+                pos_hint={"center_x": 0.5}
+            )
+            action_button.bind(on_release=lambda x: action_callback())
+            layout.add_widget(action_button)
+        
+        self.add_widget(layout)
+    
+    def update_content(self, title=None, description=None, icon=None):
+        """Update empty state content dynamically"""
+        try:
+            # Find and update children
+            layout = self.children[0] if self.children else None
+            if not layout:
+                return
+            
+            for child in layout.children:
+                if hasattr(child, 'icon') and icon:
+                    child.icon = icon
+                elif hasattr(child, 'text'):
+                    if child.font_style == "Headline" and title:
+                        child.text = title
+                    elif child.font_style == "Body" and description:
+                        child.text = description
+                        
+        except Exception as e:
+            print(f"[ERROR] Empty state update failed: {e}")
+
+
+class ResponsiveCard(MDCard):
+    """
+    Enhanced Material Design 3 card with responsive design support
+    
+    Features:
+    - Proper elevation and surface treatment following MD3 specifications
+    - Responsive padding and sizing based on screen breakpoints
+    - Adaptive touch targets for mobile, tablet, and desktop
+    - Smart constraint management for optimal layout behavior
+    """
+    
+    def __init__(self, card_type="elevated", **kwargs):
+        super().__init__(**kwargs)
+        
+        # Store card type for responsive adjustments
+        self.card_type = card_type
+        
+        # MD3 Card Types: filled, elevated, outlined
+        self._apply_card_type_styling(card_type)
+        
+        # Create content layout that child classes expect
+        self._content_layout = MDBoxLayout(orientation="vertical")
+        self.add_widget(self._content_layout)
+        
+        # MD3 specifications with responsive defaults
+        self.radius = [dp(12)]  # MD3 standard card radius (responsive adjustments applied later)
+        self.padding = [dp(24), dp(20), dp(24), dp(20)]  # MD3 card padding (responsive adjustments applied later)
+        self.adaptive_height = True
+        self.size_hint_y = None
+        self.minimum_height = dp(120)  # Ensure minimum touch target (responsive adjustments applied later)
+        
+        # Responsive state tracking
+        self._current_breakpoint = None
+        self._responsive_constraints_applied = False
+    
+    def _apply_card_type_styling(self, card_type):
+        """Apply MD3 styling based on card type"""
+        if card_type == "elevated":
+            self.theme_bg_color = "Custom"
+            self.md_bg_color = self.theme_cls.surfaceContainerHighColor
+            self.elevation = 3  # MD3 elevated card elevation
+            self.shadow_radius = dp(8)
+            self.shadow_offset = (0, dp(2))
+        elif card_type == "filled":
+            self.theme_bg_color = "Custom" 
+            self.md_bg_color = self.theme_cls.surfaceContainerHighestColor
+            self.elevation = 0
+        else:  # outlined
+            self.theme_bg_color = "Custom"
+            self.md_bg_color = self.theme_cls.surfaceColor
+            self.elevation = 0
+            # TODO: Add outline property when available in KivyMD 2.0.x
+    
+    def apply_responsive_constraints(self, available_width, cols):
+        """
+        Apply responsive constraints for optimal layout behavior
+        
+        This method is called by the dashboard's responsive layout system
+        to ensure cards adapt properly to different screen sizes and layouts
+        """
+        try:
+            # Determine current breakpoint
+            MOBILE_MAX = dp(768)
+            TABLET_MAX = dp(1200)
+            
+            if available_width <= MOBILE_MAX:
+                breakpoint = "mobile"
+            elif available_width <= TABLET_MAX:
+                breakpoint = "tablet"
+            else:
+                breakpoint = "desktop"
+            
+            # Only update if breakpoint changed to avoid unnecessary layout updates
+            if self._current_breakpoint != breakpoint:
+                self._current_breakpoint = breakpoint
+                self._apply_breakpoint_constraints(breakpoint, cols, available_width)
+                self._responsive_constraints_applied = True
+        
+        except Exception as e:
+            print(f"[ERROR] Failed to apply responsive constraints to card: {e}")
+    
+    def _apply_breakpoint_constraints(self, breakpoint, cols, available_width):
+        """Apply breakpoint-specific constraints to the card"""
+        if breakpoint == "mobile":
+            # Mobile: Optimize for single-hand operation
+            self.padding = [dp(20), dp(16), dp(20), dp(16)]  # Reduced padding
+            self.minimum_height = dp(140)  # Larger touch targets
+            self.radius = [dp(16)]  # Slightly larger radius for easier touch
+            
+        elif breakpoint == "tablet":
+            # Tablet: Balanced for two-hand operation
+            self.padding = [dp(22), dp(18), dp(22), dp(18)]  # Moderate padding
+            self.minimum_height = dp(130)  # Standard touch targets
+            self.radius = [dp(14)]  # Standard MD3 radius
+            
+        else:  # desktop
+            # Desktop: Optimal for precision input
+            self.padding = [dp(24), dp(20), dp(24), dp(20)]  # Full MD3 padding
+            self.minimum_height = dp(120)  # Compact for data density
+            self.radius = [dp(12)]  # Standard MD3 radius
+        
+        # Ensure proper size constraints
+        self.size_hint_x = None if cols > 1 else 1
+        self.adaptive_height = True
+        
+        # Apply maximum width constraint to prevent cards becoming too wide on single column
+        if cols == 1 and available_width > dp(600):
+            self.size_hint_x = None
+            self.width = min(dp(600), available_width - dp(48))
+        
+        # Force card layout update to apply new constraints
+        self._trigger_layout()
+
+
+class ServerStatusCard(ResponsiveCard):
+    """Enhanced server status card with comprehensive monitoring and MD3 design"""
     
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.theme_bg_color = "Custom"
-        self.md_bg_color = self.theme_cls.surfaceContainerColor
-        self.elevation = 2
-        self.radius = [16]  # MD3 elevated card radius
-        self.padding = dp(20)
-        self.size_hint_y = None
-        self.height = dp(160)
-        
+        super().__init__(card_type="elevated", **kwargs)
         self._build_ui()
     
     def _build_ui(self):
-        layout = MDBoxLayout(orientation="vertical", spacing=dp(12))
+        layout = MDBoxLayout(orientation="vertical", spacing=dp(16))  # MD3 spacing
         
-        # Header with status badge
-        header = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(32))
+        # Header with enhanced status indicator
+        header = MDBoxLayout(
+            orientation="horizontal", 
+            size_hint_y=None, 
+            height=dp(40),  # Proper touch target
+            spacing=dp(16)
+        )
         
         title = MDLabel(
             text="Server Status",
             theme_text_color="Primary",
-            font_style="Headline",
+            font_style="Title",  # MD3 Title Large
+            role="large",
             adaptive_height=True
         )
         header.add_widget(title)
         
-        self.status_badge = MDBadge(
-            text="OFFLINE",
-            md_bg_color=self.theme_cls.errorColor,
+        # Enhanced MD3 status chip with indicator and animation
+        status_container = MDBoxLayout(size_hint_x=None, width=dp(100))
+        
+        # Create proper MD3 chip container
+        self.status_chip = MDCard(
+            orientation="horizontal",
             size_hint=(None, None),
-            size=(dp(70), dp(24))
+            size=(dp(100), dp(32)),  # MD3 chip standard height
+            radius=[dp(16)],  # MD3 chip radius (half height)
+            elevation=0,  # Chips are surface-level
+            theme_bg_color="Custom",
+            md_bg_color=self.theme_cls.errorColor,
+            padding=[dp(12), dp(8), dp(12), dp(8)]  # MD3 chip internal padding
         )
-        header.add_widget(self.status_badge)
         
-        layout.add_widget(header)
-        layout.add_widget(MDDivider())
+        # Chip content layout
+        chip_content = MDBoxLayout(
+            orientation="horizontal",
+            spacing=dp(6),  # Tight spacing for chip content
+            adaptive_width=True
+        )
         
-        # Status information
-        info_grid = MDGridLayout(cols=2, spacing=dp(8), adaptive_height=True)
+        # Status indicator dot
+        self.status_dot = MDIconButton(
+            icon="circle",
+            theme_icon_color="Custom",
+            icon_color=self.theme_cls.onErrorColor,
+            size_hint=(None, None),
+            size=(dp(8), dp(8)),
+            disabled=True  # Decorative only
+        )
         
-        # Status details
-        self.status_label = MDLabel(text="Status: Stopped", font_style="Body", theme_text_color="Secondary")
-        self.address_label = MDLabel(text="Address: N/A", font_style="Body", theme_text_color="Secondary")
-        self.uptime_label = MDLabel(text="Uptime: 00:00:00", font_style="Body", theme_text_color="Secondary")
+        # Status text with proper MD3 typography
+        self.status_text = MDLabel(
+            text="OFFLINE",
+            font_style="Label",
+            role="large",  # MD3 Label Large for chip text
+            theme_text_color="Custom",
+            text_color=self.theme_cls.onErrorColor,
+            adaptive_width=True,
+            halign="center"
+        )
         
-        info_grid.add_widget(self.status_label)
-        info_grid.add_widget(self.address_label)
-        info_grid.add_widget(self.uptime_label)
-        info_grid.add_widget(MDLabel())  # Spacer
+        chip_content.add_widget(self.status_dot)
+        chip_content.add_widget(self.status_text)
+        self.status_chip.add_widget(chip_content)
+        status_container.add_widget(self.status_chip)
+        header.add_widget(status_container)
         
-        layout.add_widget(info_grid)
-        self.add_widget(layout)
+        self._content_layout.add_widget(header)
+        
+        # MD3 Divider with proper spacing
+        self._content_layout.add_widget(MDDivider(height=dp(1)))
+        
+        # Status information with improved typography
+        info_container = MDBoxLayout(orientation="vertical", spacing=dp(12))
+        
+        # Status details with proper MD3 typography
+        self.status_label = MDLabel(
+            text="Status: Stopped", 
+            font_style="Body", 
+            role="large",
+            theme_text_color="Primary"
+        )
+        self.address_label = MDLabel(
+            text="Address: N/A", 
+            font_style="Body", 
+            role="medium",
+            theme_text_color="Secondary"
+        )
+        self.uptime_label = MDLabel(
+            text="Uptime: 00:00:00", 
+            font_style="Body", 
+            role="medium",
+            theme_text_color="Secondary"
+        )
+        
+        info_container.add_widget(self.status_label)
+        info_container.add_widget(self.address_label) 
+        info_container.add_widget(self.uptime_label)
+        
+        self._content_layout.add_widget(info_container)
     
     def update_status(self, status: ServerStatus):
-        """Update server status display"""
+        """Update server status display with MD3 color semantics"""
         try:
             if status.running:
-                self.status_badge.text = "ONLINE"
-                self.status_badge.md_bg_color = self.theme_cls.primaryColor
+                # Update chip for online status with animation
+                self.status_text.text = "ONLINE"
+                self.status_chip.md_bg_color = self.theme_cls.primaryColor
+                self.status_text.text_color = self.theme_cls.onPrimaryColor
+                self.status_dot.icon_color = self.theme_cls.onPrimaryColor
+                
+                # Add subtle success animation
+                try:
+                    from kivy.animation import Animation
+                    success_anim = Animation(opacity=0.7, duration=0.15) + Animation(opacity=1.0, duration=0.15)
+                    success_anim.start(self.status_chip)
+                except Exception:
+                    pass  # Graceful fallback if animation fails
                 self.status_label.text = "Status: Running"
+                self.status_label.theme_text_color = "Primary"
                 self.address_label.text = f"Address: {status.host}:{status.port}"
             else:
-                self.status_badge.text = "OFFLINE"
-                self.status_badge.md_bg_color = self.theme_cls.errorColor
+                # Update chip for offline status
+                self.status_text.text = "OFFLINE"
+                self.status_chip.md_bg_color = self.theme_cls.errorColor
+                self.status_text.text_color = self.theme_cls.onErrorColor
+                self.status_dot.icon_color = self.theme_cls.onErrorColor
                 self.status_label.text = "Status: Stopped"
+                self.status_label.theme_text_color = "Error"
                 self.address_label.text = "Address: N/A"
             
-            # Format uptime
+            # Format uptime with enhanced display
             if status.uptime_seconds > 0:
                 hours = int(status.uptime_seconds // 3600)
                 minutes = int((status.uptime_seconds % 3600) // 60)
                 seconds = int(status.uptime_seconds % 60)
                 self.uptime_label.text = f"Uptime: {hours:02d}:{minutes:02d}:{seconds:02d}"
+                self.uptime_label.theme_text_color = "Primary"
             else:
                 self.uptime_label.text = "Uptime: 00:00:00"
+                self.uptime_label.theme_text_color = "Secondary"
                 
         except Exception as e:
             print(f"[ERROR] Failed to update server status: {e}")
 
 
-class ClientStatsCard(MDCard):
-    """Client statistics monitoring card"""
+class ClientStatsCard(ResponsiveCard):
+    """Material Design 3 client statistics card with proper data visualization"""
     
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.theme_bg_color = "Custom"
-        self.md_bg_color = self.theme_cls.surfaceContainerColor
-        self.elevation = 2
-        self.radius = [16]
-        self.padding = dp(20)
-        self.size_hint_y = None
-        self.height = dp(160)
-        
+        super().__init__(card_type="filled", **kwargs)
         self._build_ui()
     
     def _build_ui(self):
-        layout = MDBoxLayout(orientation="vertical", spacing=dp(12))
+        layout = MDBoxLayout(orientation="vertical", spacing=dp(16))
         
-        # Header
-        title = MDLabel(
-            text="Client Stats",
-            theme_text_color="Primary",
-            font_style="Headline",
+        # Header with icon and title
+        header = MDBoxLayout(
+            orientation="horizontal",
+            spacing=dp(16),  # 2 units on 8dp grid
             size_hint_y=None,
-            height=dp(28)
+            height=dp(40)
         )
-        layout.add_widget(title)
-        layout.add_widget(MDDivider())
         
-        # Stats grid
-        stats_grid = MDGridLayout(cols=2, spacing=dp(8), adaptive_height=True)
+        # Icon for visual hierarchy
+        icon = MDIconButton(
+            icon="account-group",
+            theme_icon_color="Custom",
+            icon_color=self.theme_cls.primaryColor,
+            size_hint=(None, None),
+            size=(dp(32), dp(32))
+        )
+        header.add_widget(icon)
         
-        self.connected_label = MDLabel(text="Connected: 0", font_style="Body", theme_text_color="Secondary")
-        self.total_label = MDLabel(text="Total: 0", font_style="Body", theme_text_color="Secondary")
-        self.transfers_label = MDLabel(text="Active Transfers: 0", font_style="Body", theme_text_color="Secondary")
+        title = MDLabel(
+            text="Client Statistics",
+            theme_text_color="Primary",
+            font_style="Title",
+            role="medium",
+            adaptive_height=True
+        )
+        header.add_widget(title)
         
-        stats_grid.add_widget(self.connected_label)
-        stats_grid.add_widget(self.total_label)
-        stats_grid.add_widget(self.transfers_label)
-        stats_grid.add_widget(MDLabel())  # Spacer
+        self._content_layout.add_widget(header)
+        self._content_layout.add_widget(MDDivider(height=dp(1)))
         
-        layout.add_widget(stats_grid)
-        self.add_widget(layout)
+        # Stats with proper MD3 data presentation  
+        stats_container = MDBoxLayout(orientation="vertical", spacing=dp(16))  # 2 units on 8dp grid
+        
+        # Connected clients with emphasis
+        connected_row = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(32))
+        self.connected_value = MDLabel(
+            text="0",
+            font_style="Display",
+            role="small",  # Large number display
+            theme_text_color="Primary",
+            size_hint_x=None,
+            width=dp(48)
+        )
+        connected_label = MDLabel(
+            text="Connected Clients",
+            font_style="Body",
+            role="medium", 
+            theme_text_color="Secondary"
+        )
+        connected_row.add_widget(self.connected_value)
+        connected_row.add_widget(connected_label)
+        
+        # Total clients
+        total_row = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(28))
+        self.total_value = MDLabel(
+            text="0",
+            font_style="Headline",
+            role="small",
+            theme_text_color="Primary", 
+            size_hint_x=None,
+            width=dp(48)
+        )
+        total_label = MDLabel(
+            text="Total Registered",
+            font_style="Body", 
+            role="medium",
+            theme_text_color="Secondary"
+        )
+        total_row.add_widget(self.total_value)
+        total_row.add_widget(total_label)
+        
+        # Active transfers
+        transfers_row = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(28))
+        self.transfers_value = MDLabel(
+            text="0",
+            font_style="Headline",
+            role="small",
+            theme_text_color="Primary",
+            size_hint_x=None,
+            width=dp(48)
+        )
+        transfers_label = MDLabel(
+            text="Active Transfers",
+            font_style="Body",
+            role="medium", 
+            theme_text_color="Secondary"
+        )
+        transfers_row.add_widget(self.transfers_value)
+        transfers_row.add_widget(transfers_label)
+        
+        stats_container.add_widget(connected_row)
+        stats_container.add_widget(total_row)
+        stats_container.add_widget(transfers_row)
+        
+        self._content_layout.add_widget(stats_container)
     
     def update_stats(self, connected: int = 0, total: int = 0, active_transfers: int = 0):
-        """Update client statistics"""
+        """Update client statistics with MD3 visual feedback"""
         try:
-            self.connected_label.text = f"Connected: {connected}"
-            self.total_label.text = f"Total: {total}"
-            self.transfers_label.text = f"Active Transfers: {active_transfers}"
+            self.connected_value.text = str(connected)
+            self.total_value.text = str(total)
+            self.transfers_value.text = str(active_transfers)
+            
+            # Apply color coding for visual feedback
+            if connected > 0:
+                self.connected_value.theme_text_color = "Primary"
+            else:
+                self.connected_value.theme_text_color = "Secondary"
+                
+            if active_transfers > 0:
+                self.transfers_value.theme_text_color = "Primary" 
+            else:
+                self.transfers_value.theme_text_color = "Secondary"
+                
         except Exception as e:
             print(f"[ERROR] Failed to update client stats: {e}")
 
 
-class TransferStatsCard(MDCard):
-    """Transfer statistics monitoring card"""
+class TransferStatsCard(ResponsiveCard):
+    """Material Design 3 transfer statistics card with enhanced data presentation"""
     
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.theme_bg_color = "Custom"
-        self.md_bg_color = self.theme_cls.surfaceContainerColor
-        self.elevation = 2
-        self.radius = [16]
-        self.padding = dp(20)
-        self.size_hint_y = None
-        self.height = dp(160)
-        
+        super().__init__(card_type="filled", **kwargs)
         self._build_ui()
     
     def _build_ui(self):
-        layout = MDBoxLayout(orientation="vertical", spacing=dp(12))
+        layout = MDBoxLayout(orientation="vertical", spacing=dp(16))
         
-        # Header
-        title = MDLabel(
-            text="Transfer Stats",
-            theme_text_color="Primary",
-            font_style="Headline",
+        # Header with icon for visual hierarchy
+        header = MDBoxLayout(
+            orientation="horizontal",
+            spacing=dp(16),  # 2 units on 8dp grid
             size_hint_y=None,
-            height=dp(28)
+            height=dp(40)
         )
-        layout.add_widget(title)
-        layout.add_widget(MDDivider())
         
-        # Stats
-        self.total_label = MDLabel(text="Total Transferred: 0 MB", font_style="Body", theme_text_color="Secondary")
-        self.rate_label = MDLabel(text="Transfer Rate: 0 KB/s", font_style="Body", theme_text_color="Secondary")
+        icon = MDIconButton(
+            icon="transfer",
+            theme_icon_color="Custom",
+            icon_color=self.theme_cls.secondaryColor,
+            size_hint=(None, None),
+            size=(dp(32), dp(32))
+        )
+        header.add_widget(icon)
         
-        layout.add_widget(self.total_label)
-        layout.add_widget(self.rate_label)
+        title = MDLabel(
+            text="Transfer Statistics",
+            theme_text_color="Primary",
+            font_style="Title",
+            role="medium",
+            adaptive_height=True
+        )
+        header.add_widget(title)
         
-        self.add_widget(layout)
+        self._content_layout.add_widget(header)
+        self._content_layout.add_widget(MDDivider(height=dp(1)))
+        
+        # Transfer metrics with prominent display
+        metrics_container = MDBoxLayout(orientation="vertical", spacing=dp(16))  # 2 units on 8dp grid
+        
+        # Total transferred - primary metric
+        total_row = MDBoxLayout(orientation="vertical", size_hint_y=None, height=dp(56))
+        self.total_value = MDLabel(
+            text="0",
+            font_style="Display",
+            role="small",  # Large number for primary metric
+            theme_text_color="Primary",
+            halign="left"
+        )
+        total_unit = MDLabel(
+            text="MB Transferred",
+            font_style="Body",
+            role="large",
+            theme_text_color="Secondary",
+            halign="left"
+        )
+        total_row.add_widget(self.total_value)
+        total_row.add_widget(total_unit)
+        
+        # Transfer rate - secondary metric
+        rate_row = MDBoxLayout(orientation="vertical", size_hint_y=None, height=dp(48))
+        self.rate_value = MDLabel(
+            text="0.0",
+            font_style="Headline",
+            role="medium",
+            theme_text_color="Primary",
+            halign="left"
+        )
+        rate_unit = MDLabel(
+            text="KB/s Current Rate",
+            font_style="Body",
+            role="medium",
+            theme_text_color="Secondary",
+            halign="left"
+        )
+        rate_row.add_widget(self.rate_value)
+        rate_row.add_widget(rate_unit)
+        
+        metrics_container.add_widget(total_row)
+        metrics_container.add_widget(rate_row)
+        
+        self._content_layout.add_widget(metrics_container)
     
     def update_stats(self, total_mb: float = 0, rate_kbs: float = 0):
-        """Update transfer statistics"""
+        """Update transfer statistics with enhanced formatting"""
         try:
-            self.total_label.text = f"Total Transferred: {total_mb:.1f} MB"
-            self.rate_label.text = f"Transfer Rate: {rate_kbs:.1f} KB/s"
+            # Format total with appropriate units
+            if total_mb >= 1024:
+                self.total_value.text = f"{total_mb/1024:.1f}"
+                # Update unit label if needed - could be dynamic
+            else:
+                self.total_value.text = f"{total_mb:.1f}"
+            
+            # Format rate with visual feedback
+            self.rate_value.text = f"{rate_kbs:.1f}"
+            
+            # Apply color coding for active transfers
+            if rate_kbs > 0:
+                self.rate_value.theme_text_color = "Primary"
+            else:
+                self.rate_value.theme_text_color = "Secondary"
+                
         except Exception as e:
             print(f"[ERROR] Failed to update transfer stats: {e}")
 
 
-class MaintenanceCard(MDCard):
-    """Maintenance and cleanup statistics card"""
+class MaintenanceCard(ResponsiveCard):
+    """Material Design 3 maintenance card with system health indicators"""
     
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.theme_bg_color = "Custom"
-        self.md_bg_color = self.theme_cls.surfaceContainerColor
-        self.elevation = 2
-        self.radius = [16]
-        self.padding = dp(20)
-        self.size_hint_y = None
-        self.height = dp(160)
-        
+        super().__init__(card_type="outlined", **kwargs)
         self._build_ui()
     
     def _build_ui(self):
-        layout = MDBoxLayout(orientation="vertical", spacing=dp(12))
+        layout = MDBoxLayout(orientation="vertical", spacing=dp(16))
         
-        # Header
-        title = MDLabel(
-            text="Maintenance",
-            theme_text_color="Primary",
-            font_style="Headline",
+        # Header with maintenance icon
+        header = MDBoxLayout(
+            orientation="horizontal",
+            spacing=dp(16),  # 2 units on 8dp grid
             size_hint_y=None,
-            height=dp(28)
+            height=dp(40)
         )
-        layout.add_widget(title)
-        layout.add_widget(MDDivider())
         
-        # Maintenance info
-        self.cleanup_label = MDLabel(text="Last Cleanup: Never", font_style="Body", theme_text_color="Secondary")
-        self.files_label = MDLabel(text="Files Cleaned: 0", font_style="Body", theme_text_color="Secondary")
+        icon = MDIconButton(
+            icon="wrench",
+            theme_icon_color="Custom",
+            icon_color=self.theme_cls.tertiaryColor,
+            size_hint=(None, None),
+            size=(dp(32), dp(32))
+        )
+        header.add_widget(icon)
         
-        layout.add_widget(self.cleanup_label)
-        layout.add_widget(self.files_label)
+        title = MDLabel(
+            text="System Maintenance",
+            theme_text_color="Primary",
+            font_style="Title",
+            role="medium",
+            adaptive_height=True
+        )
+        header.add_widget(title)
         
-        self.add_widget(layout)
+        self._content_layout.add_widget(header)
+        self._content_layout.add_widget(MDDivider(height=dp(1)))
+        
+        # Maintenance metrics
+        maintenance_container = MDBoxLayout(orientation="vertical", spacing=dp(16))  # 2 units on 8dp grid
+        
+        # Last cleanup time
+        cleanup_row = MDBoxLayout(orientation="vertical", size_hint_y=None, height=dp(40))
+        cleanup_label = MDLabel(
+            text="Last System Cleanup",
+            font_style="Body",
+            role="large",
+            theme_text_color="Primary"
+        )
+        self.cleanup_value = MDLabel(
+            text="Never",
+            font_style="Body",
+            role="medium",
+            theme_text_color="Secondary"
+        )
+        cleanup_row.add_widget(cleanup_label)
+        cleanup_row.add_widget(self.cleanup_value)
+        
+        # Files cleaned count
+        files_row = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(32))
+        self.files_count = MDLabel(
+            text="0",
+            font_style="Headline",
+            role="small",
+            theme_text_color="Primary",
+            size_hint_x=None,
+            width=dp(48)
+        )
+        files_label = MDLabel(
+            text="Files Cleaned Total",
+            font_style="Body",
+            role="medium",
+            theme_text_color="Secondary"
+        )
+        files_row.add_widget(self.files_count)
+        files_row.add_widget(files_label)
+        
+        maintenance_container.add_widget(cleanup_row)
+        maintenance_container.add_widget(files_row)
+        
+        self._content_layout.add_widget(maintenance_container)
     
     def update_maintenance(self, last_cleanup: str = "Never", files_cleaned: int = 0):
-        """Update maintenance information"""
+        """Update maintenance information with visual feedback"""
         try:
-            self.cleanup_label.text = f"Last Cleanup: {last_cleanup}"
-            self.files_label.text = f"Files Cleaned: {files_cleaned}"
+            self.cleanup_value.text = last_cleanup
+            self.files_count.text = str(files_cleaned)
+            
+            # Visual feedback for maintenance status
+            if last_cleanup == "Never":
+                self.cleanup_value.theme_text_color = "Error"
+            else:
+                self.cleanup_value.theme_text_color = "Secondary"
+                
+            if files_cleaned > 0:
+                self.files_count.theme_text_color = "Primary"
+            else:
+                self.files_count.theme_text_color = "Secondary"
+                
         except Exception as e:
             print(f"[ERROR] Failed to update maintenance info: {e}")
 
 
-class ControlPanelCard(MDCard):
-    """Enhanced control panel with colorful MD3 action buttons"""
+class ControlPanelCard(ResponsiveCard):
+    """Material Design 3 control panel with proper button hierarchy"""
     
     def __init__(self, dashboard_screen, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(card_type="elevated", **kwargs)
         self.dashboard_screen = dashboard_screen
-        self.theme_bg_color = "Custom"
-        self.md_bg_color = self.theme_cls.surfaceContainerColor
-        self.elevation = 2
-        self.radius = [16]
-        self.padding = dp(20)
-        self.size_hint_y = None
-        self.height = dp(160)
-        
         self._build_ui()
     
     def _build_ui(self):
-        layout = MDBoxLayout(orientation="vertical", spacing=dp(12))
+        layout = MDBoxLayout(orientation="vertical", spacing=dp(16))  # MD3 spacing
         
-        # Header
+        # Header with proper MD3 typography
         title = MDLabel(
             text="Control Panel",
             theme_text_color="Primary",
-            font_style="Headline",
+            font_style="Title",  # MD3 Title Large
+            role="large",
             size_hint_y=None,
-            height=dp(28)
+            height=dp(32)  # Proper touch target
         )
         layout.add_widget(title)
-        layout.add_widget(MDDivider())
+        layout.add_widget(MDDivider(height=dp(1)))
         
-        # Button grid
-        button_grid = MDGridLayout(cols=2, spacing=dp(8), adaptive_height=True)
+        # Primary actions - following MD3 button hierarchy
+        primary_actions = MDBoxLayout(
+            orientation="horizontal", 
+            spacing=dp(16),  # 2 units on 8dp grid
+            size_hint_y=None,
+            height=dp(48),  # MD3 minimum touch target
+            adaptive_height=True
+        )
         
-        # Start button (Green)
+        # Start button - Primary Filled (highest emphasis)
         self.start_button = MDButton(
-            MDButtonText(text="▶ Start"),
+            MDButtonText(text="Start Server"),
             style="filled",
             theme_bg_color="Custom",
-            md_bg_color="#4CAF50",  # Green
+            md_bg_color=self.theme_cls.primaryColor,
             size_hint_y=None,
-            height=dp(36)
+            height=dp(40),  # MD3 button height
+            radius=[dp(20)]  # MD3 fully rounded buttons
         )
         self.start_button.bind(on_release=self.dashboard_screen.start_server)
         
-        # Stop button (Red)
+        # Stop button - Error Filled (destructive action)
         self.stop_button = MDButton(
-            MDButtonText(text="⏹ Stop"),
+            MDButtonText(text="Stop Server"),
             style="filled",
             theme_bg_color="Custom",
-            md_bg_color="#F44336",  # Red
+            md_bg_color=self.theme_cls.errorColor,
             size_hint_y=None,
-            height=dp(36)
+            height=dp(40),
+            radius=[dp(20)]
         )
         self.stop_button.bind(on_release=self.dashboard_screen.stop_server)
         
-        # Restart button (Orange)
-        self.restart_button = MDButton(
-            MDButtonText(text="🔄 Restart"),
-            style="filled",
-            theme_bg_color="Custom",
-            md_bg_color="#FF9800",  # Orange
+        primary_actions.add_widget(self.start_button)
+        primary_actions.add_widget(self.stop_button)
+        layout.add_widget(primary_actions)
+        
+        # Secondary actions - using outlined buttons (medium emphasis)
+        secondary_actions = MDBoxLayout(
+            orientation="horizontal",
+            spacing=dp(16),  # 2 units on 8dp grid
             size_hint_y=None,
-            height=dp(36)
+            height=dp(48),
+            adaptive_height=True
+        )
+        
+        # Restart button - Secondary Outlined
+        self.restart_button = MDButton(
+            MDButtonText(text="Restart"),
+            style="outlined",
+            theme_line_color="Custom",
+            line_color=self.theme_cls.primaryColor,
+            size_hint_y=None,
+            height=dp(40),
+            radius=[dp(20)]
         )
         self.restart_button.bind(on_release=self.dashboard_screen.restart_server)
         
-        # Backup DB button (Purple)
+        # Backup button - Tertiary Outlined  
         self.backup_button = MDButton(
-            MDButtonText(text="💾 Backup DB"),
-            style="filled",
-            theme_bg_color="Custom",
-            md_bg_color="#9C27B0",  # Purple
+            MDButtonText(text="Backup Database"),
+            style="outlined",
+            theme_line_color="Custom", 
+            line_color=self.theme_cls.secondaryColor,
             size_hint_y=None,
-            height=dp(36)
+            height=dp(40),
+            radius=[dp(20)]
         )
         self.backup_button.bind(on_release=self.on_backup_db)
         
-        button_grid.add_widget(self.start_button)
-        button_grid.add_widget(self.stop_button)
-        button_grid.add_widget(self.restart_button)
-        button_grid.add_widget(self.backup_button)
+        secondary_actions.add_widget(self.restart_button)
+        secondary_actions.add_widget(self.backup_button)
+        layout.add_widget(secondary_actions)
         
-        layout.add_widget(button_grid)
-        self.add_widget(layout)
+        self._content_layout.add_widget(layout)
     
     def on_backup_db(self, *args):
         """Handle backup database button"""
@@ -413,27 +1171,36 @@ class ControlPanelCard(MDCard):
         # TODO: Implement database backup functionality
     
     def update_button_states(self, server_running: bool):
-        """Update button states based on server status"""
+        """Update button states with MD3 visual feedback"""
         try:
+            # Update enabled/disabled states
             self.start_button.disabled = server_running
-            self.stop_button.disabled = not server_running
+            self.stop_button.disabled = not server_running  
             self.restart_button.disabled = not server_running
+            
+            # Update visual styling based on state
+            if server_running:
+                # Server running - emphasize stop/restart
+                self.stop_button.md_bg_color = self.theme_cls.errorColor
+                self.restart_button.line_color = self.theme_cls.primaryColor
+                # Dim start button
+                self.start_button.md_bg_color = self.theme_cls.surfaceVariantColor
+            else:
+                # Server stopped - emphasize start
+                self.start_button.md_bg_color = self.theme_cls.primaryColor
+                # Dim stop/restart buttons
+                self.stop_button.md_bg_color = self.theme_cls.surfaceVariantColor
+                self.restart_button.line_color = self.theme_cls.outlineVariantColor
+                
         except Exception as e:
             print(f"[ERROR] Failed to update button states: {e}")
 
 
-class PerformanceChartCard(MDCard):
+class PerformanceChartCard(ResponsiveCard):
     """Live system performance chart with CPU and Memory monitoring"""
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.theme_bg_color = "Custom"
-        self.md_bg_color = self.theme_cls.surfaceContainerColor
-        self.elevation = 2
-        self.radius = [16]
-        self.padding = dp(20)
-        self.size_hint_y = None
-        self.height = dp(300)
         
         # Performance data
         self.cpu_data = deque(maxlen=60)  # Last 60 readings
@@ -489,7 +1256,7 @@ class PerformanceChartCard(MDCard):
             )
             layout.add_widget(fallback_label)
         
-        self.add_widget(layout)
+        self._content_layout.add_widget(layout)
     
     def update_performance_data(self, dt):
         """Update performance data and chart"""
@@ -522,19 +1289,11 @@ class PerformanceChartCard(MDCard):
             print(f"[ERROR] Failed to update performance data: {e}")
 
 
-class ActivityLogCard(MDCard):
+class ActivityLogCard(ResponsiveCard):
     """Enhanced activity log with proper text constraints"""
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.theme_bg_color = "Custom"
-        self.md_bg_color = self.theme_cls.surfaceContainerColor
-        self.elevation = 2
-        self.radius = [16]
-        self.padding = dp(20)
-        self.size_hint_y = None
-        self.height = dp(300)
-        
         self._build_ui()
     
     def _build_ui(self):
@@ -559,8 +1318,8 @@ class ActivityLogCard(MDCard):
         )
         header.add_widget(clear_button)
         
-        layout.add_widget(header)
-        layout.add_widget(MDDivider())
+        self._content_layout.add_widget(header)
+        self._content_layout.add_widget(MDDivider())
         
         # Scrollable log
         scroll = MDScrollView()
@@ -568,7 +1327,7 @@ class ActivityLogCard(MDCard):
         scroll.add_widget(self.log_list)
         layout.add_widget(scroll)
         
-        self.add_widget(layout)
+        self._content_layout.add_widget(layout)
         
         # Add initial message
         self.add_log_entry("System", "Enhanced dashboard initialized")
@@ -667,76 +1426,470 @@ class DashboardScreen(MDScreen):
         Clock.schedule_once(self.initial_load, 0.5)
     
     def build_ui(self):
-        """Build comprehensive dashboard UI with 6-card layout"""
+        """Build responsive dashboard with adaptive layout structure"""
         try:
-            # Main scroll container
-            scroll = MDScrollView()
-            main_layout = MDBoxLayout(
-                orientation="vertical",
-                spacing=dp(16),
-                padding=[dp(16), dp(16), dp(16), dp(16)],
-                adaptive_height=True
-            )
+            # Create main responsive container
+            self.main_container = self._create_main_container()
             
-            # Top row: Server Status, Client Stats, Control Panel
-            top_grid = MDGridLayout(
-                cols=3,
-                spacing=dp(16),
-                adaptive_height=True,
-                size_hint_y=None,
-                height=dp(160)
-            )
+            # Build card sections with proper hierarchy
+            self._build_primary_section()
+            self._build_secondary_section() 
+            self._build_analytics_section()
             
-            self.server_status_card = ServerStatusCard()
-            self.client_stats_card = ClientStatsCard()
-            self.control_panel_card = ControlPanelCard(self)
-            
-            top_grid.add_widget(self.server_status_card)
-            top_grid.add_widget(self.client_stats_card)
-            top_grid.add_widget(self.control_panel_card)
-            
-            main_layout.add_widget(top_grid)
-            
-            # Middle row: Transfer Stats, Maintenance
-            middle_grid = MDGridLayout(
-                cols=2,
-                spacing=dp(16),
-                adaptive_height=True,
-                size_hint_y=None,
-                height=dp(160)
-            )
-            
-            self.transfer_stats_card = TransferStatsCard()
-            self.maintenance_card = MaintenanceCard()
-            
-            middle_grid.add_widget(self.transfer_stats_card)
-            middle_grid.add_widget(self.maintenance_card)
-            
-            main_layout.add_widget(middle_grid)
-            
-            # Bottom row: Performance Chart, Activity Log
-            bottom_grid = MDGridLayout(
-                cols=2,
-                spacing=dp(16),
-                adaptive_height=True,
-                size_hint_y=None,
-                height=dp(300)
-            )
-            
-            self.performance_card = PerformanceChartCard()
-            self.activity_card = ActivityLogCard()
-            
-            bottom_grid.add_widget(self.performance_card)
-            bottom_grid.add_widget(self.activity_card)
-            
-            main_layout.add_widget(bottom_grid)
-            
-            scroll.add_widget(main_layout)
-            self.add_widget(scroll)
+            # Add to screen
+            self.add_widget(self.main_container)
             
         except Exception as e:
-            print(f"[ERROR] Failed to build enhanced dashboard: {e}")
+            print(f"[ERROR] Failed to build responsive dashboard: {e}")
             traceback.print_exc()
+    
+    def _create_main_container(self):
+        """Create the main responsive scroll container"""
+        scroll = MDScrollView(
+            do_scroll_x=False,
+            do_scroll_y=True,
+            bar_width=dp(4),
+            scroll_type=['bars']
+        )
+        
+        # Main vertical layout with proper Material Design 3 spacing
+        self.main_layout = MDBoxLayout(
+            orientation="vertical",
+            spacing=dp(24),  # 3 units on 8dp grid for section spacing
+            padding=[dp(24), dp(24), dp(24), dp(24)],  # 3 units symmetric padding
+            adaptive_height=True,
+            size_hint_y=None
+        )
+        
+        scroll.add_widget(self.main_layout)
+        return scroll
+    
+    def _build_primary_section(self):
+        """Build primary monitoring section with status and controls"""
+        # Section header with proper MD3 typography and spacing
+        primary_header = MDLabel(
+            text="Server Overview",
+            font_style="Display",
+            role="small",  # MD3 Display Small for main sections
+            theme_text_color="Primary",
+            size_hint_y=None,
+            height=dp(48),  # 6 units on 8dp grid
+            padding=[0, 0, 0, dp(8)]  # 1 unit bottom padding
+        )
+        self.main_layout.add_widget(primary_header)
+        
+        # Responsive card container for primary cards
+        primary_container = self._create_card_container(
+            cards_data=[
+                ("server_status_card", ServerStatusCard),
+                ("control_panel_card", lambda: ControlPanelCard(self))
+            ],
+            min_card_width=dp(340),
+            max_cards_per_row=2,
+            section_spacing=dp(16)  # 2 units on 8dp grid
+        )
+        
+        self.main_layout.add_widget(primary_container)
+    
+    def _build_secondary_section(self):
+        """Build secondary statistics section"""
+        # Section header with proper 8dp grid spacing
+        self.main_layout.add_widget(MDLabel(size_hint_y=None, height=dp(24)))  # 3 units spacer
+        
+        secondary_header = MDLabel(
+            text="System Statistics",
+            font_style="Headline",
+            role="large",  # MD3 Headline Large for subsections
+            theme_text_color="Primary",
+            size_hint_y=None,
+            height=dp(40),  # 5 units on 8dp grid
+            padding=[0, 0, 0, dp(8)]  # 1 unit bottom padding
+        )
+        self.main_layout.add_widget(secondary_header)
+        
+        # Stats cards container
+        stats_container = self._create_card_container(
+            cards_data=[
+                ("client_stats_card", ClientStatsCard),
+                ("transfer_stats_card", TransferStatsCard),
+                ("maintenance_card", MaintenanceCard)
+            ],
+            min_card_width=dp(280),
+            max_cards_per_row=3,
+            section_spacing=dp(16)  # 2 units on 8dp grid
+        )
+        
+        self.main_layout.add_widget(stats_container)
+    
+    def _build_analytics_section(self):
+        """Build analytics and monitoring section"""
+        # Section header with proper 8dp grid spacing
+        self.main_layout.add_widget(MDLabel(size_hint_y=None, height=dp(24)))  # 3 units spacer
+        
+        analytics_header = MDLabel(
+            text="Live Monitoring",
+            font_style="Headline",
+            role="large",  # MD3 Headline Large for subsections 
+            theme_text_color="Primary",
+            size_hint_y=None,
+            height=dp(40),  # 5 units on 8dp grid
+            padding=[0, 0, 0, dp(8)]  # 1 unit bottom padding
+        )
+        self.main_layout.add_widget(analytics_header)
+        
+        # Analytics cards with larger heights
+        analytics_container = self._create_card_container(
+            cards_data=[
+                ("performance_card", PerformanceChartCard),
+                ("activity_card", ActivityLogCard)
+            ],
+            min_card_width=dp(400),
+            max_cards_per_row=2,
+            section_spacing=dp(16),  # 2 units on 8dp grid
+            card_height=dp(320)  # Taller for charts and logs
+        )
+        
+        self.main_layout.add_widget(analytics_container)
+    
+    def _create_card_container(self, cards_data, min_card_width=None, 
+                              max_cards_per_row=3, section_spacing=None, 
+                              card_height=None):
+        """
+        Create sophisticated responsive card container with MD3 breakpoints
+        
+        Material Design 3 Breakpoint System:
+        - Desktop (>1200px): 3-column layout for optimal data density
+        - Tablet (768-1200px): 2-column layout with enhanced spacing
+        - Mobile (<768px): Single column with optimized touch targets
+        """
+        # Set defaults with dp() inside function to avoid import issues
+        if min_card_width is None:
+            min_card_width = dp(300)
+        if section_spacing is None:
+            section_spacing = dp(16)
+        
+        # MD3 Breakpoint detection with proper spacing calculations
+        screen_width = Window.width
+        available_width = screen_width - dp(48)  # Account for screen padding
+        
+        # Calculate columns using MD3 breakpoint system
+        optimal_cols, card_spacing, container_padding = self._calculate_responsive_layout(
+            available_width, min_card_width, max_cards_per_row, section_spacing
+        )
+        
+        # Create responsive grid container with adaptive sizing
+        container = MDGridLayout(
+            cols=optimal_cols,
+            spacing=card_spacing,
+            adaptive_height=True,
+            size_hint_y=None,
+            row_default_height=card_height or dp(180),
+            col_default_width=self._calculate_optimal_card_width(available_width, optimal_cols, card_spacing),
+            padding=container_padding
+        )
+        
+        # Store layout parameters for responsive updates
+        container._layout_params = {
+            'cards_data': cards_data,
+            'min_card_width': min_card_width,
+            'max_cards_per_row': max_cards_per_row,
+            'section_spacing': section_spacing,
+            'card_height': card_height
+        }
+        
+        # Bind to window resize for smooth responsive behavior
+        Window.bind(on_resize=lambda *args: self._update_container_layout_responsive(container))
+        
+        # Create and add cards with proper constraints
+        for card_attr, card_class in cards_data:
+            card = card_class()
+            
+            # Apply responsive card constraints
+            self._apply_card_responsive_constraints(card, available_width, optimal_cols)
+            
+            setattr(self, card_attr, card)
+            container.add_widget(card)
+        
+        # Calculate and set proper container height
+        rows_needed = (len(cards_data) + optimal_cols - 1) // optimal_cols
+        total_height = (card_height or dp(180)) * rows_needed + card_spacing * (rows_needed - 1)
+        container.height = total_height
+        
+        return container
+    
+    def _calculate_responsive_layout(self, available_width, min_card_width, max_cards_per_row, base_spacing):
+        """
+        Calculate responsive layout parameters using MD3 breakpoint system
+        
+        Returns:
+            tuple: (optimal_cols, card_spacing, container_padding)
+        """
+        try:
+            # MD3 Breakpoint thresholds (converted from CSS pixels to dp)
+            MOBILE_MAX = dp(768)
+            TABLET_MAX = dp(1200)
+            
+            # Determine breakpoint and adjust layout accordingly
+            if available_width <= MOBILE_MAX:
+                # Mobile: Single column with optimized spacing
+                optimal_cols = 1
+                card_spacing = dp(16)  # 2 units on 8dp grid
+                container_padding = [dp(8), dp(16), dp(8), dp(16)]  # Reduced horizontal padding
+                
+            elif available_width <= TABLET_MAX:
+                # Tablet: 2-column layout with enhanced spacing
+                optimal_cols = min(2, max_cards_per_row)
+                card_spacing = dp(20)  # 2.5 units on 8dp grid
+                container_padding = [dp(16), dp(20), dp(16), dp(20)]  # Balanced padding
+                
+            else:
+                # Desktop: 3-column layout for optimal data density
+                # Calculate optimal columns based on available space and constraints
+                max_possible_cols = int(available_width // min_card_width)
+                optimal_cols = min(max_cards_per_row, max(1, max_possible_cols))
+                card_spacing = base_spacing  # Use provided spacing
+                container_padding = [dp(24), dp(24), dp(24), dp(24)]  # Full padding
+            
+            # Ensure minimum column count
+            optimal_cols = max(1, optimal_cols)
+            
+            return optimal_cols, card_spacing, container_padding
+            
+        except Exception as e:
+            print(f"[ERROR] Responsive layout calculation failed: {e}")
+            # Fallback to safe defaults
+            return 1, dp(16), [dp(16), dp(16), dp(16), dp(16)]
+    
+    def _calculate_optimal_card_width(self, available_width, cols, spacing):
+        """
+        Calculate optimal card width based on available space and column count
+        
+        Ensures cards maintain proper aspect ratios and readability
+        """
+        try:
+            # Account for spacing between cards and container padding
+            total_spacing = spacing * (cols - 1)
+            container_padding_horizontal = dp(48)  # Total left + right padding
+            
+            # Calculate width per card
+            usable_width = available_width - total_spacing - container_padding_horizontal
+            card_width = usable_width / cols
+            
+            # Apply constraints for readability and touch targets
+            min_width = dp(280)  # Minimum for proper content display
+            max_width = dp(480)  # Maximum to prevent cards becoming too wide
+            
+            # Clamp to reasonable bounds
+            optimal_width = max(min_width, min(card_width, max_width))
+            
+            return optimal_width
+            
+        except Exception as e:
+            print(f"[ERROR] Card width calculation failed: {e}")
+            return dp(300)  # Safe fallback
+    
+    def _apply_card_responsive_constraints(self, card, available_width, cols):
+        """
+        Apply responsive constraints to individual cards for optimal layout
+        
+        Ensures touch targets remain accessible across all screen sizes
+        Uses the card's built-in responsive system if available
+        """
+        try:
+            # Use the card's built-in responsive system if it's a ResponsiveCard
+            if hasattr(card, 'apply_responsive_constraints'):
+                card.apply_responsive_constraints(available_width, cols)
+            else:
+                # Fallback for non-ResponsiveCard instances
+                self._apply_legacy_card_constraints(card, available_width, cols)
+            
+        except Exception as e:
+            print(f"[ERROR] Card constraint application failed: {e}")
+    
+    def _apply_legacy_card_constraints(self, card, available_width, cols):
+        """
+        Legacy constraint application for non-ResponsiveCard instances
+        
+        Maintains compatibility with standard MDCard instances
+        """
+        try:
+            # MD3 Breakpoint-specific card adjustments
+            MOBILE_MAX = dp(768)
+            TABLET_MAX = dp(1200)
+            
+            if available_width <= MOBILE_MAX:
+                # Mobile: Optimize for single-hand operation
+                if hasattr(card, 'padding'):
+                    card.padding = [dp(20), dp(16), dp(20), dp(16)]
+                if hasattr(card, 'minimum_height'):
+                    card.minimum_height = dp(140)
+                if hasattr(card, 'radius'):
+                    card.radius = [dp(16)]
+                    
+            elif available_width <= TABLET_MAX:
+                # Tablet: Balanced for two-hand operation
+                if hasattr(card, 'padding'):
+                    card.padding = [dp(22), dp(18), dp(22), dp(18)]
+                if hasattr(card, 'minimum_height'):
+                    card.minimum_height = dp(130)
+                if hasattr(card, 'radius'):
+                    card.radius = [dp(14)]
+                    
+            else:
+                # Desktop: Optimal for precision input
+                if hasattr(card, 'padding'):
+                    card.padding = [dp(24), dp(20), dp(24), dp(20)]
+                if hasattr(card, 'minimum_height'):
+                    card.minimum_height = dp(120)
+                if hasattr(card, 'radius'):
+                    card.radius = [dp(12)]
+            
+            # Ensure proper size constraints
+            card.size_hint_x = None if cols > 1 else 1
+            card.adaptive_height = True
+            
+            # Apply maximum width constraint to prevent cards becoming too wide
+            if cols == 1 and available_width > dp(600):
+                card.size_hint_x = None
+                card.width = min(dp(600), available_width - dp(48))
+            
+        except Exception as e:
+            print(f"[ERROR] Legacy card constraint application failed: {e}")
+    
+    def _update_container_layout_responsive(self, container):
+        """
+        Enhanced responsive layout update with smooth transitions
+        
+        Handles window resize events with proper layout recalculation
+        """
+        try:
+            if not hasattr(container, '_layout_params'):
+                return
+            
+            params = container._layout_params
+            available_width = Window.width - dp(48)
+            
+            # Recalculate layout using MD3 breakpoints
+            optimal_cols, card_spacing, container_padding = self._calculate_responsive_layout(
+                available_width, 
+                params['min_card_width'], 
+                params['max_cards_per_row'], 
+                params['section_spacing']
+            )
+            
+            # Update container properties smoothly
+            container.cols = optimal_cols
+            container.spacing = card_spacing
+            container.padding = container_padding
+            container.col_default_width = self._calculate_optimal_card_width(available_width, optimal_cols, card_spacing)
+            
+            # Update card constraints for all children
+            for card in container.children:
+                self._apply_card_responsive_constraints(card, available_width, optimal_cols)
+            
+            # Recalculate container height
+            rows_needed = (len(params['cards_data']) + optimal_cols - 1) // optimal_cols
+            card_height = params['card_height'] or dp(180)
+            total_height = card_height * rows_needed + card_spacing * (rows_needed - 1)
+            container.height = total_height
+            
+            # Force layout update
+            container._trigger_layout()
+            
+        except Exception as e:
+            print(f"[ERROR] Responsive layout update failed: {e}")
+    
+    def _update_container_layout(self, container, cards_data, min_card_width, max_cards_per_row):
+        """Legacy method - redirects to enhanced responsive layout"""
+        try:
+            self._update_container_layout_responsive(container)
+        except Exception as e:
+            print(f"[ERROR] Layout update failed: {e}")
+    
+    def get_responsive_layout_info(self):
+        """
+        Get current responsive layout information for debugging and testing
+        
+        Returns:
+            dict: Current layout state including breakpoint, screen size, and card layout
+        """
+        try:
+            screen_width = Window.width
+            available_width = screen_width - dp(48)
+            
+            # Determine current breakpoint
+            MOBILE_MAX = dp(768)
+            TABLET_MAX = dp(1200)
+            
+            if available_width <= MOBILE_MAX:
+                breakpoint = "mobile"
+                expected_cols = 1
+            elif available_width <= TABLET_MAX:
+                breakpoint = "tablet" 
+                expected_cols = 2
+            else:
+                breakpoint = "desktop"
+                expected_cols = 3
+            
+            return {
+                "screen_width": screen_width,
+                "available_width": available_width,
+                "breakpoint": breakpoint,
+                "expected_columns": expected_cols,
+                "mobile_threshold": MOBILE_MAX,
+                "tablet_threshold": TABLET_MAX,
+                "responsive_system_active": True
+            }
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to get layout info: {e}")
+            return {
+                "error": str(e),
+                "responsive_system_active": False
+            }
+    
+    def force_responsive_layout_update(self):
+        """
+        Force a complete responsive layout update
+        
+        Useful for testing or recovering from layout issues
+        """
+        try:
+            # Find all containers with layout parameters
+            containers_updated = 0
+            
+            def find_containers(widget):
+                nonlocal containers_updated
+                if hasattr(widget, '_layout_params'):
+                    self._update_container_layout_responsive(widget)
+                    containers_updated += 1
+                
+                # Recursively check children
+                if hasattr(widget, 'children'):
+                    for child in widget.children:
+                        find_containers(child)
+            
+            # Start search from main layout
+            if hasattr(self, 'main_layout'):
+                find_containers(self.main_layout)
+            
+            if self.activity_card:
+                self.activity_card.add_log_entry(
+                    "System", 
+                    f"Forced layout update: {containers_updated} containers updated"
+                )
+            
+            return containers_updated
+            
+        except Exception as e:
+            print(f"[ERROR] Force layout update failed: {e}")
+            if self.activity_card:
+                self.activity_card.add_log_entry(
+                    "System", 
+                    f"Layout update failed: {str(e)}", 
+                    "ERROR"
+                )
+            return 0
     
     def initial_load(self, dt):
         """Initial data loading and setup"""
@@ -876,6 +2029,9 @@ class DashboardScreen(MDScreen):
                 self.activity_card.add_log_entry("System", "Enhanced dashboard entered")
             self.schedule_updates()
             self.refresh_all_data()
+            
+            # Optional: Demonstrate micro-interactions (remove in production)
+            # Clock.schedule_once(lambda dt: self.demonstrate_micro_interactions(), 3.0)
         except Exception as e:
             print(f"[ERROR] Dashboard on_enter failed: {e}")
     
