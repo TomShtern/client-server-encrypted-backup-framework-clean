@@ -18,7 +18,7 @@ try:
     from kivymd.uix.boxlayout import MDBoxLayout
     from kivymd.uix.gridlayout import MDGridLayout
     from kivymd.uix.card import MDCard
-    from kivymd.uix.label import MDLabel
+    from kivymd_gui.components.md3_label import MD3Label, create_md3_label
     from kivymd.uix.button import MDButton, MDIconButton
     from kivymd.uix.button import MDButtonText
     from kivymd.uix.scrollview import MDScrollView
@@ -66,7 +66,7 @@ class ClientStatsCard(MDCard):
         layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
         
         # Header
-        title_label = MDLabel(
+        title_label = MD3Label(
             text="Client Overview",
             theme_text_color="Primary",
             font_style="Headline",
@@ -80,8 +80,8 @@ class ClientStatsCard(MDCard):
         stats_grid = MDGridLayout(cols=3, spacing=dp(16), adaptive_height=True)
         
         # Total clients
-        total_col = MDBoxLayout(orientation="vertical", spacing=dp(4))
-        self.total_count_label = MDLabel(
+        total_col = MDBoxLayout(orientation="vertical", spacing=dp(8))
+        self.total_count_label = MD3Label(
             text="0",
             theme_text_color="Primary",
             font_style="Display",
@@ -90,7 +90,7 @@ class ClientStatsCard(MDCard):
             halign="center"
         )
         total_col.add_widget(self.total_count_label)
-        total_desc_label = MDLabel(
+        total_desc_label = MD3Label(
             text="Total Clients",
             theme_text_color="Secondary",
             font_style="Body",
@@ -102,8 +102,8 @@ class ClientStatsCard(MDCard):
         stats_grid.add_widget(total_col)
         
         # Active clients
-        active_col = MDBoxLayout(orientation="vertical", spacing=dp(4))
-        self.active_count_label = MDLabel(
+        active_col = MDBoxLayout(orientation="vertical", spacing=dp(8))
+        self.active_count_label = MD3Label(
             text="0",
             theme_text_color="Primary",
             font_style="Display",
@@ -112,7 +112,7 @@ class ClientStatsCard(MDCard):
             halign="center"
         )
         active_col.add_widget(self.active_count_label)
-        active_desc_label = MDLabel(
+        active_desc_label = MD3Label(
             text="Active",
             theme_text_color="Secondary",
             font_style="Body",
@@ -124,8 +124,8 @@ class ClientStatsCard(MDCard):
         stats_grid.add_widget(active_col)
         
         # Files transferred
-        files_col = MDBoxLayout(orientation="vertical", spacing=dp(4))
-        self.files_count_label = MDLabel(
+        files_col = MDBoxLayout(orientation="vertical", spacing=dp(8))
+        self.files_count_label = MD3Label(
             text="0",
             theme_text_color="Primary",
             font_style="Display",
@@ -134,7 +134,7 @@ class ClientStatsCard(MDCard):
             halign="center"
         )
         files_col.add_widget(self.files_count_label)
-        files_desc_label = MDLabel(
+        files_desc_label = MD3Label(
             text="Files Transferred",
             theme_text_color="Secondary",
             font_style="Body",
@@ -177,7 +177,7 @@ class ClientSearchCard(MDCard):
         self.height = dp(120)
         
         # Create layout
-        layout = MDBoxLayout(orientation="vertical", spacing=dp(12))
+        layout = MDBoxLayout(orientation="vertical", spacing=dp(16))
         
         # Header
         header_layout = MDBoxLayout(
@@ -187,7 +187,7 @@ class ClientSearchCard(MDCard):
             spacing=dp(8)
         )
         
-        title_label = MDLabel(
+        title_label = MD3Label(
             text="Search & Filter",
             theme_text_color="Primary",
             font_style="Headline"
@@ -209,7 +209,7 @@ class ClientSearchCard(MDCard):
         # Search and filter controls
         controls_layout = MDBoxLayout(
             orientation="horizontal",
-            spacing=dp(12),
+            spacing=dp(16),
             adaptive_height=True
         )
         
@@ -303,7 +303,7 @@ class ClientListCard(MDCard):
             spacing=dp(8)
         )
         
-        title_label = MDLabel(
+        title_label = MD3Label(
             text="Connected Clients",
             theme_text_color="Primary",
             font_style="Headline"
@@ -510,7 +510,7 @@ class ClientsScreen(MDScreen):
             
             # Fallback UI
             error_layout = MDBoxLayout(orientation="vertical", padding=dp(16))
-            error_label = MDLabel(
+            error_label = MD3Label(
                 text=f"Failed to load clients screen: {e}",
                 theme_text_color="Error",
                 halign="center"
@@ -623,7 +623,7 @@ class ClientsScreen(MDScreen):
             # Create detail content
             content_layout = MDBoxLayout(
                 orientation="vertical",
-                spacing=dp(12),
+                spacing=dp(16),
                 adaptive_height=True
             )
             
@@ -641,14 +641,14 @@ class ClientsScreen(MDScreen):
             ]
             
             for label, value in details:
-                label_widget = MDLabel(
+                label_widget = MD3Label(
                     text=f"{label}:",
                     theme_text_color="Secondary",
                     font_style="Body",
                     size_hint_y=None,
                     height=dp(24)
                 )
-                value_widget = MDLabel(
+                value_widget = MD3Label(
                     text=value,
                     theme_text_color="Primary",
                     font_style="Body",

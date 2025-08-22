@@ -7,7 +7,7 @@ from kivymd.uix.list import MDList, MDListItem, MDListItemLeadingIcon
 from kivymd.uix.list import MDListItemHeadlineText, MDListItemSupportingText, MDListItemTrailingSupportingText
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.scrollview import MDScrollView
-from kivymd.uix.label import MDLabel
+from kivymd_gui.components.md3_label import MD3Label
 from kivy.metrics import dp
 
 class EnhancedDataTable(MDBoxLayout):
@@ -31,7 +31,7 @@ class EnhancedDataTable(MDBoxLayout):
         # Add header if needed
         if column_data:
             header_text = " | ".join([col[0] if isinstance(col, tuple) else str(col) for col in column_data])
-            header = MDLabel(
+            header = MD3Label(
                 text=header_text,
                 font_style="Label",
                 theme_text_color="Secondary",

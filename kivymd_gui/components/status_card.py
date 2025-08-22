@@ -4,7 +4,7 @@ Enhanced Material Design 3 status card components for KivyMD GUI
 
 from kivymd.uix.card import MDCard
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.label import MDLabel
+from kivymd_gui.components.md3_label import MD3Label
 from kivymd.uix.button import MDIconButton
 from kivy.properties import StringProperty
 from kivy.metrics import dp
@@ -34,7 +34,7 @@ class MDStatusCard(MDCard):
         layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
         
         # Header with icon and title
-        header = MDBoxLayout(size_hint_y=None, height=dp(40), spacing=dp(12))
+        header = MDBoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
         icon = MDIconButton(
             icon=self.icon,
             theme_icon_color="Custom",
@@ -42,7 +42,7 @@ class MDStatusCard(MDCard):
             size_hint=(None, None),
             size=(dp(40), dp(40))
         )
-        title_label = MDLabel(
+        title_label = MD3Label(
             text=self.title,
             font_style="Headline",
             theme_text_color="Primary",
@@ -52,14 +52,14 @@ class MDStatusCard(MDCard):
         header.add_widget(title_label)
         
         # Content
-        content = MDBoxLayout(orientation="vertical", spacing=dp(4))
-        self.primary_label = MDLabel(
+        content = MDBoxLayout(orientation="vertical", spacing=dp(8))
+        self.primary_label = MD3Label(
             text=self.primary_text,
             font_style="Display",
             theme_text_color="Primary",
             adaptive_height=True
         )
-        self.secondary_label = MDLabel(
+        self.secondary_label = MD3Label(
             text=self.secondary_text,
             font_style="Body",
             theme_text_color="Secondary",

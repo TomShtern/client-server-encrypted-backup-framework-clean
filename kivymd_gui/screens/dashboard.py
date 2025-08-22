@@ -60,7 +60,9 @@ from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.gridlayout import MDGridLayout
 from kivymd.uix.card import MDCard
 from kivymd.uix.label import MDLabel
+from kivymd_gui.components.md3_label import MD3Label, create_md3_label
 from kivymd.uix.button import MDButton, MDIconButton
+from kivymd_gui.components.md3_button import create_md3_icon_button
 from kivymd.uix.button import MDButtonText
 from kivymd.uix.scrollview import MDScrollView
 from kivymd.uix.divider import MDDivider
@@ -191,17 +193,16 @@ class MDLoadingCard(MDCard):
         # Header with loading indicator
         header = MDBoxLayout(
             orientation="horizontal",
-            spacing=dp(12),
+            spacing=dp(16),
             size_hint_y=None,
             height=dp(40)
         )
         
         # Title skeleton or text
-        self.title_element = MDLabel(
+        self.title_element = MD3Label(
             text=self.card_title,
             theme_text_color="Secondary",
             font_style="Title",
-            role="medium",
             adaptive_height=True
         )
         header.add_widget(self.title_element)
@@ -221,7 +222,7 @@ class MDLoadingCard(MDCard):
         # Content area with skeletons
         self.content_area = MDBoxLayout(
             orientation="vertical",
-            spacing=dp(12)
+            spacing=dp(16)
         )
         
         self._create_skeleton_content()
@@ -303,22 +304,18 @@ class MDLoadingCard(MDCard):
                 size_hint_y=None
             )
             
-            error_icon = MDIconButton(
+            error_icon = create_md3_icon_button(
                 icon="alert-circle",
-                theme_icon_color="Custom",
-                icon_color=self.theme_cls.errorColor,
-                size_hint=(None, None),
-                size=(dp(48), dp(48)),
+                tone="error",
                 disabled=True
             )
             error_layout.add_widget(error_icon)
             
-            error_label = MDLabel(
+            error_label = MD3Label(
                 text=error_message,
                 theme_text_color="Error",
                 font_style="Body",
-                role="large",
-                halign="center",
+                    halign="center",
                 adaptive_height=True
             )
             error_layout.add_widget(error_label)
@@ -385,11 +382,9 @@ class MDEmptyState(MDCard):
         )
         
         # Icon with proper MD3 sizing
-        icon_widget = MDIconButton(
+        icon_widget = create_md3_icon_button(
             icon=icon,
-            theme_icon_color="Custom",
-            icon_color=self.theme_cls.onSurfaceVariantColor,
-            size_hint=(None, None),
+            tone="secondary",
             size=(dp(64), dp(64)),  # Large icon for empty states
             disabled=True,  # Decorative only
             pos_hint={"center_x": 0.5}
@@ -397,10 +392,10 @@ class MDEmptyState(MDCard):
         layout.add_widget(icon_widget)
         
         # Title with proper MD3 typography
-        title_label = MDLabel(
+        title_label = MD3Label(
             text=title,
             font_style="Headline",
-            role="medium",  # MD3 Headline Medium for empty state titles
+            # MD3 Headline Medium for empty state titles
             theme_text_color="Primary",
             halign="center",
             adaptive_height=True
@@ -409,14 +404,15 @@ class MDEmptyState(MDCard):
         
         # Description if provided
         if description:
-            desc_label = MDLabel(
+            desc_label = MD3Label(
                 text=description,
                 font_style="Body",
-                role="large",  # MD3 Body Large for descriptions
+                # MD3 Body Large for descriptions
                 theme_text_color="Secondary",
                 halign="center",
-                adaptive_height=True,
-                text_size=(None, None)  # Allow text wrapping
+                adaptive_height=True
+                # REMOVED: text_size=(None, None) - This was causing vertical text rendering
+                # MD3Label handles proper text wrapping automatically
             )
             layout.add_widget(desc_label)
         
@@ -534,9 +530,65 @@ class ResponsiveCard(MDCard):
                 self._current_breakpoint = breakpoint
                 self._apply_breakpoint_constraints(breakpoint, cols, available_width)
                 self._responsive_constraints_applied = True
+            
+            # Apply text rendering protection to all child MD3Labels
+            self._protect_child_labels_text_rendering()
         
         except Exception as e:
             print(f"[ERROR] Failed to apply responsive constraints to card: {e}")
+    
+    def _protect_child_labels_text_rendering(self):
+        """Protect all child MD3Label instances from text rendering issues"""
+        try:
+            def protect_labels_recursive(widget):
+                # Protect MD3Label instances
+                if hasattr(widget, '__class__') and 'MD3Label' in widget.__class__.__name__:
+                    self._protect_label_text_rendering(widget)
+                
+                # Recursively protect children
+                if hasattr(widget, 'children'):
+                    for child in widget.children:
+                        protect_labels_recursive(child)
+            
+            # Start from content layout
+            if hasattr(self, '_content_layout'):
+                protect_labels_recursive(self._content_layout)
+        except Exception as e:
+            print(f"[ERROR] Failed to protect child labels: {e}")
+    
+    def _protect_label_text_rendering(self, label):
+        """Protect a label from text rendering issues"""
+        try:
+            # Ensure label has adequate width for text rendering
+            if hasattr(label, 'width') and label.width < dp(100):
+                label.size_hint_x = None
+                label.width = dp(100)
+            
+            # Ensure text_size is properly set for text wrapping
+            if hasattr(label, 'text_size'):
+                # Use the label's width for text wrapping to prevent overlapping
+                if hasattr(label, 'width') and label.width > dp(50):
+                    label.text_size = (label.width, None)
+                else:
+                    label.text_size = (dp(100), None)
+                
+            # Ensure proper text alignment
+            if not hasattr(label, 'halign') or not label.halign:
+                label.halign = 'left'
+                
+            # Ensure adaptive height to prevent text overlapping
+            if not hasattr(label, 'adaptive_height') or not label.adaptive_height:
+                label.adaptive_height = True
+        except Exception as e:
+            print(f"[ERROR] Failed to protect label: {e}")
+    
+    def add_widget(self, widget, index=0):
+        """Override add_widget to ensure proper text rendering for labels"""
+        # Apply text rendering protection to MD3Label children
+        if hasattr(widget, '__class__') and 'MD3Label' in widget.__class__.__name__:
+            self._protect_label_text_rendering(widget)
+        
+        super().add_widget(widget, index)
     
     def _apply_breakpoint_constraints(self, breakpoint, cols, available_width):
         """Apply breakpoint-specific constraints to the card"""
@@ -563,9 +615,17 @@ class ResponsiveCard(MDCard):
         self.adaptive_height = True
         
         # Apply maximum width constraint to prevent cards becoming too wide on single column
-        if cols == 1 and available_width > dp(600):
+        # Ensure minimum width for proper text rendering
+        min_card_width = dp(320)  # Minimum width for proper text rendering
+        if cols == 1 and available_width > min_card_width:
             self.size_hint_x = None
-            self.width = min(dp(600), available_width - dp(48))
+            self.width = max(min_card_width, min(dp(600), available_width - dp(48)))
+        elif cols > 1:
+            # For multi-column layouts, ensure adequate width
+            self.size_hint_x = None
+            current_width = getattr(self, 'width', 0)
+            if current_width < min_card_width:
+                self.width = min_card_width
         
         # Force card layout update to apply new constraints
         self._trigger_layout()
@@ -589,11 +649,10 @@ class ServerStatusCard(ResponsiveCard):
             spacing=dp(16)
         )
         
-        title = MDLabel(
+        title = MD3Label(
             text="Server Status",
             theme_text_color="Primary",
             font_style="Title",  # MD3 Title Large
-            role="large",
             adaptive_height=True
         )
         header.add_widget(title)
@@ -616,25 +675,23 @@ class ServerStatusCard(ResponsiveCard):
         # Chip content layout
         chip_content = MDBoxLayout(
             orientation="horizontal",
-            spacing=dp(6),  # Tight spacing for chip content
+            spacing=dp(8),  # Compliant spacing for chip content
             adaptive_width=True
         )
         
         # Status indicator dot
-        self.status_dot = MDIconButton(
+        self.status_dot = create_md3_icon_button(
             icon="circle",
-            theme_icon_color="Custom",
-            icon_color=self.theme_cls.onErrorColor,
-            size_hint=(None, None),
+            tone="error",
             size=(dp(8), dp(8)),
             disabled=True  # Decorative only
         )
         
         # Status text with proper MD3 typography
-        self.status_text = MDLabel(
+        self.status_text = MD3Label(
             text="OFFLINE",
             font_style="Label",
-            role="large",  # MD3 Label Large for chip text
+            # MD3 Label Large for chip text
             theme_text_color="Custom",
             text_color=self.theme_cls.onErrorColor,
             adaptive_width=True,
@@ -653,26 +710,26 @@ class ServerStatusCard(ResponsiveCard):
         self._content_layout.add_widget(MDDivider(height=dp(1)))
         
         # Status information with improved typography
-        info_container = MDBoxLayout(orientation="vertical", spacing=dp(12))
+        info_container = MDBoxLayout(orientation="vertical", spacing=dp(16))
         
         # Status details with proper MD3 typography
-        self.status_label = MDLabel(
+        self.status_label = MD3Label(
             text="Status: Stopped", 
             font_style="Body", 
-            role="large",
-            theme_text_color="Primary"
+            theme_text_color="Primary",
+            adaptive_height=True  # Enable adaptive height to prevent overlapping
         )
-        self.address_label = MDLabel(
+        self.address_label = MD3Label(
             text="Address: N/A", 
             font_style="Body", 
-            role="medium",
-            theme_text_color="Secondary"
+            theme_text_color="Secondary",
+            adaptive_height=True  # Enable adaptive height to prevent overlapping
         )
-        self.uptime_label = MDLabel(
+        self.uptime_label = MD3Label(
             text="Uptime: 00:00:00", 
             font_style="Body", 
-            role="medium",
-            theme_text_color="Secondary"
+            theme_text_color="Secondary",
+            adaptive_height=True  # Enable adaptive height to prevent overlapping
         )
         
         info_container.add_widget(self.status_label)
@@ -745,20 +802,17 @@ class ClientStatsCard(ResponsiveCard):
         )
         
         # Icon for visual hierarchy
-        icon = MDIconButton(
+        icon = create_md3_icon_button(
             icon="account-group",
-            theme_icon_color="Custom",
-            icon_color=self.theme_cls.primaryColor,
-            size_hint=(None, None),
+            tone="primary",
             size=(dp(32), dp(32))
         )
         header.add_widget(icon)
         
-        title = MDLabel(
+        title = MD3Label(
             text="Client Statistics",
             theme_text_color="Primary",
             font_style="Title",
-            role="medium",
             adaptive_height=True
         )
         header.add_widget(title)
@@ -770,58 +824,59 @@ class ClientStatsCard(ResponsiveCard):
         stats_container = MDBoxLayout(orientation="vertical", spacing=dp(16))  # 2 units on 8dp grid
         
         # Connected clients with emphasis
-        connected_row = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(32))
-        self.connected_value = MDLabel(
+        connected_row = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(40), spacing=dp(8))
+        self.connected_value = MD3Label(
             text="0",
             font_style="Display",
-            role="small",  # Large number display
+            # Large number display
             theme_text_color="Primary",
             size_hint_x=None,
-            width=dp(48)
+            width=dp(80),  # Increased width to accommodate Display font style
+            adaptive_height=True
         )
-        connected_label = MDLabel(
+        connected_label = MD3Label(
             text="Connected Clients",
             font_style="Body",
-            role="medium", 
-            theme_text_color="Secondary"
+            theme_text_color="Secondary",
+            adaptive_height=True
         )
         connected_row.add_widget(self.connected_value)
         connected_row.add_widget(connected_label)
         
         # Total clients
-        total_row = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(28))
-        self.total_value = MDLabel(
+        total_row = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(36), spacing=dp(8))
+        self.total_value = MD3Label(
             text="0",
             font_style="Headline",
-            role="small",
             theme_text_color="Primary", 
             size_hint_x=None,
-            width=dp(48)
+            width=dp(80),  # Increased width to accommodate Headline font style
+            adaptive_height=True
         )
-        total_label = MDLabel(
+        total_label = MD3Label(
             text="Total Registered",
             font_style="Body", 
-            role="medium",
-            theme_text_color="Secondary"
+            theme_text_color="Secondary",
+            adaptive_height=True
         )
         total_row.add_widget(self.total_value)
         total_row.add_widget(total_label)
         
         # Active transfers
-        transfers_row = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(28))
-        self.transfers_value = MDLabel(
+        transfers_row = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(36), spacing=dp(8))
+        self.transfers_value = MD3Label(
             text="0",
             font_style="Headline",
-            role="small",
             theme_text_color="Primary",
             size_hint_x=None,
-            width=dp(48)
+            width=dp(80),  # Increased width to accommodate Headline font style
+            adaptive_height=True
         )
-        transfers_label = MDLabel(
+        transfers_label = MD3Label(
             text="Active Transfers",
             font_style="Body",
-            role="medium", 
-            theme_text_color="Secondary"
+            theme_text_color="Secondary",
+            adaptive_height=True
         )
         transfers_row.add_widget(self.transfers_value)
         transfers_row.add_widget(transfers_label)
@@ -872,20 +927,17 @@ class TransferStatsCard(ResponsiveCard):
             height=dp(40)
         )
         
-        icon = MDIconButton(
+        icon = create_md3_icon_button(
             icon="transfer",
-            theme_icon_color="Custom",
-            icon_color=self.theme_cls.secondaryColor,
-            size_hint=(None, None),
+            tone="secondary",
             size=(dp(32), dp(32))
         )
         header.add_widget(icon)
         
-        title = MDLabel(
+        title = MD3Label(
             text="Transfer Statistics",
             theme_text_color="Primary",
             font_style="Title",
-            role="medium",
             adaptive_height=True
         )
         header.add_widget(title)
@@ -898,38 +950,39 @@ class TransferStatsCard(ResponsiveCard):
         
         # Total transferred - primary metric
         total_row = MDBoxLayout(orientation="vertical", size_hint_y=None, height=dp(56))
-        self.total_value = MDLabel(
+        self.total_value = MD3Label(
             text="0",
             font_style="Display",
-            role="small",  # Large number for primary metric
+            # Large number for primary metric
             theme_text_color="Primary",
-            halign="left"
+            halign="left",
+            adaptive_height=True
         )
-        total_unit = MDLabel(
+        total_unit = MD3Label(
             text="MB Transferred",
             font_style="Body",
-            role="large",
             theme_text_color="Secondary",
-            halign="left"
+            halign="left",
+            adaptive_height=True
         )
         total_row.add_widget(self.total_value)
         total_row.add_widget(total_unit)
         
         # Transfer rate - secondary metric
         rate_row = MDBoxLayout(orientation="vertical", size_hint_y=None, height=dp(48))
-        self.rate_value = MDLabel(
+        self.rate_value = MD3Label(
             text="0.0",
             font_style="Headline",
-            role="medium",
             theme_text_color="Primary",
-            halign="left"
+            halign="left",
+            adaptive_height=True
         )
-        rate_unit = MDLabel(
+        rate_unit = MD3Label(
             text="KB/s Current Rate",
             font_style="Body",
-            role="medium",
             theme_text_color="Secondary",
-            halign="left"
+            halign="left",
+            adaptive_height=True
         )
         rate_row.add_widget(self.rate_value)
         rate_row.add_widget(rate_unit)
@@ -980,20 +1033,17 @@ class MaintenanceCard(ResponsiveCard):
             height=dp(40)
         )
         
-        icon = MDIconButton(
+        icon = create_md3_icon_button(
             icon="wrench",
-            theme_icon_color="Custom",
-            icon_color=self.theme_cls.tertiaryColor,
-            size_hint=(None, None),
+            tone="tertiary",
             size=(dp(32), dp(32))
         )
         header.add_widget(icon)
         
-        title = MDLabel(
+        title = MD3Label(
             text="System Maintenance",
             theme_text_color="Primary",
             font_style="Title",
-            role="medium",
             adaptive_height=True
         )
         header.add_widget(title)
@@ -1006,36 +1056,36 @@ class MaintenanceCard(ResponsiveCard):
         
         # Last cleanup time
         cleanup_row = MDBoxLayout(orientation="vertical", size_hint_y=None, height=dp(40))
-        cleanup_label = MDLabel(
+        cleanup_label = MD3Label(
             text="Last System Cleanup",
             font_style="Body",
-            role="large",
-            theme_text_color="Primary"
+            theme_text_color="Primary",
+            adaptive_height=True
         )
-        self.cleanup_value = MDLabel(
+        self.cleanup_value = MD3Label(
             text="Never",
             font_style="Body",
-            role="medium",
-            theme_text_color="Secondary"
+            theme_text_color="Secondary",
+            adaptive_height=True
         )
         cleanup_row.add_widget(cleanup_label)
         cleanup_row.add_widget(self.cleanup_value)
         
         # Files cleaned count
-        files_row = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(32))
-        self.files_count = MDLabel(
+        files_row = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(36), spacing=dp(8))
+        self.files_count = MD3Label(
             text="0",
             font_style="Headline",
-            role="small",
             theme_text_color="Primary",
             size_hint_x=None,
-            width=dp(48)
+            width=dp(80),  # Increased width to accommodate Headline font style
+            adaptive_height=True
         )
-        files_label = MDLabel(
+        files_label = MD3Label(
             text="Files Cleaned Total",
             font_style="Body",
-            role="medium",
-            theme_text_color="Secondary"
+            theme_text_color="Secondary",
+            adaptive_height=True
         )
         files_row.add_widget(self.files_count)
         files_row.add_widget(files_label)
@@ -1078,11 +1128,10 @@ class ControlPanelCard(ResponsiveCard):
         layout = MDBoxLayout(orientation="vertical", spacing=dp(16))  # MD3 spacing
         
         # Header with proper MD3 typography
-        title = MDLabel(
+        title = MD3Label(
             text="Control Panel",
             theme_text_color="Primary",
             font_style="Title",  # MD3 Title Large
-            role="large",
             size_hint_y=None,
             height=dp(32)  # Proper touch target
         )
@@ -1213,10 +1262,10 @@ class PerformanceChartCard(ResponsiveCard):
         Clock.schedule_interval(self.update_performance_data, 1.0)
     
     def _build_ui(self):
-        layout = MDBoxLayout(orientation="vertical", spacing=dp(12))
+        layout = MDBoxLayout(orientation="vertical", spacing=dp(16))
         
         # Header
-        title = MDLabel(
+        title = MD3Label(
             text="Live System Performance",
             theme_text_color="Primary",
             font_style="Headline",
@@ -1249,7 +1298,7 @@ class PerformanceChartCard(ResponsiveCard):
             layout.add_widget(canvas)
         else:
             # Fallback if matplotlib not available
-            fallback_label = MDLabel(
+            fallback_label = MD3Label(
                 text="Performance chart unavailable\n(matplotlib not installed)",
                 theme_text_color="Secondary",
                 halign="center"
@@ -1297,12 +1346,12 @@ class ActivityLogCard(ResponsiveCard):
         self._build_ui()
     
     def _build_ui(self):
-        layout = MDBoxLayout(orientation="vertical", spacing=dp(12))
+        layout = MDBoxLayout(orientation="vertical", spacing=dp(16))
         
         # Header with clear button
         header = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(32))
         
-        title = MDLabel(
+        title = MD3Label(
             text="Activity Log",
             theme_text_color="Primary",
             font_style="Headline",
@@ -1310,10 +1359,10 @@ class ActivityLogCard(ResponsiveCard):
         )
         header.add_widget(title)
         
-        clear_button = MDIconButton(
+        clear_button = create_md3_icon_button(
             icon="delete",
+            tone="secondary",
             on_release=self.clear_log,
-            size_hint=(None, None),
             size=(dp(32), dp(32))
         )
         header.add_widget(clear_button)
@@ -1341,7 +1390,56 @@ class ActivityLogCard(ResponsiveCard):
             item = MDListItem(
                 size_hint_y=None,
                 height=dp(56),
-                spacing=dp(4)
+                spacing=dp(8)
+            )
+            
+            # Headline with source and timestamp
+            headline = MDListItemHeadlineText(
+                text=f"[{timestamp}] {source}",
+                adaptive_width=True,
+                shorten=True,
+                max_lines=1
+            )
+            
+            # Supporting text with message
+            supporting = MDListItemSupportingText(
+                text=message,
+                adaptive_width=True,
+                shorten=True,
+                max_lines=1
+            )
+            
+            # Apply color coding
+            if level == "ERROR":
+                headline.text_color = supporting.text_color = self.theme_cls.errorColor
+            elif level == "WARNING":
+                headline.text_color = supporting.text_color = self.theme_cls.tertiaryColor
+            else:
+                headline.theme_text_color = "Primary"
+                supporting.theme_text_color = "Secondary"
+            
+            item.add_widget(headline)
+            item.add_widget(supporting)
+            
+            self.log_list.add_widget(item, index=0)
+            
+            # Keep only last 100 entries
+            if len(self.log_list.children) > 100:
+                self.log_list.remove_widget(self.log_list.children[-1])
+                
+        except Exception as e:
+            print(f"[ERROR] Failed to add log entry: {e}")
+    
+    def add_log_entry(self, source: str, message: str, level: str = "INFO"):
+        """Add log entry with proper text constraints"""
+        try:
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            
+            # Create properly constrained list item
+            item = MDListItem(
+                size_hint_y=None,
+                height=dp(56),
+                spacing=dp(8)
             )
             
             # Headline with source and timestamp
@@ -1466,16 +1564,18 @@ class DashboardScreen(MDScreen):
     
     def _build_primary_section(self):
         """Build primary monitoring section with status and controls"""
+        
         # Section header with proper MD3 typography and spacing
-        primary_header = MDLabel(
+        primary_header = MD3Label(
             text="Server Overview",
             font_style="Display",
-            role="small",  # MD3 Display Small for main sections
             theme_text_color="Primary",
             size_hint_y=None,
-            height=dp(48),  # 6 units on 8dp grid
-            padding=[0, 0, 0, dp(8)]  # 1 unit bottom padding
+            height=dp(48),
+            size_hint_x=1
         )
+        # Remove the width binding that was causing vertical text rendering
+        # primary_header.bind(width=lambda *x: primary_header.setter('text_size')(primary_header, (primary_header.width, None)))
         self.main_layout.add_widget(primary_header)
         
         # Responsive card container for primary cards
@@ -1494,17 +1594,17 @@ class DashboardScreen(MDScreen):
     def _build_secondary_section(self):
         """Build secondary statistics section"""
         # Section header with proper 8dp grid spacing
-        self.main_layout.add_widget(MDLabel(size_hint_y=None, height=dp(24)))  # 3 units spacer
+        self.main_layout.add_widget(MD3Label(size_hint_y=None, height=dp(24)))  # 3 units spacer
         
-        secondary_header = MDLabel(
+        secondary_header = MD3Label(
             text="System Statistics",
             font_style="Headline",
-            role="large",  # MD3 Headline Large for subsections
             theme_text_color="Primary",
             size_hint_y=None,
-            height=dp(40),  # 5 units on 8dp grid
-            padding=[0, 0, 0, dp(8)]  # 1 unit bottom padding
+            height=dp(40)  # 5 units on 8dp grid
         )
+        # Remove the width binding that was causing vertical text rendering
+        # secondary_header.bind(width=lambda *x: secondary_header.setter('text_size')(secondary_header, (secondary_header.width, None)))
         self.main_layout.add_widget(secondary_header)
         
         # Stats cards container
@@ -1524,17 +1624,19 @@ class DashboardScreen(MDScreen):
     def _build_analytics_section(self):
         """Build analytics and monitoring section"""
         # Section header with proper 8dp grid spacing
-        self.main_layout.add_widget(MDLabel(size_hint_y=None, height=dp(24)))  # 3 units spacer
+        self.main_layout.add_widget(MD3Label(size_hint_y=None, height=dp(24)))  # 3 units spacer
         
-        analytics_header = MDLabel(
+        analytics_header = MD3Label(
             text="Live Monitoring",
             font_style="Headline",
-            role="large",  # MD3 Headline Large for subsections 
+            # MD3 Headline Large for subsections 
             theme_text_color="Primary",
             size_hint_y=None,
-            height=dp(40),  # 5 units on 8dp grid
-            padding=[0, 0, 0, dp(8)]  # 1 unit bottom padding
+            height=dp(40)  # 5 units on 8dp grid
+            # REMOVED: padding=[0, 0, 0, dp(8)] - MDLabel doesn't support padding property
         )
+        # Remove the width binding that was causing vertical text rendering
+        # analytics_header.bind(width=lambda *x: analytics_header.setter('text_size')(analytics_header, (analytics_header.width, None)))
         self.main_layout.add_widget(analytics_header)
         
         # Analytics cards with larger heights
@@ -1607,6 +1709,9 @@ class DashboardScreen(MDScreen):
             # Apply responsive card constraints
             self._apply_card_responsive_constraints(card, available_width, optimal_cols)
             
+            # Apply enhanced card constraints for text rendering
+            self._apply_enhanced_card_constraints(card, available_width, optimal_cols)
+            
             setattr(self, card_attr, card)
             container.add_widget(card)
         
@@ -1642,7 +1747,7 @@ class DashboardScreen(MDScreen):
                 card_spacing = dp(20)  # 2.5 units on 8dp grid
                 container_padding = [dp(16), dp(20), dp(16), dp(20)]  # Balanced padding
                 
-            else:
+            else:  # desktop
                 # Desktop: 3-column layout for optimal data density
                 # Calculate optimal columns based on available space and constraints
                 max_possible_cols = int(available_width // min_card_width)
@@ -1676,8 +1781,9 @@ class DashboardScreen(MDScreen):
             card_width = usable_width / cols
             
             # Apply constraints for readability and touch targets
-            min_width = dp(280)  # Minimum for proper content display
-            max_width = dp(480)  # Maximum to prevent cards becoming too wide
+            # INCREASED minimum width to ensure proper text rendering
+            min_width = dp(320)  # Increased from dp(280) to dp(320)
+            max_width = dp(500)  # Increased from dp(480) to dp(500)
             
             # Clamp to reasonable bounds
             optimal_width = max(min_width, min(card_width, max_width))
@@ -1686,7 +1792,7 @@ class DashboardScreen(MDScreen):
             
         except Exception as e:
             print(f"[ERROR] Card width calculation failed: {e}")
-            return dp(300)  # Safe fallback
+            return dp(320)  # Safe fallback with adequate width for text rendering
     
     def _apply_card_responsive_constraints(self, card, available_width, cols):
         """
@@ -1706,6 +1812,32 @@ class DashboardScreen(MDScreen):
         except Exception as e:
             print(f"[ERROR] Card constraint application failed: {e}")
     
+    def _apply_enhanced_card_constraints(self, card, available_width, cols):
+        """
+        Apply enhanced constraints that prevent text rendering issues
+        """
+        try:
+            # Ensure minimum width for proper text rendering
+            min_card_width = dp(320)  # Minimum width for proper text rendering
+            
+            # Apply size constraints
+            card.size_hint_x = None if cols > 1 else 1
+            card.adaptive_height = True
+            
+            # Ensure adequate width for text rendering
+            if cols == 1 and available_width > min_card_width:
+                card.size_hint_x = None
+                card.width = max(min_card_width, min(dp(600), available_width - dp(48)))
+            elif cols > 1:
+                # For multi-column layouts, ensure adequate width
+                card.size_hint_x = None
+                current_width = getattr(card, 'width', 0)
+                if current_width < min_card_width:
+                    card.width = min_card_width
+                    
+        except Exception as e:
+            print(f"[ERROR] Enhanced card constraint application failed: {e}")
+
     def _apply_legacy_card_constraints(self, card, available_width, cols):
         """
         Legacy constraint application for non-ResponsiveCard instances
@@ -1735,7 +1867,7 @@ class DashboardScreen(MDScreen):
                 if hasattr(card, 'radius'):
                     card.radius = [dp(14)]
                     
-            else:
+            else:  # desktop
                 # Desktop: Optimal for precision input
                 if hasattr(card, 'padding'):
                     card.padding = [dp(24), dp(20), dp(24), dp(20)]
@@ -1749,9 +1881,16 @@ class DashboardScreen(MDScreen):
             card.adaptive_height = True
             
             # Apply maximum width constraint to prevent cards becoming too wide
-            if cols == 1 and available_width > dp(600):
+            min_card_width = dp(320)  # Minimum width for proper text rendering
+            if cols == 1 and available_width > min_card_width:
                 card.size_hint_x = None
-                card.width = min(dp(600), available_width - dp(48))
+                card.width = max(min_card_width, min(dp(600), available_width - dp(48)))
+            elif cols > 1:
+                # For multi-column layouts, ensure adequate width
+                card.size_hint_x = None
+                current_width = getattr(card, 'width', 0)
+                if current_width < min_card_width:
+                    card.width = min_card_width
             
         except Exception as e:
             print(f"[ERROR] Legacy card constraint application failed: {e}")

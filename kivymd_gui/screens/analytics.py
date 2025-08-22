@@ -5,7 +5,7 @@ analytics.py - Analytics screen with charts and metrics
 
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.label import MDLabel
+from kivymd_gui.components.md3_label import MD3Label, create_md3_label
 from kivymd.uix.card import MDCard
 from kivymd.uix.segmentedbutton import MDSegmentedButton, MDSegmentedButtonItem
 from kivy.metrics import dp
@@ -34,7 +34,7 @@ class AnalyticsScreen(MDScreen):
         layout = MDBoxLayout(orientation="vertical", padding=dp(16), spacing=dp(16))
         
         # Header
-        header = MDLabel(
+        header = MD3Label(
             text="Analytics & Insights",
             font_style="Display",
             theme_text_color="Primary",
@@ -98,7 +98,7 @@ class AnalyticsScreen(MDScreen):
             
             layout.add_widget(metrics_layout)
         else:
-            layout.add_widget(MDLabel(
+            layout.add_widget(MD3Label(
                 text="Charts require kivy-garden.matplotlib\\nRun: pip install kivy-garden.matplotlib",
                 theme_text_color="Secondary",
                 halign="center"
@@ -173,8 +173,8 @@ class AnalyticsScreen(MDScreen):
         )
         
         layout = MDBoxLayout(orientation="vertical")
-        layout.add_widget(MDLabel(text=title, font_style="Title"))
-        layout.add_widget(MDLabel(text=subtitle, font_style="Body", theme_text_color="Secondary"))
+        layout.add_widget(MD3Label(text=title, font_style="Title"))
+        layout.add_widget(MD3Label(text=subtitle, font_style="Body", theme_text_color="Secondary"))
         
         if CHARTS_AVAILABLE:
             # Set dark theme for matplotlib
@@ -223,12 +223,12 @@ class AnalyticsScreen(MDScreen):
         )
         
         layout = MDBoxLayout(orientation="vertical")
-        layout.add_widget(MDLabel(
+        layout.add_widget(MD3Label(
             text=title,
             font_style="Label",
             theme_text_color="Secondary"
         ))
-        layout.add_widget(MDLabel(
+        layout.add_widget(MD3Label(
             text=str(value),
             font_style="Headline",
             theme_text_color="Primary"
@@ -240,7 +240,7 @@ class AnalyticsScreen(MDScreen):
         else:
             change_color = [0.6, 0.6, 0.6, 1]  # Neutral color
             
-        layout.add_widget(MDLabel(
+        layout.add_widget(MD3Label(
             text=str(change),
             font_style="Body",
             theme_text_color="Custom",

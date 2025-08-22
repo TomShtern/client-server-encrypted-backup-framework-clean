@@ -5,9 +5,9 @@ files.py - Files management screen with Material Design 3
 
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.label import MDLabel
+from kivymd_gui.components.md3_label import MD3Label, create_md3_label
 from kivymd.uix.card import MDCard
-from kivymd.uix.button import MDIconButton
+from kivymd_gui.components.md3_button import create_md3_icon_button
 from kivymd.uix.textfield import MDTextField, MDTextFieldLeadingIcon, MDTextFieldHintText
 from kivymd.uix.list import MDList, MDListItem, MDListItemHeadlineText, MDListItemSupportingText, MDListItemLeadingIcon
 from kivymd.uix.scrollview import MDScrollView
@@ -30,7 +30,7 @@ class FilesScreen(MDScreen):
         
         # Header with search
         header = MDBoxLayout(size_hint_y=None, height=dp(56))
-        header.add_widget(MDLabel(
+        header.add_widget(MD3Label(
             text="File Management",
             font_style="Display",
             theme_text_color="Primary"
@@ -53,9 +53,10 @@ class FilesScreen(MDScreen):
         scroll.add_widget(self.files_list)
         files_container.add_widget(scroll)
         
-        # FAB for file operations (using MDIconButton as replacement)
-        fab = MDIconButton(
+        # FAB for file operations (using M3 icon button adapter)
+        fab = create_md3_icon_button(
             icon="upload",
+            tone="primary",
             pos_hint={"right": 0.95, "bottom": 0.05},
             on_release=self.open_file_dialog
         )

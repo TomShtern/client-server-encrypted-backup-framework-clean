@@ -12,16 +12,17 @@ import traceback
 from pathlib import Path
 from typing import Optional, Dict, Any
 
-# --- VENV CHECK: Ensure we're running inside kivy_venv_new ---
-expected_venv = "kivy_venv_new"
-venv_path = os.environ.get("VIRTUAL_ENV", "")
-if expected_venv not in venv_path:
-    print(f"[ERROR] You are NOT running inside the '{expected_venv}' virtual environment.")
-    print("To fix: Activate your venv before running this script:")
-    print("  cd C:\\Users\\tom7s\\Desktopp\\Claude_Folder_2\\Client_Server_Encrypted_Backup_Framework")
-    print("  .\\kivy_venv_new\\Scripts\\activate")
-    print("  python kivymd_gui\\main.py")
-    sys.exit(1)
+# --- VENV CHECK: Ensure we're running inside kivy_venv_new (COMMENTED OUT) ---
+#expected_venv = "kivy_venv_new"
+#venv_path = os.environ.get("VIRTUAL_ENV", "")
+#if expected_venv not in venv_path:
+#    print(f"[ERROR] You are NOT running inside the '{expected_venv}' virtual environment.")
+#    print("To fix: Activate your venv before running this script:")
+#    print("  cd C:\\Users\\tom7s\\Desktopp\\Claude_Folder_2\\Client_Server_Encrypted_Backup_Framework")
+#    print("  .\\kivy_venv_new\\Scripts\\activate")
+#    print("  python kivymd_gui\\main.py")
+#    sys.exit(1)
+
 
 # Add project root to path for imports
 project_root = Path(__file__).parent.parent
@@ -50,10 +51,41 @@ except ImportError:
     print("To fix: Activate your venv and run:")
     print("  pip install kivy==2.3.1")
     sys.exit(1)
+
+# CRITICAL: Fix text rendering configuration to prevent vertical character stacking
 Config.set('graphics', 'width', '1400')
 Config.set('graphics', 'height', '900')
 Config.set('graphics', 'minimum_width', '1000')
 Config.set('graphics', 'minimum_height', '700')
+
+# Fix text wrapping and rendering issues
+Config.set('graphics', 'resizable', '1')
+Config.set('kivy', 'window_icon', '')
+
+# Ensure proper text rendering by setting text provider explicitly
+import os
+os.environ['KIVY_TEXT'] = 'sdl2'
+os.environ['KIVY_WINDOW'] = 'sdl2'
+
+# CRITICAL: Configure KivyMD for Hebrew and emoji support using existing UTF-8 solution
+from Shared.utils.utf8_solution import UTF8Support
+# Apply UTF-8 environment settings for KivyMD
+utf8_env = UTF8Support.get_env()
+for key, value in utf8_env.items():
+    os.environ[key] = value
+
+# CRITICAL: Initialize Unicode font support for proper Hebrew and emoji rendering
+print("[INFO] Initializing Unicode font support...")
+try:
+    from kivymd_gui.utils.font_config import initialize_unicode_fonts
+    if initialize_unicode_fonts():
+        print("[INFO] Unicode fonts initialized successfully")
+    else:
+        print("[WARNING] Unicode font initialization failed - may have rendering issues")
+except ImportError as e:
+    print(f"[WARNING] Could not initialize Unicode fonts: {e}")
+except Exception as e:
+    print(f"[WARNING] Unicode font initialization error: {e}")
 # KivyMD and Kivy imports
 try:
     from kivymd.app import MDApp
@@ -78,6 +110,7 @@ except ImportError as e:
 # Local imports
 from kivymd_gui.themes.custom_theme import CustomTheme, ThemeConfig
 from kivymd_gui.utils.server_integration import get_server_bridge, ServerStatus
+from kivymd_gui.components.md3_label import MD3Label, create_md3_label  # Import fixed label component
 from kivymd_gui.screens.dashboard import DashboardScreen
 from kivymd_gui.screens.clients import ClientsScreen
 from kivymd_gui.screens.settings import SettingsScreen
@@ -289,8 +322,8 @@ class EncryptedBackupServerApp(MDApp):
             nav_button.screen_name = screen_name
             nav_button.tooltip_text = text
             
-            # Create MD3 navigation label
-            nav_label = MDLabel(
+            # Create MD3 navigation label with proper text wrapping
+            nav_label = MD3Label(
                 text=text,
                 font_style="Label",
                 role="small",
@@ -374,9 +407,8 @@ class EncryptedBackupServerApp(MDApp):
             traceback.print_exc()
             
             # Add a simple fallback screen if dashboard creation fails
-            from kivymd.uix.label import MDLabel
             fallback_screen = MDScreen(name="dashboard")
-            fallback_screen.add_widget(MDLabel(
+            fallback_screen.add_widget(MD3Label(
                 text="Dashboard Loading...\n\nPlease check console for errors",
                 halign="center",
                 theme_text_color="Primary"
@@ -587,11 +619,27 @@ class EncryptedBackupServerApp(MDApp):
             print(f"[INFO] {message}")
     
     def show_startup_message(self) -> None:
-        """Show startup message"""
-        if self.server_bridge and hasattr(self.server_bridge, 'is_server_available') and self.server_bridge.is_server_available():
-            self.show_snackbar("✅ Server connection established")
-        else:
-            self.show_snackbar("⚠️ Running in standalone mode")
+        """Show startup message with Unicode test"""
+        try:
+            # Test Unicode rendering with Hebrew and emoji
+            from kivymd_gui.utils.font_config import is_unicode_fonts_ready
+            
+            if is_unicode_fonts_ready():
+                if self.server_bridge and hasattr(self.server_bridge, 'is_server_available') and self.server_bridge.is_server_available():
+                    self.show_snackbar("✅ Server connected | שרת מחובר 🎉")  # Hebrew: "Server connected"
+                else:
+                    self.show_snackbar("⚠️ Standalone mode | מצב עצמאי 🔧")  # Hebrew: "Standalone mode"
+            else:
+                # Fallback to ASCII if Unicode fonts not ready
+                if self.server_bridge and hasattr(self.server_bridge, 'is_server_available') and self.server_bridge.is_server_available():
+                    self.show_snackbar("Server connection established")
+                else:
+                    self.show_snackbar("Running in standalone mode")
+                    
+        except Exception as e:
+            print(f"[WARNING] Startup message error: {e}")
+            # Basic fallback
+            self.show_snackbar("Application started")
     
     def load_configuration(self) -> Dict[str, Any]:
         """Load configuration from JSON file"""

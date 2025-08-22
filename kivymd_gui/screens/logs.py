@@ -5,13 +5,14 @@ logs.py - Log viewer screen with real-time log monitoring
 
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.label import MDLabel
+from kivymd_gui.components.md3_label import MD3Label, create_md3_label
 from kivymd.uix.card import MDCard
 from kivymd.uix.button import MDIconButton
 from kivymd.uix.textfield import MDTextField, MDTextFieldLeadingIcon, MDTextFieldHintText
 from kivymd.uix.selectioncontrol import MDSwitch
 from kivymd.uix.scrollview import MDScrollView
 from kivymd.uix.relativelayout import MDRelativeLayout
+from kivymd_gui.components.md3_button import create_md3_icon_button
 from kivy.metrics import dp
 from kivy.clock import Clock
 from kivy.properties import StringProperty, BooleanProperty
@@ -37,7 +38,7 @@ class LogsScreen(MDScreen):
         
         # Header with controls
         header = MDBoxLayout(size_hint_y=None, height=dp(56))
-        header.add_widget(MDLabel(
+        header.add_widget(MD3Label(
             text="Server Logs",
             font_style="Display",
             theme_text_color="Primary"
@@ -54,7 +55,7 @@ class LogsScreen(MDScreen):
         
         # Auto-refresh switch
         switch_layout = MDBoxLayout(size_hint_x=None, width=dp(120), spacing=dp(8))
-        switch_layout.add_widget(MDLabel(
+        switch_layout.add_widget(MD3Label(
             text="Auto-refresh",
             size_hint_x=None,
             width=dp(80),
@@ -69,8 +70,9 @@ class LogsScreen(MDScreen):
         header.add_widget(switch_layout)
         
         # Clear button
-        clear_btn = MDIconButton(
+        clear_btn = create_md3_icon_button(
             icon="delete",
+            tone="error",
             on_release=self.clear_logs
         )
         header.add_widget(clear_btn)
@@ -79,7 +81,7 @@ class LogsScreen(MDScreen):
         
         # Log levels filter (horizontal buttons)
         filter_layout = MDBoxLayout(size_hint_y=None, height=dp(48), spacing=dp(8))
-        filter_layout.add_widget(MDLabel(
+        filter_layout.add_widget(MD3Label(
             text="Levels:",
             size_hint_x=None,
             width=dp(60),
@@ -89,10 +91,9 @@ class LogsScreen(MDScreen):
         log_levels = ["ALL", "DEBUG", "INFO", "WARNING", "ERROR"]
         self.level_buttons = {}
         for level in log_levels:
-            btn = MDIconButton(
+            btn = create_md3_icon_button(
                 icon="check-circle" if level == "ALL" else "circle-outline",
-                theme_icon_color="Custom",
-                icon_color=self.theme_cls.primaryColor if level == "ALL" else self.theme_cls.onSurfaceColor,
+                tone="primary",
                 on_release=lambda x, l=level: self.toggle_level_filter(l)
             )
             btn.level = level
@@ -114,11 +115,11 @@ class LogsScreen(MDScreen):
         )
         
         scroll = MDScrollView()
-        self.log_label = MDLabel(
+        self.log_label = MD3Label(
             text="[INFO] KivyMD GUI started\\n[INFO] Waiting for log data...\\n",
             font_name="RobotoMono-Regular",
             font_size=dp(12),
-            text_size=(None, None),
+            # REMOVED: text_size=(None, None) - This causes vertical character-by-character rendering
             halign="left",
             valign="top",
             markup=True,
@@ -130,8 +131,9 @@ class LogsScreen(MDScreen):
         log_container.add_widget(log_card)
         
         # Export button (replacing FAB with IconButton)
-        fab = MDIconButton(
+        fab = create_md3_icon_button(
             icon="download",
+            tone="secondary",
             pos_hint={"right": 0.95, "bottom": 0.05},
             on_release=self.export_logs
         )
@@ -221,18 +223,15 @@ class LogsScreen(MDScreen):
             for l, b in self.level_buttons.items():
                 b.active = all_active if l == "ALL" else False
                 b.icon = "check-circle" if b.active else "circle-outline"
-                b.icon_color = self.theme_cls.primaryColor if b.active else self.theme_cls.onSurfaceColor
         else:
             # Toggle individual level
             btn.active = not btn.active
             btn.icon = "check-circle" if btn.active else "circle-outline"
-            btn.icon_color = self.theme_cls.primaryColor if btn.active else self.theme_cls.onSurfaceColor
             
             # Update ALL button
             all_btn = self.level_buttons["ALL"]
             all_btn.active = False
             all_btn.icon = "circle-outline"
-            all_btn.icon_color = self.theme_cls.onSurfaceColor
         
         self._apply_filters()
     

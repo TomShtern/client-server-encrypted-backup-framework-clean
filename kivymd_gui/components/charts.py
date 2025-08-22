@@ -7,7 +7,7 @@ from collections import deque
 from typing import Optional
 
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.label import MDLabel
+from kivymd_gui.components.md3_label import MD3Label
 from kivymd.uix.card import MDCard
 from kivy.clock import Clock
 from kivy.metrics import dp
@@ -94,7 +94,7 @@ class MDPerformanceChart(MDCard):
         """Setup fallback when dependencies are not available"""
         fallback_layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
         
-        fallback_layout.add_widget(MDLabel(
+        fallback_layout.add_widget(MD3Label(
             text="📊 Performance Chart",
             font_style="Headline",
             theme_text_color="Primary",
@@ -109,7 +109,7 @@ class MDPerformanceChart(MDCard):
         if not SYSTEM_MONITOR_AVAILABLE:
             missing_deps.append("psutil")
             
-        fallback_layout.add_widget(MDLabel(
+        fallback_layout.add_widget(MD3Label(
             text=f"Missing dependencies: {', '.join(missing_deps)}\n\n"
                  "Install with:\n"
                  "pip install kivy-garden.matplotlib psutil",
@@ -175,7 +175,7 @@ class ChartWidget(MDBoxLayout):
                 return
         
         # Fallback for other chart types
-        self.add_widget(MDLabel(
+        self.add_widget(MD3Label(
             text=f"📊 {chart_type.upper()} Chart\n\n"
                  "Advanced charts require:\n"
                  "kivy-garden.matplotlib and psutil",

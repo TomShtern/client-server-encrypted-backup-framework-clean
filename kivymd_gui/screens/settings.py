@@ -20,7 +20,7 @@ try:
     from kivymd.uix.boxlayout import MDBoxLayout
     from kivymd.uix.gridlayout import MDGridLayout
     from kivymd.uix.card import MDCard
-    from kivymd.uix.label import MDLabel
+    from kivymd_gui.components.md3_label import MD3Label, create_md3_label
     from kivymd.uix.button import MDButton, MDIconButton
     from kivymd.uix.button import MDButtonText
     from kivymd.uix.scrollview import MDScrollView
@@ -65,7 +65,7 @@ class ServerSettingsCard(MDCard):
         self.height = dp(280)
         
         # Create layout
-        layout = MDBoxLayout(orientation="vertical", spacing=dp(12))
+        layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
         
         # Header
         header_layout = MDBoxLayout(
@@ -75,7 +75,7 @@ class ServerSettingsCard(MDCard):
             spacing=dp(8)
         )
         
-        title_label = MDLabel(
+        title_label = MD3Label(
             text="Server Configuration",
             theme_text_color="Primary",
             font_style="Headline"
@@ -98,8 +98,8 @@ class ServerSettingsCard(MDCard):
         settings_grid = MDGridLayout(cols=2, spacing=dp(16), adaptive_height=True)
         
         # Port setting
-        port_layout = MDBoxLayout(orientation="vertical", spacing=dp(4))
-        port_label = MDLabel(
+        port_layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
+        port_label = MD3Label(
             text="Server Port",
             theme_text_color="Secondary",
             font_style="Body",
@@ -119,8 +119,8 @@ class ServerSettingsCard(MDCard):
         settings_grid.add_widget(port_layout)
         
         # Host setting
-        host_layout = MDBoxLayout(orientation="vertical", spacing=dp(4))
-        host_label = MDLabel(
+        host_layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
+        host_label = MD3Label(
             text="Server Host",
             theme_text_color="Secondary",
             font_style="Body",
@@ -139,8 +139,8 @@ class ServerSettingsCard(MDCard):
         settings_grid.add_widget(host_layout)
         
         # Storage directory
-        storage_layout = MDBoxLayout(orientation="vertical", spacing=dp(4))
-        storage_label = MDLabel(
+        storage_layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
+        storage_label = MD3Label(
             text="Storage Directory",
             theme_text_color="Secondary",
             font_style="Body",
@@ -170,8 +170,8 @@ class ServerSettingsCard(MDCard):
         settings_grid.add_widget(storage_layout)
         
         # Max clients
-        clients_layout = MDBoxLayout(orientation="vertical", spacing=dp(4))
-        clients_label = MDLabel(
+        clients_layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
+        clients_label = MD3Label(
             text="Max Clients",
             theme_text_color="Secondary",
             font_style="Body",
@@ -196,14 +196,14 @@ class ServerSettingsCard(MDCard):
         timeout_layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
         
         timeout_header = MDBoxLayout(orientation="horizontal", spacing=dp(8))
-        timeout_label = MDLabel(
+        timeout_label = MD3Label(
             text="Session Timeout (minutes)",
             theme_text_color="Secondary",
             font_style="Body"
         )
         timeout_header.add_widget(timeout_label)
         
-        self.timeout_value_label = MDLabel(
+        self.timeout_value_label = MD3Label(
             text="10",
             theme_text_color="Primary",
             font_style="Body",
@@ -328,10 +328,10 @@ class UISettingsCard(MDCard):
         self.height = dp(300)
         
         # Create layout
-        layout = MDBoxLayout(orientation="vertical", spacing=dp(12))
+        layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
         
         # Header
-        title_label = MDLabel(
+        title_label = MD3Label(
             text="UI Preferences",
             theme_text_color="Primary",
             font_style="Headline",
@@ -388,14 +388,14 @@ class UISettingsCard(MDCard):
         )
         
         animations_info = MDBoxLayout(orientation="vertical")
-        animations_label = MDLabel(
+        animations_label = MD3Label(
             text="Animations",
             theme_text_color="Primary",
             font_style="Body",
             size_hint_y=None,
             height=dp(24)
         )
-        animations_desc = MDLabel(
+        animations_desc = MD3Label(
             text="Enable UI animations",
             theme_text_color="Secondary",
             font_style="Body",
@@ -424,14 +424,14 @@ class UISettingsCard(MDCard):
         )
         
         tooltips_info = MDBoxLayout(orientation="vertical")
-        tooltips_label = MDLabel(
+        tooltips_label = MD3Label(
             text="Tooltips",
             theme_text_color="Primary",
             font_style="Body",
             size_hint_y=None,
             height=dp(24)
         )
-        tooltips_desc = MDLabel(
+        tooltips_desc = MD3Label(
             text="Show helpful tooltips",
             theme_text_color="Secondary",
             font_style="Body",
@@ -455,14 +455,14 @@ class UISettingsCard(MDCard):
         refresh_layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
         
         refresh_header = MDBoxLayout(orientation="horizontal", spacing=dp(8))
-        refresh_label = MDLabel(
+        refresh_label = MD3Label(
             text="Auto-refresh Interval (seconds)",
             theme_text_color="Primary",
             font_style="Body"
         )
         refresh_header.add_widget(refresh_label)
         
-        self.refresh_value_label = MDLabel(
+        self.refresh_value_label = MD3Label(
             text="1.0",
             theme_text_color="Secondary",
             font_style="Body",
@@ -485,8 +485,8 @@ class UISettingsCard(MDCard):
         settings_list.add_widget(refresh_layout)
         
         # Log max entries
-        log_layout = MDBoxLayout(orientation="vertical", spacing=dp(4))
-        log_label = MDLabel(
+        log_layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
+        log_label = MD3Label(
             text="Log Max Entries",
             theme_text_color="Secondary",
             font_style="Body",
@@ -567,10 +567,10 @@ class SecuritySettingsCard(MDCard):
         self.height = dp(200)
         
         # Create layout
-        layout = MDBoxLayout(orientation="vertical", spacing=dp(12))
+        layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
         
         # Header
-        title_label = MDLabel(
+        title_label = MD3Label(
             text="Security Settings",
             theme_text_color="Primary",
             font_style="Headline",
@@ -584,8 +584,8 @@ class SecuritySettingsCard(MDCard):
         settings_grid = MDGridLayout(cols=2, spacing=dp(16), adaptive_height=True)
         
         # Encryption status (read-only info)
-        encryption_layout = MDBoxLayout(orientation="vertical", spacing=dp(4))
-        encryption_label = MDLabel(
+        encryption_layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
+        encryption_label = MD3Label(
             text="Encryption",
             theme_text_color="Secondary",
             font_style="Body",
@@ -594,7 +594,7 @@ class SecuritySettingsCard(MDCard):
         )
         encryption_layout.add_widget(encryption_label)
         
-        encryption_info = MDLabel(
+        encryption_info = MD3Label(
             text="RSA-1024 + AES-256-CBC",
             theme_text_color="Primary",
             font_style="Body",
@@ -605,8 +605,8 @@ class SecuritySettingsCard(MDCard):
         settings_grid.add_widget(encryption_layout)
         
         # Maintenance interval
-        maintenance_layout = MDBoxLayout(orientation="vertical", spacing=dp(4))
-        maintenance_label = MDLabel(
+        maintenance_layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
+        maintenance_label = MD3Label(
             text="Maintenance Interval (minutes)",
             theme_text_color="Secondary",
             font_style="Body",
@@ -629,7 +629,7 @@ class SecuritySettingsCard(MDCard):
         # Security actions
         actions_layout = MDBoxLayout(
             orientation="horizontal",
-            spacing=dp(12),
+            spacing=dp(8),
             size_hint_y=None,
             height=dp(40)
         )
@@ -692,10 +692,10 @@ class SettingsActionsCard(MDCard):
         self.height = dp(100)
         
         # Create layout
-        layout = MDBoxLayout(orientation="vertical", spacing=dp(12))
+        layout = MDBoxLayout(orientation="vertical", spacing=dp(8))
         
         # Header
-        title_label = MDLabel(
+        title_label = MD3Label(
             text="Settings Actions",
             theme_text_color="Primary",
             font_style="Headline",
@@ -708,7 +708,7 @@ class SettingsActionsCard(MDCard):
         # Action buttons
         buttons_layout = MDBoxLayout(
             orientation="horizontal",
-            spacing=dp(12),
+            spacing=dp(8),
             size_hint_y=None,
             height=dp(40)
         )
@@ -828,7 +828,7 @@ class SettingsScreen(MDScreen):
             
             # Fallback UI
             error_layout = MDBoxLayout(orientation="vertical", padding=dp(16))
-            error_label = MDLabel(
+            error_label = MD3Label(
                 text=f"Failed to load settings screen: {e}",
                 theme_text_color="Error",
                 halign="center"

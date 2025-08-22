@@ -5,7 +5,7 @@ database.py - Database browser screen
 
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.label import MDLabel
+from kivymd_gui.components.md3_label import MD3Label, create_md3_label
 from kivymd.uix.button import MDButton, MDIconButton, MDButtonText, MDButtonIcon
 from kivymd.uix.list import MDList, MDListItem, MDListItemHeadlineText, MDListItemSupportingText, MDListItemLeadingIcon
 from kivymd.uix.scrollview import MDScrollView
@@ -31,7 +31,7 @@ class DatabaseScreen(MDScreen):
         
         # Header with table selector
         header = MDBoxLayout(size_hint_y=None, height=dp(56))
-        header.add_widget(MDLabel(
+        header.add_widget(MD3Label(
             text="Database Browser",
             font_style="Display",
             theme_text_color="Primary"

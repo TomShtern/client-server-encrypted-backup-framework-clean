@@ -175,7 +175,7 @@ class MD3IconButton(MDIconButton):
         self.icon_color = hex_to_rgba(icon_color)
 
 
-# Factory function for creating buttons with proper typing
+# Factory functions for creating buttons with proper typing
 def create_md3_button(text: str = "", variant: str = "filled", tone: str = "primary", **kwargs) -> MD3Button:
     """
     Factory function to create M3-compliant buttons
@@ -192,6 +192,25 @@ def create_md3_button(text: str = "", variant: str = "filled", tone: str = "prim
     return MD3Button(
         text=text,
         variant=variant,
+        tone=tone,
+        **kwargs
+    )
+
+
+def create_md3_icon_button(icon: str, tone: str = "primary", **kwargs) -> MD3IconButton:
+    """
+    Factory function to create M3-compliant icon buttons
+    
+    Args:
+        icon: Icon name
+        tone: Color tone (primary, secondary, tertiary, error)
+        **kwargs: Additional KivyMD icon button properties
+        
+    Returns:
+        Configured MD3IconButton instance
+    """
+    return MD3IconButton(
+        icon=icon,
         tone=tone,
         **kwargs
     )

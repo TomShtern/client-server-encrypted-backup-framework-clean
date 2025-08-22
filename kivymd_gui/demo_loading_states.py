@@ -56,8 +56,8 @@ class LoadingStatesDemo(MDScreen):
         """Build demo interface"""
         main_layout = MDBoxLayout(
             orientation="vertical",
-            spacing=dp(24),
-            padding=[dp(24), dp(24), dp(24), dp(24)],
+            spacing=dp(16),
+            padding=[dp(16), dp(16), dp(16), dp(16)],
             adaptive_height=True
         )
         
@@ -144,7 +144,7 @@ class LoadingStatesDemo(MDScreen):
         for i in range(5):
             skeleton = MDSkeletonLoader(
                 skeleton_type="text",
-                height=dp(20 + (i * 4)),
+                height=dp(24 + (i * 8)),
                 size_hint_x=0.8 - (i * 0.1)
             )
             skeletons.append(skeleton)

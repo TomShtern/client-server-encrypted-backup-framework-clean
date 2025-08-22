@@ -16,9 +16,9 @@ class Fonts:
     CODE_FONT = "Consolas"
     
     # --- Semantic Font Sizes ---
-    H1 = (UI_FONT, 18, "bold")
-    H2 = (UI_FONT, 16, "bold")
-    H3 = (UI_FONT, 12, "bold")
+    Display = (UI_FONT, 18, "bold")
+    Headline = (UI_FONT, 16, "bold")
+    Title = (UI_FONT, 12, "bold")
     BODY = (UI_FONT, 10)
     BODY_BOLD = (UI_FONT, 10, "bold")
     SMALL = (UI_FONT, 9, "italic")
@@ -79,4 +79,4 @@ class Icons:
         "PLACEHOLDER_CHART": "graph-up-arrow",
         "VERIFIED": "check-circle-fill",
         "NOT_VERIFIED": "x-circle-fill",
-    }
+    }    C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\kivy_venv_new\Scripts\activate.bat

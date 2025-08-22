@@ -191,6 +191,23 @@ self.theme_cls.theme_style = "Dark"  # or "Light"
 self.theme_cls.primary_palette = "Blue"
 ```
 
+### Fixed Text & Unicode Components (CRITICAL)
+```python
+# ✅ CORRECT: Use MD3Label instead of MDLabel for proper text rendering
+from kivymd_gui.components.md3_label import MD3Label, create_md3_label, create_hebrew_label, create_emoji_label
+
+# Basic label with horizontal text rendering
+label = MD3Label(text="Server Dashboard", font_style="Title")
+
+# Unicode-optimized components
+hebrew_label = create_hebrew_label("שלום עולם")  # Hebrew support
+emoji_label = create_emoji_label("🎉 ✅ ❌")     # Emoji support  
+mixed_label = create_md3_label("✅ Server | שרת 🎉")  # Auto font selection
+
+# Valid KivyMD 2.0.x font styles ONLY:
+# "Display", "Headline", "Title", "Body", "Label"
+```
+
 ### Dynamic Updates (2.0.x Compatible)
 ```python
 # Update MDTopAppBarTitle text dynamically
@@ -213,8 +230,37 @@ for child in textfield.children:
 4. **Event Handling**: Changed from direct callbacks to binding patterns
 5. **Stable Version**: Always use commit `d2f7740` to avoid animation crashes
 
-### Critical Fixes Applied (2025-08-21)
+### Critical Fixes Applied (2025-08-21/22) 
 **✅ FULLY RESOLVED**: All KivyMD 2.0.x compatibility issues fixed, GUI now fully functional
+
+#### Text Rendering Fix (2025-08-22) 
+**CRITICAL**: Fixed vertical character stacking issue in KivyMD text rendering
+- **Root Cause**: `text_size=(None, None)` configuration was causing KivyMD to render text character-by-character vertically
+- **Solution**: Created `MD3Label` component that removes problematic text_size settings and lets KivyMD handle text sizing automatically
+- **Font Styles Fixed**: Updated all invalid font styles to KivyMD 2.0.x compatible versions:
+  - `H1` → `Display`, `H2/H3` → `Headline`, `H4/H5/H6` → `Title`
+  - `Body1/Body2` → `Body`, `Caption` → `Label`
+- **System-Wide**: Replaced 81 MDLabel instances across 7 screen files with MD3Label
+- **Result**: Text now renders horizontally instead of vertical character stacking
+
+#### Invalid Role Properties Fix (2025-08-22) - DASHBOARD CRITICAL
+**CRITICAL DISCOVERY**: Dashboard vertical text rendering was caused by invalid `role` properties
+- **Root Cause**: KivyMD does NOT support `role` properties (`role="small"`, `role="medium"`, `role="large"`)
+- **Symptoms**: Invalid role properties cause KivyMD to render text character-by-character vertically instead of horizontally
+- **Solution**: Removed ALL invalid `role` properties from dashboard labels in `kivymd_gui/screens/dashboard.py`
+- **Key Insight**: Both MD3Label and MDLabel work correctly when role properties are not used
+- **CRITICAL RULE**: Never use `role` properties on KivyMD labels - they are NOT valid and break text rendering
+- **Files Fixed**: `kivymd_gui/screens/dashboard.py` - removed all `role="small"`, `role="medium"`, `role="large"`
+- **Result**: Dashboard now displays text horizontally with proper formatting, no vertical character stacking
+
+#### Unicode & Hebrew/Emoji Support (2025-08-22)
+**CRITICAL**: Implemented comprehensive Unicode support for Hebrew text and emoji rendering
+- **Font System**: Created `FontConfiguration` class with automatic Windows font detection
+- **Registered Fonts**: SegoeUI (Hebrew), SegoeUIEmoji (emoji), Arial (fallback)  
+- **Smart Selection**: Automatic font selection based on text content (Hebrew U+0590-U+05FF detection)
+- **Components**: Enhanced `MD3Label` with `create_hebrew_label()`, `create_emoji_label()`, `create_unicode_label()`
+- **UTF-8 Integration**: Leveraged existing `Shared.utils.utf8_solution` for full Unicode pipeline
+- **Test Coverage**: Hebrew text "שלום עולם" and emojis "🎉 ✅ ❌" render as actual characters
 1. **MDFloatingActionButton → MDIconButton**: Replaced deprecated FAB with icon buttons in `files.py` and `logs.py`
 2. **MDTextFieldSupportingText Removal**: Component doesn't exist in 2.0.x, replaced with `hint_text` integration in `clients.py` and `settings.py`
 3. **MDButtonText Text Property**: Fixed invalid `text=` parameter by setting text via `children[0].text` post-creation
@@ -322,6 +368,12 @@ kivy_venv_new/Scripts/python.exe kivymd_gui/qa/test_qa_system.py
 
 # Error: NavigationRail animation crashes
 # Solution: Use stable commit d2f7740
+
+# CRITICAL Error: Text rendering vertically (character-by-character)
+# Root Cause: Invalid role properties (role="small", role="medium", role="large")
+# Solution: Remove ALL role properties from KivyMD labels - they are NOT supported
+# KivyMD does NOT support role properties and they break text rendering
+# Both MD3Label and MDLabel work correctly WITHOUT role properties
 
 # Emergency Recovery
 .\kivy_venv_new\Scripts\activate
