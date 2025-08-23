@@ -559,35 +559,39 @@ class ResponsiveCard(MDCard):
     def _protect_label_text_rendering(self, label):
         """FINAL LAYOUT VALIDATION: Protect a label from text rendering issues with optimized spacing"""
         try:
-            # FINAL VALIDATION: Ensure label has optimized width for text rendering
-            if hasattr(label, 'width') and label.width < dp(120):
+            # FINAL VALIDATION: Ensure label has adequate width for text rendering
+            if hasattr(label, 'width') and label.width < dp(140):
                 label.size_hint_x = None
-                label.width = dp(120)  # Optimized width for better space utilization
+                label.width = dp(140)  # Increased minimum width for better text rendering
             
-            # FINAL VALIDATION: Ensure text_size is properly set for text wrapping 
-            if hasattr(label, 'text_size'):
+            # CRITICAL: DO NOT override MD3Label's text_size setting!
+            # MD3Label sets text_size = (None, None) to prevent vertical character stacking
+            # Overriding this causes text rendering issues
+            # Only preserve existing text_size if it's properly set by MD3Label
+            # if hasattr(label, 'text_size'):
+                # REMOVED: This was overriding MD3Label's correct text_size setting
                 # Use the label's width for text wrapping to prevent overlapping
-                if hasattr(label, 'width') and label.width > dp(80):
-                    label.text_size = (label.width, None)
-                else:
-                    label.text_size = (dp(120), None)  # Optimized text size
+                # if hasattr(label, 'width') and label.width > dp(80):
+                    # label.text_size = (label.width, None)
+                # else:
+                    # label.text_size = (dp(120), None)  # Optimized text size
                 
-            # FINAL VALIDATION: Ensure proper text alignment
+            # FINAL VALIDATION: Ensure proper text alignment for better readability
             if not hasattr(label, 'halign') or not label.halign:
-                label.halign = 'left'
+                label.halign = 'left'  # Left-align text for better readability
                 
             # FINAL VALIDATION: Ensure adaptive height to prevent text overlapping
             if not hasattr(label, 'adaptive_height') or not label.adaptive_height:
                 label.adaptive_height = True
                 
             # FINAL VALIDATION: Apply minimum height to prevent text stacking
-            if hasattr(label, 'height') and label.height < dp(20):
+            if hasattr(label, 'height') and label.height < dp(24):
                 label.size_hint_y = None
-                label.height = dp(20)  # Optimized minimum height
+                label.height = dp(24)  # Increased minimum height for better text spacing
                 
-            # FINAL VALIDATION: Ensure adequate padding for text rendering
-            if hasattr(label, 'padding') and not label.padding:
-                label.padding = [dp(3), dp(2), dp(3), dp(2)]  # Optimized padding
+            # FINAL VALIDATION: Ensure adequate padding for text rendering and prevent clipping
+            if not hasattr(label, 'padding') or not label.padding:
+                label.padding = [dp(6), dp(3), dp(6), dp(3)]  # Increased padding to prevent text clipping
                 
         except Exception as e:
             print(f"[ERROR] Failed to protect label: {e}")
@@ -856,10 +860,10 @@ class ClientStatsCard(ResponsiveCard):
         # Connected clients with emphasis and better spacing
         connected_row = MDBoxLayout(
             orientation="horizontal", 
-            size_hint_y=None, 
-            height=dp(48),  # Keep height at dp(48)
             spacing=dp(16),  # Increased horizontal spacing from dp(12) to dp(16)
-            adaptive_height=True
+            adaptive_height=True,
+            size_hint_y=None
+            # REMOVED: height=dp(48) - This was conflicting with adaptive_height
         )
         self.connected_value = MD3Label(
             text="0",
@@ -867,7 +871,7 @@ class ClientStatsCard(ResponsiveCard):
             # Large number display
             theme_text_color="Primary",
             size_hint_x=None,
-            width=dp(80),  # Increased width to accommodate Display font style
+            width=dp(100),  # Increased width to accommodate Display font style with better space utilization
             adaptive_height=True
         )
         connected_label = MD3Label(
@@ -882,17 +886,17 @@ class ClientStatsCard(ResponsiveCard):
         # Total clients with enhanced spacing
         total_row = MDBoxLayout(
             orientation="horizontal", 
-            size_hint_y=None, 
-            height=dp(44),  # Keep height at dp(44)
             spacing=dp(16),  # Increased horizontal spacing from dp(12) to dp(16)
-            adaptive_height=True
+            adaptive_height=True,
+            size_hint_y=None
+            # REMOVED: height=dp(44) - This was conflicting with adaptive_height
         )
         self.total_value = MD3Label(
             text="0",
             font_style="Headline",
             theme_text_color="Primary", 
             size_hint_x=None,
-            width=dp(80),  # Increased width to accommodate Headline font style
+            width=dp(100),  # Increased width to accommodate Headline font style with better space utilization
             adaptive_height=True
         )
         total_label = MD3Label(
@@ -917,7 +921,7 @@ class ClientStatsCard(ResponsiveCard):
             font_style="Headline",
             theme_text_color="Primary",
             size_hint_x=None,
-            width=dp(80),  # Increased width to accommodate Headline font style
+            width=dp(100),  # Increased width to accommodate Headline font style with better space utilization
             adaptive_height=True
         )
         transfers_label = MD3Label(
@@ -997,7 +1001,8 @@ class TransferStatsCard(ResponsiveCard):
         metrics_container = MDBoxLayout(orientation="vertical", spacing=dp(16))  # 2 units on 8dp grid
         
         # Total transferred - primary metric
-        total_row = MDBoxLayout(orientation="vertical", size_hint_y=None, height=dp(56))
+        total_row = MDBoxLayout(orientation="vertical", size_hint_y=None, adaptive_height=True)
+        # REMOVED: height=dp(56) - This was conflicting with adaptive_height
         self.total_value = MD3Label(
             text="0",
             font_style="Display",
@@ -1017,12 +1022,15 @@ class TransferStatsCard(ResponsiveCard):
         total_row.add_widget(total_unit)
         
         # Transfer rate - secondary metric
-        rate_row = MDBoxLayout(orientation="vertical", size_hint_y=None, height=dp(48))
+        rate_row = MDBoxLayout(orientation="vertical", size_hint_y=None, adaptive_height=True)
+        # REMOVED: height=dp(48) - This was conflicting with adaptive_height
         self.rate_value = MD3Label(
             text="0.0",
             font_style="Headline",
             theme_text_color="Primary",
             halign="left",
+            size_hint_x=None,
+            width=dp(100),  # Increased width to accommodate Headline font style with better space utilization
             adaptive_height=True
         )
         rate_unit = MD3Label(
@@ -1198,8 +1206,8 @@ class ControlPanelCard(ResponsiveCard):
             orientation="horizontal", 
             spacing=dp(20),  # Keep spacing at dp(20) - already optimal
             size_hint_y=None,
-            height=dp(60),  # Increased height from dp(56) to dp(60) for better spacing
             adaptive_height=True
+            # REMOVED: height=dp(60) - This was conflicting with adaptive_height
         )
         
         # Start button - Primary Filled (highest emphasis)
@@ -1556,11 +1564,11 @@ class DashboardScreen(MDScreen):
             scroll_type=['bars']
         )
         
-        # FINAL SPACE OPTIMIZATION: Main vertical layout with optimized spacing for better space utilization
+        # Main vertical layout with increased padding to prevent text clipping
         self.main_layout = MDBoxLayout(
             orientation="vertical",
-            spacing=dp(32),  # Optimized spacing for better space utilization
-            padding=[dp(20), dp(24), dp(20), dp(24)],  # Reduced padding for better space usage
+            spacing=dp(32),  # Standard MD3 spacing
+            padding=[dp(28), dp(28), dp(28), dp(28)],  # Increased padding to prevent text clipping at edges
             adaptive_height=True,
             size_hint_y=None
         )
@@ -1721,10 +1729,15 @@ class DashboardScreen(MDScreen):
             setattr(self, card_attr, card)
             container.add_widget(card)
         
-        # FINAL SPACE OPTIMIZATION: Calculate and set optimized container height
-        rows_needed = (len(cards_data) + optimal_cols - 1) // optimal_cols
-        total_height = (card_height or dp(160)) * rows_needed + card_spacing * (rows_needed - 1)
-        container.height = total_height
+        # Calculate and set container height based on content
+        # REMOVED: Fixed height calculation that conflicts with adaptive_height
+        # Let Kivy calculate heights automatically based on content
+        # rows_needed = (len(cards_data) + optimal_cols - 1) // optimal_cols
+        # total_height = (card_height or dp(160)) * rows_needed + card_spacing * (rows_needed - 1)
+        # container.height = total_height
+        
+        # Instead, use adaptive height to let cards size themselves properly
+        container.adaptive_height = True
         
         return container
     
@@ -1786,9 +1799,9 @@ class DashboardScreen(MDScreen):
             usable_width = available_width - total_spacing - container_padding_horizontal
             card_width = usable_width / cols
             
-            # FINAL SPACE OPTIMIZATION: Enhanced constraints for optimal text rendering and space utilization
-            min_width = dp(380)  # Optimized for better space utilization while maintaining text readability
-            max_width = dp(520)  # Balanced max width for optimal space usage
+            # INCREASED minimum width to ensure adequate space for text content
+            min_width = dp(420)  # Increased from 380dp to ensure proper text rendering
+            max_width = dp(580)  # Increased from 520dp for better space utilization
             
             # Clamp to reasonable bounds with improved space utilization
             optimal_width = max(min_width, min(card_width, max_width))
@@ -1797,7 +1810,7 @@ class DashboardScreen(MDScreen):
             
         except Exception as e:
             print(f"[ERROR] Card width calculation failed: {e}")
-            return dp(380)  # Safe fallback optimized for space utilization
+            return dp(420)  # Safe fallback with increased width
     
     def _apply_card_responsive_constraints(self, card, available_width, cols):
         """
@@ -1822,17 +1835,17 @@ class DashboardScreen(MDScreen):
         Apply enhanced constraints that prevent text rendering issues
         """
         try:
-            # FINAL SPACE OPTIMIZATION: Ensure minimum width for proper text rendering with better space usage
-            min_card_width = dp(380)  # Optimized minimum width for balanced text rendering and space utilization
+            # Ensure minimum width for proper text rendering
+            min_card_width = dp(420)  # Increased minimum width for better text rendering
             
-            # Apply size constraints
+            # Apply size constraints properly
             card.size_hint_x = None if cols > 1 else 1
-            card.adaptive_height = True
+            card.adaptive_height = True  # Always use adaptive height for proper sizing
             
             # Ensure adequate width for text rendering
             if cols == 1 and available_width > min_card_width:
                 card.size_hint_x = None
-                card.width = max(min_card_width, min(dp(520), available_width - dp(40)))
+                card.width = max(min_card_width, min(dp(580), available_width - dp(56)))
             elif cols > 1:
                 # For multi-column layouts, ensure adequate width
                 card.size_hint_x = None
@@ -1857,39 +1870,39 @@ class DashboardScreen(MDScreen):
             if available_width <= MOBILE_MAX:
                 # Mobile: Optimize for single-hand operation
                 if hasattr(card, 'padding'):
-                    card.padding = [dp(20), dp(16), dp(20), dp(16)]
+                    card.padding = [dp(24), dp(20), dp(24), dp(20)]
                 if hasattr(card, 'minimum_height'):
-                    card.minimum_height = dp(140)
+                    card.minimum_height = dp(160)
                 if hasattr(card, 'radius'):
                     card.radius = [dp(16)]
                     
             elif available_width <= TABLET_MAX:
                 # Tablet: Balanced for two-hand operation
                 if hasattr(card, 'padding'):
-                    card.padding = [dp(22), dp(18), dp(22), dp(18)]
+                    card.padding = [dp(28), dp(24), dp(28), dp(24)]
                 if hasattr(card, 'minimum_height'):
-                    card.minimum_height = dp(130)
+                    card.minimum_height = dp(180)
                 if hasattr(card, 'radius'):
-                    card.radius = [dp(14)]
+                    card.radius = [dp(18)]
                     
             else:  # desktop
                 # Desktop: Optimal for precision input
                 if hasattr(card, 'padding'):
-                    card.padding = [dp(24), dp(20), dp(24), dp(20)]
+                    card.padding = [dp(32), dp(28), dp(32), dp(28)]
                 if hasattr(card, 'minimum_height'):
-                    card.minimum_height = dp(120)
+                    card.minimum_height = dp(200)
                 if hasattr(card, 'radius'):
-                    card.radius = [dp(12)]
+                    card.radius = [dp(20)]
             
             # Ensure proper size constraints
             card.size_hint_x = None if cols > 1 else 1
-            card.adaptive_height = True
+            card.adaptive_height = True  # Always use adaptive height for proper sizing
             
-            # FINAL SPACE OPTIMIZATION: Apply balanced width constraints for optimal space usage
-            min_card_width = dp(380)  # Optimized minimum width for better space utilization
+            # Apply balanced width constraints with increased minimum width
+            min_card_width = dp(420)  # Increased minimum width for better text rendering
             if cols == 1 and available_width > min_card_width:
                 card.size_hint_x = None
-                card.width = max(min_card_width, min(dp(520), available_width - dp(40)))
+                card.width = max(min_card_width, min(dp(580), available_width - dp(56)))
             elif cols > 1:
                 # For multi-column layouts, ensure adequate width
                 card.size_hint_x = None

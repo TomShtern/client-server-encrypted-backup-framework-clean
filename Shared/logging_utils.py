@@ -13,6 +13,9 @@ from typing import Tuple, Optional, Dict, Any, Union, Callable, List
 from datetime import datetime
 from pathlib import Path
 
+# Import the safe_print function to prevent console encoding errors
+from .utils.utf8_solution import safe_print
+
 # Try to import enhanced output for emoji/color support
 try:
     from .utils.enhanced_output import enhance_existing_logger
@@ -256,8 +259,8 @@ def setup_dual_logging(
     # Print the colorful console-only banner (keeps file logs plain)
     try:
         for line in console_lines:
-            # Use print so the console shows ANSI/colors when available
-            print(line)
+            # Use safe_print to avoid console encoding errors
+            safe_print(line)
     except Exception:
         # Fall back to logging plain lines if printing fails
         for line in console_lines:

@@ -10,6 +10,7 @@
         "sourcery.sourcery",
         "supabase.vscode-supabase-extension",
         "ttoowa.in-your-face-incredible",
-        "d-biehl.robotcode"
+        "d-biehl.robotcode",
+        "sobytes.flet-control-wrap"
     ]
 }
