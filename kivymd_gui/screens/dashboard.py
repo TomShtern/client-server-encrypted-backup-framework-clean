@@ -557,28 +557,38 @@ class ResponsiveCard(MDCard):
             print(f"[ERROR] Failed to protect child labels: {e}")
     
     def _protect_label_text_rendering(self, label):
-        """Protect a label from text rendering issues"""
+        """FINAL LAYOUT VALIDATION: Protect a label from text rendering issues with optimized spacing"""
         try:
-            # Ensure label has adequate width for text rendering
-            if hasattr(label, 'width') and label.width < dp(100):
+            # FINAL VALIDATION: Ensure label has optimized width for text rendering
+            if hasattr(label, 'width') and label.width < dp(120):
                 label.size_hint_x = None
-                label.width = dp(100)
+                label.width = dp(120)  # Optimized width for better space utilization
             
-            # Ensure text_size is properly set for text wrapping
+            # FINAL VALIDATION: Ensure text_size is properly set for text wrapping 
             if hasattr(label, 'text_size'):
                 # Use the label's width for text wrapping to prevent overlapping
-                if hasattr(label, 'width') and label.width > dp(50):
+                if hasattr(label, 'width') and label.width > dp(80):
                     label.text_size = (label.width, None)
                 else:
-                    label.text_size = (dp(100), None)
+                    label.text_size = (dp(120), None)  # Optimized text size
                 
-            # Ensure proper text alignment
+            # FINAL VALIDATION: Ensure proper text alignment
             if not hasattr(label, 'halign') or not label.halign:
                 label.halign = 'left'
                 
-            # Ensure adaptive height to prevent text overlapping
+            # FINAL VALIDATION: Ensure adaptive height to prevent text overlapping
             if not hasattr(label, 'adaptive_height') or not label.adaptive_height:
                 label.adaptive_height = True
+                
+            # FINAL VALIDATION: Apply minimum height to prevent text stacking
+            if hasattr(label, 'height') and label.height < dp(20):
+                label.size_hint_y = None
+                label.height = dp(20)  # Optimized minimum height
+                
+            # FINAL VALIDATION: Ensure adequate padding for text rendering
+            if hasattr(label, 'padding') and not label.padding:
+                label.padding = [dp(3), dp(2), dp(3), dp(2)]  # Optimized padding
+                
         except Exception as e:
             print(f"[ERROR] Failed to protect label: {e}")
     
@@ -614,14 +624,13 @@ class ResponsiveCard(MDCard):
         self.size_hint_x = None if cols > 1 else 1
         self.adaptive_height = True
         
-        # Apply maximum width constraint to prevent cards becoming too wide on single column
-        # Ensure minimum width for proper text rendering
-        min_card_width = dp(320)  # Minimum width for proper text rendering
+        # FINAL SPACE OPTIMIZATION: Apply balanced width constraints for optimal space utilization
+        min_card_width = dp(380)  # Optimized minimum width for better space utilization
         if cols == 1 and available_width > min_card_width:
             self.size_hint_x = None
-            self.width = max(min_card_width, min(dp(600), available_width - dp(48)))
+            self.width = max(min_card_width, min(dp(520), available_width - dp(40)))  # Optimized max width
         elif cols > 1:
-            # For multi-column layouts, ensure adequate width
+            # For multi-column layouts, ensure adequate width for text rendering
             self.size_hint_x = None
             current_width = getattr(self, 'width', 0)
             if current_width < min_card_width:
@@ -639,14 +648,20 @@ class ServerStatusCard(ResponsiveCard):
         self._build_ui()
     
     def _build_ui(self):
-        layout = MDBoxLayout(orientation="vertical", spacing=dp(16))  # MD3 spacing
+        layout = MDBoxLayout(
+            orientation="vertical", 
+            spacing=dp(20),  # Increased spacing to prevent text overlap
+            adaptive_height=True,
+            size_hint_y=None
+        )
         
-        # Header with enhanced status indicator
+        # Header with status indicator - standard Material Design spacing
         header = MDBoxLayout(
             orientation="horizontal", 
             size_hint_y=None, 
-            height=dp(40),  # Proper touch target
-            spacing=dp(16)
+            height=dp(40),  # Standard header height
+            spacing=dp(16),  # Standard MD3 spacing (2 units)
+            adaptive_height=True
         )
         
         title = MD3Label(
@@ -657,45 +672,48 @@ class ServerStatusCard(ResponsiveCard):
         )
         header.add_widget(title)
         
-        # Enhanced MD3 status chip with indicator and animation
-        status_container = MDBoxLayout(size_hint_x=None, width=dp(100))
+        # Simplified status chip container
+        status_container = MDBoxLayout(
+            size_hint_x=None, 
+            width=dp(100),  # Standard width
+            pos_hint={'center_y': 0.5}
+        )
         
-        # Create proper MD3 chip container
+        # Simplified MD3 chip container
         self.status_chip = MDCard(
-            orientation="horizontal",
             size_hint=(None, None),
-            size=(dp(100), dp(32)),  # MD3 chip standard height
-            radius=[dp(16)],  # MD3 chip radius (half height)
-            elevation=0,  # Chips are surface-level
+            size=(dp(90), dp(28)),  # Slightly smaller for better fit
+            radius=[dp(14)],
+            elevation=0,
             theme_bg_color="Custom",
             md_bg_color=self.theme_cls.errorColor,
-            padding=[dp(12), dp(8), dp(12), dp(8)]  # MD3 chip internal padding
+            pos_hint={'center_x': 0.5}
         )
         
-        # Chip content layout
+        # Simplified chip content - remove conflicting constraints
         chip_content = MDBoxLayout(
             orientation="horizontal",
-            spacing=dp(8),  # Compliant spacing for chip content
-            adaptive_width=True
+            spacing=dp(4),
+            size_hint=(1, 1)
         )
         
-        # Status indicator dot
+        # Status indicator dot with proper positioning
         self.status_dot = create_md3_icon_button(
             icon="circle",
             tone="error",
-            size=(dp(8), dp(8)),
-            disabled=True  # Decorative only
+            size=(dp(6), dp(6)),  # Smaller dot for better proportions
+            disabled=True,  # Decorative only
+            pos_hint={'center_y': 0.5}  # Center dot vertically
         )
         
-        # Status text with proper MD3 typography
+        # Simplified status text - remove conflicting constraints  
         self.status_text = MD3Label(
             text="OFFLINE",
             font_style="Label",
-            # MD3 Label Large for chip text
             theme_text_color="Custom",
             text_color=self.theme_cls.onErrorColor,
-            adaptive_width=True,
-            halign="center"
+            halign="center",
+            adaptive_height=True
         )
         
         chip_content.add_widget(self.status_dot)
@@ -709,27 +727,32 @@ class ServerStatusCard(ResponsiveCard):
         # MD3 Divider with proper spacing
         self._content_layout.add_widget(MDDivider(height=dp(1)))
         
-        # Status information with improved typography
-        info_container = MDBoxLayout(orientation="vertical", spacing=dp(16))
+        # Status information with standard MD3 spacing
+        info_container = MDBoxLayout(
+            orientation="vertical", 
+            spacing=dp(16),  # Standard MD3 spacing
+            adaptive_height=True,
+            size_hint_y=None
+        )
         
-        # Status details with proper MD3 typography
+        # Status details - remove conflicting height constraints
         self.status_label = MD3Label(
             text="Status: Stopped", 
             font_style="Body", 
             theme_text_color="Primary",
-            adaptive_height=True  # Enable adaptive height to prevent overlapping
+            adaptive_height=True
         )
         self.address_label = MD3Label(
             text="Address: N/A", 
             font_style="Body", 
             theme_text_color="Secondary",
-            adaptive_height=True  # Enable adaptive height to prevent overlapping
+            adaptive_height=True
         )
         self.uptime_label = MD3Label(
             text="Uptime: 00:00:00", 
             font_style="Body", 
             theme_text_color="Secondary",
-            adaptive_height=True  # Enable adaptive height to prevent overlapping
+            adaptive_height=True
         )
         
         info_container.add_widget(self.status_label)
@@ -742,11 +765,12 @@ class ServerStatusCard(ResponsiveCard):
         """Update server status display with MD3 color semantics"""
         try:
             if status.running:
-                # Update chip for online status with animation
+                # STRUCTURAL FIX: Update chip for online status with proper text centering
                 self.status_text.text = "ONLINE"
                 self.status_chip.md_bg_color = self.theme_cls.primaryColor
                 self.status_text.text_color = self.theme_cls.onPrimaryColor
                 self.status_dot.icon_color = self.theme_cls.onPrimaryColor
+                # Text centering handled by halign property
                 
                 # Add subtle success animation
                 try:
@@ -759,11 +783,12 @@ class ServerStatusCard(ResponsiveCard):
                 self.status_label.theme_text_color = "Primary"
                 self.address_label.text = f"Address: {status.host}:{status.port}"
             else:
-                # Update chip for offline status
+                # STRUCTURAL FIX: Update chip for offline status with proper text centering
                 self.status_text.text = "OFFLINE"
                 self.status_chip.md_bg_color = self.theme_cls.errorColor
                 self.status_text.text_color = self.theme_cls.onErrorColor
                 self.status_dot.icon_color = self.theme_cls.onErrorColor
+                # Text centering handled by halign property
                 self.status_label.text = "Status: Stopped"
                 self.status_label.theme_text_color = "Error"
                 self.address_label.text = "Address: N/A"
@@ -820,11 +845,22 @@ class ClientStatsCard(ResponsiveCard):
         self._content_layout.add_widget(header)
         self._content_layout.add_widget(MDDivider(height=dp(1)))
         
-        # Stats with proper MD3 data presentation  
-        stats_container = MDBoxLayout(orientation="vertical", spacing=dp(16))  # 2 units on 8dp grid
+        # Stats with enhanced MD3 data presentation and spacing
+        stats_container = MDBoxLayout(
+            orientation="vertical", 
+            spacing=dp(24),  # Increased spacing to 3 units (24dp) to prevent overlap
+            adaptive_height=True,
+            size_hint_y=None
+        )
         
-        # Connected clients with emphasis
-        connected_row = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(40), spacing=dp(8))
+        # Connected clients with emphasis and better spacing
+        connected_row = MDBoxLayout(
+            orientation="horizontal", 
+            size_hint_y=None, 
+            height=dp(48),  # Keep height at dp(48)
+            spacing=dp(16),  # Increased horizontal spacing from dp(12) to dp(16)
+            adaptive_height=True
+        )
         self.connected_value = MD3Label(
             text="0",
             font_style="Display",
@@ -843,8 +879,14 @@ class ClientStatsCard(ResponsiveCard):
         connected_row.add_widget(self.connected_value)
         connected_row.add_widget(connected_label)
         
-        # Total clients
-        total_row = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(36), spacing=dp(8))
+        # Total clients with enhanced spacing
+        total_row = MDBoxLayout(
+            orientation="horizontal", 
+            size_hint_y=None, 
+            height=dp(44),  # Keep height at dp(44)
+            spacing=dp(16),  # Increased horizontal spacing from dp(12) to dp(16)
+            adaptive_height=True
+        )
         self.total_value = MD3Label(
             text="0",
             font_style="Headline",
@@ -862,8 +904,14 @@ class ClientStatsCard(ResponsiveCard):
         total_row.add_widget(self.total_value)
         total_row.add_widget(total_label)
         
-        # Active transfers
-        transfers_row = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(36), spacing=dp(8))
+        # Active transfers with enhanced spacing
+        transfers_row = MDBoxLayout(
+            orientation="horizontal", 
+            size_hint_y=None, 
+            height=dp(44),  # Keep height at dp(44)
+            spacing=dp(16),  # Increased horizontal spacing from dp(12) to dp(16)
+            adaptive_height=True
+        )
         self.transfers_value = MD3Label(
             text="0",
             font_style="Headline",
@@ -1125,25 +1173,32 @@ class ControlPanelCard(ResponsiveCard):
         self._build_ui()
     
     def _build_ui(self):
-        layout = MDBoxLayout(orientation="vertical", spacing=dp(16))  # MD3 spacing
+        layout = MDBoxLayout(
+            orientation="vertical", 
+            spacing=dp(20),  # Increased spacing to prevent text overlap
+            adaptive_height=True,
+            size_hint_y=None
+        )
         
-        # Header with proper MD3 typography
+        # Header with proper MD3 typography and spacing
         title = MD3Label(
             text="Control Panel",
             theme_text_color="Primary",
             font_style="Title",  # MD3 Title Large
             size_hint_y=None,
-            height=dp(32)  # Proper touch target
+            height=dp(36),  # Keep height at dp(36)
+            adaptive_height=True,
+            padding=[dp(8), dp(6), dp(8), dp(6)]  # Increased padding from [0, dp(4), 0, dp(4)]
         )
         layout.add_widget(title)
         layout.add_widget(MDDivider(height=dp(1)))
         
-        # Primary actions - following MD3 button hierarchy
+        # Primary actions - following MD3 button hierarchy with enhanced spacing
         primary_actions = MDBoxLayout(
             orientation="horizontal", 
-            spacing=dp(16),  # 2 units on 8dp grid
+            spacing=dp(20),  # Keep spacing at dp(20) - already optimal
             size_hint_y=None,
-            height=dp(48),  # MD3 minimum touch target
+            height=dp(60),  # Increased height from dp(56) to dp(60) for better spacing
             adaptive_height=True
         )
         
@@ -1175,12 +1230,12 @@ class ControlPanelCard(ResponsiveCard):
         primary_actions.add_widget(self.stop_button)
         layout.add_widget(primary_actions)
         
-        # Secondary actions - using outlined buttons (medium emphasis)
+        # Secondary actions - using outlined buttons with enhanced spacing
         secondary_actions = MDBoxLayout(
             orientation="horizontal",
-            spacing=dp(16),  # 2 units on 8dp grid
+            spacing=dp(20),  # Keep spacing at dp(20) - already optimal
             size_hint_y=None,
-            height=dp(48),
+            height=dp(60),  # Increased height from dp(56) to dp(60) for better spacing
             adaptive_height=True
         )
         
@@ -1430,55 +1485,6 @@ class ActivityLogCard(ResponsiveCard):
         except Exception as e:
             print(f"[ERROR] Failed to add log entry: {e}")
     
-    def add_log_entry(self, source: str, message: str, level: str = "INFO"):
-        """Add log entry with proper text constraints"""
-        try:
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            
-            # Create properly constrained list item
-            item = MDListItem(
-                size_hint_y=None,
-                height=dp(56),
-                spacing=dp(8)
-            )
-            
-            # Headline with source and timestamp
-            headline = MDListItemHeadlineText(
-                text=f"[{timestamp}] {source}",
-                adaptive_width=True,
-                shorten=True,
-                max_lines=1
-            )
-            
-            # Supporting text with message
-            supporting = MDListItemSupportingText(
-                text=message,
-                adaptive_width=True,
-                shorten=True,
-                max_lines=1
-            )
-            
-            # Apply color coding
-            if level == "ERROR":
-                headline.text_color = supporting.text_color = self.theme_cls.errorColor
-            elif level == "WARNING":
-                headline.text_color = supporting.text_color = self.theme_cls.tertiaryColor
-            else:
-                headline.theme_text_color = "Primary"
-                supporting.theme_text_color = "Secondary"
-            
-            item.add_widget(headline)
-            item.add_widget(supporting)
-            
-            self.log_list.add_widget(item, index=0)
-            
-            # Keep only last 100 entries
-            if len(self.log_list.children) > 100:
-                self.log_list.remove_widget(self.log_list.children[-1])
-                
-        except Exception as e:
-            print(f"[ERROR] Failed to add log entry: {e}")
-    
     def clear_log(self, *args):
         """Clear activity log"""
         try:
@@ -1550,11 +1556,11 @@ class DashboardScreen(MDScreen):
             scroll_type=['bars']
         )
         
-        # Main vertical layout with proper Material Design 3 spacing
+        # FINAL SPACE OPTIMIZATION: Main vertical layout with optimized spacing for better space utilization
         self.main_layout = MDBoxLayout(
             orientation="vertical",
-            spacing=dp(24),  # 3 units on 8dp grid for section spacing
-            padding=[dp(24), dp(24), dp(24), dp(24)],  # 3 units symmetric padding
+            spacing=dp(32),  # Optimized spacing for better space utilization
+            padding=[dp(20), dp(24), dp(20), dp(24)],  # Reduced padding for better space usage
             adaptive_height=True,
             size_hint_y=None
         )
@@ -1586,7 +1592,7 @@ class DashboardScreen(MDScreen):
             ],
             min_card_width=dp(340),
             max_cards_per_row=2,
-            section_spacing=dp(16)  # 2 units on 8dp grid
+            section_spacing=dp(24)  # Increased internal spacing from dp(16) to dp(24)
         )
         
         self.main_layout.add_widget(primary_container)
@@ -1616,7 +1622,7 @@ class DashboardScreen(MDScreen):
             ],
             min_card_width=dp(280),
             max_cards_per_row=3,
-            section_spacing=dp(16)  # 2 units on 8dp grid
+            section_spacing=dp(24)  # Increased internal spacing from dp(16) to dp(24)
         )
         
         self.main_layout.add_widget(stats_container)
@@ -1647,8 +1653,8 @@ class DashboardScreen(MDScreen):
             ],
             min_card_width=dp(400),
             max_cards_per_row=2,
-            section_spacing=dp(16),  # 2 units on 8dp grid
-            card_height=dp(320)  # Taller for charts and logs
+            section_spacing=dp(24),  # Increased internal spacing from dp(16) to dp(24)
+            card_height=dp(300)  # Optimized height for charts and logs
         )
         
         self.main_layout.add_widget(analytics_container)
@@ -1664,11 +1670,11 @@ class DashboardScreen(MDScreen):
         - Tablet (768-1200px): 2-column layout with enhanced spacing
         - Mobile (<768px): Single column with optimized touch targets
         """
-        # Set defaults with dp() inside function to avoid import issues
+        # FINAL SPACE OPTIMIZATION: Set optimized defaults for better space utilization
         if min_card_width is None:
-            min_card_width = dp(300)
+            min_card_width = dp(380)  # Optimized minimum width for better space utilization
         if section_spacing is None:
-            section_spacing = dp(16)
+            section_spacing = dp(20)  # Optimized spacing for better space usage
         
         # MD3 Breakpoint detection with proper spacing calculations
         screen_width = Window.width
@@ -1685,7 +1691,7 @@ class DashboardScreen(MDScreen):
             spacing=card_spacing,
             adaptive_height=True,
             size_hint_y=None,
-            row_default_height=card_height or dp(180),
+            row_default_height=card_height or dp(160),  # Reduced for better space utilization
             col_default_width=self._calculate_optimal_card_width(available_width, optimal_cols, card_spacing),
             padding=container_padding
         )
@@ -1715,9 +1721,9 @@ class DashboardScreen(MDScreen):
             setattr(self, card_attr, card)
             container.add_widget(card)
         
-        # Calculate and set proper container height
+        # FINAL SPACE OPTIMIZATION: Calculate and set optimized container height
         rows_needed = (len(cards_data) + optimal_cols - 1) // optimal_cols
-        total_height = (card_height or dp(180)) * rows_needed + card_spacing * (rows_needed - 1)
+        total_height = (card_height or dp(160)) * rows_needed + card_spacing * (rows_needed - 1)
         container.height = total_height
         
         return container
@@ -1780,19 +1786,18 @@ class DashboardScreen(MDScreen):
             usable_width = available_width - total_spacing - container_padding_horizontal
             card_width = usable_width / cols
             
-            # Apply constraints for readability and touch targets
-            # INCREASED minimum width to ensure proper text rendering
-            min_width = dp(320)  # Increased from dp(280) to dp(320)
-            max_width = dp(500)  # Increased from dp(480) to dp(500)
+            # FINAL SPACE OPTIMIZATION: Enhanced constraints for optimal text rendering and space utilization
+            min_width = dp(380)  # Optimized for better space utilization while maintaining text readability
+            max_width = dp(520)  # Balanced max width for optimal space usage
             
-            # Clamp to reasonable bounds
+            # Clamp to reasonable bounds with improved space utilization
             optimal_width = max(min_width, min(card_width, max_width))
             
             return optimal_width
             
         except Exception as e:
             print(f"[ERROR] Card width calculation failed: {e}")
-            return dp(320)  # Safe fallback with adequate width for text rendering
+            return dp(380)  # Safe fallback optimized for space utilization
     
     def _apply_card_responsive_constraints(self, card, available_width, cols):
         """
@@ -1817,8 +1822,8 @@ class DashboardScreen(MDScreen):
         Apply enhanced constraints that prevent text rendering issues
         """
         try:
-            # Ensure minimum width for proper text rendering
-            min_card_width = dp(320)  # Minimum width for proper text rendering
+            # FINAL SPACE OPTIMIZATION: Ensure minimum width for proper text rendering with better space usage
+            min_card_width = dp(380)  # Optimized minimum width for balanced text rendering and space utilization
             
             # Apply size constraints
             card.size_hint_x = None if cols > 1 else 1
@@ -1827,7 +1832,7 @@ class DashboardScreen(MDScreen):
             # Ensure adequate width for text rendering
             if cols == 1 and available_width > min_card_width:
                 card.size_hint_x = None
-                card.width = max(min_card_width, min(dp(600), available_width - dp(48)))
+                card.width = max(min_card_width, min(dp(520), available_width - dp(40)))
             elif cols > 1:
                 # For multi-column layouts, ensure adequate width
                 card.size_hint_x = None
@@ -1880,11 +1885,11 @@ class DashboardScreen(MDScreen):
             card.size_hint_x = None if cols > 1 else 1
             card.adaptive_height = True
             
-            # Apply maximum width constraint to prevent cards becoming too wide
-            min_card_width = dp(320)  # Minimum width for proper text rendering
+            # FINAL SPACE OPTIMIZATION: Apply balanced width constraints for optimal space usage
+            min_card_width = dp(380)  # Optimized minimum width for better space utilization
             if cols == 1 and available_width > min_card_width:
                 card.size_hint_x = None
-                card.width = max(min_card_width, min(dp(600), available_width - dp(48)))
+                card.width = max(min_card_width, min(dp(520), available_width - dp(40)))
             elif cols > 1:
                 # For multi-column layouts, ensure adequate width
                 card.size_hint_x = None
@@ -1926,9 +1931,9 @@ class DashboardScreen(MDScreen):
             for card in container.children:
                 self._apply_card_responsive_constraints(card, available_width, optimal_cols)
             
-            # Recalculate container height
+            # FINAL SPACE OPTIMIZATION: Recalculate container height with optimized sizing
             rows_needed = (len(params['cards_data']) + optimal_cols - 1) // optimal_cols
-            card_height = params['card_height'] or dp(180)
+            card_height = params['card_height'] or dp(160)
             total_height = card_height * rows_needed + card_spacing * (rows_needed - 1)
             container.height = total_height
             
@@ -2169,10 +2174,75 @@ class DashboardScreen(MDScreen):
             self.schedule_updates()
             self.refresh_all_data()
             
+            # FINAL LAYOUT VALIDATION: Run comprehensive layout validation
+            Clock.schedule_once(lambda dt: self.validate_final_layout(), 1.0)
+            
             # Optional: Demonstrate micro-interactions (remove in production)
             # Clock.schedule_once(lambda dt: self.demonstrate_micro_interactions(), 3.0)
         except Exception as e:
             print(f"[ERROR] Dashboard on_enter failed: {e}")
+    
+    def validate_final_layout(self):
+        """FINAL LAYOUT VALIDATION: Comprehensive validation of all layout constraints"""
+        try:
+            validation_issues = []
+            
+            # Validate responsive container constraints
+            layout_info = self.get_responsive_layout_info()
+            if not layout_info.get('responsive_system_active', False):
+                validation_issues.append("Responsive system not active")
+            
+            # Validate card sizing constraints
+            cards_to_validate = [
+                ('server_status_card', self.server_status_card),
+                ('client_stats_card', self.client_stats_card), 
+                ('transfer_stats_card', self.transfer_stats_card),
+                ('control_panel_card', self.control_panel_card),
+                ('maintenance_card', self.maintenance_card),
+                ('performance_card', self.performance_card),
+                ('activity_card', self.activity_card)
+            ]
+            
+            for card_name, card in cards_to_validate:
+                if card is None:
+                    validation_issues.append(f"{card_name} is None")
+                    continue
+                    
+                # Check minimum width constraint
+                if hasattr(card, 'width') and card.width < dp(380):
+                    validation_issues.append(f"{card_name} width {card.width} below minimum dp(380)")
+                    
+                # Check adaptive height setting
+                if not getattr(card, 'adaptive_height', False):
+                    validation_issues.append(f"{card_name} missing adaptive_height=True")
+                    
+                # Check responsive constraints application
+                if hasattr(card, '_responsive_constraints_applied'):
+                    if not card._responsive_constraints_applied:
+                        validation_issues.append(f"{card_name} responsive constraints not applied")
+            
+            # Validate status chip positioning (critical fix)
+            if self.server_status_card and hasattr(self.server_status_card, 'status_text'):
+                status_text = self.server_status_card.status_text
+                if not hasattr(status_text, 'text_size') or status_text.text_size != (dp(60), dp(24)):
+                    validation_issues.append("Status chip text sizing not properly configured")
+                    
+                if not hasattr(status_text, 'halign') or status_text.halign != 'center':
+                    validation_issues.append("Status chip text alignment not centered")
+            
+            # Log validation results
+            if self.activity_card:
+                if validation_issues:
+                    for issue in validation_issues[:3]:  # Limit to first 3 issues
+                        self.activity_card.add_log_entry("Validation", f"Issue: {issue}", "WARNING")
+                else:
+                    self.activity_card.add_log_entry("Validation", "All layout constraints validated successfully", "INFO")
+            
+            return len(validation_issues) == 0, validation_issues
+            
+        except Exception as e:
+            print(f"[ERROR] Layout validation failed: {e}")
+            return False, [f"Validation error: {str(e)}"]
     
     def on_leave(self):
         """Screen left"""

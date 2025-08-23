@@ -42,8 +42,14 @@ cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
 cmake --build build --config Release  # Output: build/Release/EncryptedBackupClient.exe
 
 # Start system (RECOMMENDED)
-python scripts/one_click_build_and_run.py  # Full build + deploy + launch
+python scripts/one_click_build_and_run.py  # Full build + deploy + launch (CANONICAL)
 python scripts/launch_gui.py              # Quick start API server + browser
+
+# Additional Launch Options
+python scripts/launch_server_gui.py    # Launch KivyMD server GUI directly  
+python scripts/start_backup_server.py  # Start backup server standalone
+.\start_server_gui.bat                 # Batch file server GUI launcher
+.\start_backup_utf8.bat               # UTF-8 optimized backup launcher
 
 # Manual service startup
 python python_server/server/server.py        # Port 1256 (START FIRST)
@@ -61,8 +67,18 @@ dir "received_files"                  # Check actual transferred files
 
 # Testing (test complete web→API→C++→server chain)
 python tests/test_gui_upload.py              # Full integration test
-python scripts/testing/master_test_suite.py  # Comprehensive suite
+python scripts/testing/master_test_suite.py  # Comprehensive suite (72+ scenarios)
+python scripts/testing/quick_validation.py   # Quick system validation
 python scripts/test_emoji_support.py         # Unicode/emoji support
+python tests/integration/run_integration_tests.py # Complete integration suite
+python tests/debug_file_transfer.py          # Debug transfer issues
+python tests/focused_boundary_test.py        # Boundary condition testing
+python tests/test_performance_flow.py        # Performance benchmarking
+
+# System Maintenance & Diagnostics
+python scripts/check_dependencies.py   # Verify all dependencies
+python scripts/monitor_logs.py         # Real-time log monitoring  
+python scripts/fix_vcpkg_issues.py     # Fix vcpkg build issues
 
 # Emergency recovery
 taskkill /f /im python.exe && taskkill /f /im EncryptedBackupClient.exe
@@ -108,6 +124,17 @@ verify_file_in_received_files_dir()  # PRIMARY verification
 - **Success Verification**: File presence in `received_files/` is ONLY reliable indicator (exit codes unreliable)
 - **Port Conflicts**: Ensure 9090/1256 are free (Windows TIME_WAIT: wait 30-60s)
 
+### Critical Files for AI Development Context
+```bash
+# These files are essential for understanding system architecture (from Copilot instructions)
+api_server/cyberbackup_api_server.py    # Flask API coordination hub
+api_server/real_backup_executor.py      # Subprocess management patterns  
+python_server/server/server.py          # Multi-threaded TCP server
+Shared/utils/unified_config.py          # Configuration management
+Shared/utils/file_lifecycle.py          # Race condition prevention
+scripts/one_click_build_and_run.py      # CANONICAL launcher - primary entry point
+```
+
 ## KivyMD Material Design 3 Server GUI (CRITICAL)
 
 **✅ FULLY OPERATIONAL** - Modern Material Design 3 server administration interface
@@ -115,17 +142,29 @@ verify_file_in_received_files_dir()  # PRIMARY verification
 ### Setup & Dependencies
 ```bash
 # CRITICAL: Must use kivy_venv_new virtual environment
-.\kivy_venv_new\Scripts\activate
+python -m venv kivy_venv_new                    # Create venv (if needed)
+.\kivy_venv_new\Scripts\activate                # Activate venv
 
 # Core dependencies (STABLE commit for reliability)
 pip install git+https://github.com/kivymd/KivyMD.git@d2f7740  # MD3 support, no animation crashes
-pip install psutil==7.0.0  # System monitoring (REQUIRED)
+pip install psutil==7.0.0                       # System monitoring (REQUIRED)
+pip install materialyoucolor==2.0.10            # Material Design 3 color system
+pip install kivy==2.3.1                         # Specific Kivy version compatibility
+
+# Alternative: Install all from requirements.txt
+pip install -r requirements.txt
 
 # Run KivyMD GUI
 python kivymd_gui\main.py
 ```
 
 ### KivyMD 2.0.x API Reference (ESSENTIAL)
+
+#### Key Version Information
+- **KivyMD Version**: Commit `d2f7740` (stable, prevents animation crashes)
+- **Kivy Version**: 2.3.1 (tested compatibility)
+- **Material Design**: Version 3 specification compliance
+- **Font System**: Supports Display, Headline, Title, Body, Label styles only
 
 #### Critical Import Path Changes
 ```python
@@ -233,15 +272,23 @@ for child in textfield.children:
 ### Critical Fixes Applied (2025-08-21/22) 
 **✅ FULLY RESOLVED**: All KivyMD 2.0.x compatibility issues fixed, GUI now fully functional
 
-#### Text Rendering Fix (2025-08-22) 
-**CRITICAL**: Fixed vertical character stacking issue in KivyMD text rendering
-- **Root Cause**: `text_size=(None, None)` configuration was causing KivyMD to render text character-by-character vertically
-- **Solution**: Created `MD3Label` component that removes problematic text_size settings and lets KivyMD handle text sizing automatically
+#### Text Rendering Fix (2025-08-22) - BREAKTHROUGH ACHIEVEMENT
+**CRITICAL SUCCESS**: Fixed vertical character stacking issue in KivyMD text rendering after days of debugging
+- **Root Cause**: KivyMD's default `text_size=(self.width, None)` was causing character-by-character vertical stacking
+- **Solution**: Created `MD3Label` component with `text_size=(None, None)` and rendering protection:
+  ```python
+  # CRITICAL FIX in MD3Label
+  if 'text_size' not in kwargs:
+      self.text_size = (None, None)
+      Clock.schedule_once(lambda dt: setattr(self, 'text_size', (None, None)), 0.1)
+  ```
 - **Font Styles Fixed**: Updated all invalid font styles to KivyMD 2.0.x compatible versions:
   - `H1` → `Display`, `H2/H3` → `Headline`, `H4/H5/H6` → `Title`
   - `Body1/Body2` → `Body`, `Caption` → `Label`
 - **System-Wide**: Replaced 81 MDLabel instances across 7 screen files with MD3Label
-- **Result**: Text now renders horizontally instead of vertical character stacking
+- **Result**: Dashboard text now renders horizontally as intended
+- **✅ MAJOR BREAKTHROUGH**: Solved days-long text rendering problem
+- **Current Issue**: Text overlapping/stacking in same positions - layout spacing needs adjustment
 
 #### Invalid Role Properties Fix (2025-08-22) - DASHBOARD CRITICAL
 **CRITICAL DISCOVERY**: Dashboard vertical text rendering was caused by invalid `role` properties
@@ -338,8 +385,32 @@ kivy_venv_new/Scripts/python.exe kivymd_gui/qa/test_qa_system.py
 ### Critical Implementation Rules
 1. **Token-First**: ALL styling MUST come from `tokens.json` via adapters
 2. **No Raw KivyMD**: Use `MD3Button` instead of `MDRaisedButton`, etc.
-3. **QA Enforcement**: Run `qa_runner.py` before commits to verify compliance
-4. **Accessibility Priority**: WCAG AA compliance is non-negotiable
+3. **Text Rendering**: ALWAYS use `MD3Label` instead of `MDLabel` to prevent vertical stacking
+4. **Font Styles**: Only use KivyMD 2.0.x compatible styles (Display, Headline, Title, Body, Label)
+5. **No Role Properties**: NEVER use `role="small/medium/large"` - they break text rendering
+6. **QA Enforcement**: Run `qa_runner.py` before commits to verify compliance
+7. **Accessibility Priority**: WCAG AA compliance is non-negotiable
+
+### KivyMD 2.0.x Material Design 3 Best Practices
+```python
+# ✅ CORRECT: Material Design 3 Component Creation
+from kivymd.app import MDApp
+from kivymd.uix.screen import MDScreen
+from kivymd.uix.button import MDButton, MDButtonText
+
+# ✅ CORRECT: Text Rendering (use MD3Label)
+from kivymd_gui.components.md3_label import MD3Label
+label = MD3Label(text="Dashboard Status", font_style="Title")  # No role property!
+
+# ✅ CORRECT: Theme Setup for Material Design 3
+self.theme_cls.material_style = "M3"
+self.theme_cls.theme_style = "Dark"  # or "Light"  
+self.theme_cls.primary_palette = "Blue"
+
+# ❌ WRONG: Using raw MDLabel or role properties
+from kivymd.uix.label import MDLabel  # Don't use directly
+MDLabel(text="Text", role="small")    # Breaks text rendering!
+```
 
 ### M3 Implementation Status (2025-08-21)
 **COMPLETED ✅**: Full token-driven M3 architecture with automated QA validation

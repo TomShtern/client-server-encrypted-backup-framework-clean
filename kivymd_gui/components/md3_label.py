@@ -75,26 +75,25 @@ class MD3Label(MDLabel):
     
     def _apply_text_rendering_protection(self):
         """Apply comprehensive text rendering protection"""
-        # Ensure text_size is set correctly for proper text wrapping
-        if not hasattr(self, 'text_size') or self.text_size != (None, None):
-            # Use the widget's width for text wrapping to prevent overlapping
-            if hasattr(self, 'width') and self.width > dp(50):
-                self.text_size = (self.width, None)
-            else:
-                self.text_size = (dp(100), None)  # Safe default width
+        # CRITICAL: Always use (None, None) for text_size to prevent vertical character stacking
+        # Using width-based text_size can cause text overlapping issues
+        self.text_size = (None, None)
         
         # Ensure minimum width for proper text rendering
-        if hasattr(self, 'width') and self.width < dp(50):
+        if hasattr(self, 'width') and self.width < dp(100):
             self.size_hint_x = None
-            self.width = dp(100)
+            self.width = dp(120)  # Increased minimum width
         
         # Ensure proper text alignment
         if not hasattr(self, 'halign') or not self.halign:
             self.halign = 'left'
         
         # Enable adaptive height to prevent text overlapping
-        if not hasattr(self, 'adaptive_height') or not self.adaptive_height:
-            self.adaptive_height = True
+        self.adaptive_height = True
+        
+        # Add padding for better text spacing
+        if not hasattr(self, 'padding') or not self.padding:
+            self.padding = [dp(4), dp(2), dp(4), dp(2)]
     
     def _on_parent_change(self, instance, parent):
         """Handle parent changes to maintain text rendering protection"""
@@ -105,22 +104,16 @@ class MD3Label(MDLabel):
     
     def _on_size_change(self, instance, size):
         """Handle size changes to maintain text rendering protection"""
-        # Ensure text_size remains correct for proper text wrapping
-        if hasattr(self, 'text_size'):
-            # Use the widget's width for text wrapping to prevent overlapping
-            if size[0] > dp(50):
-                self.text_size = (size[0], None)
-            else:
-                self.text_size = (dp(100), None)
+        # CRITICAL: Always maintain (None, None) for text_size to prevent overlapping
+        self.text_size = (None, None)
         
         # Ensure minimum width for proper text rendering
-        if size[0] < dp(50):  # width is too small
+        if size[0] < dp(100):  # Increased minimum width threshold
             self.size_hint_x = None
-            self.width = dp(100)
+            self.width = dp(120)  # Increased minimum width
         
         # Ensure adaptive height to prevent text overlapping
-        if not hasattr(self, 'adaptive_height') or not self.adaptive_height:
-            self.adaptive_height = True
+        self.adaptive_height = True
     
     def on_text(self, instance, text):
         """Handle text changes to automatically select appropriate font"""
