@@ -21,7 +21,7 @@ class ClientStatsCard:
         self.connection_indicator = ft.Ref[ft.Icon]()
 
     def build(self) -> ft.Card:
-        """Build the client statistics card with M3 compliance and theme integration"""
+        """Build the client statistics card, letting the theme handle colors."""
         header = ft.Row([
             ft.Icon(ref=self.connection_indicator, name=ft.Icons.PEOPLE_ALT, size=24),
             ft.Text("Client Statistics", style=ft.TextThemeStyle.TITLE_LARGE)
@@ -63,44 +63,35 @@ class ClientStatsCard:
         return ft.Card(content=card_content, elevation=1)
 
     def update_stats(self, server_info: ServerInfo):
-        """Update statistics with new data and animations."""
+        """Update statistics with new data."""
         if not self.connected_count.current:
             return
         
-        # Animate value changes with subtle scaling effect
-        old_connected = int(self.connected_count.current.value) if self.connected_count.current.value.isdigit() else 0
-        new_connected = server_info.connected_clients
-        
-        # Apply animation to primary metric
-        if old_connected != new_connected:
-            # Pulse animation for significant changes
-            if self.connected_count.current:
-                self.connected_count.current.scale = ft.transform.Scale(1)
-                self.connected_count.current.animate_scale = ft.Animation(200, ft.AnimationCurve.ELASTIC_OUT)
-                self.page.update()
-                self.connected_count.current.scale = ft.transform.Scale(1.1)
-                self.page.update()
-                self.connected_count.current.scale = ft.transform.Scale(1)
-                self.page.update()
-        
-        # Update all values
         self.connected_count.current.value = str(server_info.connected_clients)
         self.total_count.current.value = str(server_info.total_clients)
         self.transfers_count.current.value = str(server_info.active_transfers)
         
-        # Update icon color based on client count with animation
+        # Enhanced icon animation for client count changes
         if hasattr(self.page.theme, 'color_scheme'):
             if server_info.connected_clients > 0:
+                # Animate icon color change
                 self.connection_indicator.current.color = self.page.theme.color_scheme.primary
+                
+                # Add pulse animation for new connections
+                if hasattr(self.connected_count.current, '_last_value'):
+                    if int(server_info.connected_clients) > int(self.connected_count.current._last_value):
+                        # Pulse animation
+                        original_scale = getattr(self.connection_indicator.current, 'scale', ft.Scale(1))
+                        self.connection_indicator.current.scale = ft.Scale(1.3)
+                        self.page.update()
+                        self.connection_indicator.current.scale = original_scale
+                        self.page.update()
+                        
+                self.connected_count.current._last_value = str(server_info.connected_clients)
             else:
                 self.connection_indicator.current.color = self.page.theme.color_scheme.outline
         else:
             self.connection_indicator.current.color = ft.Colors.BLUE if server_info.connected_clients > 0 else ft.Colors.GREY
-            
-        # Update transfers count color to use tertiary color with animation
-        if hasattr(self.page.theme, 'color_scheme') and server_info.active_transfers > 0:
-            # Animate color change
-            self.transfers_count.current.color = self.page.theme.color_scheme.tertiary
             
         self.page.update()
 

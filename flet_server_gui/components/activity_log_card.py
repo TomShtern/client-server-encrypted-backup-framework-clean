@@ -8,6 +8,18 @@ import flet as ft
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
+# Import enhanced components
+try:
+    from flet_server_gui.components.enhanced_components import (
+        create_enhanced_button,
+        create_enhanced_icon_button,
+        create_enhanced_data_table
+    )
+    ENHANCED_COMPONENTS_AVAILABLE = True
+except ImportError:
+    ENHANCED_COMPONENTS_AVAILABLE = False
+    print("[INFO] Enhanced components not available, using standard components")
+
 
 class ActivityLogCard:
     """Activity log card with real-time server activity"""
@@ -19,18 +31,20 @@ class ActivityLogCard:
         self.page: Optional[ft.Page] = None
 
     def build(self) -> ft.Card:
-        """Build the activity log card with M3 compliance and theme integration"""
+        """Build the activity log card with enhanced components"""
         header = ft.Row([
             ft.Row([
                 ft.Icon(ft.Icons.TIMELINE),
                 ft.Text("Activity Log", style=ft.TextThemeStyle.TITLE_LARGE)
             ], spacing=12),
-            ft.IconButton(
+            create_enhanced_icon_button(
                 icon=ft.Icons.CLEAR_ALL,
                 tooltip="Clear activity log",
-                on_click=self.clear_log,
-                # Add animation for button interactions
-                animate_scale=100
+                on_click=self.clear_log
+            ) if ENHANCED_COMPONENTS_AVAILABLE else ft.IconButton(
+                icon=ft.Icons.CLEAR_ALL,
+                tooltip="Clear activity log",
+                on_click=self.clear_log
             )
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         
@@ -56,7 +70,7 @@ class ActivityLogCard:
         return ft.Card(content=card_content, elevation=1, expand=True)
 
     def add_entry(self, source: str, message: str, level: str = "INFO"):
-        """Add a new log entry with enhanced animation"""
+        """Add a new log entry with enhanced animations"""
         if not self.log_container.current or not self.page:
             return
 
@@ -69,52 +83,39 @@ class ActivityLogCard:
 
         # Clear placeholder if it exists
         if len(self.log_container.current.controls) == 1 and isinstance(self.log_container.current.controls[0], ft.Text):
-            # Animate out placeholder
-            self.log_container.current.controls[0].opacity = 1
-            self.log_container.current.controls[0].animate_opacity = 200
-            self.page.update()
-            self.log_container.current.controls[0].opacity = 0
-            self.page.update()
             self.log_container.current.controls.clear()
 
         visual_entry = self.create_log_entry_visual(entry_data)
         
-        # Enhanced entrance animation for new entries
+        # Add animation properties
         visual_entry.opacity = 0
-        visual_entry.offset = ft.transform.Offset(0, 0.5)  # Start slightly below
         visual_entry.animate_opacity = ft.Animation(300, ft.AnimationCurve.EASE_OUT)
+        # Use proper Flet transform syntax
+        visual_entry.offset = ft.Offset(0, 0.5)  # Start slightly below
         visual_entry.animate_offset = ft.Animation(300, ft.AnimationCurve.EASE_OUT)
         
         self.log_container.current.controls.insert(0, visual_entry)
-        self.page.update()
-        
-        # Animate in
-        visual_entry.opacity = 1
-        visual_entry.offset = ft.transform.Offset(0, 0)
-        self.page.update()
         
         if len(self.log_container.current.controls) > self.max_entries:
-            # Remove oldest entry with fade out animation
-            oldest_entry = self.log_container.current.controls[-1]
-            oldest_entry.opacity = 1
-            oldest_entry.animate_opacity = ft.Animation(200, ft.AnimationCurve.EASE_IN)
-            self.page.update()
-            oldest_entry.opacity = 0
-            self.page.update()
             self.log_container.current.controls.pop()
         
         self.page.update()
+        
+        # Animate in with enhanced entrance effect
+        visual_entry.opacity = 1
+        visual_entry.offset = ft.Offset(0, 0)
+        self.page.update()
 
     def create_log_entry_visual(self, entry_data: Dict[str, Any]) -> ft.Control:
-        """Create visual representation of a log entry using theme colors."""
+        """Create visual representation of a log entry using theme colors with enhanced styling."""
         # Handle case where theme or color scheme is not available
         if not self.page.theme or not self.page.theme.color_scheme:
             # Fallback to default colors
             level_colors = {
-                "INFO": ft.Colors.GREY_600,
-                "SUCCESS": ft.Colors.GREEN_600,
-                "WARNING": ft.Colors.ORANGE_600,
-                "ERROR": ft.Colors.RED_600
+                "INFO": ft.colors.GREY_600,
+                "SUCCESS": ft.colors.GREEN_600,
+                "WARNING": ft.colors.ORANGE_600,
+                "ERROR": ft.colors.RED_600
             }
             
             color_scheme = None
@@ -135,7 +136,7 @@ class ActivityLogCard:
         }
         
         level = entry_data["level"]
-        color = level_colors.get(level, ft.Colors.GREY_600 if not color_scheme else color_scheme.on_surface_variant)
+        color = level_colors.get(level, ft.colors.GREY_600 if not color_scheme else color_scheme.on_surface_variant)
         icon = level_icons.get(level, ft.Icons.INFO_OUTLINE)
         
         time_str = entry_data["timestamp"].strftime("%H:%M:%S")
@@ -145,22 +146,15 @@ class ActivityLogCard:
             time_color = color_scheme.on_surface_variant
             message_color = color_scheme.on_surface
         else:
-            time_color = ft.Colors.GREY_600
-            message_color = ft.Colors.GREY_800
+            time_color = ft.colors.GREY_600
+            message_color = ft.colors.GREY_800
         
-        # Create the visual entry with proper styling
-        entry_row = ft.Row([
+        return ft.Row([
             ft.Icon(icon, color=color, size=16),
             ft.Text(f"[{time_str}]", style=ft.TextThemeStyle.BODY_SMALL, color=time_color, width=70),
             ft.Text(entry_data["source"], style=ft.TextThemeStyle.BODY_SMALL, weight=ft.FontWeight.BOLD, color=color, width=80),
             ft.Text(entry_data["message"], style=ft.TextThemeStyle.BODY_SMALL, color=message_color, expand=True)
         ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER)
-        
-        # Add animation properties
-        entry_row.opacity = 1
-        entry_row.animate_opacity = 300
-        
-        return entry_row
 
     def clear_log(self, e=None):
         """Clear all log entries with enhanced animation"""

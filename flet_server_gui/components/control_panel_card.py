@@ -9,6 +9,18 @@ import asyncio
 from typing import TYPE_CHECKING
 from flet_server_gui.utils.server_bridge import ServerBridge
 
+# Import enhanced components
+try:
+    from flet_server_gui.components.enhanced_components import (
+        create_enhanced_button,
+        create_enhanced_icon_button,
+        ComponentSize
+    )
+    ENHANCED_COMPONENTS_AVAILABLE = True
+except ImportError:
+    ENHANCED_COMPONENTS_AVAILABLE = False
+    print("[INFO] Enhanced components not available, using standard components")
+
 if TYPE_CHECKING:
     from flet_server_gui.main import ServerGUIApp
 
@@ -29,7 +41,7 @@ class ControlPanelCard:
         self.operation_text_ref = ft.Ref[ft.Text]()
 
     def build(self) -> ft.Card:
-        """Build the control panel card"""
+        """Build the control panel card with enhanced components"""
         
         # Header
         header = ft.Row([
@@ -37,37 +49,60 @@ class ControlPanelCard:
             ft.Text("Control Panel", style=ft.TextThemeStyle.TITLE_LARGE)
         ], spacing=12)
         
-        # Primary actions using semantic M3 buttons
-        primary_actions = ft.Row([
-            ft.FilledButton(
-                ref=self.start_button_ref,
-                text="Start Server",
-                icon=ft.Icons.PLAY_ARROW,
-                on_click=self.start_server,
-                # Add animation for button interactions
-                animate_scale=100
-            ),
-            ft.FilledButton(
-                ref=self.stop_button_ref,
-                text="Stop Server", 
-                icon=ft.Icons.STOP,
-                on_click=self.stop_server,
-                disabled=True,
-                animate_scale=100
-            )
-        ], spacing=12)
-        
-        # Secondary actions  
-        secondary_actions = ft.Row([
-            ft.OutlinedButton(
-                ref=self.restart_button_ref,
-                text="Restart",
-                icon=ft.Icons.REFRESH,
-                on_click=self.restart_server,
-                disabled=True,
-                animate_scale=100
-            )
-        ], spacing=12)
+        # Primary actions using enhanced buttons if available
+        if ENHANCED_COMPONENTS_AVAILABLE:
+            primary_actions = ft.Row([
+                create_enhanced_button(
+                    text="Start Server",
+                    icon=ft.Icons.PLAY_ARROW,
+                    on_click=self.start_server,
+                    ref=self.start_button_ref
+                ),
+                create_enhanced_button(
+                    text="Stop Server", 
+                    icon=ft.Icons.STOP,
+                    on_click=self.stop_server,
+                    disabled=True,
+                    ref=self.stop_button_ref
+                )
+            ], spacing=12)
+            
+            secondary_actions = ft.Row([
+                create_enhanced_button(
+                    text="Restart",
+                    icon=ft.Icons.REFRESH,
+                    on_click=self.restart_server,
+                    disabled=True,
+                    ref=self.restart_button_ref
+                )
+            ], spacing=12)
+        else:
+            # Fallback to standard buttons
+            primary_actions = ft.Row([
+                ft.FilledButton(
+                    ref=self.start_button_ref,
+                    text="Start Server",
+                    icon=ft.Icons.PLAY_ARROW,
+                    on_click=self.start_server
+                ),
+                ft.FilledButton(
+                    ref=self.stop_button_ref,
+                    text="Stop Server", 
+                    icon=ft.Icons.STOP,
+                    on_click=self.stop_server,
+                    disabled=True
+                )
+            ], spacing=12)
+            
+            secondary_actions = ft.Row([
+                ft.OutlinedButton(
+                    ref=self.restart_button_ref,
+                    text="Restart",
+                    icon=ft.Icons.REFRESH,
+                    on_click=self.restart_server,
+                    disabled=True
+                )
+            ], spacing=12)
         
         # Operation status (now controlled by Ref)
         operation_status = ft.Row([
@@ -112,22 +147,13 @@ class ControlPanelCard:
             self.stop_button_ref.current.disabled = not server_running
             self.restart_button_ref.current.disabled = not server_running
             
-            # Add visual feedback for button state changes using theme colors
+            # Add visual feedback for button state changes
             if hasattr(self.app.page.theme, 'color_scheme'):
                 if server_running:
-                    # Use secondary color for stop button when server is running with animation
                     self.stop_button_ref.current.style = ft.ButtonStyle(
                         bgcolor=self.app.page.theme.color_scheme.secondary,
                         color=self.app.page.theme.color_scheme.on_secondary
                     )
-                    # Add subtle pulse animation when button becomes active
-                    self.stop_button_ref.current.scale = ft.transform.Scale(1)
-                    self.stop_button_ref.current.animate_scale = ft.Animation(150, ft.AnimationCurve.ELASTIC_OUT)
-                    self.app.page.update()
-                    self.stop_button_ref.current.scale = ft.transform.Scale(1.02)
-                    self.app.page.update()
-                    self.stop_button_ref.current.scale = ft.transform.Scale(1)
-                    self.app.page.update()
                 else:
                     self.stop_button_ref.current.style = None
             self.app.page.update()

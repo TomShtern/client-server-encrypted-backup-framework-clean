@@ -17,11 +17,9 @@ sys.path.insert(0, ui_path)
 try:
     from theme_m3 import TOKENS, create_theme, linear_gradient
     THEME_AVAILABLE = True
-except ImportError as e:
+except ImportError:
     THEME_AVAILABLE = False
-    TOKENS = {}
-    print(f"[WARNING] Custom theme not available: {e}")
-    print("[WARNING] Using default M3 theme")
+    print("[WARNING] Custom theme not available, using default M3 theme")
 
 class ThemeManager:
     """Manages Material Design 3 themes and styling using custom design tokens."""
@@ -47,13 +45,12 @@ class ThemeManager:
                 self.page.dark_theme.font_family = "Inter"
         else:
             # Fallback to default M3 theme
-            seed_color = TOKENS.get("primary", "blue") if TOKENS else "blue"
             self.page.theme = ft.Theme(
-                color_scheme_seed=seed_color,
+                color_scheme_seed=TOKENS.get("primary", "blue") if THEME_AVAILABLE else "blue",
                 use_material3=True
             )
             self.page.dark_theme = ft.Theme(
-                color_scheme_seed=TOKENS.get("primary", "indigo") if TOKENS else "indigo",
+                color_scheme_seed=TOKENS.get("primary", "indigo") if THEME_AVAILABLE else "indigo",
                 use_material3=True
             )
         self.page.update()
@@ -81,5 +78,5 @@ class ThemeManager:
         else:
             # Fallback gradient
             if colors is None:
-                colors = ["#A8CBF3", "#7C5CD9"] if TOKENS else ["#2196F3", "#3F51B5"]
+                colors = ["#A8CBF3", "#7C5CD9"] if THEME_AVAILABLE else ["#2196F3", "#3F51B5"]
             return ft.LinearGradient(colors=colors, begin=begin, end=end, stops=stops)

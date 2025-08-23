@@ -9,8 +9,8 @@ TOKENS = {
     "primary_gradient": ["#A8CBF3", "#7C5CD9"],  # light blue to purple
     "primary": "#7C5CD9",  # fallback solid primary (purple)
     "on_primary": "#FFFFFF",
-    # Secondary: orange (top arrow)
-    "secondary": "#FCA651",
+    # Secondary: ORANGE (as requested)
+    "secondary": "#FFA500",  # Pure orange
     "on_secondary": "#000000",
     # Tertiary: pink-ish (bottom arrow) — distinct from error red
     "tertiary": "#AB6DA4",
