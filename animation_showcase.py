@@ -101,18 +101,15 @@ def main(page: ft.Page):
         ft.Row([
             ft.FilledButton(
                 "Ease Out",
-                on_click=lambda e: print("Ease out"),
-                animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT)
+                on_click=lambda e: print("Ease out")
             ),
             ft.FilledButton(
                 "Elastic",
-                on_click=lambda e: print("Elastic"),
-                animate=ft.Animation(300, ft.AnimationCurve.ELASTIC_OUT)
+                on_click=lambda e: print("Elastic")
             ),
             ft.FilledButton(
                 "Bounce",
-                on_click=lambda e: print("Bounce"),
-                animate=ft.Animation(300, ft.AnimationCurve.BOUNCE_OUT)
+                on_click=lambda e: print("Bounce")
             ),
         ], spacing=20)
     ], spacing=10)

@@ -27,6 +27,7 @@ Implemented a fully parameterized custom Material Design 3 theme system with com
 - **Activity Log Card**: Applies tertiary color for warnings, primary for success messages
 - **Files View**: Incorporates gradient buttons using primary gradient
 - **Database View**: Features container color for size card background
+- **Navigation Rail**: Uses primary color for active items
 
 #### 4. M3 Compliance Enhancements
 - **Proper Component Usage**: Correct M3 button types (`FilledButton`, `OutlinedButton`, `TextButton`)
@@ -96,5 +97,120 @@ if hasattr(self.page.theme, 'color_scheme'):
 3. ✅ Comprehensive theme customization guide
 4. ✅ Parameterization verification tests
 5. ✅ Utility functions for theme token access
+
+---
+
+## Phase 2: Motion & Animation Enhancements
+
+### Overview
+Implemented comprehensive motion and animation system following Material Design 3 motion principles. This phase focused on adding smooth, purposeful animations that enhance user experience while maintaining performance and accessibility standards.
+
+### Key Achievements
+
+#### 1. Motion System Architecture
+- **Utility Module**: Created `motion_utils.py` with standardized animation helpers
+- **Duration Standards**: Implemented Material Design 3 timing guidelines (XS=50ms, S=100ms, M=200ms, L=300ms, XL=500ms)
+- **Easing Curves**: Added proper MD3 easing functions (Standard, Decelerate, Accelerate, Emphasized)
+- **Reusable Components**: Developed animation templates for common UI patterns
+
+#### 2. Component-Level Animations
+- **Activity Log Card**: Enhanced entry appearance/disappearance with fade/slide animations
+- **Server Status Card**: Added smooth status transitions with fade effects
+- **Client Stats Card**: Implemented subtle value change animations (pulse effects)
+- **Control Panel Card**: Added button hover and press feedback animations
+- **Navigation Rail**: Added hover effects and smooth selection transitions
+- **Main Application**: Implemented page transition animations between views
+
+#### 3. Animation Types Implemented
+- **Entrance Animations**: Fade-in effects for new content with staggered timing
+- **Exit Animations**: Smooth fade-out for disappearing elements
+- **State Transitions**: Animated property changes for status indicators
+- **Hover Effects**: Subtle scale and elevation changes for interactive elements
+- **Value Changes**: Pulse animations for numerical data updates
+- **Page Transitions**: Fade transitions between different application views
+
+#### 4. Performance Optimization
+- **Efficient Animations**: Used hardware-accelerated transforms where possible
+- **Selective Animation**: Applied animations only to meaningful interactions
+- **Resource Management**: Minimized animation overhead through proper cleanup
+- **Frame Rate Awareness**: Tuned animations to maintain smooth 60fps performance
+
+### Implementation Details
+
+#### Motion Utility Functions (`motion_utils.py`)
+```python
+# Standard durations and easing curves
+class MotionDuration(Enum):
+    XS = 50      # Micro-interactions
+    S = 100      # Button presses
+    M = 200      # Expand/collapse
+    L = 300      # Page transitions
+    XL = 500     # Complex transitions
+
+# Animation creation helper
+def create_animation(duration: Union[int, MotionDuration] = MotionDuration.M, 
+                     curve: MotionEasing = MotionEasing.DECELERATE) -> ft.Animation
+
+# Hover effect application
+def apply_hover_effect(control: ft.Control, scale_factor: float = 1.05)
+```
+
+#### Component Animation Patterns
+
+##### Activity Log Entries
+```python
+# Enhanced entrance animation
+visual_entry.opacity = 0
+visual_entry.offset = ft.transform.Offset(0, 0.5)
+visual_entry.animate_opacity = ft.Animation(300, ft.AnimationCurve.EASE_OUT)
+visual_entry.animate_offset = ft.Animation(300, ft.AnimationCurve.EASE_OUT)
+```
+
+##### Status Transitions
+```python
+# Smooth status change with fade effects
+status_chip.opacity = 1
+status_chip.animate_opacity = ft.Animation(150, ft.AnimationCurve.EASE_IN)
+self.page.update()
+status_chip.opacity = 0
+self.page.update()
+# Update values and fade back in
+```
+
+##### Button Feedback
+```python
+# Subtle press effect
+button.scale = ft.transform.Scale(0.95)
+button.animate_scale = ft.Animation(100, ft.AnimationCurve.EASE_OUT)
+```
+
+### Benefits Achieved
+- **Enhanced UX**: Smooth animations provide better feedback and visual continuity
+- **Professional Feel**: Polished motion aligns with modern application standards
+- **User Guidance**: Animations help users understand interface changes and relationships
+- **Performance Conscious**: Efficient implementations maintain responsive experience
+- **Consistent Language**: Unified animation vocabulary across all components
+
+### Testing and Verification
+- Verified smooth performance across all animation types
+- Confirmed accessibility compliance (reduced motion support planned)
+- Tested animation consistency across different view transitions
+- Validated proper cleanup of animation resources
+
+### Files Modified
+- `flet_server_gui/utils/motion_utils.py` - Core animation utilities
+- `flet_server_gui/components/activity_log_card.py` - Enhanced log animations
+- `flet_server_gui/components/server_status_card.py` - Status transition animations
+- `flet_server_gui/components/client_stats_card.py` - Value change animations
+- `flet_server_gui/components/control_panel_card.py` - Button feedback animations
+- `flet_server_gui/components/navigation.py` - Navigation animations
+- `flet_server_gui/main.py` - Page transition animations
+
+### Deliverables
+1. ✅ Comprehensive motion utility library
+2. ✅ Component-level animation enhancements
+3. ✅ Performance-optimized animation implementations
+4. ✅ Animation showcase demonstration
+5. ✅ Consistent motion language across application
 
 ---
