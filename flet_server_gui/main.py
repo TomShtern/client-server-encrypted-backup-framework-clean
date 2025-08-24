@@ -16,12 +16,17 @@ from flet_server_gui.components.control_panel_card import ControlPanelCard
 from flet_server_gui.components.activity_log_card import ActivityLogCard
 from flet_server_gui.components.navigation import NavigationManager
 from flet_server_gui.components.files_view import FilesView
-from flet_server_gui.components.database_view import DatabaseView
+from flet_server_gui.components.real_database_view import RealDatabaseView
 from flet_server_gui.components.analytics_view import AnalyticsView
 from flet_server_gui.components.enhanced_stats_card import EnhancedStatsCard
 from flet_server_gui.components.real_time_charts import RealTimeCharts
 from flet_server_gui.components.quick_actions import QuickActions
 from flet_server_gui.components.enhanced_client_management import create_enhanced_client_management
+from flet_server_gui.components.real_data_clients import RealDataClientsView, RealDataStatsCard
+from flet_server_gui.components.real_data_files import RealDataFilesView, FileTypeBreakdownCard
+from flet_server_gui.components.comprehensive_client_management import ComprehensiveClientManagement
+from flet_server_gui.components.comprehensive_file_management import ComprehensiveFileManagement
+from flet_server_gui.components.dialog_system import DialogSystem, ToastManager
 from flet_server_gui.utils.theme_manager import ThemeManager
 from flet_server_gui.utils.server_bridge import ServerBridge, MockClient
 
@@ -39,13 +44,17 @@ class ServerGUIApp:
         # Apply theme and configure page FIRST
         self.setup_application()
         
+        # Initialize dialog and notification systems
+        self.dialog_system = DialogSystem(page)
+        self.toast_manager = ToastManager(page)
+        
         # NOW initialize components that depend on the theme
         self.status_card = ServerStatusCard(self.server_bridge, page)
         self.client_stats_card = ClientStatsCard(self.server_bridge, page)
         self.control_panel = ControlPanelCard(self.server_bridge, self)
         self.activity_log = ActivityLogCard()
         self.files_view = FilesView(self.server_bridge)
-        self.database_view = DatabaseView(self.server_bridge)
+        self.database_view = RealDatabaseView(self.server_bridge)
         self.analytics_view = AnalyticsView(self.server_bridge)
         self.enhanced_stats_card = EnhancedStatsCard()
         self.real_time_charts = RealTimeCharts()
@@ -56,7 +65,21 @@ class ServerGUIApp:
             on_view_clients=self._on_view_clients,
             on_manage_files=self._on_manage_files
         )
-        self.enhanced_client_management = None  # Will be created when needed
+        
+        # Comprehensive components with dialog integration
+        self.comprehensive_client_management = ComprehensiveClientManagement(
+            self.server_bridge, 
+            self._show_dialog
+        )
+        self.comprehensive_file_management = ComprehensiveFileManagement(
+            self.server_bridge, 
+            self._show_dialog
+        )
+        
+        # Legacy simple components (for dashboard stats)
+        self.real_data_stats = RealDataStatsCard(self.server_bridge)
+        self.file_type_breakdown = FileTypeBreakdownCard(self.server_bridge)
+        
         self.navigation = NavigationManager(page, self.switch_view)
         
         self.activity_log.set_page(page)
@@ -153,7 +176,7 @@ class ServerGUIApp:
                 controls=[
                     ft.Column(col={"sm": 12, "md": 6, "lg": 4}, controls=[self.status_card.build()]),
                     ft.Column(col={"sm": 12, "md": 6, "lg": 4}, controls=[self.control_panel.build()]),
-                    ft.Column(col={"sm": 12, "md": 12, "lg": 4}, controls=[self.client_stats_card.build()]),
+                    ft.Column(col={"sm": 12, "md": 12, "lg": 4}, controls=[self.real_data_stats.build()]),
                     ft.Column(col={"sm": 12, "md": 12, "lg": 6}, controls=[self.enhanced_stats_card]),
                     ft.Column(col={"sm": 12, "md": 12, "lg": 6}, controls=[self.real_time_charts]),
                     ft.Column(col={"sm": 12, "md": 12, "lg": 12}, controls=[self.quick_actions]),
@@ -164,21 +187,21 @@ class ServerGUIApp:
         ], spacing=24, scroll=ft.ScrollMode.ADAPTIVE, expand=True)
     
     def get_clients_view(self) -> ft.Control:
-        if not self.enhanced_client_management:
-            self.enhanced_client_management = create_enhanced_client_management(
-                self._get_sample_clients(), 
-                self.page
-            )
-        return ft.Column([
-            self.enhanced_client_management
-        ], spacing=24, expand=True, scroll=ft.ScrollMode.ADAPTIVE)
+        """Get the comprehensive clients management view"""
+        clients_control = self.comprehensive_client_management.build()
+        # Load data immediately
+        self.comprehensive_client_management.did_mount()
+        return clients_control
     
     def get_files_view(self) -> ft.Control:
-        """Get the files management view"""
-        return self.files_view.build()
+        """Get the comprehensive files management view"""
+        files_control = self.comprehensive_file_management.build()
+        # Load data immediately
+        self.comprehensive_file_management.did_mount()
+        return files_control
     
     def get_database_view(self) -> ft.Control:
-        """Get the database management view"""
+        """Get the real database management view"""
         return self.database_view.build()
     
     def get_analytics_view(self) -> ft.Control:
@@ -423,6 +446,50 @@ class ServerGUIApp:
     async def show_notification(self, message: str, is_error: bool = False):
         """Async method to show notification."""
         self._show_notification_sync(message, is_error)
+    
+    def _show_dialog(self, dialog_type: str, title: str, message: str, **kwargs):
+        """Show dialog using the dialog system - bridge method for comprehensive components"""
+        if dialog_type == "info":
+            self.dialog_system.show_info_dialog(title, message, kwargs.get('on_close'))
+        elif dialog_type == "success":
+            self.dialog_system.show_success_dialog(title, message, kwargs.get('on_close'))
+        elif dialog_type == "error":
+            self.dialog_system.show_error_dialog(title, message, kwargs.get('on_close'))
+        elif dialog_type == "warning":
+            self.dialog_system.show_warning_dialog(title, message, kwargs.get('on_close'))
+        elif dialog_type == "confirmation":
+            self.dialog_system.show_confirmation_dialog(
+                title, message,
+                kwargs.get('on_confirm', lambda: None),
+                kwargs.get('on_cancel'),
+                kwargs.get('confirm_text', 'Confirm'),
+                kwargs.get('cancel_text', 'Cancel'),
+                kwargs.get('danger', False)
+            )
+        elif dialog_type == "input":
+            self.dialog_system.show_input_dialog(
+                title, message,
+                kwargs.get('on_submit', lambda x: None),
+                kwargs.get('on_cancel'),
+                kwargs.get('placeholder', ''),
+                kwargs.get('initial_value', ''),
+                kwargs.get('multiline', False)
+            )
+        elif dialog_type == "progress":
+            return self.dialog_system.show_progress_dialog(
+                title, message,
+                kwargs.get('progress_value'),
+                kwargs.get('cancelable', True),
+                kwargs.get('on_cancel')
+            )
+        elif dialog_type == "custom":
+            self.dialog_system.show_custom_dialog(
+                title, 
+                kwargs.get('content'),
+                kwargs.get('actions'),
+                kwargs.get('modal', True),
+                kwargs.get('scrollable', False)
+            )
     
     async def monitor_loop(self):
         while True:

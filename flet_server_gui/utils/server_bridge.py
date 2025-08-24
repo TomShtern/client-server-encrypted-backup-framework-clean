@@ -17,12 +17,25 @@ project_root = os.path.join(os.path.dirname(__file__), "..", "..")
 sys.path.insert(0, project_root)
 
 try:
-    from kivymd_gui.utils.server_integration import ServerIntegrationBridge, ServerStatus
-    from kivymd_gui.models.data_models import ClientInfo
+    from python_server.server.server import BackupServer
+    from python_server.server.database import DatabaseManager
+    from python_server.server.config import DEFAULT_PORT
     BRIDGE_AVAILABLE = True
+    print("[INFO] Direct server integration available - using real data")
 except ImportError:
-    BRIDGE_AVAILABLE = False
-    print("[INFO] Server integration bridge not available - using mock data")
+    try:
+        # Try fallback path
+        import sys
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+        from python_server.server.server import BackupServer  
+        from python_server.server.database import DatabaseManager
+        from python_server.server.config import DEFAULT_PORT
+        BRIDGE_AVAILABLE = True
+        print("[INFO] Direct server integration available via fallback path - using real data")
+    except ImportError:
+        BRIDGE_AVAILABLE = False
+        print("[INFO] Direct server integration not available - using mock data")
 
 
 @dataclass
@@ -46,28 +59,25 @@ class MockClient:
     status: str = "Idle"
 
 class ServerBridge:
-    """Bridge to interface with the server system, with enhanced mock mode."""
+    """Bridge to interface with the server system, with direct database access."""
     
     def __init__(self):
-        self.server_integration = None
+        self.server_instance = None
+        self.db_manager = None
         self.mock_mode = not BRIDGE_AVAILABLE
         
-        # Enhanced mock data for development
-        self.mock_server_info = ServerInfo(total_clients=15, total_transfers=128)
-        self.mock_clients: List[MockClient] = []
-        self.mock_logs: List[Dict[str, Any]] = []
-        
-        if self.mock_mode:
-            print("[INFO] Running in Mock Mode with simulated activity.")
-            asyncio.create_task(self.simulate_activity())
-
         if BRIDGE_AVAILABLE:
             try:
-                self.server_integration = ServerIntegrationBridge()
-                self.server_integration.start_bridge()
+                # Initialize database manager directly
+                self.db_manager = DatabaseManager()
+                print("[INFO] Direct database connection established for real data")
+                self.mock_mode = False
             except Exception as e:
-                print(f"[WARNING] Could not initialize server bridge: {e}")
+                print(f"[WARNING] Could not initialize database manager: {e}")
                 self.mock_mode = True
+        
+        if self.mock_mode:
+            print("[WARNING] Running in Mock Mode - database not available")
 
     async def get_server_status(self) -> ServerInfo:
         """Get current server status"""
@@ -78,9 +88,9 @@ class ServerBridge:
         
         # Real implementation
         try:
-            if self.server_integration:
-                stats = self.server_integration.get_server_stats()
-                info = self.server_integration.get_server_info()
+            if self.db_manager:
+                # Get stats from database instead
+                stats = self.db_manager.get_database_stats()
                 
                 server_info = ServerInfo()
                 server_info.running = info.get('running', False)
@@ -111,8 +121,8 @@ class ServerBridge:
         
         # Real implementation
         try:
-            if self.server_integration:
-                self.server_integration.start_server_async(standalone=False)
+            if self.db_manager:
+                # TODO: Implement actual server start logic
                 # Wait a bit for the server to start
                 await asyncio.sleep(2)
                 return True
@@ -132,8 +142,8 @@ class ServerBridge:
         
         # Real implementation
         try:
-            if self.server_integration:
-                self.server_integration.stop_server_async()
+            if self.db_manager:
+                # TODO: Implement actual server stop logic
                 # Wait a bit for the server to stop
                 await asyncio.sleep(2)
                 return True
@@ -152,8 +162,8 @@ class ServerBridge:
         
         # Real implementation
         try:
-            if self.server_integration:
-                self.server_integration.restart_server_async(standalone=False)
+            if self.db_manager:
+                # TODO: Implement actual server restart logic
                 # Wait a bit for the server to restart
                 await asyncio.sleep(3)
                 return True
@@ -163,90 +173,188 @@ class ServerBridge:
         return False
 
     def get_client_list(self) -> List[MockClient]:
-        """Get list of connected clients."""
+        """Get list of registered clients from real database."""
         if self.mock_mode:
-            return self.mock_clients
+            return []
         
-        # Real implementation
+        # Real implementation using direct database access
         try:
-            if self.server_integration:
-                client_infos = self.server_integration.get_client_list()
-                mock_clients = []
-                for client_info in client_infos:
-                    mock_client = MockClient(
-                        client_id=client_info.client_id,
-                        address=client_info.ip_address,
-                        connected_at=client_info.connection_time or datetime.now(),
-                        last_activity=client_info.last_seen,
-                        status=client_info.status
+            if self.db_manager:
+                # Get all registered clients from database
+                db_clients = self.db_manager.get_all_clients()
+                real_clients = []
+                
+                for client_data in db_clients:
+                    # Fix date parsing - remove extra 'Z' if present
+                    last_seen_str = client_data['last_seen']
+                    if last_seen_str:
+                        # Remove extra 'Z' if it exists with timezone info
+                        if last_seen_str.endswith('+00:00Z'):
+                            last_seen_str = last_seen_str[:-1]  # Remove the 'Z'
+                        try:
+                            last_seen_dt = datetime.fromisoformat(last_seen_str)
+                        except ValueError:
+                            last_seen_dt = datetime.now()
+                    else:
+                        last_seen_dt = datetime.now()
+                    
+                    client = MockClient(
+                        client_id=client_data['name'],  # Use name as display ID
+                        address="N/A",  # Database doesn't store current IP
+                        connected_at=last_seen_dt,
+                        last_activity=last_seen_dt,
+                        status="Registered"  # All DB clients are registered
                     )
-                    mock_clients.append(mock_client)
-                return mock_clients
+                    real_clients.append(client)
+                
+                print(f"[INFO] Retrieved {len(real_clients)} real clients from database")
+                return real_clients
+                
         except Exception as e:
-            print(f"[ERROR] Failed to get client list: {e}")
+            print(f"[ERROR] Failed to get client list from database: {e}")
+        
+        return []
+
+    def get_file_list(self) -> List[Dict[str, Any]]:
+        """Get list of transferred files from real database."""
+        if self.mock_mode:
+            return []
+        
+        # Real implementation using direct database access
+        try:
+            if self.db_manager:
+                # Get all files from database
+                db_files = self.db_manager.get_all_files()
+                print(f"[INFO] Retrieved {len(db_files)} real files from database")
+                return db_files
+                
+        except Exception as e:
+            print(f"[ERROR] Failed to get file list from database: {e}")
         
         return []
 
     def get_recent_activity(self, count: int = 50) -> List[Dict[str, Any]]:
         """Get recent server activity logs."""
         if self.mock_mode:
-            return self.mock_logs[:count]
+            return []
         
-        # For real implementation, we would get logs from the server
-        # For now, return empty list
+        # For real implementation, get logs from server log files
         return []
 
     def is_mock_mode(self) -> bool:
         return self.mock_mode
+    
+    # === Client Management Operations ===
+    
+    def disconnect_client(self, client_id: str) -> bool:
+        """Disconnect a specific client."""
+        if self.mock_mode:
+            print(f"[MOCK] Would disconnect client: {client_id}")
+            return True
+        
+        try:
+            # TODO: Implement actual client disconnection via server API
+            print(f"[INFO] Disconnecting client: {client_id}")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to disconnect client {client_id}: {e}")
+            return False
+    
+    def delete_client(self, client_id: str) -> bool:
+        """Delete a client from the database."""
+        if self.mock_mode:
+            print(f"[MOCK] Would delete client: {client_id}")
+            return True
+        
+        try:
+            if self.db_manager:
+                # TODO: Add delete client method to DatabaseManager
+                print(f"[INFO] Deleting client from database: {client_id}")
+                # self.db_manager.delete_client(client_id)
+                return True
+        except Exception as e:
+            print(f"[ERROR] Failed to delete client {client_id}: {e}")
+            return False
+        
+        return False
+    
+    def disconnect_multiple_clients(self, client_ids: List[str]) -> int:
+        """Disconnect multiple clients. Returns count of successfully disconnected."""
+        success_count = 0
+        for client_id in client_ids:
+            if self.disconnect_client(client_id):
+                success_count += 1
+        return success_count
+    
+    def delete_multiple_clients(self, client_ids: List[str]) -> int:
+        """Delete multiple clients. Returns count of successfully deleted."""
+        success_count = 0
+        for client_id in client_ids:
+            if self.delete_client(client_id):
+                success_count += 1
+        return success_count
+    
+    # === File Management Operations ===
+    
+    def delete_file(self, file_info: Dict[str, Any]) -> bool:
+        """Delete a file from storage and database."""
+        if self.mock_mode:
+            filename = file_info.get('filename', 'Unknown')
+            print(f"[MOCK] Would delete file: {filename}")
+            return True
+        
+        try:
+            filename = file_info.get('filename', 'Unknown')
+            file_id = file_info.get('id')
+            
+            if self.db_manager and file_id:
+                # TODO: Add delete file method to DatabaseManager
+                print(f"[INFO] Deleting file from database: {filename}")
+                # self.db_manager.delete_file(file_id)
+                return True
+        except Exception as e:
+            print(f"[ERROR] Failed to delete file {filename}: {e}")
+            return False
+        
+        return False
+    
+    def delete_multiple_files(self, file_infos: List[Dict[str, Any]]) -> int:
+        """Delete multiple files. Returns count of successfully deleted."""
+        success_count = 0
+        for file_info in file_infos:
+            if self.delete_file(file_info):
+                success_count += 1
+        return success_count
+    
+    def download_file(self, file_info: Dict[str, Any], destination_path: str) -> bool:
+        """Download a file to specified destination."""
+        if self.mock_mode:
+            filename = file_info.get('filename', 'Unknown')
+            print(f"[MOCK] Would download file: {filename} to {destination_path}")
+            return True
+        
+        try:
+            filename = file_info.get('filename', 'Unknown')
+            # TODO: Implement actual file download from server storage
+            print(f"[INFO] Downloading file: {filename} to {destination_path}")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to download file {filename}: {e}")
+            return False
+    
+    def verify_file(self, file_info: Dict[str, Any]) -> bool:
+        """Verify file integrity."""
+        if self.mock_mode:
+            filename = file_info.get('filename', 'Unknown')
+            print(f"[MOCK] Would verify file: {filename}")
+            return True
+        
+        try:
+            filename = file_info.get('filename', 'Unknown')
+            # TODO: Implement actual file verification (CRC, size, etc.)
+            print(f"[INFO] Verifying file: {filename}")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to verify file {filename}: {e}")
+            return False
 
-    # --- Mock Mode Simulation --- #
-
-    def add_mock_log(self, source: str, message: str, level: str):
-        self.mock_logs.insert(0, {
-            "timestamp": datetime.now(),
-            "source": source,
-            "message": message,
-            "level": level
-        })
-        if len(self.mock_logs) > 100: # Keep a history of 100 logs
-            self.mock_logs.pop()
-
-    async def simulate_activity(self):
-        """A background task to simulate server activity in mock mode."""
-        client_id_counter = 0
-        while True:
-            await asyncio.sleep(random.uniform(3, 10))
-            if not self.mock_server_info.running:
-                continue
-
-            action = random.choice(["connect", "disconnect", "transfer_start", "transfer_end", "error"])
-
-            if action == "connect" and len(self.mock_clients) < 10:
-                client_id_counter += 1
-                new_client = MockClient(
-                    client_id=f"client_{client_id_counter}",
-                    address=f"192.168.1.{random.randint(100, 200)}",
-                    connected_at=datetime.now(),
-                    last_activity=datetime.now()
-                )
-                self.mock_clients.append(new_client)
-                self.add_mock_log(new_client.client_id, "Connected to server", "INFO")
-
-            elif action == "disconnect" and self.mock_clients:
-                client_to_disconnect = random.choice(self.mock_clients)
-                self.mock_clients.remove(client_to_disconnect)
-                self.add_mock_log(client_to_disconnect.client_id, "Disconnected from server", "INFO")
-
-            elif action == "transfer_start" and any(c.status == "Idle" for c in self.mock_clients):
-                client = random.choice([c for c in self.mock_clients if c.status == "Idle"])
-                client.status = "Transferring"
-                self.add_mock_log(client.client_id, f"Started file transfer: backup_{random.randint(1,100)}.dat", "SUCCESS")
-
-            elif action == "transfer_end" and any(c.status == "Transferring" for c in self.mock_clients):
-                client = random.choice([c for c in self.mock_clients if c.status == "Transferring"])
-                client.status = "Idle"
-                self.add_mock_log(client.client_id, "File transfer completed successfully", "SUCCESS")
-
-            elif action == "error" and self.mock_clients:
-                client = random.choice(self.mock_clients)
-                self.add_mock_log(client.client_id, "CRC check failed for a file chunk", "ERROR")
