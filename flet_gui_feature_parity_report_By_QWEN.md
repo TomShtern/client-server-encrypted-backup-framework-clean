@@ -67,7 +67,7 @@ Based on the ORIGINAL_serverGUIV1.py, the TKinter GUI has these key features:
 
 ### 2.2 Advanced Features:
 - **Context Menus**: Right-click actions for clients/files
-- **Drag & Drop**: File upload via drag-and-drop
+- **Drag & Drop**: File upload via drag-and-drop: THIS FEATURRE IS NOT APROPRIATE, DO NOT COPY IT.
 - **Detailed Filtering**: Search and filter capabilities
 - **Performance Charts**: Live system metrics visualization
 - **Toasts/Notifications**: User feedback system
@@ -92,69 +92,67 @@ The Flet GUI has achieved significant feature parity with the TKinter GUI:
 - Toast notifications
 
 #### ⚠️ Partially Implemented:
-- Drag-and-drop file upload (planned but not implemented)
+- Drag-and-drop file upload (planned but not implemented) - DO NOT IMPLEMENT DRAG-AND-DROP!
 - System tray integration (not implemented)
 - Process monitoring (not implemented)
 
 #### ❌ Not Implemented:
 - Background operation support
-- Cross-platform notifications
+- Cross-platform notifications(desktop is good enough, no need to go overboard)
 
 ### 3.2 Detailed Component Comparison
 
 #### Dashboard:
 - **Flet**: Enhanced with real-time charts, detailed stats cards
 - **TKinter**: Basic status cards with similar information
-- **Parity**: ✅ Achieved with enhancements
+- **Parity**: ALMOST Achieved with enhancements, might need to tweak the flet layout a bit to make to more visually apealling.
 
 #### Client Management:
-- **Flet**: Comprehensive management with disconnect, delete, bulk operations
+- **Flet**: Comprehensive management with disconnect, delete, bulk operations (a lot of buttons dont function or work.)
 - **TKinter**: Similar functionality with context menus
-- **Parity**: ✅ Achieved
+- **Parity**: ALMOST Achieved, need to make the buttons work and do actions.
 
 #### File Management:
-- **Flet**: Full file operations with preview, bulk actions, filtering
+- **Flet**: Full file operations with preview, bulk actions, filtering, not all of the buttons work.
 - **TKinter**: File listing with delete and verification
-- **Parity**: ✅ Achieved with enhancements
+- **Parity**: ALMOST Achieved with enhancements, buttons needs work.
 
 #### Database Management:
-- **Flet**: Real database content viewing with table selection
+- **Flet**: Real database content viewing with table selection, currently not displayed, but should be. it needs to display empty data entries for not an empty page, ONLY when not connectecd to the server/database. and display the correct data in a nice neat format when connected and working correct.
 - **TKinter**: Similar database browsing capabilities
-- **Parity**: ✅ Achieved
+- **Parity**: almost Achieved
 
 #### Logs & Monitoring:
 - **Flet**: Real-time log viewing with filtering
 - **TKinter**: Activity log display
-- **Parity**: ✅ Achieved
+- **Parity**: almost Achieved, a lot of buttons and settings still not working, need to fix and implement it.
 
 #### Settings:
 - **Flet**: Comprehensive settings with validation and persistence
 - **TKinter**: Basic server configuration
-- **Parity**: ✅ Achieved with enhancements
+- **Parity**: almost Achieved with enhancements, need to make sure settings get saved, that the color of the text field-box is the secondary color-orange.
 
 ## 4. Missing Features Compared to TKinter
 
 ### 4.1 System Integration Features:
 1. **System Tray Integration** - Background operation support
 2. **Process Monitoring** - System process monitoring tab
-3. **Drag-and-Drop File Upload** - File upload via drag-and-drop
+3. **Drag-and-Drop File Upload** - File upload via drag-and-drop - DO NOT IMPLEMENT THIS!
 
 ### 4.2 UI/UX Enhancements:
 1. **Advanced Context Menus** - More comprehensive right-click actions
 2. **Detailed Tooltips** - Enhanced tooltip system
-3. **Keyboard Navigation** - Full keyboard shortcut support
+3. **Keyboard Navigation** - Full keyboard shortcut support - NOT RELEVANT, DROPT IT, DO-NOT DO THIS FEATURE!
 
 ## 5. Recommendations for Enhancement
 
 ### 5.1 High Priority (Should be implemented):
 1. **System Tray Integration** - Add background operation support
-2. **Drag-and-Drop File Upload** - Implement file upload via drag-and-drop
-3. **Process Monitoring** - Add system process monitoring capabilities
+2. **Process Monitoring** - Add system process monitoring capabilities
 
 ### 5.2 Medium Priority (Nice to have):
 1. **Advanced Context Menus** - Enhance right-click actions
 2. **Detailed Tooltips** - Improve tooltip system
-3. **Keyboard Navigation** - Add full keyboard shortcut support
 
 ### 5.3 Low Priority (Future enhancements):
 1. **Cross-platform Notifications** - Native OS notifications
@@ -167,27 +165,28 @@ The Flet GUI has achieved significant feature parity with the TKinter GUI:
 - ✅ All components properly connected to ServerBridge
 - ✅ Real-time data updates implemented
 - ✅ Error handling for server communication
-- ✅ Mock mode fallback for development
+- ✅ Mock mode fallback for development - MAKE SURE ITS ALWAYS OFF WHEN CONNECTED TO REAL DATA-SOURCE.
 
 ### 6.2 Theme & Styling:
-- ✅ All components using theme tokens consistently
+- ✅ All components using theme tokens consistently(NOT REALLY, ALMOST, ONLY perpule and teal are present int the flet gui, no orange and no pinkish-red.)
 - ✅ Dark/light mode switching works for all elements
-- ✅ Custom orange secondary color applied everywhere
-- ✅ M3 elevation and shadows properly implemented
+- ✅ Custom orange secondary color applied everywhere(not everywhere)
+- ✅ M3 elevation and shadows properly implemented (still needs some work)
 
 ### 6.3 Animation & Motion:
-- ✅ All interactive elements have hover effects
-- ✅ Page transitions are smooth
-- ✅ Data updates have proper animations
-- ✅ Loading states are visually indicated
+- ✅ All interactive elements have hover effects (yet to be seen, maybe not displaying)
+- ✅ Page transitions are smooth(menu bar does not have animation at all, fix)
+- ✅ Data updates have proper animations(yet to bee seen, make sure its actually implemented to the highest standerd.)
+- ✅ Loading states are visually indicated(not seen yet)
 
 ## 7. Conclusion
 
-The Flet GUI has achieved excellent feature parity with the TKinter GUI, with several enhancements:
+The Flet GUI has achieved good feature parity with the TKinter GUI, with several enhancements:
 
 1. **Superior UI/UX**: Modern Material Design 3 implementation with smooth animations
 2. **Enhanced Functionality**: More comprehensive client and file management
 3. **Better Organization**: Modular component structure for easier maintenance
 4. **Real-time Updates**: Improved real-time data visualization
 
-The few missing features are mostly system integration capabilities that could be implemented in future iterations. Overall, the Flet GUI provides a more modern and feature-rich experience while maintaining full functional parity with the TKinter implementation.
+The few missing features are mostly system integration capabilities, buttons, views, visually apealing dashboard, etc. that should be implemented fully and fixed before the flet-gui could be called complete. Overall, the Flet GUI provides a more modern and feature-rich experience while maintaining almost functional parity with the TKinter implementation.
+the flet-gui still needs a lot of work.

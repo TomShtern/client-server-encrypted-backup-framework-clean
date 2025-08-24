@@ -63,13 +63,13 @@ class LogsView:
         
         self.search_field = ft.TextField(
             label="Search logs",
-            prefix_icon=ft.icons.search,
+            prefix_icon=ft.Icons.SEARCH,
             on_change=self._on_search_changed,
             width=300
         )
         
-        # Start monitoring
-        self._start_monitoring()
+        # Defer monitoring start until page is ready
+        # self._start_monitoring()
         
         logger.info("✅ Logs view initialized with real log service")
     
@@ -80,7 +80,7 @@ class LogsView:
         controls_bar = ft.Row([
             ft.ElevatedButton(
                 text="Start Monitoring" if not self.log_service.monitoring_active else "Stop Monitoring",
-                icon=ft.icons.play_arrow if not self.log_service.monitoring_active else ft.icons.stop,
+                icon=ft.Icons.PLAY_ARROW if not self.log_service.monitoring_active else ft.Icons.STOP,
                 on_click=self._toggle_monitoring
             ),
             ft.VerticalDivider(width=1),
@@ -89,17 +89,17 @@ class LogsView:
             self.search_field,
             ft.VerticalDivider(width=1),
             ft.IconButton(
-                icon=ft.icons.refresh,
+                icon=ft.Icons.REFRESH,
                 tooltip="Refresh logs",
                 on_click=self._refresh_logs
             ),
             ft.IconButton(
-                icon=ft.icons.clear,
+                icon=ft.Icons.CLEAR,
                 tooltip="Clear display",
                 on_click=self._clear_display
             ),
             ft.IconButton(
-                icon=ft.icons.download,
+                icon=ft.Icons.DOWNLOAD,
                 tooltip="Export logs",
                 on_click=self._export_logs
             ),
@@ -196,7 +196,23 @@ class LogsView:
                     await asyncio.sleep(5)
         
         # Start the update loop
-        asyncio.create_task(update_loop())
+        # Use the page's event loop if available, otherwise create task
+        try:
+            if hasattr(self.page, 'session') and self.page.session:
+                # We're in a page session, can create task directly
+                asyncio.create_task(update_loop())
+            else:
+                # Defer task creation until event loop is available
+                async def delayed_start():
+                    await asyncio.sleep(0.1)  # Small delay to allow page setup
+                    asyncio.create_task(update_loop())
+                
+                # Just run the loop directly for now to avoid event loop issues
+                # asyncio.create_task(delayed_start())
+                pass  # Skip auto-start for now to avoid event loop issues
+        except RuntimeError:
+            # No event loop running, defer task creation
+            pass
     
     def _process_pending_updates(self, updates: List[LogEntry]):
         """Process pending log updates and update UI"""

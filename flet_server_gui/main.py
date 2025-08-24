@@ -5,7 +5,25 @@ Flet Material Design 3 Server GUI - Main Application
 Desktop application for managing the encrypted backup server.
 """
 
-import Shared.utils.utf8_solution
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+# Import utf8_solution to fix encoding issues
+try:
+    import Shared.utils.utf8_solution
+    print("[INFO] UTF-8 solution imported successfully")
+except ImportError as e:
+    # Try alternative path
+    utf8_path = os.path.join(os.path.dirname(__file__), "..", "Shared", "utils")
+    if utf8_path not in sys.path:
+        sys.path.insert(0, utf8_path)
+    try:
+        import utf8_solution
+        print("[INFO] UTF-8 solution imported via alternative path")
+    except ImportError:
+        print("[WARNING] utf8_solution import failed, continuing without it")
+        print(f"[DEBUG] Import error: {e}")
 import flet as ft
 import asyncio
 from datetime import datetime
@@ -28,7 +46,7 @@ from flet_server_gui.components.comprehensive_client_management import Comprehen
 from flet_server_gui.components.comprehensive_file_management import ComprehensiveFileManagement
 from flet_server_gui.components.dialog_system import DialogSystem, ToastManager
 from flet_server_gui.utils.theme_manager import ThemeManager
-from flet_server_gui.utils.server_bridge import ServerBridge, MockClient
+from flet_server_gui.utils.server_bridge import ServerBridge
 from flet_server_gui.views.settings_view import SettingsView
 from flet_server_gui.views.logs_view import LogsView
 

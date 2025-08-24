@@ -91,8 +91,9 @@ class ServerBridge:
                 
                 # If no server instance provided, create one for standalone mode
                 if not self.server_instance:
-                    print("[INFO] No server instance provided, creating new BackupServer for real integration")
-                    self.server_instance = BackupServer()
+                    print("[INFO] No server instance provided, will connect to existing server")
+                    # Don't create a new server instance, just use the database connection
+                    # The server should be running separately
                     
             except Exception as e:
                 print(f"[ERROR] Could not initialize server integration: {e}")
