@@ -88,11 +88,15 @@ class ServerGUIApp:
         # Comprehensive components with dialog integration
         self.comprehensive_client_management = ComprehensiveClientManagement(
             self.server_bridge, 
-            self._show_dialog
+            self.dialog_system,
+            self.toast_manager,
+            self.page
         )
         self.comprehensive_file_management = ComprehensiveFileManagement(
             self.server_bridge, 
-            self._show_dialog
+            self.dialog_system,
+            self.toast_manager,
+            self.page
         )
         
         # Settings view with real configuration management

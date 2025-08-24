@@ -32,7 +32,7 @@ class ServerStatusCard:
         self.clients_text = ft.Ref[ft.Text]()
 
     def build(self) -> ft.Card:
-        """Build the server status card"""
+        """Build the server status card with fully responsive layout"""
         header_row = ft.Row([
             ft.Row([
                 ft.Icon(ref=self.status_icon, name=ft.Icons.RADIO_BUTTON_OFF, size=20),
@@ -48,14 +48,27 @@ class ServerStatusCard:
             ft.Text(ref=self.clients_text, value="Connected: 0 clients", style=ft.TextThemeStyle.BODY_MEDIUM)
         ], spacing=8)
         
-        card_content = ft.Container(
+        # Use responsive layout with adaptive container
+        from ..layouts.responsive_utils import ResponsiveBuilder
+        from ..layouts.breakpoint_manager import BreakpointManager
+        
+        # Get current screen width (default to 1200 if not available)
+        screen_width = getattr(self.page, 'window_width', 1200) or 1200
+        
+        # Create fully responsive container without any hardcoded dimensions
+        card_content = ResponsiveBuilder.create_adaptive_container(
             content=ft.Column([header_row, ft.Divider(), details_column], spacing=16),
-            padding=ft.padding.all(20),
-            width=350,
-            border_radius=12
+            responsive_padding=True,
+            responsive_margin=True,
+            expand=True
         )
         
-        return ft.Card(content=card_content, elevation=1)
+        # Use responsive card creation
+        return ResponsiveBuilder.create_responsive_card(
+            content=card_content,
+            elevation=1,
+            expand=True
+        )
 
     def update_status(self, server_info):
         """Update the status card with new server information."""

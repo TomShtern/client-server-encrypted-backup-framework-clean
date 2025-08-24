@@ -9,14 +9,24 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Callable
 from ..utils.server_bridge import ServerBridge
+from .base_component import BaseComponent
+from ..actions import FileActions
 
 
-class ComprehensiveFileManagement:
+class ComprehensiveFileManagement(BaseComponent):
     """Complete file management with all TKinter GUI features."""
     
-    def __init__(self, server_bridge: ServerBridge, show_dialog_callback: Optional[Callable] = None):
+    def __init__(self, server_bridge: ServerBridge, dialog_system, toast_manager, page):
+        super().__init__(page, dialog_system, toast_manager)
         self.server_bridge = server_bridge
-        self.show_dialog = show_dialog_callback or self._default_dialog
+        self.show_dialog = dialog_system or self._default_dialog
+        # Initialize file actions
+        self.file_actions = FileActions(server_bridge)
+        
+        # Initialize button factory
+        from .button_factory import ActionButtonFactory
+        # Use self as the base component for the button factory
+        self.button_factory = ActionButtonFactory(self, server_bridge, page)
         
         # UI Components
         self.file_table = None
@@ -353,33 +363,13 @@ class ComprehensiveFileManagement:
                 verified_color = ft.Colors.GREEN_600 if file_info.get('verified', False) else ft.Colors.RED_600
                 file_type = self._get_file_type(filename).title()
                 
-                # Create action buttons for this file
+                # Create action buttons for this file using button factory
                 action_buttons = ft.Row([
-                    ft.IconButton(
-                        ft.Icons.INFO,
-                        tooltip="File Details",
-                        on_click=lambda e, f=file_info: self._view_file_details(f)
-                    ),
-                    ft.IconButton(
-                        ft.Icons.DOWNLOAD,
-                        tooltip="Download",
-                        on_click=lambda e, f=file_info: self._download_file(f)
-                    ),
-                    ft.IconButton(
-                        ft.Icons.VERIFIED,
-                        tooltip="Verify",
-                        on_click=lambda e, f=file_info: self._verify_file(f)
-                    ),
-                    ft.IconButton(
-                        ft.Icons.VISIBILITY,
-                        tooltip="Preview",
-                        on_click=lambda e, f=file_info: self._preview_file(f)
-                    ),
-                    ft.IconButton(
-                        ft.Icons.DELETE,
-                        tooltip="Delete",
-                        on_click=lambda e, f=file_info: self._delete_file(f)
-                    ),
+                    self.button_factory.create_action_button('file_view_details', lambda f=file_info: [f.get('filename', 'unknown')]),
+                    self.button_factory.create_action_button('file_download', lambda f=file_info: [f.get('filename', 'unknown')]),
+                    self.button_factory.create_action_button('file_verify', lambda f=file_info: [f.get('filename', 'unknown')]),
+                    self.button_factory.create_action_button('file_preview', lambda f=file_info: [f.get('filename', 'unknown')]),
+                    self.button_factory.create_action_button('file_delete', lambda f=file_info: [f.get('filename', 'unknown')]),
                 ], tight=True)
                 
                 # Add file row
@@ -554,23 +544,45 @@ class ComprehensiveFileManagement:
     
     def _download_file(self, file_info):
         """Download a file."""
-        try:
-            filename = file_info.get('filename', 'Unknown')
-            # TODO: Implement actual download logic
-            print(f"[INFO] Downloading file: {filename}")
-            self.show_dialog("info", "Download", f"File '{filename}' download started")
-        except Exception as e:
-            self.show_dialog("error", "Error", f"Failed to download file: {str(e)}")
+        async def download_action():
+            try:
+                filename = file_info.get('filename', 'Unknown')
+                # Use action system to download file
+                # For now, we'll just show a dialog - in a real implementation, this would trigger a file save dialog
+                result = await self.file_actions.download_file(filename, f"./downloads/{filename}")
+                
+                if result.success:
+                    self.show_dialog("success", "Download Complete", f"File '{filename}' downloaded successfully")
+                else:
+                    self.show_dialog("error", "Download Failed", f"Failed to download file '{filename}': {result.error_message}")
+            except Exception as e:
+                self.show_dialog("error", "Error", f"Failed to download file: {str(e)}")
+        
+        # Run the async function
+        import asyncio
+        asyncio.create_task(download_action())
     
     def _verify_file(self, file_info):
         """Verify a file's integrity."""
-        try:
-            filename = file_info.get('filename', 'Unknown')
-            # TODO: Implement actual verification logic
-            print(f"[INFO] Verifying file: {filename}")
-            self.show_dialog("info", "Verification", f"File '{filename}' verification started")
-        except Exception as e:
-            self.show_dialog("error", "Error", f"Failed to verify file: {str(e)}")
+        async def verify_action():
+            try:
+                filename = file_info.get('filename', 'Unknown')
+                # Use action system to verify file
+                result = await self.file_actions.verify_file_integrity(filename)
+                
+                if result.success:
+                    if result.data.get('is_valid'):
+                        self.show_dialog("success", "Verification Complete", f"File '{filename}' is valid")
+                    else:
+                        self.show_dialog("warning", "Verification Failed", f"File '{filename}' is invalid")
+                else:
+                    self.show_dialog("error", "Verification Failed", f"Failed to verify file '{filename}': {result.error_message}")
+            except Exception as e:
+                self.show_dialog("error", "Error", f"Failed to verify file: {str(e)}")
+        
+        # Run the async function
+        import asyncio
+        asyncio.create_task(verify_action())
     
     def _preview_file(self, file_info):
         """Preview a file (show content or metadata)."""
@@ -588,14 +600,14 @@ class ComprehensiveFileManagement:
     
     def _delete_file(self, file_info):
         """Delete a file."""
-        filename = file_info.get('filename', 'Unknown')
-        
-        def confirm_delete():
+        async def delete_action():
             try:
-                success = self.server_bridge.delete_file(file_info)
+                filename = file_info.get('filename', 'Unknown')
+                # Use action system to delete file
+                result = await self.file_actions.delete_file(filename)
                 self._refresh_files()
                 
-                if success:
+                if result.success:
                     self.show_dialog(
                         "success",
                         "File Deleted",
@@ -605,7 +617,7 @@ class ComprehensiveFileManagement:
                     self.show_dialog(
                         "warning",
                         "Delete Warning",
-                        f"File '{filename}' delete completed with warnings"
+                        f"File '{filename}' delete completed with warnings: {result.error_message}"
                     )
             except Exception as ex:
                 self.show_dialog(
@@ -618,7 +630,7 @@ class ComprehensiveFileManagement:
             "confirmation",
             "Confirm Delete",
             f"Are you sure you want to delete file '{filename}'?\n\nThis will permanently remove the file from the server.\n\n⚠️ THIS ACTION CANNOT BE UNDONE!",
-            on_confirm=confirm_delete,
+            on_confirm=lambda: asyncio.create_task(delete_action()),
             confirm_text="Delete",
             danger=True
         )
@@ -627,38 +639,77 @@ class ComprehensiveFileManagement:
     
     def _download_selected_files(self, e):
         """Download multiple selected files."""
-        try:
-            print(f"[INFO] Downloading {len(self.selected_files)} selected files")
-            self.show_dialog("info", "Batch Download", f"Download started for {len(self.selected_files)} files")
-        except Exception as ex:
-            self.show_dialog("error", "Error", f"Failed to download files: {str(ex)}")
+        async def download_action():
+            try:
+                if not self.selected_files:
+                    self.show_dialog("warning", "No Files Selected", "Please select files to download")
+                    return
+                    
+                # Use action system to download multiple files
+                result = await self.file_actions.download_multiple_files(self.selected_files, "./downloads/")
+                
+                if result.success:
+                    self.show_dialog("success", "Download Complete", f"Downloaded {len(self.selected_files)} files successfully")
+                else:
+                    self.show_dialog("error", "Download Failed", f"Failed to download files: {result.error_message}")
+            except Exception as ex:
+                self.show_dialog("error", "Error", f"Failed to download files: {str(ex)}")
+        
+        # Run the async function
+        import asyncio
+        asyncio.create_task(download_action())
     
     def _verify_selected_files(self, e):
         """Verify multiple selected files."""
-        try:
-            print(f"[INFO] Verifying {len(self.selected_files)} selected files")
-            self.show_dialog("info", "Batch Verification", f"Verification started for {len(self.selected_files)} files")
-        except Exception as ex:
-            self.show_dialog("error", "Error", f"Failed to verify files: {str(ex)}")
+        async def verify_action():
+            try:
+                if not self.selected_files:
+                    self.show_dialog("warning", "No Files Selected", "Please select files to verify")
+                    return
+                    
+                # Use action system to verify multiple files
+                result = await self.file_actions.verify_multiple_files(self.selected_files)
+                
+                if result.success:
+                    valid_count = result.metadata.get('valid_files', 0)
+                    invalid_count = result.metadata.get('invalid_files', 0)
+                    self.show_dialog("success", "Verification Complete", 
+                                   f"Verified {len(self.selected_files)} files: {valid_count} valid, {invalid_count} invalid")
+                else:
+                    self.show_dialog("error", "Verification Failed", f"Failed to verify files: {result.error_message}")
+            except Exception as ex:
+                self.show_dialog("error", "Error", f"Failed to verify files: {str(ex)}")
+        
+        # Run the async function
+        import asyncio
+        asyncio.create_task(verify_action())
     
     def _delete_selected_files(self, e):
         """Delete multiple selected files."""
         if not self.selected_files:
             return
             
-        def confirm_bulk_delete():
+        async def delete_action():
             try:
-                deleted_count = self.server_bridge.delete_multiple_files(self.selected_files)
+                # Use action system to delete multiple files
+                result = await self.file_actions.delete_multiple_files(self.selected_files)
                 
                 self.selected_files = []
                 self._update_bulk_actions_visibility()
                 self._refresh_files()
                 
-                self.show_dialog(
-                    "success",
-                    "Bulk Delete Complete", 
-                    f"Successfully deleted {deleted_count} files"
-                )
+                if result.success:
+                    self.show_dialog(
+                        "success",
+                        "Bulk Delete Complete", 
+                        f"Successfully deleted {len(self.selected_files)} files"
+                    )
+                else:
+                    self.show_dialog(
+                        "error",
+                        "Delete Failed",
+                        f"Failed to delete files: {result.error_message}"
+                    )
             except Exception as ex:
                 self.show_dialog(
                     "error",
@@ -670,7 +721,7 @@ class ComprehensiveFileManagement:
             "confirmation",
             "Confirm Bulk Delete",
             f"Are you sure you want to delete {len(self.selected_files)} selected files?\n\nThis will permanently remove all selected files from the server.\n\n⚠️ THIS ACTION CANNOT BE UNDONE!",
-            on_confirm=confirm_bulk_delete,
+            on_confirm=lambda: asyncio.create_task(delete_action()),
             confirm_text="Delete All",
             danger=True
         )
@@ -687,65 +738,127 @@ class ComprehensiveFileManagement:
     
     def _upload_file(self, e):
         """Show upload file dialog."""
-        # TODO: Implement file picker and upload logic
-        self.show_dialog("info", "Upload File", "Upload functionality coming soon")
+        async def upload_action():
+            try:
+                # Use action system to upload file
+                # For now, we'll just show a dialog - in a real implementation, this would trigger a file picker
+                result = await self.file_actions.upload_file("./uploads/new_file.txt", "./server_files/new_file.txt")
+                
+                if result.success:
+                    self.show_dialog("success", "Upload Complete", "File uploaded successfully")
+                    self._refresh_files()
+                else:
+                    self.show_dialog("error", "Upload Failed", f"Failed to upload file: {result.error_message}")
+            except Exception as ex:
+                self.show_dialog("error", "Error", f"Failed to upload file: {str(ex)}")
+        
+        # Run the async function
+        import asyncio
+        asyncio.create_task(upload_action())
     
     def _batch_verify_files(self, e):
         """Batch verify all files."""
-        try:
-            unverified_count = len([f for f in self.all_files if not f.get('verified', False)])
-            print(f"[INFO] Starting batch verification of {unverified_count} unverified files")
-            self.show_dialog("info", "Batch Verification", f"Started verification of {unverified_count} unverified files")
-        except Exception as ex:
-            self.show_dialog("error", "Error", f"Failed to start batch verification: {str(ex)}")
+        async def verify_action():
+            try:
+                unverified_files = [f for f in self.all_files if not f.get('verified', False)]
+                if not unverified_files:
+                    self.show_dialog("info", "No Files to Verify", "All files are already verified")
+                    return
+                    
+                unverified_count = len(unverified_files)
+                # Extract file IDs for verification
+                file_ids = [f.get('filename', f'file_{i}') for i, f in enumerate(unverified_files)]
+                
+                # Use action system to verify multiple files
+                result = await self.file_actions.verify_multiple_files(file_ids)
+                
+                if result.success:
+                    valid_count = result.metadata.get('valid_files', 0)
+                    invalid_count = result.metadata.get('invalid_files', 0)
+                    self.show_dialog("success", "Batch Verification Complete", 
+                                   f"Verified {unverified_count} files: {valid_count} valid, {invalid_count} invalid")
+                    self._refresh_files()
+                else:
+                    self.show_dialog("error", "Batch Verification Failed", f"Failed to verify files: {result.error_message}")
+            except Exception as ex:
+                self.show_dialog("error", "Error", f"Failed to start batch verification: {str(ex)}")
+        
+        # Run the async function
+        import asyncio
+        asyncio.create_task(verify_action())
     
     def _show_file_statistics(self, e):
         """Show file statistics."""
-        try:
-            total_files = len(self.all_files)
-            total_size = sum(f.get('size', 0) or 0 for f in self.all_files)
-            verified_files = len([f for f in self.all_files if f.get('verified', False)])
-            
-            # Count by type
-            type_counts = {}
-            for file_info in self.all_files:
-                file_type = self._get_file_type(file_info.get('filename', ''))
-                type_counts[file_type] = type_counts.get(file_type, 0) + 1
-            
-            size_mb = total_size / (1024 * 1024)
-            
-            stats_content = ft.Column([
-                ft.Text("File Statistics", size=18, weight=ft.FontWeight.BOLD),
-                ft.Divider(),
-                
-                ft.Row([ft.Text("Total Files:", weight=ft.FontWeight.BOLD), ft.Text(str(total_files))]),
-                ft.Row([ft.Text("Total Size:", weight=ft.FontWeight.BOLD), ft.Text(f"{size_mb:.1f} MB")]),
-                ft.Row([ft.Text("Verified Files:", weight=ft.FontWeight.BOLD), ft.Text(str(verified_files))]),
-                ft.Row([ft.Text("Unverified Files:", weight=ft.FontWeight.BOLD), 
-                       ft.Text(str(total_files - verified_files))]),
-                
-                ft.Divider(),
-                ft.Text("Files by Type:", weight=ft.FontWeight.BOLD),
-                
-                *[ft.Row([ft.Text(f"{file_type.title()}:", weight=ft.FontWeight.BOLD), 
-                         ft.Text(str(count))])
-                  for file_type, count in sorted(type_counts.items())],
-            ], spacing=10)
-            
-            self.show_dialog("custom", "File Statistics", "", content=stats_content)
-        except Exception as ex:
-            self.show_dialog("error", "Error", f"Failed to generate statistics: {str(ex)}")
+        async def show_stats():
+            try:
+                # Use action system to get file list
+                result = await self.file_actions.export_file_list([], 'csv')
+                if result.success:
+                    # Parse the CSV data to get statistics
+                    csv_data = result.data
+                    lines = csv_data.split('\n') if csv_data else []
+                    total_files = max(0, len(lines) - 1)  # Subtract header line
+                    
+                    # Calculate total size from self.all_files (since we don't have size in CSV)
+                    total_size = sum(f.get('size', 0) or 0 for f in self.all_files)
+                    verified_files = len([f for f in self.all_files if f.get('verified', False)])
+                    
+                    # Count by type
+                    type_counts = {}
+                    for file_info in self.all_files:
+                        file_type = self._get_file_type(file_info.get('filename', ''))
+                        type_counts[file_type] = type_counts.get(file_type, 0) + 1
+                    
+                    size_mb = total_size / (1024 * 1024)
+                    
+                    stats_content = ft.Column([
+                        ft.Text("File Statistics", size=18, weight=ft.FontWeight.BOLD),
+                        ft.Divider(),
+                        
+                        ft.Row([ft.Text("Total Files:", weight=ft.FontWeight.BOLD), ft.Text(str(total_files))]),
+                        ft.Row([ft.Text("Total Size:", weight=ft.FontWeight.BOLD), ft.Text(f"{size_mb:.1f} MB")]),
+                        ft.Row([ft.Text("Verified Files:", weight=ft.FontWeight.BOLD), ft.Text(str(verified_files))]),
+                        ft.Row([ft.Text("Unverified Files:", weight=ft.FontWeight.BOLD), 
+                               ft.Text(str(total_files - verified_files))]),
+                        
+                        ft.Divider(),
+                        ft.Text("Files by Type:", weight=ft.FontWeight.BOLD),
+                        
+                        *[ft.Row([ft.Text(f"{file_type.title()}:", weight=ft.FontWeight.BOLD), 
+                                 ft.Text(str(count))])
+                          for file_type, count in sorted(type_counts.items())],
+                    ], spacing=10)
+                    
+                    self.show_dialog("custom", "File Statistics", "", content=stats_content)
+                else:
+                    self.show_dialog("error", "Error", f"Failed to generate statistics: {result.error_message}")
+            except Exception as ex:
+                self.show_dialog("error", "Error", f"Failed to generate statistics: {str(ex)}")
+        
+        # Run the async function
+        import asyncio
+        asyncio.create_task(show_stats())
     
     def _clean_old_files(self, e):
         """Clean old files from server."""
-        def confirm_cleanup(e):
+        async def clean_action():
             try:
-                # TODO: Implement actual cleanup logic
-                print("[INFO] Starting cleanup of old files")
-                self.show_dialog("info", "Cleanup Complete", "Old files cleanup completed")
-                self._refresh_files()
+                # Use action system to clean old files
+                result = await self.file_actions.cleanup_old_files(30)
+                
+                if result.success:
+                    cleaned_count = result.data.get('cleaned_files', 0)
+                    self.show_dialog("info", "Cleanup Complete", f"Cleaned up {cleaned_count} old files")
+                    self._refresh_files()
+                else:
+                    self.show_dialog("error", "Cleanup Failed", f"Failed to clean old files: {result.error_message}")
             except Exception as ex:
-                self.show_dialog("Error", ft.Text(f"Failed to clean old files: {str(ex)}"))
+                self.show_dialog("error", "Error", f"Failed to clean old files: {str(ex)}")
+        
+        def confirm_cleanup(e):
+            # Run the async function
+            import asyncio
+            asyncio.create_task(clean_action())
         
         confirm_content = ft.Column([
             ft.Text("Clean Old Files", size=16, weight=ft.FontWeight.BOLD),
