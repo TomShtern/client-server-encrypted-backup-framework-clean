@@ -46,11 +46,11 @@ class FilesView:
                         ft.DataCell(
                             ft.Row([
                                 ft.IconButton(ft.Icons.DOWNLOAD, tooltip="Download",
-                                            animate_scale=100),
+                                            animate_scale=100, on_click=lambda e, f=file: self._on_download_file(f)),
                                 ft.IconButton(ft.Icons.DELETE, tooltip="Delete",
-                                            animate_scale=100),
+                                            animate_scale=100, on_click=lambda e, f=file: self._on_delete_file(f)),
                                 ft.IconButton(ft.Icons.INFO, tooltip="Details",
-                                            animate_scale=100),
+                                            animate_scale=100, on_click=lambda e, f=file: self._on_file_details(f)),
                             ])
                         ),
                     ]
@@ -78,13 +78,13 @@ class FilesView:
         )
         
         filter_chips = ft.Row([
-            ft.Chip(label=ft.Text("All Files"), on_click=lambda e: print("Filter: All"),
+            ft.Chip(label=ft.Text("All Files"), on_click=self._on_filter_all,
                    animate_scale=100),
-            ft.Chip(label=ft.Text("PDF"), on_click=lambda e: print("Filter: PDF"),
+            ft.Chip(label=ft.Text("PDF"), on_click=self._on_filter_pdf,
                    animate_scale=100),
-            ft.Chip(label=ft.Text("Images"), on_click=lambda e: print("Filter: Images"),
+            ft.Chip(label=ft.Text("Images"), on_click=self._on_filter_images,
                    animate_scale=100),
-            ft.Chip(label=ft.Text("Archives"), on_click=lambda e: print("Filter: Archives"),
+            ft.Chip(label=ft.Text("Archives"), on_click=self._on_filter_archives,
                    animate_scale=100),
         ])
         
@@ -92,7 +92,7 @@ class FilesView:
         header = ft.Row([
             ft.Text("Files", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
             ft.IconButton(ft.Icons.REFRESH, tooltip="Refresh",
-                         animate_scale=100),
+                         animate_scale=100, on_click=self._on_refresh),
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         
         # Controls row with gradient button if theme is available
@@ -100,11 +100,11 @@ class FilesView:
             from flet_server_gui.ui.theme_m3 import gradient_button
             upload_button = gradient_button(
                 ft.Row([ft.Icon(ft.Icons.UPLOAD), ft.Text("Upload File")]),
-                on_click=lambda e: print("Upload clicked")
+                on_click=self._on_upload_file
             )
         except ImportError:
             upload_button = ft.FilledButton("Upload File", icon=ft.Icons.UPLOAD,
-                                          animate_scale=100)
+                                          animate_scale=100, on_click=self._on_upload_file)
         
         controls_row = ft.Row([
             search_bar,
@@ -126,6 +126,51 @@ class FilesView:
         view_content.animate_opacity = 300
         
         return view_content
+
+    def _on_download_file(self, file):
+        """Handle file download"""
+        print(f"Downloading {file['name']}")
+        # In a real implementation, this would trigger a file download
+
+    def _on_delete_file(self, file):
+        """Handle file deletion"""
+        print(f"Deleting {file['name']}")
+        # In a real implementation, this would show a confirmation dialog and delete the file
+
+    def _on_file_details(self, file):
+        """Handle file details view"""
+        print(f"Viewing details for {file['name']}")
+        # In a real implementation, this would show a detailed view of the file
+
+    def _on_filter_all(self, e):
+        """Handle filter all files"""
+        print("Filtering: All files")
+        # In a real implementation, this would filter the file list
+
+    def _on_filter_pdf(self, e):
+        """Handle filter PDF files"""
+        print("Filtering: PDF files")
+        # In a real implementation, this would filter the file list
+
+    def _on_filter_images(self, e):
+        """Handle filter image files"""
+        print("Filtering: Image files")
+        # In a real implementation, this would filter the file list
+
+    def _on_filter_archives(self, e):
+        """Handle filter archive files"""
+        print("Filtering: Archive files")
+        # In a real implementation, this would filter the file list
+
+    def _on_refresh(self, e):
+        """Handle refresh button click"""
+        print("Refreshing files list")
+        # In a real implementation, this would refresh the file list from the server
+
+    def _on_upload_file(self, e):
+        """Handle upload file button click"""
+        print("Upload file clicked")
+        # In a real implementation, this would open a file dialog and upload the selected file
 
     def show_view(self):
         """Show the view with animation"""

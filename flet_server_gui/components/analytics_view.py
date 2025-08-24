@@ -96,15 +96,15 @@ class AnalyticsView:
         # Header with title and controls
         header = ft.Row([
             ft.Text("Analytics", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
-            ft.IconButton(ft.Icons.REFRESH, tooltip="Refresh"),
+            ft.IconButton(ft.Icons.REFRESH, tooltip="Refresh", on_click=self._on_refresh),
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         
         # Time range selector
         time_selector = ft.Row([
-            ft.Chip(label=ft.Text("24 Hours"), on_click=lambda e: print("Time range: 24h")),
-            ft.Chip(label=ft.Text("7 Days"), on_click=lambda e: print("Time range: 7d")),
-            ft.Chip(label=ft.Text("30 Days"), on_click=lambda e: print("Time range: 30d")),
-            ft.Chip(label=ft.Text("90 Days"), on_click=lambda e: print("Time range: 90d")),
+            ft.Chip(label=ft.Text("24 Hours"), on_click=self._on_time_range_24h),
+            ft.Chip(label=ft.Text("7 Days"), on_click=self._on_time_range_7d),
+            ft.Chip(label=ft.Text("30 Days"), on_click=self._on_time_range_30d),
+            ft.Chip(label=ft.Text("90 Days"), on_click=self._on_time_range_90d),
         ])
         
         return ft.Column([
@@ -198,3 +198,28 @@ class AnalyticsView:
         ], spacing=20, expand=True)
         
         return ft.Container(content=chart, padding=20)
+
+    def _on_refresh(self, e):
+        """Handle refresh button click"""
+        print("Refreshing analytics view")
+        # In a real implementation, this would refresh all analytics data
+
+    def _on_time_range_24h(self, e):
+        """Handle 24 hours time range selection"""
+        print("Time range: 24h")
+        # In a real implementation, this would filter data to last 24 hours
+
+    def _on_time_range_7d(self, e):
+        """Handle 7 days time range selection"""
+        print("Time range: 7d")
+        # In a real implementation, this would filter data to last 7 days
+
+    def _on_time_range_30d(self, e):
+        """Handle 30 days time range selection"""
+        print("Time range: 30d")
+        # In a real implementation, this would filter data to last 30 days
+
+    def _on_time_range_90d(self, e):
+        """Handle 90 days time range selection"""
+        print("Time range: 90d")
+        # In a real implementation, this would filter data to last 90 days

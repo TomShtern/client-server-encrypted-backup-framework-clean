@@ -49,7 +49,7 @@ def create_theme(use_material3: bool = True, dark: bool = False) -> ft.Theme:
         custom_scheme = ft.ColorScheme(
             primary=TOKENS.get("primary", "#7C5CD9"),
             on_primary=TOKENS.get("on_primary", "#FFFFFF"),
-            secondary=TOKENS.get("secondary", "#FCA651"),
+            secondary=TOKENS.get("secondary", "#FFA500"),
             on_secondary=TOKENS.get("on_secondary", "#000000"),
             tertiary=TOKENS.get("tertiary", "#AB6DA4"),
             on_tertiary=TOKENS.get("on_tertiary", "#FFFFFF"),
@@ -76,7 +76,7 @@ def create_theme(use_material3: bool = True, dark: bool = False) -> ft.Theme:
             dark_scheme = ft.ColorScheme(
                 primary=TOKENS.get("primary", "#7C5CD9"),
                 on_primary=TOKENS.get("on_primary", "#FFFFFF"),
-                secondary=TOKENS.get("secondary", "#FCA651"),
+                secondary=TOKENS.get("secondary", "#FFA500"),
                 on_secondary=TOKENS.get("on_secondary", "#000000"),
                 tertiary=TOKENS.get("tertiary", "#AB6DA4"),
                 on_tertiary=TOKENS.get("on_tertiary", "#FFFFFF"),

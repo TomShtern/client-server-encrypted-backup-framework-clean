@@ -115,11 +115,11 @@ class DatabaseView:
                         ft.DataCell(
                             ft.Row([
                                 ft.IconButton(ft.Icons.VISIBILITY, tooltip="View Data",
-                                            animate_scale=100),
+                                            animate_scale=100, on_click=lambda e, t=table: self._on_view_table_data(t)),
                                 ft.IconButton(ft.Icons.EDIT, tooltip="Edit Schema",
-                                            animate_scale=100),
+                                            animate_scale=100, on_click=lambda e, t=table: self._on_edit_table_schema(t)),
                                 ft.IconButton(ft.Icons.DELETE, tooltip="Drop Table",
-                                            animate_scale=100),
+                                            animate_scale=100, on_click=lambda e, t=table: self._on_drop_table(t)),
                             ])
                         ),
                     ]
@@ -139,17 +139,17 @@ class DatabaseView:
         header = ft.Row([
             ft.Text("Database", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
             ft.IconButton(ft.Icons.REFRESH, tooltip="Refresh",
-                         animate_scale=100),
+                         animate_scale=100, on_click=self._on_refresh),
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         
         # Database controls
         db_controls = ft.Row([
             ft.FilledButton("Backup Database", icon=ft.Icons.BACKUP,
-                           animate_scale=100),
+                           animate_scale=100, on_click=self._on_backup_database),
             ft.OutlinedButton("Optimize", icon=ft.Icons.AUTO_FIX_HIGH,
-                             animate_scale=100),
+                             animate_scale=100, on_click=self._on_optimize_database),
             ft.OutlinedButton("Analyze", icon=ft.Icons.TROUBLESHOOT,
-                             animate_scale=100),
+                             animate_scale=100, on_click=self._on_analyze_database),
         ])
         
         # Last backup info
@@ -160,7 +160,7 @@ class DatabaseView:
                     ft.Text("Last Backup:", weight=ft.FontWeight.BOLD),
                     ft.Text(self.db_stats['last_backup']),
                     ft.TextButton("Restore", icon=ft.Icons.RESTORE,
-                                 animate_scale=100),
+                                 animate_scale=100, on_click=self._on_restore_backup),
                 ], spacing=10),
                 padding=15,
             ),
@@ -185,6 +185,46 @@ class DatabaseView:
         view_content.animate_opacity = 300
         
         return view_content
+
+    def _on_view_table_data(self, table):
+        """Handle view table data"""
+        print(f"Viewing data for table: {table['name']}")
+        # In a real implementation, this would show the table data
+
+    def _on_edit_table_schema(self, table):
+        """Handle edit table schema"""
+        print(f"Editing schema for table: {table['name']}")
+        # In a real implementation, this would open a schema editor
+
+    def _on_drop_table(self, table):
+        """Handle drop table"""
+        print(f"Dropping table: {table['name']}")
+        # In a real implementation, this would show a confirmation dialog and drop the table
+
+    def _on_refresh(self, e):
+        """Handle refresh button click"""
+        print("Refreshing database view")
+        # In a real implementation, this would refresh all database information
+
+    def _on_backup_database(self, e):
+        """Handle backup database button click"""
+        print("Backing up database")
+        # In a real implementation, this would start a database backup
+
+    def _on_optimize_database(self, e):
+        """Handle optimize database button click"""
+        print("Optimizing database")
+        # In a real implementation, this would run database optimization
+
+    def _on_analyze_database(self, e):
+        """Handle analyze database button click"""
+        print("Analyzing database")
+        # In a real implementation, this would run database analysis
+
+    def _on_restore_backup(self, e):
+        """Handle restore backup button click"""
+        print("Restoring database backup")
+        # In a real implementation, this would show backup options and restore selected backup
 
     def show_view(self):
         """Show the view with animation"""

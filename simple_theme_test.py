@@ -17,7 +17,7 @@ try:
     print(f"Primary color: {TOKENS.get('primary')}")
     print(f"Secondary color (should be orange): {TOKENS.get('secondary')}")
     print(f"Tertiary color: {TOKENS.get('tertiary')}")
-    print("All theme tokens:")
+    print("\nAll theme tokens:")
     for key, value in TOKENS.items():
         print(f"  {key}: {value}")
         

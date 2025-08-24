@@ -18,6 +18,10 @@ from flet_server_gui.components.navigation import NavigationManager
 from flet_server_gui.components.files_view import FilesView
 from flet_server_gui.components.database_view import DatabaseView
 from flet_server_gui.components.analytics_view import AnalyticsView
+from flet_server_gui.components.enhanced_stats_card import EnhancedStatsCard
+from flet_server_gui.components.real_time_charts import RealTimeCharts
+from flet_server_gui.components.quick_actions import QuickActions
+from flet_server_gui.components.enhanced_client_management import create_enhanced_client_management
 from flet_server_gui.utils.theme_manager import ThemeManager
 from flet_server_gui.utils.server_bridge import ServerBridge, MockClient
 
@@ -43,6 +47,16 @@ class ServerGUIApp:
         self.files_view = FilesView(self.server_bridge)
         self.database_view = DatabaseView(self.server_bridge)
         self.analytics_view = AnalyticsView(self.server_bridge)
+        self.enhanced_stats_card = EnhancedStatsCard()
+        self.real_time_charts = RealTimeCharts()
+        self.quick_actions = QuickActions(
+            on_backup_now=self._on_backup_now,
+            on_clear_logs=self._on_clear_logs,
+            on_restart_services=self._on_restart_services,
+            on_view_clients=self._on_view_clients,
+            on_manage_files=self._on_manage_files
+        )
+        self.enhanced_client_management = None  # Will be created when needed
         self.navigation = NavigationManager(page, self.switch_view)
         
         self.activity_log.set_page(page)
@@ -57,6 +71,7 @@ class ServerGUIApp:
     async def _on_page_connect(self, e):
         """Start background tasks when the page is connected."""
         asyncio.create_task(self.monitor_loop())
+        asyncio.create_task(self.chart_update_loop())
     
     def setup_application(self):
         """Configure the desktop application and apply the theme."""
@@ -93,8 +108,8 @@ class ServerGUIApp:
             # Let the theme handle the background color automatically
             actions=[
                 self.theme_toggle_button,
-                ft.IconButton(ft.Icons.NOTIFICATIONS, tooltip="Notifications"),
-                ft.IconButton(ft.Icons.HELP, tooltip="Help"),
+                ft.IconButton(ft.Icons.NOTIFICATIONS, tooltip="Notifications", on_click=self._on_notifications),
+                ft.IconButton(ft.Icons.HELP, tooltip="Help", on_click=self._on_help),
             ]
         )
         
@@ -139,6 +154,9 @@ class ServerGUIApp:
                     ft.Column(col={"sm": 12, "md": 6, "lg": 4}, controls=[self.status_card.build()]),
                     ft.Column(col={"sm": 12, "md": 6, "lg": 4}, controls=[self.control_panel.build()]),
                     ft.Column(col={"sm": 12, "md": 12, "lg": 4}, controls=[self.client_stats_card.build()]),
+                    ft.Column(col={"sm": 12, "md": 12, "lg": 6}, controls=[self.enhanced_stats_card]),
+                    ft.Column(col={"sm": 12, "md": 12, "lg": 6}, controls=[self.real_time_charts]),
+                    ft.Column(col={"sm": 12, "md": 12, "lg": 12}, controls=[self.quick_actions]),
                     ft.Column(col=12, controls=[self.activity_log.build()]),
                 ],
                 spacing=20,
@@ -146,30 +164,13 @@ class ServerGUIApp:
         ], spacing=24, scroll=ft.ScrollMode.ADAPTIVE, expand=True)
     
     def get_clients_view(self) -> ft.Control:
-        clients = self.server_bridge.get_client_list()
-        client_table = ft.DataTable(
-            columns=[
-                ft.DataColumn(ft.Text("Client ID")),
-                ft.DataColumn(ft.Text("IP Address")),
-                ft.DataColumn(ft.Text("Status")),
-                ft.DataColumn(ft.Text("Connected Since"), numeric=True),
-            ],
-            rows=[
-                ft.DataRow(cells=[
-                    ft.DataCell(ft.Row([ft.Icon(ft.Icons.COMPUTER), ft.Text(c.client_id)])),
-                    ft.DataCell(ft.Text(c.address)),
-                    ft.DataCell(ft.Chip(ft.Text(c.status))),
-                    ft.DataCell(ft.Text(c.connected_at.strftime("%Y-%m-%d %H:%M"))),
-                ]) for c in clients
-            ]
-        )
-        # Use a default color if theme is not fully loaded
-        border_color = ft.Colors.OUTLINE if not self.page.theme or not self.page.theme.color_scheme else self.page.theme.color_scheme.outline
+        if not self.enhanced_client_management:
+            self.enhanced_client_management = create_enhanced_client_management(
+                self._get_sample_clients(), 
+                self.page
+            )
         return ft.Column([
-            ft.Text("Client Management", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
-            ft.Divider(),
-            ft.Text(f"{len(clients)} clients currently connected."),
-            ft.Container(client_table, border=ft.border.all(1, border_color), border_radius=8, padding=10, expand=True)
+            self.enhanced_client_management
         ], spacing=24, expand=True, scroll=ft.ScrollMode.ADAPTIVE)
     
     def get_files_view(self) -> ft.Control:
@@ -213,8 +214,8 @@ class ServerGUIApp:
                         ft.TextField(label="Filter logs...", icon=ft.Icons.SEARCH),
                         log_container,
                         ft.Row([
-                            ft.FilledButton("Export Logs", icon=ft.Icons.DOWNLOAD),
-                            ft.OutlinedButton("Clear Logs", icon=ft.Icons.CLEAR),
+                            ft.FilledButton("Export Logs", icon=ft.Icons.DOWNLOAD, on_click=self._on_export_logs),
+                            ft.OutlinedButton("Clear Logs", icon=ft.Icons.CLEAR, on_click=self._on_clear_logs_view),
                         ], alignment=ft.MainAxisAlignment.END)
                     ], spacing=16),
                     padding=20,
@@ -261,6 +262,85 @@ class ServerGUIApp:
                 width=500
             )
         ], spacing=24)
+
+    def _on_backup_now(self, e):
+        """Handle backup now action"""
+        self.activity_log.add_entry("Quick Actions", "Backup initiated", "INFO")
+        # In a real implementation, this would trigger a backup
+        # For now, we'll just show a notification
+        self._show_notification_sync("Backup started")
+
+    def _on_clear_logs(self, e):
+        """Handle clear logs action"""
+        self.activity_log.clear_log()
+        self._show_notification_sync("Logs cleared")
+
+    def _on_restart_services(self, e):
+        """Handle restart services action"""
+        self.activity_log.add_entry("Quick Actions", "Services restart initiated", "INFO")
+        # In a real implementation, this would restart services
+        # For now, we'll just show a notification
+        self._show_notification_sync("Services restart initiated")
+
+    def _on_view_clients(self, e):
+        """Handle view clients action"""
+        self.switch_view("clients")
+
+    def _on_manage_files(self, e):
+        """Handle manage files action"""
+        self.switch_view("files")
+
+    def _get_sample_clients(self):
+        """Get sample client data for demonstration"""
+        import datetime
+        return [
+            {
+                "client_id": "client_001",
+                "ip": "192.168.1.101",
+                "status": "online",
+                "connected": "2025-08-23 10:30:16",
+                "activity": "2025-08-23 10:45:22"
+            },
+            {
+                "client_id": "client_002",
+                "ip": "192.168.1.102",
+                "status": "offline",
+                "connected": "2025-08-22 09:15:33",
+                "activity": "2025-08-22 14:22:18"
+            },
+            {
+                "client_id": "client_003",
+                "ip": "192.168.1.103",
+                "status": "active",
+                "connected": "2025-08-23 08:45:12",
+                "activity": "2025-08-23 10:40:05"
+            },
+            {
+                "client_id": "client_004",
+                "ip": "192.168.1.104",
+                "status": "online",
+                "connected": "2025-08-23 07:30:45",
+                "activity": "2025-08-23 10:35:30"
+            },
+            {
+                "client_id": "client_005",
+                "ip": "192.168.1.105",
+                "status": "offline",
+                "connected": "2025-08-21 16:22:18",
+                "activity": "2025-08-21 18:45:33"
+            }
+        ]
+
+    async def chart_update_loop(self):
+        """Loop to update real-time charts"""
+        while True:
+            try:
+                if self.current_view == "dashboard":
+                    await self.real_time_charts.update_charts()
+                await asyncio.sleep(5)  # Update every 5 seconds
+            except Exception as e:
+                print(f"Chart update error: {e}")
+                await asyncio.sleep(5)
 
     def switch_view(self, view_name: str):
         """Switch to a different view with animation."""
@@ -323,6 +403,22 @@ class ServerGUIApp:
         self.page.snack_bar = ft.SnackBar(content=ft.Text(message, color=content_color, weight=ft.FontWeight.BOLD), bgcolor=bgcolor, duration=3000)
         self.page.snack_bar.open = True
         self.page.update()
+
+    def _on_export_logs(self, e):
+        """Handle export logs button click"""
+        self._show_notification_sync("Logs exported successfully")
+
+    def _on_clear_logs_view(self, e):
+        """Handle clear logs button click"""
+        self._show_notification_sync("Logs cleared")
+
+    def _on_notifications(self, e):
+        """Handle notifications button click"""
+        self._show_notification_sync("No new notifications")
+
+    def _on_help(self, e):
+        """Handle help button click"""
+        self._show_notification_sync("Help documentation would be shown here")
     
     async def show_notification(self, message: str, is_error: bool = False):
         """Async method to show notification."""

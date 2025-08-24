@@ -417,6 +417,14 @@ class ServerDataCollector:
         self.server_control = server_control
         self.logger = logging.getLogger(__name__)
         
+        # Database manager for direct database access
+        self.db_manager = None
+        try:
+            from python_server.server.database import DatabaseManager
+            self.db_manager = DatabaseManager()
+        except Exception as e:
+            self.logger.warning(f"Could not initialize database manager: {e}")
+        
         # Performance tracking
         self._performance_data = {
             'cpu_usage': [],
@@ -481,18 +489,59 @@ class ServerDataCollector:
             if self._client_cache:
                 return self._client_cache.copy()
         
+        # If we have database access, we can also get registered clients from the database
+        if self.db_manager:
+            try:
+                db_clients = self.db_manager.get_all_clients()
+                for db_client in db_clients:
+                    # Check if this client is not already in the connected list
+                    if not any(c.client_id == db_client['id'] for c in clients):
+                        client_info = ClientInfo(
+                            client_id=db_client['id'],
+                            username=db_client['name'],
+                            ip_address='N/A',
+                            last_seen=datetime.fromisoformat(db_client['last_seen']) if db_client['last_seen'] else datetime.now(),
+                            files_transferred=0,
+                            status='registered',
+                            bytes_transferred=0,
+                            connection_time=None
+                        )
+                        clients.append(client_info)
+            except Exception as e:
+                self.logger.error(f"Error getting database clients: {e}")
+        
         return clients
     
     def get_file_list(self) -> List[FileInfo]:
-        """Get list of transferred files"""
+        """Get list of transferred files with enhanced information"""
+        now = time.time()
+        
+        # Check cache first
+        if self._file_cache_time and (now - self._file_cache_time) < self._cache_ttl:
+            return self._file_cache.copy()
+        
         files = []
         
         try:
-            # TODO: Integrate with database manager to get file list
-            # For now, return empty list
-            pass
+            # Get files from database if available
+            if self.db_manager:
+                db_files = self.db_manager.get_all_files()
+                for db_file in db_files:
+                    file_info = FileInfo(
+                        filename=db_file['filename'],
+                        size=db_file['size'] or 0,
+                        transfer_time=datetime.fromisoformat(db_file['date']) if db_file['date'] else datetime.now(),
+                        client_id=db_file['client'],
+                        checksum=str(db_file.get('crc', 'N/A')),
+                        file_path=db_file['path']
+                    )
+                    files.append(file_info)
         except Exception as e:
             self.logger.error(f"Error getting file list: {e}")
+        
+        # Update cache
+        self._file_cache = files.copy()
+        self._file_cache_time = now
         
         return files
     
@@ -535,32 +584,66 @@ class ServerDataCollector:
         return self._performance_data.copy()
     
     def get_server_stats(self) -> ServerStats:
-        """Get comprehensive server statistics with enhanced data"""
+        """Get server statistics with enhanced data"""
         try:
-            status = self.server_control.status_monitor.status
             client_list = self.get_client_list()
-            client_count = len(client_list)
             
-            # Calculate additional statistics
-            total_client_bytes = sum(getattr(client, 'bytes_transferred', 0) for client in client_list)
-            
-            # Get performance data
-            perf_data = self.get_performance_data()
-            current_cpu = perf_data['cpu_usage'][-1] if perf_data['cpu_usage'] else 0
-            current_memory = perf_data['memory_usage'][-1] if perf_data['memory_usage'] else 0
-            
-            return ServerStats(
-                uptime=self.server_control._format_uptime(status.uptime_seconds),
-                total_files=status.total_files,
-                total_clients=len(client_list),  # Use actual count
-                active_connections=client_count,
-                bytes_transferred=max(status.bytes_transferred, total_client_bytes),
+            # Enhanced statistics calculation
+            stats = ServerStats(
+                uptime="00:00:00",
+                total_files=0,
+                total_clients=len(client_list),
+                active_connections=0,
+                bytes_transferred=0,
                 last_update=datetime.now(),
-                # Enhanced statistics
-                cpu_usage=current_cpu,
-                memory_usage=current_memory,
-                performance_data=perf_data
+                cpu_usage=0,
+                memory_usage=0,
+                performance_data={}
             )
+            
+            # Get performance data if available
+            perf_data = self.get_performance_data()
+            if perf_data:
+                stats.cpu_usage = perf_data['cpu_usage'][-1] if perf_data['cpu_usage'] else 0
+                stats.memory_usage = perf_data['memory_usage'][-1] if perf_data['memory_usage'] else 0
+                stats.performance_data = perf_data
+            
+            # Calculate uptime if server is available
+            server = self.server_control.server_instance
+            if server and hasattr(server, 'network_server') and server.network_server.start_time:
+                uptime_seconds = time.time() - server.network_server.start_time
+                stats.uptime = self._format_uptime(uptime_seconds)
+                stats.active_connections = len([c for c in client_list if c.status == 'connected'])
+            
+            # Get file count and bytes transferred from connected clients
+            total_files = 0
+            bytes_transferred = 0
+            for client in client_list:
+                total_files += client.files_transferred
+                bytes_transferred += client.bytes_transferred
+            
+            stats.total_files = total_files
+            stats.bytes_transferred = bytes_transferred
+            
+            # Get database statistics if available
+            if self.db_manager:
+                try:
+                    db_stats = self.db_manager.get_database_stats()
+                    stats.total_files = db_stats.get('total_files', stats.total_files)
+                    stats.total_clients = db_stats.get('total_clients', stats.total_clients)
+                    
+                    # Get total bytes transferred from database if available
+                    total_bytes = self.db_manager.get_total_bytes_transferred()
+                    if total_bytes > 0:
+                        stats.bytes_transferred = total_bytes
+                        
+                except Exception as e:
+                    self.logger.debug(f"Could not get database stats: {e}")
+            
+            stats.last_update = datetime.now()
+            
+            return stats
+            
         except Exception as e:
             self.logger.error(f"Error getting server stats: {e}")
             # Return default stats

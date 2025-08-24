@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Theme Verification Test
-Simple test to verify that the custom theme is working correctly.
+Simple test to verify that the custom theme is working correctly with enhanced components.
 """
 
 import sys
@@ -28,18 +28,26 @@ try:
         # Display the theme tokens
         token_items = []
         for key, value in TOKENS.items():
-            token_items.append(
-                ft.Row([
+            # Create color swatch for color tokens
+            if isinstance(value, str) and value.startswith('#'):
+                color_swatch = ft.Container(
+                    width=24,
+                    height=24,
+                    bgcolor=value,
+                    border_radius=4,
+                    border=ft.border.all(1, ft.Colors.OUTLINE)
+                )
+                token_item = ft.Row([
                     ft.Text(f"{key}:", weight=ft.FontWeight.BOLD, width=150),
                     ft.Text(str(value)),
-                    ft.Container(
-                        width=24,
-                        height=24,
-                        bgcolor=value if isinstance(value, str) and value.startswith('#') else ft.Colors.GREY,
-                        border_radius=4
-                    ) if isinstance(value, str) and value.startswith('#') else ft.Text("")
+                    color_swatch
                 ], spacing=10)
-            )
+            else:
+                token_item = ft.Row([
+                    ft.Text(f"{key}:", weight=ft.FontWeight.BOLD, width=150),
+                    ft.Text(str(value))
+                ], spacing=10)
+            token_items.append(token_item)
         
         # Create a sample button using the theme
         sample_button = ft.FilledButton(

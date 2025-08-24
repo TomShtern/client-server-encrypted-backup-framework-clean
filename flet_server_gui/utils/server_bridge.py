@@ -18,6 +18,7 @@ sys.path.insert(0, project_root)
 
 try:
     from kivymd_gui.utils.server_integration import ServerIntegrationBridge, ServerStatus
+    from kivymd_gui.models.data_models import ClientInfo
     BRIDGE_AVAILABLE = True
 except ImportError:
     BRIDGE_AVAILABLE = False
@@ -63,6 +64,7 @@ class ServerBridge:
         if BRIDGE_AVAILABLE:
             try:
                 self.server_integration = ServerIntegrationBridge()
+                self.server_integration.start_bridge()
             except Exception as e:
                 print(f"[WARNING] Could not initialize server bridge: {e}")
                 self.mock_mode = True
@@ -74,8 +76,29 @@ class ServerBridge:
             self.mock_server_info.active_transfers = len([c for c in self.mock_clients if c.status == 'Transferring'])
             return self.mock_server_info
         
-        # Real implementation remains the same
-        # ...
+        # Real implementation
+        try:
+            if self.server_integration:
+                stats = self.server_integration.get_server_stats()
+                info = self.server_integration.get_server_info()
+                
+                server_info = ServerInfo()
+                server_info.running = info.get('running', False)
+                server_info.host = info.get('host', '127.0.0.1')
+                server_info.port = info.get('port', 1256)
+                
+                if info.get('start_time'):
+                    server_info.uptime_start = datetime.fromisoformat(info['start_time'])
+                
+                server_info.connected_clients = stats.active_connections
+                server_info.total_clients = stats.total_clients
+                server_info.active_transfers = 0  # TODO: Implement active transfers tracking
+                server_info.total_transfers = stats.total_files
+                
+                return server_info
+        except Exception as e:
+            print(f"[ERROR] Failed to get server status: {e}")
+        
         return ServerInfo() # Fallback
 
     async def start_server(self) -> bool:
@@ -85,7 +108,17 @@ class ServerBridge:
                 self.mock_server_info.uptime_start = datetime.now()
                 self.add_mock_log("Server", "Server started successfully", "SUCCESS")
             return True
-        # ...
+        
+        # Real implementation
+        try:
+            if self.server_integration:
+                self.server_integration.start_server_async(standalone=False)
+                # Wait a bit for the server to start
+                await asyncio.sleep(2)
+                return True
+        except Exception as e:
+            print(f"[ERROR] Failed to start server: {e}")
+        
         return False
 
     async def stop_server(self) -> bool:
@@ -96,7 +129,17 @@ class ServerBridge:
                 self.mock_clients.clear()
                 self.add_mock_log("Server", "Server stopped", "INFO")
             return True
-        # ...
+        
+        # Real implementation
+        try:
+            if self.server_integration:
+                self.server_integration.stop_server_async()
+                # Wait a bit for the server to stop
+                await asyncio.sleep(2)
+                return True
+        except Exception as e:
+            print(f"[ERROR] Failed to stop server: {e}")
+        
         return False
 
     async def restart_server(self) -> bool:
@@ -106,16 +149,52 @@ class ServerBridge:
             await self.start_server()
             self.add_mock_log("Server", "Server restarted", "SUCCESS")
             return True
-        # ...
+        
+        # Real implementation
+        try:
+            if self.server_integration:
+                self.server_integration.restart_server_async(standalone=False)
+                # Wait a bit for the server to restart
+                await asyncio.sleep(3)
+                return True
+        except Exception as e:
+            print(f"[ERROR] Failed to restart server: {e}")
+        
         return False
 
     def get_client_list(self) -> List[MockClient]:
         """Get list of connected clients."""
-        return self.mock_clients if self.mock_mode else []
+        if self.mock_mode:
+            return self.mock_clients
+        
+        # Real implementation
+        try:
+            if self.server_integration:
+                client_infos = self.server_integration.get_client_list()
+                mock_clients = []
+                for client_info in client_infos:
+                    mock_client = MockClient(
+                        client_id=client_info.client_id,
+                        address=client_info.ip_address,
+                        connected_at=client_info.connection_time or datetime.now(),
+                        last_activity=client_info.last_seen,
+                        status=client_info.status
+                    )
+                    mock_clients.append(mock_client)
+                return mock_clients
+        except Exception as e:
+            print(f"[ERROR] Failed to get client list: {e}")
+        
+        return []
 
     def get_recent_activity(self, count: int = 50) -> List[Dict[str, Any]]:
         """Get recent server activity logs."""
-        return self.mock_logs[:count] if self.mock_mode else []
+        if self.mock_mode:
+            return self.mock_logs[:count]
+        
+        # For real implementation, we would get logs from the server
+        # For now, return empty list
+        return []
 
     def is_mock_mode(self) -> bool:
         return self.mock_mode
