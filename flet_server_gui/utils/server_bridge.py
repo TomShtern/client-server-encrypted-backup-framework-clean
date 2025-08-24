@@ -8,6 +8,9 @@ import asyncio
 import sys
 import os
 import random
+import psutil
+import threading
+import time
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
@@ -21,6 +24,7 @@ try:
     from python_server.server.database import DatabaseManager
     from python_server.server.config import DEFAULT_PORT
     BRIDGE_AVAILABLE = True
+    PSUTIL_AVAILABLE = True
     print("[INFO] Direct server integration available - using real data")
 except ImportError:
     try:
@@ -32,10 +36,19 @@ except ImportError:
         from python_server.server.database import DatabaseManager
         from python_server.server.config import DEFAULT_PORT
         BRIDGE_AVAILABLE = True
+        PSUTIL_AVAILABLE = True
         print("[INFO] Direct server integration available via fallback path - using real data")
     except ImportError:
         BRIDGE_AVAILABLE = False
-        print("[INFO] Direct server integration not available - using mock data")
+        PSUTIL_AVAILABLE = False
+        print("[WARNING] Direct server integration not available - real integration failed")
+
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    print("[WARNING] psutil not available - system monitoring will use fallback")
 
 
 @dataclass
@@ -59,12 +72,14 @@ class MockClient:
     status: str = "Idle"
 
 class ServerBridge:
-    """Bridge to interface with the server system, with direct database access."""
+    """Bridge to interface with the server system - REAL INTEGRATION ONLY."""
     
-    def __init__(self):
-        self.server_instance = None
+    def __init__(self, server_instance: Optional[BackupServer] = None):
+        self.server_instance: Optional[BackupServer] = server_instance
         self.db_manager = None
         self.mock_mode = not BRIDGE_AVAILABLE
+        self.system_monitor_enabled = PSUTIL_AVAILABLE
+        self._server_start_time = None
         
         if BRIDGE_AVAILABLE:
             try:
@@ -72,12 +87,20 @@ class ServerBridge:
                 self.db_manager = DatabaseManager()
                 print("[INFO] Direct database connection established for real data")
                 self.mock_mode = False
+                
+                # If no server instance provided, create one for standalone mode
+                if not self.server_instance:
+                    print("[INFO] No server instance provided, creating new BackupServer for real integration")
+                    self.server_instance = BackupServer()
+                    
             except Exception as e:
-                print(f"[WARNING] Could not initialize database manager: {e}")
-                self.mock_mode = True
+                print(f"[ERROR] Could not initialize server integration: {e}")
+                print("[CRITICAL] Real integration failed - this violates NO MOCK requirement")
+                raise RuntimeError(f"Real server integration required but failed: {e}")
         
         if self.mock_mode:
-            print("[WARNING] Running in Mock Mode - database not available")
+            print("[CRITICAL ERROR] Mock mode detected - this violates the NO MOCK DATA requirement")
+            raise RuntimeError("Mock mode is not allowed - all implementations must be real")
 
     async def get_server_status(self) -> ServerInfo:
         """Get current server status"""
