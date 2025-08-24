@@ -351,52 +351,52 @@ class ToastManager:
         
     def show_success(self, message: str, duration: int = 3):
         """Show success toast."""
-        self.page.show_snack_bar(
-            ft.SnackBar(
-                content=ft.Row([
-                    ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.WHITE),
-                    ft.Text(message, color=ft.Colors.WHITE)
-                ], tight=True),
-                bgcolor=ft.Colors.GREEN_600,
-                duration=duration * 1000
-            )
+        self.page.snack_bar = ft.SnackBar(
+            content=ft.Row([
+                ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.WHITE),
+                ft.Text(message, color=ft.Colors.WHITE)
+            ], tight=True),
+            bgcolor=ft.Colors.GREEN_600,
+            duration=duration * 1000
         )
+        self.page.snack_bar.open = True
+        self.page.update()
     
     def show_error(self, message: str, duration: int = 5):
         """Show error toast."""
-        self.page.show_snack_bar(
-            ft.SnackBar(
-                content=ft.Row([
-                    ft.Icon(ft.Icons.ERROR, color=ft.Colors.WHITE),
-                    ft.Text(message, color=ft.Colors.WHITE)
-                ], tight=True),
-                bgcolor=ft.Colors.RED_600,
-                duration=duration * 1000
-            )
+        self.page.snack_bar = ft.SnackBar(
+            content=ft.Row([
+                ft.Icon(ft.Icons.ERROR, color=ft.Colors.WHITE),
+                ft.Text(message, color=ft.Colors.WHITE)
+            ], tight=True),
+            bgcolor=ft.Colors.RED_600,
+            duration=duration * 1000
         )
+        self.page.snack_bar.open = True
+        self.page.update()
     
     def show_warning(self, message: str, duration: int = 4):
         """Show warning toast."""
-        self.page.show_snack_bar(
-            ft.SnackBar(
-                content=ft.Row([
-                    ft.Icon(ft.Icons.WARNING, color=ft.Colors.WHITE),
-                    ft.Text(message, color=ft.Colors.WHITE)
-                ], tight=True),
-                bgcolor=ft.Colors.ORANGE_600,
-                duration=duration * 1000
-            )
+        self.page.snack_bar = ft.SnackBar(
+            content=ft.Row([
+                ft.Icon(ft.Icons.WARNING, color=ft.Colors.WHITE),
+                ft.Text(message, color=ft.Colors.WHITE)
+            ], tight=True),
+            bgcolor=ft.Colors.ORANGE_600,
+            duration=duration * 1000
         )
+        self.page.snack_bar.open = True
+        self.page.update()
     
     def show_info(self, message: str, duration: int = 3):
         """Show info toast."""
-        self.page.show_snack_bar(
-            ft.SnackBar(
-                content=ft.Row([
-                    ft.Icon(ft.Icons.INFO, color=ft.Colors.WHITE),
-                    ft.Text(message, color=ft.Colors.WHITE)
-                ], tight=True),
-                bgcolor=ft.Colors.BLUE_600,
-                duration=duration * 1000
-            )
+        self.page.snack_bar = ft.SnackBar(
+            content=ft.Row([
+                ft.Icon(ft.Icons.INFO, color=ft.Colors.WHITE),
+                ft.Text(message, color=ft.Colors.WHITE)
+            ], tight=True),
+            bgcolor=ft.Colors.BLUE_600,
+            duration=duration * 1000
         )
+        self.page.snack_bar.open = True
+        self.page.update()

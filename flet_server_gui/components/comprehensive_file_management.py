@@ -253,7 +253,7 @@ class ComprehensiveFileManagement:
                 verified_count = sum(1 for f in files if f.get('verified', False))
                 size_mb = total_size / (1024 * 1024) if total_size > 0 else 0
                 
-                mode_text = "Mock Data" if self.server_bridge.is_mock_mode() else "Real Database"
+                mode_text = "Mock Data" if getattr(self.server_bridge, 'mock_mode', False) else "Real Database"
                 self.status_text.value = (
                     f"Found {len(files)} files, {verified_count} verified, "
                     f"{size_mb:.1f} MB total ({mode_text})"
@@ -550,7 +550,7 @@ class ComprehensiveFileManagement:
                    ft.Text(file_info.get('path', 'Unknown'))]),
         ], spacing=10)
         
-        self.show_dialog("File Details", details_content)
+        self.show_dialog("custom", "File Details", "", content=details_content)
     
     def _download_file(self, file_info):
         """Download a file."""
@@ -558,9 +558,9 @@ class ComprehensiveFileManagement:
             filename = file_info.get('filename', 'Unknown')
             # TODO: Implement actual download logic
             print(f"[INFO] Downloading file: {filename}")
-            self.show_dialog("Download", ft.Text(f"File '{filename}' download started"))
+            self.show_dialog("info", "Download", f"File '{filename}' download started")
         except Exception as e:
-            self.show_dialog("Error", ft.Text(f"Failed to download file: {str(e)}"))
+            self.show_dialog("error", "Error", f"Failed to download file: {str(e)}")
     
     def _verify_file(self, file_info):
         """Verify a file's integrity."""
@@ -568,9 +568,9 @@ class ComprehensiveFileManagement:
             filename = file_info.get('filename', 'Unknown')
             # TODO: Implement actual verification logic
             print(f"[INFO] Verifying file: {filename}")
-            self.show_dialog("Verification", ft.Text(f"File '{filename}' verification started"))
+            self.show_dialog("info", "Verification", f"File '{filename}' verification started")
         except Exception as e:
-            self.show_dialog("Error", ft.Text(f"Failed to verify file: {str(e)}"))
+            self.show_dialog("error", "Error", f"Failed to verify file: {str(e)}")
     
     def _preview_file(self, file_info):
         """Preview a file (show content or metadata)."""
@@ -629,19 +629,17 @@ class ComprehensiveFileManagement:
         """Download multiple selected files."""
         try:
             print(f"[INFO] Downloading {len(self.selected_files)} selected files")
-            self.show_dialog("Batch Download", 
-                           ft.Text(f"Download started for {len(self.selected_files)} files"))
+            self.show_dialog("info", "Batch Download", f"Download started for {len(self.selected_files)} files")
         except Exception as ex:
-            self.show_dialog("Error", ft.Text(f"Failed to download files: {str(ex)}"))
+            self.show_dialog("error", "Error", f"Failed to download files: {str(ex)}")
     
     def _verify_selected_files(self, e):
         """Verify multiple selected files."""
         try:
             print(f"[INFO] Verifying {len(self.selected_files)} selected files")
-            self.show_dialog("Batch Verification", 
-                           ft.Text(f"Verification started for {len(self.selected_files)} files"))
+            self.show_dialog("info", "Batch Verification", f"Verification started for {len(self.selected_files)} files")
         except Exception as ex:
-            self.show_dialog("Error", ft.Text(f"Failed to verify files: {str(ex)}"))
+            self.show_dialog("error", "Error", f"Failed to verify files: {str(ex)}")
     
     def _delete_selected_files(self, e):
         """Delete multiple selected files."""
@@ -681,27 +679,25 @@ class ComprehensiveFileManagement:
         """Export file list to CSV."""
         try:
             print(f"[INFO] Exporting {len(self.selected_files)} files to CSV")
-            self.show_dialog("Export Complete", 
-                           ft.Text(f"Exported {len(self.selected_files)} files to CSV"))
+            self.show_dialog("success", "Export Complete", f"Exported {len(self.selected_files)} files to CSV")
         except Exception as ex:
-            self.show_dialog("Error", ft.Text(f"Failed to export file list: {str(ex)}"))
+            self.show_dialog("error", "Error", f"Failed to export file list: {str(ex)}")
     
     # === Other Actions ===
     
     def _upload_file(self, e):
         """Show upload file dialog."""
         # TODO: Implement file picker and upload logic
-        self.show_dialog("Upload File", ft.Text("Upload functionality coming soon"))
+        self.show_dialog("info", "Upload File", "Upload functionality coming soon")
     
     def _batch_verify_files(self, e):
         """Batch verify all files."""
         try:
             unverified_count = len([f for f in self.all_files if not f.get('verified', False)])
             print(f"[INFO] Starting batch verification of {unverified_count} unverified files")
-            self.show_dialog("Batch Verification", 
-                           ft.Text(f"Started verification of {unverified_count} unverified files"))
+            self.show_dialog("info", "Batch Verification", f"Started verification of {unverified_count} unverified files")
         except Exception as ex:
-            self.show_dialog("Error", ft.Text(f"Failed to start batch verification: {str(ex)}"))
+            self.show_dialog("error", "Error", f"Failed to start batch verification: {str(ex)}")
     
     def _show_file_statistics(self, e):
         """Show file statistics."""
@@ -736,9 +732,9 @@ class ComprehensiveFileManagement:
                   for file_type, count in sorted(type_counts.items())],
             ], spacing=10)
             
-            self.show_dialog("File Statistics", stats_content)
+            self.show_dialog("custom", "File Statistics", "", content=stats_content)
         except Exception as ex:
-            self.show_dialog("Error", ft.Text(f"Failed to generate statistics: {str(ex)}"))
+            self.show_dialog("error", "Error", f"Failed to generate statistics: {str(ex)}")
     
     def _clean_old_files(self, e):
         """Clean old files from server."""
@@ -746,7 +742,7 @@ class ComprehensiveFileManagement:
             try:
                 # TODO: Implement actual cleanup logic
                 print("[INFO] Starting cleanup of old files")
-                self.show_dialog("Cleanup Complete", ft.Text("Old files cleanup completed"))
+                self.show_dialog("info", "Cleanup Complete", "Old files cleanup completed")
                 self._refresh_files()
             except Exception as ex:
                 self.show_dialog("Error", ft.Text(f"Failed to clean old files: {str(ex)}"))
@@ -762,7 +758,7 @@ class ComprehensiveFileManagement:
             ], alignment=ft.MainAxisAlignment.END)
         ])
         
-        self.show_dialog("Confirm Cleanup", confirm_content)
+        self.show_dialog("custom", "Confirm Cleanup", "", content=confirm_content)
     
     def _default_dialog(self, title: str, content: ft.Control):
         """Default dialog implementation."""

@@ -208,7 +208,7 @@ class ComprehensiveClientManagement:
                 self.status_text.value = "No registered clients found"
                 self.status_text.color = ft.Colors.ORANGE_600
             else:
-                mode_text = "Mock Data" if self.server_bridge.is_mock_mode() else "Real Database"
+                mode_text = "Mock Data" if getattr(self.server_bridge, 'mock_mode', False) else "Real Database"
                 self.status_text.value = f"Found {len(clients)} clients ({mode_text})"
                 self.status_text.color = ft.Colors.GREEN_600
                 
@@ -612,12 +612,12 @@ class ComprehensiveClientManagement:
             ], alignment=ft.MainAxisAlignment.END)
         ])
         
-        self.show_dialog("Add Client", content)
+        self.show_dialog("custom", "Add Client", "", content=content)
     
     def _import_clients(self, e):
         """Import clients from file."""
         # TODO: Implement file picker and import logic
-        self.show_dialog("Import Clients", ft.Text("Import functionality coming soon"))
+        self.show_dialog("info", "Import Clients", "Import functionality coming soon")
     
     def _show_client_statistics(self, e):
         """Show client statistics."""
@@ -635,9 +635,9 @@ class ComprehensiveClientManagement:
                 ft.Row([ft.Text("Offline:", weight=ft.FontWeight.BOLD), ft.Text(str(total_clients - connected_clients))]),
             ], spacing=10)
             
-            self.show_dialog("Client Statistics", stats_content)
+            self.show_dialog("custom", "Client Statistics", "", content=stats_content)
         except Exception as ex:
-            self.show_dialog("Error", ft.Text(f"Failed to generate statistics: {str(ex)}"))
+            self.show_dialog("error", "Error", f"Failed to generate statistics: {str(ex)}")
     
     def _default_dialog(self, title: str, content: ft.Control):
         """Default dialog implementation."""

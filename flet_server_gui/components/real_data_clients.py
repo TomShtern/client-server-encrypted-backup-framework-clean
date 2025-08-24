@@ -138,7 +138,7 @@ class RealDataClientsView:
                     )
                 
                 # Update status
-                mode_text = "📊 Mock Data" if self.server_bridge.is_mock_mode() else "🗄️ Real Database"
+                mode_text = "📊 Mock Data" if getattr(self.server_bridge, 'mock_mode', False) else "🗄️ Real Database"
                 self.status_text.value = f"✅ Found {len(clients)} clients ({mode_text})"
                 self.status_text.color = ft.Colors.GREEN_600
             
@@ -177,7 +177,7 @@ class RealDataStatsCard:
             size_mb = total_size / (1024 * 1024) if total_size > 0 else 0
             
             # Data source indicator
-            data_source = "📊 Mock Data" if self.server_bridge.is_mock_mode() else "🗄️ Real Database"
+            data_source = "📊 Mock Data" if getattr(self.server_bridge, 'mock_mode', False) else "🗄️ Real Database"
             
         except Exception as e:
             client_count = 0

@@ -112,7 +112,7 @@ class ControlPanelCard:
         
         # Mock mode indicator
         mock_indicator = None
-        if self.server_bridge.is_mock_mode():
+        if hasattr(self.server_bridge, 'mock_mode') and self.server_bridge.mock_mode:
             mock_indicator = ft.Container(
                 content=ft.Row([
                     ft.Icon(ft.Icons.DEVELOPER_MODE, size=16),

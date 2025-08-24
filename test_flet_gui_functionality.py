@@ -28,9 +28,9 @@ def test_server_bridge():
     
     try:
         bridge = ServerBridge()
-        print(f"  [OK] ServerBridge initialized - Mock mode: {bridge.is_mock_mode()}")
+        print(f"  [OK] ServerBridge initialized - Mock mode: {getattr(bridge, 'mock_mode', False)}")
         
-        if not bridge.is_mock_mode():
+        if not getattr(bridge, 'mock_mode', False):
             print("  🗄️ Database manager available")
         else:
             print("  [WARNING] Running in mock mode - database not available")
@@ -91,7 +91,7 @@ def test_database_operations(bridge):
     """Test database operations"""
     print("\n🗄️ Testing Database Operations...")
     
-    if bridge.is_mock_mode():
+    if getattr(bridge, 'mock_mode', False):
         print("  [WARNING] Skipping database tests - mock mode")
         return
     
@@ -160,7 +160,7 @@ async def test_server_controls(bridge):
         restart_result = await bridge.restart_server()
         print(f"  📝 Restart server result: {restart_result}")
         
-        if bridge.is_mock_mode():
+        if getattr(bridge, 'mock_mode', False):
             print("  [WARNING] Server controls show warnings in mock mode (expected)")
         else:
             print("  [OK] Server controls executed")
@@ -221,7 +221,7 @@ async def main():
     print("=" * 60)
     print("🎉 Comprehensive Test Suite Complete!")
     
-    if bridge.is_mock_mode():
+    if getattr(bridge, 'mock_mode', False):
         print("[WARNING]  MOCK MODE: Some functionality limited without real server")
         print("💡 To test with real data, ensure server database is accessible")
     else:

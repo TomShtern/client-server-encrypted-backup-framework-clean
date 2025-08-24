@@ -210,7 +210,7 @@ class RealDataFilesView:
                 self.populate_table(files)
                 
                 # Update status
-                mode_text = "📊 Mock Data" if self.server_bridge.is_mock_mode() else "🗄️ Real Database"
+                mode_text = "📊 Mock Data" if getattr(self.server_bridge, 'mock_mode', False) else "🗄️ Real Database"
                 size_mb = total_size / (1024 * 1024) if total_size > 0 else 0
                 self.status_text.value = (
                     f"✅ Found {len(files)} files, {verified_count} verified, "
@@ -275,7 +275,7 @@ class FileTypeBreakdownCard:
                     ])
                 )
             
-            data_source = "📊 Mock Data" if self.server_bridge.is_mock_mode() else "🗄️ Real Database"
+            data_source = "📊 Mock Data" if getattr(self.server_bridge, 'mock_mode', False) else "🗄️ Real Database"
             
         except Exception as e:
             breakdown_items = [ft.Text(f"Error: {str(e)}", color=ft.Colors.RED_600)]

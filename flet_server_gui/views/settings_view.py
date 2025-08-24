@@ -47,22 +47,22 @@ class SettingsView:
             tabs=[
                 ft.Tab(
                     text="Server",
-                    icon=ft.icons.server,
+                    icon=ft.Icons.SETTINGS,
                     content=self._create_server_settings()
                 ),
                 ft.Tab(
                     text="GUI",
-                    icon=ft.icons.settings,
+                    icon=ft.Icons.SETTINGS,
                     content=self._create_gui_settings()
                 ),
                 ft.Tab(
                     text="Monitoring",
-                    icon=ft.icons.monitor,
+                    icon=ft.Icons.MONITOR,
                     content=self._create_monitoring_settings()
                 ),
                 ft.Tab(
                     text="Advanced",
-                    icon=ft.icons.tune,
+                    icon=ft.Icons.TUNE,
                     content=self._create_advanced_settings()
                 )
             ],
@@ -119,7 +119,7 @@ class SettingsView:
             helper_text="Directory where received files are stored",
             on_change=self._on_setting_changed,
             suffix=ft.IconButton(
-                icon=ft.icons.folder_open,
+                icon=ft.Icons.FOLDER_OPEN,
                 tooltip="Browse for directory",
                 on_click=self._browse_storage_directory
             )
@@ -356,12 +356,12 @@ class SettingsView:
                             ft.Row([
                                 ft.ElevatedButton(
                                     text="Export Settings",
-                                    icon=ft.icons.download,
+                                    icon=ft.Icons.DOWNLOAD,
                                     on_click=self._export_settings
                                 ),
                                 ft.ElevatedButton(
                                     text="Import Settings",
-                                    icon=ft.icons.upload,
+                                    icon=ft.Icons.UPLOAD,
                                     on_click=self._import_settings
                                 )
                             ]),
@@ -370,17 +370,17 @@ class SettingsView:
                             ft.Row([
                                 ft.ElevatedButton(
                                     text="Reset Server Settings",
-                                    icon=ft.icons.refresh,
+                                    icon=ft.Icons.REFRESH,
                                     on_click=lambda _: self._reset_category('server')
                                 ),
                                 ft.ElevatedButton(
                                     text="Reset GUI Settings",
-                                    icon=ft.icons.refresh,
+                                    icon=ft.Icons.REFRESH,
                                     on_click=lambda _: self._reset_category('gui')
                                 ),
                                 ft.ElevatedButton(
                                     text="Reset All Settings",
-                                    icon=ft.icons.restore,
+                                    icon=ft.Icons.RESTORE,
                                     color=ft.Colors.ERROR,
                                     on_click=self._reset_all_settings
                                 )
@@ -412,7 +412,7 @@ class SettingsView:
             content=ft.Row([
                 ft.ElevatedButton(
                     text="Save Changes",
-                    icon=ft.icons.save,
+                    icon=ft.Icons.SAVE,
                     style=ft.ButtonStyle(
                         bgcolor=ft.Colors.PRIMARY,
                         color=ft.Colors.ON_PRIMARY
@@ -421,9 +421,9 @@ class SettingsView:
                 ),
                 ft.ElevatedButton(
                     text="Cancel Changes",
-                    icon=ft.icons.cancel,
+                    icon=ft.Icons.CANCEL,
                     style=ft.ButtonStyle(
-                        bgcolor=ft.Colors.SURFACE_VARIANT,
+                        bgcolor=ft.Colors.ON_SURFACE_VARIANT,
                         color=ft.Colors.ON_SURFACE_VARIANT
                     ),
                     on_click=self._cancel_changes
