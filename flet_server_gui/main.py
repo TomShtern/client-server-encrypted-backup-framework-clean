@@ -29,6 +29,8 @@ from flet_server_gui.components.comprehensive_file_management import Comprehensi
 from flet_server_gui.components.dialog_system import DialogSystem, ToastManager
 from flet_server_gui.utils.theme_manager import ThemeManager
 from flet_server_gui.utils.server_bridge import ServerBridge, MockClient
+from flet_server_gui.views.settings_view import SettingsView
+from flet_server_gui.views.logs_view import LogsView
 
 
 class ServerGUIApp:
@@ -75,6 +77,12 @@ class ServerGUIApp:
             self.server_bridge, 
             self._show_dialog
         )
+        
+        # Settings view with real configuration management
+        self.settings_view = SettingsView(page, self.dialog_system, self.toast_manager)
+        
+        # Logs view with real-time server log monitoring
+        self.logs_view = LogsView(page, self.dialog_system, self.toast_manager)
         
         # Legacy simple components (for dashboard stats)
         self.real_data_stats = RealDataStatsCard(self.server_bridge)
@@ -209,82 +217,12 @@ class ServerGUIApp:
         return self.analytics_view.build()
     
     def get_logs_view(self) -> ft.Control:
-        """Get the logs view (placeholder)"""
-        # Create a scrollable container for logs
-        log_container = ft.Container(
-            content=ft.Column([
-                ft.Text("2025-08-23 10:30:15 [INFO] Server started successfully"),
-                ft.Text("2025-08-23 10:30:16 [INFO] Client client_001 connected"),
-                ft.Text("2025-08-23 10:30:22 [SUCCESS] File transfer completed"),
-                ft.Text("2025-08-23 10:35:44 [WARNING] CRC mismatch detected"),
-                ft.Text("2025-08-23 10:35:45 [INFO] Retrying transfer..."),
-                ft.Text("2025-08-23 10:35:50 [SUCCESS] Transfer completed on retry"),
-            ], spacing=8, scroll=ft.ScrollMode.AUTO),
-            padding=10,
-            height=300,
-            border=ft.border.all(1, ft.Colors.OUTLINE),
-            border_radius=4,
-        )
-        
-        return ft.Column([
-            ft.Text("Logs", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
-            ft.Divider(),
-            ft.Text("Detailed server logs will be displayed here."),
-            ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Text("Log Viewer", style=ft.TextThemeStyle.TITLE_MEDIUM),
-                        ft.TextField(label="Filter logs...", icon=ft.Icons.SEARCH),
-                        log_container,
-                        ft.Row([
-                            ft.FilledButton("Export Logs", icon=ft.Icons.DOWNLOAD, on_click=self._on_export_logs),
-                            ft.OutlinedButton("Clear Logs", icon=ft.Icons.CLEAR, on_click=self._on_clear_logs_view),
-                        ], alignment=ft.MainAxisAlignment.END)
-                    ], spacing=16),
-                    padding=20,
-                )
-            )
-        ], spacing=24, expand=True, scroll=ft.ScrollMode.ADAPTIVE)
+        """Get the comprehensive real-time logs view"""
+        return self.logs_view.create_logs_view()
     
     def get_settings_view(self) -> ft.Control:
-        def on_setting_change(e, setting_name):
-            # Show notification directly without async task
-            self._show_notification_sync(f'{setting_name} updated to "{e.control.value}"')
-
-        def on_save_settings(e):
-            # Show notification directly without async task
-            self._show_notification_sync("Settings saved!")
-
-        return ft.Column([
-            ft.Text("Settings", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
-            ft.Divider(),
-            ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Text("Server Configuration", style=ft.TextThemeStyle.TITLE_MEDIUM),
-                        ft.TextField(label="Port", value="1256", on_change=lambda e: on_setting_change(e, "Port")),
-                        ft.TextField(label="Max Clients", value="100", on_change=lambda e: on_setting_change(e, "Max Clients")),
-                        ft.TextField(label="Backup Directory", value="./backups", on_change=lambda e: on_setting_change(e, "Backup Directory")),
-                        ft.Switch(label="Auto-start server", value=True, on_change=lambda e: on_setting_change(e, "Auto-start")),
-                        ft.Switch(label="Enable logging", value=True, on_change=lambda e: on_setting_change(e, "Enable logging")),
-                        ft.Dropdown(
-                            label="Log Level",
-                            options=[
-                                ft.dropdown.Option("DEBUG"),
-                                ft.dropdown.Option("INFO"),
-                                ft.dropdown.Option("WARNING"),
-                                ft.dropdown.Option("ERROR"),
-                            ],
-                            value="INFO",
-                            on_change=lambda e: on_setting_change(e, "Log Level")
-                        ),
-                        ft.FilledButton("Save Settings", icon=ft.Icons.SAVE, on_click=on_save_settings)
-                    ], spacing=16),
-                    padding=20
-                ),
-                width=500
-            )
-        ], spacing=24)
+        """Get the comprehensive settings view with real configuration management"""
+        return self.settings_view.create_settings_view()
 
     def _on_backup_now(self, e):
         """Handle backup now action"""
