@@ -33,15 +33,14 @@ from flet_server_gui.components.client_stats_card import ClientStatsCard
 from flet_server_gui.components.control_panel_card import ControlPanelCard
 from flet_server_gui.components.activity_log_card import ActivityLogCard
 from flet_server_gui.components.navigation import NavigationManager
-from flet_server_gui.components.files_view import FilesView
+# files_view.py deleted - functionality in ComprehensiveFileManagement
 from flet_server_gui.components.real_database_view import RealDatabaseView
-from flet_server_gui.components.analytics_view import AnalyticsView
+from flet_server_gui.components.enhanced_performance_charts import EnhancedPerformanceCharts
 from flet_server_gui.components.enhanced_stats_card import EnhancedStatsCard
 from flet_server_gui.components.real_time_charts import RealTimeCharts
 from flet_server_gui.components.quick_actions import QuickActions
-from flet_server_gui.components.enhanced_client_management import create_enhanced_client_management
-from flet_server_gui.components.real_data_clients import RealDataClientsView, RealDataStatsCard
-from flet_server_gui.components.real_data_files import RealDataFilesView, FileTypeBreakdownCard
+from flet_server_gui.components.real_data_clients import RealDataStatsCard  # Database metrics card
+# FileTypeBreakdownCard functionality now integrated into ComprehensiveFileManagement
 from flet_server_gui.components.comprehensive_client_management import ComprehensiveClientManagement
 from flet_server_gui.components.comprehensive_file_management import ComprehensiveFileManagement
 from flet_server_gui.components.dialog_system import DialogSystem, ToastManager
@@ -73,9 +72,9 @@ class ServerGUIApp:
         self.client_stats_card = ClientStatsCard(self.server_bridge, page)
         self.control_panel = ControlPanelCard(self.server_bridge, self)
         self.activity_log = ActivityLogCard()
-        self.files_view = FilesView(self.server_bridge)
+        # files_view removed - using ComprehensiveFileManagement
         self.database_view = RealDatabaseView(self.server_bridge)
-        self.analytics_view = AnalyticsView(self.server_bridge)
+        self.analytics_view = EnhancedPerformanceCharts(self.server_bridge, page)
         self.enhanced_stats_card = EnhancedStatsCard()
         self.real_time_charts = RealTimeCharts()
         self.quick_actions = QuickActions(
@@ -104,7 +103,7 @@ class ServerGUIApp:
         
         # Legacy simple components (for dashboard stats)
         self.real_data_stats = RealDataStatsCard(self.server_bridge)
-        self.file_type_breakdown = FileTypeBreakdownCard(self.server_bridge)
+        # file_type_breakdown functionality now integrated into comprehensive_file_management
         
         self.navigation = NavigationManager(page, self.switch_view)
         
@@ -195,21 +194,49 @@ class ServerGUIApp:
         self.page.update()
     
     def get_dashboard_view(self) -> ft.Control:
+        """Simplified dashboard prioritizing core components (ENHANCED: following UX recommendations)"""
         return ft.Column([
             ft.Text("Dashboard", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
             ft.Divider(),
+            
+            # Core system status - most important information first
             ft.ResponsiveRow(
                 controls=[
                     ft.Column(col={"sm": 12, "md": 6, "lg": 4}, controls=[self.status_card.build()]),
-                    ft.Column(col={"sm": 12, "md": 6, "lg": 4}, controls=[self.control_panel.build()]),
-                    ft.Column(col={"sm": 12, "md": 12, "lg": 4}, controls=[self.real_data_stats.build()]),
-                    ft.Column(col={"sm": 12, "md": 12, "lg": 6}, controls=[self.enhanced_stats_card]),
-                    ft.Column(col={"sm": 12, "md": 12, "lg": 6}, controls=[self.real_time_charts]),
-                    ft.Column(col={"sm": 12, "md": 12, "lg": 12}, controls=[self.quick_actions]),
-                    ft.Column(col=12, controls=[self.activity_log.build()]),
+                    ft.Column(col={"sm": 12, "md": 6, "lg": 4}, controls=[self.control_panel.build()]),  
+                    ft.Column(col={"sm": 12, "md": 12, "lg": 4}, controls=[self.enhanced_stats_card]),
                 ],
-                spacing=20,
+                spacing=16,
+            ),
+            
+            ft.Container(height=16),  # Clean spacing
+            
+            # Database metrics and quick actions in secondary row
+            ft.ResponsiveRow(
+                controls=[
+                    ft.Column(col={"sm": 12, "md": 6, "lg": 6}, controls=[self.real_data_stats.build()]),
+                    ft.Column(col={"sm": 12, "md": 6, "lg": 6}, controls=[self.quick_actions]),
+                ],
+                spacing=16,
+            ),
+            
+            # Activity summary (moved detailed log to Logs view)
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("Recent Activity", style=ft.TextThemeStyle.TITLE_MEDIUM),
+                    ft.Text("View detailed logs in the Logs section", 
+                           style=ft.TextThemeStyle.BODY_MEDIUM,
+                           color=ft.Colors.OUTLINE),
+                    ft.FilledButton(
+                        "View Full Logs",
+                        icon=ft.Icons.HISTORY,
+                        on_click=lambda _: self.switch_view("logs")
+                    )
+                ]),
+                padding=16,
+                margin=ft.margin.only(top=16)
             )
+            
         ], spacing=24, scroll=ft.ScrollMode.ADAPTIVE, expand=True)
     
     def get_clients_view(self) -> ft.Control:
@@ -231,8 +258,17 @@ class ServerGUIApp:
         return self.database_view.build()
     
     def get_analytics_view(self) -> ft.Control:
-        """Get the analytics and reporting view"""
-        return self.analytics_view.build()
+        """Get the enhanced analytics view with detailed charts (ENHANCED: moved from dashboard)"""
+        return ft.Column([
+            ft.Text("Analytics & Performance", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
+            ft.Divider(),
+            
+            # Enhanced performance charts (moved from dashboard)
+            ft.ResponsiveRow([
+                ft.Column(col={"sm": 12, "md": 12, "lg": 8}, controls=[self.analytics_view.create_enhanced_charts_view()]),
+                ft.Column(col={"sm": 12, "md": 12, "lg": 4}, controls=[self.real_time_charts]),
+            ], spacing=16)
+        ], spacing=16, scroll=ft.ScrollMode.ADAPTIVE, expand=True)
     
     def get_logs_view(self) -> ft.Control:
         """Get the comprehensive real-time logs view"""

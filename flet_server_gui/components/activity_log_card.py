@@ -156,7 +156,7 @@ class ActivityLogCard:
             ft.Text(entry_data["message"], style=ft.TextThemeStyle.BODY_SMALL, color=message_color, expand=True)
         ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER)
 
-    def clear_log(self, e=None):
+    async def clear_log(self, e=None):
         """Clear all log entries with enhanced animation"""
         self.log_entries.clear()
         if self.log_container.current:
@@ -172,9 +172,9 @@ class ActivityLogCard:
                     control.opacity = 0
                 self.page.update()
                 
-                # Wait for animations to complete
-                import time
-                time.sleep(0.25)
+                # Wait for animations to complete (FIXED: async-compatible)
+                import asyncio
+                await asyncio.sleep(0.25)
             
             # Clear and add confirmation message
             self.log_container.current.controls.clear()

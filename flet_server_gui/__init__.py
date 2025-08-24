@@ -1,3 +1,2 @@
 # Flet Server GUI Package
-
-from .main import ServerGUIApp
+# All imports should be explicit for better maintainability

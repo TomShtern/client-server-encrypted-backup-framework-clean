@@ -3,15 +3,42 @@
     "default_server_host": "127.0.0.1",
     "default_server_port": 1256,
     "default_username": "TestDebugQuick",
-    "last_file_path": "C:\\WINDOWS\\TEMP\\tmp17ez9h8v_66KB_debug.txt"
+    "last_file_path": "test_file.txt",
+    "last_server_host": "127.0.0.1",
+    "last_server_port": 1256,
+    "last_username": "test_user_unique_20453"
   },
   "server": {
     "port": 1256,
     "host": "127.0.0.1",
     "file_storage_dir": "received_files",
-    "database_name": "defensive.db"
+    "database_name": "defensive.db",
+    "max_clients": 50,
+    "session_timeout": 10,
+    "maintenance_interval": 60,
+    "auto_start": false,
+    "log_level": "INFO"
   },
   "api": {
     "port": 9090
+  },
+  "gui": {
+    "theme_mode": "dark",
+    "auto_refresh_interval": 7,
+    "show_notifications": true,
+    "window_maximized": false,
+    "confirm_deletions": true,
+    "last_tab": "dashboard"
+  },
+  "monitoring": {
+    "enable_system_monitoring": true,
+    "performance_alerts": true,
+    "monitoring_interval": 2,
+    "history_retention_days": 7,
+    "alert_thresholds": {
+      "cpu_percent": 80,
+      "memory_percent": 85,
+      "disk_percent": 90
+    }
   }
 }

@@ -40,9 +40,10 @@ class EnhancedPerformanceCharts:
     Phase 7.1: Enhanced charts with real-time alerts, time range controls, and export features.
     """
     
-    def __init__(self, server_bridge):
+    def __init__(self, server_bridge, page):
         """Initialize with real server bridge for metrics"""
         self.server_bridge = server_bridge
+        self.page = page
         
         # Chart settings and configuration
         self.settings = ChartSettings()
@@ -123,7 +124,7 @@ class EnhancedPerformanceCharts:
     def _create_header(self) -> ft.Row:
         """Create header with title and main controls"""
         return ft.Row([
-            ft.Icon(ft.icons.analytics, size=32, color=ft.Colors.PRIMARY),
+            ft.Icon(ft.Icons.ANALYTICS, size=32, color=ft.Colors.PRIMARY),
             ft.Text(
                 "Enhanced Performance Monitoring",
                 size=28,
@@ -133,13 +134,13 @@ class EnhancedPerformanceCharts:
             ft.Container(expand=1),
             ft.ElevatedButton(
                 text="Start Monitoring" if not self.monitoring_active else "Stop Monitoring",
-                icon=ft.icons.play_arrow if not self.monitoring_active else ft.icons.stop,
+                icon=ft.Icons.PLAY_ARROW if not self.monitoring_active else ft.Icons.STOP,
                 on_click=self._toggle_monitoring,
                 bgcolor=ft.Colors.GREEN if not self.monitoring_active else ft.Colors.RED_ACCENT
             ),
             ft.ElevatedButton(
                 text="Export Data",
-                icon=ft.icons.file_download,
+                icon=ft.Icons.FILE_DOWNLOAD,
                 on_click=self._export_performance_data
             )
         ], alignment=ft.MainAxisAlignment.START)
@@ -180,17 +181,17 @@ class EnhancedPerformanceCharts:
                 ft.Segment(
                     value="line",
                     label=ft.Text("Line"),
-                    icon=ft.Icon(ft.icons.show_chart)
+                    icon=ft.Icon(ft.Icons.SHOW_CHART)
                 ),
                 ft.Segment(
                     value="bar", 
                     label=ft.Text("Bar"),
-                    icon=ft.Icon(ft.icons.bar_chart)
+                    icon=ft.Icon(ft.Icons.BAR_CHART)
                 ),
                 ft.Segment(
                     value="area",
                     label=ft.Text("Area"),
-                    icon=ft.Icon(ft.icons.area_chart)
+                    icon=ft.Icon(ft.Icons.AREA_CHART)
                 )
             ],
             on_change=self._on_chart_type_changed
@@ -214,11 +215,11 @@ class EnhancedPerformanceCharts:
                 ft.Container(expand=1),
                 ft.ElevatedButton(
                     text="Reset View",
-                    icon=ft.icons.refresh,
+                    icon=ft.Icons.REFRESH,
                     on_click=self._reset_charts
                 )
             ], alignment=ft.MainAxisAlignment.START),
-            bgcolor=ft.Colors.SURFACE_VARIANT,
+            bgcolor=ft.Colors.SURFACE_TINT,
             padding=10,
             border_radius=8
         )
@@ -227,7 +228,7 @@ class EnhancedPerformanceCharts:
         """Create alert panel for threshold violations"""
         self.alert_panel = ft.Container(
             content=ft.Row([
-                ft.Icon(ft.icons.notifications, color=ft.Colors.AMBER),
+                ft.Icon(ft.Icons.NOTIFICATIONS, color=ft.Colors.AMBER),
                 ft.Text("No active alerts", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
                 ft.Container(expand=1),
                 ft.TextButton("Clear All", on_click=self._clear_alerts, visible=False)
@@ -242,10 +243,10 @@ class EnhancedPerformanceCharts:
     def _create_metrics_grid(self) -> ft.Row:
         """Create enhanced metrics display grid"""
         self.stat_displays = {
-            'cpu': self._create_metric_card("CPU", ft.icons.memory, ft.Colors.BLUE),
-            'memory': self._create_metric_card("Memory", ft.icons.storage, ft.Colors.GREEN),
-            'disk': self._create_metric_card("Disk", ft.icons.hard_drive, ft.Colors.ORANGE),
-            'network': self._create_metric_card("Network", ft.icons.network_check, ft.Colors.PURPLE)
+            'cpu': self._create_metric_card("CPU", ft.Icons.MEMORY, ft.Colors.BLUE),
+            'memory': self._create_metric_card("Memory", ft.Icons.STORAGE, ft.Colors.GREEN),
+            'disk': self._create_metric_card("Disk", ft.Icons.STORAGE, ft.Colors.ORANGE),
+            'network': self._create_metric_card("Network", ft.Icons.NETWORK_CHECK, ft.Colors.PURPLE)
         }
         
         return ft.Row([
@@ -275,7 +276,7 @@ class EnhancedPerformanceCharts:
                         ft.Container(expand=1),
                         status_indicator
                     ]),
-                    ft.Text(title, size=14, weight=ft.FontWeight.W500),
+                    ft.Text(title, size=14, weight=ft.FontWeight.W_500),
                     current_text,
                     avg_text,
                     max_text
@@ -328,7 +329,7 @@ class EnhancedPerformanceCharts:
                     ft.Text(title, size=14, weight=ft.FontWeight.BOLD),
                     ft.Container(expand=1),
                     ft.IconButton(
-                        icon=ft.icons.fullscreen,
+                        icon=ft.Icons.FULLSCREEN,
                         tooltip="Full Screen",
                         on_click=lambda e, t=title: self._show_fullscreen_chart(t)
                     )
@@ -344,12 +345,12 @@ class EnhancedPerformanceCharts:
         if self.monitoring_active:
             self._stop_monitoring()
             e.control.text = "Start Monitoring"
-            e.control.icon = ft.icons.play_arrow
+            e.control.icon = ft.Icons.PLAY_ARROW
             e.control.bgcolor = ft.Colors.GREEN
         else:
             self._start_monitoring()
             e.control.text = "Stop Monitoring"
-            e.control.icon = ft.icons.stop
+            e.control.icon = ft.Icons.STOP
             e.control.bgcolor = ft.Colors.RED_ACCENT
         
         e.control.update()
@@ -361,7 +362,8 @@ class EnhancedPerformanceCharts:
             
         self.monitoring_active = True
         self.active_alerts.clear()
-        asyncio.create_task(self._enhanced_monitoring_loop())
+        # Use page's run_task to schedule the async monitoring loop properly
+        self.page.run_task(self._enhanced_monitoring_loop)
         logger.info("✅ Enhanced performance monitoring started")
     
     def _stop_monitoring(self):
@@ -592,7 +594,7 @@ class EnhancedPerformanceCharts:
         try:
             if not alerts:
                 self.alert_panel.content = ft.Row([
-                    ft.Icon(ft.icons.notifications, color=ft.Colors.GREEN),
+                    ft.Icon(ft.Icons.NOTIFICATIONS, color=ft.Colors.GREEN),
                     ft.Text("All systems normal", size=12, color=ft.Colors.GREEN),
                     ft.Container(expand=1)
                 ])
@@ -604,7 +606,7 @@ class EnhancedPerformanceCharts:
                 icon_color = ft.Colors.RED if critical_count > 0 else ft.Colors.AMBER
                 
                 self.alert_panel.content = ft.Row([
-                    ft.Icon(ft.icons.warning, color=icon_color),
+                    ft.Icon(ft.Icons.WARNING, color=icon_color),
                     ft.Text(alert_text, size=12, color=icon_color, weight=ft.FontWeight.BOLD),
                     ft.Container(expand=1),
                     ft.TextButton("Clear", on_click=self._clear_alerts, visible=True)

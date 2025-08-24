@@ -760,6 +760,54 @@ class ComprehensiveFileManagement:
         
         self.show_dialog("custom", "Confirm Cleanup", "", content=confirm_content)
     
+    # Enhanced utility methods (integrated from RealDataFilesView)
+    def format_file_size(self, size_bytes: int) -> str:
+        """Format file size in human-readable format (from RealDataFilesView)."""
+        if size_bytes == 0:
+            return "0 B"
+        elif size_bytes < 1024:
+            return f"{size_bytes} B"
+        elif size_bytes < 1024 * 1024:
+            return f"{size_bytes / 1024:.1f} KB"
+        elif size_bytes < 1024 * 1024 * 1024:
+            return f"{size_bytes / (1024 * 1024):.1f} MB"
+        else:
+            return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
+
+    def format_date(self, date_str: str) -> str:
+        """Format date string for display (from RealDataFilesView)."""
+        try:
+            if date_str:
+                # Try to parse ISO format
+                if 'T' in date_str:
+                    date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                else:
+                    date_obj = datetime.fromisoformat(date_str)
+                return date_obj.strftime('%Y-%m-%d %H:%M')
+        except Exception:
+            pass
+        return date_str or "Unknown"
+
+    def get_file_type_breakdown(self) -> List[tuple]:
+        """Get file type breakdown statistics (integrated from FileTypeBreakdownCard)."""
+        try:
+            files = self.server_bridge.get_file_list()
+            file_types = {}
+            
+            for file_info in files:
+                filename = file_info.get('filename', '')
+                if '.' in filename:
+                    ext = filename.rsplit('.', 1)[-1].lower()
+                    file_types[ext] = file_types.get(ext, 0) + 1
+                else:
+                    file_types['no extension'] = file_types.get('no extension', 0) + 1
+            
+            # Return top 5 file types sorted by count
+            return sorted(file_types.items(), key=lambda x: x[1], reverse=True)[:5]
+        except Exception as e:
+            print(f"[ERROR] Failed to get file type breakdown: {e}")
+            return []
+
     def _default_dialog(self, title: str, content: ft.Control):
         """Default dialog implementation."""
         print(f"[DIALOG] {title}: {content}")

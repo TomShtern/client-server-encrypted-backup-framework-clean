@@ -384,7 +384,7 @@ class LogsView:
         """Handle search query changes"""
         self.search_query = self.search_field.value
         # Add small delay to avoid excessive updates
-        asyncio.create_task(self._delayed_search())
+        self.page.run_task(self._delayed_search)
     
     async def _delayed_search(self):
         """Delayed search to avoid excessive updates"""

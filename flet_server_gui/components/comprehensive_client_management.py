@@ -16,6 +16,7 @@ class ComprehensiveClientManagement:
     def __init__(self, server_bridge: ServerBridge, show_dialog_callback: Optional[Callable] = None):
         self.server_bridge = server_bridge
         self.show_dialog = show_dialog_callback or self._default_dialog
+        self.page = None  # Will be set by parent component for toast notifications
         
         # UI Components
         self.client_table = None
@@ -48,18 +49,32 @@ class ComprehensiveClientManagement:
             width=300,
         )
         
-        self.filter_dropdown = ft.Dropdown(
-            label="Filter by status",
-            width=200,
-            options=[
-                ft.dropdown.Option("all", "All Clients"),
-                ft.dropdown.Option("connected", "Connected"),
-                ft.dropdown.Option("registered", "Registered"),
-                ft.dropdown.Option("offline", "Offline"),
-            ],
-            value="all",
-            on_change=self._on_filter_change
-        )
+        # Status filter chips (enhanced UX from enhanced_client_management)
+        self.status_chips = ft.Row([
+            ft.Chip(
+                label=ft.Text("All"),
+                selected=True,
+                on_select=lambda e: self._on_chip_select("all", e),
+                bgcolor=ft.Colors.PRIMARY_CONTAINER,
+            ),
+            ft.Chip(
+                label=ft.Text("Connected"),
+                on_select=lambda e: self._on_chip_select("connected", e),
+                bgcolor=ft.Colors.GREEN_100,
+            ),
+            ft.Chip(
+                label=ft.Text("Registered"),
+                on_select=lambda e: self._on_chip_select("registered", e),
+                bgcolor=ft.Colors.BLUE_100,
+            ),
+            ft.Chip(
+                label=ft.Text("Offline"),
+                on_select=lambda e: self._on_chip_select("offline", e),
+                bgcolor=ft.Colors.ORANGE_100,
+            )
+        ], spacing=8, wrap=True)
+        
+        self.current_filter = "all"
         
         self.refresh_button = ft.ElevatedButton(
             "Refresh Clients",
@@ -151,12 +166,20 @@ class ComprehensiveClientManagement:
                 ft.Divider(),
                 self.status_text,
                 
-                # Search and filter row
+                # Search and filter controls (enhanced UX from enhanced_client_management)
                 ft.Row([
                     self.search_field,
-                    self.filter_dropdown,
                     self.refresh_button,
                 ], alignment=ft.MainAxisAlignment.START, spacing=10),
+                
+                # Status filter chips for better UX
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Filter by Status:", size=12, weight=ft.FontWeight.BOLD),
+                        self.status_chips
+                    ], spacing=5),
+                    padding=ft.padding.symmetric(vertical=5)
+                ),
                 
                 ft.Container(height=10),  # Spacer
                 
@@ -226,8 +249,8 @@ class ComprehensiveClientManagement:
         if search_term:
             filtered = [c for c in filtered if search_term in c.client_id.lower()]
         
-        # Apply status filter
-        status_filter = self.filter_dropdown.value if self.filter_dropdown else "all"
+        # Apply status filter (enhanced with chip system)
+        status_filter = getattr(self, 'current_filter', 'all')
         if status_filter != "all":
             filtered = [c for c in filtered if c.status.lower() == status_filter.lower()]
         
@@ -334,6 +357,26 @@ class ComprehensiveClientManagement:
     def _on_filter_change(self, e):
         """Handle filter dropdown changes."""
         self._apply_filters()
+    
+    def _on_chip_select(self, filter_value: str, e):
+        """Handle status chip selection (enhanced UX from enhanced_client_management)."""
+        # Update current filter
+        self.current_filter = filter_value
+        
+        # Update chip selection states
+        for chip in self.status_chips.controls:
+            if isinstance(chip, ft.Chip):
+                chip.selected = False
+        
+        # Set selected chip
+        e.control.selected = True
+        
+        # Apply filters and update UI
+        self._apply_filters()
+        
+        # Show toast notification for user feedback
+        if hasattr(self, 'page') and self.page:
+            self._show_toast(f"Filtered by: {filter_value.title()}", ft.Colors.PRIMARY_CONTAINER)
     
     def _on_select_all(self, e):
         """Handle select all checkbox."""
@@ -642,6 +685,22 @@ class ComprehensiveClientManagement:
     def _default_dialog(self, title: str, content: ft.Control):
         """Default dialog implementation."""
         print(f"[DIALOG] {title}: {content}")
+    
+    def _show_toast(self, message: str, bgcolor: str = None):
+        """Show toast notification (enhanced UX from enhanced_client_management)."""
+        try:
+            if hasattr(self, 'page') and self.page:
+                # Create and show a snack bar as toast
+                snack_bar = ft.SnackBar(
+                    content=ft.Text(message),
+                    bgcolor=bgcolor or ft.Colors.PRIMARY_CONTAINER,
+                    duration=2000
+                )
+                self.page.overlay.append(snack_bar)
+                snack_bar.open = True
+                self.page.update()
+        except Exception as e:
+            print(f"[TOAST ERROR] {e}: {message}")
     
     def did_mount(self):
         """Called when component is mounted - load initial data."""

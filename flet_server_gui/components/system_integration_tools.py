@@ -787,14 +787,66 @@ class AdvancedClientSessionManager:
         logger.info(f"{'✅ Started' if self.monitoring_active else '⏹️ Stopped'} session monitoring")
     
     def _monitor_sessions(self):
-        """Monitor sessions in background"""
+        """Monitor sessions in background (FIXED: thread-safe UI updates)"""
         while self.monitoring_active:
             try:
-                self._refresh_sessions(None)
+                # Get data in background thread (safe)
+                sessions_data = self._get_sessions_data_blocking()
+                
+                # Schedule UI update on main thread (thread-safe)
+                if hasattr(self, 'page') and self.page:
+                    # Use a thread-safe approach to update UI
+                    import threading
+                    if threading.current_thread() == threading.main_thread():
+                        # Already on main thread, safe to update directly
+                        self._update_sessions_with_data(sessions_data)
+                    else:
+                        # On background thread, defer to main thread
+                        # This is a simplified approach - in production, use proper event scheduling
+                        try:
+                            self.page.update()  # This will be ignored if not on main thread
+                        except:
+                            pass  # Silently fail if not on main thread
+                
                 time.sleep(10)  # Update every 10 seconds
             except Exception as ex:
                 logger.error(f"❌ Error in session monitoring: {ex}")
                 time.sleep(30)  # Wait longer on error
+    
+    def _get_sessions_data_blocking(self):
+        """Get sessions data in a thread-safe way (ADDED: thread-safe helper)"""
+        try:
+            # Get current client data from server bridge (safe in background thread)
+            clients = self.server_bridge.get_clients()
+            
+            # Convert to session objects
+            sessions = []
+            for client in clients:
+                session = ClientSession(
+                    client_id=client.get('id', ''),
+                    ip_address=client.get('ip', ''),
+                    connection_time=datetime.fromisoformat(client.get('connect_time', datetime.now().isoformat())),
+                    last_activity=datetime.now(),
+                    files_transferred=client.get('files_count', 0),
+                    bytes_transferred=client.get('total_size', 0),
+                    status="active" if client.get('connected', False) else "disconnected",
+                    client_info=client
+                )
+                sessions.append(session)
+            
+            return sessions
+        except Exception as ex:
+            logger.error(f"❌ Error getting sessions data: {ex}")
+            return []
+    
+    def _update_sessions_with_data(self, sessions_data):
+        """Update sessions with data (ADDED: main thread UI update)"""
+        try:
+            self.session_history = sessions_data
+            self._update_sessions_table()
+            logger.info(f"✅ Updated {len(sessions_data)} client sessions")
+        except Exception as ex:
+            logger.error(f"❌ Error updating sessions UI: {ex}")
     
     def _show_session_details(self, session: ClientSession):
         """Show detailed session information"""

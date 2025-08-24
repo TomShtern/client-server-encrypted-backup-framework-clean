@@ -130,10 +130,9 @@ def create_page_transition(old_content: ft.Control,
         def fade_transition():
             old_content.opacity = 0
             page.update()
-            import time
-            time.sleep(0.2)  # Brief pause
+            # Use animation timing instead of blocking sleep (FIXED: non-blocking)
+            # Flet handles animation timing automatically
             # Replace content
-            # This would typically be handled by the page structure
             new_content.opacity = 0
             new_content.animate_opacity = create_animation(MotionDuration.M)
             new_content.opacity = 1
