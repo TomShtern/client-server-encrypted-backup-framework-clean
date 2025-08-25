@@ -10,11 +10,31 @@ import asyncio
 
 
 class DialogSystem:
-    """Central dialog management system with Material Design 3 styling."""
+    """Central dialog management system with Material Design 3 styling and enhanced animations."""
     
     def __init__(self, page: ft.Page):
         self.page = page
         self.current_dialog = None
+        
+        # Enhanced animation properties (integrated from dialogs.py)
+        self.default_scale_animation = ft.Animation(300, ft.AnimationCurve.EASE_OUT)
+        self.default_opacity_animation = ft.Animation(200, ft.AnimationCurve.EASE_OUT)
+        self.default_offset_animation = ft.Animation(300, ft.AnimationCurve.EASE_OUT)
+    
+    def _apply_enhanced_animations(self, dialog: ft.AlertDialog):
+        """Apply enhanced entrance animations to dialogs (integrated from dialogs.py)"""
+        try:
+            dialog.animate_scale = self.default_scale_animation
+            dialog.animate_opacity = self.default_opacity_animation
+            dialog.animate_offset = self.default_offset_animation
+            
+            # Initial animation states for smooth entrance
+            dialog.scale = ft.Scale(0.9)
+            dialog.opacity = 0.5
+            dialog.offset = ft.Offset(0, -0.1)
+        except Exception as e:
+            # If animations fail, continue without them
+            pass
         
     def show_info_dialog(self, title: str, message: str, on_close: Optional[Callable] = None):
         """Show an information dialog."""
@@ -33,6 +53,9 @@ class DialogSystem:
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
+        
+        # Apply enhanced animations
+        self._apply_enhanced_animations(self.current_dialog)
         
         self.page.dialog = self.current_dialog
         self.current_dialog.open = True
@@ -400,3 +423,35 @@ class ToastManager:
         )
         self.page.snack_bar.open = True
         self.page.update()
+
+
+# Factory Functions (integrated from dialogs.py)
+
+def create_enhanced_dialog_system(page: ft.Page) -> DialogSystem:
+    """Create an enhanced dialog system with animations"""
+    return DialogSystem(page)
+
+def show_enhanced_confirmation(page: ft.Page, title: str, message: str, 
+                             on_confirm: Optional[Callable] = None,
+                             on_cancel: Optional[Callable] = None):
+    """Show enhanced confirmation dialog with animations"""
+    dialog_system = DialogSystem(page)
+    return dialog_system.show_confirmation_dialog(title, message, on_confirm, on_cancel)
+
+def show_enhanced_info(page: ft.Page, title: str, message: str, 
+                      on_close: Optional[Callable] = None):
+    """Show enhanced info dialog with animations"""
+    dialog_system = DialogSystem(page)
+    return dialog_system.show_info_dialog(title, message, on_close)
+
+def show_enhanced_success(page: ft.Page, title: str, message: str, 
+                         on_close: Optional[Callable] = None):
+    """Show enhanced success dialog with animations"""
+    dialog_system = DialogSystem(page)
+    return dialog_system.show_success_dialog(title, message, on_close)
+
+def show_enhanced_error(page: ft.Page, title: str, message: str, 
+                       on_close: Optional[Callable] = None):
+    """Show enhanced error dialog with animations"""
+    dialog_system = DialogSystem(page)
+    return dialog_system.show_error_dialog(title, message, on_close)

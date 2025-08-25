@@ -5,9 +5,6 @@ Composition-based architecture using specialized settings components.
 Replaces the monolithic settings_view.py with focused single-responsibility modules.
 """
 
-# Enable UTF-8 support
-import Shared.utils.utf8_solution
-
 import flet as ft
 from typing import Dict, Any
 import logging

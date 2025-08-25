@@ -31,6 +31,7 @@
 
 
 
+
   work as a professional software engineer and an expert ui/ux designer. be mindful and 
   efficient with context and token usage. use the @agent-SWEReader  reader agent when you need 
   to read or search. deploy subagents when apropriate. you can call tools and agents in parallel

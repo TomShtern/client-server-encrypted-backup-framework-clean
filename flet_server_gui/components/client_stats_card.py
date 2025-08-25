@@ -56,11 +56,10 @@ class ClientStatsCard:
                 secondary_metrics
             ], spacing=16, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             padding=ft.padding.all(20),
-            width=400,
-            border_radius=12
+            expand=True
         )
         
-        return ft.Card(content=card_content, elevation=1)
+        return ft.Card(content=card_content, elevation=1, expand=True)
 
     def update_stats(self, server_info: ServerInfo):
         """Update statistics with new data."""

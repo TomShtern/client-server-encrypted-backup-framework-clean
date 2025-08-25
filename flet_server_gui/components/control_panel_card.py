@@ -131,12 +131,13 @@ class ControlPanelCard:
         card_content = ft.Container(
             content=ft.Column(content_items, spacing=16),
             padding=ft.padding.all(20),
-            width=350
+            expand=True
         )
         
         return ft.Card(
             content=card_content,
-            elevation=1
+            elevation=1,
+            expand=True
         )
     
     def update_button_states(self, server_running: bool):

@@ -348,20 +348,69 @@ class FileActions(BaseAction):
     
     async def cleanup_old_files(self, days_threshold: int = 30) -> ActionResult:
         """
-        Clean up files older than specified threshold.
+        Clean up old files from the server based on age threshold.
         
         Args:
-            days_threshold: Files older than this many days will be cleaned up
+            days_threshold: Number of days after which files are considered old
             
         Returns:
-            ActionResult with cleanup summary
+            ActionResult with cleanup results and metadata
         """
         try:
-            # This would be implemented based on server bridge capabilities
-            # For now, return a placeholder result
+            if not self.server_bridge or not hasattr(self.server_bridge, 'db_manager') or not self.server_bridge.db_manager:
+                return ActionResult.error_result(
+                    error_message="Database connection not available",
+                    error_code="DB_CONNECTION_ERROR"
+                )
+
+            # Get all files from database
+            all_files = self.server_bridge.db_manager.get_all_files()
+            if not all_files:
+                return ActionResult.success_result(
+                    data={'cleaned_files': 0, 'days_threshold': days_threshold, 'total_files': 0},
+                    metadata={'operation_type': 'file_cleanup', 'reason': 'no_files_found'}
+                )
+
+            # Calculate cutoff date
+            import os
+            from datetime import datetime, timedelta
+            cutoff_date = datetime.now() - timedelta(days=days_threshold)
+            
+            files_to_cleanup = []
+            for file_info in all_files:
+                try:
+                    # Check if file exists in received_files directory
+                    received_files_path = os.path.join('received_files', file_info[1])  # filename is at index 1
+                    if os.path.exists(received_files_path):
+                        file_mtime = datetime.fromtimestamp(os.path.getmtime(received_files_path))
+                        if file_mtime < cutoff_date:
+                            files_to_cleanup.append((file_info[0], file_info[1], received_files_path))  # id, filename, path
+                except (OSError, IndexError) as e:
+                    # Skip files that can't be accessed or have malformed data
+                    continue
+
+            # Clean up old files
+            cleaned_count = 0
+            for file_id, filename, file_path in files_to_cleanup:
+                try:
+                    # Remove from file system
+                    os.remove(file_path)
+                    # Remove from database
+                    self.server_bridge.db_manager.delete_file(file_id)
+                    cleaned_count += 1
+                except Exception as e:
+                    # Log error but continue with other files
+                    print(f"Failed to cleanup file {filename}: {e}")
+                    continue
+
             return ActionResult.success_result(
-                data={'cleaned_files': 0, 'days_threshold': days_threshold},
-                metadata={'operation_type': 'file_cleanup', 'implemented': False}
+                data={
+                    'cleaned_files': cleaned_count,
+                    'days_threshold': days_threshold,
+                    'total_files': len(all_files),
+                    'eligible_for_cleanup': len(files_to_cleanup)
+                },
+                metadata={'operation_type': 'file_cleanup', 'cutoff_date': cutoff_date.isoformat()}
             )
             
         except Exception as e:
@@ -428,84 +477,6 @@ class FileActions(BaseAction):
                 error_code="FILE_CONTENT_EXCEPTION"
             )
 
-    async def upload_file(self, file_path: str, destination_path: str) -> ActionResult:
-        """
-        Upload a file to the server.
-        
-        Args:
-            file_path: Local path to the file to upload
-            destination_path: Server path where file should be stored
-            
-        Returns:
-            ActionResult with upload results
-        """
-        try:
-            # This would be implemented based on server bridge capabilities
-            # For now, return a placeholder result
-            return ActionResult.success_result(
-                data={'uploaded_file': file_path, 'destination': destination_path},
-                metadata={'operation_type': 'file_upload', 'implemented': False}
-            )
-        except Exception as e:
-            return ActionResult.error_result(
-                error_message=f"File upload failed: {str(e)}",
-                error_code="FILE_UPLOAD_EXCEPTION"
-            )
-
-    async def get_file_details(self, file_id: str) -> ActionResult:
-        """
-        Get detailed information about a specific file.
-        
-        Args:
-            file_id: Unique identifier for the file
-            
-        Returns:
-            ActionResult with file details
-        """
-        try:
-            # Get file details from server bridge
-            file_data = await self.server_bridge.get_file_details(file_id)
-            if file_data:
-                return ActionResult.success_result(
-                    data=file_data,
-                    metadata={'file_id': file_id, 'operation_type': 'file_details'}
-                )
-            else:
-                return ActionResult.error_result(
-                    error_message=f"File {file_id} not found",
-                    error_code="FILE_NOT_FOUND"
-                )
-        except Exception as e:
-            return ActionResult.error_result(
-                error_message=f"Error getting file details for {file_id}: {str(e)}",
-                error_code="FILE_DETAILS_EXCEPTION"
-            )
-
-    async def get_file_content(self, file_id: str) -> ActionResult:
-        """
-        Get content of a specific file.
-        
-        Args:
-            file_id: Unique identifier for the file
-            
-        Returns:
-            ActionResult with file content
-        """
-        try:
-            # Get file content from server bridge
-            file_content = await self.server_bridge.get_file_content(file_id)
-            if file_content is not None:
-                return ActionResult.success_result(
-                    data=file_content,
-                    metadata={'file_id': file_id, 'operation_type': 'file_content'}
-                )
-            else:
-                return ActionResult.error_result(
-                    error_message=f"File {file_id} content not available",
-                    error_code="FILE_CONTENT_UNAVAILABLE"
-                )
-        except Exception as e:
-            return ActionResult.error_result(
-                error_message=f"Error getting file content for {file_id}: {str(e)}",
-                error_code="FILE_CONTENT_EXCEPTION"
-            )
+    # NOTE: File upload functionality is intentionally NOT implemented in the Flet GUI.
+    # File uploads are handled by the C++ client with JavaScript web GUI.
+    # This server management GUI only handles downloaded files, not uploads.

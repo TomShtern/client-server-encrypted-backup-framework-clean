@@ -48,23 +48,13 @@ class ServerStatusCard:
             ft.Text(ref=self.clients_text, value="Connected: 0 clients", style=ft.TextThemeStyle.BODY_MEDIUM)
         ], spacing=8)
         
-        # Use responsive layout with adaptive container
-        from ..layouts.responsive_utils import ResponsiveBuilder
-        from ..layouts.breakpoint_manager import BreakpointManager
-        
-        # Get current screen width (default to 1200 if not available)
-        screen_width = getattr(self.page, 'window_width', 1200) or 1200
-        
-        # Create fully responsive container without any hardcoded dimensions
-        card_content = ResponsiveBuilder.create_adaptive_container(
+        card_content = ft.Container(
             content=ft.Column([header_row, ft.Divider(), details_column], spacing=16),
-            responsive_padding=True,
-            responsive_margin=True,
+            padding=ft.padding.all(20),
             expand=True
         )
         
-        # Use responsive card creation
-        return ResponsiveBuilder.create_responsive_card(
+        return ft.Card(
             content=card_content,
             elevation=1,
             expand=True

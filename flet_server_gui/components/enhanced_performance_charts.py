@@ -9,6 +9,7 @@ import asyncio
 import time
 import json
 import os
+import psutil
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Tuple
 from collections import deque
@@ -80,6 +81,10 @@ class EnhancedPerformanceCharts:
         
         # Load saved settings
         self._load_chart_settings()
+        
+        # Demo/testing utilities (integrated from real_time_charts.py)
+        self.demo_mode = False
+        self.demo_update_lock = False
         
         logger.info("✅ Enhanced performance charts initialized")
     
@@ -795,3 +800,164 @@ class EnhancedPerformanceCharts:
             'active_alerts': len(self.active_alerts),
             'settings': asdict(self.settings)
         }
+    
+    # Demo/Testing Utilities (integrated from real_time_charts.py)
+    
+    def enable_demo_mode(self, initial_data_points: int = 10):
+        """Enable demo mode with sample data generation for testing"""
+        import random
+        
+        self.demo_mode = True
+        logger.info("🎭 Demo mode enabled - generating sample data")
+        
+        # Initialize with sample data points
+        self._initialize_demo_data(initial_data_points)
+    
+    def disable_demo_mode(self):
+        """Disable demo mode and clear sample data"""
+        self.demo_mode = False
+        self.demo_update_lock = False
+        logger.info("📊 Demo mode disabled - returning to real data")
+    
+    def _initialize_demo_data(self, data_points: int = 10):
+        """Initialize demo data with time-based sample points"""
+        import random
+        
+        # Clear existing data
+        for key in self.metrics_history:
+            self.metrics_history[key].clear()
+        
+        # Generate historical sample data
+        for i in range(data_points):
+            timestamp = datetime.now() - timedelta(minutes=(data_points - 1 - i) * 5)
+            
+            # Add sample data point
+            self.metrics_history['cpu'].append(random.randint(10, 80))
+            self.metrics_history['memory'].append(random.randint(30, 90))
+            self.metrics_history['disk'].append(random.randint(20, 70))
+            self.metrics_history['network'].append(random.randint(0, 50))
+            self.metrics_history['timestamps'].append(timestamp)
+    
+    async def update_demo_charts(self):
+        """Update charts with new demo data points (thread-safe)"""
+        if not self.demo_mode or self.demo_update_lock:
+            return
+        
+        self.demo_update_lock = True
+        
+        try:
+            import random
+            
+            # Generate new data points
+            timestamp = datetime.now()
+            
+            # Add new demo data
+            self.metrics_history['cpu'].append(random.randint(10, 80))
+            self.metrics_history['memory'].append(random.randint(30, 90))
+            self.metrics_history['disk'].append(random.randint(20, 70))
+            self.metrics_history['network'].append(random.randint(0, 50))
+            self.metrics_history['timestamps'].append(timestamp)
+            
+            # Update charts if UI components exist
+            if hasattr(self, 'chart_containers') and self.chart_containers:
+                self._update_enhanced_charts()
+            
+            logger.debug("🎭 Demo charts updated with sample data")
+            
+        except Exception as e:
+            logger.error(f"❌ Error updating demo charts: {e}")
+        finally:
+            self.demo_update_lock = False
+    
+    # Enhanced System Monitoring Utilities (integrated from advanced_analytics.py)
+    
+    def get_comprehensive_system_info(self) -> Dict[str, Any]:
+        """Get comprehensive system information using psutil"""
+        try:
+            boot_time = psutil.boot_time()
+            uptime = datetime.now() - datetime.fromtimestamp(boot_time)
+            network_io = psutil.net_io_counters()
+            
+            return {
+                'platform_info': {
+                    'total_memory_gb': psutil.virtual_memory().total // (1024**3),
+                    'cpu_cores_physical': psutil.cpu_count(logical=False),
+                    'cpu_cores_logical': psutil.cpu_count(logical=True),
+                    'boot_time': datetime.fromtimestamp(boot_time).isoformat(),
+                    'uptime_hours': uptime.total_seconds() / 3600,
+                },
+                'network_stats': {
+                    'bytes_received_mb': network_io.bytes_recv // (1024**2) if network_io else 0,
+                    'bytes_sent_mb': network_io.bytes_sent // (1024**2) if network_io else 0,
+                    'packets_received': network_io.packets_recv if network_io else 0,
+                    'packets_sent': network_io.packets_sent if network_io else 0,
+                },
+                'process_stats': {
+                    'total_processes': len(psutil.pids()),
+                },
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            logger.error(f"❌ Error getting system info: {e}")
+            return {}
+    
+    def create_system_info_display(self) -> ft.Control:
+        """Create a comprehensive system information display"""
+        try:
+            sys_info = self.get_comprehensive_system_info()
+            if not sys_info:
+                return ft.Text("System information unavailable", color=ft.Colors.ERROR)
+            
+            platform = sys_info.get('platform_info', {})
+            network = sys_info.get('network_stats', {})
+            processes = sys_info.get('process_stats', {})
+            
+            info_text = f"""🖥️ System: {platform.get('total_memory_gb', 'N/A')} GB RAM
+⚡ CPU: {platform.get('cpu_cores_physical', 'N/A')} cores ({platform.get('cpu_cores_logical', 'N/A')} threads)
+⏱️ Uptime: {platform.get('uptime_hours', 0):.1f} hours
+🔌 Processes: {processes.get('total_processes', 'N/A')}
+📡 Network: ⬇️{network.get('bytes_received_mb', 0)} MB  ⬆️{network.get('bytes_sent_mb', 0)} MB"""
+            
+            return ft.Container(
+                content=ft.Text(
+                    info_text,
+                    size=12,
+                    color=ft.Colors.ON_SURFACE_VARIANT
+                ),
+                padding=10,
+                bgcolor=ft.Colors.SURFACE_VARIANT,
+                border_radius=8
+            )
+        except Exception as e:
+            logger.error(f"❌ Error creating system info display: {e}")
+            return ft.Text("Error loading system info", color=ft.Colors.ERROR)
+    
+    def create_performance_progress_ring(self, label: str, value: float, color: str = ft.Colors.BLUE_600) -> ft.Control:
+        """Create a performance progress ring with label (integrated from advanced_analytics.py)"""
+        try:
+            normalized_value = min(max(value / 100.0, 0.0), 1.0)  # Ensure 0-1 range
+            
+            return ft.Column([
+                ft.ProgressRing(
+                    value=normalized_value,
+                    width=80,
+                    height=80,
+                    stroke_width=8,
+                    color=color
+                ),
+                ft.Text(
+                    label,
+                    size=12,
+                    text_align=ft.TextAlign.CENTER,
+                    weight=ft.FontWeight.BOLD
+                ),
+                ft.Text(
+                    f"{value:.1f}%",
+                    size=10,
+                    text_align=ft.TextAlign.CENTER,
+                    color=ft.Colors.ON_SURFACE_VARIANT
+                )
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5)
+        except Exception as e:
+            logger.error(f"❌ Error creating progress ring: {e}")
+            return ft.Text(f"Error: {label}", color=ft.Colors.ERROR)

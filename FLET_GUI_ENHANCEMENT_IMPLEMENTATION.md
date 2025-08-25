@@ -82,7 +82,17 @@ class ClientManagementComponent:  # Pure UI logic
 ### 1.3 Responsive Layout Foundation ✅ COMPLETED
 **Objective**: Create clean, reusable responsive utilities.
 
-**Tasks**:
+(edit:) source of TRUTH for layout:
+You want Flet components to automatically scale with screen size—no clipping, no crammed UIs, just behavior that adapts. Here's how to make it happen without overengineering.
+To make your Flet UI behave across window sizes without clipping or overlap:
+Use ResponsiveRow + col to auto-adjust layout zones.
+Use expand=True or proportional expand inside rows/columns.
+Use on_resize when needed for custom size tweaks (e.g. text wrap, scaling).
+Avoid manual absolute sizing unless necessary.
+
+
+
+**Tasks**:(before source of TRUTH for layout edit,  needs re thinking )
 - [x] Create `layouts/` directory
 - [x] Implement `ResponsiveBuilder` utility class  
 - [x] Create `BreakpointManager` for consistent breakpoints
