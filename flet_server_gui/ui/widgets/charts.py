@@ -14,7 +14,7 @@ import json
 import os
 import psutil
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Union
 from collections import deque
 from dataclasses import dataclass, asdict
 import logging
@@ -710,7 +710,7 @@ class EnhancedBarChart(ft.Container):
                  x_field: str,
                  y_field: str,
                  title: Optional[str] = None,
-                 bar_color: str = ft.colors.PRIMARY,
+                 bar_color: str = ft.Colors.PRIMARY,
                  **kwargs):
         super().__init__(**kwargs)
         
@@ -774,7 +774,7 @@ class EnhancedLineChart(ft.Container):
                  x_field: str,
                  y_field: str,
                  title: Optional[str] = None,
-                 line_color: str = ft.colors.PRIMARY,
+                 line_color: str = ft.Colors.PRIMARY,
                  **kwargs):
         super().__init__(**kwargs)
         
@@ -808,9 +808,9 @@ class EnhancedLineChart(ft.Container):
 
         chart = ft.LineChart(
             data_series=line_data,
-            border=ft.border.all(1, ft.colors.OUTLINE_VARIANT),
-            horizontal_grid_lines=ft.ChartGridLines(interval=10, color=ft.colors.with_opacity(0.2, ft.colors.ON_SURFACE)),
-            vertical_grid_lines=ft.ChartGridLines(interval=1, color=ft.colors.with_opacity(0.2, ft.colors.ON_SURFACE)),
+            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+            horizontal_grid_lines=ft.ChartGridLines(interval=10, color=ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE)),
+            vertical_grid_lines=ft.ChartGridLines(interval=1, color=ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE)),
             expand=True,
         )
 
@@ -880,7 +880,7 @@ class EnhancedPieChart(ft.Container):
         placeholder = ft.Container(
             width=self.chart_size, 
             height=self.chart_size, 
-            content=ft.Icon(ft.icons.PIE_CHART, size=100, color=ft.colors.OUTLINE),
+            content=ft.Icon(ft.Icons.PIE_CHART, size=100, color=ft.Colors.OUTLINE),
             alignment=ft.alignment.center
         )
 

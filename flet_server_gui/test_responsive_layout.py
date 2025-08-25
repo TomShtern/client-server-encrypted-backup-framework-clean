@@ -10,6 +10,22 @@ import os
 project_root = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, project_root)
 
+# Import utf8_solution to fix encoding issues
+try:
+    import Shared.utils.utf8_solution
+    print("[INFO] UTF-8 solution imported successfully")
+except ImportError as e:
+    # Try alternative path
+    utf8_path = os.path.join(os.path.dirname(__file__), "..", "Shared", "utils")
+    if utf8_path not in sys.path:
+        sys.path.insert(0, utf8_path)
+    try:
+        import utf8_solution
+        print("[INFO] UTF-8 solution imported via alternative path")
+    except ImportError:
+        print("[WARNING] utf8_solution import failed, continuing without it")
+        print(f"[DEBUG] Import error: {e}")
+
 from flet_server_gui.layouts.breakpoint_manager import BreakpointManager
 from flet_server_gui.layouts.responsive_utils import ResponsiveBuilder
 

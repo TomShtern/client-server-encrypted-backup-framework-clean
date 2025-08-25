@@ -8,7 +8,7 @@ import asyncio
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 import logging
-from ..services.log_service import LogService, LogEntry
+from flet_server_gui.services.log_service import LogService, LogEntry
 
 logger = logging.getLogger(__name__)
 

@@ -15,14 +15,15 @@ import flet as ft
 import asyncio
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Callable
-from core.client_management import ClientManagement
-from ui.widgets.tables import EnhancedTable
-from ui.widgets.buttons import ActionButtonFactory
-from ui.components.client_table_renderer import ClientTableRenderer
-from ui.components.client_filter_manager import ClientFilterManager
-from ui.components.client_action_handlers import ClientActionHandlers
-from actions.client_actions import ClientActions
-from layouts.responsive_builder import ResponsiveBuilder, BreakpointManager
+from flet_server_gui.core.client_management import ClientManagement
+from flet_server_gui.ui.widgets.tables import EnhancedDataTable
+from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
+from flet_server_gui.components.client_table_renderer import ClientTableRenderer
+from flet_server_gui.components.client_filter_manager import ClientFilterManager
+from flet_server_gui.components.client_action_handlers import ClientActionHandlers
+from flet_server_gui.actions.client_actions import ClientActions
+from flet_server_gui.layouts.responsive_utils import ResponsiveBuilder
+from flet_server_gui.layouts.breakpoint_manager import BreakpointManager
 
 
 class ClientsView:

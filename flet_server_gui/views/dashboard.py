@@ -5,19 +5,19 @@ UI: Main dashboard layout with widgets
 """
 
 import flet as ft
-from core.client_management import ClientManager
-from core.file_management import FileManager
-from core.server_operations import ServerOperations
-from ui.widgets.cards import StatusCard, ServerStatusCard
-from ui.widgets.charts import PerformanceChart
-from ui.widgets.buttons import EnhancedButton
+from flet_server_gui.core.client_management import ClientManagement
+from flet_server_gui.core.file_management import FileManagement
+from flet_server_gui.core.server_operations import ServerOperations
+from flet_server_gui.ui.widgets.cards import ServerStatusCard, ClientStatsCard
+from flet_server_gui.ui.widgets.charts import EnhancedPerformanceCharts
+# from flet_server_gui.ui.widgets.buttons import EnhancedButton  # Comment out if not available
 
 class DashboardView:
     def __init__(self, page: ft.Page):
         self.page = page
-        self.client_manager = ClientManager()
-        self.file_manager = FileManager()
-        self.server_ops = ServerOperations()
+        self.client_manager = ClientManagement(None)  # Need to pass server_bridge parameter
+        self.file_manager = FileManagement(None)  # Need to pass server_bridge parameter
+        self.server_ops = ServerOperations(None)  # Need to pass server_bridge parameter
         self.controls = []
         
     def build(self):

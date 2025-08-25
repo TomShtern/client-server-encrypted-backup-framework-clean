@@ -12,10 +12,10 @@ Shows actual database tables and content from the backup server database.
 
 import flet as ft
 from typing import List, Dict, Any, Optional
-from core.client_management import ClientManagement
-from core.file_management import FileManager
-from ui.widgets.cards import DatabaseStatsCard
-from ui.widgets.buttons import ActionButtonFactory
+from flet_server_gui.core.client_management import ClientManagement
+from flet_server_gui.core.file_management import FileManagement
+from flet_server_gui.ui.widgets.cards import DatabaseStatsCard
+from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
 
 
 class DatabaseView:

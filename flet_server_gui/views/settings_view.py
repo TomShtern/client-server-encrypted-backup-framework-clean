@@ -12,10 +12,10 @@ import logging
 # Import modular settings components
 sys_path_added = False
 try:
-    from ..settings.settings_form_generator import SettingsFormGenerator
-    from ..settings.settings_export_import_service import SettingsExportImportService
-    from ..settings.settings_reset_service import SettingsResetService
-    from ..settings.settings_change_manager import SettingsChangeManager
+    from flet_server_gui.settings.settings_form_generator import SettingsFormGenerator
+    from flet_server_gui.settings.settings_export_import_service import SettingsExportImportService
+    from flet_server_gui.settings.settings_reset_service import SettingsResetService
+    from flet_server_gui.settings.settings_change_manager import SettingsChangeManager
 except ImportError:
     # Add parent directory to path for settings modules
     import sys
@@ -30,7 +30,7 @@ except ImportError:
     from settings_reset_service import SettingsResetService
     from settings_change_manager import SettingsChangeManager
 
-from ..utils.settings_manager import SettingsManager
+from flet_server_gui.utils.settings_manager import SettingsManager
 
 logger = logging.getLogger(__name__)
 

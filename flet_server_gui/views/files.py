@@ -16,14 +16,14 @@ import asyncio
 import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Callable
-from core.file_management import FileManager
-from ui.widgets.tables import EnhancedTable
-from ui.widgets.buttons import ActionButtonFactory
-from ui.components.file_table_renderer import FileTableRenderer
-from ui.components.file_filter_manager import FileFilterManager
-from ui.components.file_action_handlers import FileActionHandlers
-from ui.components.file_preview_manager import FilePreviewManager
-from actions.file_actions import FileActions
+from flet_server_gui.core.file_management import FileManagement
+from flet_server_gui.ui.widgets.tables import EnhancedDataTable
+from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
+from flet_server_gui.components.file_table_renderer import FileTableRenderer
+from flet_server_gui.components.file_filter_manager import FileFilterManager
+from flet_server_gui.components.file_action_handlers import FileActionHandlers
+from flet_server_gui.ui.widgets.file_preview import FilePreviewManager
+from flet_server_gui.actions.file_actions import FileActions
 
 
 class FilesView:

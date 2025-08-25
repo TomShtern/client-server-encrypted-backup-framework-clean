@@ -8,7 +8,7 @@ import flet as ft
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from ..utils.server_bridge import ServerBridge
-from .button_factory import ActionButtonFactory
+from ..ui.widgets.buttons import ActionButtonFactory
 
 
 class ClientTableRenderer:

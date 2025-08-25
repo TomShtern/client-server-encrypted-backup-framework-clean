@@ -5,14 +5,14 @@ UI: Performance charts, statistics, and analytical displays
 """
 
 import flet as ft
-from core.server_operations import ServerOperations
-from ui.widgets.charts import PerformanceChart
-from ui.widgets.cards import StatusCard
+from flet_server_gui.core.server_operations import ServerOperations
+from flet_server_gui.ui.widgets.charts import EnhancedPerformanceCharts
+from flet_server_gui.ui.widgets.cards import ServerStatusCard, ClientStatsCard
 
 class AnalyticsView:
     def __init__(self, page: ft.Page):
         self.page = page
-        self.server_ops = ServerOperations()
+        self.server_ops = ServerOperations(None)  # Need to pass server_bridge parameter
         self.controls = []
         
     def build(self):

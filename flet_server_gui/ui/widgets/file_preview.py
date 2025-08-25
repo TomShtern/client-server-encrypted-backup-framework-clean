@@ -10,12 +10,10 @@ import flet as ft
 import base64
 import os
 from typing import Optional, Callable, List, Dict, Any
-from ..components.enhanced_components import (
-    EnhancedCard,
-    create_enhanced_button,
-    create_enhanced_icon_button
+from ...components.enhanced_components import (
+    EnhancedCard
 )
-from ..components.dialogs import create_toast_notification
+from ..dialogs import ToastManager
 
 
 class FilePreview(EnhancedCard):
