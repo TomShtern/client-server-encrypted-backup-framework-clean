@@ -91,6 +91,18 @@ class ActionButtonFactory:
             operation_type="bulk"
         ),
         
+        'client_disconnect_bulk': ButtonConfig(
+            text="Disconnect Selected",
+            icon=ft.Icons.LINK_OFF,
+            tooltip="Disconnect selected clients from server",
+            action_class="ClientActions",
+            action_method="disconnect_multiple_clients",
+            confirmation_text="Disconnect {count} selected clients?",
+            success_message="Clients disconnected successfully",
+            progress_message="Disconnecting clients...",
+            operation_type="bulk"
+        ),
+        
         'client_delete_bulk': ButtonConfig(
             text="Delete Selected", 
             icon=ft.Icons.DELETE,
@@ -101,6 +113,30 @@ class ActionButtonFactory:
             success_message="Clients deleted successfully",
             progress_message="Deleting clients...",
             operation_type="bulk"
+        ),
+        
+        'client_disconnect': ButtonConfig(
+            text="Disconnect Client",
+            icon=ft.Icons.LINK_OFF,
+            tooltip="Disconnect selected client from server",
+            action_class="ClientActions",
+            action_method="disconnect_client",
+            confirmation_text="Disconnect selected client?",
+            success_message="Client disconnected successfully",
+            progress_message="Disconnecting client...",
+            operation_type="single"
+        ),
+        
+        'client_delete': ButtonConfig(
+            text="Delete Client",
+            icon=ft.Icons.DELETE,
+            tooltip="Permanently delete selected client",
+            action_class="ClientActions",
+            action_method="delete_client",
+            confirmation_text="Permanently delete selected client? This cannot be undone.",
+            success_message="Client deleted successfully",
+            progress_message="Deleting client...",
+            operation_type="single"
         ),
         
         'client_view_details': ButtonConfig(
@@ -193,6 +229,68 @@ class ActionButtonFactory:
             operation_type="single"
         ),
         
+        'file_download': ButtonConfig(
+            text="Download File",
+            icon=ft.Icons.FILE_DOWNLOAD,
+            tooltip="Download file to local directory",
+            action_class="FileActions",
+            action_method="download_file",
+            confirmation_text="Download selected file?",
+            success_message="File downloaded successfully",
+            progress_message="Downloading file...",
+            operation_type="single"
+        ),
+        
+        'file_verify': ButtonConfig(
+            text="Verify File",
+            icon=ft.Icons.VERIFIED,
+            tooltip="Verify integrity of selected file",
+            action_class="FileActions",
+            action_method="verify_file_integrity",
+            confirmation_text="Verify integrity of selected file?",
+            success_message="File verified successfully",
+            progress_message="Verifying file...",
+            operation_type="single"
+        ),
+        
+        'file_delete': ButtonConfig(
+            text="Delete File",
+            icon=ft.Icons.DELETE,
+            tooltip="Permanently delete selected file",
+            action_class="FileActions",
+            action_method="delete_file",
+            confirmation_text="Permanently delete selected file? This cannot be undone.",
+            success_message="File deleted successfully",
+            progress_message="Deleting file...",
+            operation_type="single"
+        ),
+        
+        'file_view_details': ButtonConfig(
+            text="View Details",
+            icon=ft.Icons.INFO,
+            tooltip="View detailed file information",
+            action_class="FileActions",
+            action_method="get_file_details",
+            confirmation_text="View details for file {item}?",
+            success_message="File details loaded",
+            progress_message="Loading file details...",
+            requires_selection=False,
+            operation_type="single"
+        ),
+        
+        'file_preview': ButtonConfig(
+            text="Preview File",
+            icon=ft.Icons.VISIBILITY,
+            tooltip="Preview file content",
+            action_class="FileActions",
+            action_method="get_file_content",
+            confirmation_text="Preview file {item}?",
+            success_message="File preview loaded",
+            progress_message="Loading file preview...",
+            requires_selection=False,
+            operation_type="single"
+        ),
+        
         # Server Control Buttons
         'server_health_check': ButtonConfig(
             text="Health Check",
@@ -233,7 +331,7 @@ class ActionButtonFactory:
         config_key: str,
         get_selected_items: Callable[[], List[str]],
         additional_params: Optional[Dict[str, Any]] = None
-    ) -> ft.Control:
+    ) -> ft.ElevatedButton:
         """
         Create a fully functional action button.
         
@@ -250,23 +348,35 @@ class ActionButtonFactory:
         
         config = self.BUTTON_CONFIGS[config_key]
         
-        # Create the button based on style - use responsive design
-        button_props = {
-            "text": config.text,
-            "icon": config.icon,
-            "tooltip": config.tooltip,
-            "on_click": lambda e: self._handle_button_click(config, get_selected_items, additional_params),
-            "expand": True  # Responsive design
-        }
-        
-        if config.button_style == "filled":
-            button = ft.FilledButton(**button_props)
+        # Create the button based on style
+        if config.button_style == "elevated":
+            button = ft.ElevatedButton(
+                text=config.text,
+                icon=config.icon,
+                tooltip=config.tooltip,
+                on_click=lambda e: self._handle_button_click(config, get_selected_items, additional_params)
+            )
+        elif config.button_style == "filled":
+            button = ft.FilledButton(
+                text=config.text,
+                icon=config.icon,
+                tooltip=config.tooltip,
+                on_click=lambda e: self._handle_button_click(config, get_selected_items, additional_params)
+            )
         elif config.button_style == "outlined":
-            button = ft.OutlinedButton(**button_props)
-        elif config.button_style == "text":
-            button = ft.TextButton(**button_props)
-        else:  # Default to elevated
-            button = ft.ElevatedButton(**button_props)
+            button = ft.OutlinedButton(
+                text=config.text,
+                icon=config.icon,
+                tooltip=config.tooltip,
+                on_click=lambda e: self._handle_button_click(config, get_selected_items, additional_params)
+            )
+        else:  # text button
+            button = ft.TextButton(
+                text=config.text,
+                icon=config.icon,
+                tooltip=config.tooltip,
+                on_click=lambda e: self._handle_button_click(config, get_selected_items, additional_params)
+            )
         
         return button
     
@@ -356,7 +466,12 @@ class ActionButtonFactory:
         params = {}
         
         # Add selected items based on method signature
-        if selected_items:
+        if "client_id" in config.action_method and selected_items:
+            params["client_ids"] = selected_items
+        elif "file_id" in config.action_method and selected_items:  
+            params["file_ids"] = selected_items
+        elif selected_items:
+            # Generic parameter name based on action type
             if "client" in config.action_method.lower():
                 params["client_ids"] = selected_items
             elif "file" in config.action_method.lower():
@@ -389,12 +504,18 @@ class ActionButtonFactory:
             config: Button configuration
             method_params: Parameters used in the action
         """
+        # For export operations, trigger file save dialog
         if config.operation_type == "export":
+            # In a real implementation, this would trigger a file save dialog
+            # For now, just show additional success information
             export_format = config.export_format or "csv"
             await self.base_component._show_success(
                 f"Data exported in {export_format.upper()} format"
             )
+        
+        # For import operations, trigger file picker dialog  
         elif config.operation_type == "import":
+            # In a real implementation, this would trigger a file picker
             await self.base_component._show_success("Import operation completed")
     
     def create_button_group(
@@ -404,7 +525,7 @@ class ActionButtonFactory:
         orientation: str = "horizontal"
     ) -> ft.Container:
         """
-        Create a responsive group of related action buttons.
+        Create a group of related action buttons.
         
         Args:
             config_keys: List of button configuration keys
@@ -412,7 +533,7 @@ class ActionButtonFactory:
             orientation: "horizontal" or "vertical"
             
         Returns:
-            Container with responsive button group
+            Container with button group
         """
         buttons = [
             self.create_action_button(key, get_selected_items)
@@ -420,14 +541,11 @@ class ActionButtonFactory:
         ]
         
         if orientation == "horizontal":
-            control = ft.ResponsiveRow([
-                ft.Column([button], col={"sm": 12, "md": 6, "lg": 3}, expand=True)
-                for button in buttons
-            ])
+            control = ft.Row(controls=buttons, spacing=8)
         else:
-            control = ft.Column(controls=buttons, spacing=8, expand=True)
+            control = ft.Column(controls=buttons, spacing=8)
         
-        return ft.Container(content=control, padding=8, expand=True)
+        return ft.Container(content=control, padding=8)
     
     def get_available_buttons(self, action_class: Optional[str] = None) -> Dict[str, ButtonConfig]:
         """

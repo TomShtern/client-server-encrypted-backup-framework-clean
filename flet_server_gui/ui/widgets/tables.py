@@ -10,6 +10,7 @@ UI: Table rendering, Material Design 3 styling, responsive layout
 import flet as ft
 import json
 import re
+import os
 import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Callable, Tuple
@@ -784,6 +785,73 @@ class EnhancedDataTable:
         self._apply_filters()
         self._apply_sorting()
         self._update_table_display()
+
+    def _show_table_settings(self, e):
+        """Show table configuration dialog"""
+        logger.info("📋 Table settings dialog requested")
+        # TODO: Implement table settings dialog
+    
+    def _load_table_settings(self):
+        """Load saved table settings"""
+        try:
+            settings_file = f"{self.table_id}_settings.json"
+            if os.path.exists(settings_file):
+                with open(settings_file, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                
+                self.rows_per_page = settings.get('rows_per_page', 50)
+                # Load other settings as needed
+                
+                logger.info("✅ Table settings loaded")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not load table settings: {e}")
+    
+    def _save_table_settings(self):
+        """Save current table settings"""
+        try:
+            settings = {
+                'rows_per_page': self.rows_per_page,
+                'column_widths': {},  # TODO: Save column widths
+                'last_saved': datetime.now().isoformat()
+            }
+            
+            settings_file = f"{self.table_id}_settings.json"
+            with open(settings_file, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2)
+                
+        except Exception as e:
+            logger.error(f"❌ Error saving table settings: {e}")
+
+    def add_row_action(self, action: TableAction):
+        """Dynamically add a row action"""
+        self.row_actions.append(action)
+        logger.info(f"✅ Added row action: {action.name}")
+
+    def add_bulk_action(self, action: TableAction):
+        """Dynamically add a bulk action"""
+        self.bulk_actions.append(action)
+        logger.info(f"✅ Added bulk action: {action.name}")
+
+    def get_selected_data(self) -> List[Dict[str, Any]]:
+        """Get data for currently selected rows"""
+        return [self.filtered_data[i] for i in self.selected_rows if i < len(self.filtered_data)]
+
+    def clear_selection(self):
+        """Clear all row selections"""
+        self.selected_rows.clear()
+        self._update_table_display()
+
+    def get_table_stats(self) -> Dict[str, Any]:
+        """Get table statistics"""
+        return {
+            'total_rows': len(self.raw_data),
+            'filtered_rows': len(self.filtered_data),
+            'selected_rows': len(self.selected_rows),
+            'current_page': self.current_page + 1,
+            'total_pages': max(1, (len(self.filtered_data) + self.rows_per_page - 1) // self.rows_per_page),
+            'active_filters': len(self.column_filters),
+            'active_sorts': len(self.column_sorts)
+        }
 
 
 # Factory function for easy table creation

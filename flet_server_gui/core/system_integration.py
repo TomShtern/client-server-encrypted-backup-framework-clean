@@ -1,4 +1,10 @@
 """
+Purpose: Advanced system integration and monitoring tools
+Logic: File integrity checks, session management, system monitoring
+No Direct UI: Core business logic only, UI components call these methods
+"""
+
+"""
 System Integration Tools for Flet Server GUI
 Advanced system management tools including file integrity verification and client session management
 Phase 7.3 Implementation: Professional system administration features

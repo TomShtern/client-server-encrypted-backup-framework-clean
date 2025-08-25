@@ -112,7 +112,7 @@ class ClientTableRenderer:
         )
     
     def _format_last_seen(self, last_seen: str) -> str:
-        """Format last seen time to human-readable format"""
+        """Format last seen time to human-readable format with relative time display"""
         try:
             if not last_seen or last_seen == "Unknown":
                 return "Unknown"
@@ -124,16 +124,17 @@ class ClientTableRenderer:
             # Calculate time difference
             diff = now - last_seen_dt.replace(tzinfo=None)
             
-            if diff.days > 0:
-                return f"{diff.days}d ago"
-            elif diff.seconds > 3600:
-                hours = diff.seconds // 3600
-                return f"{hours}h ago"
-            elif diff.seconds > 60:
-                minutes = diff.seconds // 60
-                return f"{minutes}m ago"
-            else:
+            # Use the more sophisticated relative time formatting from real_data_clients.py
+            if diff.total_seconds() < 300:  # 5 minutes
                 return "Just now"
+            elif diff.total_seconds() < 3600:  # 1 hour
+                minutes = int(diff.total_seconds() / 60)
+                return f"{minutes}m ago"
+            elif diff.days > 0:
+                return last_seen_dt.strftime('%Y-%m-%d %H:%M')
+            else:
+                hours = int(diff.total_seconds() / 3600)
+                return f"{hours}h ago"
                 
         except (ValueError, AttributeError) as e:
             return "Unknown"

@@ -579,6 +579,81 @@ class EnhancedStatsCard:
         pass
 
 
+        return self.BUTTON_CONFIGS.copy()
+
+
+class DatabaseStatsCard:
+    """Database statistics card showing real database metrics with file size calculation."""
+    
+    def __init__(self, server_bridge: "ServerBridge", page: ft.Page):
+        self.server_bridge = server_bridge
+        self.page = page
+        
+    def build(self) -> ft.Card:
+        """Build the database stats card."""
+        # Get real data counts
+        try:
+            clients = self.server_bridge.get_client_list()
+            files = self.server_bridge.get_file_list() 
+            
+            client_count = len(clients) if clients else 0
+            file_count = len(files) if files else 0
+            
+            # Calculate total file size with proper unit conversion
+            total_size = 0
+            if files:
+                for file_info in files:
+                    size = file_info.get('size', 0)
+                    if size:
+                        total_size += size
+            
+            # Convert bytes to appropriate unit
+            if total_size == 0:
+                size_text = "0 B"
+            else:
+                size_units = ['B', 'KB', 'MB', 'GB', 'TB']
+                size_value = float(total_size)
+                unit_index = 0
+                while size_value >= 1024.0 and unit_index < len(size_units) - 1:
+                    size_value /= 1024.0
+                    unit_index += 1
+                size_text = f"{size_value:.1f} {size_units[unit_index]}"
+            
+            # Data source indicator
+            data_source = "📊 Mock Data" if getattr(self.server_bridge, 'mock_mode', False) else "🗄️ Real Database"
+            
+        except Exception as e:
+            client_count = 0
+            file_count = 0
+            size_text = "0 B"
+            data_source = f"❌ Error: {str(e)}"
+        
+        return ft.Card(
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Text("Database Statistics", size=18, weight=ft.FontWeight.BOLD),
+                    ft.Divider(),
+                    ft.Row([
+                        ft.Icon(ft.Icons.PERSON, color=ft.Colors.BLUE_600),
+                        ft.Text(f"Registered Clients: {client_count}", size=16),
+                    ]),
+                    ft.Row([
+                        ft.Icon(ft.Icons.FOLDER, color=ft.Colors.GREEN_600),
+                        ft.Text(f"Stored Files: {file_count}", size=16),
+                    ]),
+                    ft.Row([
+                        ft.Icon(ft.Icons.STORAGE, color=ft.Colors.ORANGE_600),
+                        ft.Text(f"Total Size: {size_text}", size=16),
+                    ]),
+                    ft.Divider(),
+                    ft.Text(data_source, size=12, color=ft.Colors.GREY_600, italic=True),
+                ], spacing=8),
+                padding=20,
+            ),
+            elevation=2,
+        )
+
+
 # Factory functions for easy card creation
 def create_client_stats_card(server_bridge: "ServerBridge", page: ft.Page) -> ClientStatsCard:
     """Create a client statistics card"""
@@ -595,3 +670,8 @@ def create_activity_log_card() -> ActivityLogCard:
 def create_enhanced_stats_card(title: str = "Statistics Overview", page: ft.Page = None) -> EnhancedStatsCard:
     """Create an enhanced statistics card"""
     return EnhancedStatsCard(title=title, page=page)
+
+
+def create_database_stats_card(server_bridge: "ServerBridge", page: ft.Page) -> DatabaseStatsCard:
+    """Create a database statistics card"""
+    return DatabaseStatsCard(server_bridge, page)

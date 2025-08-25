@@ -1,25 +1,40 @@
 #!/usr/bin/env python3
 """
-Dashboard Widget System
-Modular dashboard widgets with enhanced interactions and animations.
+UI Widgets - Dashboard Widgets
+
+Purpose: Reusable dashboard widgets with enhanced interactions and animations
+Logic: Widget state management, refresh scheduling, content updates
+UI: Collapsible widgets, animated transitions, responsive layouts
+
+This module consolidates functionality from the previous components/widgets.py file
+and integrates it with the existing card components to provide a comprehensive
+widget system for the dashboard.
 """
 
 import flet as ft
-from typing import Optional, Callable, List, Dict, Union
+from typing import Optional, Callable, List, Dict, Union, Any
 from enum import Enum
 import asyncio
+from datetime import datetime
 
 
 class WidgetSize(Enum):
-    """Standard widget sizes"""
-    SMALL = 1  # 1 column
-    MEDIUM = 2  # 2 columns
-    LARGE = 3   # 3 columns
-    FULL = 4    # Full width
+    """Standard widget sizes for responsive grid layouts"""
+    SMALL = 1   # 1 column (25% width on large screens)
+    MEDIUM = 2  # 2 columns (50% width on large screens)
+    LARGE = 3   # 3 columns (75% width on large screens)
+    FULL = 4    # Full width (100% width on all screens)
 
 
 class DashboardWidget(ft.Card):
-    """Base dashboard widget with enhanced features"""
+    """
+    Base dashboard widget with enhanced features including:
+    - Collapsible content
+    - Auto-refresh capabilities
+    - Animated transitions
+    - Responsive sizing
+    - Theme-aware styling
+    """
     
     def __init__(self,
                  title: str,
@@ -30,6 +45,19 @@ class DashboardWidget(ft.Card):
                  collapsible: bool = True,
                  animate_duration: int = 200,
                  **kwargs):
+        """
+        Initialize dashboard widget.
+        
+        Args:
+            title: Widget title displayed in header
+            content: Main widget content control
+            size: Widget size for responsive grid layout
+            refresh_interval: Auto-refresh interval in seconds (None to disable)
+            on_refresh: Callback function for refresh operations
+            collapsible: Whether widget content can be collapsed
+            animate_duration: Duration for animations in milliseconds
+            **kwargs: Additional Card properties
+        """
         super().__init__(**kwargs)
         
         self.title = title
@@ -44,64 +72,67 @@ class DashboardWidget(ft.Card):
         self.animate_scale = ft.Animation(animate_duration, ft.AnimationCurve.EASE_OUT)
         self.animate_elevation = ft.Animation(animate_duration, ft.AnimationCurve.EASE_OUT)
         
-        # Create header controls
-        self.header_controls = self._create_header_controls()
-        
-        # Store content for collapse/expand
+        # Store content reference for collapse/expand
         self.main_content = content
         
-        # Build widget
+        # Create content container with initial state
+        self.content_container = ft.Container(
+            content=content,
+            animate=ft.Animation(animate_duration, ft.AnimationCurve.EASE_OUT),
+            animate_scale=ft.Animation(animate_duration, ft.AnimationCurve.EASE_OUT),
+            expand=True
+        )
+        
+        # Build the complete widget
         self.content = self._build_widget()
         
-        # Start refresh timer if interval specified
-        if refresh_interval:
+        # Start refresh timer if configured
+        if refresh_interval and refresh_interval > 0:
             self._start_refresh_timer()
     
-    def _create_header_controls(self) -> List[ft.Control]:
-        """Create header controls (title, buttons)"""
-        controls = [
-            ft.Text(self.title, style=ft.TextThemeStyle.TITLE_MEDIUM, expand=True)
-        ]
+    def _build_widget(self) -> ft.Container:
+        """Build the complete widget with header and content."""
+        # Header with title and controls
+        header_controls = []
         
+        # Title
+        title_text = ft.Text(
+            self.title,
+            style=ft.TextThemeStyle.TITLE_MEDIUM,
+            weight=ft.FontWeight.BOLD,
+            expand=True
+        )
+        header_controls.append(title_text)
+        
+        # Collapsible button if enabled
         if self.collapsible:
-            controls.append(
-                ft.IconButton(
-                    icon=ft.Icons.EXPAND_LESS,
-                    tooltip="Collapse",
-                    on_click=self._toggle_collapse,
-                    animate_scale=ft.Animation(100, ft.AnimationCurve.EASE_OUT)
-                )
+            collapse_button = ft.IconButton(
+                icon=ft.Icons.EXPAND_LESS,
+                tooltip="Collapse",
+                on_click=self._toggle_collapse,
+                icon_size=20
             )
+            header_controls.append(collapse_button)
         
-        if self.refresh_interval or self.on_refresh_callback:
-            controls.append(
-                ft.IconButton(
-                    icon=ft.Icons.REFRESH,
-                    tooltip="Refresh",
-                    on_click=self._refresh,
-                    animate_scale=ft.Animation(100, ft.AnimationCurve.EASE_OUT)
-                )
+        # Refresh button if callback provided
+        if self.on_refresh_callback:
+            refresh_button = ft.IconButton(
+                icon=ft.Icons.REFRESH,
+                tooltip="Refresh",
+                on_click=self._refresh,
+                icon_size=20
             )
+            header_controls.append(refresh_button)
         
-        return controls
-    
-    def _build_widget(self) -> ft.Control:
-        """Build the complete widget"""
         # Header row
         header = ft.Row(
-            self.header_controls,
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+            header_controls,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER
         )
         
         # Divider
-        divider = ft.Divider()
-        
-        # Content container (for collapse/expand)
-        self.content_container = ft.Container(
-            content=self.main_content,
-            animate=ft.Animation(self.animate_duration, ft.AnimationCurve.EASE_OUT),
-            animate_scale=ft.Animation(self.animate_duration, ft.AnimationCurve.EASE_OUT)
-        )
+        divider = ft.Divider(height=1, thickness=1)
         
         # Widget content
         widget_content = ft.Column([
@@ -120,12 +151,12 @@ class DashboardWidget(ft.Card):
         return card_container
     
     def _toggle_collapse(self, e):
-        """Toggle widget collapse state"""
+        """Toggle widget collapse state with animation."""
         self.is_collapsed = not self.is_collapsed
         
-        # Update header button icon
+        # Update collapse button icon and tooltip
         header_row = self.content.content.controls[0]  # Header row
-        collapse_button = header_row.controls[-1]  # Last button (collapse)
+        collapse_button = header_row.controls[-2 if self.on_refresh_callback else -1]  # Collapse button
         collapse_button.icon = ft.Icons.EXPAND_MORE if self.is_collapsed else ft.Icons.EXPAND_LESS
         collapse_button.tooltip = "Expand" if self.is_collapsed else "Collapse"
         
@@ -140,31 +171,51 @@ class DashboardWidget(ft.Card):
         self.page.update()
     
     def _refresh(self, e):
-        """Refresh widget content"""
+        """Refresh widget content."""
         if self.on_refresh_callback:
             self.on_refresh_callback(e)
     
     def _start_refresh_timer(self):
-        """Start automatic refresh timer"""
+        """Start automatic refresh timer."""
         async def refresh_loop():
             while True:
                 await asyncio.sleep(self.refresh_interval)
                 if self.on_refresh_callback and self.page:
-                    self.on_refresh_callback(None)
+                    # Run refresh callback
+                    try:
+                        self.on_refresh_callback(None)
+                    except Exception as ex:
+                        print(f"[ERROR] Widget refresh failed: {ex}")
         
         if self.page:
             asyncio.create_task(refresh_loop())
     
     def update_content(self, new_content: ft.Control):
-        """Update widget content"""
+        """Update widget content with animation."""
         self.main_content = new_content
         if not self.is_collapsed:
             self.content_container.content = new_content
+            # Add entrance animation
+            self.content_container.opacity = 0
+            self.content_container.animate_opacity = ft.Animation(200, ft.AnimationCurve.EASE_OUT)
             self.page.update()
+            self.content_container.opacity = 1
+            self.page.update()
+    
+    def set_title(self, new_title: str):
+        """Update widget title."""
+        header_row = self.content.content.controls[0]  # Header row
+        title_control = header_row.controls[0]  # Title text
+        title_control.value = new_title
+        self.title = new_title
+        self.page.update()
 
 
 class StatisticWidget(DashboardWidget):
-    """Specialized widget for displaying statistics"""
+    """
+    Specialized widget for displaying statistics with trends.
+    Shows a numeric value with optional unit, icon, and trend indicator.
+    """
     
     def __init__(self,
                  title: str,
@@ -175,6 +226,19 @@ class StatisticWidget(DashboardWidget):
                  color: Optional[str] = None,
                  size: WidgetSize = WidgetSize.SMALL,
                  **kwargs):
+        """
+        Initialize statistic widget.
+        
+        Args:
+            title: Statistic title
+            value: Numeric value to display
+            unit: Optional unit (e.g., "MB", "%", "clients")
+            icon: Optional icon to display
+            trend: Optional trend percentage (positive = up, negative = down)
+            color: Optional color for value display
+            size: Widget size
+            **kwargs: Additional DashboardWidget properties
+        """
         # Create statistic content
         content_items = []
         
@@ -231,7 +295,10 @@ class StatisticWidget(DashboardWidget):
 
 
 class ActivityFeedWidget(DashboardWidget):
-    """Specialized widget for displaying activity feeds"""
+    """
+    Specialized widget for displaying activity feeds.
+    Shows a chronological list of activities with timestamps and severity levels.
+    """
     
     def __init__(self,
                  title: str = "Recent Activity",
@@ -239,6 +306,20 @@ class ActivityFeedWidget(DashboardWidget):
                  max_activities: int = 10,
                  size: WidgetSize = WidgetSize.MEDIUM,
                  **kwargs):
+        """
+        Initialize activity feed widget.
+        
+        Args:
+            title: Widget title
+            activities: List of activity dictionaries with keys:
+                       - timestamp: Activity timestamp
+                       - message: Activity description
+                       - source: Activity source (optional)
+                       - level: Severity level (INFO, SUCCESS, WARNING, ERROR)
+            max_activities: Maximum number of activities to display
+            size: Widget size
+            **kwargs: Additional DashboardWidget properties
+        """
         self.activities = activities or []
         self.max_activities = max_activities
         
@@ -253,7 +334,7 @@ class ActivityFeedWidget(DashboardWidget):
         )
     
     def _create_feed_content(self) -> ft.Control:
-        """Create activity feed content"""
+        """Create activity feed content."""
         activity_items = []
         
         # Limit to max_activities
@@ -291,6 +372,13 @@ class ActivityFeedWidget(DashboardWidget):
             )
         
         return ft.Column(activity_items, spacing=2, expand=True)
+    
+    def add_activity(self, activity: Dict[str, str]):
+        """Add a new activity to the feed."""
+        self.activities.append(activity)
+        # Update the feed content
+        feed_content = self._create_feed_content()
+        self.update_content(feed_content)
 
 
 # Factory functions for easy widget creation
@@ -302,7 +390,7 @@ def create_stat_widget(title: str,
                        color: Optional[str] = None,
                        size: WidgetSize = WidgetSize.SMALL,
                        **kwargs) -> StatisticWidget:
-    """Create a statistic widget"""
+    """Create a statistic widget."""
     return StatisticWidget(
         title=title,
         value=value,
@@ -314,12 +402,13 @@ def create_stat_widget(title: str,
         **kwargs
     )
 
+
 def create_activity_widget(title: str = "Recent Activity",
                           activities: Optional[List[Dict[str, str]]] = None,
                           max_activities: int = 10,
                           size: WidgetSize = WidgetSize.MEDIUM,
                           **kwargs) -> ActivityFeedWidget:
-    """Create an activity feed widget"""
+    """Create an activity feed widget."""
     return ActivityFeedWidget(
         title=title,
         activities=activities,
@@ -328,6 +417,7 @@ def create_activity_widget(title: str = "Recent Activity",
         **kwargs
     )
 
+
 def create_dashboard_widget(title: str,
                            content: ft.Control,
                            size: WidgetSize = WidgetSize.MEDIUM,
@@ -335,7 +425,7 @@ def create_dashboard_widget(title: str,
                            on_refresh: Optional[Callable] = None,
                            collapsible: bool = True,
                            **kwargs) -> DashboardWidget:
-    """Create a generic dashboard widget"""
+    """Create a generic dashboard widget."""
     return DashboardWidget(
         title=title,
         content=content,

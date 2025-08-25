@@ -1,19 +1,33 @@
+"""
+Purpose: Database browser view
+Logic: Database browsing, table viewing, and database management operations
+UI: Database statistics, table selector, and table content display
+"""
+
 #!/usr/bin/env python3
 """
-Real Database View Component
+Database Browser View
 Shows actual database tables and content from the backup server database.
 """
 
 import flet as ft
 from typing import List, Dict, Any, Optional
-from ..utils.server_bridge import ServerBridge
+from core.client_management import ClientManagement
+from core.file_management import FileManager
+from ui.widgets.cards import DatabaseStatsCard
+from ui.widgets.buttons import ActionButtonFactory
 
 
-class RealDatabaseView:
-    """Real database view with actual database content and management capabilities."""
+class DatabaseView:
+    """Database browser view with actual database content and management capabilities."""
     
-    def __init__(self, server_bridge: ServerBridge):
+    def __init__(self, server_bridge: "ServerBridge", dialog_system, toast_manager, page):
         self.server_bridge = server_bridge
+        self.dialog_system = dialog_system
+        self.toast_manager = toast_manager
+        self.page = page
+        
+        # UI Components
         self.selected_table = None
         self.table_selector = None
         self.table_content = None
@@ -21,7 +35,7 @@ class RealDatabaseView:
         self.refresh_button = None
         
     def build(self) -> ft.Control:
-        """Build the real database view."""
+        """Build the database browser view."""
         
         # Header
         header = ft.Row([
@@ -347,10 +361,14 @@ class RealDatabaseView:
     
     def _show_error(self, message: str):
         """Show error message to user."""
-        # TODO: Implement proper toast/snackbar notification
-        print(f"[ERROR] {message}")
+        if self.toast_manager:
+            self.toast_manager.show_error(message)
+        else:
+            print(f"[ERROR] {message}")
     
     def _show_success(self, message: str):
         """Show success message to user."""
-        # TODO: Implement proper toast/snackbar notification  
-        print(f"[SUCCESS] {message}")
+        if self.toast_manager:
+            self.toast_manager.show_success(message)
+        else:
+            print(f"[SUCCESS] {message}")
