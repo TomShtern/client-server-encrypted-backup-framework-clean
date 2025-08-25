@@ -118,8 +118,6 @@ class ResponsiveBuilder:
         return ft.Container(
             content=content,
             width=width,
-            min_width=min_width,
-            max_width=max_width,
             **container_kwargs
         )
     

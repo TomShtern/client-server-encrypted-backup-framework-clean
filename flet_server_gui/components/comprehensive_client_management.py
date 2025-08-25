@@ -139,7 +139,8 @@ class ComprehensiveClientManagement(BaseComponent):
         
         # Main layout with responsive design
         screen_width = self.page.window_width or 1024
-        responsive_padding = BreakpointManager.get_adaptive_padding(screen_width)
+        from ..layouts.responsive_utils import ResponsiveBuilder
+        responsive_padding = ResponsiveBuilder.get_adaptive_padding(screen_width)
         
         return ft.Container(
             content=ft.Column([
