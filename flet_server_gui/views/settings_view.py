@@ -5,9 +5,6 @@ Composition-based architecture using specialized settings components.
 Replaces the monolithic settings_view.py with focused single-responsibility modules.
 """
 
-# Enable UTF-8 support
-import Shared.utils.utf8_solution
-
 import flet as ft
 from typing import Dict, Any
 import logging
@@ -194,9 +191,9 @@ class ModularSettingsView:
             margin=ft.Margin(0, 10, 0, 0)
         )
     
-    # ============================================================================
+    # ============================================================================ 
     # EVENT HANDLERS (delegated to specialized components)
-    # ============================================================================
+    # ============================================================================ 
     
     def _on_setting_changed(self):
         """Handle when any setting changes"""
@@ -310,7 +307,7 @@ class ModularSettingsView:
         
         file_picker.save_file(
             dialog_title="Export Settings",
-            file_name="settings.json",
+            file_name="flet_server_settings.json",
             file_type=ft.FilePickerFileType.CUSTOM,
             allowed_extensions=["json"]
         )
@@ -355,9 +352,9 @@ class ModularSettingsView:
         if success:
             logger.info("Settings backup created successfully")
     
-    # ============================================================================
+    # ============================================================================ 
     # UTILITY METHODS
-    # ============================================================================
+    # ============================================================================ 
     
     def get_current_settings(self) -> Dict[str, Any]:
         """Get current settings values from all forms"""

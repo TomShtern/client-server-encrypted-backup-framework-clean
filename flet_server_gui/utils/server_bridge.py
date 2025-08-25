@@ -5,9 +5,6 @@ Composition-based architecture using specialized manager components.
 Replaces the monolithic server_bridge.py with focused single-responsibility modules.
 """
 
-# Enable UTF-8 support
-import Shared.utils.utf8_solution
-
 import sys
 import os
 from typing import Optional, List, Dict, Any
