@@ -191,9 +191,9 @@ class ModularSettingsView:
             margin=ft.Margin(0, 10, 0, 0)
         )
     
-    # ============================================================================
+    # ============================================================================ 
     # EVENT HANDLERS (delegated to specialized components)
-    # ============================================================================
+    # ============================================================================ 
     
     def _on_setting_changed(self):
         """Handle when any setting changes"""
@@ -297,11 +297,19 @@ class ModularSettingsView:
                     logger.info(f"Settings exported to: {file_path}")
         
         # Use file picker dialog
-        self.dialog_system.show_file_picker(
-            title="Export Settings",
-            file_type="json",
-            mode="save",
-            on_result=on_file_selected
+        def pick_files_result(e: ft.FilePickerResultEvent):
+            if e.path:
+                on_file_selected(e.path)
+        
+        file_picker = ft.FilePicker(on_result=pick_files_result)
+        self.page.overlay.append(file_picker)
+        self.page.update()
+        
+        file_picker.save_file(
+            dialog_title="Export Settings",
+            file_name="flet_server_settings.json",
+            file_type=ft.FilePickerFileType.CUSTOM,
+            allowed_extensions=["json"]
         )
     
     def _handle_import_settings(self, e):
@@ -322,11 +330,18 @@ class ModularSettingsView:
                     logger.info(f"Settings imported from: {file_path}")
         
         # Use file picker dialog
-        self.dialog_system.show_file_picker(
-            title="Import Settings",
-            file_type="json",
-            mode="open",
-            on_result=on_file_selected
+        def pick_files_result(e: ft.FilePickerResultEvent):
+            if e.files:
+                on_file_selected(e.files[0].path)
+        
+        file_picker = ft.FilePicker(on_result=pick_files_result)
+        self.page.overlay.append(file_picker)
+        self.page.update()
+        
+        file_picker.pick_files(
+            dialog_title="Import Settings",
+            file_type=ft.FilePickerFileType.CUSTOM,
+            allowed_extensions=["json"]
         )
     
     def _handle_create_backup(self, e):
@@ -337,9 +352,9 @@ class ModularSettingsView:
         if success:
             logger.info("Settings backup created successfully")
     
-    # ============================================================================
+    # ============================================================================ 
     # UTILITY METHODS
-    # ============================================================================
+    # ============================================================================ 
     
     def get_current_settings(self) -> Dict[str, Any]:
         """Get current settings values from all forms"""

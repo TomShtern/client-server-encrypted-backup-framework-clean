@@ -164,7 +164,7 @@ class ComprehensiveFileManagement(BaseComponent):
                 ft.Text("0 files", size=10, key="file_count"),
                 ft.Text("0 B total", size=10, key="total_size"),
             ], spacing=2, tight=True),
-            bgcolor=ft.Colors.SURFACE_VARIANT,
+            bgcolor=ft.Colors.ON_SURFACE_VARIANT,
             padding=8,
             border_radius=6,
             width=120

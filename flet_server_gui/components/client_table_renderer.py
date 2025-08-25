@@ -36,9 +36,9 @@ class ClientTableRenderer:
                 ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD)),
             ],
             rows=[],
-            border=ft.Border.all(1, ft.Colors.OUTLINE),
+            border=ft.border.all(1, ft.Colors.OUTLINE),
             border_radius=8,
-            heading_row_color=ft.Colors.SURFACE_VARIANT,
+            heading_row_color=ft.Colors.ON_SURFACE_VARIANT,
             heading_row_height=50,
             data_row_max_height=60,
             show_checkbox_column=False,  # We handle checkboxes manually
@@ -180,7 +180,7 @@ class ClientTableRenderer:
             content=ft.Column([
                 self.client_table
             ], scroll=ft.ScrollMode.AUTO),
-            border=ft.Border.all(1, ft.Colors.OUTLINE),
+            border=ft.border.all(1, ft.Colors.OUTLINE),
             border_radius=8,
             padding=10,
             expand=True

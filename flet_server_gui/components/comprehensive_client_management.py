@@ -106,11 +106,17 @@ class ComprehensiveClientManagement(BaseComponent):
         return ft.Container(
             content=ft.Column([
                 # Header section
-                ft.Row([
-                    ft.Icon(ft.Icons.PEOPLE, size=24),
-                    ft.Text("Client Management", style=ft.TextThemeStyle.TITLE_LARGE, expand=True),
-                    self.refresh_button
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.ResponsiveRow([
+                    ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.PEOPLE, size=24),
+                            ft.Text("Client Management", style=ft.TextThemeStyle.TITLE_LARGE),
+                        ])
+                    ], col={"xs": 12, "sm": 6, "md": 8}),
+                    ft.Column([
+                        self.refresh_button
+                    ], col={"xs": 12, "sm": 6, "md": 4}, alignment=ft.MainAxisAlignment.END)
+                ]),
                 
                 ft.Divider(),
                 
@@ -125,10 +131,13 @@ class ComprehensiveClientManagement(BaseComponent):
                 ft.Divider(),
                 
                 # Selection and bulk actions
-                ft.Row([
-                    self.select_all_checkbox,
-                    ft.VerticalDivider(width=20),
-                    self.bulk_actions_row
+                ft.ResponsiveRow([
+                    ft.Column([
+                        self.select_all_checkbox
+                    ], col={"xs": 12, "sm": 6}),
+                    ft.Column([
+                        self.bulk_actions_row
+                    ], col={"xs": 12, "sm": 6})
                 ]),
                 
                 ft.Divider(),

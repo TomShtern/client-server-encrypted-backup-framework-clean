@@ -365,6 +365,41 @@ class DialogSystem:
             details_content
         )
 
+    async def show_confirmation(self, title: str, message: str) -> bool:
+        """Show a confirmation dialog and return the user's choice.
+        
+        Args:
+            title: Dialog title
+            message: Confirmation message
+            
+        Returns:
+            True if user confirmed, False if cancelled
+        """
+        # Create a future to wait for the dialog result
+        future = asyncio.Future()
+        
+        def on_confirm():
+            self.current_dialog.open = False
+            self.page.update()
+            if not future.done():
+                future.set_result(True)
+        
+        def on_cancel():
+            self.current_dialog.open = False
+            self.page.update()
+            if not future.done():
+                future.set_result(False)
+        
+        self.show_confirmation_dialog(
+            title=title,
+            message=message,
+            on_confirm=on_confirm,
+            on_cancel=on_cancel
+        )
+        
+        # Wait for the result
+        return await future
+
 
 class ToastManager:
     """Toast notification system for quick feedback."""

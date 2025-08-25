@@ -357,14 +357,14 @@ class FileActions(BaseAction):
             ActionResult with cleanup results and metadata
         """
         try:
-            if not self.server_bridge or not hasattr(self.server_bridge, 'db_manager') or not self.server_bridge.db_manager:
+            if not self.server_bridge or not hasattr(self.server_bridge, 'data_manager') or not self.server_bridge.data_manager.db_manager:
                 return ActionResult.error_result(
                     error_message="Database connection not available",
                     error_code="DB_CONNECTION_ERROR"
                 )
 
             # Get all files from database
-            all_files = self.server_bridge.db_manager.get_all_files()
+            all_files = self.server_bridge.data_manager.db_manager.get_all_files()
             if not all_files:
                 return ActionResult.success_result(
                     data={'cleaned_files': 0, 'days_threshold': days_threshold, 'total_files': 0},
@@ -396,7 +396,7 @@ class FileActions(BaseAction):
                     # Remove from file system
                     os.remove(file_path)
                     # Remove from database
-                    self.server_bridge.db_manager.delete_file(file_id)
+                    self.server_bridge.data_manager.db_manager.delete_file(file_id)
                     cleaned_count += 1
                 except Exception as e:
                     # Log error but continue with other files

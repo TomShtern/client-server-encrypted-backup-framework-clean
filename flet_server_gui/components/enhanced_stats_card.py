@@ -163,22 +163,12 @@ class EnhancedStatsCard(EnhancedCard):
     def _on_refresh(self, e):
         """Handle refresh button click"""
         # Show a toast notification
-        from flet_server_gui.components.dialogs import create_toast_notification
-        toast = create_toast_notification(
-            message="Statistics refreshed",
-            bgcolor=ft.Colors.SECONDARY_CONTAINER
-        )
-        toast.show(self.page)
+        self.toast_manager.show_success("Statistics refreshed", duration=3)
 
     def _on_view_details(self, e):
         """Handle view details button click"""
         # Show a toast notification
-        from flet_server_gui.components.dialogs import create_toast_notification
-        toast = create_toast_notification(
-            message="Viewing detailed statistics",
-            bgcolor=ft.Colors.PRIMARY_CONTAINER
-        )
-        toast.show(self.page)
+        self.toast_manager.show_info("Viewing detailed statistics", duration=3)
 
 
 # Factory function

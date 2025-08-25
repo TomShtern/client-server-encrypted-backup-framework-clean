@@ -1,9 +1,9 @@
 {
   "settings": {
-    "time_range_minutes": 5,
-    "update_interval": 10,
-    "chart_type": "line",
-    "show_thresholds": false,
+    "time_range_minutes": 1,
+    "update_interval": 15,
+    "chart_type": "bar",
+    "show_thresholds": true,
     "auto_scale": true,
     "theme": "default"
   },

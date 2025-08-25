@@ -12,7 +12,6 @@ from flet_server_gui.components.enhanced_components import (
     create_enhanced_button,
     create_enhanced_icon_button
 )
-from flet_server_gui.components.dialogs import create_toast_notification
 
 
 class FileDetails(EnhancedCard):

@@ -158,7 +158,7 @@ class SettingsChangeManager:
                     content=ft.Column([
                         ft.Row([
                             changes_indicator,
-                            ft.Spacer(),
+                            ft.Container(expand=True),
                             save_button,
                             cancel_button
                         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),

@@ -11,13 +11,13 @@ from flet_server_gui.components.enhanced_components import (
     create_enhanced_icon_button,
     EnhancedCard
 )
-from flet_server_gui.components.dialogs import create_confirmation_dialog
 
 
 class QuickActions(EnhancedCard):
     """Quick actions component with shortcut buttons for common operations"""
     
     def __init__(self, 
+                 page: ft.Page,
                  on_backup_now: Optional[Callable] = None,
                  on_clear_logs: Optional[Callable] = None,
                  on_restart_services: Optional[Callable] = None,
@@ -25,6 +25,7 @@ class QuickActions(EnhancedCard):
                  on_manage_files: Optional[Callable] = None,
                  animate_duration: int = 200,
                  **kwargs):
+        self.page = page
         self.on_backup_now = on_backup_now
         self.on_clear_logs = on_clear_logs
         self.on_restart_services = on_restart_services
@@ -119,38 +120,41 @@ class QuickActions(EnhancedCard):
     def _on_backup_now(self, e):
         """Handle backup now action"""
         if self.on_backup_now:
-            # Show confirmation dialog
-            dialog = create_confirmation_dialog(
+            # Show confirmation dialog using DialogSystem
+            from flet_server_gui.components.dialog_system import DialogSystem
+            dialog_system = DialogSystem(self.page)
+            dialog_system.show_confirmation_dialog(
                 title="Start Backup",
                 message="Are you sure you want to start a backup now?",
-                on_confirm=lambda e: self.on_backup_now(e),
+                on_confirm=lambda: self.on_backup_now(e),
                 on_cancel=None
             )
-            dialog.show(self.page)
     
     def _on_clear_logs(self, e):
         """Handle clear logs action"""
         if self.on_clear_logs:
-            # Show confirmation dialog
-            dialog = create_confirmation_dialog(
+            # Show confirmation dialog using DialogSystem
+            from flet_server_gui.components.dialog_system import DialogSystem
+            dialog_system = DialogSystem(self.page)
+            dialog_system.show_confirmation_dialog(
                 title="Clear Logs",
                 message="Are you sure you want to clear all logs?",
-                on_confirm=lambda e: self.on_clear_logs(e),
+                on_confirm=lambda: self.on_clear_logs(e),
                 on_cancel=None
             )
-            dialog.show(self.page)
     
     def _on_restart_services(self, e):
         """Handle restart services action"""
         if self.on_restart_services:
-            # Show confirmation dialog
-            dialog = create_confirmation_dialog(
+            # Show confirmation dialog using DialogSystem
+            from flet_server_gui.components.dialog_system import DialogSystem
+            dialog_system = DialogSystem(self.page)
+            dialog_system.show_confirmation_dialog(
                 title="Restart Services",
                 message="Are you sure you want to restart all services?",
-                on_confirm=lambda e: self.on_restart_services(e),
+                on_confirm=lambda: self.on_restart_services(e),
                 on_cancel=None
             )
-            dialog.show(self.page)
     
     def _on_view_clients(self, e):
         """Handle view clients action"""
@@ -165,12 +169,9 @@ class QuickActions(EnhancedCard):
     def _on_settings(self, e):
         """Handle settings action"""
         # Show a toast notification for now
-        from flet_server_gui.components.dialogs import create_toast_notification
-        toast = create_toast_notification(
-            message="Settings opened",
-            bgcolor=ft.Colors.SECONDARY_CONTAINER
-        )
-        toast.show(self.page)
+        from flet_server_gui.components.dialog_system import ToastManager
+        toast_manager = ToastManager(self.page)
+        toast_manager.show_info("Settings opened")
 
 
 # Factory function

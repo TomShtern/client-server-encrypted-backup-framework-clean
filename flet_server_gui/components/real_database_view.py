@@ -98,16 +98,16 @@ class RealDatabaseView:
     def refresh_database(self, e=None):
         """Refresh database information and table list."""
         try:
-            if not self.server_bridge.db_manager:
+            if not self.server_bridge.data_manager.db_manager:
                 self._show_error("Database not available")
                 return
             
             # Get database statistics
-            stats = self.server_bridge.db_manager.get_database_stats()
+            stats = self.server_bridge.data_manager.db_manager.get_database_stats()
             self._update_stats_cards(stats)
             
             # Get table names
-            table_names = self.server_bridge.db_manager.get_table_names()
+            table_names = self.server_bridge.data_manager.db_manager.get_table_names()
             self._update_table_selector(table_names)
             
             print(f"[INFO] Database refreshed - found {len(table_names)} tables")
@@ -231,12 +231,12 @@ class RealDatabaseView:
     def load_table_content(self, table_name: str):
         """Load and display table content."""
         try:
-            if not self.server_bridge.db_manager:
+            if not self.server_bridge.data_manager.db_manager:
                 self._show_error("Database not available")
                 return
             
             # Get table content
-            columns, rows = self.server_bridge.db_manager.get_table_content(table_name)
+            columns, rows = self.server_bridge.data_manager.db_manager.get_table_content(table_name)
             
             if not columns:
                 self.table_content.content = ft.Text(
@@ -288,12 +288,12 @@ class RealDatabaseView:
     def backup_database(self, e):
         """Handle database backup."""
         try:
-            if not self.server_bridge.db_manager:
+            if not self.server_bridge.data_manager.db_manager:
                 self._show_error("Database not available")
                 return
             
             # Perform backup
-            backup_path = self.server_bridge.db_manager.backup_database_to_file()
+            backup_path = self.server_bridge.data_manager.db_manager.backup_database_to_file()
             self._show_success(f"Database backed up to: {backup_path}")
             print(f"[INFO] Database backed up to: {backup_path}")
             
@@ -304,12 +304,12 @@ class RealDatabaseView:
     def optimize_database(self, e):
         """Handle database optimization."""
         try:
-            if not self.server_bridge.db_manager:
+            if not self.server_bridge.data_manager.db_manager:
                 self._show_error("Database not available")
                 return
             
             # Perform optimization
-            result = self.server_bridge.db_manager.optimize_database()
+            result = self.server_bridge.data_manager.db_manager.optimize_database()
             
             space_saved = result.get('space_saved_mb', 0)
             if result.get('vacuum_performed', False):
@@ -326,12 +326,12 @@ class RealDatabaseView:
     def analyze_database(self, e):
         """Handle database analysis."""
         try:
-            if not self.server_bridge.db_manager:
+            if not self.server_bridge.data_manager.db_manager:
                 self._show_error("Database not available")
                 return
             
             # Get database health
-            health = self.server_bridge.db_manager.get_database_health()
+            health = self.server_bridge.data_manager.db_manager.get_database_health()
             
             if health.get('integrity_check', False) and health.get('foreign_key_check', False):
                 issues = len(health.get('issues', []))
