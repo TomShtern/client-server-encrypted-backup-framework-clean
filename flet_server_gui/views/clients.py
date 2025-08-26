@@ -18,6 +18,7 @@ from typing import List, Dict, Any, Optional, Callable
 from flet_server_gui.core.client_management import ClientManagement
 from flet_server_gui.ui.widgets.tables import EnhancedDataTable
 from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
+from flet_server_gui.utils.thread_safe_ui import ThreadSafeUIUpdater, ui_safe_update
 from flet_server_gui.components.client_table_renderer import ClientTableRenderer
 from flet_server_gui.components.client_filter_manager import ClientFilterManager
 from flet_server_gui.components.client_action_handlers import ClientActionHandlers
@@ -36,6 +37,10 @@ class ClientsView:
         self.server_bridge = server_bridge
         self.page = page
         self.toast_manager = toast_manager
+        
+        # Initialize thread-safe UI updater
+        self.ui_updater = ThreadSafeUIUpdater(page)
+        self._updater_started = False
         
         # Initialize button factory
         self.button_factory = ActionButtonFactory(self, server_bridge, page)
@@ -164,7 +169,11 @@ class ClientsView:
             if self.refresh_button:
                 self.refresh_button.disabled = True
                 self.refresh_button.text = "Refreshing..."
-                self.page.update()
+                # Thread-safe UI update
+                if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                    self.ui_updater.queue_update(lambda: None)
+                else:
+                    self.page.update()
             
             # Get fresh client data
             clients = await self.server_bridge.get_clients()
@@ -194,7 +203,11 @@ class ClientsView:
             if self.refresh_button:
                 self.refresh_button.disabled = False
                 self.refresh_button.text = "Refresh Clients"
-                self.page.update()
+                # Thread-safe UI update
+                if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                    self.ui_updater.queue_update(lambda: None)
+                else:
+                    self.page.update()
     
     def _on_filtered_data_changed(self, filtered_clients: List[Dict[str, Any]]):
         """Handle filtered data changes from filter manager."""
@@ -214,13 +227,21 @@ class ClientsView:
                 self.select_all_checkbox.value = False
                 self._update_bulk_actions_visibility()
             
-            self.page.update()
+            # Thread-safe UI update
+            if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                self.ui_updater.queue_update(lambda: None)
+            else:
+                self.page.update()
             
         except Exception as ex:
             if self.status_text:
                 self.status_text.value = f"Error updating filter: {str(ex)}"
                 self.status_text.color = ft.Colors.RED_600
-            self.page.update()
+            # Thread-safe UI update
+            if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                self.ui_updater.queue_update(lambda: None)
+            else:
+                self.page.update()
     
     def _on_select_all(self, e):
         """Handle select all checkbox changes."""
@@ -236,7 +257,11 @@ class ClientsView:
                 self.table_renderer.deselect_all_rows()
             
             self._update_bulk_actions_visibility()
-            self.page.update()
+            # Thread-safe UI update
+            if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                self.ui_updater.queue_update(lambda: None)
+            else:
+                self.page.update()
             
         except Exception as ex:
             if self.toast_manager:
@@ -256,7 +281,11 @@ class ClientsView:
             self._update_select_all_checkbox()
             
             self._update_bulk_actions_visibility()
-            self.page.update()
+            # Thread-safe UI update
+            if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                self.ui_updater.queue_update(lambda: None)
+            else:
+                self.page.update()
             
         except Exception as ex:
             if self.toast_manager:
@@ -280,7 +309,11 @@ class ClientsView:
                 self.select_all_checkbox.value = None  # Indeterminate state
             
             self._update_bulk_actions_visibility()
-            self.page.update()
+            # Thread-safe UI update
+            if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                self.ui_updater.queue_update(lambda: None)
+            else:
+                self.page.update()
         except Exception:
             pass  # Ignore errors in checkbox updates
     
@@ -326,6 +359,11 @@ class ClientsView:
     # Auto-refresh functionality
     async def start_auto_refresh(self, interval_seconds: int = 30):
         """Start automatic refresh of client data"""
+        # Start the thread-safe UI updater
+        if not self._updater_started:
+            await self.ui_updater.start()
+            self._updater_started = True
+            
         while True:
             await asyncio.sleep(interval_seconds)
             if self.page:  # Check if page is still active

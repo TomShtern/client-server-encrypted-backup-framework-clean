@@ -81,3 +81,59 @@ class SimpleServerBridge:
         """Clean up old files"""
         await asyncio.sleep(0.8)  # Simulate cleanup time
         return {"cleaned_files": 3, "freed_space": "15.2 MB"}
+    
+    def is_server_running(self) -> bool:
+        """Check if backup server is running"""
+        return self.server_info.running
+    
+    def get_clients(self) -> List[Dict[str, Any]]:
+        """Get list of connected clients (standardized API)"""
+        return self.get_client_list()
+    
+    def get_files(self) -> List[Dict[str, Any]]:
+        """Get list of managed files (standardized API)"""
+        return self.get_file_list()
+    
+    def get_notifications(self) -> List[Dict[str, Any]]:
+        """Get pending notifications"""
+        mock_notifications = []
+        
+        # Add server status notification
+        if self.server_info.running:
+            mock_notifications.append({
+                "id": 1,
+                "type": "system",
+                "message": f"Server running on {self.server_info.host}:{self.server_info.port}",
+                "timestamp": datetime.now().isoformat(),
+                "severity": "info"
+            })
+        else:
+            mock_notifications.append({
+                "id": 2,
+                "type": "system", 
+                "message": "Server is currently stopped",
+                "timestamp": datetime.now().isoformat(),
+                "severity": "warning"
+            })
+        
+        # Add client activity notifications
+        connected_count = len([c for c in self.mock_clients if c["status"] == "connected"])
+        if connected_count > 0:
+            mock_notifications.append({
+                "id": 3,
+                "type": "client",
+                "message": f"{connected_count} client(s) currently connected",
+                "timestamp": datetime.now().isoformat(),
+                "severity": "info"
+            })
+        
+        # Add file activity notification
+        mock_notifications.append({
+            "id": 4,
+            "type": "file",
+            "message": f"{len(self.mock_files)} files in backup storage",
+            "timestamp": datetime.now().isoformat(),
+            "severity": "info"
+        })
+        
+        return mock_notifications

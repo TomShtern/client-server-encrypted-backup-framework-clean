@@ -11,12 +11,17 @@ from typing import Optional
 import psutil
 import os
 from flet_server_gui.utils.server_bridge import ServerBridge
+from flet_server_gui.utils.thread_safe_ui import ThreadSafeUIUpdater, ui_safe_update
 
 class DashboardView:
     def __init__(self, page: ft.Page, server_bridge: Optional[ServerBridge] = None):
         self.page = page
         self.server_bridge = server_bridge or ServerBridge()
         self.controls = []
+        
+        # Initialize thread-safe UI updater
+        self.ui_updater = ThreadSafeUIUpdater(page)
+        self._updater_started = False
         
         # Status card refs for real-time updates
         self.server_status_text = ft.Ref[ft.Text]()
@@ -663,7 +668,11 @@ class DashboardView:
                 oldest = controls[0]
                 oldest.opacity = 0
                 oldest.scale = ft.Scale(0.8)
-                self.page.update()
+                # Thread-safe UI update
+                if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                    self.ui_updater.queue_update(lambda: None)
+                else:
+                    self.page.update()
                 # Remove after animation
                 asyncio.create_task(self._remove_old_entry())
         
@@ -674,12 +683,23 @@ class DashboardView:
             controls.clear()
             
         controls.append(log_entry)
-        self.page.update()
+        # Thread-safe UI update
+        if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+            self.ui_updater.queue_update(lambda: None)
+        else:
+            self.page.update()
         
         # Animate in the new entry
-        log_entry.opacity = 1
-        log_entry.scale = ft.Scale(1.0)
-        self.page.update()
+        def animate_entry():
+            log_entry.opacity = 1
+            log_entry.scale = ft.Scale(1.0)
+        
+        # Thread-safe UI update
+        if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+            self.ui_updater.queue_update(animate_entry)
+        else:
+            animate_entry()
+            self.page.update()
     
     async def _remove_old_entry(self):
         """Remove old entry after fade animation"""
@@ -687,7 +707,11 @@ class DashboardView:
         if (self.activity_log_container.current and 
             len(self.activity_log_container.current.controls) >= self.max_log_entries):
             self.activity_log_container.current.controls.pop(0)
-            self.page.update()
+            # Thread-safe UI update
+            if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                self.ui_updater.queue_update(lambda: None)
+            else:
+                self.page.update()
     
     def start_dashboard_sync(self):
         """Initialize dashboard UI elements (synchronous part)"""
@@ -698,6 +722,12 @@ class DashboardView:
     
     async def start_dashboard_async(self):
         """Initialize dashboard background tasks (asynchronous part)"""
+        # Start the thread-safe UI updater
+        if not self._updater_started:
+            await self.ui_updater.start()
+            self._updater_started = True
+            self.add_log_entry("UI", "Thread-safe UI updater started", "SUCCESS")
+        
         # Wait briefly for UI to be fully ready
         await asyncio.sleep(1)
         self.add_log_entry("Server", "Real-time updates active", "SUCCESS")
@@ -800,7 +830,11 @@ class DashboardView:
                 if self.total_clients_text.current:
                     self.total_clients_text.current.value = str(getattr(server_info, 'total_clients', 0))
                 
-                self.page.update()
+                # Thread-safe UI update
+                if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                    self.ui_updater.queue_update(lambda: None)
+                else:
+                    self.page.update()
                 
         except Exception as e:
             self.add_log_entry("Status", f"Failed to update server status: {str(e)}", "ERROR")

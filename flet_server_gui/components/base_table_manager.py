@@ -6,8 +6,28 @@ Shared functionality for table rendering components.
 
 import flet as ft
 import asyncio
+import sys
+import os
 from typing import List, Dict, Any, Optional, Callable
 from abc import ABC, abstractmethod
+
+# Add project root to path for imports
+project_root = os.path.join(os.path.dirname(__file__), "..", "..")
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+try:
+    from flet_server_gui.utils.server_bridge import ServerBridge
+    from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
+except ImportError:
+    # Fallback to relative imports for direct execution
+    try:
+        sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+        from utils.server_bridge import ServerBridge
+        from ui.widgets.buttons import ActionButtonFactory
+    except ImportError:
+        ServerBridge = object
+        ActionButtonFactory = object
 
 
 class BaseTableManager(ABC):
@@ -68,7 +88,7 @@ class BaseTableManager(ABC):
             content=ft.Column([
                 self.data_table
             ], scroll=ft.ScrollMode.AUTO),
-            border=ft.Border.all(1, ft.Colors.OUTLINE),
+            border=ft.border.all(1, ft.Colors.OUTLINE),
             border_radius=8,
             padding=10,
             expand=True
@@ -87,6 +107,92 @@ class BaseTableManager(ABC):
             on_change=on_select,
             data=item_id
         )
+    
+    def select_all_rows(self):
+        """Select all rows in table"""
+        if not self.data_table or not self.data_table.rows:
+            return
+        
+        # Extract all item IDs from table rows
+        all_item_ids = []
+        for row in self.data_table.rows:
+            # Look for checkbox in first cell to get item ID
+            if row.cells and len(row.cells) > 0:
+                first_cell = row.cells[0]
+                if hasattr(first_cell, 'content') and hasattr(first_cell.content, 'data'):
+                    item_id = first_cell.content.data
+                    if item_id:
+                        all_item_ids.append(item_id)
+        
+        # Update selected_items list
+        self.selected_items = all_item_ids[:]
+        
+        # Update all checkboxes to checked state
+        for row in self.data_table.rows:
+            if row.cells and len(row.cells) > 0:
+                first_cell = row.cells[0]
+                if hasattr(first_cell, 'content') and isinstance(first_cell.content, ft.Checkbox):
+                    first_cell.content.value = True
+        
+        # Update the display
+        self.update_table_display()
+    
+    def clear_selection(self):
+        """Clear all row selections"""
+        if not self.data_table or not self.data_table.rows:
+            return
+        
+        # Clear the selected_items list
+        self.selected_items.clear()
+        
+        # Update all checkboxes to unchecked state
+        for row in self.data_table.rows:
+            if row.cells and len(row.cells) > 0:
+                first_cell = row.cells[0]
+                if hasattr(first_cell, 'content') and isinstance(first_cell.content, ft.Checkbox):
+                    first_cell.content.value = False
+        
+        # Update the display
+        self.update_table_display()
+    
+    def get_selected_data(self) -> List[Dict[str, Any]]:
+        """Get data for all selected rows"""
+        selected_data = []
+        
+        if not self.data_table or not self.data_table.rows or not self.selected_items:
+            return selected_data
+        
+        # Iterate through table rows to find selected ones
+        for row in self.data_table.rows:
+            if not row.cells or len(row.cells) == 0:
+                continue
+                
+            # Get item ID from first cell (checkbox)
+            first_cell = row.cells[0]
+            item_id = None
+            if hasattr(first_cell, 'content') and hasattr(first_cell.content, 'data'):
+                item_id = first_cell.content.data
+            
+            # If this row is selected, extract its data
+            if item_id and item_id in self.selected_items:
+                row_data = {'id': item_id}
+                
+                # Extract data from each cell
+                for i, cell in enumerate(row.cells):
+                    if hasattr(cell, 'content'):
+                        if isinstance(cell.content, ft.Text):
+                            row_data[f'column_{i}'] = cell.content.value
+                        elif isinstance(cell.content, ft.Checkbox):
+                            # Skip checkbox column, already have ID
+                            pass
+                        elif hasattr(cell.content, 'value'):
+                            row_data[f'column_{i}'] = cell.content.value
+                        else:
+                            row_data[f'column_{i}'] = str(cell.content)
+                
+                selected_data.append(row_data)
+        
+        return selected_data
 
 
 class BaseFilterManager(ABC):

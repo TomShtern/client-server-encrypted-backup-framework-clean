@@ -19,6 +19,7 @@ from typing import List, Dict, Any, Optional, Callable
 from flet_server_gui.core.file_management import FileManagement
 from flet_server_gui.ui.widgets.tables import EnhancedDataTable
 from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
+from flet_server_gui.utils.thread_safe_ui import ThreadSafeUIUpdater, ui_safe_update
 from flet_server_gui.components.file_table_renderer import FileTableRenderer
 from flet_server_gui.components.file_filter_manager import FileFilterManager
 from flet_server_gui.components.file_action_handlers import FileActionHandlers
@@ -35,6 +36,10 @@ class FilesView:
     def __init__(self, server_bridge: "ServerBridge", dialog_system, toast_manager, page):
         self.server_bridge = server_bridge
         self.page = page
+        
+        # Initialize thread-safe UI updater
+        self.ui_updater = ThreadSafeUIUpdater(page)
+        self._updater_started = False
         
         # Initialize button factory
         self.button_factory = ActionButtonFactory(self, server_bridge, page)
@@ -181,7 +186,11 @@ class FilesView:
             if self.refresh_button:
                 self.refresh_button.disabled = True
                 self.refresh_button.text = "Refreshing..."
-                self.page.update()
+                # Thread-safe UI update
+                if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                    self.ui_updater.queue_update(lambda: None)
+                else:
+                    self.page.update()
             
             # Get fresh file data
             files = await self.server_bridge.get_files()
@@ -211,7 +220,11 @@ class FilesView:
             if self.refresh_button:
                 self.refresh_button.disabled = False
                 self.refresh_button.text = "Refresh Files"
-                self.page.update()
+                # Thread-safe UI update
+                if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                    self.ui_updater.queue_update(lambda: None)
+                else:
+                    self.page.update()
     
     def _on_filtered_data_changed(self, filtered_files: List[Dict[str, Any]]):
         """Handle filtered data changes from filter manager."""
@@ -231,13 +244,21 @@ class FilesView:
                 self.select_all_checkbox.value = False
                 self._update_bulk_actions_visibility()
             
-            self.page.update()
+            # Thread-safe UI update
+            if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                self.ui_updater.queue_update(lambda: None)
+            else:
+                self.page.update()
             
         except Exception as ex:
             if self.status_text:
                 self.status_text.value = f"Error updating filter: {str(ex)}"
                 self.status_text.color = ft.Colors.RED_600
-            self.page.update()
+            # Thread-safe UI update
+            if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                self.ui_updater.queue_update(lambda: None)
+            else:
+                self.page.update()
     
     def _on_select_all(self, e):
         """Handle select all checkbox changes."""
@@ -253,7 +274,11 @@ class FilesView:
                 self.table_renderer.deselect_all_rows()
             
             self._update_bulk_actions_visibility()
-            self.page.update()
+            # Thread-safe UI update
+            if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                self.ui_updater.queue_update(lambda: None)
+            else:
+                self.page.update()
             
         except Exception as ex:
             if self.toast_manager:
@@ -273,7 +298,11 @@ class FilesView:
             self._update_select_all_checkbox()
             
             self._update_bulk_actions_visibility()
-            self.page.update()
+            # Thread-safe UI update
+            if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                self.ui_updater.queue_update(lambda: None)
+            else:
+                self.page.update()
             
         except Exception as ex:
             if self.toast_manager:
@@ -297,7 +326,11 @@ class FilesView:
                 self.select_all_checkbox.value = None  # Indeterminate state
             
             self._update_bulk_actions_visibility()
-            self.page.update()
+            # Thread-safe UI update
+            if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                self.ui_updater.queue_update(lambda: None)
+            else:
+                self.page.update()
         except Exception:
             pass  # Ignore errors in checkbox updates
     
@@ -356,6 +389,11 @@ class FilesView:
     # Auto-refresh functionality
     async def start_auto_refresh(self, interval_seconds: int = 60):
         """Start automatic refresh of file data"""
+        # Start the thread-safe UI updater
+        if not self._updater_started:
+            await self.ui_updater.start()
+            self._updater_started = True
+            
         while True:
             await asyncio.sleep(interval_seconds)
             if self.page:  # Check if page is still active

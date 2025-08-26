@@ -5,10 +5,28 @@ Handles UI rendering of client data in tables with proper formatting and respons
 """
 
 import flet as ft
+import sys
+import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from ..utils.server_bridge import ServerBridge
-from ..ui.widgets.buttons import ActionButtonFactory
+
+# Add project root to path for imports
+project_root = os.path.join(os.path.dirname(__file__), "..", "..")
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+try:
+    from flet_server_gui.utils.server_bridge import ServerBridge
+    from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
+except ImportError:
+    # Fallback to relative imports for direct execution
+    try:
+        sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+        from utils.server_bridge import ServerBridge
+        from ui.widgets.buttons import ActionButtonFactory
+    except ImportError:
+        ServerBridge = object
+        ActionButtonFactory = object
 
 
 class ClientTableRenderer:

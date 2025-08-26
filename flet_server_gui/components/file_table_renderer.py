@@ -5,10 +5,28 @@ Handles UI rendering of file data in tables with proper formatting and responsiv
 """
 
 import flet as ft
+import sys
+import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from ..utils.server_bridge import ServerBridge
-from ..ui.widgets.buttons import ActionButtonFactory
+
+# Add project root to path for imports
+project_root = os.path.join(os.path.dirname(__file__), "..", "..")
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+try:
+    from flet_server_gui.utils.server_bridge import ServerBridge
+    from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
+except ImportError:
+    # Fallback to relative imports for direct execution
+    try:
+        sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+        from utils.server_bridge import ServerBridge
+        from ui.widgets.buttons import ActionButtonFactory
+    except ImportError:
+        ServerBridge = object
+        ActionButtonFactory = object
 
 
 class FileTableRenderer:
@@ -214,6 +232,36 @@ class FileTableRenderer:
     
     def update_table_display(self) -> None:
         """Update table display after changes"""
+        if self.page:
+            self.page.update()
+    
+    def select_all_rows(self) -> None:
+        """Select all rows in the table"""
+        if not self.file_table:
+            return
+            
+        # Update all checkboxes in the table
+        for row in self.file_table.rows:
+            if row.cells and len(row.cells) > 0:
+                checkbox = row.cells[0].content
+                if isinstance(checkbox, ft.Checkbox):
+                    checkbox.value = True
+                    
+        if self.page:
+            self.page.update()
+    
+    def deselect_all_rows(self) -> None:
+        """Deselect all rows in the table"""
+        if not self.file_table:
+            return
+            
+        # Update all checkboxes in the table
+        for row in self.file_table.rows:
+            if row.cells and len(row.cells) > 0:
+                checkbox = row.cells[0].content
+                if isinstance(checkbox, ft.Checkbox):
+                    checkbox.value = False
+                    
         if self.page:
             self.page.update()
     

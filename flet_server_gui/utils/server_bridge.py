@@ -214,6 +214,89 @@ class ModularServerBridge:
     def get_file_list(self) -> List[Dict[str, Any]]:
         """Legacy compatibility method"""
         return self.get_all_files()
+    
+    # ============================================================================
+    # STANDARDIZED API METHODS (Phase 1 Critical Stability Fixes)
+    # ============================================================================
+    
+    def is_server_running(self) -> bool:
+        """Check if backup server is running (standardized API)"""
+        return self.connection_manager.is_server_running()
+    
+    def get_clients(self) -> List[RealClient]:
+        """Get list of connected clients (standardized API)"""
+        return self.get_all_clients()
+    
+    def get_files(self) -> List[Dict[str, Any]]:
+        """Get list of managed files (standardized API)"""
+        return self.get_all_files()
+    
+    def get_notifications(self) -> List[Dict[str, Any]]:
+        """Get pending notifications (standardized API)"""
+        notifications = []
+        
+        try:
+            # Get system status notifications
+            health = self.get_health_status()
+            server_running = self.is_server_running()
+            
+            # Add server status notification
+            notifications.append({
+                "id": 1,
+                "type": "system",
+                "message": f"Server {'running' if server_running else 'stopped'}",
+                "timestamp": health.get('timestamp', 'unknown'),
+                "severity": "info" if server_running else "warning"
+            })
+            
+            # Add health notifications
+            if health.get('status') == 'unhealthy':
+                notifications.append({
+                    "id": 2,
+                    "type": "system",
+                    "message": "System health check failed",
+                    "timestamp": health.get('timestamp', 'unknown'),
+                    "severity": "error"
+                })
+            
+            # Get recent activity for activity notifications  
+            recent_activity = self.get_recent_activity(5)
+            for i, activity in enumerate(recent_activity[:3]):  # Limit to 3 recent
+                notifications.append({
+                    "id": 10 + i,
+                    "type": "activity",
+                    "message": f"{activity.get('action', 'Unknown action')}: {activity.get('details', 'No details')}",
+                    "timestamp": activity.get('timestamp', 'unknown'),
+                    "severity": "info"
+                })
+            
+            # Add client/file count notifications
+            clients = self.get_clients()
+            files = self.get_files()
+            
+            notifications.append({
+                "id": 20,
+                "type": "stats",
+                "message": f"Total: {len(clients)} clients, {len(files)} files",
+                "timestamp": health.get('timestamp', 'unknown'),
+                "severity": "info"
+            })
+            
+        except Exception as e:
+            # Fallback notification if data retrieval fails
+            notifications.append({
+                "id": 999,
+                "type": "system",
+                "message": f"Notification system error: {str(e)}",
+                "timestamp": "error",
+                "severity": "error"
+            })
+        
+        # Sort by severity (error, warning, info) then by timestamp
+        severity_order = {"error": 0, "warning": 1, "info": 2}
+        notifications.sort(key=lambda x: (severity_order.get(x.get('severity', 'info'), 3), x.get('timestamp', '')))
+        
+        return notifications
 
 
 # Backward compatibility alias
