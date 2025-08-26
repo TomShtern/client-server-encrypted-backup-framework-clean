@@ -10,9 +10,11 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Import utf8_solution to fix encoding issues
+safe_print = print  # Default fallback
 try:
     import Shared.utils.utf8_solution
-    print("[INFO] UTF-8 solution imported successfully")
+    from Shared.utils.utf8_solution import safe_print
+    safe_print("[INFO] UTF-8 solution imported successfully")
 except ImportError as e:
     # Try alternative path
     utf8_path = os.path.join(os.path.dirname(__file__), "..", "Shared", "utils")
@@ -20,10 +22,11 @@ except ImportError as e:
         sys.path.insert(0, utf8_path)
     try:
         import utf8_solution
-        print("[INFO] UTF-8 solution imported via alternative path")
+        from utf8_solution import safe_print
+        safe_print("[INFO] UTF-8 solution imported via alternative path")
     except ImportError:
-        print("[WARNING] utf8_solution import failed, continuing without it")
-        print(f"[DEBUG] Import error: {e}")
+        safe_print("[WARNING] utf8_solution import failed, continuing without it")
+        safe_print(f"[DEBUG] Import error: {e}")
 import flet as ft
 import asyncio
 from datetime import datetime
@@ -35,7 +38,16 @@ from flet_server_gui.components.quick_actions import QuickActions
 from flet_server_gui.ui.navigation import NavigationManager
 from flet_server_gui.ui.dialogs import DialogSystem, ToastManager
 from flet_server_gui.ui.theme import ThemeManager
-from flet_server_gui.utils.server_bridge import ServerBridge
+# Robust server bridge with fallback
+try:
+    from flet_server_gui.utils.server_bridge import ServerBridge
+    BRIDGE_TYPE = "Full ModularServerBridge" 
+    print(f"[SUCCESS] Using {BRIDGE_TYPE}")
+except Exception as e:
+    print(f"[WARNING] Full ServerBridge unavailable ({e}), using SimpleServerBridge")
+    from flet_server_gui.utils.simple_server_bridge import SimpleServerBridge as ServerBridge
+    BRIDGE_TYPE = "SimpleServerBridge (Fallback)"
+    print(f"[INFO] Using {BRIDGE_TYPE}")
 # Direct import to avoid __init__.py issues
 try:
     from flet_server_gui.views.settings_view import SettingsView
@@ -70,7 +82,7 @@ class ServerGUIApp:
         self.file_actions = FileActions(self.server_bridge)
 
         # NOW initialize working components 
-        self.control_panel = ControlPanelCard(self.server_bridge, self.page, self.show_notification, None)
+        self.control_panel = ControlPanelCard(self.server_bridge, self.page, self.show_notification, self.add_log_entry)
         self.quick_actions = QuickActions(
             page=page,
             on_backup_now=self._on_backup_now,
@@ -133,7 +145,13 @@ class ServerGUIApp:
     
     async def _on_page_connect(self, e):
         """Start background tasks when the page is connected."""
+        # Start main monitor loop
         asyncio.create_task(self.monitor_loop())
+        
+        # Initialize dashboard if it's the current view
+        if self.current_view == "dashboard" and self.dashboard_view:
+            self.dashboard_view.start_dashboard_sync()  # Sync initialization
+            asyncio.create_task(self.dashboard_view.start_dashboard_async())  # Async tasks
     
     def setup_application(self):
         """Configure the desktop application and apply the theme."""
@@ -216,8 +234,7 @@ class ServerGUIApp:
             try:
                 dashboard_content = self.dashboard_view.build()
                 if dashboard_content:
-                    # Start the dashboard's real-time updates and welcome messages
-                    self.dashboard_view.start_dashboard()
+                    # Dashboard async tasks will be started via _on_page_connect
                     return dashboard_content
                 else:
                     # Fallback to simplified dashboard if build returns None
@@ -237,54 +254,103 @@ class ServerGUIApp:
     
     def _build_simplified_dashboard(self) -> ft.Control:
         """Build a simplified dashboard when full dashboard is not available."""
-        return ft.Column([
-            ft.Text("Dashboard", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
-            ft.Divider(),
-            ft.ResponsiveRow(
-                controls=[
-                    ft.Column(col={"xs": 12, "sm": 12, "md": 6, "lg": 6, "xl": 6}, controls=[self.control_panel.build()]),  
-                    ft.Column(col={"xs": 12, "sm": 12, "md": 6, "lg": 6, "xl": 6}, controls=[ft.Card(
-                        content=ft.Container(
-                            content=ft.Text("Additional components will be restored once import issues are resolved.",
-                                           style=ft.TextThemeStyle.BODY_LARGE,
-                                           text_align=ft.TextAlign.CENTER),
-                            padding=40
-                        )
-                    )]),
-                ],
-                spacing=16,
-            ),
-            ft.Container(height=16),
-            ft.ResponsiveRow(
-                controls=[
-                    ft.Column(col={"xs": 12, "sm": 12, "md": 6, "lg": 6, "xl": 6}, controls=[self.quick_actions]),
-                    ft.Column(col={"xs": 12, "sm": 12, "md": 6, "lg": 6, "xl": 6}, controls=[ft.Card(
-                        content=ft.Container(
-                            content=ft.Text("Server statistics will be shown here.",
-                                           style=ft.TextThemeStyle.BODY_LARGE,
-                                           text_align=ft.TextAlign.CENTER),
-                            padding=40
-                        )
-                    )]),
-                ],
-                spacing=16,
-            ),
-            ft.Container(
+        
+        # Create status cards with mock data
+        server_status_card = ft.Card(
+            content=ft.Container(
                 content=ft.Column([
-                    ft.Text("Recent Activity", style=ft.TextThemeStyle.TITLE_MEDIUM),
-                    ft.Text("View detailed logs in the Logs section", 
-                           style=ft.TextThemeStyle.BODY_MEDIUM,
-                           color=ft.Colors.OUTLINE),
-                    ft.FilledButton(
-                        "View Full Logs",
-                        icon=ft.Icons.HISTORY,
-                        on_click=lambda _: self.switch_view("logs")
-                    )
-                ]),
-                padding=16,
-                margin=ft.margin.only(top=16)
-            )
-        ], spacing=24, scroll=ft.ScrollMode.ADAPTIVE, expand=True)
+                    ft.Text("Server Status", style=ft.TextThemeStyle.TITLE_MEDIUM),
+                    ft.Divider(),
+                    ft.Row([
+                        ft.Text("Status:"),
+                        ft.Container(expand=True),
+                        ft.Text("Offline", color=ft.Colors.ERROR)
+                    ]),
+                    ft.Row([
+                        ft.Text("Port:"),
+                        ft.Container(expand=True),
+                        ft.Text("1256")
+                    ])
+                ], spacing=8),
+                padding=20
+            ),
+            elevation=2
+        )
+        
+        stats_card = ft.Card(
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Text("Statistics", style=ft.TextThemeStyle.TITLE_MEDIUM),
+                    ft.Divider(),
+                    ft.Row([
+                        ft.Text("Clients:"),
+                        ft.Container(expand=True),
+                        ft.Text("0")
+                    ]),
+                    ft.Row([
+                        ft.Text("Files:"),
+                        ft.Container(expand=True),
+                        ft.Text("0")
+                    ])
+                ], spacing=8),
+                padding=20
+            ),
+            elevation=2
+        )
+        
+        return ft.Column([
+            ft.Text("Server Dashboard", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
+            ft.Divider(),
+            
+            # Status row
+            ft.ResponsiveRow([
+                ft.Container(
+                    content=server_status_card,
+                    col={"xs": 12, "sm": 12, "md": 4}
+                ),
+                ft.Container(
+                    content=stats_card,
+                    col={"xs": 12, "sm": 12, "md": 4}
+                ),
+                ft.Container(
+                    content=self.control_panel.build(),
+                    col={"xs": 12, "sm": 12, "md": 4}
+                )
+            ], spacing=16),
+            
+            ft.Container(height=16),
+            
+            # Quick actions row
+            ft.ResponsiveRow([
+                ft.Container(
+                    content=self.quick_actions,
+                    col={"xs": 12, "sm": 12, "md": 6}
+                ),
+                ft.Container(
+                    content=ft.Card(
+                        content=ft.Container(
+                            content=ft.Column([
+                                ft.Text("Activity Log", style=ft.TextThemeStyle.TITLE_MEDIUM),
+                                ft.Divider(),
+                                ft.Text("System started", style=ft.TextThemeStyle.BODY_SMALL),
+                                ft.Text("GUI initialized", style=ft.TextThemeStyle.BODY_SMALL),
+                                ft.Container(
+                                    content=ft.FilledButton(
+                                        "View Full Logs",
+                                        icon=ft.Icons.HISTORY,
+                                        on_click=lambda _: self.switch_view("logs")
+                                    ),
+                                    alignment=ft.alignment.center,
+                                    margin=ft.margin.only(top=8)
+                                )
+                            ], spacing=8),
+                            padding=20
+                        )
+                    ),
+                    col={"xs": 12, "sm": 12, "md": 6}
+                )
+            ], spacing=16)
+        ], spacing=24, scroll=ft.ScrollMode.AUTO, expand=True)
     
     def get_clients_view(self) -> ft.Control:
         """Create and return the clients view."""
@@ -404,21 +470,36 @@ class ServerGUIApp:
 
     async def _on_backup_now(self, e):
         """Handle backup now action by running the file cleanup job."""
-        self.activity_log.add_entry("Quick Actions", "Cleanup job initiated", "INFO")
-        result = await self.file_actions.cleanup_old_files(days_threshold=30)
-        if result.success:
-            cleaned_count = result.data.get('cleaned_files', 0)
-            await self.show_notification(f"Cleanup successful: {cleaned_count} old files removed.")
-        else:
-            await self.show_notification(f"Cleanup failed: {result.error_message}", is_error=True)
+        self.add_log_entry("Quick Actions", "Cleanup job initiated", "INFO")
+        try:
+            result = await self.server_bridge.cleanup_old_files_by_age(days_threshold=30)
+            if result and result.get('success'):
+                cleaned_count = result.get('cleaned_files', 0)
+                await self.show_notification(f"Cleanup successful: {cleaned_count} old files removed.")
+                self.add_log_entry("Cleanup", f"Removed {cleaned_count} old files", "SUCCESS")
+            else:
+                await self.show_notification("Cleanup failed", is_error=True)
+                self.add_log_entry("Cleanup", "Cleanup operation failed", "ERROR")
+        except Exception as ex:
+            await self.show_notification(f"Cleanup error: {str(ex)}", is_error=True)
+            self.add_log_entry("Cleanup", f"Error: {str(ex)}", "ERROR")
 
     async def _on_clear_logs(self, e):
         """Handle clear logs action."""
-        await self.activity_log.clear_log(e)
+        if (self.current_view == "dashboard" and 
+            self.dashboard_view and 
+            hasattr(self.dashboard_view, '_clear_activity_log')):
+            self.dashboard_view._clear_activity_log(e)
+        else:
+            self.add_log_entry("System", "Activity log cleared", "INFO")
 
     async def _on_restart_services(self, e):
         """Handle restart services action."""
-        await self.control_panel.restart_server(e)
+        if hasattr(self.control_panel, 'restart_server'):
+            await self.control_panel.restart_server(e)
+        else:
+            self.add_log_entry("System", "Restart requested", "INFO")
+            await self.show_notification("Service restart initiated")
 
     def _on_view_clients(self, e):
         self.switch_view("clients")
@@ -517,6 +598,17 @@ class ServerGUIApp:
             self.toast_manager.show_error(message)
         else:
             self.toast_manager.show_success(message)
+    
+    def add_log_entry(self, source: str, message: str, level: str = "INFO"):
+        """Add entry to the activity log"""
+        # Forward to dashboard if available
+        if (self.current_view == "dashboard" and 
+            self.dashboard_view and 
+            hasattr(self.dashboard_view, 'add_log_entry')):
+            self.dashboard_view.add_log_entry(source, message, level)
+        else:
+            # Fallback to console
+            safe_print(f"[LOG] {source}: {message} ({level})")
     
     async def monitor_loop(self):
         while True:

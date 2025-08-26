@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+
+# Import UTF-8 solution first to fix encoding issues
+try:
+    import Shared.utils.utf8_solution
+    print("[UTF-8] UTF-8 solution imported successfully")
+except ImportError:
+    print("[WARNING] UTF-8 solution not available")
 """
 Launch script for Flet Server GUI
 Runs the Material Design 3 desktop application.

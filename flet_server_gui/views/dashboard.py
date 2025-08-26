@@ -510,24 +510,55 @@ class DashboardView:
     
     # Event handlers for control panel buttons
     async def _on_start_server(self, e):
-        """Handle start server button"""
-        self.add_log_entry("System", "Starting server...", "INFO")
-        # Add server start logic here
+        """Handle start server button with real functionality"""
+        self.add_log_entry("System", "Starting backup server...", "INFO")
+        try:
+            success = await self.server_bridge.start_server()
+            if success:
+                self.add_log_entry("System", "Server started successfully!", "SUCCESS")
+                await self._async_update_server_status()
+            else:
+                self.add_log_entry("System", "Failed to start server", "ERROR")
+        except Exception as ex:
+            self.add_log_entry("System", f"Start error: {str(ex)}", "ERROR")
         
     async def _on_stop_server(self, e):
-        """Handle stop server button"""
-        self.add_log_entry("System", "Stopping server...", "INFO")
-        # Add server stop logic here
+        """Handle stop server button with real functionality"""
+        self.add_log_entry("System", "Stopping backup server...", "INFO")
+        try:
+            success = await self.server_bridge.stop_server()
+            if success:
+                self.add_log_entry("System", "Server stopped successfully", "SUCCESS")
+                await self._async_update_server_status()
+            else:
+                self.add_log_entry("System", "Failed to stop server", "ERROR")
+        except Exception as ex:
+            self.add_log_entry("System", f"Stop error: {str(ex)}", "ERROR")
         
     async def _on_restart_server(self, e):
-        """Handle restart server button"""
-        self.add_log_entry("System", "Restarting server...", "INFO")
-        # Add server restart logic here
+        """Handle restart server button with real functionality"""
+        self.add_log_entry("System", "Restarting backup server...", "INFO")
+        try:
+            success = await self.server_bridge.restart_server()
+            if success:
+                self.add_log_entry("System", "Server restarted successfully!", "SUCCESS")
+                await self._async_update_server_status()
+            else:
+                self.add_log_entry("System", "Failed to restart server", "ERROR")
+        except Exception as ex:
+            self.add_log_entry("System", f"Restart error: {str(ex)}", "ERROR")
         
     async def _on_backup_db(self, e):
-        """Handle backup database button"""
+        """Handle backup database button with real functionality"""
         self.add_log_entry("Database", "Creating database backup...", "INFO")
-        # Add database backup logic here
+        try:
+            success = await self.server_bridge.backup_database()
+            if success:
+                self.add_log_entry("Database", "Database backup completed", "SUCCESS")
+            else:
+                self.add_log_entry("Database", "Database backup failed", "ERROR")
+        except Exception as ex:
+            self.add_log_entry("Database", f"Backup error: {str(ex)}", "ERROR")
         
     async def _on_exit_gui(self, e):
         """Handle exit GUI button"""
@@ -535,22 +566,34 @@ class DashboardView:
         self.page.window_close()
     
     def _clear_activity_log(self, e):
-        """Clear the activity log"""
+        """Clear the activity log with visual feedback"""
         if self.activity_log_container.current:
+            # Clear existing entries
             self.activity_log_container.current.controls.clear()
-            self.activity_log_container.current.controls.append(
-                ft.Container(
-                    content=ft.Text(
-                        "Activity log cleared",
-                        style=ft.TextThemeStyle.BODY_SMALL,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                        italic=True
-                    ),
-                    alignment=ft.alignment.center,
-                    padding=ft.padding.all(16)
-                )
+            
+            # Add cleared message
+            cleared_msg = ft.Container(
+                content=ft.Text(
+                    "Activity log cleared",
+                    style=ft.TextThemeStyle.BODY_SMALL,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    italic=True
+                ),
+                alignment=ft.alignment.center,
+                padding=ft.padding.all(16),
+                animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
+                opacity=0
             )
+            
+            self.activity_log_container.current.controls.append(cleared_msg)
             self.page.update()
+            
+            # Animate in the cleared message
+            cleared_msg.opacity = 1
+            self.page.update()
+            
+            # Add system log entry
+            self.add_log_entry("System", "Activity log manually cleared", "INFO")
     
     def add_log_entry(self, source: str, message: str, level: str = "INFO"):
         """Add entry to activity log with smooth animations"""
@@ -646,25 +689,20 @@ class DashboardView:
             self.activity_log_container.current.controls.pop(0)
             self.page.update()
     
-    def start_dashboard(self):
-        """Initialize dashboard with welcome messages and start real-time updates"""
+    def start_dashboard_sync(self):
+        """Initialize dashboard UI elements (synchronous part)"""
         # Add welcome messages to demonstrate the polished log system
         self.add_log_entry("System", "Dashboard initialized successfully", "SUCCESS")
         self.add_log_entry("Theme", "Material Design 3 theme applied", "INFO")
-        self.add_log_entry("Server", "Monitoring server status...", "INFO")
-        
-        # Schedule background update task to start after a brief delay
-        # This ensures the event loop is fully established
-        try:
-            # Try to create the task, but don't fail if event loop isn't ready
-            asyncio.create_task(self._delayed_start_updates())
-        except RuntimeError:
-            # Event loop not ready yet, log will show anyway
-            self.add_log_entry("Monitor", "Real-time updates will start when ready", "INFO")
+        self.add_log_entry("Monitor", "Starting real-time monitoring...", "INFO")
     
-    async def _delayed_start_updates(self):
-        """Start updates after a brief delay to ensure event loop is ready"""
-        await asyncio.sleep(2)  # Give the GUI time to fully initialize
+    async def start_dashboard_async(self):
+        """Initialize dashboard background tasks (asynchronous part)"""
+        # Wait briefly for UI to be fully ready
+        await asyncio.sleep(1)
+        self.add_log_entry("Server", "Real-time updates active", "SUCCESS")
+        
+        # Start the background monitoring loop
         asyncio.create_task(self._real_time_update_loop())
     
     async def _real_time_update_loop(self):
