@@ -188,6 +188,36 @@ class ClientTableRenderer:
         )
     
     def update_table_display(self) -> None:
-        """Update table display after changes"""
+        """Update the table display"""
+        if self.page and self.client_table:
+            self.page.update()
+    
+    def select_all_rows(self) -> None:
+        """Select all rows in the table"""
+        if not self.client_table:
+            return
+            
+        # Update all checkboxes in the table
+        for row in self.client_table.rows:
+            if row.cells and len(row.cells) > 0:
+                checkbox = row.cells[0].content
+                if isinstance(checkbox, ft.Checkbox):
+                    checkbox.value = True
+                    
+        if self.page:
+            self.page.update()
+    
+    def deselect_all_rows(self) -> None:
+        """Deselect all rows in the table"""
+        if not self.client_table:
+            return
+            
+        # Update all checkboxes in the table
+        for row in self.client_table.rows:
+            if row.cells and len(row.cells) > 0:
+                checkbox = row.cells[0].content
+                if isinstance(checkbox, ft.Checkbox):
+                    checkbox.value = False
+                    
         if self.page:
             self.page.update()

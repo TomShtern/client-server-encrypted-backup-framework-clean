@@ -80,13 +80,42 @@ class ServerGUIApp:
             on_manage_files=self._on_manage_files
         )
         
-        # Placeholder views until imports are fully fixed
-        self.clients_view = None
-        self.files_view = None
-        self.database_view = None
-        self.analytics_view = None
-        
-        # Initialize view objects if available
+        # Initialize view objects
+        try:
+            from flet_server_gui.views.dashboard import DashboardView
+            self.dashboard_view = DashboardView(page)
+        except Exception as e:
+            print(f"[WARNING] Dashboard view import failed: {e}")
+            self.dashboard_view = None
+            
+        try:
+            from flet_server_gui.views.clients import ClientsView
+            self.clients_view = ClientsView(self.server_bridge, self.dialog_system, self.toast_manager, page)
+        except Exception as e:
+            print(f"[WARNING] Clients view import failed: {e}")
+            self.clients_view = None
+            
+        try:
+            from flet_server_gui.views.files import FilesView
+            self.files_view = FilesView(self.server_bridge, self.dialog_system, self.toast_manager, page)
+        except Exception as e:
+            print(f"[WARNING] Files view import failed: {e}")
+            self.files_view = None
+            
+        try:
+            from flet_server_gui.views.database import DatabaseView
+            self.database_view = DatabaseView(self.server_bridge, self.dialog_system, self.toast_manager, page)
+        except Exception as e:
+            print(f"[WARNING] Database view import failed: {e}")
+            self.database_view = None
+            
+        try:
+            from flet_server_gui.views.analytics import AnalyticsView
+            self.analytics_view = AnalyticsView(page)
+        except Exception as e:
+            print(f"[WARNING] Analytics view import failed: {e}")
+            self.analytics_view = None
+            
         if SettingsView:
             self.settings_view = SettingsView(page, self.dialog_system, self.toast_manager)
         else:
@@ -95,7 +124,7 @@ class ServerGUIApp:
             self.logs_view = LogsView(page, self.dialog_system, self.toast_manager)
         else:
             self.logs_view = None
-        self.navigation = NavigationManager(page, self.switch_view)
+        # Navigation manager will be initialized after content_area is created in build_ui
 
         self.build_ui()
         
@@ -150,10 +179,14 @@ class ServerGUIApp:
         self.content_area = ft.AnimatedSwitcher(
             content=initial_view,
             transition=ft.AnimatedSwitcherTransition.FADE,
-            duration=300,
-            reverse_duration=300,
-            expand=True
+            duration=200,
+            reverse_duration=150,
+            switch_in_curve=ft.AnimationCurve.EASE_OUT,
+            switch_out_curve=ft.AnimationCurve.EASE_OUT,
         )
+
+        # Initialize navigation manager after content_area is created
+        self.navigation = NavigationManager(self.page, self.switch_view, self.content_area)
         
         self.nav_rail = self.navigation.build()
         
@@ -178,7 +211,30 @@ class ServerGUIApp:
         self.page.update()
     
     def get_dashboard_view(self) -> ft.Control:
-        """Simplified dashboard prioritizing core components."""
+        """Create and return the dashboard view."""
+        if self.dashboard_view:
+            try:
+                dashboard_content = self.dashboard_view.build()
+                if dashboard_content:
+                    return dashboard_content
+                else:
+                    # Fallback to simplified dashboard if build returns None
+                    return self._build_simplified_dashboard()
+            except Exception as e:
+                print(f"[ERROR] Failed to build dashboard view: {e}")
+                return ft.Container(
+                    content=ft.Text(f"Dashboard view error: {str(e)}",
+                                   style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                                   text_align=ft.TextAlign.CENTER),
+                    padding=40,
+                    alignment=ft.alignment.center
+                )
+        else:
+            # Fallback to simplified dashboard if view not available
+            return self._build_simplified_dashboard()
+    
+    def _build_simplified_dashboard(self) -> ft.Control:
+        """Build a simplified dashboard when full dashboard is not available."""
         return ft.Column([
             ft.Text("Dashboard", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
             ft.Divider(),
@@ -229,40 +285,96 @@ class ServerGUIApp:
         ], spacing=24, scroll=ft.ScrollMode.ADAPTIVE, expand=True)
     
     def get_clients_view(self) -> ft.Control:
-        return ft.Container(
-            content=ft.Text("Clients view - Import issues being resolved",
-                           style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                           text_align=ft.TextAlign.CENTER),
-            padding=40,
-            alignment=ft.alignment.center
-        )
+        """Create and return the clients view."""
+        if self.clients_view:
+            try:
+                return self.clients_view.build()
+            except Exception as e:
+                print(f"[ERROR] Failed to build clients view: {e}")
+                return ft.Container(
+                    content=ft.Text(f"Clients view error: {str(e)}",
+                                   style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                                   text_align=ft.TextAlign.CENTER),
+                    padding=40,
+                    alignment=ft.alignment.center
+                )
+        else:
+            return ft.Container(
+                content=ft.Text("Clients view not available",
+                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                               text_align=ft.TextAlign.CENTER),
+                padding=40,
+                alignment=ft.alignment.center
+            )
     
     def get_files_view(self) -> ft.Control:
-        return ft.Container(
-            content=ft.Text("Files view - Import issues being resolved",
-                           style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                           text_align=ft.TextAlign.CENTER),
-            padding=40,
-            alignment=ft.alignment.center
-        )
+        """Create and return the files view."""
+        if self.files_view:
+            try:
+                return self.files_view.build()
+            except Exception as e:
+                print(f"[ERROR] Failed to build files view: {e}")
+                return ft.Container(
+                    content=ft.Text(f"Files view error: {str(e)}",
+                                   style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                                   text_align=ft.TextAlign.CENTER),
+                    padding=40,
+                    alignment=ft.alignment.center
+                )
+        else:
+            return ft.Container(
+                content=ft.Text("Files view not available",
+                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                               text_align=ft.TextAlign.CENTER),
+                padding=40,
+                alignment=ft.alignment.center
+            )
     
     def get_database_view(self) -> ft.Control:
-        return ft.Container(
-            content=ft.Text("Database view - Import issues being resolved",
-                           style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                           text_align=ft.TextAlign.CENTER),
-            padding=40,
-            alignment=ft.alignment.center
-        )
+        """Create and return the database view."""
+        if self.database_view:
+            try:
+                return self.database_view.build()
+            except Exception as e:
+                print(f"[ERROR] Failed to build database view: {e}")
+                return ft.Container(
+                    content=ft.Text(f"Database view error: {str(e)}",
+                                   style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                                   text_align=ft.TextAlign.CENTER),
+                    padding=40,
+                    alignment=ft.alignment.center
+                )
+        else:
+            return ft.Container(
+                content=ft.Text("Database view not available",
+                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                               text_align=ft.TextAlign.CENTER),
+                padding=40,
+                alignment=ft.alignment.center
+            )
     
     def get_analytics_view(self) -> ft.Control:
-        return ft.Container(
-            content=ft.Text("Analytics view - Import issues being resolved",
-                           style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                           text_align=ft.TextAlign.CENTER),
-            padding=40,
-            alignment=ft.alignment.center
-        )
+        """Create and return the analytics view."""
+        if self.analytics_view:
+            try:
+                return self.analytics_view.build()
+            except Exception as e:
+                print(f"[ERROR] Failed to build analytics view: {e}")
+                return ft.Container(
+                    content=ft.Text(f"Analytics view error: {str(e)}",
+                                   style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                                   text_align=ft.TextAlign.CENTER),
+                    padding=40,
+                    alignment=ft.alignment.center
+                )
+        else:
+            return ft.Container(
+                content=ft.Text("Analytics view not available",
+                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                               text_align=ft.TextAlign.CENTER),
+                padding=40,
+                alignment=ft.alignment.center
+            )
     
     def get_logs_view(self) -> ft.Control:
         if self.logs_view:
@@ -332,22 +444,48 @@ class ServerGUIApp:
             "settings": self.get_settings_view
         }
         
-        new_content_instance = view_map.get(view_name, self.get_dashboard_view)()
+        view_builder = view_map.get(view_name, self.get_dashboard_view)
         
-        # Special handling for view classes vs created controls
-        if view_name == "logs" and self.logs_view:
-            self.active_view_instance = self.logs_view
-            new_content = self.logs_view.create_logs_view()
-        else:
-            self.active_view_instance = new_content_instance
-            new_content = new_content_instance
+        try:
+            new_content_instance = view_builder()
+            
+            # Special handling for view classes vs created controls
+            if view_name == "logs" and self.logs_view:
+                self.active_view_instance = self.logs_view
+                new_content = self.logs_view.create_logs_view()
+            else:
+                self.active_view_instance = new_content_instance
+                new_content = new_content_instance
 
-        # Start the new view if it has a start method
-        if hasattr(self.active_view_instance, 'start'):
-            self.active_view_instance.start()
+            # Ensure new_content is not None
+            if new_content is None:
+                new_content = ft.Container(
+                    content=ft.Text(f"View '{view_name}' is not available", 
+                                   style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                                   text_align=ft.TextAlign.CENTER),
+                    padding=40,
+                    alignment=ft.alignment.center,
+                    expand=True
+                )
 
-        self.content_area.content = new_content
-        self.page.update()
+            # Start the new view if it has a start method
+            if hasattr(self.active_view_instance, 'start'):
+                self.active_view_instance.start()
+
+            self.content_area.content = new_content
+            self.page.update()
+        except Exception as e:
+            print(f"[ERROR] Failed to switch to view '{view_name}': {e}")
+            error_content = ft.Container(
+                content=ft.Text(f"Error loading view '{view_name}': {str(e)}", 
+                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                               text_align=ft.TextAlign.CENTER),
+                padding=40,
+                alignment=ft.alignment.center,
+                expand=True
+            )
+            self.content_area.content = error_content
+            self.page.update()
 
     def toggle_theme(self, e):
         self.theme_manager.toggle_theme()

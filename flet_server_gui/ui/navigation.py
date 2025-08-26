@@ -26,9 +26,10 @@ class NavigationView(Enum):
 class NavigationManager:
     """Manages navigation between different views with enhanced routing capabilities."""
     
-    def __init__(self, page: ft.Page, switch_callback: Callable[[str], None]):
+    def __init__(self, page: ft.Page, switch_callback: Callable[[str], None], content_area=None):
         self.page = page
         self.switch_callback = switch_callback
+        self.content_area = content_area
         self.current_index = 0
         self.current_view = NavigationView.DASHBOARD
         
@@ -123,8 +124,8 @@ class NavigationManager:
                 destination_content.append(badge)
             
             destination = ft.NavigationRailDestination(
-                icon_content=ft.Stack(destination_content + [ft.Icon(item["icon"])]) if destination_content else item["icon"],
-                selected_icon_content=ft.Stack(destination_content + [ft.Icon(item["selected_icon"])]) if destination_content else item["selected_icon"],
+                icon=ft.Stack(destination_content + [ft.Icon(item["icon"])]) if destination_content else item["icon"],
+                selected_icon=ft.Stack(destination_content + [ft.Icon(item["selected_icon"])]) if destination_content else item["selected_icon"],
                 label=item["label"]
             )
             
@@ -141,7 +142,7 @@ class NavigationManager:
             destinations=destinations,
             on_change=self.on_navigation_change,
             # Enhanced styling
-            bgcolor=ft.Colors.SURFACE_VARIANT,
+            bgcolor=ft.Colors.SURFACE,
             leading=self._create_navigation_header() if extended else None,
             trailing=self._create_navigation_footer() if extended else None,
             # Animations
@@ -205,8 +206,15 @@ class NavigationManager:
         # Update navigation history
         self._update_navigation_history(new_view)
         
-        # Clear badge if present
-        self._clear_view_badge(new_view)
+        # Ensure content is not None
+        if self.content_area.content is None:
+            self.content_area.content = ft.Container(
+                content=ft.Text("View content not available", 
+                               style=ft.TextThemeStyle.BODY_MEDIUM,
+                               text_align=ft.TextAlign.CENTER),
+                padding=20,
+                alignment=ft.alignment.center
+            )
         
         # Apply navigation animation
         if self.nav_rail:

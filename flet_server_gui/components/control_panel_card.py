@@ -181,10 +181,12 @@ class ControlPanelCard:
                 self.add_log_entry("Control", "Server started by user", "SUCCESS")
             else:
                 await self.show_notification("Failed to start server", is_error=True)
-                self.add_log_entry("Control", "Failed to start server", "ERROR")
+                if self.add_log_entry:
+                    self.add_log_entry("Control", "Failed to start server", "ERROR")
         except Exception as ex:
             await self.show_notification(f"Error starting server: {str(ex)}", is_error=True)
-            self.add_log_entry("Control", f"Start error: {str(ex)}", "ERROR")
+            if self.add_log_entry:
+                self.add_log_entry("Control", f"Start error: {str(ex)}", "ERROR")
         finally:
             self.hide_operation_status()
     
@@ -196,13 +198,16 @@ class ControlPanelCard:
             if success:
                 self.update_button_states(False)
                 await self.show_notification("Server stopped successfully")
-                self.add_log_entry("Control", "Server stopped by user", "INFO")
+                if self.add_log_entry:
+                    self.add_log_entry("Control", "Server stopped by user", "INFO")
             else:
                 await self.show_notification("Failed to stop server", is_error=True)
-                self.add_log_entry("Control", "Failed to stop server", "ERROR")
+                if self.add_log_entry:
+                    self.add_log_entry("Control", "Failed to stop server", "ERROR")
         except Exception as ex:
             await self.show_notification(f"Error stopping server: {str(ex)}", is_error=True)
-            self.add_log_entry("Control", f"Stop error: {str(ex)}", "ERROR")
+            if self.add_log_entry:
+                self.add_log_entry("Control", f"Stop error: {str(ex)}", "ERROR")
         finally:
             self.hide_operation_status()
     
@@ -214,12 +219,15 @@ class ControlPanelCard:
             if success:
                 self.update_button_states(True)
                 await self.show_notification("Server restarted successfully")
-                self.add_log_entry("Control", "Server restarted by user", "SUCCESS")
+                if self.add_log_entry:
+                    self.add_log_entry("Control", "Server restarted by user", "SUCCESS")
             else:
                 await self.show_notification("Failed to restart server", is_error=True)
-                self.add_log_entry("Control", "Failed to restart server", "ERROR")
+                if self.add_log_entry:
+                    self.add_log_entry("Control", "Failed to restart server", "ERROR")
         except Exception as ex:
             await self.show_notification(f"Error restarting server: {str(ex)}", is_error=True)
-            self.add_log_entry("Control", f"Restart error: {str(ex)}", "ERROR")
+            if self.add_log_entry:
+                self.add_log_entry("Control", f"Restart error: {str(ex)}", "ERROR")
         finally:
             self.hide_operation_status()

@@ -35,6 +35,7 @@ class ClientsView:
     def __init__(self, server_bridge, dialog_system, toast_manager, page):
         self.server_bridge = server_bridge
         self.page = page
+        self.toast_manager = toast_manager
         
         # Initialize button factory
         self.button_factory = ActionButtonFactory(self, server_bridge, page)

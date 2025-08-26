@@ -121,7 +121,7 @@ class QuickActions(EnhancedCard):
         """Handle backup now action"""
         if self.on_backup_now:
             # Show confirmation dialog using DialogSystem
-            from flet_server_gui.components.dialog_system import DialogSystem
+            from flet_server_gui.ui.dialogs import DialogSystem
             dialog_system = DialogSystem(self.page)
             dialog_system.show_confirmation_dialog(
                 title="Start Backup",
@@ -134,7 +134,7 @@ class QuickActions(EnhancedCard):
         """Handle clear logs action"""
         if self.on_clear_logs:
             # Show confirmation dialog using DialogSystem
-            from flet_server_gui.components.dialog_system import DialogSystem
+            from flet_server_gui.ui.dialogs import DialogSystem
             dialog_system = DialogSystem(self.page)
             dialog_system.show_confirmation_dialog(
                 title="Clear Logs",
@@ -147,7 +147,7 @@ class QuickActions(EnhancedCard):
         """Handle restart services action"""
         if self.on_restart_services:
             # Show confirmation dialog using DialogSystem
-            from flet_server_gui.components.dialog_system import DialogSystem
+            from flet_server_gui.ui.dialogs import DialogSystem
             dialog_system = DialogSystem(self.page)
             dialog_system.show_confirmation_dialog(
                 title="Restart Services",
@@ -168,10 +168,10 @@ class QuickActions(EnhancedCard):
     
     def _on_settings(self, e):
         """Handle settings action"""
-        # Show a toast notification for now
-        from flet_server_gui.components.dialog_system import ToastManager
+        # Show settings dialog using ToastManager
+        from flet_server_gui.ui.dialogs import ToastManager
         toast_manager = ToastManager(self.page)
-        toast_manager.show_info("Settings opened")
+        toast_manager.show_info("Settings dialog would open here")
 
 
 # Factory function

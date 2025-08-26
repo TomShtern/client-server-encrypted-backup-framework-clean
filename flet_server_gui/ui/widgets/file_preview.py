@@ -48,148 +48,100 @@ class FilePreview(EnhancedCard):
         file_name = os.path.basename(self.file_path) if self.file_path else "Untitled"
         file_ext = os.path.splitext(file_name)[1].lower() if self.file_path else ""
         
-        # Header with file info and actions
+        # Header with file info and controls
         header = ft.Row([
-            ft.Icon(self._get_file_icon(file_ext), size=24),
-            ft.Text(file_name, style=ft.TextThemeStyle.TITLE_MEDIUM, expand=True),
-            ft.Row([
-                create_enhanced_icon_button(
-                    icon=ft.Icons.DOWNLOAD,
-                    tooltip="Download File",
-                    on_click=self._on_download_click,
-                    size=20
-                ) if self.on_download else ft.Container(),
-                create_enhanced_icon_button(
-                    icon=ft.Icons.DELETE,
-                    tooltip="Delete File",
-                    on_click=self._on_delete_click,
-                    size=20
-                ) if self.on_delete else ft.Container(),
-                create_enhanced_icon_button(
-                    icon=ft.Icons.CLOSE,
-                    tooltip="Close Preview",
-                    on_click=self._on_close_click,
-                    size=20
-                ) if self.on_close else ft.Container(),
-            ], spacing=0)
-        ], spacing=12)
-        
-        # Preview content area
-        if self.file_content:
-            # Determine content type and create appropriate preview
-            if self._is_text_file(file_ext):
-                preview_content = self._create_text_preview()
-            elif self._is_image_file(file_ext):
-                preview_content = self._create_image_preview()
-            else:
-                preview_content = self._create_binary_preview()
-        else:
-            preview_content = ft.Text(
-                "No preview available for this file type.",
-                italic=True,
-                color=ft.Colors.ON_SURFACE_VARIANT
+            ft.Icon(ft.Icons.DESCRIPTION, size=24),
+            ft.Text(file_name, weight=ft.FontWeight.BOLD, size=16, expand=True),
+            ft.IconButton(
+                icon=ft.Icons.CLOSE,
+                tooltip="Close Preview",
+                on_click=self._on_close_click
             )
+        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         
-        # File info
+        # File details
         file_size = self._get_file_size()
-        file_info = ft.Row([
-            ft.Text(f"Size: {file_size}", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
-            ft.Text(f"Type: {file_ext.upper() if file_ext else 'Unknown'}", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
-        ], spacing=16)
+        file_info = ft.Text(f"Size: {file_size} | Type: {file_ext.upper() if file_ext else 'Unknown'}", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+        
+        # Content preview
+        if self.file_content:
+            # For text files, show content in a scrollable text area
+            if file_ext in ['.txt', '.md', '.py', '.js', '.html', '.css', '.json', '.xml', '.csv']:
+                content_preview = ft.Container(
+                    content=ft.TextField(
+                        value=self.file_content,
+                        read_only=True,
+                        multiline=True,
+                        expand=True,
+                        border=ft.InputBorder.NONE
+                    ),
+                    expand=True,
+                    padding=ft.padding.all(12)
+                )
+            # For image files, show a placeholder
+            elif file_ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp']:
+                content_preview = ft.Container(
+                    content=ft.Column([
+                        ft.Icon(ft.Icons.IMAGE, size=64, color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Text("Image Preview", size=14, weight=ft.FontWeight.BOLD),
+                        ft.Text("Image previews are not implemented in this demo", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+                    ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    expand=True,
+                    alignment=ft.alignment.center
+                )
+            # For other files, show a generic preview
+            else:
+                content_preview = ft.Container(
+                    content=ft.Column([
+                        ft.Icon(ft.Icons.DESCRIPTION, size=64, color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Text("File Preview", size=14, weight=ft.FontWeight.BOLD),
+                        ft.Text("Preview not available for this file type", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+                    ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    expand=True,
+                    alignment=ft.alignment.center
+                )
+        else:
+            content_preview = ft.Container(
+                content=ft.Text("No content available", size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+                expand=True,
+                alignment=ft.alignment.center
+            )
+        
+        # Action buttons
+        action_buttons = ft.Row([
+            ft.ElevatedButton(
+                "Download",
+                icon=ft.Icons.DOWNLOAD,
+                on_click=self._on_download_click,
+                style=ft.ButtonStyle(
+                    bgcolor=ft.Colors.PRIMARY,
+                    color=ft.Colors.ON_PRIMARY
+                )
+            ),
+            ft.OutlinedButton(
+                "Delete",
+                icon=ft.Icons.DELETE,
+                on_click=self._on_delete_click,
+                style=ft.ButtonStyle(
+                    color=ft.Colors.ERROR
+                )
+            )
+        ], alignment=ft.MainAxisAlignment.END)
+        
+        # Main layout
+        preview_layout = ft.Column([
+            header,
+            ft.Divider(),
+            file_info,
+            ft.Divider(),
+            content_preview,
+            ft.Divider(),
+            action_buttons
+        ], spacing=12, expand=True)
         
         return ft.Container(
-            content=ft.Column([
-                header,
-                ft.Divider(),
-                ft.Container(content=preview_content, expand=True),
-                ft.Divider(),
-                file_info
-            ], spacing=8, expand=True),
-            padding=16,
-            expand=True
-        )
-    
-    def _get_file_icon(self, file_ext: str) -> str:
-        """Get appropriate icon for file type"""
-        if file_ext in ['.txt', '.md', '.log', '.csv']:
-            return ft.Icons.DESCRIPTION
-        elif file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']:
-            return ft.Icons.IMAGE
-        elif file_ext in ['.pdf']:
-            return ft.Icons.PICTURE_AS_PDF
-        elif file_ext in ['.doc', '.docx']:
-            return ft.Icons.DESCRIPTION
-        elif file_ext in ['.xls', '.xlsx']:
-            return ft.Icons.TABLE_CHART
-        elif file_ext in ['.zip', '.rar', '.7z']:
-            return ft.Icons.FOLDER_ZIP
-        else:
-            return ft.Icons.INSERT_DRIVE_FILE
-    
-    def _is_text_file(self, file_ext: str) -> bool:
-        """Check if file is a text file"""
-        text_extensions = ['.txt', '.md', '.log', '.csv', '.json', '.xml', '.html', '.css', '.js', '.py', '.java', '.cpp', '.h']
-        return file_ext in text_extensions
-    
-    def _is_image_file(self, file_ext: str) -> bool:
-        """Check if file is an image file"""
-        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
-        return file_ext in image_extensions
-    
-    def _create_text_preview(self) -> ft.Control:
-        """Create text file preview"""
-        return ft.Container(
-            content=ft.Column([
-                ft.Text(
-                    self.file_content[:1000],  # Limit preview size
-                    style=ft.TextThemeStyle.BODY_MEDIUM,
-                    selectable=True,
-                    overflow=ft.TextOverflow.ELLIPSIS
-                ),
-                ft.Text(
-                    "... (preview truncated)" if len(self.file_content) > 1000 else "",
-                    italic=True,
-                    size=12,
-                    color=ft.Colors.ON_SURFACE_VARIANT
-                )
-            ], spacing=8),
-            padding=8,
-            border_radius=4,
-            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
-            expand=True
-        )
-    
-    def _create_image_preview(self) -> ft.Control:
-        """Create image file preview"""
-        try:
-            # For now, show a placeholder - in a real implementation this would show the actual image
-            return ft.Container(
-                content=ft.Column([
-                    ft.Icon(ft.Icons.IMAGE, size=64, color=ft.Colors.ON_SURFACE_VARIANT),
-                    ft.Text("Image Preview", size=14, weight=ft.FontWeight.BOLD),
-                    ft.Text("Image preview would be displayed here", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
-                ], 
-                alignment=ft.MainAxisAlignment.CENTER,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=8),
-                alignment=ft.alignment.center,
-                expand=True
-            )
-        except Exception:
-            return self._create_binary_preview()
-    
-    def _create_binary_preview(self) -> ft.Control:
-        """Create binary file preview"""
-        return ft.Container(
-            content=ft.Column([
-                ft.Icon(ft.Icons.INSERT_DRIVE_FILE, size=64, color=ft.Colors.ON_SURFACE_VARIANT),
-                ft.Text("Binary File", size=14, weight=ft.FontWeight.BOLD),
-                ft.Text("Binary file content cannot be previewed", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
-            ],
-            alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=8),
-            alignment=ft.alignment.center,
+            content=preview_layout,
+            padding=ft.padding.all(16),
             expand=True
         )
     
@@ -249,6 +201,16 @@ class FilePreviewManager:
         
         # Preview cache for performance
         self.preview_cache = {}
+    
+    def create_preview_area(self) -> ft.Control:
+        """Create a preview area for file previews"""
+        return ft.Container(
+            content=ft.Text("Select a file to preview", size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+            alignment=ft.alignment.center,
+            expand=True,
+            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+            border_radius=ft.border_radius.all(8)
+        )
     
     async def show_file_preview(self, filename: str) -> None:
         """Show file preview in a dialog"""
@@ -314,7 +276,7 @@ class FilePreviewManager:
                 ft.Text("This file type cannot be previewed directly.", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
                 ft.Container(height=16),
                 ft.Row([
-                    create_enhanced_button(
+                    ft.ElevatedButton(
                         text="Download File",
                         icon=ft.Icons.DOWNLOAD,
                         on_click=lambda e: self._download_file(filename)
@@ -337,18 +299,18 @@ class FilePreviewManager:
         try:
             # In a real implementation, this would trigger the actual download
             print(f"Downloading file: {filename}")
-            create_toast_notification(self.page, f"Downloading {filename}...", "info")
+            ToastManager(self.page).show_info(f"Downloading {filename}...")
         except Exception as e:
-            create_toast_notification(self.page, f"Download failed: {str(e)}", "error")
+            ToastManager(self.page).show_error(f"Download failed: {str(e)}")
     
     def _delete_file(self, filename: str):
         """Delete the file"""
         try:
             # In a real implementation, this would trigger the actual deletion
             print(f"Deleting file: {filename}")
-            create_toast_notification(self.page, f"Deleting {filename}...", "info")
+            ToastManager(self.page).show_info(f"Deleting {filename}...")
         except Exception as e:
-            create_toast_notification(self.page, f"Deletion failed: {str(e)}", "error")
+            ToastManager(self.page).show_error(f"Deletion failed: {str(e)}")
     
     def get_cache_info(self) -> Dict[str, Any]:
         """Get preview cache information"""
