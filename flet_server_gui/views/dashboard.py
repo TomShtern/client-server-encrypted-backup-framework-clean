@@ -384,17 +384,19 @@ class DashboardView:
             content=ft.Column([
                 # Chart placeholder with gradient background
                 ft.Container(
-                    content=ft.Stack([
-                        # Background gradient
+                    content=ft.Column([
+                        # Background gradient as separate container
                         ft.Container(
                             gradient=ft.LinearGradient(
                                 begin=ft.alignment.top_center,
                                 end=ft.alignment.bottom_center,
                                 colors=[ft.Colors.BLUE_100, ft.Colors.TRANSPARENT]
                             ),
-                            border_radius=8
+                            border_radius=8,
+                            height=180,
+                            width=float("inf")
                         ),
-                        # Chart lines simulation
+                        # Chart lines simulation - positioned absolutely
                         ft.Container(
                             content=ft.Column([
                                 ft.Text("System Performance Monitoring",

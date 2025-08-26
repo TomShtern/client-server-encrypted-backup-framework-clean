@@ -12,20 +12,14 @@ pydantic>=2.11.7
 pydantic-core>=2.33.2
 
 
-# KivyMD for modern Material Design GUI - Stable versions
+# KivyMD for modern Material Design GUI - Stable versions - I DONT USE KIVY ANYMORE
 #kivy-garden.matplotlib
 #new updated manually set based on installetion requirements
-Kivy-Garden>=0.1.5
 certifi>=2025.8.3
 charset_normalizer>=3.4.3
 docutils>=0.22
 filetype>=1.2.0
 idna>=3.10
-kivy>=2.3.1
-kivy-deps.angle>=0.4.0
-kivy-deps.glew>=0.3.1
-kivy-deps.sdl2>=0.8.0
-kivy_examples>=2.3.1
 pillow>=10.4.0
 pygments>=2.19.2
 pypiwin32>=223

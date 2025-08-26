@@ -111,21 +111,38 @@ class NavigationManager:
         destinations = []
         
         for i, item in enumerate(self.nav_items):
-            # Create destination with optional badge
-            destination_content = []
+            # Create destination with optional badge using Row instead of Stack for better hitbox
+            icon_content = None
+            selected_icon_content = None
             
-            # Badge support
             if item.get("badge_count", 0) > 0:
-                badge = ft.Badge(
+                # Use Row for better clickable area instead of Stack
+                badge = ft.Container(
                     content=ft.Text(str(item["badge_count"]), size=10, color=ft.Colors.WHITE),
-                    small_size=16,
-                    bgcolor=ft.Colors.RED_600
+                    width=16,
+                    height=16,
+                    bgcolor=ft.Colors.RED_600,
+                    border_radius=8,
+                    alignment=ft.alignment.center
                 )
-                destination_content.append(badge)
+                
+                icon_content = ft.Row([
+                    ft.Icon(item["icon"]),
+                    badge
+                ], spacing=4, alignment=ft.MainAxisAlignment.CENTER)
+                
+                selected_icon_content = ft.Row([
+                    ft.Icon(item["selected_icon"]),
+                    badge
+                ], spacing=4, alignment=ft.MainAxisAlignment.CENTER)
+            else:
+                # Simple icons without badges
+                icon_content = item["icon"]
+                selected_icon_content = item["selected_icon"]
             
             destination = ft.NavigationRailDestination(
-                icon=ft.Stack(destination_content + [ft.Icon(item["icon"])]) if destination_content else item["icon"],
-                selected_icon=ft.Stack(destination_content + [ft.Icon(item["selected_icon"])]) if destination_content else item["selected_icon"],
+                icon=icon_content,
+                selected_icon=selected_icon_content,
                 label=item["label"]
             )
             
@@ -142,7 +159,7 @@ class NavigationManager:
             destinations=destinations,
             on_change=self.on_navigation_change,
             # Enhanced styling
-            bgcolor=ft.Colors.SURFACE,
+            bgcolor="#F5F5F5",  # Light gray instead of ft.Colors.SURFACE
             leading=self._create_navigation_header() if extended else None,
             trailing=self._create_navigation_footer() if extended else None,
             # Animations
@@ -231,6 +248,17 @@ class NavigationManager:
         
         # Execute main switch callback
         self.switch_callback(new_view)
+    
+    def sync_navigation_state(self, current_view_name: str):
+        """Sync navigation rail selection with current view."""
+        # Find the view index
+        for i, item in enumerate(self.nav_items):
+            if item["view"] == current_view_name:
+                self.current_index = i
+                self.current_view = NavigationView(current_view_name)
+                if self.nav_rail:
+                    self.nav_rail.selected_index = i
+                break
     
     def navigate_to(self, view_name: str, add_to_history: bool = True) -> bool:
         """Programmatically navigate to a specific view."""

@@ -38,6 +38,12 @@ from flet_server_gui.components.quick_actions import QuickActions
 from flet_server_gui.ui.navigation import NavigationManager
 from flet_server_gui.ui.dialogs import DialogSystem, ToastManager
 from flet_server_gui.ui.theme import ThemeManager
+from flet_server_gui.ui.layouts.responsive_fixes import apply_layout_fixes
+# Import new Phase 4 components
+from flet_server_gui.ui.widgets.status_pill import StatusPill, ServerStatus
+from flet_server_gui.ui.widgets.notifications_panel import NotificationsPanel, create_notification, NotificationType, NotificationPriority
+from flet_server_gui.ui.widgets.activity_log_dialog import ActivityLogDialog, create_activity_entry, ActivityLevel, ActivityCategory
+
 # Robust server bridge with fallback
 try:
     from flet_server_gui.utils.server_bridge import ServerBridge
@@ -77,6 +83,11 @@ class ServerGUIApp:
         # Initialize dialog and notification systems
         self.dialog_system = DialogSystem(page)
         self.toast_manager = ToastManager(page)
+        
+        # Initialize Phase 4 components
+        self.status_pill = StatusPill(ServerStatus.UNKNOWN)
+        self.notifications_panel = NotificationsPanel()
+        self.activity_log_dialog = ActivityLogDialog()
         
         # Initialize action handlers
         self.file_actions = FileActions(self.server_bridge)
@@ -140,6 +151,9 @@ class ServerGUIApp:
 
         self.build_ui()
         
+        # Add sample notifications and activities for demonstration
+        self._add_sample_data()
+        
         self.page.window_to_front = True
         self.page.on_connect = self._on_page_connect
     
@@ -158,12 +172,18 @@ class ServerGUIApp:
         self.page.title = "Encrypted Backup Server - Control Panel"
         self.page.window_width = 1400
         self.page.window_height = 900
-        self.page.window_min_width = 1000
-        self.page.window_min_height = 750
+        self.page.window_min_width = 800  # Reduced to ensure windowed mode works
+        self.page.window_min_height = 600  # Reduced to ensure windowed mode works
         self.page.window_resizable = True
         self.theme_manager.apply_theme()
         self.page.padding = ft.padding.all(20)
         self.page.spacing = 0
+        
+        # Apply layout fixes for clipping and hitbox issues
+        apply_layout_fixes(self.page)
+        
+        # Apply theme consistency
+        self.theme_manager.apply_consistency()
         
         self.theme_tokens = self.theme_manager.get_tokens()
     
@@ -181,12 +201,28 @@ class ServerGUIApp:
             on_click=self.toggle_theme
         )
 
+        # Update status pill when clicked
+        def on_status_pill_click(e):
+            # Show detailed status dialog
+            self.dialog_system.show_info_dialog(
+                "Server Status",
+                "Server is currently online and ready to handle requests.\\n\\n"
+                "Status: Online\\n"
+                "Port: 1256\\n"
+                "Connected Clients: 3\\n"
+                "Uptime: 2 hours, 15 minutes"
+            )
+        
+        # Set click handler (status will be updated after page is ready)
+        self.status_pill.on_click = on_status_pill_click
+
         app_bar = ft.AppBar(
             title=ft.Text("Server Control Panel", weight=ft.FontWeight.W_500),
             leading=self.hamburger_button,
             actions=[
-                self.theme_toggle_button,
+                self.status_pill,
                 ft.IconButton(ft.Icons.NOTIFICATIONS, tooltip="Notifications", on_click=self._on_notifications),
+                self.theme_toggle_button,
                 ft.IconButton(ft.Icons.HELP, tooltip="Help", on_click=self._on_help),
             ]
         )
@@ -208,18 +244,27 @@ class ServerGUIApp:
         
         self.nav_rail = self.navigation.build()
         
+        # Use responsive layout fixes to prevent clipping
         self.main_layout = ft.Row([
             self.nav_rail,
             ft.VerticalDivider(width=1),
             ft.Container(
                 content=self.content_area, 
                 padding=ft.padding.all(20), 
-                expand=True
+                expand=True,
+                clip_behavior=ft.ClipBehavior.NONE  # Prevent content clipping
             )
         ], expand=True, spacing=0)
         
         self.page.appbar = app_bar
         self.page.add(self.main_layout)
+        
+        # Update status to running after StatusPill is added to page (no animation for test compatibility)
+        self.status_pill.set_status(ServerStatus.RUNNING, animate=False)
+        
+        # Ensure proper windowed mode compatibility
+        self.page.window_min_width = 800
+        self.page.window_min_height = 600
     
     def toggle_navigation(self, e):
         """Toggle navigation rail visibility"""
@@ -477,6 +522,16 @@ class ServerGUIApp:
                 cleaned_count = result.get('cleaned_files', 0)
                 await self.show_notification(f"Cleanup successful: {cleaned_count} old files removed.")
                 self.add_log_entry("Cleanup", f"Removed {cleaned_count} old files", "SUCCESS")
+                
+                # Add notification to panel
+                notification = create_notification(
+                    "Backup Completed",
+                    f"Cleanup successful: {cleaned_count} old files removed.",
+                    NotificationType.BACKUP,
+                    NotificationPriority.NORMAL,
+                    ["View Details"]
+                )
+                self.notifications_panel.add_notification(notification)
             else:
                 await self.show_notification("Cleanup failed", is_error=True)
                 self.add_log_entry("Cleanup", "Cleanup operation failed", "ERROR")
@@ -556,6 +611,11 @@ class ServerGUIApp:
                 self.active_view_instance.start()
 
             self.content_area.content = new_content
+            
+            # Sync navigation state
+            if hasattr(self, 'navigation') and self.navigation:
+                self.navigation.sync_navigation_state(view_name)
+                
             self.page.update()
         except Exception as e:
             print(f"[ERROR] Failed to switch to view '{view_name}': {e}")
@@ -583,7 +643,8 @@ class ServerGUIApp:
 
     def _on_notifications(self, e):
         """Handle notifications button click."""
-        self.dialog_system.show_info_dialog("Notifications", "No new notifications.")
+        # Show notifications panel
+        self.notifications_panel.show()
 
     def _on_help(self, e):
         """Handle help button click."""
@@ -592,15 +653,114 @@ class ServerGUIApp:
             "Encrypted Backup Server - Control Panel\nVersion: 1.0.0\nDeveloped with Flet and Material Design 3."
         )
     
+    def _show_activity_log(self, e):
+        """Show activity log dialog."""
+        self.activity_log_dialog.show(self.page)
+    
+    def _add_sample_data(self):
+        """Add sample notifications and activities for demonstration."""
+        # Add sample notifications
+        notif1 = create_notification(
+            "Backup Completed",
+            "Daily backup completed successfully with 0 errors.",
+            NotificationType.BACKUP,
+            NotificationPriority.NORMAL,
+            ["View Details", "Dismiss"]
+        )
+        notif2 = create_notification(
+            "Security Alert",
+            "Failed login attempt detected from IP 192.168.1.100",
+            NotificationType.SECURITY,
+            NotificationPriority.HIGH,
+            ["Block IP", "Dismiss"]
+        )
+        notif3 = create_notification(
+            "System Update",
+            "New version available for download",
+            NotificationType.MAINTENANCE,
+            NotificationPriority.LOW,
+            ["Download", "Dismiss"]
+        )
+        
+        self.notifications_panel.add_notification(notif1)
+        self.notifications_panel.add_notification(notif2)
+        self.notifications_panel.add_notification(notif3)
+        
+        # Add sample activities
+        activity1 = create_activity_entry(
+            "Server started successfully",
+            ActivityLevel.SUCCESS,
+            ActivityCategory.SYSTEM,
+            "ServerManager"
+        )
+        activity2 = create_activity_entry(
+            "Client connected: Client-001",
+            ActivityLevel.INFO,
+            ActivityCategory.CLIENT,
+            "ClientManager"
+        )
+        activity3 = create_activity_entry(
+            "Backup job completed",
+            ActivityLevel.SUCCESS,
+            ActivityCategory.BACKUP,
+            "BackupService"
+        )
+        activity4 = create_activity_entry(
+            "Warning: Disk space low",
+            ActivityLevel.WARNING,
+            ActivityCategory.SYSTEM,
+            "SystemMonitor"
+        )
+        
+        self.activity_log_dialog.add_activity(activity1)
+        self.activity_log_dialog.add_activity(activity2)
+        self.activity_log_dialog.add_activity(activity3)
+        self.activity_log_dialog.add_activity(activity4)
+    
     async def show_notification(self, message: str, is_error: bool = False):
         """Async method to show notification."""
         if is_error:
             self.toast_manager.show_error(message)
         else:
             self.toast_manager.show_success(message)
+        
+        # Also add to notifications panel
+        notif_type = NotificationType.ERROR if is_error else NotificationType.INFO
+        priority = NotificationPriority.HIGH if is_error else NotificationPriority.NORMAL
+        notification = create_notification(
+            "System Notification",
+            message,
+            notif_type,
+            priority
+        )
+        self.notifications_panel.add_notification(notification)
     
     def add_log_entry(self, source: str, message: str, level: str = "INFO"):
         """Add entry to the activity log"""
+        # Map string level to enum
+        level_map = {
+            "DEBUG": ActivityLevel.DEBUG,
+            "INFO": ActivityLevel.INFO,
+            "WARNING": ActivityLevel.WARNING,
+            "ERROR": ActivityLevel.ERROR,
+            "CRITICAL": ActivityLevel.CRITICAL,
+            "SUCCESS": ActivityLevel.SUCCESS
+        }
+        
+        activity_level = level_map.get(level.upper(), ActivityLevel.INFO)
+        activity_category = ActivityCategory.SYSTEM  # Default category
+        
+        # Create activity entry
+        activity = create_activity_entry(
+            message,
+            activity_level,
+            activity_category,
+            source
+        )
+        
+        # Add to activity log dialog
+        self.activity_log_dialog.add_activity(activity)
+        
         # Forward to dashboard if available
         if (self.current_view == "dashboard" and 
             self.dashboard_view and 

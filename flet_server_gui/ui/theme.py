@@ -79,6 +79,13 @@ class ThemeManager:
             )
         
         self.page.update()
+    
+    def apply_consistency(self):
+        """
+        Apply theme consistency across the application.
+        """
+        from flet_server_gui.ui.theme_consistency import apply_theme_consistency
+        apply_theme_consistency(self.page, TOKENS)
 
     def create_theme(self, use_material3: bool = True, dark: bool = False) -> ft.Theme:
         """Return a Flet Theme using the tokens above.

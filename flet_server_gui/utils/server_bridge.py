@@ -298,6 +298,12 @@ class ModularServerBridge:
         
         return notifications
 
+    def register_connection_callback(self, callback):
+        """Register callback for connection status changes"""
+        # Use the connection manager to register the callback
+        if hasattr(self.connection_manager, 'register_callback'):
+            self.connection_manager.register_callback(callback)
+
 
 # Backward compatibility alias
 ServerBridge = ModularServerBridge
