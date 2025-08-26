@@ -34,7 +34,7 @@ from flet_server_gui.components.control_panel_card import ControlPanelCard
 from flet_server_gui.components.quick_actions import QuickActions
 from flet_server_gui.ui.navigation import NavigationManager
 from flet_server_gui.ui.dialogs import DialogSystem, ToastManager
-from flet_server_gui.utils.theme_manager import ThemeManager
+from flet_server_gui.ui.theme import ThemeManager
 from flet_server_gui.utils.server_bridge import ServerBridge
 # Direct import to avoid __init__.py issues
 try:
@@ -83,7 +83,7 @@ class ServerGUIApp:
         # Initialize view objects
         try:
             from flet_server_gui.views.dashboard import DashboardView
-            self.dashboard_view = DashboardView(page)
+            self.dashboard_view = DashboardView(page, self.server_bridge)
         except Exception as e:
             print(f"[WARNING] Dashboard view import failed: {e}")
             self.dashboard_view = None
@@ -216,6 +216,8 @@ class ServerGUIApp:
             try:
                 dashboard_content = self.dashboard_view.build()
                 if dashboard_content:
+                    # Start the dashboard's real-time updates and welcome messages
+                    self.dashboard_view.start_dashboard()
                     return dashboard_content
                 else:
                     # Fallback to simplified dashboard if build returns None
