@@ -26,26 +26,26 @@ class SettingsFormGenerator:
             'port': ft.TextField(
                 label="Server Port",
                 value=str(current_values.get('port', 1256)),
-                width=200,
+                expand=True,
                 keyboard_type=ft.KeyboardType.NUMBER,
                 on_change=self._trigger_change_callback
             ),
             'host': ft.TextField(
                 label="Server Host",
                 value=current_values.get('host', '127.0.0.1'),
-                width=200,
+                expand=True,
                 on_change=self._trigger_change_callback
             ),
             'storage_directory': ft.TextField(
                 label="Storage Directory",
                 value=current_values.get('storage_directory', 'received_files'),
-                width=300,
+                expand=True,
                 on_change=self._trigger_change_callback
             ),
             'max_connections': ft.TextField(
                 label="Max Connections",
                 value=str(current_values.get('max_connections', 100)),
-                width=150,
+                expand=True,
                 keyboard_type=ft.KeyboardType.NUMBER,
                 on_change=self._trigger_change_callback
             ),
@@ -65,10 +65,9 @@ class SettingsFormGenerator:
             "Server Configuration",
             ft.Icons.SETTINGS,
             [
-                ft.Row([
-                    controls['host'],
-                    ft.VerticalDivider(width=20),
-                    controls['port']
+                ft.ResponsiveRow([
+                    ft.Container(content=controls['host'], col={"sm": 12, "md": 6}, expand=True),
+                    ft.Container(content=controls['port'], col={"sm": 12, "md": 6}, expand=True)
                 ]),
                 ft.Row([
                     controls['storage_directory'],
@@ -90,7 +89,7 @@ class SettingsFormGenerator:
         controls = {
             'theme_mode': ft.Dropdown(
                 label="Theme Mode",
-                width=200,
+                expand=True,
                 value=current_values.get('theme_mode', 'system'),
                 options=[
                     ft.dropdown.Option("light", "Light"),
@@ -105,7 +104,7 @@ class SettingsFormGenerator:
                 max=300,
                 divisions=59,
                 value=current_values.get('refresh_interval', 30),
-                width=300,
+                expand=True,
                 on_change=self._trigger_change_callback
             ),
             'show_notifications': ft.Switch(
@@ -176,27 +175,27 @@ class SettingsFormGenerator:
             'cpu_alert_threshold': ft.TextField(
                 label="CPU Alert Threshold (%)",
                 value=str(current_values.get('cpu_alert_threshold', 80)),
-                width=150,
+                expand=True,
                 keyboard_type=ft.KeyboardType.NUMBER,
                 on_change=self._trigger_change_callback
             ),
             'memory_alert_threshold': ft.TextField(
                 label="Memory Alert Threshold (%)",
                 value=str(current_values.get('memory_alert_threshold', 85)),
-                width=150,
+                expand=True,
                 keyboard_type=ft.KeyboardType.NUMBER,
                 on_change=self._trigger_change_callback
             ),
             'disk_alert_threshold': ft.TextField(
                 label="Disk Alert Threshold (%)",
                 value=str(current_values.get('disk_alert_threshold', 90)),
-                width=150,
+                expand=True,
                 keyboard_type=ft.KeyboardType.NUMBER,
                 on_change=self._trigger_change_callback
             ),
             'monitoring_interval': ft.Dropdown(
                 label="Monitoring Interval",
-                width=200,
+                expand=True,
                 value=str(current_values.get('monitoring_interval', 60)),
                 options=[
                     ft.dropdown.Option("30", "30 seconds"),
@@ -235,7 +234,7 @@ class SettingsFormGenerator:
         controls = {
             'backup_frequency': ft.Dropdown(
                 label="Database Backup Frequency",
-                width=200,
+                expand=True,
                 value=current_values.get('backup_frequency', 'weekly'),
                 options=[
                     ft.dropdown.Option("daily", "Daily"),
@@ -253,7 +252,7 @@ class SettingsFormGenerator:
             'cleanup_days': ft.TextField(
                 label="Days to keep files",
                 value=str(current_values.get('cleanup_days', 30)),
-                width=150,
+                expand=True,
                 keyboard_type=ft.KeyboardType.NUMBER,
                 on_change=self._trigger_change_callback
             ),

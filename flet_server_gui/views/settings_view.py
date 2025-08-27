@@ -138,9 +138,10 @@ class ModularSettingsView:
                 # Export/Import section
                 export_import_section
                 
-            ], spacing=10, expand=True),
+            ], spacing=10, scroll=ft.ScrollMode.AUTO),
             padding=20,
-            expand=True
+            expand=True,
+            clip_behavior=ft.ClipBehavior.NONE
         )
     
     def _create_export_import_section(self) -> ft.Container:

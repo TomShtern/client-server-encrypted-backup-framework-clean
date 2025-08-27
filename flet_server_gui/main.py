@@ -76,6 +76,11 @@ class ServerGUIApp:
         self.current_view = "dashboard"
         self.active_view_instance = None
         self.nav_rail_visible = True
+        
+        # Resource management
+        self._background_tasks = set()  # Track all async tasks for cleanup
+        self._monitor_task = None  # Main monitor task reference
+        self._is_shutting_down = False  # Prevent new tasks during shutdown
 
         # Apply theme and configure page FIRST
         self.setup_application()
@@ -84,8 +89,10 @@ class ServerGUIApp:
         self.dialog_system = DialogSystem(page)
         self.toast_manager = ToastManager(page)
         
-        # Initialize Phase 4 components
-        self.status_pill = StatusPill(ServerStatus.UNKNOWN)
+        # Initialize Phase 4 components - Status pill should be OFFLINE and not clickable
+        from flet_server_gui.ui.widgets.status_pill import StatusPillConfig
+        status_pill_config = StatusPillConfig(clickable=False)  # Not clickable
+        self.status_pill = StatusPill(ServerStatus.STOPPED, config=status_pill_config)  # OFFLINE by default
         self.notifications_panel = NotificationsPanel()
         self.activity_log_dialog = ActivityLogDialog()
         
@@ -103,50 +110,40 @@ class ServerGUIApp:
             on_manage_files=self._on_manage_files
         )
         
-        # Initialize view objects
-        try:
-            from flet_server_gui.views.dashboard import DashboardView
-            self.dashboard_view = DashboardView(page, self.server_bridge)
-        except Exception as e:
-            print(f"[WARNING] Dashboard view import failed: {e}")
-            self.dashboard_view = None
-            
-        try:
-            from flet_server_gui.views.clients import ClientsView
-            self.clients_view = ClientsView(self.server_bridge, self.dialog_system, self.toast_manager, page)
-        except Exception as e:
-            print(f"[WARNING] Clients view import failed: {e}")
-            self.clients_view = None
-            
-        try:
-            from flet_server_gui.views.files import FilesView
-            self.files_view = FilesView(self.server_bridge, self.dialog_system, self.toast_manager, page)
-        except Exception as e:
-            print(f"[WARNING] Files view import failed: {e}")
-            self.files_view = None
-            
-        try:
-            from flet_server_gui.views.database import DatabaseView
-            self.database_view = DatabaseView(self.server_bridge, self.dialog_system, self.toast_manager, page)
-        except Exception as e:
-            print(f"[WARNING] Database view import failed: {e}")
-            self.database_view = None
-            
-        try:
-            from flet_server_gui.views.analytics import AnalyticsView
-            self.analytics_view = AnalyticsView(page)
-        except Exception as e:
-            print(f"[WARNING] Analytics view import failed: {e}")
-            self.analytics_view = None
-            
-        if SettingsView:
-            self.settings_view = SettingsView(page, self.dialog_system, self.toast_manager)
-        else:
-            self.settings_view = None
-        if LogsView:
-            self.logs_view = LogsView(page, self.dialog_system, self.toast_manager)
-        else:
-            self.logs_view = None
+        # Initialize view objects with robust error handling
+        self.dashboard_view = self._safe_init_view(
+            "Dashboard", "flet_server_gui.views.dashboard", "DashboardView", 
+            page, self.server_bridge
+        )
+        
+        self.clients_view = self._safe_init_view(
+            "Clients", "flet_server_gui.views.clients", "ClientsView",
+            self.server_bridge, self.dialog_system, self.toast_manager, page
+        )
+        
+        self.files_view = self._safe_init_view(
+            "Files", "flet_server_gui.views.files", "FilesView",
+            self.server_bridge, self.dialog_system, self.toast_manager, page
+        )
+        
+        self.database_view = self._safe_init_view(
+            "Database", "flet_server_gui.views.database", "DatabaseView",
+            self.server_bridge, self.dialog_system, self.toast_manager, page
+        )
+        
+        self.analytics_view = self._safe_init_view(
+            "Analytics", "flet_server_gui.views.analytics", "AnalyticsView",
+            page, self.server_bridge
+        )
+        
+        # Handle pre-imported views (SettingsView and LogsView)
+        self.settings_view = self._safe_init_preloaded_view(
+            "Settings", SettingsView, page, self.dialog_system, self.toast_manager
+        )
+        
+        self.logs_view = self._safe_init_preloaded_view(
+            "Logs", LogsView, page, self.dialog_system, self.toast_manager
+        )
         # Navigation manager will be initialized after content_area is created in build_ui
 
         self.build_ui()
@@ -156,27 +153,222 @@ class ServerGUIApp:
         
         self.page.window_to_front = True
         self.page.on_connect = self._on_page_connect
+        self.page.on_close = self._on_page_close
+    
+    def _safe_init_view(self, view_name: str, module_path: str, class_name: str, *args):
+        """
+        Safely import and initialize a view with detailed error diagnostics.
+        
+        Args:
+            view_name: Human-readable name for logging (e.g., "Dashboard")
+            module_path: Module path for import (e.g., "flet_server_gui.views.dashboard")
+            class_name: Class name to import (e.g., "DashboardView")
+            *args: Arguments to pass to the view constructor
+        
+        Returns:
+            View instance if successful, None if failed
+        """
+        view_instance = None
+        
+        # Step 1: Try to import the module
+        try:
+            import importlib
+            module = importlib.import_module(module_path)
+            safe_print(f"[SUCCESS] {view_name} module imported successfully from {module_path}")
+        except ImportError as e:
+            safe_print(f"[ERROR] {view_name} import failed: Module '{module_path}' not found")
+            safe_print(f"[DEBUG] Import error details: {e}")
+            return None
+        except Exception as e:
+            safe_print(f"[ERROR] {view_name} import failed: Unexpected error importing '{module_path}'")
+            safe_print(f"[DEBUG] Error details: {e}")
+            return None
+        
+        # Step 2: Try to get the class from the module
+        try:
+            view_class = getattr(module, class_name)
+            safe_print(f"[SUCCESS] {view_name} class '{class_name}' found in module")
+        except AttributeError as e:
+            safe_print(f"[ERROR] {view_name} class not found: '{class_name}' not in '{module_path}'")
+            safe_print(f"[DEBUG] Available classes: {[name for name in dir(module) if not name.startswith('_')]}")
+            return None
+        except Exception as e:
+            safe_print(f"[ERROR] {view_name} class access failed: Unexpected error accessing '{class_name}'")
+            safe_print(f"[DEBUG] Error details: {e}")
+            return None
+        
+        # Step 3: Try to initialize the view
+        try:
+            view_instance = view_class(*args)
+            safe_print(f"[SUCCESS] {view_name} view initialized successfully")
+        except TypeError as e:
+            safe_print(f"[ERROR] {view_name} initialization failed: Invalid arguments for constructor")
+            safe_print(f"[DEBUG] Constructor error: {e}")
+            safe_print(f"[DEBUG] Provided args: {len(args)} arguments")
+            return None
+        except Exception as e:
+            safe_print(f"[ERROR] {view_name} initialization failed: Runtime error during construction")
+            safe_print(f"[DEBUG] Runtime error: {e}")
+            return None
+        
+        return view_instance
+    
+    def _safe_init_preloaded_view(self, view_name: str, view_class, *args):
+        """
+        Safely initialize a pre-imported view class with detailed error diagnostics.
+        
+        Args:
+            view_name: Human-readable name for logging (e.g., "Settings")
+            view_class: Pre-imported class (could be None if import failed)
+            *args: Arguments to pass to the view constructor
+        
+        Returns:
+            View instance if successful, None if failed
+        """
+        if view_class is None:
+            safe_print(f"[WARNING] {view_name} view not available: Class was not imported successfully")
+            safe_print(f"[INFO] {view_name} will show 'not available' message to users")
+            return None
+        
+        try:
+            view_instance = view_class(*args)
+            safe_print(f"[SUCCESS] {view_name} view initialized successfully from pre-imported class")
+            return view_instance
+        except TypeError as e:
+            safe_print(f"[ERROR] {view_name} initialization failed: Invalid arguments for constructor")
+            safe_print(f"[DEBUG] Constructor error: {e}")
+            safe_print(f"[DEBUG] Provided args: {len(args)} arguments")
+            return None
+        except Exception as e:
+            safe_print(f"[ERROR] {view_name} initialization failed: Runtime error during construction")
+            safe_print(f"[DEBUG] Runtime error: {e}")
+            return None
+    
+    def _track_task(self, task: asyncio.Task) -> asyncio.Task:
+        """Track an async task for cleanup."""
+        if not self._is_shutting_down:
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
+        return task
+    
+    async def _cancel_all_tasks(self):
+        """Cancel all background tasks gracefully."""
+        self._is_shutting_down = True
+        
+        # Cancel main monitor task first
+        if self._monitor_task and not self._monitor_task.done():
+            self._monitor_task.cancel()
+            try:
+                await self._monitor_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                safe_print(f"[WARNING] Error cancelling monitor task: {e}")
+        
+        # Cancel all other background tasks
+        if self._background_tasks:
+            safe_print(f"[INFO] Cancelling {len(self._background_tasks)} background tasks...")
+            for task in list(self._background_tasks):
+                if not task.done():
+                    task.cancel()
+            
+            # Wait for tasks to complete cancellation
+            if self._background_tasks:
+                await asyncio.gather(*self._background_tasks, return_exceptions=True)
+            
+            self._background_tasks.clear()
+    
+    def _cleanup_view_resources(self, view_instance):
+        """Clean up resources for a view instance."""
+        if not view_instance:
+            return
+        
+        # Call dispose if available
+        if hasattr(view_instance, 'dispose'):
+            try:
+                view_instance.dispose()
+            except Exception as e:
+                safe_print(f"[WARNING] Error disposing view: {e}")
+        
+        # Call cleanup if available
+        if hasattr(view_instance, 'cleanup'):
+            try:
+                view_instance.cleanup()
+            except Exception as e:
+                safe_print(f"[WARNING] Error cleaning up view: {e}")
+        
+        # Call stop if available
+        if hasattr(view_instance, 'stop'):
+            try:
+                view_instance.stop()
+            except Exception as e:
+                safe_print(f"[WARNING] Error stopping view: {e}")
+    
+    async def dispose(self):
+        """Dispose of all application resources."""
+        safe_print("[INFO] Disposing application resources...")
+        
+        # Clean up current view
+        self._cleanup_view_resources(self.active_view_instance)
+        
+        # Clean up all view instances
+        for view in [self.dashboard_view, self.clients_view, self.files_view, 
+                    self.database_view, self.analytics_view, self.settings_view, self.logs_view]:
+            self._cleanup_view_resources(view)
+        
+        # Cancel all background tasks
+        await self._cancel_all_tasks()
+        
+        # Clean up server bridge
+        if hasattr(self.server_bridge, 'cleanup'):
+            try:
+                self.server_bridge.cleanup()
+            except Exception as e:
+                safe_print(f"[WARNING] Error cleaning up server bridge: {e}")
+        
+        safe_print("[INFO] Application disposed successfully")
+    
+    async def _on_page_close(self, e):
+        """Handle application close event."""
+        await self.dispose()
     
     async def _on_page_connect(self, e):
         """Start background tasks when the page is connected."""
-        # Start main monitor loop
-        asyncio.create_task(self.monitor_loop())
+        if self._is_shutting_down:
+            return
+        
+        # Start main monitor loop with tracking
+        self._monitor_task = self._track_task(asyncio.create_task(self.monitor_loop()))
         
         # Initialize dashboard if it's the current view
         if self.current_view == "dashboard" and self.dashboard_view:
             self.dashboard_view.start_dashboard_sync()  # Sync initialization
-            asyncio.create_task(self.dashboard_view.start_dashboard_async())  # Async tasks
+            # Track dashboard async tasks
+            if hasattr(self.dashboard_view, 'start_dashboard_async'):
+                self._track_task(asyncio.create_task(self.dashboard_view.start_dashboard_async()))
     
     def setup_application(self):
         """Configure the desktop application and apply the theme."""
         self.page.title = "Encrypted Backup Server - Control Panel"
-        self.page.window_width = 1400
-        self.page.window_height = 900
-        self.page.window_min_width = 800  # Reduced to ensure windowed mode works
-        self.page.window_min_height = 600  # Reduced to ensure windowed mode works
+        
+        # Adaptive window sizing - use percentage of screen or reasonable defaults
+        # Remove hardcoded dimensions to allow natural sizing
+        self.page.window_width = None  # Let Flet determine optimal width
+        self.page.window_height = None  # Let Flet determine optimal height
+        
+        # More reasonable minimum sizes for standard screens
+        self.page.window_min_width = 1024  # Minimum for proper layout
+        self.page.window_min_height = 768   # Standard 4:3 aspect ratio
         self.page.window_resizable = True
+        
+        # Set preferred window size on first launch
+        self.page.window_width = 1200  # Reasonable default that works on most screens
+        self.page.window_height = 800   # Balanced height for content
+        
         self.theme_manager.apply_theme()
-        self.page.padding = ft.padding.all(20)
+        
+        # Reduced padding for better space utilization
+        self.page.padding = ft.padding.all(12)
         self.page.spacing = 0
         
         # Apply layout fixes for clipping and hitbox issues
@@ -184,6 +376,9 @@ class ServerGUIApp:
         
         # Apply theme consistency
         self.theme_manager.apply_consistency()
+        
+        # Register window resize handler for responsive behavior
+        self.page.on_window_event = self.handle_window_resize
         
         self.theme_tokens = self.theme_manager.get_tokens()
     
@@ -201,26 +396,14 @@ class ServerGUIApp:
             on_click=self.toggle_theme
         )
 
-        # Update status pill when clicked
-        def on_status_pill_click(e):
-            # Show detailed status dialog
-            self.dialog_system.show_info_dialog(
-                "Server Status",
-                "Server is currently online and ready to handle requests.\\n\\n"
-                "Status: Online\\n"
-                "Port: 1256\\n"
-                "Connected Clients: 3\\n"
-                "Uptime: 2 hours, 15 minutes"
-            )
-        
-        # Set click handler (status will be updated after page is ready)
-        self.status_pill.on_click = on_status_pill_click
+        # Initialize status pill as OFFLINE since we're not connected to a server
+        self.status_pill.set_status(ServerStatus.STOPPED)  # OFFLINE status
 
         app_bar = ft.AppBar(
             title=ft.Text("Server Control Panel", weight=ft.FontWeight.W_500),
             leading=self.hamburger_button,
             actions=[
-                self.status_pill,
+                self.status_pill,  # Status pill is not clickable
                 ft.IconButton(ft.Icons.NOTIFICATIONS, tooltip="Notifications", on_click=self._on_notifications),
                 self.theme_toggle_button,
                 ft.IconButton(ft.Icons.HELP, tooltip="Help", on_click=self._on_help),
@@ -244,33 +427,73 @@ class ServerGUIApp:
         
         self.nav_rail = self.navigation.build()
         
-        # Use responsive layout fixes to prevent clipping
+        # Responsive main layout with proper expand behavior
         self.main_layout = ft.Row([
-            self.nav_rail,
-            ft.VerticalDivider(width=1),
+            # Navigation rail container
             ft.Container(
-                content=self.content_area, 
-                padding=ft.padding.all(20), 
-                expand=True,
-                clip_behavior=ft.ClipBehavior.NONE  # Prevent content clipping
+                content=self.nav_rail,
+                width=None,  # Let nav rail determine its own width
+                expand=False  # Don't expand the navigation area
+            ),
+            # Divider
+            ft.VerticalDivider(width=1),
+            # Content area with responsive container
+            ft.Container(
+                content=self.content_area,
+                padding=ft.padding.symmetric(horizontal=16, vertical=12),  # Reduced padding
+                expand=True,  # This should expand to fill available space
+                clip_behavior=ft.ClipBehavior.NONE,  # Prevent content clipping
+                # Ensure content area can scroll if needed
+                alignment=ft.alignment.top_left
             )
-        ], expand=True, spacing=0)
+        ], 
+        expand=True,  # Main row expands to fill page
+        spacing=0,
+        vertical_alignment=ft.CrossAxisAlignment.START  # Align to top
+        )
         
         self.page.appbar = app_bar
         self.page.add(self.main_layout)
         
-        # Update status to running after StatusPill is added to page (no animation for test compatibility)
-        self.status_pill.set_status(ServerStatus.RUNNING, animate=False)
-        
-        # Ensure proper windowed mode compatibility
-        self.page.window_min_width = 800
-        self.page.window_min_height = 600
+        # Remove redundant minimum size settings - already set in setup_application()
+        # The responsive layout will handle sizing automatically
     
     def toggle_navigation(self, e):
-        """Toggle navigation rail visibility"""
+        """Toggle navigation rail visibility with responsive behavior"""
         self.nav_rail_visible = not self.nav_rail_visible
         self.nav_rail.visible = self.nav_rail_visible
         self.hamburger_button.icon = ft.Icons.MENU if self.nav_rail_visible else ft.Icons.MENU_OPEN
+        
+        # Update content area padding based on nav rail visibility
+        if hasattr(self, 'main_layout') and len(self.main_layout.controls) >= 3:
+            content_container = self.main_layout.controls[2]  # Content area container
+            if self.nav_rail_visible:
+                content_container.padding = ft.padding.symmetric(horizontal=16, vertical=12)
+            else:
+                # More space when nav rail is hidden
+                content_container.padding = ft.padding.symmetric(horizontal=24, vertical=12)
+        
+        self.page.update()
+    
+    def handle_window_resize(self, e=None):
+        """Handle window resize events to ensure responsive layout"""
+        if not hasattr(self, 'page') or not self.page:
+            return
+            
+        # Auto-hide navigation on very small screens
+        window_width = getattr(self.page, 'window_width', 1200)
+        if window_width and window_width < 1024 and self.nav_rail_visible:
+            # Auto-collapse navigation on small screens
+            self.nav_rail_visible = False
+            self.nav_rail.visible = False
+            self.hamburger_button.icon = ft.Icons.MENU_OPEN
+            
+            # Update content area for more space
+            if hasattr(self, 'main_layout') and len(self.main_layout.controls) >= 3:
+                content_container = self.main_layout.controls[2]
+                content_container.padding = ft.padding.symmetric(horizontal=12, vertical=8)
+        
+        # Update layout
         self.page.update()
     
     def get_dashboard_view(self) -> ft.Control:
@@ -300,24 +523,30 @@ class ServerGUIApp:
     def _build_simplified_dashboard(self) -> ft.Control:
         """Build a simplified dashboard when full dashboard is not available."""
         
-        # Create status cards with mock data
+        # Create compact status cards optimized for windowed mode
         server_status_card = ft.Card(
             content=ft.Container(
                 content=ft.Column([
-                    ft.Text("Server Status", style=ft.TextThemeStyle.TITLE_MEDIUM),
-                    ft.Divider(),
-                    ft.Row([
-                        ft.Text("Status:"),
-                        ft.Container(expand=True),
-                        ft.Text("Offline", color=ft.Colors.ERROR)
-                    ]),
-                    ft.Row([
-                        ft.Text("Port:"),
-                        ft.Container(expand=True),
-                        ft.Text("1256")
-                    ])
-                ], spacing=8),
-                padding=20
+                    ft.Text("Server Status", style=ft.TextThemeStyle.TITLE_SMALL, weight=ft.FontWeight.BOLD),
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Row([
+                                ft.Text("Status:", size=12),
+                                ft.Container(expand=True),
+                                ft.Text("Offline", color=ft.Colors.ERROR, size=12, weight=ft.FontWeight.BOLD)
+                            ]),
+                            ft.Row([
+                                ft.Text("Port:", size=12),
+                                ft.Container(expand=True),
+                                ft.Text("1256", size=12)
+                            ])
+                        ], spacing=4),
+                        margin=ft.margin.only(top=8)
+                    )
+                ], spacing=4),
+                padding=16,  # Reduced padding for more compact layout
+                height=100,  # Fixed height for consistency
+                alignment=ft.alignment.top_left
             ),
             elevation=2
         )
@@ -325,77 +554,100 @@ class ServerGUIApp:
         stats_card = ft.Card(
             content=ft.Container(
                 content=ft.Column([
-                    ft.Text("Statistics", style=ft.TextThemeStyle.TITLE_MEDIUM),
-                    ft.Divider(),
-                    ft.Row([
-                        ft.Text("Clients:"),
-                        ft.Container(expand=True),
-                        ft.Text("0")
-                    ]),
-                    ft.Row([
-                        ft.Text("Files:"),
-                        ft.Container(expand=True),
-                        ft.Text("0")
-                    ])
-                ], spacing=8),
-                padding=20
+                    ft.Text("Statistics", style=ft.TextThemeStyle.TITLE_SMALL, weight=ft.FontWeight.BOLD),
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Row([
+                                ft.Text("Clients:", size=12),
+                                ft.Container(expand=True),
+                                ft.Text("0", size=12, weight=ft.FontWeight.BOLD)
+                            ]),
+                            ft.Row([
+                                ft.Text("Files:", size=12),
+                                ft.Container(expand=True),
+                                ft.Text("0", size=12, weight=ft.FontWeight.BOLD)
+                            ])
+                        ], spacing=4),
+                        margin=ft.margin.only(top=8)
+                    )
+                ], spacing=4),
+                padding=16,  # Reduced padding for more compact layout
+                height=100,  # Fixed height for consistency
+                alignment=ft.alignment.top_left
             ),
             elevation=2
         )
         
-        return ft.Column([
-            ft.Text("Server Dashboard", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
-            ft.Divider(),
-            
-            # Status row
-            ft.ResponsiveRow([
-                ft.Container(
-                    content=server_status_card,
-                    col={"xs": 12, "sm": 12, "md": 4}
-                ),
-                ft.Container(
-                    content=stats_card,
-                    col={"xs": 12, "sm": 12, "md": 4}
-                ),
-                ft.Container(
-                    content=self.control_panel.build(),
-                    col={"xs": 12, "sm": 12, "md": 4}
-                )
-            ], spacing=16),
-            
-            ft.Container(height=16),
-            
-            # Quick actions row
-            ft.ResponsiveRow([
-                ft.Container(
-                    content=self.quick_actions,
-                    col={"xs": 12, "sm": 12, "md": 6}
-                ),
-                ft.Container(
-                    content=ft.Card(
-                        content=ft.Container(
-                            content=ft.Column([
-                                ft.Text("Activity Log", style=ft.TextThemeStyle.TITLE_MEDIUM),
-                                ft.Divider(),
-                                ft.Text("System started", style=ft.TextThemeStyle.BODY_SMALL),
-                                ft.Text("GUI initialized", style=ft.TextThemeStyle.BODY_SMALL),
-                                ft.Container(
-                                    content=ft.FilledButton(
-                                        "View Full Logs",
-                                        icon=ft.Icons.HISTORY,
-                                        on_click=lambda _: self.switch_view("logs")
-                                    ),
-                                    alignment=ft.alignment.center,
-                                    margin=ft.margin.only(top=8)
-                                )
-                            ], spacing=8),
-                            padding=20
-                        )
+        return ft.Container(
+            content=ft.Column([
+                ft.Text("Server Dashboard", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
+                ft.Divider(),
+                
+                # Status row with improved responsive breakpoints
+                ft.ResponsiveRow([
+                    ft.Container(
+                        content=server_status_card,
+                        col={"xs": 12, "sm": 6, "md": 4, "lg": 4},
+                        expand=True
                     ),
-                    col={"xs": 12, "sm": 12, "md": 6}
-                )
-            ], spacing=16)
-        ], spacing=24, scroll=ft.ScrollMode.AUTO, expand=True)
+                    ft.Container(
+                        content=stats_card,
+                        col={"xs": 12, "sm": 6, "md": 4, "lg": 4},
+                        expand=True
+                    ),
+                    ft.Container(
+                        content=self.control_panel.build(),
+                        col={"xs": 12, "sm": 12, "md": 4, "lg": 4},
+                        expand=True
+                    )
+                ], spacing=12, run_spacing=12),
+                
+                ft.Container(height=12),  # Reduced spacing
+                
+                # Quick actions row with better breakpoints
+                ft.ResponsiveRow([
+                    ft.Container(
+                        content=self.quick_actions,
+                        col={"xs": 12, "sm": 12, "md": 6, "lg": 6},
+                        expand=True
+                    ),
+                    ft.Container(
+                        content=ft.Card(
+                            content=ft.Container(
+                                content=ft.Column([
+                                    ft.Text("Activity Log", style=ft.TextThemeStyle.TITLE_MEDIUM),
+                                    ft.Divider(),
+                                    ft.Container(
+                                        content=ft.Column([
+                                            ft.Text("System started", style=ft.TextThemeStyle.BODY_SMALL),
+                                            ft.Text("GUI initialized", style=ft.TextThemeStyle.BODY_SMALL),
+                                        ], spacing=4),
+                                        height=60,  # Fixed height for consistency
+                                        alignment=ft.alignment.top_left
+                                    ),
+                                    ft.Container(
+                                        content=ft.FilledButton(
+                                            "View Full Logs",
+                                            icon=ft.Icons.HISTORY,
+                                            on_click=lambda _: self.switch_view("logs")
+                                        ),
+                                        alignment=ft.alignment.center,
+                                        margin=ft.margin.only(top=8)
+                                    )
+                                ], spacing=8),
+                                padding=16  # Reduced padding
+                            ),
+                            elevation=2
+                        ),
+                        col={"xs": 12, "sm": 12, "md": 6, "lg": 6},
+                        expand=True
+                    )
+                ], spacing=12, run_spacing=12)
+            ], spacing=16, scroll=ft.ScrollMode.AUTO, expand=True),
+            expand=True,
+            padding=ft.padding.all(8),  # Outer padding for the dashboard
+            clip_behavior=ft.ClipBehavior.NONE
+        )
     
     def get_clients_view(self) -> ft.Control:
         """Create and return the clients view."""
@@ -515,6 +767,9 @@ class ServerGUIApp:
 
     async def _on_backup_now(self, e):
         """Handle backup now action by running the file cleanup job."""
+        if self._is_shutting_down:
+            return
+            
         self.add_log_entry("Quick Actions", "Cleanup job initiated", "INFO")
         try:
             result = await self.server_bridge.cleanup_old_files_by_age(days_threshold=30)
@@ -541,6 +796,9 @@ class ServerGUIApp:
 
     async def _on_clear_logs(self, e):
         """Handle clear logs action."""
+        if self._is_shutting_down:
+            return
+            
         if (self.current_view == "dashboard" and 
             self.dashboard_view and 
             hasattr(self.dashboard_view, '_clear_activity_log')):
@@ -550,6 +808,9 @@ class ServerGUIApp:
 
     async def _on_restart_services(self, e):
         """Handle restart services action."""
+        if self._is_shutting_down:
+            return
+            
         if hasattr(self.control_panel, 'restart_server'):
             await self.control_panel.restart_server(e)
         else:
@@ -567,9 +828,8 @@ class ServerGUIApp:
         if self.current_view == view_name:
             return
 
-        # Stop the current view if it has a stop method
-        if self.active_view_instance and hasattr(self.active_view_instance, 'stop'):
-            self.active_view_instance.stop()
+        # Clean up the current view properly
+        self._cleanup_view_resources(self.active_view_instance)
 
         self.current_view = view_name
         view_map = {
@@ -719,6 +979,9 @@ class ServerGUIApp:
     
     async def show_notification(self, message: str, is_error: bool = False):
         """Async method to show notification."""
+        if self._is_shutting_down:
+            return
+            
         if is_error:
             self.toast_manager.show_error(message)
         else:
@@ -771,18 +1034,80 @@ class ServerGUIApp:
             safe_print(f"[LOG] {source}: {message} ({level})")
     
     async def monitor_loop(self):
-        while True:
+        """Main monitoring loop with proper resource management and meaningful functionality."""
+        safe_print("[INFO] Starting application monitor loop...")
+        monitor_interval = 5  # Reasonable 5-second interval
+        
+        while not self._is_shutting_down:
             try:
-                if self.current_view == "dashboard":
-                    # Real-time updates will be restored when imports are fixed
+                # Check if we should continue monitoring
+                if self._is_shutting_down:
+                    break
+                
+                # Monitor server status
+                try:
+                    if hasattr(self.server_bridge, 'get_server_status'):
+                        server_status = await self.server_bridge.get_server_status()
+                        if server_status and hasattr(self, 'status_pill'):
+                            # Update status pill based on server status
+                            if server_status.get('running', False):
+                                self.status_pill.set_status(ServerStatus.RUNNING)
+                            else:
+                                self.status_pill.set_status(ServerStatus.STOPPED)
+                except Exception as e:
+                    safe_print(f"[DEBUG] Server status check failed: {e}")
+                
+                # Update current view if it has monitor methods
+                if self.current_view == "dashboard" and self.dashboard_view:
+                    if hasattr(self.dashboard_view, 'update_metrics'):
+                        try:
+                            await self.dashboard_view.update_metrics()
+                        except Exception as e:
+                            safe_print(f"[DEBUG] Dashboard metrics update failed: {e}")
+                
+                elif self.current_view == "analytics" and self.analytics_view:
+                    if hasattr(self.analytics_view, 'refresh_data'):
+                        try:
+                            await self.analytics_view.refresh_data()
+                        except Exception as e:
+                            safe_print(f"[DEBUG] Analytics refresh failed: {e}")
+                
+                # Monitor system resources (basic)
+                try:
+                    import psutil
+                    cpu_percent = psutil.cpu_percent(interval=None)
+                    memory = psutil.virtual_memory()
+                    
+                    # Log warnings if resources are high
+                    if cpu_percent > 80:
+                        safe_print(f"[WARNING] High CPU usage: {cpu_percent:.1f}%")
+                    if memory.percent > 85:
+                        safe_print(f"[WARNING] High memory usage: {memory.percent:.1f}%")
+                        
+                except ImportError:
+                    # psutil not available, skip resource monitoring
                     pass
-                elif self.current_view == "analytics":
-                    # This view manages its own updates, so we don't call it here.
-                    pass
-                await asyncio.sleep(2)
+                except Exception as e:
+                    safe_print(f"[DEBUG] Resource monitoring failed: {e}")
+                
+                # Wait for next cycle, but check for shutdown
+                for _ in range(monitor_interval):
+                    if self._is_shutting_down:
+                        break
+                    await asyncio.sleep(1)
+                    
+            except asyncio.CancelledError:
+                safe_print("[INFO] Monitor loop cancelled")
+                break
             except Exception as e:
-                print(f"Monitor loop error: {e}")
-                await asyncio.sleep(5)
+                safe_print(f"[ERROR] Monitor loop error: {e}")
+                # Use longer delay on errors
+                for _ in range(10):
+                    if self._is_shutting_down:
+                        break
+                    await asyncio.sleep(1)
+        
+        safe_print("[INFO] Monitor loop stopped")
 
 def main(page: ft.Page):
     app = ServerGUIApp(page)

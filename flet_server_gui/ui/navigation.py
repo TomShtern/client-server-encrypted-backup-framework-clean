@@ -158,13 +158,14 @@ class NavigationManager:
             extended=extended,
             destinations=destinations,
             on_change=self.on_navigation_change,
-            # Enhanced styling
-            bgcolor="#F5F5F5",  # Light gray instead of ft.Colors.SURFACE
+            # Enhanced styling - use theme colors instead of hardcoded
+            bgcolor=None,  # Let Material Design 3 theme control the background
             leading=self._create_navigation_header() if extended else None,
             trailing=self._create_navigation_footer() if extended else None,
-            # Animations
-            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
-            animate_opacity=ft.Animation(150, ft.AnimationCurve.EASE_OUT)
+            # Enhanced animations for better user experience
+            animate_scale=ft.Animation(250, ft.AnimationCurve.EASE_IN_OUT),
+            animate_opacity=ft.Animation(200, ft.AnimationCurve.EASE_IN_OUT),
+            animate_rotation=ft.Animation(300, ft.AnimationCurve.DECELERATE)
         )
         
         return self.nav_rail
@@ -233,14 +234,15 @@ class NavigationManager:
                 alignment=ft.alignment.center
             )
         
-        # Apply navigation animation
+        # Apply smooth navigation animation with scale effect
         if self.nav_rail:
-            self.nav_rail.opacity = 0.8
-            self.nav_rail.animate_opacity = ft.Animation(150, ft.AnimationCurve.EASE_OUT)
+            # Scale animation for visual feedback
+            self.nav_rail.scale = 0.98
+            self.nav_rail.animate_scale = ft.Animation(150, ft.AnimationCurve.EASE_IN_OUT)
             self.page.update()
             
-            # Reset opacity after animation
-            self.nav_rail.opacity = 1.0
+            # Reset scale after animation
+            self.nav_rail.scale = 1.0
             self.page.update()
         
         # Trigger callbacks

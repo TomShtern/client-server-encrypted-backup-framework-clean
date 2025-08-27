@@ -103,6 +103,10 @@ class FileFilterManager:
         self.all_files = files
         self._apply_filters_and_sort()
     
+    def update_file_data(self, files: List[Any]) -> None:
+        """Update file data - alias for set_file_data"""
+        self.set_file_data(files)
+    
     def get_filtered_files(self) -> List[Any]:
         """Get the current filtered and sorted file list"""
         return self.filtered_files

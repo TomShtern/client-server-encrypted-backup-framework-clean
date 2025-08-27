@@ -85,6 +85,10 @@ class ClientFilterManager:
         self.all_clients = clients
         self._apply_filters()
     
+    def update_client_data(self, clients: List[Any]) -> None:
+        """Update client data - alias for set_client_data"""
+        self.set_client_data(clients)
+    
     def get_filtered_clients(self) -> List[Any]:
         """Get the current filtered client list"""
         return self.filtered_clients

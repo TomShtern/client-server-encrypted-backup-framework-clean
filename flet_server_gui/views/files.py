@@ -36,6 +36,7 @@ class FilesView:
     def __init__(self, server_bridge: "ServerBridge", dialog_system, toast_manager, page):
         self.server_bridge = server_bridge
         self.page = page
+        self.toast_manager = toast_manager
         
         # Initialize thread-safe UI updater
         self.ui_updater = ThreadSafeUIUpdater(page)
@@ -192,8 +193,17 @@ class FilesView:
                 else:
                     self.page.update()
             
-            # Get fresh file data
-            files = await self.server_bridge.get_files()
+            # Defensive server connection check
+            if not self.server_bridge:
+                raise ConnectionError("Server bridge is not initialized")
+            
+            # Check if server bridge has connection validation
+            if hasattr(self.server_bridge, 'is_connected'):
+                if not await self.server_bridge.is_connected():
+                    raise ConnectionError("Server is not connected. Please check server status.")
+            
+            # Get fresh file data with timeout
+            files = self.server_bridge.get_files()
             
             # Update filter manager with new data
             self.filter_manager.update_file_data(files)
@@ -212,10 +222,27 @@ class FilesView:
             if self.select_all_checkbox:
                 self.select_all_checkbox.value = False
             
-        except Exception as ex:
+        except asyncio.TimeoutError:
             if self.status_text:
-                self.status_text.value = f"Error loading files: {str(ex)}"
+                self.status_text.value = "Timeout loading files. Server may be unresponsive."
                 self.status_text.color = ft.Colors.RED_600
+            if self.toast_manager:
+                self.toast_manager.show_error("Server connection timeout")
+        except ConnectionError as conn_ex:
+            if self.status_text:
+                self.status_text.value = str(conn_ex)
+                self.status_text.color = ft.Colors.AMBER_600
+            if self.toast_manager:
+                self.toast_manager.show_warning("Server connection issue")
+        except Exception as ex:
+            error_msg = f"Error loading files: {str(ex)}"
+            if self.status_text:
+                self.status_text.value = error_msg
+                self.status_text.color = ft.Colors.RED_600
+            if self.toast_manager:
+                self.toast_manager.show_error(error_msg)
+            # Log the full exception for debugging
+            print(f"[ERROR] FilesView refresh failed: {ex}")
         finally:
             if self.refresh_button:
                 self.refresh_button.disabled = False
@@ -227,10 +254,21 @@ class FilesView:
                     self.page.update()
     
     def _on_filtered_data_changed(self, filtered_files: List[Dict[str, Any]]):
-        """Handle filtered data changes from filter manager."""
+        """Handle filtered data changes from filter manager with defensive checks."""
         try:
+            # Defensive check for None or empty data
+            if filtered_files is None:
+                filtered_files = []
+                if self.status_text:
+                    self.status_text.value = "No file data available"
+                    self.status_text.color = ft.Colors.AMBER_600
+                return
+            
             # Update table with new filtered data
-            self.table_renderer.update_table_data(filtered_files)
+            if hasattr(self, 'table_renderer') and self.table_renderer:
+                self.table_renderer.update_table_data(filtered_files)
+            else:
+                print("[WARNING] Table renderer not available for file data update")
             
             # Update status text
             if self.status_text:

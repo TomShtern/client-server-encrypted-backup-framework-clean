@@ -127,7 +127,9 @@ class EnhancedPerformanceCharts:
         start_stop_button = ft.ElevatedButton(
             text="Start Monitoring",
             icon=ft.Icons.PLAY_ARROW,
-            bgcolor=ft.Colors.GREEN,
+            # Use theme-aware colors instead of hardcoded GREEN
+            bgcolor=ft.Colors.PRIMARY,
+            color=ft.Colors.ON_PRIMARY,
             on_click=self._toggle_monitoring,
             expand=True
         )
@@ -222,6 +224,7 @@ class EnhancedPerformanceCharts:
         
         return ft.Container(
             content=controls,
+            # Use proper surface color for dark theme compatibility
             bgcolor=ft.Colors.SURFACE_VARIANT,
             padding=ft.padding.all(10),
             border_radius=8,
@@ -247,7 +250,9 @@ class EnhancedPerformanceCharts:
                     expand=True
                 )
             ], expand=True),
-            bgcolor=ft.Colors.SURFACE,
+            # Use theme surface color instead of hardcoded SURFACE
+            bgcolor=None,  # Let container inherit from parent theme
+            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
             padding=ft.padding.all(8),
             border_radius=4,
             height=40,
@@ -319,6 +324,8 @@ class EnhancedPerformanceCharts:
                 padding=ft.padding.all(12),
                 expand=True
             ),
+            # Remove hardcoded card colors - use theme
+            bgcolor=None,  # Let Material Design 3 theme control card background
             expand=True
         )
     
@@ -363,6 +370,8 @@ class EnhancedPerformanceCharts:
                        color=ft.Colors.ON_SURFACE_VARIANT),
                 ft.Container(height=100, expand=True)  # Chart area
             ], expand=True),
+            # Use theme-aware colors for proper dark mode support
+            bgcolor=ft.Colors.SURFACE_CONTAINER,
             border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
             border_radius=4,
             padding=ft.padding.all(8),
@@ -401,12 +410,12 @@ class EnhancedPerformanceCharts:
             self._stop_monitoring()
             e.control.text = "Start Monitoring"
             e.control.icon = ft.Icons.PLAY_ARROW
-            e.control.bgcolor = ft.Colors.GREEN
+            e.control.bgcolor = ft.Colors.PRIMARY
         else:
             self._start_monitoring()
             e.control.text = "Stop Monitoring"
             e.control.icon = ft.Icons.STOP
-            e.control.bgcolor = ft.Colors.RED_ACCENT
+            e.control.bgcolor = ft.Colors.ERROR
         
         e.control.update()
     
@@ -417,8 +426,18 @@ class EnhancedPerformanceCharts:
             
         self.monitoring_active = True
         self.active_alerts.clear()
-        # Use page's run_task to schedule the async monitoring loop properly
-        asyncio.create_task(self._enhanced_monitoring_loop())
+        # Use page's run_task to properly schedule async task in Flet
+        if hasattr(self.page, 'run_task'):
+            self.page.run_task(self._enhanced_monitoring_loop)
+        else:
+            # Fallback: schedule on existing event loop if available
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self._enhanced_monitoring_loop())
+            except RuntimeError:
+                # No event loop available - use basic monitoring instead
+                self._start_basic_monitoring()
+                return
         logger.info("✅ Enhanced performance monitoring started")
     
     def _stop_monitoring(self):
@@ -630,7 +649,7 @@ class EnhancedPerformanceCharts:
             
             alert_container.controls = alert_texts
             clear_button_container.visible = True
-            self.alert_panel.bgcolor = ft.Colors.ERROR_CONTAINER if any(a['level'] == 'critical' for a in alerts) else ft.Colors.SURFACE_VARIANT
+            self.alert_panel.bgcolor = ft.Colors.ERROR_CONTAINER if any(a['level'] == 'critical' for a in alerts) else ft.Colors.SURFACE_CONTAINER_HIGHEST
         else:
             # No alerts
             alert_container.controls = [

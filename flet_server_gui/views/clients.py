@@ -37,6 +37,7 @@ class ClientsView:
         self.server_bridge = server_bridge
         self.page = page
         self.toast_manager = toast_manager
+        self.dialog_system = dialog_system
         
         # Initialize thread-safe UI updater
         self.ui_updater = ThreadSafeUIUpdater(page)
@@ -164,7 +165,7 @@ class ClientsView:
         )
     
     async def _refresh_clients(self, e=None):
-        """Refresh client data from server with loading state management."""
+        """Refresh client data from server with loading state management and connection validation."""
         try:
             if self.refresh_button:
                 self.refresh_button.disabled = True
@@ -175,8 +176,17 @@ class ClientsView:
                 else:
                     self.page.update()
             
-            # Get fresh client data
-            clients = await self.server_bridge.get_clients()
+            # Defensive server connection check
+            if not self.server_bridge:
+                raise ConnectionError("Server bridge is not initialized")
+            
+            # Check if server bridge has connection validation
+            if hasattr(self.server_bridge, 'is_connected'):
+                if not await self.server_bridge.is_connected():
+                    raise ConnectionError("Server is not connected. Please check server status.")
+            
+            # Get fresh client data with timeout
+            clients = self.server_bridge.get_clients()
             
             # Update filter manager with new data
             self.filter_manager.update_client_data(clients)
@@ -195,10 +205,27 @@ class ClientsView:
             if self.select_all_checkbox:
                 self.select_all_checkbox.value = False
             
-        except Exception as ex:
+        except asyncio.TimeoutError:
             if self.status_text:
-                self.status_text.value = f"Error loading clients: {str(ex)}"
+                self.status_text.value = "Timeout loading clients. Server may be unresponsive."
                 self.status_text.color = ft.Colors.RED_600
+            if self.toast_manager:
+                self.toast_manager.show_error("Server connection timeout")
+        except ConnectionError as conn_ex:
+            if self.status_text:
+                self.status_text.value = str(conn_ex)
+                self.status_text.color = ft.Colors.AMBER_600
+            if self.toast_manager:
+                self.toast_manager.show_warning("Server connection issue")
+        except Exception as ex:
+            error_msg = f"Error loading clients: {str(ex)}"
+            if self.status_text:
+                self.status_text.value = error_msg
+                self.status_text.color = ft.Colors.RED_600
+            if self.toast_manager:
+                self.toast_manager.show_error(error_msg)
+            # Log the full exception for debugging
+            print(f"[ERROR] ClientsView refresh failed: {ex}")
         finally:
             if self.refresh_button:
                 self.refresh_button.disabled = False
@@ -210,10 +237,21 @@ class ClientsView:
                     self.page.update()
     
     def _on_filtered_data_changed(self, filtered_clients: List[Dict[str, Any]]):
-        """Handle filtered data changes from filter manager."""
+        """Handle filtered data changes from filter manager with defensive checks."""
         try:
+            # Defensive check for None or empty data
+            if filtered_clients is None:
+                filtered_clients = []
+                if self.status_text:
+                    self.status_text.value = "No client data available"
+                    self.status_text.color = ft.Colors.AMBER_600
+                return
+            
             # Update table with new filtered data
-            self.table_renderer.update_table_data(filtered_clients)
+            if hasattr(self, 'table_renderer') and self.table_renderer:
+                self.table_renderer.update_table_data(filtered_clients)
+            else:
+                print("[WARNING] Table renderer not available for client data update")
             
             # Update status text
             if self.status_text:

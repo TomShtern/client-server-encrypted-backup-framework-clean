@@ -1,39 +1,69 @@
+# Core Encryption & Security
 pycryptodome>=3.15.0
-psutil>=5.8.0
+psutil>=5.9.0
+
+# Flask Web Framework & API
 Flask>=2.0.0
 flask-cors>=6.0.0
-flask-socketio>=0.0.0
-sentry-sdk>=0.0.0
+flask-socketio>=5.0.0
+sentry-sdk>=1.0.0
+
+# File System & Monitoring
 watchdog>=2.1.0
-tkcalendar>=1.6.1
-tksheet>=6.2.15
-plyer>=2.1.0
+filetype>=1.2.0
+magic>=0.4.0
+
+# GUI Frameworks
+flet>=0.21.0                    # Primary GUI framework (Material Design 3)
+tkcalendar>=1.6.1               # Legacy TKinter calendar widget
+tksheet>=6.2.15                 # Legacy TKinter sheet widget
+plyer>=2.1.0                    # Cross-platform native features
+matplotlib>=3.7.0               # Charts for GUI analytics
+
+# Data Validation & Processing
 pydantic>=2.11.7
 pydantic-core>=2.33.2
 
-
-# KivyMD for modern Material Design GUI - Stable versions - I DONT USE KIVY ANYMORE
-#kivy-garden.matplotlib
-#new updated manually set based on installetion requirements
-certifi>=2025.8.3
-charset_normalizer>=3.4.3
+# Core Python Dependencies (Updated)
+certifi>=2024.8.30
+charset_normalizer>=3.4.0
 docutils>=0.22
-filetype>=1.2.0
 idna>=3.10
 pillow>=10.4.0
-pygments>=2.19.2
+pygments>=2.19.0
 pypiwin32>=223
 pywin32>=311
-requests>=2.32.5
-urllib3>=2.5.0
+requests>=2.32.0
+urllib3>=2.2.0
 
-materialyoucolor>=2.0.10
-
-asynckivy>=0.9.0
-asyncgui>=0.9.3
-
-
-# KivyMD Material Design 3 - STABLE commit (install with git)
-# pip install git+https://github.com/kivymd/KivyMD.git@d2f7740
-# kivymd>=2.0.1.dev0 (commit d2f7740)
-
+#considering to add these:
+rich>=13.7.0                    # Enhanced console output with colors and styles; use for better debugging logs in subprocess invocations or build outputs in one_click_build_and_run.py
+loguru>=0.7.0                   # Structured logging library; simplifies logging in Flask API Bridge or Python Server, with rotation and formatting for better error tracking
+pytest>=7.0.0                   # Testing framework; essential for unit testing integration flows (e.g., Flask API to C++ client) and verifying file receipts in server/received_files/
+cryptography>=41.0.0            # Advanced cryptography library; enhances encryption in Flask API communications or C++ client, but test integration carefully to avoid conflicts with pycryptodome
+plotly>=5.15.0                  # Interactive plotting library; integrates with Flet GUI for dynamic charts displaying real-time backup metrics from Flask API
+aiofiles>=23.0.0                # Async file operations; speeds up file handling in Flask bridge or server, reducing latency in subprocess management
+humanize>=4.7.0                 # Human-readable data formatting; formats file sizes or times in GUI analytics, improving user experience in Flet web UI
+hashlib                         # Built-in hashing module; already available, use for additional hashing needs in CRC verification or file integrity checks
+seaborn>=0.12.0                 # Statistical visualization; enhances matplotlib in GUI for advanced analytics plots, integrating with backup data from Python Server
+textual>=0.38.0                 # TUI (text-based UI) framework; creates console dashboards for monitoring backups, useful for debugging or headless operations
+typer>=0.9.0                    # CLI building toolkit; builds command-line tools for manual testing of C++ client or server, complementing one_click_build_and_run.py
+click>=8.1.0                    # Command-line interface framework; similar to typer, for creating CLI utilities to interact with the backup system
+websockets>=11.0                # WebSocket library; enhances flask-socketio for real-time updates in web UI, enabling live backup progress notifications
+sse-starlette>=1.6.0            # Server-Sent Events for Starlette/FastAPI; adds live event streaming from Flask API to web UI for backup status updates
+python-magic-bin>=0.4.14        # File type detection binaries; complements magic library for better file type identification in file monitoring
+mimetypes                       # Built-in MIME type module; already available, use for file type handling in uploads or downloads
+xxhash>=3.3.0                   # Fast hashing algorithm; improves performance in CRC verification for large files in C++ client or Python Server
+schedule>=1.2.0                 # Job scheduling library; schedules automated backups or maintenance tasks in Python Server
+apscheduler>=3.10.0             # Advanced Python Scheduler; more robust scheduling for recurring backups, integrable with Flask API for user-triggered tasks
+numpy>=1.24.0                   # Numerical computing library; supports data processing in GUI analytics or server-side calculations for backup metrics
+pexpect>=4.8.0                  # Advanced subprocess control; improves interaction with C++ client in --batch mode, handling hangs or timeouts more reliably
+streamlit>=1.28.0               # Rapid web app prototyping; creates quick dashboards for backup analytics, embeddable in Flet GUI for advanced visualizations
+flet-contrib>=2023.10.0         # Extended Flet components; adds advanced Material Design 3 widgets (e.g., data tables, charts) to web UI for richer interfaces
+material-design-icons>=1.0.0    # Icon library for Material Design; integrates with Flet for consistent icons in ThemeManager or ParticleSystem
+flet-animations>=0.1.0          # Animation library for Flet; adds smooth transitions and effects to GUI components, enhancing user experience with Material Design 3
+flet-themes>=0.1.0              # Theme management for Flet; extends ThemeManager for dynamic Material Design 3 themes, allowing runtime switching in GUI
+uvloop>=0.19.0                  # High-performance event loop; boosts async performance in Flask API Bridge and Python Server, reducing latency in file transfers
+manim>=0.18.0                   # Mathematical animation engine; creates dynamic tutorials or progress visualizations in GUI, adding educational or cinematic elements
+pyvista>=0.43.0                 # 3D visualization library; adds immersive 3D data exploration for backup analytics in Flet GUI, turning file structures into interactive views
+socketio>=5.8.0                 # Socket.IO library; extends flask-socketio for real-time collaborative features in web UI, like shared backup sessions 

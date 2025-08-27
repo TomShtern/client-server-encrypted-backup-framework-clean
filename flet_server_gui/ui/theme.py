@@ -83,9 +83,15 @@ class ThemeManager:
     def apply_consistency(self):
         """
         Apply theme consistency across the application.
+        Temporarily disabled to prevent async/threading issues.
         """
-        from flet_server_gui.ui.theme_consistency import apply_theme_consistency
-        apply_theme_consistency(self.page, TOKENS)
+        try:
+            from flet_server_gui.ui.theme_consistency import apply_theme_consistency
+            # Temporarily disabled to fix async/threading issues
+            # apply_theme_consistency(self.page, TOKENS)
+            print("[INFO] Theme consistency disabled to prevent async errors")
+        except Exception as e:
+            print(f"[WARNING] Theme consistency not available: {e}")
 
     def create_theme(self, use_material3: bool = True, dark: bool = False) -> ft.Theme:
         """Return a Flet Theme using the tokens above.
