@@ -124,7 +124,6 @@ class SettingsChangeManager:
         reset_all_button = ft.TextButton(
             "Reset All to Defaults",
             icon=ft.Icons.RESTORE,
-            style=ft.ButtonStyle(color=ft.Colors.ERROR),
             on_click=lambda e: self._handle_reset_all(on_reset_all)
         )
         
@@ -133,17 +132,17 @@ class SettingsChangeManager:
             content=ft.Row([
                 ft.Icon(
                     ft.Icons.EDIT if self.has_changes else ft.Icons.CHECK_CIRCLE,
-                    color=ft.Colors.ORANGE_600 if self.has_changes else ft.Colors.GREEN_600,
+                    color=ft.Colors.ON_SURFACE if self.has_changes else ft.Colors.ON_SURFACE,
                     size=20
                 ),
                 ft.Text(
                     f"{len(self.get_changed_settings())} changes" if self.has_changes else "No changes",
-                    color=ft.Colors.ORANGE_600 if self.has_changes else ft.Colors.GREEN_600,
+                    color=ft.Colors.ON_SURFACE,
                     weight=ft.FontWeight.BOLD
                 )
             ], spacing=5, tight=True),
             padding=ft.Padding(10, 5, 10, 5),
-            bgcolor=ft.Colors.ORANGE_50 if self.has_changes else ft.Colors.GREEN_50,
+            bgcolor=None,  # Let inherit from parent theme
             border_radius=6
         )
         

@@ -119,7 +119,15 @@ class FileFilterManager:
         # Apply search filter
         search_term = self.search_field.value.lower() if self.search_field and self.search_field.value else ""
         if search_term:
-            filtered = [f for f in filtered if search_term in f.filename.lower()]
+            filtered = []
+            for f in filtered:
+                filename = ""
+                if hasattr(f, 'filename'):
+                    filename = f.filename.lower()
+                elif hasattr(f, 'get'):
+                    filename = f.get('filename', '').lower()
+                if search_term in filename:
+                    filtered.append(f)
         
         # Apply type filter
         if self._current_type_filter != "all":
@@ -157,10 +165,10 @@ class FileFilterManager:
             for extensions in type_mappings.values():
                 all_extensions.update(extensions)
             
-            return [f for f in files if self._get_file_extension(f.filename) not in all_extensions]
+            return [f for f in files if self._get_file_extension(f.filename if hasattr(f, 'filename') else f.get('filename', '')) not in all_extensions]
         
         target_extensions = type_mappings.get(type_filter, [])
-        return [f for f in files if self._get_file_extension(f.filename) in target_extensions]
+        return [f for f in files if self._get_file_extension(f.filename if hasattr(f, 'filename') else f.get('filename', '')) in target_extensions]
     
     def _get_file_extension(self, filename: str) -> str:
         """Get file extension in lowercase"""
@@ -170,19 +178,26 @@ class FileFilterManager:
         """Apply sorting to file list"""
         try:
             if sort_option == "date_desc":
-                return sorted(files, key=lambda f: getattr(f, 'date_received', ''), reverse=True)
+                return sorted(files, key=lambda f: (getattr(f, 'date_received', '') if hasattr(f, 'date_received') else f.get('date_received', '')), reverse=True)
             elif sort_option == "date_asc":
-                return sorted(files, key=lambda f: getattr(f, 'date_received', ''))
+                return sorted(files, key=lambda f: (getattr(f, 'date_received', '') if hasattr(f, 'date_received') else f.get('date_received', '')))
             elif sort_option == "name_asc":
-                return sorted(files, key=lambda f: f.filename.lower())
+                return sorted(files, key=lambda f: (f.filename.lower() if hasattr(f, 'filename') else f.get('filename', '').lower()))
             elif sort_option == "name_desc":
-                return sorted(files, key=lambda f: f.filename.lower(), reverse=True)
+                return sorted(files, key=lambda f: (f.filename.lower() if hasattr(f, 'filename') else f.get('filename', '').lower()), reverse=True)
             elif sort_option == "size_desc":
-                return sorted(files, key=lambda f: getattr(f, 'size', 0), reverse=True)
+                return sorted(files, key=lambda f: (getattr(f, 'size', 0) if hasattr(f, 'size') else f.get('size', 0)), reverse=True)
             elif sort_option == "size_asc":
-                return sorted(files, key=lambda f: getattr(f, 'size', 0))
+                return sorted(files, key=lambda f: (getattr(f, 'size', 0) if hasattr(f, 'size') else f.get('size', 0)))
             elif sort_option == "type_asc":
-                return sorted(files, key=lambda f: self._get_file_extension(f.filename))
+                def get_filename(f):
+                    if hasattr(f, 'filename'):
+                        return f.filename
+                    elif hasattr(f, 'get'):
+                        return f.get('filename', '')
+                    else:
+                        return ''
+                return sorted(files, key=lambda f: self._get_file_extension(get_filename(f)))
             else:
                 return files
         except Exception as e:

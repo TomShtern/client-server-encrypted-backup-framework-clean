@@ -74,20 +74,30 @@ class ClientTableRenderer:
         
         for client in filtered_clients:
             # Client selection checkbox
+            client_id = getattr(client, 'client_id', None) or (client['client_id'] if hasattr(client, '__getitem__') and 'client_id' in client else (client.get('id', 'Unknown') if hasattr(client, 'get') else 'Unknown'))
             client_checkbox = ft.Checkbox(
-                value=client.client_id in selected_clients,
+                value=client_id in selected_clients,
                 on_change=on_client_select,
-                data=client.client_id
+                data=client_id
             )
             
             # Status display with color coding
-            status_display = self._format_status_display(client.status)
+            status = getattr(client, 'status', None) or (client['status'] if hasattr(client, '__getitem__') and 'status' in client else (client.get('status', 'Unknown') if hasattr(client, 'get') else 'Unknown'))
+            status_display = self._format_status_display(status)
             
             # Last seen formatting
-            last_seen_display = self._format_last_seen(client.last_seen)
+            last_seen = getattr(client, 'last_seen', None) or (client['last_seen'] if hasattr(client, '__getitem__') and 'last_seen' in client else (client.get('last_seen', 'Unknown') if hasattr(client, 'get') else 'Unknown'))
+            last_seen_display = self._format_last_seen(last_seen)
             
             # Total size formatting
-            size_display = self._format_total_size(getattr(client, 'total_size', 0))
+            total_size = getattr(client, 'total_size', None) or (client['total_size'] if hasattr(client, '__getitem__') and 'total_size' in client else (client.get('total_size', 0) if hasattr(client, 'get') else 0))
+            size_display = self._format_total_size(total_size)
+            
+            # Files count
+            files_count = getattr(client, 'files_count', None) or (client['files_count'] if hasattr(client, '__getitem__') and 'files_count' in client else (client.get('files_count', 0) if hasattr(client, 'get') else 0))
+            
+            # Client ID
+            client_id = getattr(client, 'client_id', None) or (client['client_id'] if hasattr(client, '__getitem__') and 'client_id' in client else (client.get('id', 'Unknown') if hasattr(client, 'get') else 'Unknown'))
             
             # Action buttons
             action_buttons = self._create_client_action_buttons(client)
@@ -97,10 +107,10 @@ class ClientTableRenderer:
                 ft.DataRow(
                     cells=[
                         ft.DataCell(client_checkbox),
-                        ft.DataCell(ft.Text(client.client_id, size=12)),
+                        ft.DataCell(ft.Text(client_id, size=12)),
                         ft.DataCell(status_display),
                         ft.DataCell(ft.Text(last_seen_display, size=11)),
-                        ft.DataCell(ft.Text(str(getattr(client, 'files_count', 0)))),
+                        ft.DataCell(ft.Text(str(files_count))),
                         ft.DataCell(ft.Text(size_display)),
                         ft.DataCell(action_buttons),
                     ]
@@ -204,6 +214,15 @@ class ClientTableRenderer:
             padding=10,
             expand=True
         )
+    
+    def update_table_data(self, filtered_clients: List[Any], on_client_select: callable = None, 
+                         selected_clients: List[str] = None) -> None:
+        """Update table with new data"""
+        if selected_clients is None:
+            selected_clients = self.selected_clients
+            
+        self.populate_client_table(filtered_clients, on_client_select, selected_clients)
+        self.update_table_display()
     
     def update_table_display(self) -> None:
         """Update the table display"""

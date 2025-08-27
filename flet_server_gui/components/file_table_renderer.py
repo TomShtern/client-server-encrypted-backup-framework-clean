@@ -74,23 +74,27 @@ class FileTableRenderer:
         
         for file_obj in filtered_files:
             # File selection checkbox
+            filename = getattr(file_obj, 'filename', None) or (file_obj['filename'] if hasattr(file_obj, '__getitem__') and 'filename' in file_obj else (file_obj.get('name', 'Unknown') if hasattr(file_obj, 'get') else 'Unknown'))
             file_checkbox = ft.Checkbox(
-                value=file_obj.filename in selected_files,
+                value=filename in selected_files,
                 on_change=on_file_select,
-                data=file_obj.filename
+                data=filename
             )
             
             # File type icon and display
-            file_type_display = self._get_file_type_display(file_obj.filename)
+            filename = getattr(file_obj, 'filename', None) or (file_obj['filename'] if hasattr(file_obj, '__getitem__') and 'filename' in file_obj else (file_obj.get('name', 'Unknown') if hasattr(file_obj, 'get') else 'Unknown'))
+            file_type_display = self._get_file_type_display(filename)
             
             # Size formatting
-            size_display = self._format_file_size(getattr(file_obj, 'size', 0))
+            size_attr = getattr(file_obj, 'size', 0)
+            size_display = self._format_file_size(size_attr or (file_obj['size'] if hasattr(file_obj, '__getitem__') and 'size' in file_obj else (file_obj.get('size', 0) if hasattr(file_obj, 'get') else 0)))
             
             # Date formatting
-            date_display = self._format_date(getattr(file_obj, 'date_received', ''))
+            date_received = getattr(file_obj, 'date_received', None) or (file_obj['date_received'] if hasattr(file_obj, '__getitem__') and 'date_received' in file_obj else (file_obj.get('date', '') if hasattr(file_obj, 'get') else ''))
+            date_display = self._format_date(date_received)
             
             # Client display
-            client_display = getattr(file_obj, 'client_id', 'Unknown')
+            client_display = getattr(file_obj, 'client_id', None) or (file_obj['client_id'] if hasattr(file_obj, '__getitem__') and 'client_id' in file_obj else (file_obj.get('client', 'Unknown') if hasattr(file_obj, 'get') else 'Unknown'))
             
             # Action buttons
             action_buttons = self._create_file_action_buttons(file_obj)
@@ -100,7 +104,7 @@ class FileTableRenderer:
                 ft.DataRow(
                     cells=[
                         ft.DataCell(file_checkbox),
-                        ft.DataCell(ft.Text(file_obj.filename, size=12)),
+                        ft.DataCell(ft.Text(filename, size=12)),
                         ft.DataCell(file_type_display),
                         ft.DataCell(ft.Text(size_display, size=11)),
                         ft.DataCell(ft.Text(date_display, size=11)),
@@ -230,6 +234,15 @@ class FileTableRenderer:
             expand=True
         )
     
+    def update_table_data(self, filtered_files: List[Any], on_file_select: callable = None, 
+                         selected_files: List[str] = None) -> None:
+        """Update table with new data"""
+        if selected_files is None:
+            selected_files = self.selected_files
+            
+        self.populate_file_table(filtered_files, on_file_select, selected_files)
+        self.update_table_display()
+    
     def update_table_display(self) -> None:
         """Update table display after changes"""
         if self.page:
@@ -279,7 +292,8 @@ class FileTableRenderer:
         file_types = {}
         
         for file_obj in files:
-            extension = file_obj.filename.split('.')[-1].lower() if '.' in file_obj.filename else 'no_ext'
+            filename = getattr(file_obj, 'filename', None) or (file_obj['filename'] if hasattr(file_obj, '__getitem__') and 'filename' in file_obj else (file_obj.get('name', 'Unknown') if hasattr(file_obj, 'get') else 'Unknown'))
+            extension = filename.split('.')[-1].lower() if '.' in filename else 'no_ext'
             file_types[extension] = file_types.get(extension, 0) + 1
         
         return {

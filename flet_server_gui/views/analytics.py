@@ -59,7 +59,7 @@ class AnalyticsView:
                 ft.Card(
                     content=ft.Container(
                         content=ft.Column([
-                            ft.Icon(ft.Icons.WARNING_AMBER, size=48, color=ft.Colors.AMBER),
+                            ft.Icon(ft.Icons.WARNING_AMBER, size=48),
                             ft.Text("Server Connection Required", style=ft.TextThemeStyle.HEADLINE_SMALL),
                             ft.Text("Analytics requires an active server connection to display real-time performance data.",
                                    style=ft.TextThemeStyle.BODY_MEDIUM, text_align=ft.TextAlign.CENTER),
@@ -78,11 +78,24 @@ class AnalyticsView:
                 self._build_basic_system_info()
             ], spacing=16, scroll=ft.ScrollMode.AUTO, expand=True)
         
-        return ft.Container(
+        container = ft.Container(
             content=content,
             padding=20,
             expand=True
         )
+        
+        # Schedule chart initialization after the container is added to the page
+        if self.performance_charts:
+            # Use a small delay to ensure the charts are mounted
+            import asyncio
+            async def delayed_init():
+                await asyncio.sleep(0.1)
+                self.initialize_charts()
+            
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(delayed_init)
+        
+        return container
         
     def update_data(self):
         """Update analytics data with real implementations"""
@@ -192,3 +205,8 @@ class AnalyticsView:
             print("[INFO] Server bridge is available")
         else:
             print("[WARNING] No server bridge connection")
+    
+    def initialize_charts(self):
+        """Initialize charts after they are added to the page"""
+        if self.performance_charts:
+            self.performance_charts.initialize_updates()

@@ -570,7 +570,13 @@ class DashboardView:
     async def _on_exit_gui(self, e):
         """Handle exit GUI button"""
         self.add_log_entry("System", "Closing GUI...", "INFO")
-        self.page.window_close()
+        # Use the correct method to close the window
+        if hasattr(self.page, 'window_destroy'):
+            self.page.window_destroy()
+        else:
+            # Fallback: try to close via window visibility
+            self.page.window_visible = False
+            self.page.update()
     
     def _clear_activity_log(self, e):
         """Clear the activity log with visual feedback"""

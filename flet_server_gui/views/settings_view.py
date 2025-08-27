@@ -151,14 +151,14 @@ class ModularSettingsView:
             "Export Settings",
             icon=ft.Icons.DOWNLOAD,
             on_click=self._handle_export_settings,
-            style=ft.ButtonStyle(bgcolor=ft.Colors.BLUE_100)
+            
         )
         
         import_button = ft.ElevatedButton(
             "Import Settings",
             icon=ft.Icons.UPLOAD,
             on_click=self._handle_import_settings,
-            style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN_100)
+            
         )
         
         backup_button = ft.OutlinedButton(

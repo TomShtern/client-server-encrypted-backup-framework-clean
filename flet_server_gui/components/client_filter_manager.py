@@ -101,11 +101,29 @@ class ClientFilterManager:
         # Apply search filter
         search_term = self.search_field.value.lower() if self.search_field and self.search_field.value else ""
         if search_term:
-            filtered = [c for c in filtered if search_term in c.client_id.lower()]
+            filtered_search = []
+            for c in filtered:
+                client_id = ""
+                if hasattr(c, 'client_id'):
+                    client_id = c.client_id.lower()
+                elif hasattr(c, '__getitem__'):  # Check if it's dict-like
+                    client_id = c['client_id'].lower() if 'client_id' in c else ''
+                if search_term in client_id:
+                    filtered_search.append(c)
+            filtered = filtered_search
         
         # Apply status filter
         if self._current_filter != "all":
-            filtered = [c for c in filtered if c.status.lower() == self._current_filter.lower()]
+            filtered_status = []
+            for c in filtered:
+                status = ""
+                if hasattr(c, 'status'):
+                    status = c.status.lower()
+                elif hasattr(c, '__getitem__'):  # Check if it's dict-like
+                    status = c['status'].lower() if 'status' in c else ''
+                if status == self._current_filter.lower():
+                    filtered_status.append(c)
+            filtered = filtered_status
         
         self.filtered_clients = filtered
         

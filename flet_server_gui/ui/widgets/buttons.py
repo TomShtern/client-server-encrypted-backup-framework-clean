@@ -354,31 +354,40 @@ class ActionButtonFactory:
                 text=config.text,
                 icon=config.icon,
                 tooltip=config.tooltip,
-                on_click=lambda e: self._handle_button_click(config, get_selected_items, additional_params)
+                on_click=lambda e: self._safe_handle_button_click(e, config, get_selected_items, additional_params)
             )
         elif config.button_style == "filled":
             button = ft.FilledButton(
                 text=config.text,
                 icon=config.icon,
                 tooltip=config.tooltip,
-                on_click=lambda e: self._handle_button_click(config, get_selected_items, additional_params)
+                on_click=lambda e: self._safe_handle_button_click(e, config, get_selected_items, additional_params)
             )
         elif config.button_style == "outlined":
             button = ft.OutlinedButton(
                 text=config.text,
                 icon=config.icon,
                 tooltip=config.tooltip,
-                on_click=lambda e: self._handle_button_click(config, get_selected_items, additional_params)
+                on_click=lambda e: self._safe_handle_button_click(e, config, get_selected_items, additional_params)
             )
         else:  # text button
             button = ft.TextButton(
                 text=config.text,
                 icon=config.icon,
                 tooltip=config.tooltip,
-                on_click=lambda e: self._handle_button_click(config, get_selected_items, additional_params)
+                on_click=lambda e: self._safe_handle_button_click(e, config, get_selected_items, additional_params)
             )
         
         return button
+    
+    def _safe_handle_button_click(self, e, config: ButtonConfig, get_selected_items: Callable[[], List[str]], additional_params: Optional[Dict[str, Any]]):
+        """Safely handle button click by running async handler in background task"""
+        if hasattr(self.page, 'run_task'):
+            self.page.run_task(self._handle_button_click, config, get_selected_items, additional_params)
+        else:
+            # Fallback for older Flet versions
+            import asyncio
+            asyncio.create_task(self._handle_button_click(config, get_selected_items, additional_params))
     
     async def _handle_button_click(
         self,

@@ -127,9 +127,6 @@ class EnhancedPerformanceCharts:
         start_stop_button = ft.ElevatedButton(
             text="Start Monitoring",
             icon=ft.Icons.PLAY_ARROW,
-            # Use theme-aware colors instead of hardcoded GREEN
-            bgcolor=ft.Colors.PRIMARY,
-            color=ft.Colors.ON_PRIMARY,
             on_click=self._toggle_monitoring,
             expand=True
         )
@@ -225,7 +222,7 @@ class EnhancedPerformanceCharts:
         return ft.Container(
             content=controls,
             # Use proper surface color for dark theme compatibility
-            bgcolor=ft.Colors.SURFACE_VARIANT,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
             padding=ft.padding.all(10),
             border_radius=8,
             expand=True
@@ -303,7 +300,7 @@ class EnhancedPerformanceCharts:
         status_indicator = ft.Container(
             width=8,
             height=8,
-            bgcolor=ft.Colors.GREY,
+            bgcolor=ft.Colors.ON_SURFACE_VARIANT,
             border_radius=4
         )
         
@@ -324,8 +321,6 @@ class EnhancedPerformanceCharts:
                 padding=ft.padding.all(12),
                 expand=True
             ),
-            # Remove hardcoded card colors - use theme
-            bgcolor=None,  # Let Material Design 3 theme control card background
             expand=True
         )
     
@@ -364,19 +359,19 @@ class EnhancedPerformanceCharts:
     def _create_enhanced_chart(self, title: str, color) -> ft.Container:
         """Create enhanced chart container with interactive features and responsive design"""
         chart_display = ft.Container(
-            content=ft.Column([
-                ft.Text("Start monitoring to see live data", 
-                       style=ft.TextThemeStyle.BODY_MEDIUM, 
-                       color=ft.Colors.ON_SURFACE_VARIANT),
-                ft.Container(height=100, expand=True)  # Chart area
-            ], expand=True),
-            # Use theme-aware colors for proper dark mode support
-            bgcolor=ft.Colors.SURFACE_CONTAINER,
-            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
-            border_radius=4,
-            padding=ft.padding.all(8),
-            expand=True
-        )
+                content=ft.Column([
+                    ft.Text("Start monitoring to see live data", 
+                           style=ft.TextThemeStyle.BODY_MEDIUM, 
+                           color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Container(height=100, expand=True)  # Chart area
+                ], expand=True),
+                # Use theme-aware colors for proper dark mode support
+                bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
+                border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+                border_radius=4,
+                padding=ft.padding.all(8),
+                expand=True
+            )
         
         return ft.Container(
             content=ft.Column([
@@ -410,12 +405,14 @@ class EnhancedPerformanceCharts:
             self._stop_monitoring()
             e.control.text = "Start Monitoring"
             e.control.icon = ft.Icons.PLAY_ARROW
-            e.control.bgcolor = ft.Colors.PRIMARY
+            # Use theme-aware colors instead of hardcoded colors
+            e.control.bgcolor = None  # Let button inherit theme colors
         else:
             self._start_monitoring()
             e.control.text = "Stop Monitoring"
             e.control.icon = ft.Icons.STOP
-            e.control.bgcolor = ft.Colors.ERROR
+            # Use theme-aware colors instead of hardcoded colors
+            e.control.bgcolor = None  # Let button inherit theme colors
         
         e.control.update()
     
@@ -579,7 +576,11 @@ class EnhancedPerformanceCharts:
                     else:
                         status_indicator.bgcolor = ft.Colors.GREEN
                     
-                    card.update()
+                    # Only update if the card is attached to the page
+                    if hasattr(card, '_attached') and card._attached:
+                        card.update()
+                    elif hasattr(card, 'page') and card.page:
+                        card.update()
     
     def _update_enhanced_charts(self):
         """Update charts with enhanced visualization"""
@@ -621,7 +622,9 @@ class EnhancedPerformanceCharts:
                 ], spacing=5)
                 
                 chart_display.content = chart_content
-                chart_display.update()
+                # Only update if the container is attached to the page
+                if hasattr(chart_display, 'page') and chart_display.page:
+                    chart_display.update()
         except Exception as e:
             logger.error(f"❌ Error updating chart for {metric_name}: {e}")
     
@@ -630,38 +633,91 @@ class EnhancedPerformanceCharts:
         if not self.alert_panel:
             return
             
-        panel_content = self.alert_panel.content.controls[0]  # ResponsiveRow
-        alert_container = panel_content.controls[0].content  # First container with alerts
-        clear_button_container = panel_content.controls[1].content  # Second container with clear button
+        # Safely navigate the container structure
+        try:
+            panel_content = self.alert_panel.content
+            if hasattr(panel_content, 'controls') and panel_content.controls:
+                responsive_row = panel_content.controls[0]
+                if hasattr(responsive_row, 'controls') and len(responsive_row.controls) >= 2:
+                    alert_container = responsive_row.controls[0]
+                    if hasattr(alert_container, 'content'):
+                        alert_content = alert_container.content
+                    else:
+                        alert_content = alert_container
+                    clear_button_container = responsive_row.controls[1]
+                    if hasattr(clear_button_container, 'content'):
+                        clear_content = clear_button_container.content
+                    else:
+                        clear_content = clear_button_container
+                else:
+                    # Fallback to direct access
+                    alert_content = panel_content
+                    clear_content = None
+            else:
+                # Fallback to direct access
+                alert_content = panel_content
+                clear_content = None
+        except (AttributeError, IndexError):
+            # Fallback to direct access if structure is different
+            alert_content = self.alert_panel.content
+            clear_content = None
         
+        # Create alert content
         if alerts:
             # Show alerts
             alert_texts = []
             for alert in alerts:
-                color = ft.Colors.RED if alert['level'] == 'critical' else ft.Colors.AMBER
+                # Use theme-aware colors instead of hardcoded colors
+                color = ft.Colors.ERROR if alert['level'] == 'critical' else ft.Colors.AMBER
                 icon = ft.Icons.ERROR if alert['level'] == 'critical' else ft.Icons.WARNING
                 alert_texts.append(
                     ft.Row([
                         ft.Icon(icon, color=color, size=16),
-                        ft.Text(alert['message'], size=12, color=color)
+                        ft.Text(alert['message'], size=12, color=ft.Colors.ON_SURFACE)
                     ], spacing=4)
                 )
             
-            alert_container.controls = alert_texts
-            clear_button_container.visible = True
-            self.alert_panel.bgcolor = ft.Colors.ERROR_CONTAINER if any(a['level'] == 'critical' for a in alerts) else ft.Colors.SURFACE_CONTAINER_HIGHEST
+            # Update alert content
+            if hasattr(alert_content, 'controls'):
+                alert_content.controls = alert_texts
+            else:
+                # If it's a container, update its content
+                if hasattr(alert_content, 'content'):
+                    alert_content.content = ft.Column(alert_texts, spacing=4) if alert_texts else None
+            
+            # Update clear button visibility
+            if clear_content:
+                clear_content.visible = True
+                
+            # Update background color using theme-aware colors
+            if hasattr(self.alert_panel, 'bgcolor'):
+                self.alert_panel.bgcolor = ft.Colors.ERROR_CONTAINER if any(a['level'] == 'critical' for a in alerts) else None  # Let inherit from parent theme
         else:
             # No alerts
-            alert_container.controls = [
-                ft.Row([
-                    ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN, size=16),
-                    ft.Text("All systems normal", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
-                ], spacing=4)
-            ]
-            clear_button_container.visible = False
-            self.alert_panel.bgcolor = ft.Colors.SURFACE
+            normal_alert = ft.Row([
+                ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.ON_PRIMARY, size=16),
+                ft.Text("All systems normal", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+            ], spacing=4)
+            
+            # Update alert content
+            if hasattr(alert_content, 'controls'):
+                alert_content.controls = [normal_alert]
+            else:
+                # If it's a container, update its content
+                if hasattr(alert_content, 'content'):
+                    alert_content.content = normal_alert
+            
+            # Update clear button visibility
+            if clear_content:
+                clear_content.visible = False
+                
+            # Update background color using theme-aware colors
+            if hasattr(self.alert_panel, 'bgcolor'):
+                self.alert_panel.bgcolor = None  # Let inherit from parent theme_HIGHEST
         
-        self.alert_panel.update()
+        # Update the panel only if it's attached to the page
+        if hasattr(self.alert_panel, 'page') and self.alert_panel.page:
+            self.alert_panel.update()
     
     def _clear_alerts(self, e):
         """Clear all active alerts"""
@@ -687,7 +743,9 @@ class EnhancedPerformanceCharts:
                        color=ft.Colors.ON_SURFACE_VARIANT),
                 ft.Container(height=100, expand=True)
             ], expand=True)
-            chart_display.update()
+            # Only update if the container is attached to the page
+            if hasattr(chart_display, 'page') and chart_display.page:
+                chart_display.update()
     
     def _show_fullscreen_chart(self, title: str):
         """Show fullscreen chart (placeholder implementation)"""
@@ -716,6 +774,13 @@ class EnhancedPerformanceCharts:
         """Handle threshold display toggle"""
         self.settings.show_thresholds = e.control.value
         logger.info(f"Threshold display toggled to {self.settings.show_thresholds}")
+    
+    def initialize_updates(self):
+        """Initialize updates after component is mounted to page"""
+        # Reset charts to initial state
+        self._reset_charts(None)
+        # Update alert panel to initial state
+        self._update_alert_panel([])
 
 
 # Enhanced Chart Components
