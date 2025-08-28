@@ -31,6 +31,35 @@ class FileActionHandlers:
         """Set callback for when data changes and refresh is needed"""
         self.on_data_changed = callback
     
+    async def _show_confirmation_dialog(self, title: str, message: str, 
+                                 on_confirm: Callable, on_cancel: Callable = None):
+        """Show confirmation dialog with standard styling"""
+        if self.dialog_system:
+            confirmed = await self.dialog_system.show_confirmation_async(
+                title=title,
+                message=message
+            )
+            if confirmed:
+                # Handle both sync and async callbacks
+                if asyncio.iscoroutinefunction(on_confirm):
+                    await on_confirm()
+                else:
+                    on_confirm()
+            elif on_cancel:
+                # Handle both sync and async callbacks
+                if asyncio.iscoroutinefunction(on_cancel):
+                    await on_cancel()
+                else:
+                    on_cancel()
+            else:
+                self._close_dialog()
+        else:
+            # Fallback behavior - handle both sync and async callbacks
+            if asyncio.iscoroutinefunction(on_confirm):
+                await on_confirm()
+            else:
+                on_confirm()
+    
     async def download_file(self, filename: str, destination_path: str = None) -> bool:
         """Download a single file"""
         try:
@@ -92,6 +121,43 @@ class FileActionHandlers:
             self.toast_manager.show_error(f"Error verifying file: {str(e)}")
             return False
     
+    async def preview_file(self, filename: str) -> None:
+        """Preview file content using FilePreviewManager"""
+        try:
+            # Show loading indicator
+            self.dialog_system.show_info_dialog(
+                title="Loading Preview",
+                message=f"Loading preview for '{filename}'...",
+            )
+            
+            # Get file content through FileActions
+            result = await self.file_actions.get_file_content(filename)
+            
+            # Close loading dialog
+            self._close_dialog()
+            
+            if result.success:
+                # Show preview using FilePreviewManager
+                if hasattr(self, 'parent_view') and hasattr(self.parent_view, 'preview_manager'):
+                    # If we have access to the preview manager through parent view
+                    await self.parent_view.preview_manager.show_file_preview(filename)
+                elif hasattr(self, 'preview_manager'):
+                    # If preview manager is directly available
+                    await self.preview_manager.show_file_preview(filename)
+                else:
+                    # Fallback: show content in a simple dialog
+                    file_content = result.data
+                    self.dialog_system.show_info_dialog(
+                        title=f"Preview: {filename}",
+                        message=file_content[:1000] + "..." if len(file_content) > 1000 else file_content
+                    )
+            else:
+                self.toast_manager.show_error(f"Failed to load preview for '{filename}': {result.error_message}")
+                
+        except Exception as e:
+            self._close_dialog()
+            self.toast_manager.show_error(f"Error previewing file: {str(e)}")
+    
     async def delete_file(self, filename: str) -> None:
         """Delete a file with confirmation"""
         def confirm_delete():
@@ -99,7 +165,7 @@ class FileActionHandlers:
             asyncio.create_task(self._perform_delete(filename))
         
         # Show confirmation dialog
-        self.dialog_system.show_confirmation_dialog(
+        await self._show_confirmation_dialog(
             title="⚠️ Confirm Delete",
             message=f"Are you sure you want to permanently delete '{filename}'? This action cannot be undone.",
             on_confirm=confirm_delete,
@@ -201,7 +267,7 @@ class FileActionHandlers:
             self._close_dialog()
             asyncio.create_task(self._perform_bulk_download(filenames))
         
-        self.dialog_system.show_confirmation_dialog(
+        await self._show_confirmation_dialog(
             title="Confirm Bulk Download",
             message=f"Are you sure you want to download {len(filenames)} files to your Downloads folder?",
             on_confirm=confirm_bulk_download,
@@ -249,7 +315,7 @@ class FileActionHandlers:
             self._close_dialog()
             asyncio.create_task(self._perform_bulk_verify(filenames))
         
-        self.dialog_system.show_confirmation_dialog(
+        await self._show_confirmation_dialog(
             title="Confirm Bulk Verification",
             message=f"Are you sure you want to verify {len(filenames)} files?",
             on_confirm=confirm_bulk_verify,
@@ -296,7 +362,7 @@ class FileActionHandlers:
             self._close_dialog()
             asyncio.create_task(self._perform_bulk_delete(filenames))
         
-        self.dialog_system.show_confirmation_dialog(
+        await self._show_confirmation_dialog(
             title="⚠️ Confirm Bulk Delete",
             message=f"Are you sure you want to permanently delete {len(filenames)} files? This action cannot be undone.",
             on_confirm=confirm_bulk_delete,

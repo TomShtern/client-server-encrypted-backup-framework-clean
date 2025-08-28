@@ -9,6 +9,24 @@ import flet as ft
 from typing import Dict, Any
 import logging
 
+# Enhanced components imports
+from flet_server_gui.ui.widgets import (
+    EnhancedButton,
+    EnhancedCard,
+    EnhancedTable,
+    EnhancedWidget,
+    EnhancedButtonConfig,
+    ButtonVariant,
+    CardVariant,
+    TableSize,
+    WidgetSize,
+    WidgetType
+)
+
+# Layout fixes imports
+from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
+from flet_server_gui.ui.theme_consistency import ThemeConsistencyManager, apply_theme_consistency
+
 # Import modular settings components
 sys_path_added = False
 try:
@@ -31,15 +49,22 @@ except ImportError:
     from settings_change_manager import SettingsChangeManager
 
 from flet_server_gui.utils.settings_manager import SettingsManager
+from flet_server_gui.components.base_component import BaseComponent
 
 logger = logging.getLogger(__name__)
 
 
-class ModularSettingsView:
+class ModularSettingsView(BaseComponent):
     """Refactored settings view using composition pattern with specialized components."""
     
     def __init__(self, page: ft.Page, dialog_system, toast_manager):
         """Initialize with modular settings components."""
+        # Initialize parent BaseComponent
+        super().__init__(page, dialog_system, toast_manager)
+        
+        # Initialize theme consistency manager
+        self.theme_manager = ThemeConsistencyManager(page)
+        
         self.page = page
         self.dialog_system = dialog_system
         self.toast_manager = toast_manager
@@ -76,7 +101,7 @@ class ModularSettingsView:
             'advanced': self.form_generator.create_advanced_settings_form(current_settings)
         }
         
-        # Create action bar using change manager
+        # Create action bar using change manager - Apply responsive layout fixes
         action_bar = self.change_manager.create_action_bar(
             on_save=self._handle_save_settings,
             on_cancel=self._handle_cancel_changes,
@@ -84,10 +109,16 @@ class ModularSettingsView:
             on_reset_all=self._handle_reset_all
         )
         
+        # Apply hitbox fixes to action buttons if they exist
+        if hasattr(action_bar, 'controls'):
+            for control in action_bar.controls:
+                if isinstance(control, (ft.ElevatedButton, ft.OutlinedButton)):
+                    control = ResponsiveLayoutFixes.fix_button_hitbox(control)
+        
         # Create export/import section
         export_import_section = self._create_export_import_section()
         
-        # Create tabs for different setting categories
+        # Create tabs for different setting categories - Apply responsive layout fixes
         tabs = ft.Tabs(
             selected_index=0,
             animation_duration=300,
@@ -116,29 +147,43 @@ class ModularSettingsView:
             expand=True
         )
         
+        # Apply clipping fixes to tabs
+        tabs = ResponsiveLayoutFixes.create_clipping_safe_container(
+            tabs
+        )
+        
+        # Main layout with action bar at top - Apply responsive layout fixes
+        main_content = ft.Column([
+            # Header
+            ft.Row([
+                ft.Icon(ft.Icons.SETTINGS, size=28),
+                ft.Text("Settings Configuration", 
+                        style=ft.TextThemeStyle.TITLE_LARGE, 
+                        expand=True),
+            ], alignment=ft.MainAxisAlignment.START),
+            
+            ft.Divider(),
+            
+            # Action bar
+            action_bar,
+            
+            # Settings tabs
+            tabs,
+            
+            # Export/Import section
+            export_import_section
+            
+        ], spacing=10, scroll=ft.ScrollMode.AUTO)
+        
+        # Apply windowed mode compatibility
+        main_layout = ResponsiveLayoutFixes.create_windowed_layout_fix(main_content)
+        
+        # Apply theme consistency
+        apply_theme_consistency(self.page)
+        
         # Main layout with action bar at top
         return ft.Container(
-            content=ft.Column([
-                # Header
-                ft.Row([
-                    ft.Icon(ft.Icons.SETTINGS, size=28),
-                    ft.Text("Settings Configuration", 
-                            style=ft.TextThemeStyle.TITLE_LARGE, 
-                            expand=True),
-                ], alignment=ft.MainAxisAlignment.START),
-                
-                ft.Divider(),
-                
-                # Action bar
-                action_bar,
-                
-                # Settings tabs
-                tabs,
-                
-                # Export/Import section
-                export_import_section
-                
-            ], spacing=10, scroll=ft.ScrollMode.AUTO),
+            content=main_layout,
             padding=20,
             expand=True,
             clip_behavior=ft.ClipBehavior.NONE
@@ -154,6 +199,9 @@ class ModularSettingsView:
             
         )
         
+        # Apply hitbox fixes to export button
+        export_button = ResponsiveLayoutFixes.fix_button_hitbox(export_button)
+        
         import_button = ft.ElevatedButton(
             "Import Settings",
             icon=ft.Icons.UPLOAD,
@@ -161,11 +209,17 @@ class ModularSettingsView:
             
         )
         
+        # Apply hitbox fixes to import button
+        import_button = ResponsiveLayoutFixes.fix_button_hitbox(import_button)
+        
         backup_button = ft.OutlinedButton(
             "Create Backup",
             icon=ft.Icons.BACKUP,
             on_click=self._handle_create_backup
         )
+        
+        # Apply hitbox fixes to backup button
+        backup_button = ResponsiveLayoutFixes.fix_button_hitbox(backup_button)
         
         return ft.Container(
             content=ft.Card(

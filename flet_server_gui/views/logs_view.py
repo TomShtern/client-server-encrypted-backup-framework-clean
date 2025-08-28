@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Logs View for Flet Server GUI
 Real-time server log viewer with advanced filtering and management
@@ -8,11 +9,36 @@ import asyncio
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 import logging
+
+# Existing imports
 from flet_server_gui.services.log_service import LogService, LogEntry
+from flet_server_gui.components.base_component import BaseComponent
+from flet_server_gui.components.log_action_handlers import LogActionHandlers
+from flet_server_gui.core.semantic_colors import get_status_color
+
+# Enhanced components imports
+from flet_server_gui.ui.widgets import (
+    EnhancedButton,
+    EnhancedCard,
+    EnhancedTable,
+    EnhancedWidget,
+    EnhancedButtonConfig,
+    ButtonVariant,
+    CardVariant,
+    TableSize,
+    WidgetSize,
+    WidgetType
+)
+
+# Layout fixes imports
+from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
+from flet_server_gui.ui.theme_consistency import ThemeConsistencyManager
+from flet_server_gui.ui.theme_m3 import TOKENS
+
 
 logger = logging.getLogger(__name__)
 
-class LogsView:
+class LogsView(BaseComponent):
     """
     Real-time log viewer with advanced filtering and search capabilities.
     NO mock data - displays actual server logs with live updates.
@@ -20,11 +46,24 @@ class LogsView:
     
     def __init__(self, page: ft.Page, dialog_system, toast_manager):
         """Initialize with real log service"""
+        # Initialize parent BaseComponent
+        super().__init__(page, dialog_system, toast_manager)
+        
+        # Initialize theme consistency manager
+        self.theme_manager = ThemeConsistencyManager(page)
+        
         self.page = page
         self.dialog_system = dialog_system
         self.toast_manager = toast_manager
         self.log_service = LogService()
         self._ui_update_task = None
+        
+        # Initialize action handlers
+        self.action_handlers = LogActionHandlers(self.log_service, dialog_system, toast_manager, page)
+        self.initialized = False
+        self.action_handlers.set_data_changed_callback(self._refresh_logs)
+        self.action_handlers.parent_view = self
+        self.initialized = True
         
         # UI state
         self.auto_scroll = True
@@ -33,12 +72,15 @@ class LogsView:
         self.search_query = ""
         self.max_displayed_logs = 500
         
-        # UI components
+        # UI components - Apply responsive layout fixes
         self.log_list = ft.ListView(spacing=2, padding=10, auto_scroll=True, expand=True)
-        self.log_counter = ft.Text("0 entries", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
-        self.monitoring_status = ft.Text("●", color=ft.Colors.RED, size=16)
+        self.log_counter = ft.Text("0 entries", size=12)
+        self.monitoring_status = ft.Text("●", color=get_status_color("error"), size=16)
         
-        # Filter controls
+        # Apply hitbox alignment fixes
+        self.monitoring_status = ResponsiveLayoutFixes.fix_hitbox_alignment(self.monitoring_status)
+        
+        # Filter controls - Apply responsive layout fixes
         self.level_filter = ft.Dropdown(
             label="Level",
             value="ALL",
@@ -69,13 +111,26 @@ class LogsView:
             width=300
         )
         
+        # Apply clipping fixes to filter controls
+        self.level_filter = ResponsiveLayoutFixes.create_clipping_safe_container(
+            self.level_filter
+        )
+        
+        self.component_filter = ResponsiveLayoutFixes.create_clipping_safe_container(
+            self.component_filter
+        )
+        
+        self.search_field = ResponsiveLayoutFixes.create_clipping_safe_container(
+            self.search_field
+        )
+        
         logger.info("✅ Logs view initialized with real log service")
 
     def start(self):
         """Start log monitoring and UI updates."""
         if not self.log_service.monitoring_active:
             if self.log_service.start_monitoring():
-                self.monitoring_status.color = ft.Colors.GREEN
+                self.monitoring_status.color = get_status_color("success")
                 self.monitoring_status.value = "●"
                 if self._ui_update_task is None:
                     self._ui_update_task = self.page.run_task(self._ui_update_loop)
@@ -89,7 +144,7 @@ class LogsView:
         if self._ui_update_task:
             self._ui_update_task.cancel()
             self._ui_update_task = None
-        self.monitoring_status.color = ft.Colors.RED
+        self.monitoring_status.color = get_status_color("error")
 
     def create_logs_view(self) -> ft.Container:
         """Create the main logs view with real-time updates"""
@@ -145,7 +200,7 @@ class LogsView:
                 on_change=self._on_max_entries_changed
             ),
             ft.Container(expand=1),
-            ft.Text("Real-time server log monitoring", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+            ft.Text("Real-time server log monitoring", size=12, color=TOKENS['outline'])
         ])
         
         return ft.Container(
@@ -154,12 +209,12 @@ class LogsView:
                     "Server Logs",
                     size=28,
                     weight=ft.FontWeight.BOLD,
-                    color=ft.Colors.PRIMARY
+                    color=TOKENS['primary']
                 ),
                 ft.Text(
                     "Real-time server log monitoring and analysis",
                     size=14,
-                    color=ft.Colors.ON_SURFACE_VARIANT
+                    color=TOKENS['outline']
                 ),
                 ft.Divider(height=20),
                 controls_bar,
@@ -167,7 +222,7 @@ class LogsView:
                 ft.Divider(),
                 ft.Container(
                     content=self.log_list,
-                    border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+                    border=ft.border.all(1, TOKENS['outline']),
                     border_radius=8,
                     expand=True
                 )
@@ -222,26 +277,28 @@ class LogsView:
     
     def _add_log_entry_to_ui(self, entry: LogEntry):
         """Add a log entry to the UI list"""
-        level_colors = {
-            'DEBUG': ft.Colors.BLUE_GREY,
-            'INFO': ft.Colors.BLUE,
-            'WARNING': ft.Colors.ORANGE,
-            'ERROR': ft.Colors.RED,
-            'CRITICAL': ft.Colors.PURPLE
+        # Use semantic color system for log level colors
+        level_color_map = {
+            'DEBUG': "info",
+            'INFO': "info",
+            'WARNING': "warning",
+            'ERROR': "error",
+            'CRITICAL': "error"
         }
-        level_color = level_colors.get(entry.level.upper(), ft.Colors.ON_SURFACE)
+        semantic_level = level_color_map.get(entry.level.upper(), "neutral")
+        level_color = get_status_color(semantic_level)
         time_str = entry.timestamp.strftime("%H:%M:%S")
         
         log_row = ft.Container(
             content=ft.Row([
-                ft.Container(content=ft.Text(time_str, size=10, color=ft.Colors.ON_SURFACE_VARIANT), width=60),
+                ft.Container(content=ft.Text(time_str, size=10, color=TOKENS['outline']), width=60),
                 ft.Container(content=ft.Text(entry.level, size=10, color=level_color, weight=ft.FontWeight.BOLD), width=60),
-                ft.Container(content=ft.Text(entry.component, size=10, color=ft.Colors.ON_SURFACE_VARIANT), width=80),
-                ft.Expanded(child=ft.Text(entry.message, size=12, color=ft.Colors.ON_SURFACE, overflow=ft.TextOverflow.ELLIPSIS))
+                ft.Container(content=ft.Text(entry.component, size=10, color=TOKENS['outline']), width=80),
+                ft.Expanded(child=ft.Text(entry.message, size=12, color=TOKENS['on_surface'], overflow=ft.TextOverflow.ELLIPSIS))
             ]),
             padding=ft.padding.symmetric(horizontal=8, vertical=2),
             border_radius=4,
-            bgcolor=ft.Colors.SURFACE_VARIANT if entry.level.upper() in ['WARNING', 'ERROR', 'CRITICAL'] else None,
+            bgcolor=TOKENS['surface_variant'] if entry.level.upper() in ['WARNING', 'ERROR', 'CRITICAL'] else None,
             data=entry.id
         )
         self.log_list.controls.append(log_row)
@@ -262,23 +319,9 @@ class LogsView:
     
     def _refresh_logs(self, e):
         """Refresh the log display"""
-        try:
-            self.log_list.controls.clear()
-            recent_logs = self.log_service.get_recent_logs(limit=self.max_displayed_logs)
-            self._update_component_filter(recent_logs)
-            
-            displayed_count = 0
-            for entry in reversed(recent_logs):
-                if self._should_display_entry(entry):
-                    self._add_log_entry_to_ui(entry)
-                    displayed_count += 1
-            
-            self._update_stats()
-            self.page.update()
-            logger.info(f"✅ Logs refreshed - displaying {displayed_count} entries")
-        except Exception as e:
-            logger.error(f"❌ Error refreshing logs: {e}")
-            self.toast_manager.show_error("Failed to refresh logs")
+        if hasattr(self, 'initialized') and self.initialized and \
+           hasattr(self.action_handlers, 'callback_initialized') and self.action_handlers.callback_initialized:
+            asyncio.create_task(self.action_handlers.refresh_logs())
     
     def _update_component_filter(self, logs: List[LogEntry]):
         """Update component filter dropdown with available components"""
@@ -334,38 +377,12 @@ class LogsView:
     
     def _clear_display(self, e):
         """Clear the log display"""
-        self.log_list.controls.clear()
-        self.log_counter.value = "0 entries displayed"
-        self.page.update()
-        self.toast_manager.show_info("Log display cleared")
+        asyncio.create_task(self.action_handlers.clear_logs())
     
     def _export_logs(self, e):
         """Export logs to file"""
-        try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"server_logs_export_{timestamp}.txt"
-            logs = self.log_service.get_recent_logs()
-            filtered_logs = [log for log in logs if self._should_display_entry(log)]
-            
-            if filtered_logs:
-                with open(filename, 'w', encoding='utf-8') as f:
-                    f.write(f"# Server Logs Export - {datetime.now().isoformat()}\n")
-                    f.write(f"# Filters: Level={self.filter_level}, Component={self.filter_component}\n")
-                    f.write(f"# Search: {self.search_query or 'None'}\n")
-                    f.write(f"# Total entries: {len(filtered_logs)}\n\n")
-                    for entry in sorted(filtered_logs, key=lambda x: x.timestamp):
-                        f.write(f"{entry.timestamp.isoformat()} - {entry.level} - {entry.component} - {entry.message}\n")
-                
-                self.dialog_system.show_success_dialog(
-                    title="Export Successful",
-                    message=f"Logs exported to {filename}\n{len(filtered_logs)} entries exported"
-                )
-                logger.info(f"✅ Logs exported to {filename}")
-            else:
-                self.toast_manager.show_warning("No logs to export with current filters")
-        except Exception as e:
-            logger.error(f"❌ Error exporting logs: {e}")
-            self.dialog_system.show_error_dialog(
-                title="Export Failed",
-                message="An error occurred while exporting logs. Check logs for details."
-            )
+        asyncio.create_task(self.action_handlers.export_logs(
+            self.filter_level, 
+            self.filter_component, 
+            self.search_query
+        ))

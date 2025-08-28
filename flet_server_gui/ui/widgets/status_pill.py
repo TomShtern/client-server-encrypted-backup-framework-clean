@@ -12,6 +12,9 @@ from typing import Optional, Callable, Dict, Any
 from enum import Enum
 import asyncio
 from datetime import datetime, timedelta
+from flet_server_gui.core.semantic_colors import get_status_color
+from flet_server_gui.ui.theme_m3 import TOKENS
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 
 class ServerStatus(Enum):
@@ -76,13 +79,13 @@ class StatusPill(ft.Container):
         }
         
         self._status_color_map = {
-            ServerStatus.RUNNING: ft.Colors.GREEN,
-            ServerStatus.STOPPED: ft.Colors.GREY,
-            ServerStatus.STARTING: ft.Colors.BLUE,
-            ServerStatus.STOPPING: ft.Colors.ORANGE,
-            ServerStatus.ERROR: ft.Colors.RED,
-            ServerStatus.UNKNOWN: ft.Colors.AMBER,
-            ServerStatus.MAINTENANCE: ft.Colors.PURPLE
+            ServerStatus.RUNNING: get_status_color("success"),
+            ServerStatus.STOPPED: get_status_color("neutral"),
+            ServerStatus.STARTING: get_status_color("info"),
+            ServerStatus.STOPPING: get_status_color("warning"),
+            ServerStatus.ERROR: get_status_color("error"),
+            ServerStatus.UNKNOWN: get_status_color("warning"),
+            ServerStatus.MAINTENANCE: get_status_color("info")
         }
         
         self._status_icon_map = {
@@ -106,7 +109,7 @@ class StatusPill(ft.Container):
                 self._get_status_text(),
                 size=12,
                 weight=ft.FontWeight.W_500,
-                color=ft.Colors.WHITE
+                color=TOKENS['on_primary']
             )
         
         # Create icon component
@@ -114,7 +117,7 @@ class StatusPill(ft.Container):
             self._icon = ft.Icon(
                 self._get_status_icon(),
                 size=16,
-                color=ft.Colors.WHITE
+                color=TOKENS['on_primary']
             )
         
         # Create content row
@@ -158,7 +161,7 @@ class StatusPill(ft.Container):
             # Update icon if shown
             if self._icon:
                 self._icon.name = self._get_status_icon()
-                self._icon.color = ft.Colors.WHITE
+                self._icon.color = TOKENS['on_primary']
             
             # Trigger animation
             if animate:
@@ -181,7 +184,7 @@ class StatusPill(ft.Container):
     
     def _get_status_color(self) -> str:
         """Get background color for current status"""
-        return self._status_color_map.get(self.status, ft.Colors.GREY)
+        return self._status_color_map.get(self.status, TOKENS['outline'])
     
     def _get_status_icon(self) -> str:
         """Get icon for current status"""

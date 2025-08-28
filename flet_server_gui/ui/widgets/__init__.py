@@ -70,6 +70,73 @@ from .widgets import (
     create_dashboard_widget
 )
 
+# Enhanced components
+from .enhanced_dialogs import (
+    DialogType,
+    DialogSize,
+    DialogConfig,
+    EnhancedDialog,
+    EnhancedAlertDialog,
+    ConfirmationDialog
+)
+
+from .enhanced_buttons import (
+    ButtonVariant,
+    ButtonSize,
+    ButtonState,
+    EnhancedButtonConfig,
+    EnhancedButton,
+    create_primary_button,
+    create_secondary_button,
+    create_outline_button,
+    create_text_button,
+    create_icon_button,
+    create_fab_button
+)
+
+from .enhanced_cards import (
+    CardVariant,
+    CardSize,
+    EnhancedCardConfig,
+    EnhancedCard,
+    StatCard,
+    DataCard
+)
+
+from .enhanced_charts import (
+    ChartType,
+    ChartSize,
+    ChartDataPoint,
+    ChartSeries,
+    EnhancedChartConfig,
+    EnhancedChart,
+    create_line_chart as create_enhanced_line_chart,
+    create_bar_chart as create_enhanced_bar_chart,
+    create_pie_chart as create_enhanced_pie_chart
+)
+
+from .enhanced_tables import (
+    TableSize,
+    SortDirection as EnhancedSortDirection,
+    TableColumn as EnhancedTableColumn,
+    TableConfig,
+    EnhancedTable,
+    create_simple_table,
+    create_client_table,
+    create_file_table
+)
+
+from .enhanced_widgets import (
+    WidgetType,
+    WidgetSize as EnhancedWidgetSize,
+    WidgetConfig,
+    EnhancedWidget,
+    StatWidget,
+    ProgressWidget,
+    StatusWidget,
+    WidgetManager
+)
+
 __all__ = [
     # Button components
     'ButtonConfig',
@@ -122,5 +189,65 @@ __all__ = [
     'ActivityFeedWidget',
     'create_stat_widget',
     'create_activity_widget',
-    'create_dashboard_widget'
+    'create_dashboard_widget',
+    
+    # Enhanced dialog components
+    'DialogType',
+    'DialogSize',
+    'DialogConfig',
+    'EnhancedDialog',
+    'EnhancedAlertDialog',
+    'ConfirmationDialog',
+    
+    # Enhanced button components
+    'ButtonVariant',
+    'ButtonSize',
+    'ButtonState',
+    'EnhancedButtonConfig',
+    'EnhancedButton',
+    'create_primary_button',
+    'create_secondary_button',
+    'create_outline_button',
+    'create_text_button',
+    'create_icon_button',
+    'create_fab_button',
+    
+    # Enhanced card components
+    'CardVariant',
+    'CardSize',
+    'EnhancedCardConfig',
+    'EnhancedCard',
+    'StatCard',
+    'DataCard',
+    
+    # Enhanced chart components
+    'ChartType',
+    'ChartSize',
+    'ChartDataPoint',
+    'ChartSeries',
+    'EnhancedChartConfig',
+    'EnhancedChart',
+    'create_enhanced_line_chart',
+    'create_enhanced_bar_chart',
+    'create_enhanced_pie_chart',
+    
+    # Enhanced table components
+    'TableSize',
+    'EnhancedSortDirection',
+    'EnhancedTableColumn',
+    'TableConfig',
+    'EnhancedTable',
+    'create_simple_table',
+    'create_client_table',
+    'create_file_table',
+    
+    # Enhanced widget components
+    'WidgetType',
+    'EnhancedWidgetSize',
+    'WidgetConfig',
+    'EnhancedWidget',
+    'StatWidget',
+    'ProgressWidget',
+    'StatusWidget',
+    'WidgetManager'
 ]

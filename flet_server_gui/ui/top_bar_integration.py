@@ -34,6 +34,7 @@ from enum import Enum, auto
 import asyncio
 from datetime import datetime, timedelta
 import flet as ft
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 
 class TopBarLayout(Enum):
@@ -247,7 +248,7 @@ class TopBarIntegrationManager:
                         col={"sm": 2, "md": 2, "xl": 2},
                         controls=[
                             ft.Row([
-                                ft.Icon(ft.Icons.BACKUP, size=24, color=ft.Colors.PRIMARY),
+                                ft.Icon(ft.Icons.BACKUP, size=24, color=TOKENS['primary']),
                                 ft.Text("CyberBackup", size=16, weight=ft.FontWeight.W_500) if effective_config.show_title else ft.Container(),
                             ], tight=True),
                         ],
@@ -287,9 +288,9 @@ class TopBarIntegrationManager:
                     ),
                 ]),
                 height=effective_config.height,
-                bgcolor=ft.Colors.SURFACE,
+                bgcolor=TOKENS['surface'],
                 padding=ft.padding.symmetric(horizontal=16, vertical=8),
-                border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
+                border=ft.border.only(bottom=ft.border.BorderSide(1, TOKENS['outline'])),
                 # TODO: Replace with complete implementation
             )
             
@@ -298,7 +299,7 @@ class TopBarIntegrationManager:
             
         except Exception as e:
             # TODO: Handle top bar creation errors
-            return ft.Text(f"Top Bar Error: {str(e)}", color=ft.Colors.ERROR)
+            return ft.Text(f"Top Bar Error: {str(e)}", color=TOKENS['error'])
     
     def _create_breadcrumb_section(self) -> ft.Control:
         """
@@ -322,8 +323,8 @@ class TopBarIntegrationManager:
         # TODO: Integrate with navigation sync manager
         
         return ft.Row([
-            ft.Text("Dashboard", size=14, color=ft.Colors.ON_SURFACE_VARIANT),
-            ft.Icon(ft.Icons.CHEVRON_RIGHT, size=16, color=ft.Colors.ON_SURFACE_VARIANT),
+            ft.Text("Dashboard", size=14, color=TOKENS['outline']),
+            ft.Icon(ft.Icons.CHEVRON_RIGHT, size=16, color=TOKENS['outline']),
             ft.Text("Current Page", size=14, weight=ft.FontWeight.W_500),
         ], tight=True)
     
@@ -350,10 +351,10 @@ class TopBarIntegrationManager:
         return ft.Row([
             ft.Container(
                 content=ft.Row([
-                    ft.Icon(ft.Icons.CIRCLE, size=12, color=ft.Colors.GREEN),
+                    ft.Icon(ft.Icons.CIRCLE, size=12, color=TOKENS['secondary']),
                     ft.Text("Online", size=12),
                 ], tight=True),
-                bgcolor=ft.Colors.SURFACE_VARIANT,
+                bgcolor=TOKENS['surface_variant'],
                 padding=6,
                 border_radius=12,
             ),
@@ -386,7 +387,7 @@ class TopBarIntegrationManager:
                 # TODO: Add click handler
             ),
             text="5",
-            bgcolor=ft.Colors.ERROR,
+            bgcolor=TOKENS['error'],
         )
     
     def _create_user_profile_button(self) -> ft.Control:

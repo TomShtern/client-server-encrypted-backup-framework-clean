@@ -105,19 +105,19 @@ def main(page: ft.Page):
     test_components = [
         ft.Container(
             content=ft.Text("Column 1", size=20),
-            bgcolor=ft.Colors.BLUE_200,
+            bgcolor=TOKENS['primary'],
             padding=20,
             expand=True
         ),
         ft.Container(
             content=ft.Text("Column 2", size=20),
-            bgcolor=ft.Colors.GREEN_200,
+            bgcolor=TOKENS['secondary'],
             padding=20,
             expand=True
         ),
         ft.Container(
             content=ft.Text("Column 3", size=20),
-            bgcolor=ft.Colors.ORANGE_200,
+            bgcolor=TOKENS['secondary'],
             padding=20,
             expand=True
         )

@@ -8,6 +8,7 @@ UI: Navigation rail, routing controls
 import flet as ft
 from typing import Callable, Dict, Any, Optional, List
 from enum import Enum
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 # ============================================================================
 # NAVIGATION DEFINITIONS
@@ -118,10 +119,8 @@ class NavigationManager:
             if item.get("badge_count", 0) > 0:
                 # Use Row for better clickable area instead of Stack
                 badge = ft.Container(
-                    content=ft.Text(str(item["badge_count"]), size=10, color=ft.Colors.WHITE),
-                    width=16,
-                    height=16,
-                    bgcolor=ft.Colors.RED_600,
+                    content=ft.Text(str(item["badge_count"]), size=10, color=TOKENS['on_error']),
+                    bgcolor=TOKENS['error'],
                     border_radius=8,
                     alignment=ft.alignment.center
                 )
@@ -153,7 +152,7 @@ class NavigationManager:
         self.nav_rail = ft.NavigationRail(
             selected_index=self.current_index,
             label_type=ft.NavigationRailLabelType.ALL if show_labels else ft.NavigationRailLabelType.SELECTED,
-            min_width=72 if not extended else 100,
+            min_width=72,
             min_extended_width=256,
             extended=extended,
             destinations=destinations,
@@ -174,7 +173,7 @@ class NavigationManager:
         """Create header for extended navigation rail."""
         return ft.Container(
             content=ft.Column([
-                ft.Icon(ft.Icons.CLOUD_SYNC, size=32, color=ft.Colors.PRIMARY),
+                ft.Icon(ft.Icons.CLOUD_SYNC, size=32, color=TOKENS['primary']),
                 ft.Text("Backup Server", size=12, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
             padding=ft.Padding(16, 16, 16, 8)

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Purpose: Advanced system integration and monitoring tools
 Logic: File integrity checks, session management, system monitoring
 No Direct UI: Core business logic only, UI components call these methods
@@ -13,6 +13,7 @@ Phase 7.3 Implementation: Professional system administration features
 import flet as ft
 import os
 import hashlib
+from ..ui.theme_m3 import TOKENS
 import json
 import asyncio
 import threading
@@ -74,7 +75,7 @@ class FileIntegrityManager:
         self.results_table = None
         self.scan_status = ft.Text("Ready to scan", size=12)
         
-        logger.info("✅ File integrity manager initialized")
+        logger.info("ג… File integrity manager initialized")
     
     def create_integrity_tools(self) -> ft.Container:
         """Create file integrity verification tools UI"""
@@ -85,19 +86,19 @@ class FileIntegrityManager:
                 text="Quick Scan",
                 icon=ft.icons.scanner,
                 on_click=self._start_quick_scan,
-                bgcolor=ft.colors.BLUE
+                bgcolor=TOKENS['primary']
             ),
             ft.ElevatedButton(
                 text="Full Scan",
                 icon=ft.icons.manage_search,
                 on_click=self._start_full_scan,
-                bgcolor=ft.colors.ORANGE
+                bgcolor=TOKENS['secondary']
             ),
             ft.ElevatedButton(
                 text="Repair Issues",
                 icon=ft.icons.build,
                 on_click=self._repair_files,
-                bgcolor=ft.colors.GREEN,
+                bgcolor=TOKENS["secondary"],
                 disabled=True
             ),
             ft.Container(expand=1),
@@ -115,7 +116,7 @@ class FileIntegrityManager:
                 self.progress_bar
             ]),
             padding=10,
-            bgcolor=ft.colors.SURFACE_VARIANT,
+            bgcolor=TOKENS["surface_variant"],
             border_radius=8,
             visible=True
         )
@@ -132,12 +133,12 @@ class FileIntegrityManager:
                     "File Integrity Verification",
                     size=24,
                     weight=ft.FontWeight.BOLD,
-                    color=ft.colors.PRIMARY
+                    color=TOKENS["primary"]
                 ),
                 ft.Text(
                     "Verify and repair file corruption in the backup storage",
                     size=14,
-                    color=ft.colors.ON_SURFACE_VARIANT
+                    color=TOKENS["outline"]
                 ),
                 ft.Divider(height=20),
                 control_panel,
@@ -164,7 +165,7 @@ class FileIntegrityManager:
                 ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD))
             ],
             rows=[],
-            border=ft.border.all(1, ft.colors.OUTLINE),
+            border=ft.border.all(1, TOKENS["outline"]),
             border_radius=8
         )
         
@@ -185,12 +186,12 @@ class FileIntegrityManager:
         
         return ft.Container(
             content=ft.Row([
-                self._create_stat_card("Total Files", "0", ft.icons.folder, ft.colors.BLUE),
-                self._create_stat_card("Valid Files", "0", ft.icons.check_circle, ft.colors.GREEN),
-                self._create_stat_card("Corrupted", "0", ft.icons.error, ft.colors.RED),
-                self._create_stat_card("Missing", "0", ft.icons.help, ft.colors.ORANGE)
+                self._create_stat_card("Total Files", "0", ft.icons.folder, TOKENS["primary"]),
+                self._create_stat_card("Valid Files", "0", ft.icons.check_circle, TOKENS["secondary"]),
+                self._create_stat_card("Corrupted", "0", ft.icons.error, TOKENS["error"]),
+                self._create_stat_card("Missing", "0", ft.icons.help, TOKENS["secondary"])
             ], alignment=ft.MainAxisAlignment.SPACE_EVENLY),
-            bgcolor=ft.colors.SURFACE_VARIANT,
+            bgcolor=TOKENS["surface_variant"],
             padding=15,
             border_radius=8
         )
@@ -223,7 +224,7 @@ class FileIntegrityManager:
             
             # Start scan in background
             threading.Thread(target=self._perform_quick_scan, daemon=True).start()
-            logger.info("🔍 Quick integrity scan started")
+            logger.info("נ” Quick integrity scan started")
     
     def _start_full_scan(self, e):
         """Start full integrity scan (all files)"""
@@ -239,7 +240,7 @@ class FileIntegrityManager:
             
             # Start scan in background
             threading.Thread(target=self._perform_full_scan, daemon=True).start()
-            logger.info("🔍 Full integrity scan started")
+            logger.info("נ” Full integrity scan started")
     
     def _perform_quick_scan(self):
         """Perform quick scan (last 24 hours)"""
@@ -263,7 +264,7 @@ class FileIntegrityManager:
             self._scan_files(recent_files, "Quick Scan")
             
         except Exception as ex:
-            logger.error(f"❌ Error in quick scan: {ex}")
+            logger.error(f"ג Error in quick scan: {ex}")
             self.scan_status.value = f"Scan error: {ex}"
         finally:
             self.scanning_active = False
@@ -285,7 +286,7 @@ class FileIntegrityManager:
             self._scan_files(all_files, "Full Scan")
             
         except Exception as ex:
-            logger.error(f"❌ Error in full scan: {ex}")
+            logger.error(f"ג Error in full scan: {ex}")
             self.scan_status.value = f"Scan error: {ex}"
         finally:
             self.scanning_active = False
@@ -321,7 +322,7 @@ class FileIntegrityManager:
         self._update_stats_panel()
         
         self.scan_status.value = f"{scan_type} complete: {len(self.scan_results)} files checked"
-        logger.info(f"✅ {scan_type} completed: {len(self.scan_results)} files")
+        logger.info(f"ג… {scan_type} completed: {len(self.scan_results)} files")
     
     def _check_file_integrity(self, file_path: Path) -> FileIntegrityResult:
         """Check integrity of a single file"""
@@ -362,7 +363,7 @@ class FileIntegrityManager:
                 self.integrity_database[file_key]["last_checked"] = datetime.now().isoformat()
             else:
                 status = "corrupted"
-                logger.warning(f"⚠️ File corruption detected: {file_path}")
+                logger.warning(f"ג ן¸ File corruption detected: {file_path}")
             
             return FileIntegrityResult(
                 filepath=str(file_path),
@@ -374,7 +375,7 @@ class FileIntegrityManager:
             )
             
         except Exception as ex:
-            logger.error(f"❌ Error checking file {file_path}: {ex}")
+            logger.error(f"ג Error checking file {file_path}: {ex}")
             return FileIntegrityResult(
                 filepath=str(file_path),
                 expected_hash=None,
@@ -403,23 +404,23 @@ class FileIntegrityManager:
             # Status indicator with color
             if result.status == "valid":
                 status_cell = ft.DataCell(ft.Row([
-                    ft.Icon(ft.icons.check_circle, color=ft.colors.GREEN, size=16),
-                    ft.Text("Valid", color=ft.colors.GREEN)
+                    ft.Icon(ft.icons.check_circle, color=TOKENS["secondary"], size=16),
+                    ft.Text("Valid", color=TOKENS["secondary"])
                 ]))
             elif result.status == "corrupted":
                 status_cell = ft.DataCell(ft.Row([
-                    ft.Icon(ft.icons.error, color=ft.colors.RED, size=16),
-                    ft.Text("Corrupted", color=ft.colors.RED)
+                    ft.Icon(ft.icons.error, color=TOKENS["error"], size=16),
+                    ft.Text("Corrupted", color=TOKENS["error"])
                 ]))
             elif result.status == "missing":
                 status_cell = ft.DataCell(ft.Row([
-                    ft.Icon(ft.icons.help, color=ft.colors.ORANGE, size=16),
-                    ft.Text("Missing", color=ft.colors.ORANGE)
+                    ft.Icon(ft.icons.help, color=TOKENS["secondary"], size=16),
+                    ft.Text("Missing", color=TOKENS["secondary"])
                 ]))
             else:
                 status_cell = ft.DataCell(ft.Row([
-                    ft.Icon(ft.icons.info, color=ft.colors.BLUE, size=16),
-                    ft.Text("Unknown", color=ft.colors.BLUE)
+                    ft.Icon(ft.icons.info, color=TOKENS["primary"], size=16),
+                    ft.Text("Unknown", color=TOKENS["primary"])
                 ]))
             
             # Action buttons
@@ -462,17 +463,17 @@ class FileIntegrityManager:
         
         # Update stat cards (this is simplified - in a real implementation,
         # you'd need to properly update the card text values)
-        logger.info(f"📊 Scan statistics: {stats}")
+        logger.info(f"נ“ Scan statistics: {stats}")
     
     def _repair_files(self, e):
         """Attempt to repair corrupted files"""
         corrupted_files = [r for r in self.scan_results if r.status == "corrupted"]
         
         if not corrupted_files:
-            logger.info("ℹ️ No corrupted files to repair")
+            logger.info("ג„¹ן¸ No corrupted files to repair")
             return
         
-        logger.info(f"🔧 Attempting to repair {len(corrupted_files)} corrupted files")
+        logger.info(f"נ”§ Attempting to repair {len(corrupted_files)} corrupted files")
         # TODO: Implement file repair logic (restore from backup, re-download, etc.)
     
     def _export_integrity_report(self, e):
@@ -499,10 +500,10 @@ class FileIntegrityManager:
             with open(filename, 'w', encoding='utf-8') as f:
                 json.dump(report_data, f, indent=2, default=str)
             
-            logger.info(f"✅ Integrity report exported: {filename}")
+            logger.info(f"ג… Integrity report exported: {filename}")
             
         except Exception as ex:
-            logger.error(f"❌ Error exporting integrity report: {ex}")
+            logger.error(f"ג Error exporting integrity report: {ex}")
     
     def _reverify_file(self, filepath: str):
         """Re-verify a specific file"""
@@ -516,21 +517,21 @@ class FileIntegrityManager:
                 break
         
         self._update_results_table()
-        logger.info(f"🔍 Re-verified file: {filepath} -> {result.status}")
+        logger.info(f"נ” Re-verified file: {filepath} -> {result.status}")
     
     def _delete_corrupted_file(self, filepath: str):
         """Delete a corrupted file after confirmation"""
         # TODO: Add confirmation dialog
         try:
             Path(filepath).unlink()
-            logger.info(f"🗑️ Deleted corrupted file: {filepath}")
+            logger.info(f"נ—‘ן¸ Deleted corrupted file: {filepath}")
             
             # Remove from results
             self.scan_results = [r for r in self.scan_results if r.filepath != filepath]
             self._update_results_table()
             
         except Exception as ex:
-            logger.error(f"❌ Error deleting file {filepath}: {ex}")
+            logger.error(f"ג Error deleting file {filepath}: {ex}")
     
     def _load_integrity_database(self) -> Dict[str, Dict]:
         """Load file integrity database"""
@@ -539,7 +540,7 @@ class FileIntegrityManager:
                 with open(self.integrity_database_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
         except Exception as ex:
-            logger.warning(f"⚠️ Could not load integrity database: {ex}")
+            logger.warning(f"ג ן¸ Could not load integrity database: {ex}")
         
         return {}
     
@@ -549,7 +550,7 @@ class FileIntegrityManager:
             with open(self.integrity_database_file, 'w', encoding='utf-8') as f:
                 json.dump(self.integrity_database, f, indent=2, default=str)
         except Exception as ex:
-            logger.error(f"❌ Error saving integrity database: {ex}")
+            logger.error(f"ג Error saving integrity database: {ex}")
 
 
 class AdvancedClientSessionManager:
@@ -568,7 +569,7 @@ class AdvancedClientSessionManager:
         self.sessions_table = None
         self.session_stats = {}
         
-        logger.info("✅ Advanced client session manager initialized")
+        logger.info("ג… Advanced client session manager initialized")
     
     def create_session_manager(self) -> ft.Container:
         """Create advanced session management UI"""
@@ -579,13 +580,13 @@ class AdvancedClientSessionManager:
                 text="Refresh Sessions",
                 icon=ft.icons.refresh,
                 on_click=self._refresh_sessions,
-                bgcolor=ft.colors.BLUE
+                bgcolor=TOKENS["primary"]
             ),
             ft.ElevatedButton(
                 text="Start Monitoring",
                 icon=ft.icons.monitor,
                 on_click=self._toggle_monitoring,
-                bgcolor=ft.colors.GREEN
+                bgcolor=TOKENS["secondary"]
             ),
             ft.Container(expand=1),
             ft.ElevatedButton(
@@ -610,12 +611,12 @@ class AdvancedClientSessionManager:
                     "Advanced Client Session Management",
                     size=24,
                     weight=ft.FontWeight.BOLD,
-                    color=ft.colors.PRIMARY
+                    color=TOKENS["primary"]
                 ),
                 ft.Text(
                     "Monitor, analyze, and manage client connections and sessions",
                     size=14,
-                    color=ft.colors.ON_SURFACE_VARIANT
+                    color=TOKENS["outline"]
                 ),
                 ft.Divider(height=20),
                 control_panel,
@@ -634,12 +635,12 @@ class AdvancedClientSessionManager:
         """Create session statistics panel"""
         return ft.Container(
             content=ft.Row([
-                self._create_stat_card("Active Sessions", "0", ft.icons.people, ft.colors.GREEN),
-                self._create_stat_card("Total Connections", "0", ft.icons.timeline, ft.colors.BLUE),
-                self._create_stat_card("Data Transferred", "0 MB", ft.icons.cloud_upload, ft.colors.ORANGE),
-                self._create_stat_card("Avg Session Time", "0 min", ft.icons.timer, ft.colors.PURPLE)
+                self._create_stat_card("Active Sessions", "0", ft.icons.people, TOKENS["secondary"]),
+                self._create_stat_card("Total Connections", "0", ft.icons.timeline, TOKENS["primary"]),
+                self._create_stat_card("Data Transferred", "0 MB", ft.icons.cloud_upload, TOKENS["secondary"]),
+                self._create_stat_card("Avg Session Time", "0 min", ft.icons.timer, TOKENS["tertiary"])
             ], alignment=ft.MainAxisAlignment.SPACE_EVENLY),
-            bgcolor=ft.colors.SURFACE_VARIANT,
+            bgcolor=TOKENS["surface_variant"],
             padding=15,
             border_radius=8
         )
@@ -672,7 +673,7 @@ class AdvancedClientSessionManager:
                 ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD))
             ],
             rows=[],
-            border=ft.border.all(1, ft.colors.OUTLINE),
+            border=ft.border.all(1, TOKENS["outline"]),
             border_radius=8
         )
         
@@ -693,10 +694,10 @@ class AdvancedClientSessionManager:
         return ft.Container(
             content=ft.Column([
                 ft.Text("Session Details", size=16, weight=ft.FontWeight.BOLD),
-                ft.Text("Select a session to view detailed information", size=12, color=ft.colors.ON_SURFACE_VARIANT)
+                ft.Text("Select a session to view detailed information", size=12, color=TOKENS["outline"])
             ]),
             height=150,
-            bgcolor=ft.colors.SURFACE_VARIANT,
+            bgcolor=TOKENS["surface_variant"],
             padding=15,
             border_radius=8
         )
@@ -724,10 +725,10 @@ class AdvancedClientSessionManager:
             
             self.session_history = sessions
             self._update_sessions_table()
-            logger.info(f"✅ Refreshed {len(sessions)} client sessions")
+            logger.info(f"ג… Refreshed {len(sessions)} client sessions")
             
         except Exception as ex:
-            logger.error(f"❌ Error refreshing sessions: {ex}")
+            logger.error(f"ג Error refreshing sessions: {ex}")
     
     def _update_sessions_table(self):
         """Update sessions table with current data"""
@@ -737,13 +738,13 @@ class AdvancedClientSessionManager:
             # Status indicator
             if session.status == "active":
                 status_cell = ft.DataCell(ft.Row([
-                    ft.Icon(ft.icons.circle, color=ft.colors.GREEN, size=12),
-                    ft.Text("Active", color=ft.colors.GREEN, size=12)
+                    ft.Icon(ft.icons.circle, color=TOKENS["secondary"], size=12),
+                    ft.Text("Active", color=TOKENS["secondary"], size=12)
                 ]))
             else:
                 status_cell = ft.DataCell(ft.Row([
-                    ft.Icon(ft.icons.circle, color=ft.colors.GREY, size=12),
-                    ft.Text("Disconnected", color=ft.colors.GREY, size=12)
+                    ft.Icon(ft.icons.circle, color=TOKENS["outline"], size=12),
+                    ft.Text("Disconnected", color=TOKENS["outline"], size=12)
                 ]))
             
             # Action buttons
@@ -782,15 +783,15 @@ class AdvancedClientSessionManager:
         if self.monitoring_active:
             self.monitoring_active = False
             e.control.text = "Start Monitoring"
-            e.control.bgcolor = ft.colors.GREEN
+            e.control.bgcolor = TOKENS["secondary"]
         else:
             self.monitoring_active = True
             e.control.text = "Stop Monitoring"
-            e.control.bgcolor = ft.colors.RED
+            e.control.bgcolor = TOKENS["error"]
             threading.Thread(target=self._monitor_sessions, daemon=True).start()
         
         e.control.update()
-        logger.info(f"{'✅ Started' if self.monitoring_active else '⏹️ Stopped'} session monitoring")
+        logger.info(f"{'ג… Started' if self.monitoring_active else 'ג¹ן¸ Stopped'} session monitoring")
     
     def _monitor_sessions(self):
         """Monitor sessions in background and schedule UI updates safely."""
@@ -805,7 +806,7 @@ class AdvancedClientSessionManager:
                 
                 time.sleep(10)  # Update every 10 seconds
             except Exception as ex:
-                logger.error(f"❌ Error in session monitoring: {ex}")
+                logger.error(f"ג Error in session monitoring: {ex}")
                 time.sleep(30)  # Wait longer on error
     
     def _get_sessions_data_blocking(self):
@@ -831,7 +832,7 @@ class AdvancedClientSessionManager:
             
             return sessions
         except Exception as ex:
-            logger.error(f"❌ Error getting sessions data: {ex}")
+            logger.error(f"ג Error getting sessions data: {ex}")
             return []
     
     def _update_sessions_with_data(self, sessions_data):
@@ -839,13 +840,13 @@ class AdvancedClientSessionManager:
         try:
             self.session_history = sessions_data
             self._update_sessions_table()
-            logger.info(f"✅ Updated {len(sessions_data)} client sessions")
+            logger.info(f"ג… Updated {len(sessions_data)} client sessions")
         except Exception as ex:
-            logger.error(f"❌ Error updating sessions UI: {ex}")
+            logger.error(f"ג Error updating sessions UI: {ex}")
     
     def _show_session_details(self, session: ClientSession):
         """Show detailed session information"""
-        logger.info(f"📋 Showing details for session: {session.client_id}")
+        logger.info(f"נ“‹ Showing details for session: {session.client_id}")
         # TODO: Implement session details dialog
     
     def _disconnect_session(self, session: ClientSession):
@@ -855,11 +856,11 @@ class AdvancedClientSessionManager:
             if success:
                 session.status = "disconnected"
                 self._update_sessions_table()
-                logger.info(f"✅ Disconnected client session: {session.client_id}")
+                logger.info(f"ג… Disconnected client session: {session.client_id}")
             else:
-                logger.warning(f"⚠️ Failed to disconnect client: {session.client_id}")
+                logger.warning(f"ג ן¸ Failed to disconnect client: {session.client_id}")
         except Exception as ex:
-            logger.error(f"❌ Error disconnecting session: {ex}")
+            logger.error(f"ג Error disconnecting session: {ex}")
     
     def _export_session_data(self, e):
         """Export session data to file"""
@@ -878,10 +879,10 @@ class AdvancedClientSessionManager:
             with open(filename, 'w', encoding='utf-8') as f:
                 json.dump(export_data, f, indent=2, default=str)
             
-            logger.info(f"✅ Session data exported: {filename}")
+            logger.info(f"ג… Session data exported: {filename}")
             
         except Exception as ex:
-            logger.error(f"❌ Error exporting session data: {ex}")
+            logger.error(f"ג Error exporting session data: {ex}")
 
 
 class SystemIntegrationTools:
@@ -896,7 +897,7 @@ class SystemIntegrationTools:
         self.file_integrity = FileIntegrityManager(server_bridge)
         self.session_manager = AdvancedClientSessionManager(server_bridge)
         
-        logger.info("✅ System integration tools initialized")
+        logger.info("ג… System integration tools initialized")
     
     def create_integration_tools_view(self) -> ft.Container:
         """Create unified system integration tools view"""
@@ -922,18 +923,18 @@ class SystemIntegrationTools:
         return ft.Container(
             content=ft.Column([
                 ft.Row([
-                    ft.Icon(ft.icons.integration_instructions, size=32, color=ft.colors.PRIMARY),
+                    ft.Icon(ft.icons.integration_instructions, size=32, color=TOKENS["primary"]),
                     ft.Text(
                         "System Integration Tools",
                         size=28,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.colors.PRIMARY
+                        color=TOKENS["primary"]
                     )
                 ]),
                 ft.Text(
                     "Advanced system administration and maintenance tools",
                     size=14,
-                    color=ft.colors.ON_SURFACE_VARIANT
+                    color=TOKENS["outline"]
                 ),
                 ft.Divider(height=20),
                 tabs

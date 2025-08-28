@@ -12,11 +12,34 @@ Shows actual database tables and content from the backup server database.
 
 import flet as ft
 from typing import List, Dict, Any, Optional
+
+# Existing imports
 from flet_server_gui.core.client_management import ClientManagement
 from flet_server_gui.core.file_management import FileManagement
 from flet_server_gui.ui.widgets.cards import DatabaseStatsCard
 from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
 from flet_server_gui.components.base_component import BaseComponent
+from flet_server_gui.components.database_action_handlers import DatabaseActionHandlers
+
+# Enhanced components imports
+from flet_server_gui.ui.widgets import (
+    EnhancedButton,
+    EnhancedCard,
+    EnhancedTable,
+    EnhancedWidget,
+    EnhancedButtonConfig,
+    ButtonVariant,
+    CardVariant,
+    TableSize,
+    WidgetSize,
+    WidgetType
+)
+
+# Layout fixes imports
+from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
+from flet_server_gui.ui.theme_consistency import ThemeConsistencyManager, apply_theme_consistency
+from flet_server_gui.ui.theme_m3 import TOKENS
+
 
 
 class DatabaseView(BaseComponent):
@@ -26,10 +49,23 @@ class DatabaseView(BaseComponent):
         # Initialize parent BaseComponent
         super().__init__(page, dialog_system, toast_manager)
         
+        # Initialize theme consistency manager
+        self.theme_manager = ThemeConsistencyManager(page)
+        
         self.server_bridge = server_bridge
         self.dialog_system = dialog_system
         self.toast_manager = toast_manager
         self.page = page
+        
+        # Initialize action handlers
+        self.action_handlers = DatabaseActionHandlers(server_bridge, dialog_system, toast_manager, page)
+        self.action_handlers.set_data_changed_callback(self.refresh_database)
+        
+        # Initialize button factory
+        self.button_factory = ActionButtonFactory(self, server_bridge, page)
+        
+        # Set action handlers in button factory
+        self.button_factory.actions["DatabaseActionHandlers"] = self.action_handlers
         
         # UI Components
         self.selected_table = None
@@ -41,7 +77,7 @@ class DatabaseView(BaseComponent):
     def build(self) -> ft.Control:
         """Build the database browser view."""
         
-        # Header
+        # Header - Apply responsive layout fixes
         header = ft.Row([
             ft.Text("Database Browser", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
             ft.IconButton(
@@ -51,10 +87,14 @@ class DatabaseView(BaseComponent):
             ),
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         
-        # Database stats (will be populated dynamically)
+        # Apply hitbox fixes to the refresh button
+        if len(header.controls) > 1 and isinstance(header.controls[1], ft.IconButton):
+            header.controls[1] = ResponsiveLayoutFixes.fix_button_hitbox(header.controls[1])
+        
+        # Database stats (will be populated dynamically) - Apply responsive layout fixes
         self.stats_cards = ft.ResponsiveRow([], spacing=20)
         
-        # Table selector
+        # Table selector - Apply responsive layout fixes
         self.table_selector = ft.Dropdown(
             label="Select Table",
             width=300,
@@ -62,37 +102,47 @@ class DatabaseView(BaseComponent):
             options=[]  # Will be populated by refresh
         )
         
-        # Database controls
+        # Database controls - Apply responsive layout fixes
         db_controls = ft.Row([
-            ft.FilledButton(
-                "Backup Database", 
-                icon=ft.Icons.BACKUP,
-                on_click=self.backup_database
+            self.button_factory.create_action_button(
+                "database_backup",
+                lambda: []
             ),
-            ft.OutlinedButton(
-                "Optimize Database", 
-                icon=ft.Icons.AUTO_FIX_HIGH,
-                on_click=self.optimize_database
+            self.button_factory.create_action_button(
+                "database_optimize", 
+                lambda: []
             ),
-            ft.OutlinedButton(
-                "Analyze Database", 
-                icon=ft.Icons.TROUBLESHOOT,
-                on_click=self.analyze_database
+            self.button_factory.create_action_button(
+                "database_analyze", 
+                lambda: []
+            ),
+            self.button_factory.create_action_button(
+                "database_execute_query", 
+                lambda: []
             ),
         ], spacing=10)
         
-        # Table content area (scrollable)
+        # Apply hitbox fixes to action buttons
+        for control in db_controls.controls:
+            if isinstance(control, ft.ElevatedButton):
+                control = ResponsiveLayoutFixes.fix_button_hitbox(control)
+        
+        # Table content area (scrollable) - Apply responsive layout fixes
         self.table_content = ft.Container(
             content=ft.Text("Select a table to view its contents", 
-                          style=ft.TextThemeStyle.BODY_LARGE, 
-                          color=ft.Colors.GREY_600),
+                          style=ft.TextThemeStyle.BODY_LARGE),
             height=400,
-            border=ft.border.all(1, ft.Colors.OUTLINE),
+            border=ft.border.all(1, TOKENS['outline']),
             border_radius=8,
             padding=20,
         )
         
-        # Main content
+        # Apply clipping fixes to table content
+        self.table_content = ResponsiveLayoutFixes.create_clipping_safe_container(
+            self.table_content
+        )
+        
+        # Main content - Apply responsive layout fixes
         content = ft.Column([
             header,
             ft.Divider(),
@@ -108,10 +158,16 @@ class DatabaseView(BaseComponent):
             self.table_content,
         ], spacing=20, expand=True, scroll=ft.ScrollMode.ADAPTIVE)
         
+        # Apply windowed mode compatibility
+        main_content = ResponsiveLayoutFixes.create_windowed_layout_fix(content)
+        
+        # Apply theme consistency
+        apply_theme_consistency(self.page)
+        
         # Load data immediately
         self.refresh_database()
         
-        return content
+        return main_content
     
     def refresh_database(self, e=None):
         """Refresh database information and table list."""
@@ -143,7 +199,7 @@ class DatabaseView(BaseComponent):
             ft.Card(
                 content=ft.Container(
                     content=ft.Column([
-                        ft.Icon(ft.Icons.PERSON, size=32, color=ft.Colors.BLUE_600),
+                        ft.Icon(ft.Icons.PERSON, size=32, color=TOKENS['primary']),
                         ft.Text("Clients", style=ft.TextThemeStyle.LABEL_LARGE),
                         ft.Text(str(stats.get('total_clients', 0)), 
                                style=ft.TextThemeStyle.DISPLAY_MEDIUM, 
@@ -161,7 +217,7 @@ class DatabaseView(BaseComponent):
             ft.Card(
                 content=ft.Container(
                     content=ft.Column([
-                        ft.Icon(ft.Icons.FOLDER, size=32, color=ft.Colors.GREEN_600),
+                        ft.Icon(ft.Icons.FOLDER, size=32, color=TOKENS['secondary']),
                         ft.Text("Files", style=ft.TextThemeStyle.LABEL_LARGE),
                         ft.Text(str(stats.get('total_files', 0)), 
                                style=ft.TextThemeStyle.DISPLAY_MEDIUM, 
@@ -179,7 +235,7 @@ class DatabaseView(BaseComponent):
             ft.Card(
                 content=ft.Container(
                     content=ft.Column([
-                        ft.Icon(ft.Icons.VERIFIED, size=32, color=ft.Colors.ORANGE_600),
+                        ft.Icon(ft.Icons.VERIFIED, size=32, color=TOKENS['secondary']),
                         ft.Text("Verified", style=ft.TextThemeStyle.LABEL_LARGE),
                         ft.Text(str(stats.get('verified_files', 0)), 
                                style=ft.TextThemeStyle.DISPLAY_MEDIUM, 
@@ -198,7 +254,7 @@ class DatabaseView(BaseComponent):
             ft.Card(
                 content=ft.Container(
                     content=ft.Column([
-                        ft.Icon(ft.Icons.STORAGE, size=32, color=ft.Colors.PURPLE_600),
+                        ft.Icon(ft.Icons.STORAGE, size=32, color=TOKENS['primary']),
                         ft.Text("DB Size", style=ft.TextThemeStyle.LABEL_LARGE),
                         ft.Text(f"{db_size_mb:.1f} MB", 
                                style=ft.TextThemeStyle.DISPLAY_MEDIUM, 
@@ -218,13 +274,13 @@ class DatabaseView(BaseComponent):
         for table_name in table_names:
             # Add icon based on table name
             if 'client' in table_name.lower():
-                icon = "👤"
+                icon = "נ‘₪"
             elif 'file' in table_name.lower():
-                icon = "📁"
+                icon = "נ“"
             elif 'log' in table_name.lower():
-                icon = "📋"
+                icon = "נ“‹"
             else:
-                icon = "🗂️"
+                icon = "נ—‚ן¸"
             
             self.table_selector.options.append(
                 ft.dropdown.Option(
@@ -259,7 +315,7 @@ class DatabaseView(BaseComponent):
             if not columns:
                 self.table_content.content = ft.Text(
                     f"Table '{table_name}' is empty or cannot be read",
-                    color=ft.Colors.GREY_600
+                    color=TOKENS['outline']
                 )
                 self.table_content.update()
                 return
@@ -267,27 +323,27 @@ class DatabaseView(BaseComponent):
             # Create data table
             data_table = ft.DataTable(
                 columns=[
-                    ft.DataColumn(ft.Text(col, weight=ft.FontWeight.BOLD)) 
+                    ft.DataColumn(ft.Text(col, weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)) 
                     for col in columns
                 ],
                 rows=[
                     ft.DataRow(cells=[
-                        ft.DataCell(ft.Text(str(row.get(col, '')), selectable=True))
+                        ft.DataCell(ft.Text(str(row.get(col, '')), selectable=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS))
                         for col in columns
                     ])
                     for row in rows[:50]  # Limit to first 50 rows for performance
                 ],
-                border=ft.border.all(1, ft.Colors.OUTLINE),
+                border=ft.border.all(1, TOKENS['outline']),
                 border_radius=8,
-                vertical_lines=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
-                horizontal_lines=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                vertical_lines=ft.border.BorderSide(1, TOKENS['outline']),
+                horizontal_lines=ft.border.BorderSide(1, TOKENS['outline']),
             )
             
             # Status text
             status_text = ft.Text(
                 f"Showing {min(len(rows), 50)} of {len(rows)} rows from '{table_name}'",
                 size=12,
-                color=ft.Colors.GREY_600
+                color=TOKENS['outline']
             )
             
             # Update table content
@@ -305,63 +361,15 @@ class DatabaseView(BaseComponent):
     
     def backup_database(self, e):
         """Handle database backup."""
-        try:
-            if not self.server_bridge.data_manager.db_manager:
-                self._show_error("Database not available")
-                return
-            
-            # Perform backup
-            backup_path = self.server_bridge.data_manager.db_manager.backup_database_to_file()
-            self._show_success(f"Database backed up to: {backup_path}")
-            print(f"[INFO] Database backed up to: {backup_path}")
-            
-        except Exception as e:
-            self._show_error(f"Backup failed: {str(e)}")
-            print(f"[ERROR] Database backup failed: {e}")
+        asyncio.create_task(self.action_handlers.backup_database())
     
     def optimize_database(self, e):
         """Handle database optimization."""
-        try:
-            if not self.server_bridge.data_manager.db_manager:
-                self._show_error("Database not available")
-                return
-            
-            # Perform optimization
-            result = self.server_bridge.data_manager.db_manager.optimize_database()
-            
-            space_saved = result.get('space_saved_mb', 0)
-            if result.get('vacuum_performed', False):
-                self._show_success(f"Database optimized successfully! Space saved: {space_saved:.1f} MB")
-            else:
-                self._show_error("Database optimization failed")
-            
-            print(f"[INFO] Database optimization result: {result}")
-            
-        except Exception as e:
-            self._show_error(f"Optimization failed: {str(e)}")
-            print(f"[ERROR] Database optimization failed: {e}")
+        asyncio.create_task(self.action_handlers.optimize_database())
     
     def analyze_database(self, e):
         """Handle database analysis."""
-        try:
-            if not self.server_bridge.data_manager.db_manager:
-                self._show_error("Database not available")
-                return
-            
-            # Get database health
-            health = self.server_bridge.data_manager.db_manager.get_database_health()
-            
-            if health.get('integrity_check', False) and health.get('foreign_key_check', False):
-                issues = len(health.get('issues', []))
-                self._show_success(f"Database analysis complete. Issues found: {issues}")
-            else:
-                self._show_error("Database analysis found integrity issues")
-            
-            print(f"[INFO] Database health: {health}")
-            
-        except Exception as e:
-            self._show_error(f"Analysis failed: {str(e)}")
-            print(f"[ERROR] Database analysis failed: {e}")
+        asyncio.create_task(self.action_handlers.analyze_database())
     
     def _show_error(self, message: str):
         """Show error message to user."""

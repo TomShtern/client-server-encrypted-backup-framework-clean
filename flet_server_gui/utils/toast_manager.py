@@ -23,6 +23,7 @@ from typing import Dict, List, Optional, Callable, Any
 from enum import Enum
 from datetime import datetime, timedelta
 from dataclasses import dataclass
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 
 class ToastType(Enum):
@@ -76,28 +77,28 @@ class ToastManager:
         # Material Design 3 styling for each toast type
         self.toast_styles = {
             ToastType.SUCCESS: {
-                "bgcolor": ft.Colors.GREEN_100,
-                "color": ft.Colors.GREEN_800,
+                "bgcolor": TOKENS['secondary'],
+                "color": TOKENS['on_secondary'],
                 "icon": ft.Icons.CHECK_CIRCLE,
-                "icon_color": ft.Colors.GREEN_600
+                "icon_color": TOKENS['secondary']
             },
             ToastType.INFO: {
-                "bgcolor": ft.Colors.BLUE_100,
-                "color": ft.Colors.BLUE_800,
+                "bgcolor": TOKENS['primary'],
+                "color": TOKENS['on_primary'],
                 "icon": ft.Icons.INFO,
-                "icon_color": ft.Colors.BLUE_600
+                "icon_color": TOKENS['primary']
             },
             ToastType.WARNING: {
-                "bgcolor": ft.Colors.ORANGE_100,
-                "color": ft.Colors.ORANGE_800,
+                "bgcolor": TOKENS['tertiary'],
+                "color": TOKENS['on_tertiary'],
                 "icon": ft.Icons.WARNING_AMBER,
-                "icon_color": ft.Colors.ORANGE_600
+                "icon_color": TOKENS['tertiary']
             },
             ToastType.ERROR: {
-                "bgcolor": ft.Colors.RED_100,
-                "color": ft.Colors.RED_800,
+                "bgcolor": TOKENS['error'],
+                "color": TOKENS['on_error'],
                 "icon": ft.Icons.ERROR_OUTLINE,
-                "icon_color": ft.Colors.RED_600
+                "icon_color": TOKENS['error']
             }
         }
         

@@ -1,3 +1,4 @@
+﻿#!/usr/bin/env python3
 """
 Purpose: Main dashboard view matching the screenshot layout
 Logic: Aggregates data from various sources for display
@@ -12,12 +13,23 @@ import psutil
 import os
 from flet_server_gui.utils.server_bridge import ServerBridge
 from flet_server_gui.utils.thread_safe_ui import ThreadSafeUIUpdater, ui_safe_update
+from flet_server_gui.components.base_component import BaseComponent
+from flet_server_gui.core.semantic_colors import get_status_color
+from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes, fix_content_clipping, fix_button_clickable_areas, ensure_windowed_compatibility
 
-class DashboardView:
-    def __init__(self, page: ft.Page, server_bridge: Optional[ServerBridge] = None):
+from flet_server_gui.ui.theme_m3 import TOKENS
+
+
+class DashboardView(BaseComponent):
+    def __init__(self, page: ft.Page, server_bridge: Optional[ServerBridge] = None, dialog_system=None, toast_manager=None):
+        # Initialize parent BaseComponent
+        super().__init__(page, dialog_system, toast_manager)
+        
         self.page = page
         self.server_bridge = server_bridge or ServerBridge()
         self.controls = []
+        
+        # Semantic colors will be used from existing system
         
         # Initialize thread-safe UI updater
         self.ui_updater = ThreadSafeUIUpdater(page)
@@ -53,13 +65,13 @@ class DashboardView:
         return ft.Row([
             ft.Text(f"{label}:", 
                    style=ft.TextThemeStyle.BODY_MEDIUM, 
-                   color=ft.Colors.ON_SURFACE_VARIANT),
+                   color=TOKENS['outline']),
             ft.Container(expand=True),
             ft.Text(ref=value_ref, 
                    value=default_value, 
                    style=ft.TextThemeStyle.BODY_MEDIUM,
                    weight=ft.FontWeight.W_500,
-                   color=value_color or ft.Colors.ON_SURFACE)
+                   color=value_color or TOKENS['on_surface'])
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         
     def build(self):
@@ -72,26 +84,25 @@ class DashboardView:
                         "Encrypted Backup Server",
                         style=ft.TextThemeStyle.HEADLINE_MEDIUM,
                         weight=ft.FontWeight.W_600,
-                        color=ft.Colors.ON_SURFACE
+                        color=TOKENS['on_surface']
                     ),
                     col={"sm": 12, "md": 8},
                     alignment=ft.alignment.center_left
                 ),
-                ft.Container(
-                    content=ft.Column([
+                ft.Container(content=ft.Column([
                         ft.Text(
                             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             style=ft.TextThemeStyle.BODY_MEDIUM,
-                            color=ft.Colors.ON_SURFACE_VARIANT
+                            color=TOKENS['outline']
                         ),
                         ft.Row([
-                            ft.Text("Server", style=ft.TextThemeStyle.BODY_SMALL, color=ft.Colors.ON_SURFACE_VARIANT),
+                            ft.Text("Server", style=ft.TextThemeStyle.BODY_SMALL, color=TOKENS['outline']),
                             ft.Icon(
                                 ft.Icons.CIRCLE,
-                                color=ft.Colors.ERROR,
+                                color=get_status_color("error"),
                                 size=12
                             ),
-                            ft.Text("Offline", style=ft.TextThemeStyle.BODY_SMALL, color=ft.Colors.ERROR)
+                            ft.Text("Offline", style=ft.TextThemeStyle.BODY_SMALL, color=get_status_color("error"))
                         ], spacing=6, alignment=ft.MainAxisAlignment.END)
                     ], horizontal_alignment=ft.CrossAxisAlignment.END, spacing=4),
                     col={"sm": 12, "md": 4},
@@ -152,8 +163,7 @@ class DashboardView:
             ], spacing=12, run_spacing=12)
         ], spacing=16, scroll=ft.ScrollMode.AUTO, expand=True)
         
-        return ft.Container(
-            content=ft.Column([
+        return ft.Container(content=ft.Column([
                 header,
                 content
             ], spacing=0, expand=True),
@@ -164,15 +174,13 @@ class DashboardView:
     def _create_server_status_card(self):
         """Create the Server Status card with Material Design 3 styling"""
         return ft.Card(
-            content=ft.Container(
-                content=ft.Column([
+            content=ft.Container(content=ft.Column([
                     ft.Text("Server Status", 
                            style=ft.TextThemeStyle.TITLE_LARGE, 
                            weight=ft.FontWeight.W_500),
-                    ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
-                    ft.Container(
-                        content=ft.Column([
-                            self._create_status_row("Status", self.server_status_text, "Stopped", ft.Colors.ERROR),
+                    ft.Divider(height=1, color=TOKENS['outline']),
+                    ft.Container(content=ft.Column([
+                            self._create_status_row("Status", self.server_status_text, "Stopped", get_status_color("error")),
                             self._create_status_row("Address", self.server_address_text, "N/A"),
                             self._create_status_row("Uptime", self.server_uptime_text, "00:00:00")
                         ], spacing=12),
@@ -184,38 +192,35 @@ class DashboardView:
                 expand=False
             ),
             elevation=2,
-            surface_tint_color=ft.Colors.PRIMARY,
+            surface_tint_color=TOKENS['primary'],
             margin=ft.margin.all(0)
         )
     
     def _create_client_stats_card(self):
         """Create the Client Stats card with Material Design 3 styling"""
         return ft.Card(
-            content=ft.Container(
-                content=ft.Column([
+            content=ft.Container(content=ft.Column([
                     ft.Text("Client Stats", 
                            style=ft.TextThemeStyle.TITLE_LARGE, 
                            weight=ft.FontWeight.W_500),
-                    ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
-                    ft.Container(
-                        content=ft.Column([
+                    ft.Divider(height=1, color=TOKENS['outline']),
+                    ft.Container(content=ft.Column([
                             # Prominent connected clients display
-                            ft.Container(
-                                content=ft.Column([
+                            ft.Container(content=ft.Column([
                                     ft.Text(ref=self.connected_clients_text, value="0",
                                            style=ft.TextThemeStyle.DISPLAY_SMALL,
                                            weight=ft.FontWeight.W_600,
-                                           color=ft.Colors.PRIMARY,
+                                           color=TOKENS['primary'],
                                            text_align=ft.TextAlign.CENTER),
                                     ft.Text("Connected Clients",
                                            style=ft.TextThemeStyle.BODY_MEDIUM,
-                                           color=ft.Colors.ON_SURFACE_VARIANT,
+                                           color=TOKENS['outline'],
                                            text_align=ft.TextAlign.CENTER)
                                 ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
                                 alignment=ft.alignment.center,
                                 padding=ft.padding.symmetric(vertical=8)
                             ),
-                            ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
+                            ft.Divider(height=1, color=TOKENS['outline']),
                             self._create_status_row("Total Registered", self.total_clients_text, "0"),
                             self._create_status_row("Active Transfers", self.active_transfers_text, "0")
                         ], spacing=12),
@@ -227,21 +232,19 @@ class DashboardView:
                 expand=False
             ),
             elevation=2,
-            surface_tint_color=ft.Colors.PRIMARY,
+            surface_tint_color=TOKENS['primary'],
             margin=ft.margin.all(0)
         )
     
     def _create_control_panel_card(self):
         """Create the Control Panel card with Material Design 3 buttons"""
         return ft.Card(
-            content=ft.Container(
-                content=ft.Column([
+            content=ft.Container(content=ft.Column([
                     ft.Text("Control Panel", 
                            style=ft.TextThemeStyle.TITLE_LARGE, 
                            weight=ft.FontWeight.W_500),
-                    ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
-                    ft.Container(
-                        content=ft.Column([
+                    ft.Divider(height=1, color=TOKENS['outline']),
+                    ft.Container(content=ft.Column([
                             # Primary actions row
                             ft.ResponsiveRow([
                                 ft.Container(
@@ -251,8 +254,8 @@ class DashboardView:
                                             ft.Icon(ft.Icons.PLAY_ARROW, size=20),
                                             ft.Text("Start", weight=ft.FontWeight.W_500)
                                         ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
-                                        bgcolor=ft.Colors.GREEN_600,
-                                        color=ft.Colors.WHITE,
+                                        bgcolor=get_status_color("success"),
+                                        color=TOKENS['background'],
                                         on_click=self._on_start_server
                                     ),
                                     col={"sm": 12, "md": 6},
@@ -265,8 +268,8 @@ class DashboardView:
                                             ft.Icon(ft.Icons.STOP, size=20),
                                             ft.Text("Stop", weight=ft.FontWeight.W_500)
                                         ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
-                                        bgcolor=ft.Colors.RED_600,
-                                        color=ft.Colors.WHITE,
+                                        bgcolor=get_status_color("error"),
+                                        color=TOKENS['background'],
                                         on_click=self._on_stop_server
                                     ),
                                     col={"sm": 12, "md": 6},
@@ -280,8 +283,8 @@ class DashboardView:
                                     content=ft.OutlinedButton(
                                         ref=self.restart_button,
                                         content=ft.Row([
-                                            ft.Icon(ft.Icons.REFRESH, size=20, color=ft.Colors.ORANGE_600),
-                                            ft.Text("Restart", weight=ft.FontWeight.W_500, color=ft.Colors.ORANGE_600)
+                                            ft.Icon(ft.Icons.REFRESH, size=20, color=get_status_color("warning")),
+                                            ft.Text("Restart", weight=ft.FontWeight.W_500, color=get_status_color("warning"))
                                         ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
                                         on_click=self._on_restart_server
                                     ),
@@ -295,8 +298,8 @@ class DashboardView:
                                 ft.Container(
                                     content=ft.OutlinedButton(
                                         content=ft.Row([
-                                            ft.Icon(ft.Icons.STORAGE, size=18, color=ft.Colors.PURPLE_600),
-                                            ft.Text("Backup DB", weight=ft.FontWeight.W_400, color=ft.Colors.PURPLE_600)
+                                            ft.Icon(ft.Icons.STORAGE, size=18, color=get_status_color("info")),
+                                            ft.Text("Backup DB", weight=ft.FontWeight.W_400, color=get_status_color("info"))
                                         ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
                                         on_click=self._on_backup_db
                                     ),
@@ -306,8 +309,8 @@ class DashboardView:
                                 ft.Container(
                                     content=ft.TextButton(
                                         content=ft.Row([
-                                            ft.Icon(ft.Icons.EXIT_TO_APP, size=18, color=ft.Colors.ON_SURFACE_VARIANT),
-                                            ft.Text("Exit GUI", weight=ft.FontWeight.W_400, color=ft.Colors.ON_SURFACE_VARIANT)
+                                            ft.Icon(ft.Icons.EXIT_TO_APP, size=18, color=TOKENS['outline']),
+                                            ft.Text("Exit GUI", weight=ft.FontWeight.W_400, color=TOKENS['outline'])
                                         ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
                                         on_click=self._on_exit_gui
                                     ),
@@ -323,22 +326,20 @@ class DashboardView:
                 expand=False
             ),
             elevation=2,
-            surface_tint_color=ft.Colors.PRIMARY,
+            surface_tint_color=TOKENS['primary'],
             margin=ft.margin.all(0)
         )
     
     def _create_transfer_stats_card(self):
         """Create the Transfer Stats card with Material Design 3 styling"""
         return ft.Card(
-            content=ft.Container(
-                content=ft.Column([
+            content=ft.Container(content=ft.Column([
                     ft.Text("Transfer Stats", 
                            style=ft.TextThemeStyle.TITLE_LARGE, 
                            weight=ft.FontWeight.W_500),
-                    ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
-                    ft.Container(
-                        content=ft.Column([
-                            self._create_status_row("Total Transferred", self.total_transferred_text, "0 MB", ft.Colors.PRIMARY),
+                    ft.Divider(height=1, color=TOKENS['outline']),
+                    ft.Container(content=ft.Column([
+                            self._create_status_row("Total Transferred", self.total_transferred_text, "0 MB", TOKENS['primary']),
                             self._create_status_row("Transfer Rate", self.transfer_rate_text, "0 KB/s")
                         ], spacing=16),
                         padding=ft.padding.symmetric(vertical=8)
@@ -348,21 +349,19 @@ class DashboardView:
                 expand=False
             ),
             elevation=2,
-            surface_tint_color=ft.Colors.PRIMARY,
+            surface_tint_color=TOKENS['primary'],
             margin=ft.margin.all(0)
         )
     
     def _create_maintenance_card(self):
         """Create the Maintenance card with Material Design 3 styling"""
         return ft.Card(
-            content=ft.Container(
-                content=ft.Column([
+            content=ft.Container(content=ft.Column([
                     ft.Text("Maintenance", 
                            style=ft.TextThemeStyle.TITLE_LARGE, 
                            weight=ft.FontWeight.W_500),
-                    ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
-                    ft.Container(
-                        content=ft.Column([
+                    ft.Divider(height=1, color=TOKENS['outline']),
+                    ft.Container(content=ft.Column([
                             self._create_status_row("Last Cleanup", self.last_cleanup_text, "Never"),
                             self._create_status_row("Files Cleaned", self.files_cleaned_text, "0")
                         ], spacing=16),
@@ -373,47 +372,44 @@ class DashboardView:
                 expand=False
             ),
             elevation=2,
-            surface_tint_color=ft.Colors.PRIMARY,
+            surface_tint_color=TOKENS['primary'],
             margin=ft.margin.all(0)
         )
     
     def _create_performance_chart_card(self):
         """Create the Live System Performance card with responsive chart"""
         # Create a professional performance visualization
-        chart_content = ft.Container(
-            content=ft.Column([
+        chart_content = ft.Container(content=ft.Column([
                 # Chart placeholder with gradient background
-                ft.Container(
-                    content=ft.Column([
+                ft.Container(content=ft.Column([
                         # Background gradient as separate container
                         ft.Container(
                             gradient=ft.LinearGradient(
                                 begin=ft.alignment.top_center,
                                 end=ft.alignment.bottom_center,
-                                colors=[ft.Colors.BLUE_100, ft.Colors.TRANSPARENT]
+                                colors=[TOKENS['surface_variant'], "transparent"]
                             ),
                             border_radius=8,
                             height=180,
                             width=float("inf")
                         ),
                         # Chart lines simulation - positioned absolutely
-                        ft.Container(
-                            content=ft.Column([
+                        ft.Container(content=ft.Column([
                                 ft.Text("System Performance Monitoring",
                                        style=ft.TextThemeStyle.BODY_LARGE,
-                                       color=ft.Colors.ON_SURFACE_VARIANT,
+                                       color=TOKENS['outline'],
                                        text_align=ft.TextAlign.CENTER),
                                 ft.Container(
                                     content=ft.Row([
                                         ft.Icon(ft.Icons.TRENDING_UP, 
-                                               color=ft.Colors.PRIMARY, size=48),
+                                               color=TOKENS['primary'], size=48),
                                         ft.Column([
                                             ft.Text("CPU: 12%", 
                                                    style=ft.TextThemeStyle.BODY_MEDIUM,
-                                                   color=ft.Colors.BLUE_600),
+                                                   color=get_status_color("info")),
                                             ft.Text("Memory: 34%", 
                                                    style=ft.TextThemeStyle.BODY_MEDIUM,
-                                                   color=ft.Colors.PURPLE_600)
+                                                   color=get_status_color("info"))
                                         ], spacing=4)
                                     ], alignment=ft.MainAxisAlignment.CENTER, spacing=16),
                                     expand=True
@@ -425,19 +421,19 @@ class DashboardView:
                     ]),
                     height=180,  # Flexible height
                     border_radius=8,
-                    border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT)
+                    border=ft.border.all(1, TOKENS['outline'])
                 ),
                 # Chart legend
                 ft.Row([
                     ft.Container(
                         content=ft.Row([
-                            ft.Container(width=12, height=3, bgcolor=ft.Colors.BLUE_600, border_radius=2),
+                            ft.Container(width=12, height=3, bgcolor=get_status_color("info"), border_radius=2),
                             ft.Text("CPU %", style=ft.TextThemeStyle.BODY_SMALL)
                         ], spacing=6)
                     ),
                     ft.Container(
                         content=ft.Row([
-                            ft.Container(width=12, height=3, bgcolor=ft.Colors.PURPLE_600, border_radius=2),
+                            ft.Container(width=12, height=3, bgcolor=get_status_color("info"), border_radius=2),
                             ft.Text("Memory %", style=ft.TextThemeStyle.BODY_SMALL)
                         ], spacing=6)
                     )
@@ -447,27 +443,25 @@ class DashboardView:
         )
         
         return ft.Card(
-            content=ft.Container(
-                content=ft.Column([
+            content=ft.Container(content=ft.Column([
                     ft.Text("Live System Performance", 
                            style=ft.TextThemeStyle.TITLE_LARGE, 
                            weight=ft.FontWeight.W_500),
-                    ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
+                    ft.Divider(height=1, color=TOKENS['outline']),
                     chart_content
                 ], spacing=16),
                 padding=ft.padding.all(20),
                 expand=False
             ),
             elevation=2,
-            surface_tint_color=ft.Colors.PRIMARY,
+            surface_tint_color=TOKENS['primary'],
             margin=ft.margin.all(0)
         )
     
     def _create_activity_log_card(self):
         """Create the Activity Log card with responsive design"""
         return ft.Card(
-            content=ft.Container(
-                content=ft.Column([
+            content=ft.Container(content=ft.Column([
                     ft.Row([
                         ft.Text("Activity Log", 
                                style=ft.TextThemeStyle.TITLE_LARGE, 
@@ -480,7 +474,7 @@ class DashboardView:
                             on_click=self._clear_activity_log
                         )
                     ]),
-                    ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
+                    ft.Divider(height=1, color=TOKENS['outline']),
                     ft.Container(
                         content=ft.Column(
                             ref=self.activity_log_container,
@@ -489,7 +483,7 @@ class DashboardView:
                                     content=ft.Text(
                                         "No recent activity",
                                         style=ft.TextThemeStyle.BODY_SMALL,
-                                        color=ft.Colors.ON_SURFACE_VARIANT,
+                                        color=TOKENS['outline'],
                                         italic=True
                                     ),
                                     alignment=ft.alignment.center,
@@ -503,15 +497,15 @@ class DashboardView:
                         expand=True,  # Let it flex with the card
                         padding=ft.padding.all(8),
                         border_radius=8,
-                        bgcolor=ft.Colors.SURFACE_TINT,
-                        border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT)
+                        bgcolor=TOKENS['surface_variant'],
+                        border=ft.border.all(1, TOKENS['outline'])
                     )
                 ], spacing=16, expand=True),
                 padding=ft.padding.all(20),
                 expand=False
             ),
             elevation=2,
-            surface_tint_color=ft.Colors.PRIMARY,
+            surface_tint_color=TOKENS['primary'],
             margin=ft.margin.all(0)
         )
     
@@ -589,7 +583,7 @@ class DashboardView:
                 content=ft.Text(
                     "Activity log cleared",
                     style=ft.TextThemeStyle.BODY_SMALL,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    color=TOKENS['outline'],
                     italic=True
                 ),
                 alignment=ft.alignment.center,
@@ -617,10 +611,10 @@ class DashboardView:
         
         # Professional color coding with Material Design 3 colors
         color_map = {
-            "INFO": ft.Colors.ON_SURFACE,
-            "SUCCESS": ft.Colors.GREEN_600,
-            "WARNING": ft.Colors.AMBER_600,
-            "ERROR": ft.Colors.ERROR
+            "INFO": TOKENS['on_surface'],
+            "SUCCESS": get_status_color("success"),
+            "WARNING": get_status_color("warning"),
+            "ERROR": get_status_color("error")
         }
         
         # Icon mapping for log levels
@@ -637,25 +631,25 @@ class DashboardView:
                 ft.Icon(
                     icon_map.get(level, ft.Icons.INFO_OUTLINE),
                     size=14,
-                    color=color_map.get(level, ft.Colors.ON_SURFACE)
+                    color=color_map.get(level, TOKENS['on_surface'])
                 ),
                 ft.Text(
                     f"[{timestamp}]",
                     style=ft.TextThemeStyle.BODY_SMALL,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    color=TOKENS['outline'],
                     weight=ft.FontWeight.W_400
                 ),
                 ft.Text(
                     source,
                     style=ft.TextThemeStyle.BODY_SMALL,
-                    color=color_map.get(level, ft.Colors.ON_SURFACE),
+                    color=color_map.get(level, TOKENS['on_surface']),
                     weight=ft.FontWeight.W_500
                 ),
-                ft.Text(":", style=ft.TextThemeStyle.BODY_SMALL, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text(":", style=ft.TextThemeStyle.BODY_SMALL, color=TOKENS['outline']),
                 ft.Text(
                     message,
                     style=ft.TextThemeStyle.BODY_SMALL,
-                    color=ft.Colors.ON_SURFACE,
+                    color=TOKENS['on_surface'],
                     overflow=ft.TextOverflow.ELLIPSIS,
                     expand=True
                 )
@@ -823,12 +817,12 @@ class DashboardView:
                 is_running = getattr(server_info, 'running', False)
                 if is_running:
                     self.server_status_text.current.value = "Online"
-                    self.server_status_text.current.color = ft.Colors.GREEN_600
+                    self.server_status_text.current.color = get_status_color("success")
                     if self.server_address_text.current:
                         self.server_address_text.current.value = f"{getattr(server_info, 'host', 'localhost')}:{getattr(server_info, 'port', '1256')}"
                 else:
                     self.server_status_text.current.value = "Offline"
-                    self.server_status_text.current.color = ft.Colors.ERROR
+                    self.server_status_text.current.color = get_status_color("error")
                     if self.server_address_text.current:
                         self.server_address_text.current.value = "N/A"
                         

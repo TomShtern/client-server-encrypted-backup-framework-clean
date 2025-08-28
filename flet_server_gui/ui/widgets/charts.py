@@ -18,6 +18,7 @@ from typing import Dict, List, Any, Optional, Tuple, Union
 from collections import deque
 from dataclasses import dataclass, asdict
 import logging
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 logger = logging.getLogger(__name__)
 
@@ -222,7 +223,7 @@ class EnhancedPerformanceCharts:
         return ft.Container(
             content=controls,
             # Use proper surface color for dark theme compatibility
-            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
+            bgcolor=TOKENS['surface_variant'],
             padding=ft.padding.all(10),
             border_radius=8,
             expand=True
@@ -234,8 +235,8 @@ class EnhancedPerformanceCharts:
             content=ft.ResponsiveRow([
                 ft.Container(
                     content=ft.Row([
-                        ft.Icon(ft.Icons.NOTIFICATIONS, color=ft.Colors.AMBER),
-                        ft.Text("No active alerts", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+                        ft.Icon(ft.Icons.NOTIFICATIONS, color=TOKENS['tertiary']),
+                        ft.Text("No active alerts", size=12, color=TOKENS['outline'])
                     ], spacing=8),
                     col={"sm": 12, "md": 8},
                     expand=True
@@ -249,7 +250,7 @@ class EnhancedPerformanceCharts:
             ], expand=True),
             # Use theme surface color instead of hardcoded SURFACE
             bgcolor=None,  # Let container inherit from parent theme
-            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+            border=ft.border.all(1, TOKENS['outline']),
             padding=ft.padding.all(8),
             border_radius=4,
             height=40,
@@ -260,10 +261,10 @@ class EnhancedPerformanceCharts:
     def _create_metrics_grid(self) -> ft.ResponsiveRow:
         """Create responsive metrics display grid"""
         self.stat_displays = {
-            'cpu': self._create_metric_card("CPU", ft.Icons.MEMORY, ft.Colors.BLUE),
-            'memory': self._create_metric_card("Memory", ft.Icons.STORAGE, ft.Colors.GREEN),
-            'disk': self._create_metric_card("Disk", ft.Icons.STORAGE, ft.Colors.ORANGE),
-            'network': self._create_metric_card("Network", ft.Icons.NETWORK_CHECK, ft.Colors.PURPLE)
+            'cpu': self._create_metric_card("CPU", ft.Icons.MEMORY, TOKENS['primary']),
+            'memory': self._create_metric_card("Memory", ft.Icons.STORAGE, TOKENS['secondary']),
+            'disk': self._create_metric_card("Disk", ft.Icons.STORAGE, TOKENS['tertiary']),
+            'network': self._create_metric_card("Network", ft.Icons.NETWORK_CHECK, TOKENS['primary'])
         }
         
         return ft.ResponsiveRow([
@@ -294,13 +295,13 @@ class EnhancedPerformanceCharts:
         current_text = ft.Text("--", style=ft.TextThemeStyle.HEADLINE_MEDIUM, 
                               weight=ft.FontWeight.BOLD, color=color)
         avg_text = ft.Text("Avg: --", style=ft.TextThemeStyle.BODY_SMALL, 
-                          color=ft.Colors.ON_SURFACE_VARIANT)
+                          color=TOKENS['outline'])
         max_text = ft.Text("Max: --", style=ft.TextThemeStyle.BODY_SMALL, 
-                          color=ft.Colors.ON_SURFACE_VARIANT)
+                          color=TOKENS['outline'])
         status_indicator = ft.Container(
             width=8,
             height=8,
-            bgcolor=ft.Colors.ON_SURFACE_VARIANT,
+            bgcolor=TOKENS['outline'],
             border_radius=4
         )
         
@@ -327,10 +328,10 @@ class EnhancedPerformanceCharts:
     def _create_charts_section(self) -> ft.ResponsiveRow:
         """Create responsive charts display section"""
         self.chart_containers = {
-            'cpu': self._create_enhanced_chart("CPU Usage %", ft.Colors.BLUE),
-            'memory': self._create_enhanced_chart("Memory Usage %", ft.Colors.GREEN),
-            'disk': self._create_enhanced_chart("Disk Usage %", ft.Colors.ORANGE),
-            'network': self._create_enhanced_chart("Network Activity (MB/s)", ft.Colors.PURPLE)
+            'cpu': self._create_enhanced_chart("CPU Usage %", TOKENS['primary']),
+            'memory': self._create_enhanced_chart("Memory Usage %", TOKENS['secondary']),
+            'disk': self._create_enhanced_chart("Disk Usage %", TOKENS['tertiary']),
+            'network': self._create_enhanced_chart("Network Activity (MB/s)", TOKENS['primary'])
         }
         
         return ft.ResponsiveRow([
@@ -362,12 +363,12 @@ class EnhancedPerformanceCharts:
                 content=ft.Column([
                     ft.Text("Start monitoring to see live data", 
                            style=ft.TextThemeStyle.BODY_MEDIUM, 
-                           color=ft.Colors.ON_SURFACE_VARIANT),
+                           color=TOKENS['outline']),
                     ft.Container(height=100, expand=True)  # Chart area
                 ], expand=True),
                 # Use theme-aware colors for proper dark mode support
-                bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
-                border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+                bgcolor=TOKENS['surface_variant'],
+                border=ft.border.all(1, TOKENS['outline']),
                 border_radius=4,
                 padding=ft.padding.all(8),
                 expand=True
@@ -570,11 +571,11 @@ class EnhancedPerformanceCharts:
                     # Status indicator color based on thresholds
                     status_indicator = card_content.controls[0].controls[2]
                     if current_value >= self.thresholds[metric_name].critical:
-                        status_indicator.bgcolor = ft.Colors.RED
+                        status_indicator.bgcolor = TOKENS['error']
                     elif current_value >= self.thresholds[metric_name].warning:
-                        status_indicator.bgcolor = ft.Colors.AMBER
+                        status_indicator.bgcolor = TOKENS['tertiary']
                     else:
-                        status_indicator.bgcolor = ft.Colors.GREEN
+                        status_indicator.bgcolor = TOKENS['secondary']
                     
                     # Only update if the card is attached to the page
                     if hasattr(card, '_attached') and card._attached:
@@ -613,12 +614,12 @@ class EnhancedPerformanceCharts:
                         ft.Container(expand=True),
                         ft.Text(f"Points: {len(data)}", 
                                style=ft.TextThemeStyle.BODY_SMALL,
-                               color=ft.Colors.ON_SURFACE_VARIANT)
+                               color=TOKENS['outline'])
                     ]),
                     progress_bar,
                     ft.Text(f"Range: {min(data):.1f}% - {max(data):.1f}%",
                            style=ft.TextThemeStyle.BODY_SMALL,
-                           color=ft.Colors.ON_SURFACE_VARIANT)
+                           color=TOKENS['outline'])
                 ], spacing=5)
                 
                 chart_display.content = chart_content
@@ -668,12 +669,12 @@ class EnhancedPerformanceCharts:
             alert_texts = []
             for alert in alerts:
                 # Use theme-aware colors instead of hardcoded colors
-                color = ft.Colors.ERROR if alert['level'] == 'critical' else ft.Colors.AMBER
+                color = TOKENS['error'] if alert['level'] == 'critical' else TOKENS['tertiary']
                 icon = ft.Icons.ERROR if alert['level'] == 'critical' else ft.Icons.WARNING
                 alert_texts.append(
                     ft.Row([
                         ft.Icon(icon, color=color, size=16),
-                        ft.Text(alert['message'], size=12, color=ft.Colors.ON_SURFACE)
+                        ft.Text(alert['message'], size=12, color=TOKENS['on_background'])
                     ], spacing=4)
                 )
             
@@ -691,12 +692,12 @@ class EnhancedPerformanceCharts:
                 
             # Update background color using theme-aware colors
             if hasattr(self.alert_panel, 'bgcolor'):
-                self.alert_panel.bgcolor = ft.Colors.ERROR_CONTAINER if any(a['level'] == 'critical' for a in alerts) else None  # Let inherit from parent theme
+                self.alert_panel.bgcolor = TOKENS['error'] if any(a['level'] == 'critical' for a in alerts) else None  # Let inherit from parent theme
         else:
             # No alerts
             normal_alert = ft.Row([
-                ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.ON_PRIMARY, size=16),
-                ft.Text("All systems normal", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+                ft.Icon(ft.Icons.CHECK_CIRCLE, color=TOKENS['on_primary'], size=16),
+                ft.Text("All systems normal", size=12, color=TOKENS['outline'])
             ], spacing=4)
             
             # Update alert content
@@ -740,7 +741,7 @@ class EnhancedPerformanceCharts:
             chart_display.content = ft.Column([
                 ft.Text("Start monitoring to see live data", 
                        style=ft.TextThemeStyle.BODY_MEDIUM, 
-                       color=ft.Colors.ON_SURFACE_VARIANT),
+                       color=TOKENS['outline']),
                 ft.Container(height=100, expand=True)
             ], expand=True)
             # Only update if the container is attached to the page
@@ -794,7 +795,7 @@ class EnhancedBarChart(ft.Container):
                  x_field: str,
                  y_field: str,
                  title: Optional[str] = None,
-                 bar_color: str = ft.Colors.PRIMARY,
+                 bar_color: str = TOKENS['primary'],
                  **kwargs):
         super().__init__(**kwargs)
         
@@ -858,7 +859,7 @@ class EnhancedLineChart(ft.Container):
                  x_field: str,
                  y_field: str,
                  title: Optional[str] = None,
-                 line_color: str = ft.Colors.PRIMARY,
+                 line_color: str = TOKENS['primary'],
                  **kwargs):
         super().__init__(**kwargs)
         
@@ -892,9 +893,9 @@ class EnhancedLineChart(ft.Container):
 
         chart = ft.LineChart(
             data_series=line_data,
-            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
-            horizontal_grid_lines=ft.ChartGridLines(interval=10, color=ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE)),
-            vertical_grid_lines=ft.ChartGridLines(interval=1, color=ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE)),
+            border=ft.border.all(1, TOKENS['outline']),
+            horizontal_grid_lines=ft.ChartGridLines(interval=10, color=ft.colors.with_opacity(0.2, TOKENS['on_background'])),
+            vertical_grid_lines=ft.ChartGridLines(interval=1, color=ft.colors.with_opacity(0.2, TOKENS['on_background'])),
             expand=True,
         )
 
@@ -926,12 +927,12 @@ class EnhancedPieChart(ft.Container):
         self.show_labels = show_labels
         
         self.colors = colors or [
-            ft.Colors.PRIMARY,
-            ft.Colors.SECONDARY,
-            ft.Colors.TERTIARY,
-            ft.Colors.ERROR,
-            ft.Colors.OUTLINE,
-            ft.Colors.ON_SURFACE_VARIANT
+            TOKENS['primary'],
+            TOKENS['secondary'],
+            TOKENS['tertiary'],
+            TOKENS['error'],
+            TOKENS['outline'],
+            TOKENS['outline']
         ]
         
         self.total = sum(item[self.value_field] for item in data) if data else 1
@@ -964,7 +965,7 @@ class EnhancedPieChart(ft.Container):
         placeholder = ft.Container(
             width=self.chart_size, 
             height=self.chart_size, 
-            content=ft.Icon(ft.Icons.PIE_CHART, size=100, color=ft.Colors.OUTLINE),
+            content=ft.Icon(ft.Icons.PIE_CHART, size=100, color=TOKENS['outline']),
             alignment=ft.alignment.center
         )
 

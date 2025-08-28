@@ -43,6 +43,7 @@ from flet_server_gui.ui.layouts.responsive_fixes import apply_layout_fixes
 from flet_server_gui.ui.widgets.status_pill import StatusPill, ServerStatus
 from flet_server_gui.ui.widgets.notifications_panel import NotificationsPanel, create_notification, NotificationType, NotificationPriority
 from flet_server_gui.ui.widgets.activity_log_dialog import ActivityLogDialog, create_activity_entry, ActivityLevel, ActivityCategory
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 # Robust server bridge with fallback
 try:
@@ -133,7 +134,7 @@ class ServerGUIApp:
         
         self.analytics_view = self._safe_init_view(
             "Analytics", "flet_server_gui.views.analytics", "AnalyticsView",
-            page, self.server_bridge
+            page, self.server_bridge, self.dialog_system, self.toast_manager
         )
         
         # Handle pre-imported views (SettingsView and LogsView)
@@ -164,26 +165,37 @@ class ServerGUIApp:
             module_path: Module path for import (e.g., "flet_server_gui.views.dashboard")
             class_name: Class name to import (e.g., "DashboardView")
             *args: Arguments to pass to the view constructor
-        
+            
         Returns:
             View instance if successful, None if failed
         """
         view_instance = None
         
+        # Debug: Print current working directory and Python path
+        import os
+        safe_print(f"[DEBUG] Current working directory: {os.getcwd()}")
+        import sys
+        safe_print(f"[DEBUG] Python path (first 5 entries): {sys.path[:5]}")
+        
         # Step 1: Try to import the module
         try:
             import importlib
+            safe_print(f"[DEBUG] Attempting to import module: {module_path}")
             module = importlib.import_module(module_path)
             safe_print(f"[SUCCESS] {view_name} module imported successfully from {module_path}")
         except ImportError as e:
             safe_print(f"[ERROR] {view_name} import failed: Module '{module_path}' not found")
             safe_print(f"[DEBUG] Import error details: {e}")
+            import traceback
+            safe_print(f"[DEBUG] Full traceback: {traceback.format_exc()}")
             return None
         except Exception as e:
             safe_print(f"[ERROR] {view_name} import failed: Unexpected error importing '{module_path}'")
             safe_print(f"[DEBUG] Error details: {e}")
+            import traceback
+            safe_print(f"[DEBUG] Full traceback: {traceback.format_exc()}")
             return None
-        
+            
         # Step 2: Try to get the class from the module
         try:
             view_class = getattr(module, class_name)
@@ -476,22 +488,41 @@ class ServerGUIApp:
         self.page.update()
     
     def handle_window_resize(self, e=None):
-        """Handle window resize events to ensure responsive layout"""
+        """Handle window resize events to ensure responsive layout with MD3 desktop breakpoints"""
         if not hasattr(self, 'page') or not self.page:
             return
             
-        # Auto-hide navigation on very small screens
+        # Get current window dimensions
         window_width = getattr(self.page, 'window_width', 1200)
+        window_height = getattr(self.page, 'window_height', 800)
+        
+        # Import breakpoint system
+        from flet_server_gui.ui.layouts.md3_desktop_breakpoints import MD3DesktopBreakpoints, DesktopBreakpoint
+        
+        # Determine current breakpoint
+        breakpoint = MD3DesktopBreakpoints.get_breakpoint(window_width)
+        
+        # Auto-hide navigation on very small screens (windowed mode)
         if window_width and window_width < 1024 and self.nav_rail_visible:
             # Auto-collapse navigation on small screens
-            self.nav_rail_visible = False
-            self.nav_rail.visible = False
+            self.nav_rail.extended = False
+            self.nav_rail.label_type = ft.NavigationRailLabelType.SELECTED
             self.hamburger_button.icon = ft.Icons.MENU_OPEN
             
             # Update content area for more space
             if hasattr(self, 'main_layout') and len(self.main_layout.controls) >= 3:
                 content_container = self.main_layout.controls[2]
                 content_container.padding = ft.padding.symmetric(horizontal=12, vertical=8)
+        elif window_width and window_width >= 1024 and not self.nav_rail.extended:
+            # Restore navigation on larger screens
+            self.nav_rail.extended = True
+            self.nav_rail.label_type = ft.NavigationRailLabelType.ALL
+            self.hamburger_button.icon = ft.Icons.MENU
+            
+            # Update content area padding
+            if hasattr(self, 'main_layout') and len(self.main_layout.controls) >= 3:
+                content_container = self.main_layout.controls[2]
+                content_container.padding = ft.padding.symmetric(horizontal=16, vertical=12)
         
         # Update layout
         self.page.update()
@@ -533,7 +564,7 @@ class ServerGUIApp:
                             ft.Row([
                                 ft.Text("Status:", size=12),
                                 ft.Container(expand=True),
-                                ft.Text("Offline", color=ft.Colors.ERROR, size=12, weight=ft.FontWeight.BOLD)
+                                ft.Text("Offline", color=TOKENS['error'], size=12, weight=ft.FontWeight.BOLD)
                             ]),
                             ft.Row([
                                 ft.Text("Port:", size=12),

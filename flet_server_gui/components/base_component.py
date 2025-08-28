@@ -7,7 +7,7 @@ This enables consistent behavior and reduces code duplication.
 
 import flet as ft
 from typing import Callable, Optional, Any, Dict, List
-from ..actions.base_action import ActionResult
+from flet_server_gui.actions.base_action import ActionResult
 import asyncio
 
 

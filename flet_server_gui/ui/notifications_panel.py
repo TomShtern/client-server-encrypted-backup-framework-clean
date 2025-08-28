@@ -18,22 +18,15 @@ Fill in the TODO sections to implement:
 3. Bulk notification management with batch operations
 4. Notification card interactions and action handling
 5. Integration with Phase 3 theme consistency and responsive layout
-6. Push notification support and browser integration
-
-INTEGRATION DEPENDENCIES:
-- Phase 1: Thread-safe UI updates via ui_updater patterns
-- Phase 2: Error handling via ErrorHandler, toast notifications for confirmation
-- Phase 3: Theme integration via ThemeConsistencyManager, responsive via ResponsiveLayoutManager
-- Existing: DatabaseManager for notification persistence, ServerBridge for system notifications
 """
 
-from typing import Dict, List, Optional, Callable, Any, Union, Set, Tuple
-from dataclasses import dataclass, field
-from enum import Enum, auto
-import asyncio
-from datetime import datetime, timedelta
 import flet as ft
-import json
+from typing import List, Dict, Any, Optional, Callable, Set
+from datetime import datetime
+from enum import Enum
+from dataclasses import dataclass, field
+import asyncio
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 
 class NotificationType(Enum):
@@ -270,10 +263,10 @@ class NotificationsPanelManager:
                     ft.Container(
                         content=ft.Row([
                             ft.Text("Notifications", size=16, weight=ft.FontWeight.W_500),
-                            ft.Badge(content=ft.Text("5"), bgcolor=ft.Colors.PRIMARY),
+                            ft.Badge(content=ft.Text("5"), bgcolor=TOKENS['primary']),
                         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                         padding=12,
-                        bgcolor=ft.Colors.SURFACE_VARIANT,
+                        bgcolor=TOKENS['surface_variant'],
                     ),
                     # Content placeholder
                     ft.Container(
@@ -284,7 +277,7 @@ class NotificationsPanelManager:
                 ]),
                 width=350,
                 height=effective_config.max_panel_height,
-                bgcolor=ft.Colors.SURFACE,
+                bgcolor=TOKENS['surface'],
                 border_radius=8,
                 # TODO: Replace with complete implementation
             )
@@ -294,7 +287,7 @@ class NotificationsPanelManager:
             
         except Exception as e:
             # TODO: Handle panel creation errors
-            return ft.Text(f"Notifications Panel Error: {str(e)}", color=ft.Colors.ERROR)
+            return ft.Text(f"Notifications Panel Error: {str(e)}", color=TOKENS['error'])
     
     def create_notification_card(self, notification: NotificationData) -> ft.Control:
         """
@@ -353,9 +346,9 @@ class NotificationsPanelManager:
                         ft.Row([
                             ft.Icon(notification.icon, size=20, color=self._get_priority_color(notification.priority)),
                             ft.Text(notification.title, size=14, weight=ft.FontWeight.W_500, expand=True),
-                            ft.Text(self._format_timestamp(notification.timestamp), size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+                            ft.Text(self._format_timestamp(notification.timestamp), size=12, color=TOKENS['outline']),
                         ]),
-                        ft.Text(notification.message, size=12, color=ft.Colors.ON_SURFACE),
+                        ft.Text(notification.message, size=12, color=TOKENS['on_surface']),
                         # TODO: Add action buttons
                     ]),
                     padding=12,
@@ -369,7 +362,7 @@ class NotificationsPanelManager:
             
         except Exception as e:
             # TODO: Handle card creation errors
-            return ft.Text(f"Card Error: {notification.title}", color=ft.Colors.ERROR)
+            return ft.Text(f"Card Error: {notification.title}", color=TOKENS['error'])
 
     # ═══════════════════════════════════════════════════════════════════════════════════
     # NOTIFICATION MANAGEMENT - TODO: Implement CRUD operations
@@ -899,12 +892,12 @@ class NotificationsPanelManager:
     def _get_priority_color(self, priority: NotificationPriority) -> str:
         """Get Material Design 3 color for priority level"""
         color_map = {
-            NotificationPriority.CRITICAL: ft.Colors.ERROR,
-            NotificationPriority.HIGH: ft.Colors.ORANGE,
-            NotificationPriority.NORMAL: ft.Colors.PRIMARY,
-            NotificationPriority.LOW: ft.Colors.ON_SURFACE_VARIANT,
+            NotificationPriority.CRITICAL: TOKENS['error'],
+            NotificationPriority.HIGH: TOKENS['secondary'],
+            NotificationPriority.NORMAL: TOKENS['primary'],
+            NotificationPriority.LOW: TOKENS['outline'],
         }
-        return color_map.get(priority, ft.Colors.ON_SURFACE_VARIANT)
+        return color_map.get(priority, TOKENS['outline'])
     
     def _format_timestamp(self, timestamp: datetime) -> str:
         """Format timestamp for display"""

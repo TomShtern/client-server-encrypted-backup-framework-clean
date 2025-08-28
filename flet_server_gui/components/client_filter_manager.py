@@ -8,6 +8,7 @@ import flet as ft
 import asyncio
 from typing import List, Dict, Any, Optional, Callable
 from datetime import datetime
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 
 class ClientFilterManager:
@@ -52,22 +53,22 @@ class ClientFilterManager:
                 label=ft.Text("All"),
                 selected=True,
                 on_select=lambda e: self._on_chip_select("all", e),
-                bgcolor=ft.Colors.PRIMARY_CONTAINER,
+                bgcolor=TOKENS['container'],
             ),
             ft.Chip(
                 label=ft.Text("Connected"),
                 on_select=lambda e: self._on_chip_select("connected", e),
-                bgcolor=ft.Colors.GREEN_100,
+                bgcolor=TOKENS['secondary'],
             ),
             ft.Chip(
                 label=ft.Text("Registered"),
                 on_select=lambda e: self._on_chip_select("registered", e),
-                bgcolor=ft.Colors.BLUE_100,
+                bgcolor=TOKENS['primary'],
             ),
             ft.Chip(
                 label=ft.Text("Offline"),
                 on_select=lambda e: self._on_chip_select("offline", e),
-                bgcolor=ft.Colors.ORANGE_100,
+                bgcolor=TOKENS['tertiary'],
             )
         ], spacing=8, wrap=True)
         

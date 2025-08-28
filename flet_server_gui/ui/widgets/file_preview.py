@@ -13,6 +13,7 @@ from typing import Optional, Callable, List, Dict, Any
 from ...components.enhanced_components import (
     EnhancedCard
 )
+from flet_server_gui.ui.theme_m3 import TOKENS
 from ..dialogs import ToastManager
 
 
@@ -61,7 +62,7 @@ class FilePreview(EnhancedCard):
         
         # File details
         file_size = self._get_file_size()
-        file_info = ft.Text(f"Size: {file_size} | Type: {file_ext.upper() if file_ext else 'Unknown'}", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+        file_info = ft.Text(f"Size: {file_size} | Type: {file_ext.upper() if file_ext else 'Unknown'}", size=12, color=TOKENS['outline'])
         
         # Content preview
         if self.file_content:
@@ -82,9 +83,9 @@ class FilePreview(EnhancedCard):
             elif file_ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp']:
                 content_preview = ft.Container(
                     content=ft.Column([
-                        ft.Icon(ft.Icons.IMAGE, size=64, color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Icon(ft.Icons.IMAGE, size=64, color=TOKENS['outline']),
                         ft.Text("Image Preview", size=14, weight=ft.FontWeight.BOLD),
-                        ft.Text("Image previews are not implemented in this demo", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+                        ft.Text("Image previews are not implemented in this demo", size=12, color=TOKENS['outline'])
                     ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     expand=True,
                     alignment=ft.alignment.center
@@ -93,16 +94,16 @@ class FilePreview(EnhancedCard):
             else:
                 content_preview = ft.Container(
                     content=ft.Column([
-                        ft.Icon(ft.Icons.DESCRIPTION, size=64, color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Icon(ft.Icons.DESCRIPTION, size=64, color=TOKENS['outline']),
                         ft.Text("File Preview", size=14, weight=ft.FontWeight.BOLD),
-                        ft.Text("Preview not available for this file type", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+                        ft.Text("Preview not available for this file type", size=12, color=TOKENS['outline']),
                     ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     expand=True,
                     alignment=ft.alignment.center
                 )
         else:
             content_preview = ft.Container(
-                content=ft.Text("No content available", size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+                content=ft.Text("No content available", size=14, color=TOKENS['outline']),
                 expand=True,
                 alignment=ft.alignment.center
             )
@@ -114,8 +115,8 @@ class FilePreview(EnhancedCard):
                 icon=ft.Icons.DOWNLOAD,
                 on_click=self._on_download_click,
                 style=ft.ButtonStyle(
-                    bgcolor=ft.Colors.PRIMARY,
-                    color=ft.Colors.ON_PRIMARY
+                    bgcolor=TOKENS['primary'],
+                    color=TOKENS['on_primary']
                 )
             ),
             ft.OutlinedButton(
@@ -123,7 +124,7 @@ class FilePreview(EnhancedCard):
                 icon=ft.Icons.DELETE,
                 on_click=self._on_delete_click,
                 style=ft.ButtonStyle(
-                    color=ft.Colors.ERROR
+                    color=TOKENS['error']
                 )
             )
         ], alignment=ft.MainAxisAlignment.END)
@@ -205,10 +206,10 @@ class FilePreviewManager:
     def create_preview_area(self) -> ft.Control:
         """Create a preview area for file previews"""
         return ft.Container(
-            content=ft.Text("Select a file to preview", size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+            content=ft.Text("Select a file to preview", size=14, color=TOKENS['outline']),
             alignment=ft.alignment.center,
             expand=True,
-            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+            border=ft.border.all(1, TOKENS['outline']),
             border_radius=ft.border_radius.all(8)
         )
     
@@ -270,10 +271,10 @@ class FilePreviewManager:
         """Create content for files that cannot be previewed"""
         return ft.Container(
             content=ft.Column([
-                ft.Icon(ft.Icons.VISIBILITY_OFF, size=48, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Icon(ft.Icons.VISIBILITY_OFF, size=48, color=TOKENS['outline']),
                 ft.Text("Preview Not Available", size=16, weight=ft.FontWeight.BOLD),
                 ft.Text(f"File: {filename}", size=14),
-                ft.Text("This file type cannot be previewed directly.", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text("This file type cannot be previewed directly.", size=12, color=TOKENS['outline']),
                 ft.Container(height=16),
                 ft.Row([
                     ft.ElevatedButton(

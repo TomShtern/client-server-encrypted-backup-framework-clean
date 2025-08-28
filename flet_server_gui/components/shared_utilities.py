@@ -7,6 +7,7 @@ Common utility functions used across multiple components.
 import flet as ft
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 
 class FormatUtils:
@@ -68,12 +69,12 @@ class IconUtils:
     def get_status_icon(status: str) -> Dict[str, Any]:
         """Get icon and color for status"""
         status_map = {
-            "connected": {"icon": ft.Icons.WIFI, "color": ft.Colors.GREEN_600},
-            "registered": {"icon": ft.Icons.VERIFIED_USER, "color": ft.Colors.BLUE_600},
-            "offline": {"icon": ft.Icons.WIFI_OFF, "color": ft.Colors.ORANGE_600},
-            "error": {"icon": ft.Icons.ERROR, "color": ft.Colors.RED_600},
+            "connected": {"icon": ft.Icons.WIFI, "color": TOKENS['tertiary']},
+            "registered": {"icon": ft.Icons.VERIFIED_USER, "color": TOKENS['primary']},
+            "offline": {"icon": ft.Icons.WIFI_OFF, "color": TOKENS['secondary']},
+            "error": {"icon": ft.Icons.ERROR, "color": TOKENS['error']},
         }
-        return status_map.get(status.lower(), {"icon": ft.Icons.HELP, "color": ft.Colors.GREY_600})
+        return status_map.get(status.lower(), {"icon": ft.Icons.HELP, "color": TOKENS['outline']})
     
     @staticmethod
     def get_file_type_icon(filename: str) -> Dict[str, Any]:
@@ -81,28 +82,28 @@ class IconUtils:
         extension = FormatUtils.get_file_extension(filename)
         
         type_mappings = {
-            'txt': {'icon': '📄', 'name': 'Text', 'color': ft.Colors.BLUE_100},
-            'pdf': {'icon': '📕', 'name': 'PDF', 'color': ft.Colors.RED_100},
-            'doc': {'icon': '📘', 'name': 'Word', 'color': ft.Colors.BLUE_200},
-            'docx': {'icon': '📘', 'name': 'Word', 'color': ft.Colors.BLUE_200},
-            'xls': {'icon': '📗', 'name': 'Excel', 'color': ft.Colors.GREEN_200},
-            'xlsx': {'icon': '📗', 'name': 'Excel', 'color': ft.Colors.GREEN_200},
-            'ppt': {'icon': '📙', 'name': 'PowerPoint', 'color': ft.Colors.ORANGE_200},
-            'pptx': {'icon': '📙', 'name': 'PowerPoint', 'color': ft.Colors.ORANGE_200},
-            'jpg': {'icon': '🖼️', 'name': 'Image', 'color': ft.Colors.PURPLE_100},
-            'jpeg': {'icon': '🖼️', 'name': 'Image', 'color': ft.Colors.PURPLE_100},
-            'png': {'icon': '🖼️', 'name': 'Image', 'color': ft.Colors.PURPLE_100},
-            'gif': {'icon': '🖼️', 'name': 'Image', 'color': ft.Colors.PURPLE_100},
-            'mp4': {'icon': '🎬', 'name': 'Video', 'color': ft.Colors.TEAL_100},
-            'avi': {'icon': '🎬', 'name': 'Video', 'color': ft.Colors.TEAL_100},
-            'mp3': {'icon': '🎵', 'name': 'Audio', 'color': ft.Colors.PINK_100},
-            'wav': {'icon': '🎵', 'name': 'Audio', 'color': ft.Colors.PINK_100},
-            'zip': {'icon': '🗜️', 'name': 'Archive', 'color': ft.Colors.GREY_200},
-            'rar': {'icon': '🗜️', 'name': 'Archive', 'color': ft.Colors.GREY_200},
-            '7z': {'icon': '🗜️', 'name': 'Archive', 'color': ft.Colors.GREY_200},
+            'txt': {'icon': '📄', 'name': 'Text', 'color': TOKENS['surface']},
+            'pdf': {'icon': '📕', 'name': 'PDF', 'color': TOKENS['error']},
+            'doc': {'icon': '📘', 'name': 'Word', 'color': TOKENS['primary']},
+            'docx': {'icon': '📘', 'name': 'Word', 'color': TOKENS['primary']},
+            'xls': {'icon': '📗', 'name': 'Excel', 'color': TOKENS['tertiary']},
+            'xlsx': {'icon': '📗', 'name': 'Excel', 'color': TOKENS['tertiary']},
+            'ppt': {'icon': '📙', 'name': 'PowerPoint', 'color': TOKENS['secondary']},
+            'pptx': {'icon': '📙', 'name': 'PowerPoint', 'color': TOKENS['secondary']},
+            'jpg': {'icon': '🖼️', 'name': 'Image', 'color': TOKENS['container']},
+            'jpeg': {'icon': '🖼️', 'name': 'Image', 'color': TOKENS['container']},
+            'png': {'icon': '🖼️', 'name': 'Image', 'color': TOKENS['container']},
+            'gif': {'icon': '🖼️', 'name': 'Image', 'color': TOKENS['container']},
+            'mp4': {'icon': '🎬', 'name': 'Video', 'color': TOKENS['surface_variant']},
+            'avi': {'icon': '🎬', 'name': 'Video', 'color': TOKENS['surface_variant']},
+            'mp3': {'icon': '🎵', 'name': 'Audio', 'color': TOKENS['tertiary']},
+            'wav': {'icon': '🎵', 'name': 'Audio', 'color': TOKENS['tertiary']},
+            'zip': {'icon': '🗜️', 'name': 'Archive', 'color': TOKENS['outline']},
+            'rar': {'icon': '🗜️', 'name': 'Archive', 'color': TOKENS['outline']},
+            '7z': {'icon': '🗜️', 'name': 'Archive', 'color': TOKENS['outline']},
         }
         
-        return type_mappings.get(extension, {'icon': '📄', 'name': 'File', 'color': ft.Colors.GREY_100})
+        return type_mappings.get(extension, {'icon': '📄', 'name': 'File', 'color': TOKENS['surface_variant']})
 
 
 class UIUtils:
@@ -112,19 +113,19 @@ class UIUtils:
     def create_status_chip(status: str) -> ft.Container:
         """Create a status display chip with appropriate styling"""
         status_colors = {
-            "connected": ft.Colors.GREEN_600,
-            "registered": ft.Colors.BLUE_600,
-            "offline": ft.Colors.ORANGE_600,
+            "connected": TOKENS['tertiary'],
+            "registered": TOKENS['primary'],
+            "offline": TOKENS['secondary'],
         }
         
-        color = status_colors.get(status.lower(), ft.Colors.GREY_600)
+        color = status_colors.get(status.lower(), TOKENS['outline'])
         
         return ft.Container(
             content=ft.Text(
                 status.title(),
                 size=11,
                 weight=ft.FontWeight.BOLD,
-                color=ft.Colors.WHITE
+                color=TOKENS['on_primary']
             ),
             bgcolor=color,
             padding=ft.Padding(4, 2, 4, 2),
@@ -163,9 +164,9 @@ class UIUtils:
         """Create an empty state display"""
         return ft.Container(
             content=ft.Column([
-                ft.Icon(icon, size=64, color=ft.Colors.GREY_400),
-                ft.Text(title, weight=ft.FontWeight.BOLD, size=18, color=ft.Colors.GREY_600),
-                ft.Text(description, size=14, color=ft.Colors.GREY_500, text_align=ft.TextAlign.CENTER),
+                ft.Icon(icon, size=64, color=TOKENS['outline']),
+                ft.Text(title, weight=ft.FontWeight.BOLD, size=18, color=TOKENS['outline']),
+                ft.Text(description, size=14, color=TOKENS['outline'], text_align=ft.TextAlign.CENTER),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
             alignment=ft.alignment.center,
             padding=40
@@ -173,19 +174,19 @@ class UIUtils:
     
     @staticmethod
     def create_stats_card(title: str, value: str, subtitle: str = "", 
-                         color: str = ft.Colors.PRIMARY) -> ft.Container:
+                         color: str = None) -> ft.Container:
         """Create a statistics card"""
         content = [
-            ft.Text(title, size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE_VARIANT),
-            ft.Text(value, size=18, weight=ft.FontWeight.BOLD, color=color),
+            ft.Text(title, size=12, weight=ft.FontWeight.BOLD, color=TOKENS['outline']),
+            ft.Text(value, size=18, weight=ft.FontWeight.BOLD, color=color or TOKENS['primary']),
         ]
         
         if subtitle:
-            content.append(ft.Text(subtitle, size=10, color=ft.Colors.ON_SURFACE_VARIANT))
+            content.append(ft.Text(subtitle, size=10, color=TOKENS['outline']))
         
         return ft.Container(
             content=ft.Column(content, spacing=2, tight=True),
-            bgcolor=ft.Colors.SURFACE_VARIANT,
+            bgcolor=TOKENS['surface_variant'],
             padding=12,
             border_radius=8,
             width=120

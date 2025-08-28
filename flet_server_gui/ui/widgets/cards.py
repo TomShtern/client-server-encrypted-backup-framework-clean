@@ -11,6 +11,7 @@ import flet as ft
 import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, TYPE_CHECKING
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 if TYPE_CHECKING:
     from flet_server_gui.utils.server_bridge import ServerBridge, ServerInfo
@@ -99,7 +100,7 @@ class ClientStatsCard:
             else:
                 self.connection_indicator.current.color = self.page.theme.color_scheme.outline
         else:
-            self.connection_indicator.current.color = ft.Colors.BLUE if server_info.connected_clients > 0 else ft.Colors.GREY
+            self.connection_indicator.current.color = TOKENS['primary'] if server_info.connected_clients > 0 else TOKENS['outline']
             
         self.page.update()
 
@@ -186,7 +187,7 @@ class ServerStatusCard:
                 self.status_chip.current.label.color = self.page.theme.color_scheme.on_primary_container
                 self.status_icon.current.color = self.page.theme.color_scheme.primary
             else:
-                self.status_icon.current.color = ft.Colors.GREEN
+                self.status_icon.current.color = TOKENS['secondary']
                 
             self.status_icon.current.name = ft.Icons.RADIO_BUTTON_CHECKED
             self.address_text.current.value = f"Address: {getattr(server_info, 'host', 'N/A')}:{getattr(server_info, 'port', 'N/A')}"
@@ -199,7 +200,7 @@ class ServerStatusCard:
                 self.status_chip.current.label.color = self.page.theme.color_scheme.on_secondary_container
                 self.status_icon.current.color = self.page.theme.color_scheme.outline
             else:
-                self.status_icon.current.color = ft.Colors.GREY
+                self.status_icon.current.color = TOKENS['outline']
                 
             self.status_icon.current.name = ft.Icons.RADIO_BUTTON_OFF
             self.address_text.current.value = "Address: N/A"
@@ -338,13 +339,13 @@ class ActivityLogCard:
         else:
             # Fallback colors
             level_colors = {
-                "INFO": ft.Colors.GREY_600,
-                "SUCCESS": ft.Colors.GREEN_600,
-                "WARNING": ft.Colors.ORANGE_600,
-                "ERROR": ft.Colors.RED_600
+                "INFO": TOKENS['outline'],
+                "SUCCESS": TOKENS['secondary'],
+                "WARNING": TOKENS['tertiary'],
+                "ERROR": TOKENS['error']
             }
-            time_color = ft.Colors.GREY_600
-            message_color = ft.Colors.GREY_800
+            time_color = TOKENS['outline']
+            message_color = TOKENS['on_background']
         
         level_icons = {
             "INFO": ft.Icons.INFO_OUTLINE,
@@ -459,7 +460,7 @@ class EnhancedStatsCard:
                 ),
                 ft.Text(ref=self.cpu_text, value="0%", 
                        style=ft.TextThemeStyle.BODY_MEDIUM, 
-                       color=ft.Colors.ON_SURFACE_VARIANT)
+                       color=TOKENS['outline'])
             ], col={"sm": 12, "md": 6, "lg": 3}, expand=True),
             
             # Memory Usage with progress bar
@@ -473,18 +474,18 @@ class EnhancedStatsCard:
                 ),
                 ft.Text(ref=self.memory_text, value="0%", 
                        style=ft.TextThemeStyle.BODY_MEDIUM, 
-                       color=ft.Colors.ON_SURFACE_VARIANT)
+                       color=TOKENS['outline'])
             ], col={"sm": 12, "md": 6, "lg": 3}, expand=True),
             
             # Network Traffic
             ft.Column([
                 ft.Text("Network", style=ft.TextThemeStyle.LABEL_LARGE),
                 ft.Row([
-                    ft.Icon(ft.Icons.ARROW_UPWARD, size=16, color=ft.Colors.GREEN),
+                    ft.Icon(ft.Icons.ARROW_UPWARD, size=16, color=TOKENS['secondary']),
                     ft.Text(ref=self.net_up_text, value="0 KB/s", style=ft.TextThemeStyle.BODY_MEDIUM),
                 ], spacing=4),
                 ft.Row([
-                    ft.Icon(ft.Icons.ARROW_DOWNWARD, size=16, color=ft.Colors.BLUE),
+                    ft.Icon(ft.Icons.ARROW_DOWNWARD, size=16, color=TOKENS['primary']),
                     ft.Text(ref=self.net_down_text, value="0 KB/s", style=ft.TextThemeStyle.BODY_MEDIUM),
                 ], spacing=4)
             ], col={"sm": 12, "md": 6, "lg": 3}, expand=True),
@@ -500,7 +501,7 @@ class EnhancedStatsCard:
                 ),
                 ft.Text(ref=self.storage_text, value="0%", 
                        style=ft.TextThemeStyle.BODY_MEDIUM, 
-                       color=ft.Colors.ON_SURFACE_VARIANT)
+                       color=TOKENS['outline'])
             ], col={"sm": 12, "md": 6, "lg": 3}, expand=True),
         ], spacing=20, expand=True)
         
@@ -634,19 +635,19 @@ class DatabaseStatsCard:
                     ft.Text("Database Statistics", size=18, weight=ft.FontWeight.BOLD),
                     ft.Divider(),
                     ft.Row([
-                        ft.Icon(ft.Icons.PERSON, color=ft.Colors.BLUE_600),
+                        ft.Icon(ft.Icons.PERSON, color=TOKENS['primary']),
                         ft.Text(f"Registered Clients: {client_count}", size=16),
                     ]),
                     ft.Row([
-                        ft.Icon(ft.Icons.FOLDER, color=ft.Colors.GREEN_600),
+                        ft.Icon(ft.Icons.FOLDER, color=TOKENS['secondary']),
                         ft.Text(f"Stored Files: {file_count}", size=16),
                     ]),
                     ft.Row([
-                        ft.Icon(ft.Icons.STORAGE, color=ft.Colors.ORANGE_600),
+                        ft.Icon(ft.Icons.STORAGE, color=TOKENS['tertiary']),
                         ft.Text(f"Total Size: {size_text}", size=16),
                     ]),
                     ft.Divider(),
-                    ft.Text(data_source, size=12, color=ft.Colors.GREY_600, italic=True),
+                    ft.Text(data_source, size=12, color=TOKENS['outline'], italic=True),
                 ], spacing=8),
                 padding=20,
             ),

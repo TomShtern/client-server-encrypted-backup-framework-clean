@@ -1,3 +1,4 @@
+﻿#!/usr/bin/env python3
 """
 Purpose: Analytics & charts view
 Logic: Data aggregation and metrics calculation
@@ -5,10 +6,39 @@ UI: Performance charts, statistics, and analytical displays
 """
 
 import flet as ft
-from flet_server_gui.core.server_operations import ServerOperations
 
-class AnalyticsView:
-    def __init__(self, page: ft.Page, server_bridge=None):
+# Existing imports
+from flet_server_gui.core.server_operations import ServerOperations
+from flet_server_gui.components.base_component import BaseComponent
+
+# Enhanced components imports
+from flet_server_gui.ui.widgets import (
+    EnhancedButton,
+    EnhancedCard,
+    EnhancedChart,
+    EnhancedWidget,
+    EnhancedButtonConfig,
+    ButtonVariant,
+    CardVariant,
+    ChartType,
+    WidgetSize,
+    WidgetType
+)
+
+# Layout fixes imports
+from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
+from flet_server_gui.ui.theme_consistency import ThemeConsistencyManager, apply_theme_consistency
+from flet_server_gui.ui.theme_m3 import TOKENS
+
+
+class AnalyticsView(BaseComponent):
+    def __init__(self, page: ft.Page, server_bridge=None, dialog_system=None, toast_manager=None):
+        # Initialize parent BaseComponent
+        super().__init__(page, dialog_system, toast_manager)
+        
+        # Initialize theme consistency manager
+        self.theme_manager = ThemeConsistencyManager(page)
+        
         self.page = page
         self.server_bridge = server_bridge
         self.server_ops = ServerOperations(server_bridge) if server_bridge else None
@@ -24,9 +54,9 @@ class AnalyticsView:
         
     def build(self):
         """Build the analytics view with real performance monitoring"""
-        # Header with enhanced styling
+        # Header with enhanced styling - Apply responsive layout fixes
         header = ft.Row([
-            ft.Icon(ft.Icons.AUTO_GRAPH, size=28, color=ft.Colors.PRIMARY),
+            ft.Icon(ft.Icons.AUTO_GRAPH, size=28),
             ft.Text("Analytics & Performance", style=ft.TextThemeStyle.HEADLINE_MEDIUM, weight=ft.FontWeight.BOLD),
             ft.Container(expand=True),
             ft.IconButton(
@@ -35,6 +65,10 @@ class AnalyticsView:
                 on_click=self._refresh_analytics
             )
         ], spacing=12, alignment=ft.MainAxisAlignment.START)
+        
+        # Apply hitbox fixes to the refresh button
+        if len(header.controls) > 3 and isinstance(header.controls[3], ft.IconButton):
+            header.controls[3] = ResponsiveLayoutFixes.fix_button_hitbox(header.controls[3])
         
         # Build content based on availability of performance charts
         if self.performance_charts:
@@ -78,11 +112,22 @@ class AnalyticsView:
                 self._build_basic_system_info()
             ], spacing=16, scroll=ft.ScrollMode.AUTO, expand=True)
         
+        # Apply responsive layout fixes
+        content = ResponsiveLayoutFixes.create_clipping_safe_container(
+            content
+        )
+        
         container = ft.Container(
             content=content,
             padding=20,
             expand=True
         )
+        
+        # Apply windowed mode compatibility
+        main_container = ResponsiveLayoutFixes.create_windowed_layout_fix(container)
+        
+        # Apply theme consistency
+        apply_theme_consistency(self.page)
         
         # Schedule chart initialization after the container is added to the page
         if self.performance_charts:
@@ -95,7 +140,7 @@ class AnalyticsView:
             if hasattr(self.page, 'run_task'):
                 self.page.run_task(delayed_init)
         
-        return container
+        return main_container
         
     def update_data(self):
         """Update analytics data with real implementations"""
@@ -118,10 +163,10 @@ class AnalyticsView:
             content=ft.Column([
                 ft.Text("System Summary", style=ft.TextThemeStyle.TITLE_MEDIUM, weight=ft.FontWeight.BOLD),
                 ft.Text("Real-time system performance monitoring with threshold alerts and interactive charts.",
-                       style=ft.TextThemeStyle.BODY_MEDIUM, color=ft.Colors.ON_SURFACE_VARIANT),
+                       style=ft.TextThemeStyle.BODY_MEDIUM),
                 ft.Container(
                     content=ft.Row([
-                        ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN, size=16),
+                        ft.Icon(ft.Icons.CHECK_CIRCLE, color=TOKENS['secondary'], size=16),
                         ft.Text("Enhanced monitoring active", style=ft.TextThemeStyle.BODY_SMALL)
                     ], spacing=8),
                     padding=ft.padding.only(top=8)
@@ -129,7 +174,7 @@ class AnalyticsView:
             ], spacing=8),
             padding=16,
             border_radius=8,
-            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST
+            bgcolor=TOKENS['surface_variant']
         )
     
     def _build_historical_trends(self) -> ft.Container:
@@ -138,16 +183,16 @@ class AnalyticsView:
             content=ft.Column([
                 ft.Text("Historical Trends", style=ft.TextThemeStyle.TITLE_MEDIUM, weight=ft.FontWeight.BOLD),
                 ft.Text("Performance data is collected and stored for trend analysis.",
-                       style=ft.TextThemeStyle.BODY_MEDIUM, color=ft.Colors.ON_SURFACE_VARIANT),
+                       style=ft.TextThemeStyle.BODY_MEDIUM, color=TOKENS['outline']),
                 ft.Row([
-                    self._create_trend_stat("Peak CPU", "--", ft.Icons.TRENDING_UP, ft.Colors.BLUE),
-                    self._create_trend_stat("Avg Memory", "--", ft.Icons.MEMORY, ft.Colors.GREEN),
-                    self._create_trend_stat("Max Network", "--", ft.Icons.NETWORK_CHECK, ft.Colors.PURPLE)
+                    self._create_trend_stat("Peak CPU", "--", ft.Icons.TRENDING_UP, TOKENS['primary']),
+                    self._create_trend_stat("Avg Memory", "--", ft.Icons.MEMORY, TOKENS['secondary']),
+                    self._create_trend_stat("Max Network", "--", ft.Icons.NETWORK_CHECK, TOKENS['primary'])
                 ], spacing=16)
             ], spacing=12),
             padding=16,
             border_radius=8,
-            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
+            bgcolor=TOKENS['surface_variant'],
             margin=ft.margin.only(top=16)
         )
     
@@ -161,7 +206,7 @@ class AnalyticsView:
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
             padding=12,
             border_radius=6,
-            bgcolor=ft.Colors.SURFACE,
+            bgcolor=TOKENS['surface'],
             expand=True
         )
     
@@ -183,11 +228,11 @@ class AnalyticsView:
         return ft.Container(
             content=ft.Column([
                 ft.Text("System Information", style=ft.TextThemeStyle.TITLE_MEDIUM, weight=ft.FontWeight.BOLD),
-                *[ft.Text(f"• {item}", style=ft.TextThemeStyle.BODY_MEDIUM) for item in info_items]
+                *[ft.Text(f"ג€¢ {item}", style=ft.TextThemeStyle.BODY_MEDIUM) for item in info_items]
             ], spacing=8),
             padding=16,
             border_radius=8,
-            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+            border=ft.border.all(1, TOKENS['outline']),
             margin=ft.margin.only(top=16)
         )
     

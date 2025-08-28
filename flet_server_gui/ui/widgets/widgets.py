@@ -16,6 +16,7 @@ from typing import Optional, Callable, List, Dict, Union, Any
 from enum import Enum
 import asyncio
 from datetime import datetime
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 
 class WidgetSize(Enum):
@@ -245,7 +246,7 @@ class StatisticWidget(DashboardWidget):
         # Icon if provided
         if icon:
             content_items.append(
-                ft.Icon(icon, size=32, color=color or ft.Colors.PRIMARY)
+                ft.Icon(icon, size=32, color=color or TOKENS['primary'])
             )
         
         # Value display
@@ -253,14 +254,14 @@ class StatisticWidget(DashboardWidget):
             str(value),
             style=ft.TextThemeStyle.DISPLAY_MEDIUM,
             weight=ft.FontWeight.BOLD,
-            color=color or ft.Colors.ON_SURFACE
+            color=color or TOKENS['on_background']
         )
         
         # Unit if provided
         if unit:
             value_with_unit = ft.Row([
                 value_text,
-                ft.Text(unit, style=ft.TextThemeStyle.LABEL_LARGE, color=ft.Colors.ON_SURFACE_VARIANT)
+                ft.Text(unit, style=ft.TextThemeStyle.LABEL_LARGE, color=TOKENS['outline'])
             ], spacing=4, alignment=ft.MainAxisAlignment.CENTER)
             content_items.append(value_with_unit)
         else:
@@ -268,7 +269,7 @@ class StatisticWidget(DashboardWidget):
         
         # Trend indicator if provided
         if trend is not None:
-            trend_color = ft.Colors.GREEN if trend >= 0 else ft.Colors.RED
+            trend_color = TOKENS['secondary'] if trend >= 0 else TOKENS['error']
             trend_icon = ft.Icons.ARROW_UPWARD if trend >= 0 else ft.Icons.ARROW_DOWNWARD
             trend_text = ft.Text(f"{abs(trend):.1f}%", color=trend_color, size=12)
             
@@ -348,18 +349,18 @@ class ActivityFeedWidget(DashboardWidget):
             
             # Determine icon and color based on level
             level_configs = {
-                "INFO": (ft.Icons.INFO_OUTLINE, ft.Colors.PRIMARY),
-                "SUCCESS": (ft.Icons.CHECK_CIRCLE_OUTLINE, ft.Colors.GREEN),
-                "WARNING": (ft.Icons.WARNING_AMBER, ft.Colors.ORANGE),
-                "ERROR": (ft.Icons.ERROR_OUTLINE, ft.Colors.RED)
+                "INFO": (ft.Icons.INFO_OUTLINE, TOKENS['primary']),
+                "SUCCESS": (ft.Icons.CHECK_CIRCLE_OUTLINE, TOKENS['secondary']),
+                "WARNING": (ft.Icons.WARNING_AMBER, TOKENS['tertiary']),
+                "ERROR": (ft.Icons.ERROR_OUTLINE, TOKENS['error'])
             }
             
-            icon, color = level_configs.get(level.upper(), (ft.Icons.INFO_OUTLINE, ft.Colors.PRIMARY))
+            icon, color = level_configs.get(level.upper(), (ft.Icons.INFO_OUTLINE, TOKENS['primary']))
             
             activity_item = ft.ListTile(
                 leading=ft.Icon(icon, color=color, size=16),
                 title=ft.Text(message, size=13),
-                subtitle=ft.Text(f"{source} • {timestamp}", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                subtitle=ft.Text(f"{source} • {timestamp}", size=11, color=TOKENS['outline']),
                 dense=True
             )
             
@@ -368,7 +369,7 @@ class ActivityFeedWidget(DashboardWidget):
         
         if not activity_items:
             activity_items.append(
-                ft.Text("No recent activity", italic=True, color=ft.Colors.ON_SURFACE_VARIANT)
+                ft.Text("No recent activity", italic=True, color=TOKENS['outline'])
             )
         
         return ft.Column(activity_items, spacing=2, expand=True)

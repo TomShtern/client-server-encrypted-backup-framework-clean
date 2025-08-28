@@ -36,7 +36,7 @@ def main(page: ft.Page):
                 label="Files"
             ),
         ],
-        bgcolor=ft.Colors.SURFACE,  # This might be causing the issue
+        bgcolor=TOKENS['surface'],  # This might be causing the issue
         on_change=lambda e: print(f"Selected index: {e.control.selected_index}")
     )
     

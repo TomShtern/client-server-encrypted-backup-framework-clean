@@ -145,7 +145,7 @@ class EnhancedDataTable(ft.DataTable):
                 # Store original color and lighten
                 pass
             else:
-                row.bgcolor = ft.colors.SURFACE_VARIANT
+                row.bgcolor = TOKENS['surface_variant']
         else:
             # Hover exit - restore original
             row = e.control

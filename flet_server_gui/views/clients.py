@@ -15,6 +15,8 @@ import flet as ft
 import asyncio
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Callable
+
+# Existing imports
 from flet_server_gui.core.client_management import ClientManagement
 from flet_server_gui.ui.widgets.tables import EnhancedDataTable
 from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
@@ -26,6 +28,29 @@ from flet_server_gui.actions.client_actions import ClientActions
 from flet_server_gui.layouts.responsive_utils import ResponsiveBuilder
 from flet_server_gui.layouts.breakpoint_manager import BreakpointManager
 from flet_server_gui.components.base_component import BaseComponent
+
+# Theme consistency import
+from flet_server_gui.ui.theme_consistency import apply_theme_consistency
+
+# Enhanced components imports
+from flet_server_gui.ui.widgets import (
+    EnhancedButton,
+    EnhancedCard,
+    EnhancedTable,
+    EnhancedWidget,
+    EnhancedButtonConfig,
+    ButtonVariant,
+    CardVariant,
+    TableSize,
+    WidgetSize,
+    WidgetType
+)
+
+# Layout fixes imports
+from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
+from flet_server_gui.ui.theme_consistency import ThemeConsistencyManager
+from flet_server_gui.ui.theme_m3 import TOKENS
+
 
 
 class ClientsView(BaseComponent):
@@ -47,6 +72,9 @@ class ClientsView(BaseComponent):
         # Initialize parent BaseComponent
         super().__init__(page, dialog_system, toast_manager)
         
+        # Initialize theme consistency manager
+        self.theme_manager = ThemeConsistencyManager(page)
+        
         # Initialize button factory
         self.button_factory = ActionButtonFactory(self, server_bridge, page)
         
@@ -54,6 +82,9 @@ class ClientsView(BaseComponent):
         self.table_renderer = ClientTableRenderer(server_bridge, self.button_factory, page)
         self.filter_manager = ClientFilterManager(page, toast_manager)
         self.action_handlers = ClientActionHandlers(server_bridge, dialog_system, toast_manager, page)
+        
+        # Set action handlers in button factory
+        self.button_factory.actions["ClientActionHandlers"] = self.action_handlers
         
         # Setup callbacks
         self.filter_manager.on_filter_changed = self._on_filtered_data_changed
@@ -75,7 +106,7 @@ class ClientsView(BaseComponent):
         self.status_text = ft.Text(
             "Loading client data...",
             size=14,
-            color=ft.Colors.BLUE_600
+            color=TOKENS['primary']
         )
         
         # Refresh button
@@ -84,86 +115,105 @@ class ClientsView(BaseComponent):
             icon=ft.Icons.REFRESH,
             on_click=self._refresh_clients,
             style=ft.ButtonStyle(
-                bgcolor=ft.Colors.PRIMARY,
-                color=ft.Colors.ON_PRIMARY
+                bgcolor=TOKENS['primary'],
+                color=TOKENS['on_primary']
             )
         )
         
         # Search and filter controls from filter manager
         search_controls = self.filter_manager.create_search_controls(self._on_filtered_data_changed)
         
-        # Client table from table renderer
-        client_table_container = self.table_renderer.get_table_container()
-        
-        # Select all checkbox
-        self.select_all_checkbox = ft.Checkbox(
-            label="Select All",
-            on_change=self._on_select_all
-        )
-        
-        # Bulk actions row
+        # Bulk actions row - Remove hardcoded styles and apply responsive fixes
         self.bulk_actions_row = ft.Row([
             ft.Text("Bulk Actions:", weight=ft.FontWeight.BOLD),
             ft.ElevatedButton(
                 "Disconnect Selected",
                 icon=ft.Icons.LOGOUT,
                 on_click=self._bulk_disconnect,
-                style=ft.ButtonStyle(bgcolor=ft.Colors.ORANGE_100),
                 visible=False
             ),
             ft.ElevatedButton(
                 "Delete Selected",
                 icon=ft.Icons.DELETE_FOREVER,
                 on_click=self._bulk_delete,
-                style=ft.ButtonStyle(bgcolor=ft.Colors.RED_100),
                 visible=False
             ),
         ], spacing=10)
         
+        # Apply hitbox fixes to buttons
+        if self.refresh_button:
+            self.refresh_button = ResponsiveLayoutFixes.fix_button_hitbox(self.refresh_button)
+        
+        if self.select_all_checkbox:
+            self.select_all_checkbox = ResponsiveLayoutFixes.fix_hitbox_alignment(self.select_all_checkbox)
+        
+        # Client table from table renderer - Apply responsive layout fixes
+        client_table_container = self.table_renderer.get_table_container()
+        print(f"[DEBUG] client_table_container type: {type(client_table_container)}")
+        print(f"[DEBUG] client_table_container: {client_table_container}")
+        client_table_container = ResponsiveLayoutFixes.create_clipping_safe_container(
+            client_table_container
+        )
+        print(f"[DEBUG] After clipping safe container type: {type(client_table_container)}")
+        print(f"[DEBUG] After clipping safe container: {client_table_container}")
+        
+        # Apply windowed mode compatibility
+        main_content = ft.Column([
+            # Header section
+            ft.ResponsiveRow([
+                ft.Column([
+                    ft.Row([
+                        ft.Icon(ft.Icons.PEOPLE, size=24),
+                        ft.Text("Client Management", style=ft.TextThemeStyle.TITLE_LARGE),
+                    ])
+                ], col={"xs": 12, "sm": 6, "md": 8}),
+                ft.Column([
+                    self.refresh_button
+                ], col={"xs": 12, "sm": 6, "md": 4}, alignment=ft.MainAxisAlignment.END)
+            ]),
+            
+            ft.Divider(),
+            
+            # Status
+            self.status_text,
+            
+            ft.Divider(),
+            
+            # Search and filters
+            search_controls,
+            
+            ft.Divider(),
+            
+            # Selection and bulk actions
+            ft.ResponsiveRow([
+                ft.Column([
+                    self.select_all_checkbox
+                ], col={"xs": 12, "sm": 6}),
+                ft.Column([
+                    self.bulk_actions_row
+                ], col={"xs": 12, "sm": 6})
+            ]),
+            
+            ft.Divider(),
+            
+            # Client table
+            ft.ResponsiveRow([
+                ft.Column([
+                    client_table_container
+                ], col={"xs": 12})
+            ], expand=True),
+            
+        ], spacing=10, expand=True)
+        
+        # Apply windowed mode compatibility to the entire layout
+        main_layout = ResponsiveLayoutFixes.create_windowed_layout_fix(main_content)
+        
+        # Apply theme consistency
+        apply_theme_consistency(self.page)
+        
         # Main layout
         return ft.Container(
-            content=ft.Column([
-                # Header section
-                ft.ResponsiveRow([
-                    ft.Column([
-                        ft.Row([
-                            ft.Icon(ft.Icons.PEOPLE, size=24),
-                            ft.Text("Client Management", style=ft.TextThemeStyle.TITLE_LARGE),
-                        ])
-                    ], col={"xs": 12, "sm": 6, "md": 8}),
-                    ft.Column([
-                        self.refresh_button
-                    ], col={"xs": 12, "sm": 6, "md": 4}, alignment=ft.MainAxisAlignment.END)
-                ]),
-                
-                ft.Divider(),
-                
-                # Status
-                self.status_text,
-                
-                ft.Divider(),
-                
-                # Search and filters
-                search_controls,
-                
-                ft.Divider(),
-                
-                # Selection and bulk actions
-                ft.ResponsiveRow([
-                    ft.Column([
-                        self.select_all_checkbox
-                    ], col={"xs": 12, "sm": 6}),
-                    ft.Column([
-                        self.bulk_actions_row
-                    ], col={"xs": 12, "sm": 6})
-                ]),
-                
-                ft.Divider(),
-                
-                # Client table
-                client_table_container,
-                
-            ], spacing=10, expand=True),
+            content=main_layout,
             padding=20,
             expand=True
         )
@@ -201,8 +251,8 @@ class ClientsView(BaseComponent):
             
             # Update status
             if self.status_text:
-                self.status_text.value = f"Loaded {len(clients)} clients ({len(filtered_clients)} shown)"
-                self.status_text.color = ft.Colors.GREEN_600
+                self.status_text.value = f"Loaded {len(clients)} clients"
+                # Use theme-aware color or let it inherit from theme
             
             # Reset selection
             self.selected_clients.clear()
@@ -212,20 +262,20 @@ class ClientsView(BaseComponent):
         except asyncio.TimeoutError:
             if self.status_text:
                 self.status_text.value = "Timeout loading clients. Server may be unresponsive."
-                self.status_text.color = ft.Colors.RED_600
+                # Use theme-aware color or let it inherit from theme
             if self.toast_manager:
                 self.toast_manager.show_error("Server connection timeout")
         except ConnectionError as conn_ex:
             if self.status_text:
                 self.status_text.value = str(conn_ex)
-                self.status_text.color = ft.Colors.AMBER_600
+                # Use theme-aware color or let it inherit from theme
             if self.toast_manager:
                 self.toast_manager.show_warning("Server connection issue")
         except Exception as ex:
             error_msg = f"Error loading clients: {str(ex)}"
             if self.status_text:
                 self.status_text.value = error_msg
-                self.status_text.color = ft.Colors.RED_600
+                # Use theme-aware color or let it inherit from theme
             if self.toast_manager:
                 self.toast_manager.show_error(error_msg)
             # Log the full exception for debugging
@@ -248,7 +298,7 @@ class ClientsView(BaseComponent):
                 filtered_clients = []
                 if self.status_text:
                     self.status_text.value = "No client data available"
-                    self.status_text.color = ft.Colors.AMBER_600
+                    # Use theme-aware color or let it inherit from theme
                 return
             
             # Update table with new filtered data
@@ -261,7 +311,7 @@ class ClientsView(BaseComponent):
             if self.status_text:
                 total_clients = len(self.filter_manager.all_clients)
                 self.status_text.value = f"Showing {len(filtered_clients)} of {total_clients} clients"
-                self.status_text.color = ft.Colors.BLUE_600
+                # Use theme-aware color or let it inherit from theme
             
             # Reset selection when filter changes
             self.selected_clients.clear()
@@ -278,7 +328,7 @@ class ClientsView(BaseComponent):
         except Exception as ex:
             if self.status_text:
                 self.status_text.value = f"Error updating filter: {str(ex)}"
-                self.status_text.color = ft.Colors.RED_600
+                # Use theme-aware color or let it inherit from theme
             # Thread-safe UI update
             if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
                 self.ui_updater.queue_update(lambda: None)

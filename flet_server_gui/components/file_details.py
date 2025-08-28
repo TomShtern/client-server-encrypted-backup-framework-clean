@@ -7,6 +7,7 @@ Material Design 3 component for detailed file information with enhanced UI.
 import flet as ft
 from typing import Dict, Optional, Callable
 import os
+from flet_server_gui.ui.theme_m3 import TOKENS
 from flet_server_gui.components.enhanced_components import (
     EnhancedCard,
     create_enhanced_button,
@@ -91,49 +92,49 @@ class FileDetails(EnhancedCard):
         return ft.ResponsiveRow([
             # Name
             ft.Column([
-                ft.Text("Name", style=ft.TextThemeStyle.LABEL_LARGE, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text("Name", style=ft.TextThemeStyle.LABEL_LARGE, color=TOKENS['outline']),
                 ft.Text(file_name, style=ft.TextThemeStyle.BODY_LARGE)
             ], col={"sm": 12, "md": 6}),
             
             # Path
             ft.Column([
-                ft.Text("Path", style=ft.TextThemeStyle.LABEL_LARGE, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text("Path", style=ft.TextThemeStyle.LABEL_LARGE, color=TOKENS['outline']),
                 ft.Text(file_path, style=ft.TextThemeStyle.BODY_LARGE, selectable=True)
             ], col={"sm": 12, "md": 6}),
             
             # Size
             ft.Column([
-                ft.Text("Size", style=ft.TextThemeStyle.LABEL_LARGE, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text("Size", style=ft.TextThemeStyle.LABEL_LARGE, color=TOKENS['outline']),
                 ft.Text(file_size, style=ft.TextThemeStyle.BODY_LARGE)
             ], col={"sm": 12, "md": 6}),
             
             # Type
             ft.Column([
-                ft.Text("Type", style=ft.TextThemeStyle.LABEL_LARGE, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text("Type", style=ft.TextThemeStyle.LABEL_LARGE, color=TOKENS['outline']),
                 ft.Text(file_type, style=ft.TextThemeStyle.BODY_LARGE)
             ], col={"sm": 12, "md": 6}),
             
             # Modified
             ft.Column([
-                ft.Text("Modified", style=ft.TextThemeStyle.LABEL_LARGE, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text("Modified", style=ft.TextThemeStyle.LABEL_LARGE, color=TOKENS['outline']),
                 ft.Text(modified, style=ft.TextThemeStyle.BODY_LARGE)
             ], col={"sm": 12, "md": 6}),
             
             # Created
             ft.Column([
-                ft.Text("Created", style=ft.TextThemeStyle.LABEL_LARGE, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text("Created", style=ft.TextThemeStyle.LABEL_LARGE, color=TOKENS['outline']),
                 ft.Text(created, style=ft.TextThemeStyle.BODY_LARGE)
             ], col={"sm": 12, "md": 6}),
             
             # Owner
             ft.Column([
-                ft.Text("Owner", style=ft.TextThemeStyle.LABEL_LARGE, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text("Owner", style=ft.TextThemeStyle.LABEL_LARGE, color=TOKENS['outline']),
                 ft.Text(owner, style=ft.TextThemeStyle.BODY_LARGE)
             ], col={"sm": 12, "md": 6}),
             
             # Permissions
             ft.Column([
-                ft.Text("Permissions", style=ft.TextThemeStyle.LABEL_LARGE, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text("Permissions", style=ft.TextThemeStyle.LABEL_LARGE, color=TOKENS['outline']),
                 ft.Text(permissions, style=ft.TextThemeStyle.BODY_LARGE)
             ], col={"sm": 12, "md": 6}),
         ], spacing=12)
@@ -201,7 +202,7 @@ class FileDetails(EnhancedCard):
         else:
             toast = create_toast_notification(
                 message="Opening file preview",
-                bgcolor=ft.Colors.PRIMARY_CONTAINER
+                bgcolor=TOKENS['container']
             )
             toast.show(self.page)
     
@@ -212,7 +213,7 @@ class FileDetails(EnhancedCard):
         else:
             toast = create_toast_notification(
                 message="File download started",
-                bgcolor=ft.Colors.PRIMARY_CONTAINER
+                bgcolor=TOKENS['container']
             )
             toast.show(self.page)
     
@@ -234,7 +235,7 @@ class FileDetails(EnhancedCard):
         """Handle delete confirmation"""
         toast = create_toast_notification(
             message="File deleted successfully",
-            bgcolor=ft.Colors.SECONDARY_CONTAINER
+            bgcolor=TOKENS['surface_variant']
         )
         toast.show(self.page)
 

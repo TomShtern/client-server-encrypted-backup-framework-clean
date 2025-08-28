@@ -6,6 +6,7 @@ Material Design 3 component for bulk file operations with enhanced UI.
 
 import flet as ft
 from typing import List, Dict, Optional, Callable
+from flet_server_gui.ui.theme_m3 import TOKENS
 from flet_server_gui.components.enhanced_components import (
     create_enhanced_button,
     create_enhanced_icon_button,
@@ -100,7 +101,7 @@ class BulkOperations(EnhancedCard):
     def _create_files_list(self) -> ft.Control:
         """Create list of selected files"""
         if not self.selected_files:
-            return ft.Text("No files selected", italic=True, color=ft.Colors.ON_SURFACE_VARIANT)
+            return ft.Text("No files selected", italic=True, color=TOKENS["outline"])
         
         file_items = []
         for file_info in self.selected_files[:10]:  # Show only first 10 files
@@ -181,7 +182,7 @@ class BulkOperations(EnhancedCard):
             # Show completion message
             toast = create_toast_notification(
                 message=f"Bulk {operation} completed successfully",
-                bgcolor=ft.Colors.PRIMARY_CONTAINER
+                bgcolor=TOKENS["container"]
             )
             toast.show(self.page)
         
@@ -211,7 +212,7 @@ class BulkOperations(EnhancedCard):
             # Show completion message
             toast = create_toast_notification(
                 message=f"Deleted {len(self.selected_files)} files successfully",
-                bgcolor=ft.Colors.SECONDARY_CONTAINER
+                bgcolor=TOKENS["surface_variant"]
             )
             toast.show(self.page)
             

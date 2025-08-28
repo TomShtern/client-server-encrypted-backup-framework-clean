@@ -31,6 +31,7 @@ from enum import Enum, auto
 import asyncio
 from datetime import datetime, timedelta
 import flet as ft
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 
 class ServerStatus(Enum):
@@ -325,12 +326,12 @@ class StatusIndicatorManager:
             # Placeholder pill structure
             pill_container = ft.Container(
                 content=ft.Row([
-                    ft.Icon(ft.Icons.CIRCLE, size=12, color=ft.Colors.GREY),
-                    ft.Text("Status", size=12, color=ft.Colors.ON_SURFACE),
+                    ft.Icon(ft.Icons.CIRCLE, size=12, color=TOKENS['outline']),
+                    ft.Text("Status", size=12, color=TOKENS['on_background']),
                 ], tight=True),
                 padding=effective_config.padding,
                 border_radius=effective_config.border_radius,
-                bgcolor=ft.Colors.SURFACE_VARIANT,
+                bgcolor=TOKENS['surface_variant'],
                 # TODO: Replace with complete implementation
             )
             
@@ -342,7 +343,7 @@ class StatusIndicatorManager:
         except Exception as e:
             # TODO: Handle pill creation errors
             # Return fallback pill
-            return ft.Text(f"Status ({pill_id})", color=ft.Colors.ERROR)
+            return ft.Text(f"Status ({pill_id})", color=TOKENS['error'])
     
     def create_status_hero_pill(self, pill_id: str = "main_status") -> ft.Control:
         """
@@ -736,15 +737,15 @@ class StatusIndicatorManager:
     def _get_status_color(self, status: ServerStatus) -> str:
         """Get Material Design 3 color for status"""
         color_map = {
-            ServerStatus.RUNNING: ft.Colors.GREEN,
-            ServerStatus.STOPPED: ft.Colors.GREY,
-            ServerStatus.STARTING: ft.Colors.BLUE,
-            ServerStatus.STOPPING: ft.Colors.ORANGE,
-            ServerStatus.ERROR: ft.Colors.RED,
-            ServerStatus.UNKNOWN: ft.Colors.AMBER,
-            ServerStatus.MAINTENANCE: ft.Colors.PURPLE,
+            ServerStatus.RUNNING: TOKENS['secondary'],
+            ServerStatus.STOPPED: TOKENS['outline'],
+            ServerStatus.STARTING: TOKENS['primary'],
+            ServerStatus.STOPPING: TOKENS['tertiary'],
+            ServerStatus.ERROR: TOKENS['error'],
+            ServerStatus.UNKNOWN: TOKENS['tertiary'],
+            ServerStatus.MAINTENANCE: TOKENS['tertiary'],
         }
-        return color_map.get(status, ft.Colors.GREY)
+        return color_map.get(status, TOKENS['outline'])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
@@ -791,5 +792,5 @@ def create_simple_status_pill(status: ServerStatus, text: str = None) -> ft.Cont
         content=ft.Text(text or status.value),
         padding=8,
         border_radius=16,
-        bgcolor=ft.Colors.SURFACE_VARIANT
+        bgcolor=TOKENS['surface_variant']
     )

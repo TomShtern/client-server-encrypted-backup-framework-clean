@@ -9,6 +9,8 @@ import sys
 import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+from flet_server_gui.core.semantic_colors import get_status_color
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 # Add project root to path for imports
 project_root = os.path.join(os.path.dirname(__file__), "..", "..")
@@ -46,17 +48,17 @@ class ClientTableRenderer:
         self.client_table = ft.DataTable(
             columns=[
                 ft.DataColumn(ft.Checkbox(on_change=None)),  # Select all will be handled by parent
-                ft.DataColumn(ft.Text("Client ID", weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("Last Seen", weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("Files", weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("Total Size", weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Client ID", weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
+                ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
+                ft.DataColumn(ft.Text("Last Seen", weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
+                ft.DataColumn(ft.Text("Files", weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
+                ft.DataColumn(ft.Text("Total Size", weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
+                ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
             ],
             rows=[],
-            border=ft.border.all(1, ft.Colors.OUTLINE),
+            border=ft.border.all(1, TOKENS['outline']),
             border_radius=8,
-            heading_row_color=ft.Colors.ON_SURFACE_VARIANT,
+            heading_row_color=TOKENS['surface_variant'],
             heading_row_height=50,
             data_row_max_height=60,
             show_checkbox_column=False,  # We handle checkboxes manually
@@ -107,11 +109,11 @@ class ClientTableRenderer:
                 ft.DataRow(
                     cells=[
                         ft.DataCell(client_checkbox),
-                        ft.DataCell(ft.Text(client_id, size=12)),
+                        ft.DataCell(ft.Text(client_id, size=12, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
                         ft.DataCell(status_display),
-                        ft.DataCell(ft.Text(last_seen_display, size=11)),
-                        ft.DataCell(ft.Text(str(files_count))),
-                        ft.DataCell(ft.Text(size_display)),
+                        ft.DataCell(ft.Text(last_seen_display, size=11, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
+                        ft.DataCell(ft.Text(str(files_count), max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
+                        ft.DataCell(ft.Text(size_display, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
                         ft.DataCell(action_buttons),
                     ]
                 )
@@ -119,20 +121,21 @@ class ClientTableRenderer:
     
     def _format_status_display(self, status: str) -> ft.Control:
         """Format status with appropriate color coding"""
-        status_colors = {
-            "connected": ft.Colors.GREEN_600,
-            "registered": ft.Colors.BLUE_600,
-            "offline": ft.Colors.ORANGE_600,
+        # Use semantic color system for client status colors
+        status_color_map = {
+            "connected": "success",
+            "registered": "info", 
+            "offline": "warning"
         }
-        
-        color = status_colors.get(status.lower(), ft.Colors.GREY_600)
+        semantic_status = status_color_map.get(status.lower(), "neutral")
+        color = get_status_color(semantic_status)
         
         return ft.Container(
             content=ft.Text(
                 status.title(),
                 size=11,
                 weight=ft.FontWeight.BOLD,
-                color=ft.Colors.WHITE
+                color=TOKENS['on_primary']
             ),
             bgcolor=color,
             padding=ft.Padding(4, 2, 4, 2),
@@ -205,11 +208,15 @@ class ClientTableRenderer:
         if not self.client_table:
             self.create_client_table()
         
+        # Debugging
+        print(f"[DEBUG] client_table type: {type(self.client_table)}")
+        print(f"[DEBUG] client_table: {self.client_table}")
+        
         return ft.Container(
             content=ft.Column([
                 self.client_table
             ], scroll=ft.ScrollMode.AUTO),
-            border=ft.border.all(1, ft.Colors.OUTLINE),
+            border=ft.border.all(1, TOKENS['outline']),
             border_radius=8,
             padding=10,
             expand=True

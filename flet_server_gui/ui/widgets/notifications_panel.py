@@ -13,6 +13,7 @@ from enum import Enum
 from dataclasses import dataclass, field
 from datetime import datetime
 import asyncio
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 
 class NotificationType(Enum):
@@ -60,15 +61,15 @@ class NotificationsPanel(ft.NavigationDrawer):
         self.on_notification_click = on_notification_click
         self.on_action_click = on_action_click
         self.position = ft.NavigationDrawerPosition.END
-        self.bgcolor = ft.Colors.SURFACE
+        self.bgcolor = TOKENS['surface']
         self.elevation = 16
         
         # Priority styling
         self._priority_colors = {
-            NotificationPriority.CRITICAL: ft.Colors.RED,
-            NotificationPriority.HIGH: ft.Colors.ORANGE,
-            NotificationPriority.NORMAL: ft.Colors.BLUE,
-            NotificationPriority.LOW: ft.Colors.GREY
+            NotificationPriority.CRITICAL: TOKENS['error'],
+            NotificationPriority.HIGH: TOKENS['tertiary'],
+            NotificationPriority.NORMAL: TOKENS['primary'],
+            NotificationPriority.LOW: TOKENS['outline']
         }
         
         self._type_icons = {
@@ -116,9 +117,9 @@ class NotificationsPanel(ft.NavigationDrawer):
         # Create empty state
         empty_state = ft.Container(
             content=ft.Column([
-                ft.Icon(ft.Icons.NOTIFICATIONS_NONE, size=48, color=ft.Colors.ON_SURFACE_VARIANT),
-                ft.Text("No notifications", size=16, color=ft.Colors.ON_SURFACE_VARIANT),
-                ft.Text("You're all caught up!", size=14, color=ft.Colors.ON_SURFACE_VARIANT)
+                ft.Icon(ft.Icons.NOTIFICATIONS_NONE, size=48, color=TOKENS['outline']),
+                ft.Text("No notifications", size=16, color=TOKENS['outline']),
+                ft.Text("You're all caught up!", size=14, color=TOKENS['outline'])
             ], 
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=8),
@@ -139,7 +140,7 @@ class NotificationsPanel(ft.NavigationDrawer):
     def _create_notification_card(self, notification: NotificationItem) -> ft.Container:
         """Create a notification card"""
         # Priority indicator
-        priority_color = self._priority_colors.get(notification.priority, ft.Colors.GREY)
+        priority_color = self._priority_colors.get(notification.priority, TOKENS['outline'])
         priority_indicator = ft.Container(
             width=4,
             bgcolor=priority_color,
@@ -158,13 +159,13 @@ class NotificationsPanel(ft.NavigationDrawer):
             notification.title,
             size=14,
             weight=ft.FontWeight.BOLD if not notification.read else ft.FontWeight.NORMAL,
-            color=ft.Colors.ON_SURFACE if not notification.read else ft.Colors.ON_SURFACE_VARIANT
+            color=TOKENS['on_background'] if not notification.read else TOKENS['outline']
         )
         
         message = ft.Text(
             notification.message,
             size=12,
-            color=ft.Colors.ON_SURFACE_VARIANT,
+            color=TOKENS['outline'],
             max_lines=2,
             overflow=ft.TextOverflow.ELLIPSIS
         )
@@ -173,7 +174,7 @@ class NotificationsPanel(ft.NavigationDrawer):
         timestamp = ft.Text(
             self._format_timestamp(notification.timestamp),
             size=10,
-            color=ft.Colors.ON_SURFACE_VARIANT
+            color=TOKENS['outline']
         )
         
         # Action buttons
@@ -211,7 +212,7 @@ class NotificationsPanel(ft.NavigationDrawer):
                 )
             ], spacing=0),
             border_radius=8,
-            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST if not notification.read else ft.Colors.SURFACE,
+            bgcolor=TOKENS['surface_variant'] if not notification.read else TOKENS['surface'],
             ink=True,
             on_click=lambda e, nid=notification.id: self._handle_notification_click(nid)
         )

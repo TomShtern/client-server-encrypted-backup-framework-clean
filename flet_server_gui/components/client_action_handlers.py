@@ -30,6 +30,35 @@ class ClientActionHandlers:
         """Set callback for when data changes and refresh is needed"""
         self.on_data_changed = callback
     
+    async def _show_confirmation_dialog(self, title: str, message: str, 
+                                 on_confirm: Callable, on_cancel: Callable = None):
+        """Show confirmation dialog with standard styling"""
+        if self.dialog_system:
+            confirmed = await self.dialog_system.show_confirmation_async(
+                title=title,
+                message=message
+            )
+            if confirmed:
+                # Handle both sync and async callbacks
+                if asyncio.iscoroutinefunction(on_confirm):
+                    await on_confirm()
+                else:
+                    on_confirm()
+            elif on_cancel:
+                # Handle both sync and async callbacks
+                if asyncio.iscoroutinefunction(on_cancel):
+                    await on_cancel()
+                else:
+                    on_cancel()
+            else:
+                self._close_dialog()
+        else:
+            # Fallback behavior - handle both sync and async callbacks
+            if asyncio.iscoroutinefunction(on_confirm):
+                await on_confirm()
+            else:
+                on_confirm()
+    
     async def view_client_details(self, client_id: str) -> None:
         """View detailed information about a client"""
         try:
@@ -87,7 +116,7 @@ class ClientActionHandlers:
             asyncio.create_task(self._perform_disconnect(client_id))
         
         # Show confirmation dialog
-        self.dialog_system.show_confirmation_dialog(
+        await self._show_confirmation_dialog(
             title="Confirm Disconnect",
             message=f"Are you sure you want to disconnect client '{client_id}'?",
             on_confirm=confirm_disconnect,
@@ -117,7 +146,7 @@ class ClientActionHandlers:
             asyncio.create_task(self._perform_delete(client_id))
         
         # Show confirmation dialog with warning
-        self.dialog_system.show_confirmation_dialog(
+        await self._show_confirmation_dialog(
             title="⚠️ Confirm Delete",
             message=f"Are you sure you want to permanently delete client '{client_id}' and all associated data? This action cannot be undone.",
             on_confirm=confirm_delete,
@@ -187,15 +216,15 @@ class ClientActionHandlers:
             self._close_dialog()
             asyncio.create_task(self._perform_bulk_disconnect(client_ids))
         
-        self.dialog_system.show_confirmation_dialog(
+        await self._show_confirmation_dialog(
             title="Confirm Bulk Disconnect",
             message=f"Are you sure you want to disconnect {len(client_ids)} clients?",
             on_confirm=confirm_bulk_disconnect,
             on_cancel=lambda: self._close_dialog()
         )
     
-    async def _perform_bulk_disconnect(self, client_ids: List[str]) -> None:
-        """Actually perform bulk disconnection"""
+    async def bulk_disconnect_clients(self, client_ids: List[str]) -> None:
+        """Disconnect multiple clients from the server"""
         success_count = 0
         for client_id in client_ids:
             try:
@@ -214,7 +243,7 @@ class ClientActionHandlers:
             self._close_dialog()
             asyncio.create_task(self._perform_bulk_delete(client_ids))
         
-        self.dialog_system.show_confirmation_dialog(
+        await self._show_confirmation_dialog(
             title="⚠️ Confirm Bulk Delete",
             message=f"Are you sure you want to permanently delete {len(client_ids)} clients and all associated data? This action cannot be undone.",
             on_confirm=confirm_bulk_delete,

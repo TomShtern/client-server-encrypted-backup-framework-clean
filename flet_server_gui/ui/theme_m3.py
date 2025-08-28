@@ -1,9 +1,13 @@
-# theme_m3.py
-# Expanded Material-3 style design tokens for your Flet app.
-# Generated from your logo (favicon.svg). Replace hex values if you want different shades.
+#!/usr/bin/env python3
+"""
+Expanded Material-3 style design tokens for your Flet app.
+Generated from your logo (favicon.svg). Replace hex values if you want different shades.
+"""
 import flet as ft
+from .theme_tokens import get_theme_token_manager, ColorRole
 
-# Design tokens (explicit roles)
+
+# Design tokens (explicit roles) - Updated to use theme tokens system
 TOKENS = {
     # Primary: blue → purple gradient (use these colors for gradients, accents, icons)
     "primary_gradient": ["#A8CBF3", "#7C5CD9"],  # light blue to purple
@@ -20,6 +24,7 @@ TOKENS = {
     "on_container": "#FFFFFF",
     # Surface tones (suggested): neutral surfaces compatible with M3
     "surface": "#F6F8FB",            # main surface (light)
+    "on_surface": "#000000",         # text on main surface
     "surface_variant": "#E7EDF7",    # subtle variant
     "surface_dark": "#0F1720",       # main dark surface suggestion
     "background": "#FFFFFF",
@@ -29,6 +34,7 @@ TOKENS = {
     "error": "#B00020",
     "on_error": "#FFFFFF"
 }
+
 
 def create_theme(use_material3: bool = True, dark: bool = False) -> ft.Theme:
     """Return a Flet Theme using the tokens above.
@@ -43,37 +49,50 @@ def create_theme(use_material3: bool = True, dark: bool = False) -> ft.Theme:
         font_family="Inter"
     )
     
-    # Override with custom color scheme if available
-    if hasattr(ft, 'ColorScheme'):
-        # Create a custom color scheme using all the defined tokens
-        custom_scheme = ft.ColorScheme(
-            primary=TOKENS.get("primary", "#7C5CD9"),
-            on_primary=TOKENS.get("on_primary", "#FFFFFF"),
-            secondary=TOKENS.get("secondary", "#FFA500"),
-            on_secondary=TOKENS.get("on_secondary", "#000000"),
-            tertiary=TOKENS.get("tertiary", "#AB6DA4"),
-            on_tertiary=TOKENS.get("on_tertiary", "#FFFFFF"),
-            primary_container=TOKENS.get("container", "#38A298"),
-            on_primary_container=TOKENS.get("on_container", "#FFFFFF"),
-            secondary_container=TOKENS.get("container", "#38A298"),
-            on_secondary_container=TOKENS.get("on_container", "#FFFFFF"),
-            tertiary_container=TOKENS.get("container", "#38A298"),
-            on_tertiary_container=TOKENS.get("on_container", "#FFFFFF"),
-            surface=TOKENS.get("surface", "#F6F8FB") if not dark else TOKENS.get("surface_dark", "#0F1720"),
-            on_surface=TOKENS.get("on_background", "#000000") if not dark else "#FFFFFF",
-            surface_variant=TOKENS.get("surface_variant", "#E7EDF7"),
-            on_surface_variant=TOKENS.get("outline", "#666666"),
-            outline=TOKENS.get("outline", "#666666"),
-            error=TOKENS.get("error", "#B00020"),
-            on_error=TOKENS.get("on_error", "#FFFFFF"),
-        )
-        
-        # Apply the custom color scheme
-        theme.color_scheme = custom_scheme
-        
-        # For dark theme, adjust some colors
-        if dark:
-            dark_scheme = ft.ColorScheme(
+    # Try to use theme token manager for consistent colors
+    try:
+        from flet_server_gui.ui.theme_tokens import get_theme_token_manager
+        manager = get_theme_token_manager()
+        if manager:
+            # Override with theme token colors
+            custom_scheme = ft.ColorScheme(
+                primary=manager.get_color(ColorRole.PRIMARY),
+                on_primary=manager.get_color(ColorRole.ON_PRIMARY),
+                primary_container=manager.get_color(ColorRole.PRIMARY_CONTAINER),
+                on_primary_container=manager.get_color(ColorRole.ON_PRIMARY_CONTAINER),
+                secondary=manager.get_color(ColorRole.SECONDARY),
+                on_secondary=manager.get_color(ColorRole.ON_SECONDARY),
+                secondary_container=manager.get_color(ColorRole.SECONDARY_CONTAINER),
+                on_secondary_container=manager.get_color(ColorRole.ON_SECONDARY_CONTAINER),
+                tertiary=manager.get_color(ColorRole.TERTIARY),
+                on_tertiary=manager.get_color(ColorRole.ON_TERTIARY),
+                tertiary_container=manager.get_color(ColorRole.TERTIARY_CONTAINER),
+                on_tertiary_container=manager.get_color(ColorRole.ON_TERTIARY_CONTAINER),
+                error=manager.get_color(ColorRole.ERROR),
+                on_error=manager.get_color(ColorRole.ON_ERROR),
+                error_container=manager.get_color(ColorRole.ERROR_CONTAINER),
+                on_error_container=manager.get_color(ColorRole.ON_ERROR_CONTAINER),
+                background=manager.get_color(ColorRole.BACKGROUND) if not dark else manager.get_color(ColorRole.SURFACE),
+                on_background=manager.get_color(ColorRole.ON_BACKGROUND) if not dark else "#FFFFFF",
+                surface=manager.get_color(ColorRole.SURFACE) if not dark else manager.get_color(ColorRole.SURFACE),
+                on_surface="#FFFFFF" if dark else manager.get_color(ColorRole.ON_SURFACE),
+                surface_variant=manager.get_color(ColorRole.SURFACE_VARIANT),
+                on_surface_variant=manager.get_color(ColorRole.ON_SURFACE_VARIANT),
+                outline=manager.get_color(ColorRole.OUTLINE),
+                outline_variant=manager.get_color(ColorRole.OUTLINE_VARIANT),
+                shadow=manager.get_color(ColorRole.SHADOW),
+                inverse_surface=manager.get_color(ColorRole.INVERSE_SURFACE),
+                inverse_on_surface=manager.get_color(ColorRole.INVERSE_ON_SURFACE),
+                inverse_primary=manager.get_color(ColorRole.INVERSE_PRIMARY),
+            )
+            
+            # Apply the custom color scheme
+            theme.color_scheme = custom_scheme
+    except ImportError:
+        # Fallback to original implementation
+        if hasattr(ft, 'ColorScheme'):
+            # Create a custom color scheme using all the defined tokens
+            custom_scheme = ft.ColorScheme(
                 primary=TOKENS.get("primary", "#7C5CD9"),
                 on_primary=TOKENS.get("on_primary", "#FFFFFF"),
                 secondary=TOKENS.get("secondary", "#FFA500"),
@@ -86,17 +105,72 @@ def create_theme(use_material3: bool = True, dark: bool = False) -> ft.Theme:
                 on_secondary_container=TOKENS.get("on_container", "#FFFFFF"),
                 tertiary_container=TOKENS.get("container", "#38A298"),
                 on_tertiary_container=TOKENS.get("on_container", "#FFFFFF"),
-                surface=TOKENS.get("surface_dark", "#0F1720"),
-                on_surface="#FFFFFF",
+                surface=TOKENS.get("surface", "#F6F8FB") if not dark else TOKENS.get("surface_dark", "#0F1720"),
+                on_surface=TOKENS.get("on_background", "#000000") if not dark else "#FFFFFF",
                 surface_variant=TOKENS.get("surface_variant", "#E7EDF7"),
                 on_surface_variant=TOKENS.get("outline", "#666666"),
                 outline=TOKENS.get("outline", "#666666"),
                 error=TOKENS.get("error", "#B00020"),
                 on_error=TOKENS.get("on_error", "#FFFFFF"),
             )
-            theme.color_scheme = dark_scheme
+            
+            # Apply the custom color scheme
+            theme.color_scheme = custom_scheme
+            
+            # For dark theme, adjust some colors
+            if dark:
+                dark_scheme = ft.ColorScheme(
+                    primary=TOKENS.get("primary", "#7C5CD9"),
+                    on_primary=TOKENS.get("on_primary", "#FFFFFF"),
+                    secondary=TOKENS.get("secondary", "#FFA500"),
+                    on_secondary=TOKENS.get("on_secondary", "#000000"),
+                    tertiary=TOKENS.get("tertiary", "#AB6DA4"),
+                    on_tertiary=TOKENS.get("on_tertiary", "#FFFFFF"),
+                    primary_container=TOKENS.get("container", "#38A298"),
+                    on_primary_container=TOKENS.get("on_container", "#FFFFFF"),
+                    secondary_container=TOKENS.get("container", "#38A298"),
+                    on_secondary_container=TOKENS.get("on_container", "#FFFFFF"),
+                    tertiary_container=TOKENS.get("container", "#38A298"),
+                    on_tertiary_container=TOKENS.get("on_container", "#FFFFFF"),
+                    surface=TOKENS.get("surface_dark", "#0F1720"),
+                    on_surface="#FFFFFF",
+                    surface_variant=TOKENS.get("surface_variant", "#E7EDF7"),
+                    on_surface_variant=TOKENS.get("outline", "#666666"),
+                    outline=TOKENS.get("outline", "#666666"),
+                    error=TOKENS.get("error", "#B00020"),
+                    on_error=TOKENS.get("on_error", "#FFFFFF"),
+                )
+                theme.color_scheme = dark_scheme
     
     return theme
+
+
+# Helper: make linear gradient for containers/buttons
+def linear_gradient(colors=None, begin=ft.alignment.top_left, end=ft.alignment.bottom_right, stops=None):
+    if colors is None:
+        colors = TOKENS["primary_gradient"]
+    return ft.LinearGradient(colors=colors, begin=begin, end=end, stops=stops)
+
+
+# Small helpers for consistent components
+def gradient_button(content, width=220, height=48, on_click=None, radius=12):
+    """Return a Container that behaves like a Filled/Gradient button."""
+    c = ft.Container(
+        width=width,
+        height=height,
+        content=ft.Row([content], alignment=ft.MainAxisAlignment.CENTER),
+        border_radius=ft.border_radius.all(radius),
+        gradient=linear_gradient(),
+        alignment=ft.alignment.center,
+        ink=True,
+        on_click=on_click,
+        animate_scale=180
+    )
+    return c
+
+
+def surface_container(child, padding=12, radius=12, elevation=2):
+    return ft.Card(content=child, elevation=elevation, border_radius=ft.border_radius.all(radius))
 
 # Helper: make linear gradient for containers/buttons
 def linear_gradient(colors=None, begin=ft.alignment.top_left, end=ft.alignment.bottom_right, stops=None):

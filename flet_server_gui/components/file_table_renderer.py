@@ -9,6 +9,7 @@ import sys
 import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 # Add project root to path for imports
 project_root = os.path.join(os.path.dirname(__file__), "..", "..")
@@ -46,17 +47,17 @@ class FileTableRenderer:
         self.file_table = ft.DataTable(
             columns=[
                 ft.DataColumn(ft.Checkbox(on_change=None)),  # Select all handled by parent
-                ft.DataColumn(ft.Text("Filename", weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("Type", weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("Size", weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("Date", weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("Client", weight=ft.FontWeight.BOLD)),
-                ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Filename", weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
+                ft.DataColumn(ft.Text("Type", weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
+                ft.DataColumn(ft.Text("Size", weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
+                ft.DataColumn(ft.Text("Date", weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
+                ft.DataColumn(ft.Text("Client", weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
+                ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
             ],
             rows=[],
-            border=ft.border.all(1, ft.Colors.OUTLINE),
+            border=ft.border.all(1, TOKENS['outline']),
             border_radius=8,
-            heading_row_color=ft.Colors.ON_SURFACE_VARIANT,
+            heading_row_color=TOKENS['surface_variant'],
             heading_row_height=50,
             data_row_max_height=60,
             show_checkbox_column=False,  # We handle checkboxes manually
@@ -104,11 +105,11 @@ class FileTableRenderer:
                 ft.DataRow(
                     cells=[
                         ft.DataCell(file_checkbox),
-                        ft.DataCell(ft.Text(filename, size=12)),
+                        ft.DataCell(ft.Text(filename, size=12, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
                         ft.DataCell(file_type_display),
-                        ft.DataCell(ft.Text(size_display, size=11)),
-                        ft.DataCell(ft.Text(date_display, size=11)),
-                        ft.DataCell(ft.Text(client_display, size=11)),
+                        ft.DataCell(ft.Text(size_display, size=11, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
+                        ft.DataCell(ft.Text(date_display, size=11, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
+                        ft.DataCell(ft.Text(client_display, size=11, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
                         ft.DataCell(action_buttons),
                     ]
                 )
@@ -120,28 +121,28 @@ class FileTableRenderer:
         
         # File type mappings
         type_mappings = {
-            'txt': ('📄', 'Text', ft.Colors.BLUE_100),
-            'pdf': ('📕', 'PDF', ft.Colors.RED_100),
-            'doc': ('📘', 'Word', ft.Colors.BLUE_200),
-            'docx': ('📘', 'Word', ft.Colors.BLUE_200),
-            'xls': ('📗', 'Excel', ft.Colors.GREEN_200),
-            'xlsx': ('📗', 'Excel', ft.Colors.GREEN_200),
-            'ppt': ('📙', 'PowerPoint', ft.Colors.ORANGE_200),
-            'pptx': ('📙', 'PowerPoint', ft.Colors.ORANGE_200),
-            'jpg': ('🖼️', 'Image', ft.Colors.PURPLE_100),
-            'jpeg': ('🖼️', 'Image', ft.Colors.PURPLE_100),
-            'png': ('🖼️', 'Image', ft.Colors.PURPLE_100),
-            'gif': ('🖼️', 'Image', ft.Colors.PURPLE_100),
-            'mp4': ('🎬', 'Video', ft.Colors.TEAL_100),
-            'avi': ('🎬', 'Video', ft.Colors.TEAL_100),
-            'mp3': ('🎵', 'Audio', ft.Colors.PINK_100),
-            'wav': ('🎵', 'Audio', ft.Colors.PINK_100),
-            'zip': ('🗜️', 'Archive', ft.Colors.GREY_200),
-            'rar': ('🗜️', 'Archive', ft.Colors.GREY_200),
-            '7z': ('🗜️', 'Archive', ft.Colors.GREY_200),
+            'txt': ('📄', 'Text', TOKENS['surface']),
+            'pdf': ('📕', 'PDF', TOKENS['error']),
+            'doc': ('📘', 'Word', TOKENS['primary']),
+            'docx': ('📘', 'Word', TOKENS['primary']),
+            'xls': ('📗', 'Excel', TOKENS['tertiary']),
+            'xlsx': ('📗', 'Excel', TOKENS['tertiary']),
+            'ppt': ('📙', 'PowerPoint', TOKENS['secondary']),
+            'pptx': ('📙', 'PowerPoint', TOKENS['secondary']),
+            'jpg': ('🖼️', 'Image', TOKENS['container']),
+            'jpeg': ('🖼️', 'Image', TOKENS['container']),
+            'png': ('🖼️', 'Image', TOKENS['container']),
+            'gif': ('🖼️', 'Image', TOKENS['container']),
+            'mp4': ('🎬', 'Video', TOKENS['surface_variant']),
+            'avi': ('🎬', 'Video', TOKENS['surface_variant']),
+            'mp3': ('🎵', 'Audio', TOKENS['tertiary']),
+            'wav': ('🎵', 'Audio', TOKENS['tertiary']),
+            'zip': ('🗜️', 'Archive', TOKENS['outline']),
+            'rar': ('🗜️', 'Archive', TOKENS['outline']),
+            '7z': ('🗜️', 'Archive', TOKENS['outline']),
         }
         
-        icon, type_name, bg_color = type_mappings.get(file_extension, ('📄', 'File', ft.Colors.GREY_100))
+        icon, type_name, bg_color = type_mappings.get(file_extension, ('📄', 'File', TOKENS['surface_variant']))
         
         return ft.Container(
             content=ft.Row([
@@ -228,7 +229,7 @@ class FileTableRenderer:
             content=ft.Column([
                 self.file_table
             ], scroll=ft.ScrollMode.AUTO),
-            border=ft.border.all(1, ft.Colors.OUTLINE),
+            border=ft.border.all(1, TOKENS['outline']),
             border_radius=8,
             padding=10,
             expand=True

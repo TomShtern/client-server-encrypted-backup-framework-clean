@@ -1,4 +1,4 @@
-"""
+﻿"""
 Purpose: File management view
 Logic: File listing, filtering, and management operations
 UI: File table, action buttons, and file details
@@ -26,6 +26,10 @@ from flet_server_gui.components.file_action_handlers import FileActionHandlers
 from flet_server_gui.ui.widgets.file_preview import FilePreviewManager
 from flet_server_gui.actions.file_actions import FileActions
 from flet_server_gui.components.base_component import BaseComponent
+from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes, fix_content_clipping, fix_button_clickable_areas, ensure_windowed_compatibility
+
+from flet_server_gui.ui.theme_m3 import TOKENS
+
 
 
 class FilesView(BaseComponent):
@@ -75,7 +79,7 @@ class FilesView(BaseComponent):
         self.status_text = ft.Text(
             "Loading file data...",
             size=14,
-            color=ft.Colors.BLUE_600
+            color=TOKENS['primary']
         )
         
         # Refresh button
@@ -84,8 +88,8 @@ class FilesView(BaseComponent):
             icon=ft.Icons.REFRESH,
             on_click=self._refresh_files,
             style=ft.ButtonStyle(
-                bgcolor=ft.Colors.PRIMARY,
-                color=ft.Colors.ON_PRIMARY
+                bgcolor=TOKENS['primary'],
+                color=TOKENS['on_primary']
             )
         )
         
@@ -111,28 +115,27 @@ class FilesView(BaseComponent):
                 "Download Selected",
                 icon=ft.Icons.DOWNLOAD,
                 on_click=self._bulk_download,
-                style=ft.ButtonStyle(bgcolor=ft.Colors.BLUE_100),
+                style=ft.ButtonStyle(bgcolor=TOKENS['surface_variant']),
                 visible=False
             ),
             ft.ElevatedButton(
                 "Verify Selected",
                 icon=ft.Icons.VERIFIED,
                 on_click=self._bulk_verify,
-                style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN_100),
+                style=ft.ButtonStyle(bgcolor=TOKENS['surface_variant']),
                 visible=False
             ),
             ft.ElevatedButton(
                 "Delete Selected",
                 icon=ft.Icons.DELETE_FOREVER,
                 on_click=self._bulk_delete,
-                style=ft.ButtonStyle(bgcolor=ft.Colors.RED_100),
+                style=ft.ButtonStyle(bgcolor=TOKENS['surface_variant']),
                 visible=False
             ),
         ], spacing=10)
         
         # Main layout
-        return ft.Container(
-            content=ft.Column([
+        return ft.Container(content=ft.Column([
                 # Header section
                 ft.ResponsiveRow([
                     ft.Column([
@@ -219,7 +222,7 @@ class FilesView(BaseComponent):
             # Update status
             if self.status_text:
                 self.status_text.value = f"Loaded {len(files)} files ({len(filtered_files)} shown)"
-                self.status_text.color = ft.Colors.GREEN_600
+                self.status_text.color = TOKENS['secondary']
             
             # Reset selection
             self.selected_files.clear()
@@ -229,20 +232,20 @@ class FilesView(BaseComponent):
         except asyncio.TimeoutError:
             if self.status_text:
                 self.status_text.value = "Timeout loading files. Server may be unresponsive."
-                self.status_text.color = ft.Colors.RED_600
+                self.status_text.color = TOKENS['error']
             if self.toast_manager:
                 self.toast_manager.show_error("Server connection timeout")
         except ConnectionError as conn_ex:
             if self.status_text:
                 self.status_text.value = str(conn_ex)
-                self.status_text.color = ft.Colors.AMBER_600
+                self.status_text.color = TOKENS['secondary']
             if self.toast_manager:
                 self.toast_manager.show_warning("Server connection issue")
         except Exception as ex:
             error_msg = f"Error loading files: {str(ex)}"
             if self.status_text:
                 self.status_text.value = error_msg
-                self.status_text.color = ft.Colors.RED_600
+                self.status_text.color = TOKENS['error']
             if self.toast_manager:
                 self.toast_manager.show_error(error_msg)
             # Log the full exception for debugging
@@ -265,7 +268,7 @@ class FilesView(BaseComponent):
                 filtered_files = []
                 if self.status_text:
                     self.status_text.value = "No file data available"
-                    self.status_text.color = ft.Colors.AMBER_600
+                    self.status_text.color = TOKENS['secondary']
                 return
             
             # Update table with new filtered data
@@ -278,7 +281,7 @@ class FilesView(BaseComponent):
             if self.status_text:
                 total_files = len(self.filter_manager.all_files)
                 self.status_text.value = f"Showing {len(filtered_files)} of {total_files} files"
-                self.status_text.color = ft.Colors.BLUE_600
+                self.status_text.color = TOKENS['primary']
             
             # Reset selection when filter changes
             self.selected_files.clear()
@@ -295,7 +298,7 @@ class FilesView(BaseComponent):
         except Exception as ex:
             if self.status_text:
                 self.status_text.value = f"Error updating filter: {str(ex)}"
-                self.status_text.color = ft.Colors.RED_600
+                self.status_text.color = TOKENS['error']
             # Thread-safe UI update
             if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
                 self.ui_updater.queue_update(lambda: None)

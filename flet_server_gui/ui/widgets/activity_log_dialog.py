@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import json
 import re
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 
 class ActivityLevel(Enum):
@@ -67,13 +68,13 @@ class ActivityLogDialog(ft.AlertDialog):
         
         # Level styling
         self._level_colors = {
-            ActivityLevel.DEBUG: ft.Colors.GREY,
-            ActivityLevel.INFO: ft.Colors.BLUE,
-            ActivityLevel.WARNING: ft.Colors.ORANGE,
-            ActivityLevel.ERROR: ft.Colors.RED,
-            ActivityLevel.CRITICAL: ft.Colors.RED_800,
-            ActivityLevel.SUCCESS: ft.Colors.GREEN,
-            ActivityLevel.SECURITY: ft.Colors.PURPLE
+            ActivityLevel.DEBUG: TOKENS['outline'],
+            ActivityLevel.INFO: TOKENS['primary'],
+            ActivityLevel.WARNING: TOKENS['tertiary'],
+            ActivityLevel.ERROR: TOKENS['error'],
+            ActivityLevel.CRITICAL: TOKENS['error'],
+            ActivityLevel.SUCCESS: TOKENS['secondary'],
+            ActivityLevel.SECURITY: TOKENS['primary']
         }
         
         self._level_icons = {
@@ -190,16 +191,16 @@ class ActivityLogDialog(ft.AlertDialog):
         return ft.DataTable(
             columns=columns,
             rows=rows,
-            heading_row_color=ft.Colors.SURFACE_CONTAINER_HIGHEST,
+            heading_row_color=TOKENS['surface_variant'],
             heading_text_style=ft.TextStyle(weight=ft.FontWeight.BOLD),
             data_row_min_height=40,
-            border=ft.border.all(1, ft.Colors.ON_SURFACE_VARIANT)
+            border=ft.border.all(1, TOKENS['outline'])
         )
     
     def _create_activity_row(self, activity: ActivityEntry) -> ft.DataRow:
         """Create a row for an activity entry"""
         # Level cell with icon and color
-        level_color = self._level_colors.get(activity.level, ft.Colors.GREY)
+        level_color = self._level_colors.get(activity.level, TOKENS['outline'])
         level_icon = self._level_icons.get(activity.level, ft.Icons.INFO)
         
         level_cell = ft.DataCell(

@@ -9,6 +9,7 @@ import flet as ft
 from typing import Optional, Callable, Any, Dict, List
 import asyncio
 from enum import Enum
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 # ============================================================================
 # DIALOG TYPES AND CONFIGURATIONS
@@ -103,14 +104,14 @@ class DialogSystem:
     def _get_dialog_icon(self, dialog_type: DialogType) -> Dict[str, Any]:
         """Get appropriate icon and color for dialog type."""
         icons = {
-            DialogType.INFO: {"icon": ft.Icons.INFO, "color": ft.Colors.BLUE_600},
-            DialogType.SUCCESS: {"icon": ft.Icons.CHECK_CIRCLE, "color": ft.Colors.GREEN_600},
-            DialogType.ERROR: {"icon": ft.Icons.ERROR, "color": ft.Colors.RED_600},
-            DialogType.WARNING: {"icon": ft.Icons.WARNING, "color": ft.Colors.ORANGE_600},
-            DialogType.CONFIRMATION: {"icon": ft.Icons.HELP, "color": ft.Colors.AMBER_600},
-            DialogType.INPUT: {"icon": ft.Icons.EDIT, "color": ft.Colors.BLUE_600},
-            DialogType.CUSTOM: {"icon": ft.Icons.SETTINGS, "color": ft.Colors.GREY_600},
-            DialogType.PROGRESS: {"icon": ft.Icons.HOURGLASS_EMPTY, "color": ft.Colors.BLUE_600}
+            DialogType.INFO: {"icon": ft.Icons.INFO, "color": TOKENS['primary']},
+            DialogType.SUCCESS: {"icon": ft.Icons.CHECK_CIRCLE, "color": TOKENS['secondary']},
+            DialogType.ERROR: {"icon": ft.Icons.ERROR, "color": TOKENS['error']},
+            DialogType.WARNING: {"icon": ft.Icons.WARNING, "color": TOKENS['secondary']},
+            DialogType.CONFIRMATION: {"icon": ft.Icons.HELP, "color": TOKENS['secondary']},
+            DialogType.INPUT: {"icon": ft.Icons.EDIT, "color": TOKENS['primary']},
+            DialogType.CUSTOM: {"icon": ft.Icons.SETTINGS, "color": TOKENS['outline']},
+            DialogType.PROGRESS: {"icon": ft.Icons.HOURGLASS_EMPTY, "color": TOKENS['primary']}
         }
         return icons.get(dialog_type, icons[DialogType.INFO])
     
@@ -176,7 +177,7 @@ class DialogSystem:
         
         content = ft.Text(message, size=14)
         actions = [ft.FilledButton("OK", on_click=close_action, 
-                                  style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN_600))]
+                                  style=ft.ButtonStyle(bgcolor=TOKENS['secondary']))]
         
         dialog = self._create_dialog_base(title, content, actions, DialogType.SUCCESS, size)
         self._show_dialog(dialog)
@@ -202,8 +203,8 @@ class DialogSystem:
                 ft.Divider(),
                 ft.Text("Details:", weight=ft.FontWeight.BOLD, size=12),
                 ft.Container(
-                    content=ft.Text(details, size=11, color=ft.Colors.GREY_700, selectable=True),
-                    bgcolor=ft.Colors.GREY_100,
+                    content=ft.Text(details, size=11, color=TOKENS['outline'], selectable=True),
+                    bgcolor=TOKENS['surface_variant'],
                     padding=10,
                     border_radius=5,
                     width=float("inf")
@@ -212,7 +213,7 @@ class DialogSystem:
         
         content = ft.Column(content_controls, spacing=10, tight=True)
         actions = [ft.FilledButton("OK", on_click=close_action,
-                                  style=ft.ButtonStyle(bgcolor=ft.Colors.RED_600))]
+                                  style=ft.ButtonStyle(bgcolor=TOKENS['error']))]
         
         dialog = self._create_dialog_base(title, content, actions, DialogType.ERROR, size)
         self._show_dialog(dialog)
@@ -231,7 +232,7 @@ class DialogSystem:
         
         content = ft.Text(message, size=14)
         actions = [ft.FilledButton("OK", on_click=close_action,
-                                  style=ft.ButtonStyle(bgcolor=ft.Colors.ORANGE_600))]
+                                  style=ft.ButtonStyle(bgcolor=TOKENS['secondary']))]
         
         dialog = self._create_dialog_base(title, content, actions, DialogType.WARNING, size)
         self._show_dialog(dialog)
@@ -258,7 +259,7 @@ class DialogSystem:
         
         content = ft.Text(message, size=14)
         
-        confirm_button_color = ft.Colors.RED_600 if danger else ft.Colors.BLUE_600
+        confirm_button_color = TOKENS['error'] if danger else TOKENS['primary']
         actions = [
             ft.TextButton(cancel_text, on_click=cancel_action),
             ft.FilledButton(
@@ -292,7 +293,7 @@ class DialogSystem:
             autofocus=True
         )
         
-        error_text = ft.Text("", color=ft.Colors.RED_600, size=12)
+        error_text = ft.Text("", color=TOKENS['error'], size=12)
         
         def validate_and_submit():
             value = input_field.value or ""
@@ -519,10 +520,10 @@ class ToastManager:
         """Show success toast."""
         self.page.snack_bar = ft.SnackBar(
             content=ft.Row([
-                ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.WHITE),
-                ft.Text(message, color=ft.Colors.WHITE)
-            ], tight=True),
-            bgcolor=ft.Colors.GREEN_600,
+                ft.Icon(ft.Icons.CHECK_CIRCLE, color=TOKENS['on_secondary']),
+                ft.Text(message, color=TOKENS['on_secondary'])
+            ]),
+            bgcolor=TOKENS['secondary'],
             duration=duration * 1000
         )
         self.page.snack_bar.open = True
@@ -532,10 +533,10 @@ class ToastManager:
         """Show error toast."""
         self.page.snack_bar = ft.SnackBar(
             content=ft.Row([
-                ft.Icon(ft.Icons.ERROR, color=ft.Colors.WHITE),
-                ft.Text(message, color=ft.Colors.WHITE)
-            ], tight=True),
-            bgcolor=ft.Colors.RED_600,
+                ft.Icon(ft.Icons.ERROR, color=TOKENS['on_error']),
+                ft.Text(message, color=TOKENS['on_error'])
+            ]),
+            bgcolor=TOKENS['error'],
             duration=duration * 1000
         )
         self.page.snack_bar.open = True
@@ -545,10 +546,10 @@ class ToastManager:
         """Show warning toast."""
         self.page.snack_bar = ft.SnackBar(
             content=ft.Row([
-                ft.Icon(ft.Icons.WARNING, color=ft.Colors.WHITE),
-                ft.Text(message, color=ft.Colors.WHITE)
-            ], tight=True),
-            bgcolor=ft.Colors.ORANGE_600,
+                ft.Icon(ft.Icons.WARNING, color=TOKENS['on_secondary']),
+                ft.Text(message, color=TOKENS['on_secondary'])
+            ]),
+            bgcolor=TOKENS['secondary'],
             duration=duration * 1000
         )
         self.page.snack_bar.open = True
@@ -558,10 +559,10 @@ class ToastManager:
         """Show info toast."""
         self.page.snack_bar = ft.SnackBar(
             content=ft.Row([
-                ft.Icon(ft.Icons.INFO, color=ft.Colors.WHITE),
-                ft.Text(message, color=ft.Colors.WHITE)
-            ], tight=True),
-            bgcolor=ft.Colors.BLUE_600,
+                ft.Icon(ft.Icons.INFO, color=TOKENS['on_primary']),
+                ft.Text(message, color=TOKENS['on_primary'])
+            ]),
+            bgcolor=TOKENS['primary'],
             duration=duration * 1000
         )
         self.page.snack_bar.open = True

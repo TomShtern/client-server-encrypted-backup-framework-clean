@@ -10,6 +10,7 @@ import sys
 import os
 from typing import List, Dict, Any, Optional, Callable
 from abc import ABC, abstractmethod
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 # Add project root to path for imports
 project_root = os.path.join(os.path.dirname(__file__), "..", "..")
@@ -72,9 +73,9 @@ class BaseTableManager(ABC):
         self.data_table = ft.DataTable(
             columns=self.get_table_columns(),
             rows=[],
-            border=ft.border.all(1, ft.Colors.OUTLINE),
+            border=ft.border.all(1, TOKENS['outline']),
             border_radius=8,
-            heading_row_color=ft.Colors.SURFACE_TINT,
+            heading_row_color=TOKENS['surface_variant'],
             heading_row_height=50,
             data_row_max_height=60,
             show_checkbox_column=False,  # We handle checkboxes manually
@@ -103,7 +104,7 @@ class BaseTableManager(ABC):
             content=ft.Column([
                 self.data_table
             ], scroll=ft.ScrollMode.AUTO),
-            border=ft.border.all(1, ft.Colors.OUTLINE),
+            border=ft.border.all(1, TOKENS['outline']),
             border_radius=8,
             padding=10,
             expand=True
@@ -698,15 +699,34 @@ class BaseActionHandler(ABC):
             ft.Text("Please wait...")
         ], spacing=10)
     
-    def _show_confirmation_dialog(self, title: str, message: str, 
+    async def _show_confirmation_dialog(self, title: str, message: str, 
                                  on_confirm: Callable, on_cancel: Callable = None):
         """Show confirmation dialog with standard styling"""
-        self.dialog_system.show_confirmation_dialog(
-            title=title,
-            message=message,
-            on_confirm=on_confirm,
-            on_cancel=on_cancel or (lambda: self._close_dialog())
-        )
+        if self.dialog_system:
+            confirmed = await self.dialog_system.show_confirmation_async(
+                title=title,
+                message=message
+            )
+            if confirmed:
+                # Handle both sync and async callbacks
+                if asyncio.iscoroutinefunction(on_confirm):
+                    await on_confirm()
+                else:
+                    on_confirm()
+            elif on_cancel:
+                # Handle both sync and async callbacks
+                if asyncio.iscoroutinefunction(on_cancel):
+                    await on_cancel()
+                else:
+                    on_cancel()
+            else:
+                self._close_dialog()
+        else:
+            # Fallback behavior - handle both sync and async callbacks
+            if asyncio.iscoroutinefunction(on_confirm):
+                await on_confirm()
+            else:
+                on_confirm()
     
     async def _show_progress_dialog(self, title: str, message: str) -> None:
         """Show progress dialog during long operations"""
@@ -929,7 +949,7 @@ class BaseActionHandler(ABC):
             self._close_dialog()
             asyncio.create_task(on_confirm())
         
-        self._show_confirmation_dialog(
+        await self._show_confirmation_dialog(
             title=f"Confirm {action.title()}",
             message=message,
             on_confirm=confirm_wrapper

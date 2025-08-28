@@ -38,7 +38,7 @@ class ResponsiveExamples:
             ),
             ft.Text(
                 "Running",
-                color=ft.Colors.GREEN,
+                color=TOKENS['secondary'],
                 size=ResponsiveBuilder.get_responsive_font_size(width, 14)
             ),
             ft.Text(

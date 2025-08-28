@@ -25,6 +25,7 @@ from datetime import datetime
 from enum import Enum
 from dataclasses import dataclass, field
 import flet as ft
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 
 class ThemeMode(Enum):
@@ -328,32 +329,32 @@ class ThemeConsistencyManager:
             
             if component_type == "surface":
                 component_colors = {
-                    "bg": self.current_tokens.colors.get(ColorRole.SURFACE, ft.Colors.SURFACE),
-                    "fg": self.current_tokens.colors.get(ColorRole.ON_SURFACE, ft.Colors.ON_SURFACE),
-                    "variant_bg": self.current_tokens.colors.get(ColorRole.SURFACE_VARIANT, ft.Colors.SURFACE_VARIANT),
-                    "variant_fg": self.current_tokens.colors.get(ColorRole.ON_SURFACE_VARIANT, ft.Colors.ON_SURFACE_VARIANT),
-                    "outline": self.current_tokens.colors.get(ColorRole.OUTLINE, ft.Colors.OUTLINE)
+                    "bg": self.current_tokens.colors.get(ColorRole.SURFACE, TOKENS.get('surface', '#F6F8FB')),
+                    "fg": self.current_tokens.colors.get(ColorRole.ON_SURFACE, TOKENS.get('on_background', '#000000')),
+                    "variant_bg": self.current_tokens.colors.get(ColorRole.SURFACE_VARIANT, TOKENS.get('surface_variant', '#E7EDF7')),
+                    "variant_fg": self.current_tokens.colors.get(ColorRole.ON_SURFACE_VARIANT, TOKENS.get('on_background', '#000000')),
+                    "outline": self.current_tokens.colors.get(ColorRole.OUTLINE, TOKENS.get('outline', '#666666'))
                 }
             elif component_type == "primary":
                 component_colors = {
-                    "bg": self.current_tokens.colors.get(ColorRole.PRIMARY, ft.Colors.PRIMARY),
-                    "fg": self.current_tokens.colors.get(ColorRole.ON_PRIMARY, ft.Colors.ON_PRIMARY),
-                    "container_bg": self.current_tokens.colors.get(ColorRole.PRIMARY_CONTAINER, ft.Colors.PRIMARY_CONTAINER),
-                    "container_fg": self.current_tokens.colors.get(ColorRole.ON_PRIMARY_CONTAINER, ft.Colors.ON_PRIMARY_CONTAINER)
+                    "bg": self.current_tokens.colors.get(ColorRole.PRIMARY, TOKENS.get('primary', '#7C5CD9')),
+                    "fg": self.current_tokens.colors.get(ColorRole.ON_PRIMARY, TOKENS.get('on_primary', '#FFFFFF')),
+                    "container_bg": self.current_tokens.colors.get(ColorRole.PRIMARY_CONTAINER, TOKENS.get('container', '#38A298')),
+                    "container_fg": self.current_tokens.colors.get(ColorRole.ON_PRIMARY_CONTAINER, TOKENS.get('on_container', '#FFFFFF'))
                 }
             elif component_type == "secondary":
                 component_colors = {
-                    "bg": self.current_tokens.colors.get(ColorRole.SECONDARY, ft.Colors.SECONDARY),
-                    "fg": self.current_tokens.colors.get(ColorRole.ON_SECONDARY, ft.Colors.ON_SECONDARY),
-                    "container_bg": self.current_tokens.colors.get(ColorRole.SECONDARY_CONTAINER, ft.Colors.SECONDARY_CONTAINER),
-                    "container_fg": self.current_tokens.colors.get(ColorRole.ON_SECONDARY_CONTAINER, ft.Colors.ON_SECONDARY_CONTAINER)
+                    "bg": self.current_tokens.colors.get(ColorRole.SECONDARY, TOKENS.get('secondary', '#FFA500')),
+                    "fg": self.current_tokens.colors.get(ColorRole.ON_SECONDARY, TOKENS.get('on_secondary', '#000000')),
+                    "container_bg": self.current_tokens.colors.get(ColorRole.SECONDARY_CONTAINER, TOKENS.get('container', '#38A298')),
+                    "container_fg": self.current_tokens.colors.get(ColorRole.ON_SECONDARY_CONTAINER, TOKENS.get('on_container', '#FFFFFF'))
                 }
             elif component_type == "error":
                 component_colors = {
-                    "bg": self.current_tokens.colors.get(ColorRole.ERROR, ft.Colors.ERROR),
-                    "fg": self.current_tokens.colors.get(ColorRole.ON_ERROR, ft.Colors.ON_ERROR),
-                    "container_bg": self.current_tokens.colors.get(ColorRole.ERROR_CONTAINER, ft.Colors.ERROR_CONTAINER),
-                    "container_fg": self.current_tokens.colors.get(ColorRole.ON_ERROR_CONTAINER, ft.Colors.ON_ERROR_CONTAINER)
+                    "bg": self.current_tokens.colors.get(ColorRole.ERROR, TOKENS.get('error', '#B00020')),
+                    "fg": self.current_tokens.colors.get(ColorRole.ON_ERROR, TOKENS.get('on_error', '#FFFFFF')),
+                    "container_bg": self.current_tokens.colors.get(ColorRole.ERROR_CONTAINER, TOKENS.get('surface', '#F6F8FB')),
+                    "container_fg": self.current_tokens.colors.get(ColorRole.ON_ERROR_CONTAINER, TOKENS.get('error', '#B00020'))
                 }
             else:
                 # Default to surface colors
@@ -890,28 +891,28 @@ def get_consistent_button_style(button_type: str = "filled",
     
     styles = {
         "filled": {
-            "bgcolor": tokens.colors.get(ColorRole.PRIMARY, ft.Colors.PRIMARY),
-            "color": tokens.colors.get(ColorRole.ON_PRIMARY, ft.Colors.ON_PRIMARY),
+            "bgcolor": tokens.colors.get(ColorRole.PRIMARY, TOKENS['primary']),
+            "color": tokens.colors.get(ColorRole.ON_PRIMARY, TOKENS['on_primary']),
         },
         "outlined": {
-            "bgcolor": ft.Colors.TRANSPARENT,
-            "color": tokens.colors.get(ColorRole.PRIMARY, ft.Colors.PRIMARY),
-            "side": ft.BorderSide(1, tokens.colors.get(ColorRole.OUTLINE, ft.Colors.OUTLINE)),
+            "bgcolor": None,
+            "color": tokens.colors.get(ColorRole.PRIMARY, TOKENS['primary']),
+            "side": ft.BorderSide(1, tokens.colors.get(ColorRole.OUTLINE, TOKENS['outline'])),
         },
         "text": {
-            "bgcolor": ft.Colors.TRANSPARENT,
-            "color": tokens.colors.get(ColorRole.PRIMARY, ft.Colors.PRIMARY),
+            "bgcolor": None,
+            "color": tokens.colors.get(ColorRole.PRIMARY, TOKENS['primary']),
         },
         "gradient": {
             "gradient": ft.LinearGradient(
                 colors=[
-                    tokens.colors.get(ColorRole.PRIMARY, ft.Colors.BLUE),
-                    tokens.colors.get(ColorRole.SECONDARY, ft.Colors.PURPLE)
+                    tokens.colors.get(ColorRole.PRIMARY, TOKENS['primary']),
+                    tokens.colors.get(ColorRole.SECONDARY, TOKENS['secondary'])
                 ],
                 begin=ft.alignment.top_left,
                 end=ft.alignment.bottom_right
             ),
-            "color": tokens.colors.get(ColorRole.ON_PRIMARY, ft.Colors.ON_PRIMARY),
+            "color": tokens.colors.get(ColorRole.ON_PRIMARY, TOKENS['on_primary']),
         }
     }
     return styles.get(button_type, styles["filled"])

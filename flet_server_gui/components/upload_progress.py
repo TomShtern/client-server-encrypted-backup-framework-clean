@@ -7,6 +7,7 @@ Material Design 3 component for visualizing file upload progress with enhanced U
 import flet as ft
 from typing import List, Dict, Optional, Callable
 import asyncio
+from flet_server_gui.ui.theme_m3 import TOKENS
 from flet_server_gui.components.enhanced_components import (
     EnhancedCard,
     CircularProgressIndicator,
@@ -80,7 +81,7 @@ class UploadProgress(EnhancedCard):
     def _create_files_progress(self) -> ft.Control:
         """Create individual file progress indicators"""
         if not self.files:
-            return ft.Text("No files to upload", italic=True, color=ft.Colors.ON_SURFACE_VARIANT)
+            return ft.Text("No files to upload", italic=True, color=TOKENS["outline"])
         
         file_items = []
         for file_info in self.files:
@@ -97,9 +98,9 @@ class UploadProgress(EnhancedCard):
                 ft.Icons.CHECK_CIRCLE if file_info.get("progress", 0) == 1.0 else
                 ft.Icons.ERROR if file_info.get("error") else
                 ft.Icons.HOURGLASS_EMPTY,
-                color=ft.Colors.GREEN if file_info.get("progress", 0) == 1.0 else
-                ft.Colors.RED if file_info.get("error") else
-                ft.Colors.PRIMARY,
+                color=TOKENS["tertiary"] if file_info.get("progress", 0) == 1.0 else
+                TOKENS["error"] if file_info.get("error") else
+                TOKENS["primary"],
                 size=16
             )
             
@@ -111,12 +112,12 @@ class UploadProgress(EnhancedCard):
                         ft.Text(
                             f"{int(file_info.get('progress', 0) * 100)}%" if not file_info.get("error") else "Error",
                             style=ft.TextThemeStyle.BODY_SMALL,
-                            color=ft.Colors.ON_SURFACE_VARIANT
+                            color=TOKENS["outline"]
                         ),
                         ft.Text(
                             file_info.get("size", "Unknown"),
                             style=ft.TextThemeStyle.BODY_SMALL,
-                            color=ft.Colors.ON_SURFACE_VARIANT
+                            color=TOKENS["outline"]
                         )
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                     progress_bar
@@ -188,7 +189,7 @@ class UploadProgress(EnhancedCard):
             
             toast = create_toast_notification(
                 message="Upload cancelled",
-                bgcolor=ft.Colors.SECONDARY_CONTAINER
+                bgcolor=TOKENS["surface_variant"]
             )
             toast.show(self.page)
     
@@ -229,12 +230,12 @@ class UploadProgress(EnhancedCard):
         if completed_files == total_files:
             toast = create_toast_notification(
                 message=f"All {total_files} files uploaded successfully",
-                bgcolor=ft.Colors.PRIMARY_CONTAINER
+                bgcolor=TOKENS["container"]
             )
         else:
             toast = create_toast_notification(
                 message=f"Uploaded {completed_files}/{total_files} files",
-                bgcolor=ft.Colors.SECONDARY_CONTAINER
+                bgcolor=TOKENS["surface_variant"]
             )
         
         toast.show(self.page)

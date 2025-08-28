@@ -9,6 +9,7 @@ import Shared.utils.utf8_solution
 
 import flet as ft
 from typing import Dict, Any, Callable, Optional, List
+from flet_server_gui.ui.theme_m3 import TOKENS
 
 
 class SettingsChangeManager:
@@ -92,8 +93,8 @@ class SettingsChangeManager:
             "Save Settings",
             icon=ft.Icons.SAVE,
             style=ft.ButtonStyle(
-                bgcolor=ft.Colors.PRIMARY,
-                color=ft.Colors.ON_PRIMARY
+                bgcolor=TOKENS['primary'],
+                color=TOKENS['on_primary']
             ),
             disabled=not self.has_changes,
             on_click=lambda e: self._handle_save(on_save)
@@ -132,12 +133,12 @@ class SettingsChangeManager:
             content=ft.Row([
                 ft.Icon(
                     ft.Icons.EDIT if self.has_changes else ft.Icons.CHECK_CIRCLE,
-                    color=ft.Colors.ON_SURFACE if self.has_changes else ft.Colors.ON_SURFACE,
+                    color=TOKENS['on_surface'] if self.has_changes else TOKENS['on_surface'],
                     size=20
                 ),
                 ft.Text(
                     f"{len(self.get_changed_settings())} changes" if self.has_changes else "No changes",
-                    color=ft.Colors.ON_SURFACE,
+                    color=TOKENS['on_surface'],
                     weight=ft.FontWeight.BOLD
                 )
             ], spacing=5, tight=True),
@@ -192,14 +193,14 @@ class SettingsChangeManager:
             
             # Update icon
             indicator_row.controls[0].name = ft.Icons.EDIT if self.has_changes else ft.Icons.CHECK_CIRCLE
-            indicator_row.controls[0].color = ft.Colors.ORANGE_600 if self.has_changes else ft.Colors.GREEN_600
+            indicator_row.controls[0].color = TOKENS['secondary'] if self.has_changes else TOKENS['secondary']
             
             # Update text
             indicator_row.controls[1].value = f"{len(self.get_changed_settings())} changes" if self.has_changes else "No changes"
-            indicator_row.controls[1].color = ft.Colors.ORANGE_600 if self.has_changes else ft.Colors.GREEN_600
+            indicator_row.controls[1].color = TOKENS['secondary'] if self.has_changes else TOKENS['secondary']
             
             # Update container background
-            self.changes_indicator.bgcolor = ft.Colors.ORANGE_50 if self.has_changes else ft.Colors.GREEN_50
+            self.changes_indicator.bgcolor = TOKENS['surface_variant'] if self.has_changes else TOKENS['surface_variant']
         
         if self.page:
             self.page.update()
