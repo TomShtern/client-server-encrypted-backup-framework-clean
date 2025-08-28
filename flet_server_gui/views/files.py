@@ -25,9 +25,10 @@ from flet_server_gui.components.file_filter_manager import FileFilterManager
 from flet_server_gui.components.file_action_handlers import FileActionHandlers
 from flet_server_gui.ui.widgets.file_preview import FilePreviewManager
 from flet_server_gui.actions.file_actions import FileActions
+from flet_server_gui.components.base_component import BaseComponent
 
 
-class FilesView:
+class FilesView(BaseComponent):
     """
     Complete file management view with modular architecture.
     Composed of specialized components for table rendering, filtering, actions, and preview.
@@ -41,6 +42,9 @@ class FilesView:
         # Initialize thread-safe UI updater
         self.ui_updater = ThreadSafeUIUpdater(page)
         self._updater_started = False
+        
+        # Initialize parent BaseComponent
+        super().__init__(page, dialog_system, toast_manager)
         
         # Initialize button factory
         self.button_factory = ActionButtonFactory(self, server_bridge, page)

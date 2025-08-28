@@ -16,12 +16,16 @@ from flet_server_gui.core.client_management import ClientManagement
 from flet_server_gui.core.file_management import FileManagement
 from flet_server_gui.ui.widgets.cards import DatabaseStatsCard
 from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
+from flet_server_gui.components.base_component import BaseComponent
 
 
-class DatabaseView:
+class DatabaseView(BaseComponent):
     """Database browser view with actual database content and management capabilities."""
     
     def __init__(self, server_bridge: "ServerBridge", dialog_system, toast_manager, page):
+        # Initialize parent BaseComponent
+        super().__init__(page, dialog_system, toast_manager)
+        
         self.server_bridge = server_bridge
         self.dialog_system = dialog_system
         self.toast_manager = toast_manager

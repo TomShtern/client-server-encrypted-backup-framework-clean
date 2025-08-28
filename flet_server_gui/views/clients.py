@@ -25,9 +25,10 @@ from flet_server_gui.components.client_action_handlers import ClientActionHandle
 from flet_server_gui.actions.client_actions import ClientActions
 from flet_server_gui.layouts.responsive_utils import ResponsiveBuilder
 from flet_server_gui.layouts.breakpoint_manager import BreakpointManager
+from flet_server_gui.components.base_component import BaseComponent
 
 
-class ClientsView:
+class ClientsView(BaseComponent):
     """
     Complete client management view with modular architecture.
     Composed of specialized components for table rendering, filtering, and actions.
@@ -42,6 +43,9 @@ class ClientsView:
         # Initialize thread-safe UI updater
         self.ui_updater = ThreadSafeUIUpdater(page)
         self._updater_started = False
+        
+        # Initialize parent BaseComponent
+        super().__init__(page, dialog_system, toast_manager)
         
         # Initialize button factory
         self.button_factory = ActionButtonFactory(self, server_bridge, page)
