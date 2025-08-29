@@ -137,6 +137,12 @@ class ClientsView(BaseComponent):
             ),
         ], spacing=10)
         
+        # Select all checkbox
+        self.select_all_checkbox = ft.Checkbox(
+            label="Select All",
+            on_change=self._on_select_all
+        )
+        
         # Apply hitbox fixes to buttons
         if self.refresh_button:
             self.refresh_button = ResponsiveLayoutFixes.fix_button_hitbox(self.refresh_button)
