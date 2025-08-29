@@ -87,7 +87,7 @@ def test_basic_functionality():
     try:
         # Test theme system creation
         print("  [THEME] Testing theme system initialization...")
-        from flet_server_gui.core import MaterialDesign3ThemeSystem, theme_system
+        from flet_server_gui.ui.unified_theme_system import MaterialDesign3ThemeSystem, theme_system
         
         # Create new theme system
         custom_theme = MaterialDesign3ThemeSystem()

@@ -31,7 +31,7 @@ Usage:
 from .server_operations import ServerOperations
 from .client_management import ClientManagement
 from .file_management import FileManagement
-from .theme_system import MaterialDesign3ThemeSystem, theme_system, get_theme_system
+from ..ui.unified_theme_system import MaterialDesign3ThemeSystem, theme_system, get_theme_system
 from .design_tokens import (
     ColorRole, TypographyRole, LIGHT_COLOR_TOKENS, DARK_COLOR_TOKENS,
     TYPOGRAPHY_TOKENS, SPACING_TOKENS, ELEVATION_TOKENS,

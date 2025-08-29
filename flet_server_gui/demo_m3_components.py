@@ -16,7 +16,7 @@ from ui.m3_components import (
     M3ComponentFactory, ComponentStyle, M3ButtonConfig, M3CardConfig,
     get_m3_factory, create_m3_button, create_m3_card, create_m3_text_field
 )
-from core.theme_system import ThemeMode, get_theme_system
+from flet_server_gui.ui.unified_theme_system import ThemeMode, get_theme_system
 
 
 def main(page: ft.Page):

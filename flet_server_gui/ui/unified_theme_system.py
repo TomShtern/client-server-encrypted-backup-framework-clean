@@ -50,53 +50,112 @@ class DynamicTokens:
     """Enhanced dynamic tokens that work with Flet's theme system properly"""
     
     def __init__(self):
-        # Static token definitions - these never change
+        # Enhanced static token definitions - these never change and provide fallback values
         self._static_tokens = {
             # Primary: blue → purple gradient
             "primary_gradient": ["#A8CBF3", "#7C5CD9"],
             "primary": "#7C5CD9",
             "on_primary": "#FFFFFF",
+            "primary_container": "#EADDFF",
+            "on_primary_container": "#21005D",
+            
             # Secondary: ORANGE
             "secondary": "#FFA500", 
             "on_secondary": "#000000",
+            "secondary_container": "#FFDDB3",
+            "on_secondary_container": "#2B1600",
+            
             # Tertiary: pink-ish
             "tertiary": "#AB6DA4",
             "on_tertiary": "#FFFFFF",
+            "tertiary_container": "#FFD8EE",
+            "on_tertiary_container": "#3A0038",
+            
             # Containers (teal)
             "container": "#38A298",
             "on_container": "#FFFFFF",
+            
             # Surface tones
             "surface": "#F6F8FB",
             "on_surface": "#000000",
             "surface_variant": "#E7EDF7",
+            "on_surface_variant": "#44474E",
+            "surface_container": "#F6F8FB",
+            "surface_container_high": "#F6F8FB",
+            "surface_container_highest": "#0F1720",
             "surface_dark": "#0F1720", 
+            "inverse_surface": "#2F3033",
+            "on_inverse_surface": "#F1F0F4",
+            
+            # Background and foreground
             "background": "#FFFFFF",
             "on_background": "#000000",
+            
+            # Outlines and borders
             "outline": "#666666",
+            "outline_variant": "#C4C6D0",
+            
             # Error
             "error": "#B00020",
-            "on_error": "#FFFFFF"
+            "on_error": "#FFFFFF",
+            "error_container": "#FFDAD6",
+            "on_error_container": "#410002",
+            
+            # Additional semantic colors
+            "shadow": "#000000",
+            "scrim": "#000000"
         }
         
-        # Flet theme-aware color mappings - these adapt to theme automatically
+        # Enhanced Flet theme-aware color mappings - these adapt to theme automatically
         # Using available Flet Colors constants that adapt to light/dark theme
+        # Based on Material Design 3 color system specifications
         self._flet_color_mappings = {
+            # Primary color palette
             "primary": "Colors.PRIMARY",
             "on_primary": "Colors.ON_PRIMARY",
+            "primary_container": "Colors.PRIMARY_CONTAINER",
+            "on_primary_container": "Colors.ON_PRIMARY_CONTAINER",
+            
+            # Secondary color palette
             "secondary": "Colors.SECONDARY", 
             "on_secondary": "Colors.ON_SECONDARY",
+            "secondary_container": "Colors.SECONDARY_CONTAINER",
+            "on_secondary_container": "Colors.ON_SECONDARY_CONTAINER",
+            
+            # Tertiary color palette
             "tertiary": "Colors.TERTIARY",
             "on_tertiary": "Colors.ON_TERTIARY",
-            "container": "Colors.PRIMARY_CONTAINER",
-            "on_container": "Colors.ON_PRIMARY_CONTAINER",
+            "tertiary_container": "Colors.TERTIARY_CONTAINER",
+            "on_tertiary_container": "Colors.ON_TERTIARY_CONTAINER",
+            
+            # Surface colors
             "surface": "Colors.SURFACE",
             "on_surface": "Colors.ON_SURFACE",
-            "surface_variant": "Colors.SURFACE_CONTAINER_HIGHEST",  # Proper surface variant background color
+            "surface_variant": "Colors.SURFACE_CONTAINER_HIGHEST",  # Proper surface variant background
+            "on_surface_variant": "Colors.ON_SURFACE_VARIANT",
+            "surface_container": "Colors.SURFACE_CONTAINER_HIGHEST",
+            "surface_container_high": "Colors.SURFACE_CONTAINER_HIGHEST",
+            "surface_container_highest": "Colors.SURFACE_CONTAINER_HIGHEST",
+            "inverse_surface": "Colors.INVERSE_SURFACE",
+            "on_inverse_surface": "Colors.ON_INVERSE_SURFACE",
+            
+            # Background and foreground
             "background": "Colors.SURFACE",  # Use surface as background equivalent
             "on_background": "Colors.ON_SURFACE",  # Use on_surface as on_background equivalent
+            
+            # Outlines and borders
             "outline": "Colors.OUTLINE",
+            "outline_variant": "Colors.ON_SURFACE_VARIANT",
+            
+            # Error colors
             "error": "Colors.ERROR",
-            "on_error": "Colors.ON_ERROR"
+            "on_error": "Colors.ON_ERROR",
+            "error_container": "Colors.ERROR_CONTAINER",
+            "on_error_container": "Colors.ON_ERROR_CONTAINER",
+            
+            # Additional semantic colors
+            "shadow": "Colors.SHADOW",  # If available, otherwise fallback to BLACK
+            "scrim": "Colors.SCRIM"     # If available, otherwise fallback to BLACK
         }
     
     def _should_use_flet_colors(self):
@@ -115,7 +174,17 @@ class DynamicTokens:
             import flet as ft
             # Return Flet color constant that adapts to theme automatically
             flet_constant = self._flet_color_mappings[key]
-            return getattr(ft.Colors, flet_constant.split('.')[1])
+            color_attr = flet_constant.split('.')[1]
+            
+            # Handle fallbacks for colors that might not exist in all Flet versions
+            if hasattr(ft.Colors, color_attr):
+                return getattr(ft.Colors, color_attr)
+            elif color_attr in ['SHADOW', 'SCrim']:
+                # Fallback to BLACK for shadow/scrim if not available
+                return ft.Colors.BLACK
+            else:
+                # Fallback to static colors if Flet color not available
+                return self._static_tokens.get(key, ft.Colors.BLACK)
         
         # Fallback to static colors (should rarely happen)
         return self._static_tokens[key]
@@ -895,11 +964,12 @@ _global_theme_utilities: Optional[ThemeUtilities] = None
 
 def initialize_theme(page: ft.Page) -> UnifiedThemeManager:
     """Initialize and return global theme manager"""
-    global _global_theme_manager, _global_theme_utilities
+    global _global_theme_manager, _global_theme_utilities, theme_system
     
     if _global_theme_manager is None:
         _global_theme_manager = UnifiedThemeManager(page)
         _global_theme_utilities = ThemeUtilities(_global_theme_manager)
+        theme_system = _global_theme_manager  # Set backward compatibility alias
     
     return _global_theme_manager
 
@@ -1257,12 +1327,27 @@ def DYNAMIC_TOKENS_PROXY() -> DynamicTokens:
     return get_dynamic_tokens()
 
 
+def get_theme_system() -> Optional[UnifiedThemeManager]:
+    """Get global theme manager instance - backward compatibility"""
+    return get_theme_manager()
+
+
+# Backward compatibility alias
+theme_system = None  # Will be set when initialize_theme is called
+MaterialDesign3ThemeSystem = UnifiedThemeManager
+
+
 __all__ = [
     # Core classes
     "UnifiedThemeManager",
     "ThemeUtilities", 
     "ThemeValidator",
     "MaterialDesignTokens",
+    
+    # Backward compatibility
+    "MaterialDesign3ThemeSystem",
+    "theme_system",
+    "get_theme_system",
     
     # Enums
     "ColorRole",

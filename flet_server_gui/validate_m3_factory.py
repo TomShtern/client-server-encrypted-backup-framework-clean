@@ -197,7 +197,7 @@ def test_theme_integration() -> Dict[str, bool]:
     
     try:
         from ui.m3_components import get_m3_factory
-        from core.theme_system import ThemeMode
+        from flet_server_gui.ui.unified_theme_system import ThemeMode
         from core.design_tokens import ColorRole, get_color_token
         
         factory = get_m3_factory()

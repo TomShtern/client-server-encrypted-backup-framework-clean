@@ -34,7 +34,7 @@ THEME_SYSTEM_AVAILABLE = False
 DESIGN_TOKENS_AVAILABLE = False
 
 try:
-    from flet_server_gui.core.theme_system import get_theme_system, ThemeMode
+    from flet_server_gui.ui.unified_theme_system import get_theme_system, ThemeMode
     from flet_server_gui.core.design_tokens import (
         ColorRole, TypographyRole, get_color_token, get_typography_token,
         get_spacing_token, get_elevation_token, BUTTON_TOKENS, CARD_TOKENS,
@@ -45,7 +45,7 @@ try:
 except ImportError:
     # Fallback for relative imports when run from within the package
     try:
-        from ..core.theme_system import get_theme_system, ThemeMode
+        from flet_server_gui.ui.unified_theme_system import get_theme_system, ThemeMode
         from ..core.design_tokens import (
             ColorRole, TypographyRole, get_color_token, get_typography_token,
             get_spacing_token, get_elevation_token, BUTTON_TOKENS, CARD_TOKENS,
