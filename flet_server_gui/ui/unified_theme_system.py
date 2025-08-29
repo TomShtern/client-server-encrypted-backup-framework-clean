@@ -1338,7 +1338,7 @@ def get_theme_system() -> Optional[UnifiedThemeManager]:
 
 
 # ============================================================================
-# DESIGN TOKENS - Consolidated from core/design_tokens.py
+# DESIGN TOKENS - Consolidated from archived design_tokens.py (removed)
 # ============================================================================
 
 import flet as ft
