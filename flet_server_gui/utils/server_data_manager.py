@@ -39,14 +39,24 @@ class RealClient:
 class ServerDataManager:
     """Manages server data operations and database interactions"""
     
-    def __init__(self, server_instance: Optional[BackupServer] = None):
+    def __init__(self, server_instance: Optional[BackupServer] = None, database_name: Optional[str] = None):
         self.server_instance = server_instance
         self.db_manager = None
         
+        # Use MockaBase when running standalone (no server instance)
+        if database_name is None and server_instance is None:
+            # Check if MockaBase exists, if not create it
+            mockabase_path = "MockaBase.db"
+            if not os.path.exists(mockabase_path):
+                print("[INFO] MockaBase not found, will use default database")
+            else:
+                database_name = mockabase_path
+                print(f"[INFO] Using MockaBase: {database_name}")
+        
         if DATABASE_AVAILABLE:
             try:
-                self.db_manager = DatabaseManager()
-                print("[INFO] Database connection established")
+                self.db_manager = DatabaseManager(database_name)
+                print(f"[INFO] Database connection established ({database_name or 'default'})")
             except Exception as e:
                 print(f"[ERROR] Database initialization failed: {e}")
                 raise RuntimeError(f"Database connection required: {e}")

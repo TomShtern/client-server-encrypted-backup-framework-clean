@@ -30,7 +30,7 @@ except ImportError:
 class ModularServerBridge:
     """Refactored server bridge using composition pattern with specialized managers."""
     
-    def __init__(self, server_instance: Optional[BackupServer] = None):
+    def __init__(self, server_instance: Optional[BackupServer] = None, database_name: Optional[str] = None):
         """Initialize with modular component managers."""
         
         if not SERVER_AVAILABLE:
@@ -40,11 +40,11 @@ class ModularServerBridge:
         
         # Initialize component managers with dependency injection
         self.connection_manager = ServerConnectionManager(server_instance)
-        self.data_manager = ServerDataManager(server_instance)
+        self.data_manager = ServerDataManager(server_instance, database_name)
         self.monitoring_manager = ServerMonitoringManager(server_instance)
         self.file_manager = ServerFileManager()
         
-        print("[SUCCESS] Modular server bridge initialized with specialized managers")
+        print(f"[SUCCESS] Modular server bridge initialized with specialized managers ({database_name or 'default database'})")
     
     # ============================================================================
     # SERVER LIFECYCLE OPERATIONS (delegated to connection_manager)

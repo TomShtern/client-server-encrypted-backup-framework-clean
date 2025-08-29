@@ -72,7 +72,12 @@ class ServerGUIApp:
     
     def __init__(self, page: ft.Page):
         self.page = page
-        self.server_bridge = ServerBridge()
+        # Use MockaBase when running standalone (no server connection)
+        mockabase_path = "MockaBase.db"
+        if os.path.exists(mockabase_path):
+            self.server_bridge = ServerBridge(database_name=mockabase_path)
+        else:
+            self.server_bridge = ServerBridge()
         self.theme_manager = ThemeManager(page)
         self.current_view = "dashboard"
         self.active_view_instance = None
