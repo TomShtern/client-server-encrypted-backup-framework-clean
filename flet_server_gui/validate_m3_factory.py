@@ -50,9 +50,10 @@ def test_imports() -> Dict[str, bool]:
     
     # Test design tokens imports
     try:
-        from core.design_tokens import (
+        from flet_server_gui.ui.unified_theme_system import (
             ColorRole, TypographyRole, get_color_token, get_typography_token,
-            get_spacing_token, get_elevation_token, BUTTON_TOKENS, CARD_TOKENS
+            get_spacing_token, get_elevation_token, BUTTON_TOKENS, CARD_TOKENS,
+            BORDER_RADIUS_TOKENS, ANIMATION_TOKENS
         )
         results["design_tokens"] = True
         safe_print("✅ Design tokens imported successfully")
@@ -198,7 +199,7 @@ def test_theme_integration() -> Dict[str, bool]:
     try:
         from ui.m3_components import get_m3_factory
         from flet_server_gui.ui.unified_theme_system import ThemeMode
-        from core.design_tokens import ColorRole, get_color_token
+        from flet_server_gui.ui.unified_theme_system import ColorRole, get_color_token
         
         factory = get_m3_factory()
         
@@ -226,7 +227,7 @@ def test_theme_integration() -> Dict[str, bool]:
         
         # Test typography integration
         try:
-            from core.design_tokens import TypographyRole, get_typography_token
+            from flet_server_gui.ui.unified_theme_system import TypographyRole, get_typography_token
             typography = get_typography_token(TypographyRole.BODY_LARGE)
             results["typography_integration"] = True
             safe_print("✅ Typography integration working")

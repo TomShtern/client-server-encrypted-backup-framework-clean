@@ -32,7 +32,7 @@ def test_imports():
             "ColorTokens", "TypographyTokens", "SpacingTokens", "ElevationTokens"
         ]),
         
-        ("Core Design Tokens", "flet_server_gui.core.design_tokens", [
+        ("Core Design Tokens", "flet_server_gui.ui.unified_theme_system", [
             "ColorRole", "TypographyRole", "LIGHT_COLOR_TOKENS", "DARK_COLOR_TOKENS",
             "TYPOGRAPHY_TOKENS", "SPACING_TOKENS", "ELEVATION_TOKENS",
             "get_color_token", "get_typography_token"
@@ -151,7 +151,7 @@ def test_file_structure():
     expected_files = [
         "core/__init__.py",
         "core/theme_system.py",
-        "core/design_tokens.py", 
+        "ui/unified_theme_system.py", 
         "core/responsive_layout.py",
         "core/client_management.py",
         "core/file_management.py",
