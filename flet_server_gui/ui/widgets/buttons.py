@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from flet_server_gui.actions import ClientActions, FileActions, ServerActions
 from flet_server_gui.actions.base_action import ActionResult
 from flet_server_gui.components.base_component import BaseComponent
+from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
 
 
 @dataclass
@@ -537,6 +538,7 @@ class ActionButtonFactory:
             "ServerActions": ServerActions(server_bridge),
             "ClientActionHandlers": None,  # Will be set by views
             "FileActionHandlers": None,    # Will be set by views
+            "DatabaseActionHandlers": None,  # Will be set by views
             "ServerActionHandlers": None   # Will be set by views
         }
     
@@ -562,43 +564,74 @@ class ActionButtonFactory:
         
         config = self.BUTTON_CONFIGS[config_key]
         
+        # Create a wrapper function to capture the current values
+        def create_handler(config, get_selected_items, additional_params):
+            return lambda e: self._safe_handle_button_click(e, config, get_selected_items, additional_params)
+        
         # Create the button based on style
         if config.button_style == "elevated":
             button = ft.ElevatedButton(
                 text=config.text,
                 icon=config.icon,
                 tooltip=config.tooltip,
-                on_click=lambda e: self._safe_handle_button_click(e, config, get_selected_items, additional_params)
+                on_click=create_handler(config, get_selected_items, additional_params)
             )
         elif config.button_style == "filled":
             button = ft.FilledButton(
                 text=config.text,
                 icon=config.icon,
                 tooltip=config.tooltip,
-                on_click=lambda e: self._safe_handle_button_click(e, config, get_selected_items, additional_params)
+                on_click=create_handler(config, get_selected_items, additional_params)
             )
         elif config.button_style == "outlined":
             button = ft.OutlinedButton(
                 text=config.text,
                 icon=config.icon,
                 tooltip=config.tooltip,
-                on_click=lambda e: self._safe_handle_button_click(e, config, get_selected_items, additional_params)
+                on_click=create_handler(config, get_selected_items, additional_params)
             )
         else:  # text button
             button = ft.TextButton(
                 text=config.text,
                 icon=config.icon,
                 tooltip=config.tooltip,
-                on_click=lambda e: self._safe_handle_button_click(e, config, get_selected_items, additional_params)
+                on_click=create_handler(config, get_selected_items, additional_params)
             )
         
-        return button
+        # Apply hitbox fixes to ensure proper clickable area
+        # We need to preserve the button's click handler in the container
+        original_on_click = button.on_click
+        button_container = ResponsiveLayoutFixes.fix_button_hitbox(button)
+        
+        # Set the container's click handler to delegate to the button's handler
+        if original_on_click:
+            button_container.on_click = original_on_click
+        
+        return button_container
     
     def _safe_handle_button_click(self, e, config: ButtonConfig, get_selected_items: Callable[[], List[str]], additional_params: Optional[Dict[str, Any]]):
         """Safely handle button click by running async handler in background task"""
+        print(f"[DEBUG] _safe_handle_button_click called with config: {config.action_key}")
         if hasattr(self.page, 'run_task'):
-            self.page.run_task(self._handle_button_click, config, get_selected_items, additional_params)
+            print(f"[DEBUG] Using page.run_task for {config.action_key}")
+            # Pass the coroutine function and its arguments separately
+            async def wrapper():
+                print(f"[DEBUG] Wrapper function started for {config.action_key}")
+                try:
+                    result = await self._handle_button_click(config, get_selected_items, additional_params)
+                    print(f"[DEBUG] Wrapper function completed for {config.action_key}, result: {result}")
+                    return result
+                except Exception as ex:
+                    print(f"[ERROR] Wrapper function failed for {config.action_key}: {ex}")
+                    raise
+            try:
+                self.page.run_task(wrapper)
+                print(f"[DEBUG] page.run_task called successfully for {config.action_key}")
+            except Exception as ex:
+                print(f"[ERROR] page.run_task failed for {config.action_key}: {ex}")
+                raise
         else:
+            print(f"[DEBUG] Using asyncio.create_task fallback for {config.action_key}")
             # Fallback for older Flet versions
             import asyncio
             asyncio.create_task(self._handle_button_click(config, get_selected_items, additional_params))
@@ -617,28 +650,33 @@ class ActionButtonFactory:
             get_selected_items: Function to get selected items
             additional_params: Additional parameters for the action
         """
+        print(f"[DEBUG] _handle_button_click started for {config.action_key}")
         try:
             # Validate selection requirements
             selected_items = get_selected_items() if config.requires_selection else []
+            print(f"[DEBUG] Selected items for {config.action_key}: {selected_items}")
             
             if config.requires_selection:
                 if len(selected_items) < config.min_selection:
                     await self.base_component._show_error(
                         f"Please select at least {config.min_selection} item(s)"
                     )
+                    print(f"[DEBUG] Selection requirement not met for {config.action_key}")
                     return
                 
                 if config.max_selection and len(selected_items) > config.max_selection:
                     await self.base_component._show_error(
                         f"Please select no more than {config.max_selection} item(s)"
                     )
+                    print(f"[DEBUG] Selection requirement exceeded for {config.action_key}")
                     return
             
             # Get the action instance and method
             action_instance = self.actions[config.action_class]
+            print(f"[DEBUG] Action instance for {config.action_key}: {action_instance}")
             
             # For action handlers that are set by views, get them from the base component if they're None
-            if action_instance is None and config.action_class in ["ClientActionHandlers", "FileActionHandlers", "ServerActionHandlers"]:
+            if action_instance is None and config.action_class in ["ClientActionHandlers", "FileActionHandlers", "DatabaseActionHandlers", "ServerActionHandlers"]:
                 # Try to get the action handler from the base component
                 if hasattr(self.base_component, 'action_handlers'):
                     action_instance = self.base_component.action_handlers
@@ -646,20 +684,31 @@ class ActionButtonFactory:
                     action_instance = self.base_component.client_action_handlers
                 elif hasattr(self.base_component, 'file_action_handlers') and config.action_class == "FileActionHandlers":
                     action_instance = self.base_component.file_action_handlers
+                elif hasattr(self.base_component, 'database_action_handlers') and config.action_class == "DatabaseActionHandlers":
+                    action_instance = self.base_component.database_action_handlers
                 elif hasattr(self.base_component, 'server_action_handlers') and config.action_class == "ServerActionHandlers":
                     action_instance = self.base_component.server_action_handlers
             
+            # If still None, try to get from the base component's actions dict
+            if action_instance is None and hasattr(self.base_component, 'actions'):
+                action_instance = self.base_component.actions.get(config.action_class)
+            
+            print(f"[DEBUG] Final action instance for {config.action_key}: {action_instance}")
             if action_instance is None:
                 await self.base_component._show_error(f"Action handler {config.action_class} not available")
+                print(f"[ERROR] Action handler not available for {config.action_key}")
                 return
                 
             action_method = getattr(action_instance, config.action_method)
+            print(f"[DEBUG] Action method for {config.action_key}: {action_method}")
             
             # Prepare method parameters
             method_params = self._prepare_method_params(config, selected_items, additional_params)
+            print(f"[DEBUG] Method params for {config.action_key}: {method_params}")
             
             # Use the base component's confirmation and execution pattern
             if config.operation_type == "bulk":
+                print(f"[DEBUG] Executing bulk action for {config.action_key}")
                 success = await self.base_component.execute_bulk_action(
                     action=lambda items: action_method(**method_params),
                     selected_items=selected_items,
@@ -671,7 +720,10 @@ class ActionButtonFactory:
                 confirmation_text = config.confirmation_text
                 if "{count}" in confirmation_text:
                     confirmation_text = confirmation_text.format(count=len(selected_items))
+                elif "{item}" in confirmation_text and selected_items:
+                    confirmation_text = confirmation_text.format(item=selected_items[0] if len(selected_items) == 1 else f"{len(selected_items)} items")
                 
+                print(f"[DEBUG] Executing single action for {config.action_key} with confirmation: {confirmation_text}")
                 success = await self.base_component.execute_with_confirmation(
                     action=lambda: action_method(**method_params),
                     confirmation_text=confirmation_text,
@@ -681,7 +733,17 @@ class ActionButtonFactory:
             
             # Handle special post-action operations
             if success:
+                print(f"[DEBUG] Action successful for {config.action_key}, handling post-action")
                 await self._handle_post_action(config, method_params)
+                
+            print(f"[DEBUG] _handle_button_click completed for {config.action_key}, success: {success}")
+            return success
+            
+        except Exception as e:
+            print(f"[ERROR] _handle_button_click failed for {config.action_key}: {e}")
+            import traceback
+            traceback.print_exc()
+            await self.base_component._show_error(f"Button action failed: {str(e)}")
                 
         except Exception as e:
             await self.base_component._show_error(f"Button action failed: {str(e)}")
@@ -703,40 +765,103 @@ class ActionButtonFactory:
         Returns:
             Dictionary of method parameters
         """
+        print(f"[DEBUG] _prepare_method_params called for {config.action_key} with selected_items: {selected_items}")
         params = {}
         
         # Special handling for perform_bulk_action method
         if config.action_method == "perform_bulk_action":
+            print(f"[DEBUG] Handling bulk action for {config.action_key}")
             # For bulk actions, we need to pass the action type and filenames
             action_type_map = {
                 'file_download_bulk': 'download',
                 'file_verify_bulk': 'verify',
-                'file_delete_bulk': 'delete'
+                'file_delete_bulk': 'delete',
+                'client_disconnect_bulk': 'disconnect',
+                'client_delete_bulk': 'delete'
             }
             if config.action_key in action_type_map:
                 params["action"] = action_type_map[config.action_key]
-                params["filenames"] = selected_items
+                params["filenames"] = selected_items if "file" in config.action_key else selected_items
+                # For client actions, use client_ids parameter
+                if "client" in config.action_key:
+                    params["client_ids"] = selected_items
+            else:
+                # Default handling for bulk actions
+                params["action"] = config.action_key.replace("_bulk", "").split("_")[-1]
+                if "client" in config.action_key:
+                    params["client_ids"] = selected_items
+                else:
+                    params["filenames"] = selected_items
         else:
+            print(f"[DEBUG] Handling single action for {config.action_key}")
             # Add selected items based on method signature
             if "client_id" in config.action_method and selected_items:
-                params["client_ids"] = selected_items
+                # For single client actions, pass client_id as a single value
+                if config.operation_type == "single" and len(selected_items) == 1:
+                    params["client_id"] = selected_items[0]
+                    print(f"[DEBUG] Setting client_id to single value: {selected_items[0]}")
+                else:
+                    params["client_ids"] = selected_items
+                    print(f"[DEBUG] Setting client_ids to multiple values: {selected_items}")
             elif "file_id" in config.action_method and selected_items:  
-                params["file_ids"] = selected_items
+                # For single file actions, pass file_id as a single value
+                if config.operation_type == "single" and len(selected_items) == 1:
+                    params["file_id"] = selected_items[0]
+                    print(f"[DEBUG] Setting file_id to single value: {selected_items[0]}")
+                else:
+                    params["file_ids"] = selected_items
+                    print(f"[DEBUG] Setting file_ids to multiple values: {selected_items}")
             elif selected_items:
                 # Generic parameter name based on action type
-                if "client" in config.action_method.lower():
-                    params["client_ids"] = selected_items
-                elif "file" in config.action_method.lower():
-                    params["file_ids"] = selected_items
+                if "client" in config.action_method.lower() or "client" in config.action_key.lower():
+                    # For single client actions, pass client_id as a single value
+                    if config.operation_type == "single" and len(selected_items) == 1:
+                        params["client_id"] = selected_items[0]
+                        print(f"[DEBUG] Setting client_id (generic) to single value: {selected_items[0]}")
+                    else:
+                        params["client_ids"] = selected_items
+                        print(f"[DEBUG] Setting client_ids (generic) to multiple values: {selected_items}")
+                elif "file" in config.action_method.lower() or "file" in config.action_key.lower():
+                    # For single file actions, pass file_id as a single value
+                    if config.operation_type == "single" and len(selected_items) == 1:
+                        params["file_id"] = selected_items[0]
+                        print(f"[DEBUG] Setting file_id (generic) to single value: {selected_items[0]}")
+                    else:
+                        params["file_ids"] = selected_items
+                        print(f"[DEBUG] Setting file_ids (generic) to multiple values: {selected_items}")
+                else:
+                    # Default to generic parameter names
+                    if config.action_class in ["ClientActions", "ClientActionHandlers"]:
+                        # For single client actions, pass client_id as a single value
+                        if config.operation_type == "single" and len(selected_items) == 1:
+                            params["client_id"] = selected_items[0]
+                            print(f"[DEBUG] Setting client_id (default) to single value: {selected_items[0]}")
+                        else:
+                            params["client_ids"] = selected_items
+                            print(f"[DEBUG] Setting client_ids (default) to multiple values: {selected_items}")
+                    elif config.action_class in ["FileActions", "FileActionHandlers"]:
+                        # For single file actions, pass file_id as a single value
+                        if config.operation_type == "single" and len(selected_items) == 1:
+                            params["file_id"] = selected_items[0]
+                            print(f"[DEBUG] Setting file_id (default) to single value: {selected_items[0]}")
+                        else:
+                            params["file_ids"] = selected_items
+                            print(f"[DEBUG] Setting file_ids (default) to multiple values: {selected_items}")
+                    else:
+                        params["items"] = selected_items
+                        print(f"[DEBUG] Setting items (fallback) to values: {selected_items}")
             
             # Add export format if specified
             if config.export_format:
                 params["export_format"] = config.export_format
+                print(f"[DEBUG] Setting export_format to: {config.export_format}")
         
         # Add any additional parameters
         if additional_params:
             params.update(additional_params)
+            print(f"[DEBUG] Added additional params: {additional_params}")
             
+        print(f"[DEBUG] _prepare_method_params returning params: {params}")
         return params
     
     def _get_item_type(self, action_class: str) -> str:

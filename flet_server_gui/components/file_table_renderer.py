@@ -71,14 +71,31 @@ class FileTableRenderer:
             return
         
         self.file_table.rows.clear()
-        self.selected_files = selected_files
+        self.selected_files = selected_files or []
         
         for file_obj in filtered_files:
             # File selection checkbox
             filename = getattr(file_obj, 'filename', None) or (file_obj['filename'] if hasattr(file_obj, '__getitem__') and 'filename' in file_obj else (file_obj.get('name', 'Unknown') if hasattr(file_obj, 'get') else 'Unknown'))
+            
+            # Create a wrapper function to capture the filename
+            def create_checkbox_handler(filename):
+                def handler(e):
+                    # Call the parent's selection handler if provided
+                    if on_file_select:
+                        # Create a mock event with the filename as data
+                        class MockEvent:
+                            def __init__(self, filename, checked):
+                                self.data = filename
+                                self.control = type('Control', (), {'value': checked})()
+                        # Determine new state (opposite of current)
+                        new_state = not (filename in self.selected_files)
+                        mock_event = MockEvent(filename, new_state)
+                        on_file_select(mock_event)
+                return handler
+            
             file_checkbox = ft.Checkbox(
-                value=filename in selected_files,
-                on_change=on_file_select,
+                value=filename in self.selected_files,
+                on_change=create_checkbox_handler(filename),
                 data=filename
             )
             
@@ -197,26 +214,33 @@ class FileTableRenderer:
     
     def _create_file_action_buttons(self, file_obj) -> ft.Row:
         """Create action buttons for a file row"""
+        # Get filename safely
+        filename = getattr(file_obj, 'filename', None) or (file_obj['filename'] if hasattr(file_obj, '__getitem__') and 'filename' in file_obj else (file_obj.get('name', 'Unknown') if hasattr(file_obj, 'get') else 'Unknown'))
+        
+        # Create wrapper functions to properly capture filename
+        def make_file_getter(filename):
+            return lambda: [filename]
+        
         return ft.Row([
             self.button_factory.create_action_button(
                 'file_view_details', 
-                lambda f=file_obj: [f.filename]
+                make_file_getter(filename)
             ),
             self.button_factory.create_action_button(
                 'file_preview', 
-                lambda f=file_obj: [f.filename]
+                make_file_getter(filename)
             ),
             self.button_factory.create_action_button(
                 'file_download', 
-                lambda f=file_obj: [f.filename]
+                make_file_getter(filename)
             ),
             self.button_factory.create_action_button(
                 'file_verify', 
-                lambda f=file_obj: [f.filename]
+                make_file_getter(filename)
             ),
             self.button_factory.create_action_button(
                 'file_delete', 
-                lambda f=file_obj: [f.filename]
+                make_file_getter(filename)
             ),
         ], tight=True, spacing=5)
     
@@ -225,14 +249,24 @@ class FileTableRenderer:
         if not self.file_table:
             self.create_file_table()
         
-        return ft.Container(
+        # Create a scrollable container for the table with proper responsive properties
+        table_scroll_container = ft.Container(
             content=ft.Column([
                 self.file_table
-            ], scroll=ft.ScrollMode.AUTO),
+            ], scroll=ft.ScrollMode.AUTO, expand=True),
+            expand=True,
+            clip_behavior=ft.ClipBehavior.NONE
+        )
+        
+        # Wrap in a responsive container with proper sizing
+        return ft.Container(
+            content=table_scroll_container,
             border=ft.border.all(1, TOKENS['outline']),
             border_radius=8,
             padding=10,
-            expand=True
+            expand=True,
+            clip_behavior=ft.ClipBehavior.NONE,
+            width=float("inf")  # Allow infinite width for proper scaling
         )
     
     def update_table_data(self, filtered_files: List[Any], on_file_select: callable = None, 

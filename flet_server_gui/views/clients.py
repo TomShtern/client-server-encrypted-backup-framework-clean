@@ -86,9 +86,16 @@ class ClientsView(BaseComponent):
         # Set action handlers in button factory
         self.button_factory.actions["ClientActionHandlers"] = self.action_handlers
         
+        # Also set in the base component for backward compatibility
+        self.actions = {
+            "ClientActionHandlers": self.action_handlers
+        }
+        
         # Setup callbacks
         self.filter_manager.on_filter_changed = self._on_filtered_data_changed
+        print(f"[DEBUG] Setting on_data_changed callback: {self._refresh_clients}")
         self.action_handlers.set_data_changed_callback(self._refresh_clients)
+        print(f"[DEBUG] on_data_changed callback set successfully")
         
         # UI Components
         self.status_text = None
@@ -136,6 +143,11 @@ class ClientsView(BaseComponent):
                 visible=False
             ),
         ], spacing=10)
+        
+        # Apply hitbox fixes to bulk action buttons
+        for control in self.bulk_actions_row.controls:
+            if isinstance(control, ft.ElevatedButton):
+                control = ResponsiveLayoutFixes.fix_button_hitbox(control)
         
         # Select all checkbox
         self.select_all_checkbox = ft.Checkbox(
@@ -211,7 +223,7 @@ class ClientsView(BaseComponent):
             
         ], spacing=10, expand=True)
         
-        # Apply windowed mode compatibility to the entire layout
+        # Apply windowed mode compatibility
         main_layout = ResponsiveLayoutFixes.create_windowed_layout_fix(main_content)
         
         # Apply theme consistency
@@ -221,12 +233,15 @@ class ClientsView(BaseComponent):
         return ft.Container(
             content=main_layout,
             padding=20,
-            expand=True
+            expand=True,
+            clip_behavior=ft.ClipBehavior.NONE
         )
     
     async def _refresh_clients(self, e=None):
-        """Refresh client data from server with loading state management and connection validation."""
+        """Refresh client data with comprehensive error handling and user feedback."""
+        print(f"[DEBUG] _refresh_clients called with event: {e}")
         try:
+            # Disable refresh button during refresh
             if self.refresh_button:
                 self.refresh_button.disabled = True
                 self.refresh_button.text = "Refreshing..."
@@ -235,8 +250,8 @@ class ClientsView(BaseComponent):
                     self.ui_updater.queue_update(lambda: None)
                 else:
                     self.page.update()
-            
-            # Defensive server connection check
+
+            # Validate server bridge availability
             if not self.server_bridge:
                 raise ConnectionError("Server bridge is not initialized")
             
@@ -244,17 +259,17 @@ class ClientsView(BaseComponent):
             if hasattr(self.server_bridge, 'is_connected'):
                 if not await self.server_bridge.is_connected():
                     raise ConnectionError("Server is not connected. Please check server status.")
-            
+
             # Get fresh client data with timeout
             clients = self.server_bridge.get_clients()
-            
+
             # Update filter manager with new data
             self.filter_manager.update_client_data(clients)
-            
+
             # Update table with filtered data
             filtered_clients = self.filter_manager.get_filtered_clients()
-            self.table_renderer.update_table_data(filtered_clients)
-            
+            self.table_renderer.update_table_data(filtered_clients, self._on_client_selected, self.selected_clients)
+
             # Update status
             if self.status_text:
                 self.status_text.value = f"Loaded {len(clients)} clients"
@@ -265,28 +280,28 @@ class ClientsView(BaseComponent):
             if self.select_all_checkbox:
                 self.select_all_checkbox.value = False
             
+            print(f"[DEBUG] _refresh_clients completed successfully, loaded {len(clients)} clients")
+            
         except asyncio.TimeoutError:
             if self.status_text:
-                self.status_text.value = "Timeout loading clients. Server may be unresponsive."
+                self.status_text.value = "❌ Timeout loading client data"
                 # Use theme-aware color or let it inherit from theme
             if self.toast_manager:
-                self.toast_manager.show_error("Server connection timeout")
-        except ConnectionError as conn_ex:
+                self.toast_manager.show_error("Timeout loading client data. Please try again.")
+            print(f"[ERROR] Timeout error in _refresh_clients")
+            
+        except Exception as e:
             if self.status_text:
-                self.status_text.value = str(conn_ex)
+                self.status_text.value = f"❌ Error loading client data: {str(e)}"
                 # Use theme-aware color or let it inherit from theme
             if self.toast_manager:
-                self.toast_manager.show_warning("Server connection issue")
-        except Exception as ex:
-            error_msg = f"Error loading clients: {str(ex)}"
-            if self.status_text:
-                self.status_text.value = error_msg
-                # Use theme-aware color or let it inherit from theme
-            if self.toast_manager:
-                self.toast_manager.show_error(error_msg)
-            # Log the full exception for debugging
-            print(f"[ERROR] ClientsView refresh failed: {ex}")
+                self.toast_manager.show_error(f"Error loading client data: {str(e)}")
+            print(f"[ERROR] Exception in _refresh_clients: {e}")
+            import traceback
+            traceback.print_exc()
+            
         finally:
+            # Re-enable refresh button
             if self.refresh_button:
                 self.refresh_button.disabled = False
                 self.refresh_button.text = "Refresh Clients"
@@ -309,7 +324,7 @@ class ClientsView(BaseComponent):
             
             # Update table with new filtered data
             if hasattr(self, 'table_renderer') and self.table_renderer:
-                self.table_renderer.update_table_data(filtered_clients)
+                self.table_renderer.update_table_data(filtered_clients, self._on_client_selected, self.selected_clients)
             else:
                 print("[WARNING] Table renderer not available for client data update")
             
@@ -365,9 +380,13 @@ class ClientsView(BaseComponent):
             if self.toast_manager:
                 self.toast_manager.show_error(f"Error in selection: {str(ex)}")
     
-    def _on_client_selected(self, client_id: str, selected: bool):
+    def _on_client_selected(self, e):
         """Handle individual client selection from table."""
         try:
+            # Extract client_id and selection state from the event
+            client_id = e.data
+            selected = e.control.value if hasattr(e.control, 'value') else False
+            
             if selected:
                 if client_id not in self.selected_clients:
                     self.selected_clients.append(client_id)

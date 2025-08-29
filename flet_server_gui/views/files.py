@@ -63,6 +63,17 @@ class FilesView(BaseComponent):
         self.filter_manager.on_filter_changed = self._on_filtered_data_changed
         self.action_handlers.set_data_changed_callback(self._refresh_files)
         
+        # Set action handlers in button factory
+        self.button_factory.actions["FileActionHandlers"] = self.action_handlers
+        
+        # Also set in the base component for backward compatibility
+        self.actions = {
+            "FileActionHandlers": self.action_handlers
+        }
+        
+        # Set parent reference for preview manager
+        self.action_handlers.parent_view = self
+        
         # UI Components
         self.status_text = None
         self.refresh_button = None
@@ -132,6 +143,11 @@ class FilesView(BaseComponent):
                 visible=False
             ),
         ], spacing=10)
+        
+        # Apply hitbox fixes to bulk action buttons
+        for control in self.bulk_actions_row.controls:
+            if isinstance(control, ft.ElevatedButton):
+                control = ResponsiveLayoutFixes.fix_button_hitbox(control)
         
         # Main layout
         return ft.Container(content=ft.Column([
@@ -216,7 +232,7 @@ class FilesView(BaseComponent):
             
             # Update table with filtered data
             filtered_files = self.filter_manager.get_filtered_files()
-            self.table_renderer.update_table_data(filtered_files)
+            self.table_renderer.update_table_data(filtered_files, self._on_file_selected, self.selected_files)
             
             # Update status
             if self.status_text:
@@ -272,7 +288,7 @@ class FilesView(BaseComponent):
             
             # Update table with new filtered data
             if hasattr(self, 'table_renderer') and self.table_renderer:
-                self.table_renderer.update_table_data(filtered_files)
+                self.table_renderer.update_table_data(filtered_files, self._on_file_selected, self.selected_files)
             else:
                 print("[WARNING] Table renderer not available for file data update")
             
@@ -328,9 +344,13 @@ class FilesView(BaseComponent):
             if self.toast_manager:
                 self.toast_manager.show_error(f"Error in selection: {str(ex)}")
     
-    def _on_file_selected(self, file_id: str, selected: bool):
+    def _on_file_selected(self, e):
         """Handle individual file selection from table."""
         try:
+            # Extract file_id and selection state from the event
+            file_id = e.data
+            selected = e.control.value if hasattr(e.control, 'value') else False
+            
             if selected:
                 if file_id not in self.selected_files:
                     self.selected_files.append(file_id)

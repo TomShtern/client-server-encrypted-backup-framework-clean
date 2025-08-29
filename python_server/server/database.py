@@ -1741,7 +1741,7 @@ class DatabaseManager:
                 SELECT name FROM sqlite_master 
                 WHERE type='table' AND name NOT LIKE 'sqlite_%'
                 ORDER BY name
-            """)
+            """, fetchall=True)
             return [row[0] for row in result] if result else []
         except Exception as e:
             logger.error(f"Error getting table names: {e}")
@@ -1761,14 +1761,14 @@ class DatabaseManager:
         """
         try:
             # First, get column information
-            result = self.execute(f"PRAGMA table_info({table_name})")
+            result = self.execute(f"PRAGMA table_info({table_name})", fetchall=True)
             if not result:
                 return [], []
                 
             columns = [row[1] for row in result]  # row[1] is the column name
             
             # Then get the table data
-            data_result = self.execute(f"SELECT * FROM {table_name} LIMIT 1000")  # Limit for performance
+            data_result = self.execute(f"SELECT * FROM {table_name} LIMIT 1000", fetchall=True)  # Limit for performance
             if not data_result:
                 return columns, []
             

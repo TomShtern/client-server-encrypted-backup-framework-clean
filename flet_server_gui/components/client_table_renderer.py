@@ -73,14 +73,31 @@ class ClientTableRenderer:
             return
         
         self.client_table.rows.clear()
-        self.selected_clients = selected_clients
+        self.selected_clients = selected_clients or []
         
         for client in filtered_clients:
             # Client selection checkbox
             client_id = getattr(client, 'client_id', None) or (client['client_id'] if hasattr(client, '__getitem__') and 'client_id' in client else (client.get('id', 'Unknown') if hasattr(client, 'get') else 'Unknown'))
+            
+            # Create a wrapper function to capture the client_id
+            def create_checkbox_handler(client_id):
+                def handler(e):
+                    # Call the parent's selection handler if provided
+                    if on_client_select:
+                        # Create a mock event with the client_id as data
+                        class MockEvent:
+                            def __init__(self, client_id, checked):
+                                self.data = client_id
+                                self.control = type('Control', (), {'value': checked})()
+                        # Determine new state (opposite of current)
+                        new_state = not (client_id in self.selected_clients)
+                        mock_event = MockEvent(client_id, new_state)
+                        on_client_select(mock_event)
+                return handler
+            
             client_checkbox = ft.Checkbox(
-                value=client_id in selected_clients,
-                on_change=on_client_select,
+                value=client_id in self.selected_clients,
+                on_change=create_checkbox_handler(client_id),
                 data=client_id
             )
             
@@ -185,24 +202,51 @@ class ClientTableRenderer:
     
     def _create_client_action_buttons(self, client) -> ft.Row:
         """Create action buttons for a client row"""
-        return ft.Row([
-            self.button_factory.create_action_button(
-                'client_view_details', 
-                lambda c=client: [c.client_id]
-            ),
-            self.button_factory.create_action_button(
-                'client_view_files', 
-                lambda c=client: [c.client_id]
-            ),
-            self.button_factory.create_action_button(
-                'client_disconnect', 
-                lambda c=client: [c.client_id]
-            ),
-            self.button_factory.create_action_button(
-                'client_delete', 
-                lambda c=client: [c.client_id]
-            ),
+        # Get client ID safely
+        client_id = getattr(client, 'client_id', None) or (client['client_id'] if hasattr(client, '__getitem__') and 'client_id' in client else (client.get('id', 'Unknown') if hasattr(client, 'get') else 'Unknown'))
+        print(f"[DEBUG] Creating action buttons for client: {client_id}")
+        
+        # Create wrapper functions to properly capture client_id
+        def make_client_getter(client_id):
+            def getter():
+                result = [client_id]
+                print(f"[DEBUG] Client getter returning: {result}")
+                return result
+            return getter
+        
+        print(f"[DEBUG] Creating client view details button for: {client_id}")
+        view_details_button = self.button_factory.create_action_button(
+            'client_view_details', 
+            make_client_getter(client_id)
+        )
+        
+        print(f"[DEBUG] Creating client view files button for: {client_id}")
+        view_files_button = self.button_factory.create_action_button(
+            'client_view_files', 
+            make_client_getter(client_id)
+        )
+        
+        print(f"[DEBUG] Creating client disconnect button for: {client_id}")
+        disconnect_button = self.button_factory.create_action_button(
+            'client_disconnect', 
+            make_client_getter(client_id)
+        )
+        
+        print(f"[DEBUG] Creating client delete button for: {client_id}")
+        delete_button = self.button_factory.create_action_button(
+            'client_delete', 
+            make_client_getter(client_id)
+        )
+        
+        buttons_row = ft.Row([
+            view_details_button,
+            view_files_button,
+            disconnect_button,
+            delete_button,
         ], tight=True, spacing=5)
+        
+        print(f"[DEBUG] Created action buttons row for client: {client_id}")
+        return buttons_row
     
     def get_table_container(self) -> ft.Container:
         """Get the table wrapped in a responsive container"""
@@ -220,14 +264,24 @@ class ClientTableRenderer:
                 rows=[]
             )
         
-        return ft.Container(
+        # Create a scrollable container for the table with proper responsive properties
+        table_scroll_container = ft.Container(
             content=ft.Column([
                 self.client_table
-            ], scroll=ft.ScrollMode.AUTO),
+            ], scroll=ft.ScrollMode.AUTO, expand=True),
+            expand=True,
+            clip_behavior=ft.ClipBehavior.NONE
+        )
+        
+        # Wrap in a responsive container with proper sizing
+        return ft.Container(
+            content=table_scroll_container,
             border=ft.border.all(1, TOKENS['outline']),
             border_radius=8,
             padding=10,
-            expand=True
+            expand=True,
+            clip_behavior=ft.ClipBehavior.NONE,
+            width=float("inf")  # Allow infinite width for proper scaling
         )
     
     def update_table_data(self, filtered_clients: List[Any], on_client_select: callable = None, 

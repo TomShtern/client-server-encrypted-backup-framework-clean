@@ -67,6 +67,11 @@ class DatabaseView(BaseComponent):
         # Set action handlers in button factory
         self.button_factory.actions["DatabaseActionHandlers"] = self.action_handlers
         
+        # Also set in the base component for backward compatibility
+        self.actions = {
+            "DatabaseActionHandlers": self.action_handlers
+        }
+        
         # UI Components
         self.selected_table = None
         self.table_selector = None
@@ -103,24 +108,32 @@ class DatabaseView(BaseComponent):
         )
         
         # Database controls - Apply responsive layout fixes
+        def empty_getter():
+            return []
+            
         db_controls = ft.Row([
             self.button_factory.create_action_button(
                 "database_backup",
-                lambda: []
+                empty_getter
             ),
             self.button_factory.create_action_button(
                 "database_optimize", 
-                lambda: []
+                empty_getter
             ),
             self.button_factory.create_action_button(
                 "database_analyze", 
-                lambda: []
+                empty_getter
             ),
             self.button_factory.create_action_button(
                 "database_execute_query", 
-                lambda: []
+                empty_getter
             ),
         ], spacing=10)
+        
+        # Apply hitbox fixes to action buttons
+        for control in db_controls.controls:
+            if isinstance(control, ft.ElevatedButton):
+                control = ResponsiveLayoutFixes.fix_button_hitbox(control)
         
         # Apply hitbox fixes to action buttons
         for control in db_controls.controls:
@@ -131,10 +144,11 @@ class DatabaseView(BaseComponent):
         self.table_content = ft.Container(
             content=ft.Text("Select a table to view its contents", 
                           style=ft.TextThemeStyle.BODY_LARGE),
-            height=400,
+            # Remove fixed height to allow responsive scaling
             # Let theme handle border color automatically,
             border_radius=8,
             padding=20,
+            expand=True
         )
         
         # Apply clipping fixes to table content
@@ -155,7 +169,11 @@ class DatabaseView(BaseComponent):
             ], alignment=ft.MainAxisAlignment.START),
             ft.Container(height=20),  # Spacer
             ft.Text("Table Contents", style=ft.TextThemeStyle.TITLE_LARGE),
-            self.table_content,
+            ft.Container(
+                content=self.table_content,
+                expand=True,
+                clip_behavior=ft.ClipBehavior.NONE
+            ),
         ], spacing=20, expand=True, scroll=ft.ScrollMode.ADAPTIVE)
         
         # Apply windowed mode compatibility
@@ -164,8 +182,24 @@ class DatabaseView(BaseComponent):
         # Apply theme consistency
         apply_theme_consistency(self.page)
         
-        # Load data immediately
-        self.refresh_database()
+        # Defer data loading until page is ready
+        # This avoids "Control must be added to the page first" errors
+        if hasattr(self.page, 'after_render_callbacks'):
+            self.page.after_render_callbacks.append(self.refresh_database)
+        else:
+            # Fallback: try to refresh after a short delay using page update
+            import threading
+            import time
+            def delayed_refresh():
+                time.sleep(0.1)  # Small delay to ensure controls are added
+                if hasattr(self, 'page') and self.page:
+                    try:
+                        self.refresh_database()
+                        self.page.update()
+                    except Exception:
+                        # If page update fails, that's OK - controls might not be ready yet
+                        pass
+            threading.Thread(target=delayed_refresh, daemon=True).start()
         
         return main_content
     
@@ -183,6 +217,14 @@ class DatabaseView(BaseComponent):
             # Get table names
             table_names = self.server_bridge.data_manager.db_manager.get_table_names()
             self._update_table_selector(table_names)
+            
+            # Force update the stats cards if they're added to the page
+            try:
+                if self.stats_cards.page:
+                    self.stats_cards.update()
+            except Exception:
+                # Control not yet added to page, that's OK
+                pass
             
             print(f"[INFO] Database refreshed - found {len(table_names)} tables")
             
@@ -274,13 +316,13 @@ class DatabaseView(BaseComponent):
         for table_name in table_names:
             # Add icon based on table name
             if 'client' in table_name.lower():
-                icon = "נ‘₪"
+                icon = "👥"  # Person icon
             elif 'file' in table_name.lower():
-                icon = "נ“"
+                icon = "📄"  # Document icon
             elif 'log' in table_name.lower():
-                icon = "נ“‹"
+                icon = "📝"  # Memo icon
             else:
-                icon = "נ—‚ן¸"
+                icon = "📊"  # Chart icon
             
             self.table_selector.options.append(
                 ft.dropdown.Option(
@@ -352,7 +394,13 @@ class DatabaseView(BaseComponent):
                 data_table
             ], spacing=10, scroll=ft.ScrollMode.AUTO)
             
-            # Update will be handled by parent component
+            # Force update the UI if the container is added to the page
+            try:
+                if self.table_content.page:
+                    self.table_content.update()
+            except Exception:
+                # Control not yet added to page, that's OK
+                pass
             print(f"[INFO] Loaded {len(rows)} rows from table '{table_name}'")
             
         except Exception as e:
