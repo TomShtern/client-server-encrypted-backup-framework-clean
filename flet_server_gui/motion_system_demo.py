@@ -12,7 +12,7 @@ from flet_server_gui.ui.motion_system import (
     MotionDuration, 
     MotionEasing
 )
-from .ui.theme_m3 import TOKENS
+from .ui.unified_theme_system import TOKENS
 
 
 class MotionSystemDemo:

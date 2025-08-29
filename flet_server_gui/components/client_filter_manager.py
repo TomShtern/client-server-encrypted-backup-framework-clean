@@ -8,7 +8,7 @@ import flet as ft
 import asyncio
 from typing import List, Dict, Any, Optional, Callable
 from datetime import datetime
-from flet_server_gui.ui.theme_m3 import TOKENS
+from flet_server_gui.ui.unified_theme_system import TOKENS
 
 
 class ClientFilterManager:

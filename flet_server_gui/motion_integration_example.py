@@ -7,7 +7,7 @@ Shows how to integrate M3 Motion System with existing Flet GUI components.
 import flet as ft
 import asyncio
 from typing import Optional
-from .ui.theme_m3 import TOKENS
+from .ui.unified_theme_system import TOKENS
 
 # Import the motion system
 from flet_server_gui.ui.motion_system import (
@@ -22,7 +22,7 @@ from flet_server_gui.ui.motion_system import (
 try:
     from flet_server_gui.ui.widgets.cards import ServerStatusCard, ClientStatsCard
     from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
-    from flet_server_gui.ui.theme import ThemeManager
+    from flet_server_gui.ui.unified_theme_system import ThemeManager
     HAS_COMPONENTS = True
 except ImportError:
     HAS_COMPONENTS = False

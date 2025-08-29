@@ -26,7 +26,6 @@ class LogActionHandlers:
         
         # Callbacks for parent component
         self.on_data_changed: Optional[Callable] = None
-        self.callback_initialized = False
     
     def set_data_changed_callback(self, callback: Callable):
         """Set callback for when data changes and refresh is needed"""
@@ -37,7 +36,21 @@ class LogActionHandlers:
         """Export logs with confirmation"""
         def confirm_export():
             self._close_dialog()
-            asyncio.create_task(self._perform_export(filter_level, filter_component, search_query))
+            # Use page.run_task if available, otherwise check for event loop
+            if hasattr(self.page, 'run_task'):
+                # Create a wrapper function to pass the parameters
+                async def perform_export_wrapper():
+                    await self._perform_export(filter_level, filter_component, search_query)
+                self.page.run_task(perform_export_wrapper)
+            else:
+                # Check if we're in an async context
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self._perform_export(filter_level, filter_component, search_query))
+                except RuntimeError:
+                    # No event loop running, skip async task creation
+                    pass
         
         # Show confirmation dialog
         if self.dialog_system:
@@ -106,7 +119,18 @@ class LogActionHandlers:
         """Clear logs with confirmation"""
         def confirm_clear():
             self._close_dialog()
-            asyncio.create_task(self._perform_clear())
+            # Use page.run_task if available, otherwise check for event loop
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(self._perform_clear)
+            else:
+                # Check if we're in an async context
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self._perform_clear())
+                except RuntimeError:
+                    # No event loop running, skip async task creation
+                    pass
         
         # Show confirmation dialog
         if self.dialog_system:

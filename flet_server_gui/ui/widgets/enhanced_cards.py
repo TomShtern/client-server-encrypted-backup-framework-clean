@@ -13,7 +13,7 @@ from enum import Enum
 from dataclasses import dataclass, field
 import asyncio
 import logging
-from flet_server_gui.ui.theme_m3 import TOKENS
+from flet_server_gui.ui.unified_theme_system import TOKENS
 
 logger = logging.getLogger(__name__)
 

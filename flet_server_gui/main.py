@@ -37,13 +37,13 @@ from flet_server_gui.components.control_panel_card import ControlPanelCard
 from flet_server_gui.components.quick_actions import QuickActions
 from flet_server_gui.ui.navigation import NavigationManager
 from flet_server_gui.ui.dialogs import DialogSystem, ToastManager
-from flet_server_gui.ui.theme import ThemeManager
+# Unified theme system - consolidates all theme functionality
+from flet_server_gui.ui.unified_theme_system import ThemeManager, TOKENS
 from flet_server_gui.ui.layouts.responsive_fixes import apply_layout_fixes
 # Import new Phase 4 components
 from flet_server_gui.ui.widgets.status_pill import StatusPill, ServerStatus
 from flet_server_gui.ui.widgets.notifications_panel import NotificationsPanel, create_notification, NotificationType, NotificationPriority
 from flet_server_gui.ui.widgets.activity_log_dialog import ActivityLogDialog, create_activity_entry, ActivityLevel, ActivityCategory
-from flet_server_gui.ui.theme_m3 import TOKENS
 
 # Robust server bridge with fallback
 try:
@@ -386,8 +386,8 @@ class ServerGUIApp:
         # Apply layout fixes for clipping and hitbox issues
         apply_layout_fixes(self.page)
         
-        # Apply theme consistency
-        self.theme_manager.apply_consistency()
+        # Apply theme
+        self.theme_manager.apply_theme()
         
         # Register window resize handler for responsive behavior
         self.page.on_window_event = self.handle_window_resize

@@ -10,7 +10,8 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from flet_server_gui.core.semantic_colors import get_status_color
-from flet_server_gui.ui.theme_m3 import TOKENS
+# Unified theme system - consolidated theme functionality
+from flet_server_gui.ui.unified_theme_system import TOKENS
 
 # Add project root to path for imports
 project_root = os.path.join(os.path.dirname(__file__), "..", "..")
@@ -208,9 +209,16 @@ class ClientTableRenderer:
         if not self.client_table:
             self.create_client_table()
         
-        # Debugging
-        print(f"[DEBUG] client_table type: {type(self.client_table)}")
-        print(f"[DEBUG] client_table: {self.client_table}")
+        # Ensure client_table is not None
+        if not self.client_table:
+            # Create a fallback table if needed
+            self.client_table = ft.DataTable(
+                columns=[
+                    ft.DataColumn(ft.Text("Client ID")),
+                    ft.DataColumn(ft.Text("Status")),
+                ],
+                rows=[]
+            )
         
         return ft.Container(
             content=ft.Column([

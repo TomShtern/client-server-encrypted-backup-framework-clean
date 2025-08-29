@@ -30,7 +30,7 @@ from flet_server_gui.layouts.breakpoint_manager import BreakpointManager
 from flet_server_gui.components.base_component import BaseComponent
 
 # Theme consistency import
-from flet_server_gui.ui.theme_consistency import apply_theme_consistency
+from flet_server_gui.ui.unified_theme_system import apply_theme_consistency
 
 # Enhanced components imports
 from flet_server_gui.ui.widgets import (
@@ -48,8 +48,8 @@ from flet_server_gui.ui.widgets import (
 
 # Layout fixes imports
 from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
-from flet_server_gui.ui.theme_consistency import ThemeConsistencyManager
-from flet_server_gui.ui.theme_m3 import TOKENS
+# Unified theme system - consolidated theme functionality
+from flet_server_gui.ui.unified_theme_system import ThemeConsistencyManager, TOKENS
 
 
 
@@ -114,10 +114,7 @@ class ClientsView(BaseComponent):
             "Refresh Clients",
             icon=ft.Icons.REFRESH,
             on_click=self._refresh_clients,
-            style=ft.ButtonStyle(
-                bgcolor=TOKENS['primary'],
-                color=TOKENS['on_primary']
-            )
+            # Let theme handle button colors automatically
         )
         
         # Search and filter controls from filter manager
@@ -149,13 +146,16 @@ class ClientsView(BaseComponent):
         
         # Client table from table renderer - Apply responsive layout fixes
         client_table_container = self.table_renderer.get_table_container()
-        print(f"[DEBUG] client_table_container type: {type(client_table_container)}")
-        print(f"[DEBUG] client_table_container: {client_table_container}")
+        # Ensure client_table_container is not None
+        if client_table_container is None:
+            client_table_container = ft.Container(
+                content=ft.Text("Client table not available"),
+                padding=20,
+                alignment=ft.alignment.center
+            )
         client_table_container = ResponsiveLayoutFixes.create_clipping_safe_container(
             client_table_container
         )
-        print(f"[DEBUG] After clipping safe container type: {type(client_table_container)}")
-        print(f"[DEBUG] After clipping safe container: {client_table_container}")
         
         # Apply windowed mode compatibility
         main_content = ft.Column([

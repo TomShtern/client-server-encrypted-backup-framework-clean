@@ -252,7 +252,7 @@ def get_theme_tokens() -> Dict[str, str]:
         return _cached_tokens
     
     try:
-        from flet_server_gui.ui.theme import TOKENS
+        from flet_server_gui.ui.unified_theme_system import TOKENS
         _cached_tokens = TOKENS
         return TOKENS
     except ImportError:
@@ -314,7 +314,7 @@ def get_gradient_colors() -> list:
 def get_linear_gradient(begin=ft.alignment.top_left, end=ft.alignment.bottom_right, stops=None) -> ft.LinearGradient:
     """Create a linear gradient using theme colors."""
     try:
-        from flet_server_gui.ui.theme import linear_gradient
+        from flet_server_gui.ui.unified_theme_system import linear_gradient
         return linear_gradient(begin=begin, end=end, stops=stops)
     except ImportError:
         # Fallback gradient
@@ -340,7 +340,7 @@ def apply_theme_to_component(component: ft.Control, page: ft.Page) -> None:
 def create_themed_button(text: str, icon=None, button_type: str = "filled", **kwargs) -> ft.Control:
     """Create a themed button using the appropriate theme colors."""
     try:
-        from flet_server_gui.ui.theme import gradient_button
+        from flet_server_gui.ui.unified_theme_system import gradient_button
         if button_type == "gradient":
             return gradient_button(ft.Row([ft.Icon(icon), ft.Text(text)]) if icon else ft.Text(text), **kwargs)
     except ImportError:

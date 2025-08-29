@@ -37,8 +37,8 @@ from flet_server_gui.ui.widgets import (
 
 # Layout fixes imports
 from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
-from flet_server_gui.ui.theme_consistency import ThemeConsistencyManager, apply_theme_consistency
-from flet_server_gui.ui.theme_m3 import TOKENS
+from flet_server_gui.ui.unified_theme_system import ThemeConsistencyManager, apply_theme_consistency
+from flet_server_gui.ui.unified_theme_system import TOKENS
 
 
 
@@ -132,7 +132,7 @@ class DatabaseView(BaseComponent):
             content=ft.Text("Select a table to view its contents", 
                           style=ft.TextThemeStyle.BODY_LARGE),
             height=400,
-            border=ft.border.all(1, TOKENS['outline']),
+            # Let theme handle border color automatically,
             border_radius=8,
             padding=20,
         )
@@ -333,10 +333,10 @@ class DatabaseView(BaseComponent):
                     ])
                     for row in rows[:50]  # Limit to first 50 rows for performance
                 ],
-                border=ft.border.all(1, TOKENS['outline']),
+                # Let theme handle border colors automatically,
                 border_radius=8,
-                vertical_lines=ft.border.BorderSide(1, TOKENS['outline']),
-                horizontal_lines=ft.border.BorderSide(1, TOKENS['outline']),
+                # Let theme handle grid line colors automatically,
+                # Let theme handle grid line colors automatically,
             )
             
             # Status text
@@ -361,15 +361,48 @@ class DatabaseView(BaseComponent):
     
     def backup_database(self, e):
         """Handle database backup."""
-        asyncio.create_task(self.action_handlers.backup_database())
+        # Use page.run_task if available, otherwise check for event loop
+        if hasattr(self.page, 'run_task'):
+            self.page.run_task(self.action_handlers.backup_database())
+        else:
+            # Check if we're in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                if loop.is_running():
+                    asyncio.create_task(self.action_handlers.backup_database())
+            except RuntimeError:
+                # No event loop running, skip async task creation
+                pass
     
     def optimize_database(self, e):
         """Handle database optimization."""
-        asyncio.create_task(self.action_handlers.optimize_database())
+        # Use page.run_task if available, otherwise check for event loop
+        if hasattr(self.page, 'run_task'):
+            self.page.run_task(self.action_handlers.optimize_database())
+        else:
+            # Check if we're in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                if loop.is_running():
+                    asyncio.create_task(self.action_handlers.optimize_database())
+            except RuntimeError:
+                # No event loop running, skip async task creation
+                pass
     
     def analyze_database(self, e):
         """Handle database analysis."""
-        asyncio.create_task(self.action_handlers.analyze_database())
+        # Use page.run_task if available, otherwise check for event loop
+        if hasattr(self.page, 'run_task'):
+            self.page.run_task(self.action_handlers.analyze_database())
+        else:
+            # Check if we're in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                if loop.is_running():
+                    asyncio.create_task(self.action_handlers.analyze_database())
+            except RuntimeError:
+                # No event loop running, skip async task creation
+                pass
     
     def _show_error(self, message: str):
         """Show error message to user."""

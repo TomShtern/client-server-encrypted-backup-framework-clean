@@ -28,7 +28,7 @@ from flet_server_gui.actions.file_actions import FileActions
 from flet_server_gui.components.base_component import BaseComponent
 from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes, fix_content_clipping, fix_button_clickable_areas, ensure_windowed_compatibility
 
-from flet_server_gui.ui.theme_m3 import TOKENS
+from flet_server_gui.ui.unified_theme_system import TOKENS
 
 
 
@@ -88,8 +88,7 @@ class FilesView(BaseComponent):
             icon=ft.Icons.REFRESH,
             on_click=self._refresh_files,
             style=ft.ButtonStyle(
-                bgcolor=TOKENS['primary'],
-                color=TOKENS['on_primary']
+                # Let theme handle button colors automatically
             )
         )
         
@@ -115,21 +114,21 @@ class FilesView(BaseComponent):
                 "Download Selected",
                 icon=ft.Icons.DOWNLOAD,
                 on_click=self._bulk_download,
-                style=ft.ButtonStyle(bgcolor=TOKENS['surface_variant']),
+                # Let theme handle button colors automatically
                 visible=False
             ),
             ft.ElevatedButton(
                 "Verify Selected",
                 icon=ft.Icons.VERIFIED,
                 on_click=self._bulk_verify,
-                style=ft.ButtonStyle(bgcolor=TOKENS['surface_variant']),
+                # Let theme handle button colors automatically
                 visible=False
             ),
             ft.ElevatedButton(
                 "Delete Selected",
-                icon=ft.Icons.DELETE_FOREVER,
+                icon=ft.Icons.DELETE,
                 on_click=self._bulk_delete,
-                style=ft.ButtonStyle(bgcolor=TOKENS['surface_variant']),
+                # Let theme handle button colors automatically
                 visible=False
             ),
         ], spacing=10)
@@ -222,7 +221,7 @@ class FilesView(BaseComponent):
             # Update status
             if self.status_text:
                 self.status_text.value = f"Loaded {len(files)} files ({len(filtered_files)} shown)"
-                self.status_text.color = TOKENS['secondary']
+                # Let theme handle text color automatically
             
             # Reset selection
             self.selected_files.clear()
@@ -232,20 +231,20 @@ class FilesView(BaseComponent):
         except asyncio.TimeoutError:
             if self.status_text:
                 self.status_text.value = "Timeout loading files. Server may be unresponsive."
-                self.status_text.color = TOKENS['error']
+                # Let theme handle text color automatically
             if self.toast_manager:
                 self.toast_manager.show_error("Server connection timeout")
         except ConnectionError as conn_ex:
             if self.status_text:
                 self.status_text.value = str(conn_ex)
-                self.status_text.color = TOKENS['secondary']
+                # Let theme handle text color automatically
             if self.toast_manager:
                 self.toast_manager.show_warning("Server connection issue")
         except Exception as ex:
             error_msg = f"Error loading files: {str(ex)}"
             if self.status_text:
                 self.status_text.value = error_msg
-                self.status_text.color = TOKENS['error']
+                # Let theme handle text color automatically
             if self.toast_manager:
                 self.toast_manager.show_error(error_msg)
             # Log the full exception for debugging
@@ -268,7 +267,7 @@ class FilesView(BaseComponent):
                 filtered_files = []
                 if self.status_text:
                     self.status_text.value = "No file data available"
-                    self.status_text.color = TOKENS['secondary']
+                    # Let theme handle text color automatically
                 return
             
             # Update table with new filtered data
@@ -281,7 +280,7 @@ class FilesView(BaseComponent):
             if self.status_text:
                 total_files = len(self.filter_manager.all_files)
                 self.status_text.value = f"Showing {len(filtered_files)} of {total_files} files"
-                self.status_text.color = TOKENS['primary']
+                # Let theme handle text color automatically
             
             # Reset selection when filter changes
             self.selected_files.clear()
@@ -298,7 +297,7 @@ class FilesView(BaseComponent):
         except Exception as ex:
             if self.status_text:
                 self.status_text.value = f"Error updating filter: {str(ex)}"
-                self.status_text.color = TOKENS['error']
+                # Let theme handle text color automatically
             # Thread-safe UI update
             if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
                 self.ui_updater.queue_update(lambda: None)

@@ -24,7 +24,7 @@ from typing import Dict, List, Callable, Optional, Any, Union, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 import logging
-from flet_server_gui.ui.theme_m3 import TOKENS
+from flet_server_gui.ui.unified_theme_system import TOKENS
 
 # Configure logging first
 logger = logging.getLogger(__name__)

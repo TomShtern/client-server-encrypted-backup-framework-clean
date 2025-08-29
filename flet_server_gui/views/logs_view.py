@@ -32,8 +32,8 @@ from flet_server_gui.ui.widgets import (
 
 # Layout fixes imports
 from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
-from flet_server_gui.ui.theme_consistency import ThemeConsistencyManager
-from flet_server_gui.ui.theme_m3 import TOKENS
+# Unified theme system - consolidated theme functionality
+from flet_server_gui.ui.unified_theme_system import ThemeConsistencyManager, TOKENS
 
 
 logger = logging.getLogger(__name__)
@@ -58,12 +58,13 @@ class LogsView(BaseComponent):
         self.log_service = LogService()
         self._ui_update_task = None
         
+        # Flag to prevent callbacks during initialization
+        self.initialized = False
+        
         # Initialize action handlers
         self.action_handlers = LogActionHandlers(self.log_service, dialog_system, toast_manager, page)
-        self.initialized = False
         self.action_handlers.set_data_changed_callback(self._refresh_logs)
         self.action_handlers.parent_view = self
-        self.initialized = True
         
         # UI state
         self.auto_scroll = True
@@ -123,6 +124,9 @@ class LogsView(BaseComponent):
         self.search_field = ResponsiveLayoutFixes.create_clipping_safe_container(
             self.search_field
         )
+        
+        # Set initialized flag after everything is set up
+        self.initialized = True
         
         logger.info("✅ Logs view initialized with real log service")
 
@@ -222,7 +226,7 @@ class LogsView(BaseComponent):
                 ft.Divider(),
                 ft.Container(
                     content=self.log_list,
-                    border=ft.border.all(1, TOKENS['outline']),
+                    # Let theme handle border color automatically,
                     border_radius=8,
                     expand=True
                 )
@@ -291,14 +295,14 @@ class LogsView(BaseComponent):
         
         log_row = ft.Container(
             content=ft.Row([
-                ft.Container(content=ft.Text(time_str, size=10, color=TOKENS['outline']), width=60),
-                ft.Container(content=ft.Text(entry.level, size=10, color=level_color, weight=ft.FontWeight.BOLD), width=60),
-                ft.Container(content=ft.Text(entry.component, size=10, color=TOKENS['outline']), width=80),
-                ft.Expanded(child=ft.Text(entry.message, size=12, color=TOKENS['on_surface'], overflow=ft.TextOverflow.ELLIPSIS))
+                ft.Container(content=ft.Text(time_str, size=10), width=60),
+                ft.Container(content=ft.Text(entry.level, size=10, weight=ft.FontWeight.BOLD), width=60),
+                ft.Container(content=ft.Text(entry.component, size=10), width=80),
+                ft.Expanded(child=ft.Text(entry.message, size=12, overflow=ft.TextOverflow.ELLIPSIS))
             ]),
             padding=ft.padding.symmetric(horizontal=8, vertical=2),
             border_radius=4,
-            bgcolor=TOKENS['surface_variant'] if entry.level.upper() in ['WARNING', 'ERROR', 'CRITICAL'] else None,
+            bgcolor=get_status_color("warning") if entry.level.upper() == 'WARNING' else get_status_color("error") if entry.level.upper() in ['ERROR', 'CRITICAL'] else None,
             data=entry.id
         )
         self.log_list.controls.append(log_row)
@@ -319,9 +323,24 @@ class LogsView(BaseComponent):
     
     def _refresh_logs(self, e):
         """Refresh the log display"""
-        if hasattr(self, 'initialized') and self.initialized and \
-           hasattr(self.action_handlers, 'callback_initialized') and self.action_handlers.callback_initialized:
-            asyncio.create_task(self.action_handlers.refresh_logs())
+        # Only refresh if the view is fully initialized
+        if hasattr(self, 'initialized') and self.initialized:
+            try:
+                # Use page.run_task if available, otherwise check for event loop
+                if hasattr(self.page, 'run_task'):
+                    self.page.run_task(self.action_handlers.refresh_logs)
+                else:
+                    # Check if we're in an async context
+                    try:
+                        loop = asyncio.get_running_loop()
+                        if loop.is_running():
+                            asyncio.create_task(self.action_handlers.refresh_logs())
+                    except RuntimeError:
+                        # No event loop running, skip refresh
+                        pass
+            except Exception:
+                # General exception handling
+                pass
     
     def _update_component_filter(self, logs: List[LogEntry]):
         """Update component filter dropdown with available components"""
@@ -340,14 +359,28 @@ class LogsView(BaseComponent):
     
     def _on_filter_changed(self, e):
         """Handle filter changes"""
-        self.filter_level = self.level_filter.value
-        self.filter_component = self.component_filter.value
+        # Check if level_filter and component_filter are properly initialized
+        if hasattr(self.level_filter, 'value'):
+            self.filter_level = self.level_filter.value
+        if hasattr(self.component_filter, 'value'):
+            self.filter_component = self.component_filter.value
         self._refresh_logs(None)
     
     def _on_search_changed(self, e):
         """Handle search query changes"""
         self.search_query = self.search_field.value
-        self.page.run_task(self._delayed_search)
+        # Use page.run_task if available, otherwise check for event loop
+        if hasattr(self.page, 'run_task'):
+            self.page.run_task(self._delayed_search)
+        else:
+            # Check if we're in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                if loop.is_running():
+                    asyncio.create_task(self._delayed_search())
+            except RuntimeError:
+                # No event loop running, skip operation
+                pass
     
     async def _delayed_search(self):
         """Delayed search to avoid excessive updates"""
@@ -377,12 +410,41 @@ class LogsView(BaseComponent):
     
     def _clear_display(self, e):
         """Clear the log display"""
-        asyncio.create_task(self.action_handlers.clear_logs())
+        # Use page.run_task if available, otherwise check for event loop
+        if hasattr(self.page, 'run_task'):
+            self.page.run_task(self.action_handlers.clear_logs)
+        else:
+            # Check if we're in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                if loop.is_running():
+                    asyncio.create_task(self.action_handlers.clear_logs())
+            except RuntimeError:
+                # No event loop running, skip operation
+                pass
     
     def _export_logs(self, e):
         """Export logs to file"""
-        asyncio.create_task(self.action_handlers.export_logs(
-            self.filter_level, 
-            self.filter_component, 
-            self.search_query
-        ))
+        # Use page.run_task if available, otherwise check for event loop
+        if hasattr(self.page, 'run_task'):
+            # Create a wrapper function to pass the parameters
+            async def export_logs_wrapper():
+                await self.action_handlers.export_logs(
+                    self.filter_level, 
+                    self.filter_component, 
+                    self.search_query
+                )
+            self.page.run_task(export_logs_wrapper)
+        else:
+            # Check if we're in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                if loop.is_running():
+                    asyncio.create_task(self.action_handlers.export_logs(
+                        self.filter_level, 
+                        self.filter_component, 
+                        self.search_query
+                    ))
+            except RuntimeError:
+                # No event loop running, skip operation
+                pass

@@ -25,7 +25,7 @@ Usage:
 """
 
 import flet as ft
-from typing import Dict, Optional, Tuple, Any
+from typing import Dict, Optional, Tuple, Any, Callable
 from enum import Enum
 from functools import lru_cache
 import threading
@@ -607,6 +607,72 @@ class LegacyColorReplacements:
     def PRIMARY(theme_mode: Optional[str] = None) -> str:
         """Replace ft.Colors.PRIMARY with semantic primary color"""
         return get_status_color("primary", theme_mode)
+    
+    @staticmethod
+    def SECONDARY(theme_mode: Optional[str] = None) -> str:
+        """Replace TOKENS['secondary'] with semantic secondary color"""
+        return get_status_color("secondary", theme_mode)
+    
+    @staticmethod
+    def OUTLINE(theme_mode: Optional[str] = None) -> str:
+        """Replace TOKENS['outline'] with semantic outline color"""
+        return get_border_color("default", theme_mode)
+    
+    @staticmethod
+    def ON_SURFACE(theme_mode: Optional[str] = None) -> str:
+        """Replace TOKENS['on_surface'] with semantic text color"""
+        return get_text_color("default", theme_mode)
+    
+    @staticmethod
+    def SURFACE_VARIANT(theme_mode: Optional[str] = None) -> str:
+        """Replace TOKENS['surface_variant'] with semantic surface variant color"""
+        return get_surface_color("variant", theme_mode)
+
+
+# Theme-Aware TOKENS Replacement
+# This provides a drop-in replacement for the static TOKENS dictionary
+# Usage: THEME_TOKENS('primary') instead of TOKENS['primary']
+def get_theme_aware_tokens(theme_mode: Optional[str] = None) -> Dict[str, Callable]:
+    """
+    Get theme-aware token functions that return colors based on current theme.
+    Usage: get_theme_aware_tokens(theme_mode)['primary']() instead of TOKENS['primary']
+    """
+    return {
+        'primary': lambda: LegacyColorReplacements.PRIMARY(theme_mode),
+        'secondary': lambda: LegacyColorReplacements.SECONDARY(theme_mode),
+        'outline': lambda: LegacyColorReplacements.OUTLINE(theme_mode),
+        'on_surface': lambda: LegacyColorReplacements.ON_SURFACE(theme_mode),
+        'surface_variant': lambda: LegacyColorReplacements.SURFACE_VARIANT(theme_mode),
+        'on_primary': lambda: get_status_color("on_primary", theme_mode),
+        'on_secondary': lambda: get_status_color("on_secondary", theme_mode),
+        'tertiary': lambda: get_status_color("tertiary", theme_mode),
+        'on_tertiary': lambda: get_status_color("on_tertiary", theme_mode),
+        'container': lambda: get_surface_color("container", theme_mode),
+        'on_container': lambda: get_text_color("on_container", theme_mode),
+        'surface': lambda: get_surface_color("default", theme_mode),
+        'background': lambda: get_surface_color("background", theme_mode),
+        'on_background': lambda: get_text_color("on_background", theme_mode),
+        'error': lambda: get_status_color("error", theme_mode),
+        'on_error': lambda: get_status_color("on_error", theme_mode),
+        # Special handling for gradient (returns list)
+        'primary_gradient': lambda: ["#A8CBF3", "#7C5CD9"],
+        # Special handling for dark surface
+        'surface_dark': lambda: "#0F1720",
+    }
+
+
+# Convenience function for backward compatibility
+def THEME_TOKENS(key: str, theme_mode: Optional[str] = None) -> str:
+    """
+    Drop-in replacement for TOKENS[key] that returns theme-aware colors.
+    Usage: THEME_TOKENS('primary') instead of TOKENS['primary']
+    """
+    tokens = get_theme_aware_tokens(theme_mode)
+    if key in tokens:
+        return tokens[key]()
+    # Fallback to original TOKENS for unknown keys
+    from ui.unified_theme_system import TOKENS
+    return TOKENS.get(key, "#000000")
     
     @staticmethod
     def get_button_color(state: str = "default", theme_mode: Optional[str] = None) -> str:

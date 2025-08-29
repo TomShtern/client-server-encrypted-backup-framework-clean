@@ -15,7 +15,7 @@ ui_path = os.path.join(project_root, "ui")
 sys.path.insert(0, ui_path)
 
 try:
-    from theme_m3 import TOKENS, create_theme, linear_gradient
+    from flet_server_gui.ui.unified_theme_system import TOKENS, create_theme, linear_gradient
     THEME_AVAILABLE = True
 except ImportError:
     THEME_AVAILABLE = False

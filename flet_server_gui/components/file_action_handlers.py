@@ -162,7 +162,18 @@ class FileActionHandlers:
         """Delete a file with confirmation"""
         def confirm_delete():
             self._close_dialog()
-            asyncio.create_task(self._perform_delete(filename))
+            # Use page.run_task if available, otherwise check for event loop
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(self._perform_delete(filename))
+            else:
+                # Check if we're in an async context
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self._perform_delete(filename))
+                except RuntimeError:
+                    # No event loop running, skip async task creation
+                    pass
         
         # Show confirmation dialog
         await self._show_confirmation_dialog(
@@ -206,7 +217,7 @@ class FileActionHandlers:
                 title=f"File Details: {filename}",
                 content=details_content,
                 actions=[
-                    ft.TextButton("Download", on_click=lambda e: asyncio.create_task(self._download_from_dialog(filename))),
+                    ft.TextButton("Download", on_click=lambda e: self._safe_async_task(self._download_from_dialog(filename))),
                     ft.TextButton("Close", on_click=lambda e: self._close_dialog())
                 ]
             )
@@ -265,7 +276,18 @@ class FileActionHandlers:
         """Download multiple files"""
         def confirm_bulk_download():
             self._close_dialog()
-            asyncio.create_task(self._perform_bulk_download(filenames))
+            # Use page.run_task if available, otherwise check for event loop
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(self._perform_bulk_download(filenames))
+            else:
+                # Check if we're in an async context
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self._perform_bulk_download(filenames))
+                except RuntimeError:
+                    # No event loop running, skip async task creation
+                    pass
         
         await self._show_confirmation_dialog(
             title="Confirm Bulk Download",
@@ -313,7 +335,18 @@ class FileActionHandlers:
         """Verify multiple files"""
         def confirm_bulk_verify():
             self._close_dialog()
-            asyncio.create_task(self._perform_bulk_verify(filenames))
+            # Use page.run_task if available, otherwise check for event loop
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(self._perform_bulk_verify(filenames))
+            else:
+                # Check if we're in an async context
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self._perform_bulk_verify(filenames))
+                except RuntimeError:
+                    # No event loop running, skip async task creation
+                    pass
         
         await self._show_confirmation_dialog(
             title="Confirm Bulk Verification",
@@ -360,7 +393,18 @@ class FileActionHandlers:
         """Delete multiple files"""
         def confirm_bulk_delete():
             self._close_dialog()
-            asyncio.create_task(self._perform_bulk_delete(filenames))
+            # Use page.run_task if available, otherwise check for event loop
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(self._perform_bulk_delete(filenames))
+            else:
+                # Check if we're in an async context
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self._perform_bulk_delete(filenames))
+                except RuntimeError:
+                    # No event loop running, skip async task creation
+                    pass
         
         await self._show_confirmation_dialog(
             title="⚠️ Confirm Bulk Delete",
@@ -433,3 +477,18 @@ class FileActionHandlers:
             if self.dialog_system.current_dialog:
                 self.dialog_system.current_dialog.open = False
                 self.page.update()
+    
+    def _safe_async_task(self, coro):
+        """Safely create an async task with proper error handling"""
+        # Use page.run_task if available, otherwise check for event loop
+        if hasattr(self.page, 'run_task'):
+            self.page.run_task(coro)
+        else:
+            # Check if we're in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                if loop.is_running():
+                    asyncio.create_task(coro)
+            except RuntimeError:
+                # No event loop running, skip async task creation
+                pass

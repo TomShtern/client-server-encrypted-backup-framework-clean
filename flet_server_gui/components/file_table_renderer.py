@@ -9,7 +9,7 @@ import sys
 import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from flet_server_gui.ui.theme_m3 import TOKENS
+from flet_server_gui.ui.unified_theme_system import TOKENS
 
 # Add project root to path for imports
 project_root = os.path.join(os.path.dirname(__file__), "..", "..")

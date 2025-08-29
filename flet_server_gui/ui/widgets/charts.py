@@ -18,7 +18,7 @@ from typing import Dict, List, Any, Optional, Tuple, Union
 from collections import deque
 from dataclasses import dataclass, asdict
 import logging
-from flet_server_gui.ui.theme_m3 import TOKENS
+from flet_server_gui.ui.unified_theme_system import TOKENS
 
 logger = logging.getLogger(__name__)
 

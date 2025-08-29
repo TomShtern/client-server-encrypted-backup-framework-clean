@@ -13,7 +13,7 @@ from typing import Optional, Callable, List, Dict, Any
 from ...components.enhanced_components import (
     EnhancedCard
 )
-from flet_server_gui.ui.theme_m3 import TOKENS
+from flet_server_gui.ui.unified_theme_system import TOKENS
 from ..dialogs import ToastManager
 
 

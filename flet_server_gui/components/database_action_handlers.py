@@ -30,7 +30,18 @@ class DatabaseActionHandlers:
         """Backup database with confirmation"""
         def confirm_backup():
             self._close_dialog()
-            asyncio.create_task(self._perform_backup())
+            # Use page.run_task if available, otherwise check for event loop
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(self._perform_backup())
+            else:
+                # Check if we're in an async context
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self._perform_backup())
+                except RuntimeError:
+                    # No event loop running, skip async task creation
+                    pass
         
         # Show confirmation dialog
         if self.dialog_system:
@@ -80,7 +91,18 @@ class DatabaseActionHandlers:
         """Optimize database with confirmation"""
         def confirm_optimize():
             self._close_dialog()
-            asyncio.create_task(self._perform_optimize())
+            # Use page.run_task if available, otherwise check for event loop
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(self._perform_optimize())
+            else:
+                # Check if we're in an async context
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self._perform_optimize())
+                except RuntimeError:
+                    # No event loop running, skip async task creation
+                    pass
         
         # Show confirmation dialog
         if self.dialog_system:
@@ -133,7 +155,18 @@ class DatabaseActionHandlers:
         """Analyze database with confirmation"""
         def confirm_analyze():
             self._close_dialog()
-            asyncio.create_task(self._perform_analyze())
+            # Use page.run_task if available, otherwise check for event loop
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(self._perform_analyze())
+            else:
+                # Check if we're in an async context
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self._perform_analyze())
+                except RuntimeError:
+                    # No event loop running, skip async task creation
+                    pass
         
         # Show confirmation dialog
         if self.dialog_system:

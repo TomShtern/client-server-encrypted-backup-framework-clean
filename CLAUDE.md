@@ -18,10 +18,16 @@ A **5-layer Client-Server Encrypted Backup Framework** implementing secure file 
 ## Core Technical Implementation
 
 ### Critical Integration Pattern
+**Flask API Bridge as Coordination Hub**: The Flask API Bridge (`cyberbackup_api_server.py` + `real_backup_executor.py`) is the central coordination hub. Web UI communicates ONLY with Flask API, never directly with C++ client or Python server.
+
 **RealBackupExecutor** manages subprocess execution:
 1. Generate `transfer.info` (3 lines: `server:port`, `username`, `filepath`)
 2. Launch C++ client: `subprocess.Popen([client_exe, "--batch"], cwd=working_dir)`
 3. **FileReceiptProgressTracker** watches `received_files/` for ground truth completion
+
+### Architecture Flow Patterns
+**Web Client Path**: `Web UI → Flask API Bridge → C++ Client (subprocess) → Python Server`
+**Direct Client Path**: `C++ Client → Python Server` (both clients connect to same server via different pathways)
 
 ### Multi-Layer Progress Monitoring
 - **Layer 0**: FileReceiptProgressTracker - File appears → immediate 100% (HIGHEST PRIORITY)
@@ -66,15 +72,29 @@ pip install -r requirements.txt  # Critical: flask-cors, flask-socketio, watchdo
 netstat -an | findstr ":9090\\|:1256"  # Both ports LISTENING
 dir "received_files"                  # Check actual transferred files
 
+# Code Quality & Linting
+pyright .                           # Type checking (configured in pyproject.toml)
+# Recommended additional linting tools:
+# pip install ruff pylint mypy
+# ruff check .                      # Fast Python linter
+# pylint **/*.py                    # Comprehensive linting
+# mypy .                           # Advanced type checking
+
 # Testing (test complete web→API→C++→server chain)
+python scripts/testing/master_test_suite.py  # Comprehensive suite (72+ scenarios) - PRIMARY TEST
 python tests/test_gui_upload.py              # Full integration test
-python scripts/testing/master_test_suite.py  # Comprehensive suite (72+ scenarios)
-python scripts/testing/quick_validation.py   # Quick system validation
-python scripts/test_emoji_support.py         # Unicode/emoji support
 python tests/integration/run_integration_tests.py # Complete integration suite
+python scripts/testing/quick_validation.py   # Quick system validation
+python scripts/test_system_working.py        # System validation
+python scripts/test_emoji_support.py         # Unicode/emoji support
 python tests/debug_file_transfer.py          # Debug transfer issues
 python tests/focused_boundary_test.py        # Boundary condition testing
 python tests/test_performance_flow.py        # Performance benchmarking
+
+# Validation Scripts
+python scripts/testing/validate_null_check_fixes.py  # Null check validation
+python scripts/testing/validate_server_gui.py        # GUI validation
+python scripts/fix_and_test.py                       # Quick system validation
 
 # System Maintenance & Diagnostics
 python scripts/check_dependencies.py   # Verify all dependencies
@@ -104,7 +124,9 @@ result = subprocess.run([exe, "--batch"], capture_output=True)  # Hebrew+emoji w
 - **transfer.info**: Exactly 3 lines: `server:port`, `username`, `filepath`
 - **--batch flag**: CRITICAL for subprocess execution (prevents hanging)
 - **vcpkg toolchain**: Required for C++ builds (boost, cryptopp, zlib, sentry-native)
-- **Dependencies**: flask-cors, flask-socketio, watchdog, sentry-sdk, psutil
+- **Python Dependencies**: See `requirements.txt` - Critical: flask-cors, flask-socketio, watchdog, sentry-sdk, psutil
+- **Development Environment**: Python 3.13+, CMake 3.15+, vcpkg for C++ dependencies
+- **Virtual Environments**: `flet_venv` for Flet GUI development
 
 ### Integration Patterns
 ```python
@@ -138,7 +160,7 @@ verify_file_in_received_files_dir()  # PRIMARY verification
 **Example**: A "simple" client management component might contain useful date formatting functions or error message templates that the "comprehensive" version lacks.
 
 ### Security Vulnerabilities (Active Issues)
-- **Static IV**: Zero IV allows pattern analysis (HIGH PRIORITY)
+- **Static IV**: Zero IV allows pattern analysis (LOW PRIORITY)
 - **No HMAC**: CRC32 provides no tampering protection (MEDIUM PRIORITY) 
 - **Deterministic encryption**: Same plaintext produces same ciphertext
 
@@ -275,101 +297,12 @@ ft.ResponsiveRow([
 ft.Container(width=350, height=400)  # Causes clipping/cramming
 ```
 
-### Flet Architecture & Key Components ✅ CONSOLIDATED (2025-08-26)
-**STATUS: PRODUCTION READY** - Successfully consolidated from 60+ fragmented files to organized structure
+### Flet Architecture & Key Components ✅ CONSOLIDATED
+**STATUS: PRODUCTION READY** - Modern Flet-based Material Design 3 GUI with organized modular structure
 
-```
-flet_server_gui/
-├── main.py                    # ✅ Main application with Material Design 3 theme
-├── launch_flet_gui.py         # ✅ Easy launcher with error handling
-├── core/                      # ✅ Business logic & data operations (NEW)
-│   ├── server_operations.py   # Server lifecycle management & async operations
-│   ├── client_management.py   # Complete client CRUD operations & bulk processing
-│   ├── file_management.py     # File lifecycle & integrity verification
-│   └── system_integration.py  # Advanced system tools & monitoring
-├── ui/                        # ✅ Pure UI components & rendering (NEW)
-│   ├── theme.py               # Material Design 3 theme & styling system
-│   ├── navigation.py          # App navigation & routing with history
-│   ├── dialogs.py             # Dialog systems & toast notifications
-│   └── widgets/               # Consolidated UI widget system
-│       ├── buttons.py         # Button factory & configurations (564 lines)
-│       ├── cards.py           # Status cards & displays (676 lines) 
-│       ├── tables.py          # Enhanced data tables with filtering/sorting
-│       ├── charts.py          # Performance monitoring charts
-│       ├── file_preview.py    # File preview components
-│       └── widgets.py         # Dashboard widgets with enhanced interactions
-├── views/                     # ✅ Full-screen application views (NEW)
-│   ├── dashboard.py           # Main dashboard view
-│   ├── clients.py             # Client management view
-│   ├── files.py               # File management view
-│   ├── database.py            # Database browser view
-│   ├── analytics.py           # Analytics & charts view
-│   ├── settings_view.py       # ✅ Comprehensive settings UI
-│   └── logs_view.py           # ✅ Real-time log viewer
-├── services/                  # ✅ Background services & utilities (NEW)
-│   ├── configuration.py       # Settings management & persistence
-│   ├── monitoring.py          # Log monitoring & system tracking
-│   └── data_export.py         # Export/import functionality
-├── utils/                     # ✅ Pure utility functions
-│   ├── server_bridge.py       # ✅ Complete server integration
-│   ├── settings_manager.py    # ✅ Real configuration management
-│   ├── helpers.py             # General utility functions
-│   └── motion_utils.py        # Animation & motion utilities
-└── components/                # ✅ Remaining specialized components (16 files)
-    ├── control_panel_card.py  # Start/stop/restart controls
-    ├── quick_actions.py       # Quick actions component used in main.py
-    └── [14 other specialized components]
-```
+**Launch**: `python launch_flet_gui.py` (requires `flet_venv` virtual environment)  
+**Features**: Enterprise architecture, real data integration, UTF-8 support, responsive design
 
-### Consolidation Benefits Achieved ✅
-- **40% File Reduction**: From 60+ fragmented files to organized structure
-- **UTF-8 Integration**: International filename support across all entry points
-- **Import Clarity**: All absolute imports working (`from flet_server_gui.core.client_management import ClientManagement`)
-- **Zero Regression**: Full compatibility with existing 5-layer backup framework
-- **Production Ready**: All imports tested and verified working
-
-### Key Features
-- **Enterprise Architecture**: Professional modular design with clean separation of concerns
-- **Native Material Design 3**: Built-in components, perfect text rendering (chosen over KivyMD due to text stacking issues)
-- **Real Data Integration**: Direct DatabaseManager connection (17 clients, 14 files), zero mock/simulation code
-- **Complete Functionality**: Server operations, analytics, file integrity, session management
-- **Responsive Design**: Native ResponsiveRow + expand=True eliminates clipping/cramming issues
-
-### Setup & Launch
-```bash
-# Setup (one-time)
-python -m venv flet_venv
-powershell -Command ".\flet_venv\Scripts\Activate.ps1"
-pip install flet
-
-# Launch
-python launch_flet_gui.py          # Desktop application  
-python launch_flet_gui.py --web    # Web browser version
-```
-
-### Import Patterns ✅ NEW CONSOLIDATED STRUCTURE
-```python
-# ✅ CORRECT Import Patterns (Post-Consolidation):
-from flet_server_gui.main import ServerGUIApp
-from flet_server_gui.core.client_management import ClientManagement, ClientData
-from flet_server_gui.core.file_management import FileData
-from flet_server_gui.core.server_operations import ServerOperations
-from flet_server_gui.ui.widgets.cards import ServerStatusCard, ClientStatsCard, ActivityLogCard
-from flet_server_gui.ui.widgets.buttons import ActionButtonFactory, ButtonConfig
-from flet_server_gui.ui.widgets.tables import EnhancedDataTable
-from flet_server_gui.ui.widgets.charts import EnhancedPerformanceCharts
-from flet_server_gui.ui.navigation import NavigationManager, Router
-from flet_server_gui.ui.dialogs import DialogSystem, ToastManager
-from flet_server_gui.views.dashboard import DashboardView
-from flet_server_gui.views.clients import ClientsView
-from flet_server_gui.views.settings_view import SettingsView
-from flet_server_gui.views.logs_view import LogsView
-
-# ❌ OLD Import Patterns (No Longer Valid - Removed in Consolidation):
-# from flet_server_gui.components.client_stats_card import ClientStatsCard
-# from flet_server_gui.components.comprehensive_client_management import ...
-# from flet_server_gui.components.enhanced_table_components import ...
-```
 
 ### **Button Handler Implementation Pattern**
 ```python
@@ -388,33 +321,7 @@ async def _on_start_server(self, e):
         self.add_log_entry("System", f"Start error: {str(ex)}", "ERROR")
 ```
 
-### **UTF-8 Integration - COMPLETE**
-```python
-# ✅ UTF-8 solution active in all entry points:
-try:
-    import Shared.utils.utf8_solution
-    print("[UTF-8] UTF-8 solution imported successfully")
-except ImportError:
-    print("[WARNING] UTF-8 solution not available")
 
-# Safe printing function for console output:
-def safe_print(message: str):
-    try:
-        print(message)
-    except UnicodeEncodeError:
-        clean_msg = ''.join(char if ord(char) < 128 else '?' for char in message)
-        print(clean_msg)
-```
-
-### **Validation and Testing**
-```bash
-# ✅ COMPREHENSIVE VALIDATION AVAILABLE:
-python validate_gui_functionality.py  # Tests all imports, API compatibility, functionality
-python minimal_flet_test.py          # Basic Flet functionality test
-
-# ✅ PRODUCTION LAUNCH:
-python launch_flet_gui.py            # Fully operational Material Design 3 GUI
-```
 
 ## System Recovery & Troubleshooting
 ```bash
@@ -431,20 +338,14 @@ netstat -an | findstr ":9090\\|:1256"
 **Solution**: CallbackMultiplexer routes progress to correct job handlers, eliminates race conditions  
 **FileReceiptProgressTracker**: Monitors `received_files/` for ground truth completion with watchdog library
 
-## Current Implementation Status (2025-08-25)
+## Current Implementation Status
 
 **✅ Fully Operational System**:
 - **5-layer architecture**: Complete Web UI → Flask API → C++ Client → Python Server → File Storage  
 - **72+ successful transfers**: Production evidence in `received_files/`
-- **Enterprise Flet GUI**: Material Design 3 server management with real data integration (17 clients, 14 files)
-- **Zero mock data**: 100% real server operations, database connections, file system integration
-
-**Key Technical Achievements**:
-- **Thread-safe UI**: Fixed async/threading issues, proper background→main thread patterns
-- **Responsive design**: Native Flet ResponsiveRow + expand=True eliminates layout issues  
-- **API compatibility**: All Flet API naming inconsistencies resolved
-- **Race condition fixes**: CallbackMultiplexer eliminates progress tracking conflicts
+- **Enterprise Flet GUI**: Material Design 3 server management with real data integration
 - **UTF-8 support**: Complete Unicode filename handling (Hebrew + emoji)
+- **Thread-safe UI**: Resolved async/threading issues and race condition fixes
 
 ## Documentation & Project Evidence
 - **`TECHNICAL_DIAGRAMS.md`**: Architecture diagrams  
@@ -452,5 +353,30 @@ netstat -an | findstr ":9090\\|:1256"
 - **`refactoring_report.md`**: Refactoring and technical debt analysis
 - **`Shared/unified_monitor.py`**: Unified file monitoring system
 - **Virtual Environment**: `flet_venv` - Primary for Flet GUI
+
+## Git Workflow & Branching
+
+### Branch Structure
+- **Main branch**: `12_06_2025_checkpoint` (use for pull requests)
+- **Current branch**: `clean-main` (active development)
+- **Files with uncommitted changes**: 
+  - `flet_server_gui/components/client_table_renderer.py`
+  - `flet_server_gui/components/log_action_handlers.py` 
+  - `flet_server_gui/views/clients.py`
+  - `flet_server_gui/views/logs_view.py`
+
+### Git Commands
+```bash
+# Check current status and branch
+git status
+git branch
+
+# Commit workflow
+git add .
+git commit -m "descriptive message"
+
+# Create pull requests to main branch
+git checkout 12_06_2025_checkpoint  # Switch to main branch for PRs
+```
 
 **Note**: Follow the "Redundant File Analysis Protocol" section before deleting any files - valuable utilities often hidden in "simple" components.

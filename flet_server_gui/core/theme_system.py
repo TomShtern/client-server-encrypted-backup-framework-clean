@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from enum import Enum
 import json
 import logging
-from flet_server_gui.ui.theme_m3 import TOKENS
+from ui.unified_theme_system import TOKENS
 
 # Configure logging
 logger = logging.getLogger(__name__)

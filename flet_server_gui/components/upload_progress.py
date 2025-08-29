@@ -7,7 +7,7 @@ Material Design 3 component for visualizing file upload progress with enhanced U
 import flet as ft
 from typing import List, Dict, Optional, Callable
 import asyncio
-from flet_server_gui.ui.theme_m3 import TOKENS
+from flet_server_gui.ui.unified_theme_system import TOKENS
 from flet_server_gui.components.enhanced_components import (
     EnhancedCard,
     CircularProgressIndicator,

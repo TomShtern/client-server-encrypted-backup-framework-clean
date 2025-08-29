@@ -8,7 +8,7 @@ UI: Navigation rail, routing controls
 import flet as ft
 from typing import Callable, Dict, Any, Optional, List
 from enum import Enum
-from flet_server_gui.ui.theme_m3 import TOKENS
+from flet_server_gui.ui.unified_theme_system import TOKENS
 
 # ============================================================================
 # NAVIGATION DEFINITIONS
@@ -118,9 +118,9 @@ class NavigationManager:
             
             if item.get("badge_count", 0) > 0:
                 # Use Row for better clickable area instead of Stack
+                # Use theme-aware colors that will adapt to light/dark mode
                 badge = ft.Container(
-                    content=ft.Text(str(item["badge_count"]), size=10, color=TOKENS['on_error']),
-                    bgcolor=TOKENS['error'],
+                    content=ft.Text(str(item["badge_count"]), size=10),
                     border_radius=8,
                     alignment=ft.alignment.center
                 )
@@ -173,7 +173,7 @@ class NavigationManager:
         """Create header for extended navigation rail."""
         return ft.Container(
             content=ft.Column([
-                ft.Icon(ft.Icons.CLOUD_SYNC, size=32, color=TOKENS['primary']),
+                ft.Icon(ft.Icons.CLOUD_SYNC, size=32),
                 ft.Text("Backup Server", size=12, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
             padding=ft.Padding(16, 16, 16, 8)

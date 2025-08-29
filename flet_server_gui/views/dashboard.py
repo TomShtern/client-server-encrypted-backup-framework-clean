@@ -17,7 +17,8 @@ from flet_server_gui.components.base_component import BaseComponent
 from flet_server_gui.core.semantic_colors import get_status_color
 from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes, fix_content_clipping, fix_button_clickable_areas, ensure_windowed_compatibility
 
-from flet_server_gui.ui.theme_m3 import TOKENS
+# Unified theme system - consolidated theme functionality
+from flet_server_gui.ui.unified_theme_system import TOKENS
 
 
 class DashboardView(BaseComponent):
@@ -192,7 +193,7 @@ class DashboardView(BaseComponent):
                 expand=False
             ),
             elevation=2,
-            surface_tint_color=TOKENS['primary'],
+            # Let theme handle surface tint color automatically,
             margin=ft.margin.all(0)
         )
     
@@ -232,7 +233,7 @@ class DashboardView(BaseComponent):
                 expand=False
             ),
             elevation=2,
-            surface_tint_color=TOKENS['primary'],
+            # Let theme handle surface tint color automatically,
             margin=ft.margin.all(0)
         )
     
@@ -255,7 +256,7 @@ class DashboardView(BaseComponent):
                                             ft.Text("Start", weight=ft.FontWeight.W_500)
                                         ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
                                         bgcolor=get_status_color("success"),
-                                        color=TOKENS['background'],
+                                        # Let theme handle text color automatically,
                                         on_click=self._on_start_server
                                     ),
                                     col={"sm": 12, "md": 6},
@@ -269,7 +270,7 @@ class DashboardView(BaseComponent):
                                             ft.Text("Stop", weight=ft.FontWeight.W_500)
                                         ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
                                         bgcolor=get_status_color("error"),
-                                        color=TOKENS['background'],
+                                        # Let theme handle text color automatically,
                                         on_click=self._on_stop_server
                                     ),
                                     col={"sm": 12, "md": 6},
@@ -326,7 +327,7 @@ class DashboardView(BaseComponent):
                 expand=False
             ),
             elevation=2,
-            surface_tint_color=TOKENS['primary'],
+            # Let theme handle surface tint color automatically,
             margin=ft.margin.all(0)
         )
     
@@ -421,7 +422,7 @@ class DashboardView(BaseComponent):
                     ]),
                     height=180,  # Flexible height
                     border_radius=8,
-                    border=ft.border.all(1, TOKENS['outline'])
+                    # Let theme handle border color automatically
                 ),
                 # Chart legend
                 ft.Row([
@@ -497,8 +498,8 @@ class DashboardView(BaseComponent):
                         expand=True,  # Let it flex with the card
                         padding=ft.padding.all(8),
                         border_radius=8,
-                        bgcolor=TOKENS['surface_variant'],
-                        border=ft.border.all(1, TOKENS['outline'])
+                        # Let theme handle background color
+                        # Let theme handle border color
                     )
                 ], spacing=16, expand=True),
                 padding=ft.padding.all(20),
@@ -803,7 +804,18 @@ class DashboardView(BaseComponent):
                 
             # Update server status via server_bridge
             if self.server_bridge:
-                asyncio.create_task(self._async_update_server_status())
+                # Use page.run_task if available, otherwise check for event loop
+                if hasattr(self.page, 'run_task'):
+                    self.page.run_task(self._async_update_server_status())
+                else:
+                    # Check if we're in an async context
+                    try:
+                        loop = asyncio.get_running_loop()
+                        if loop.is_running():
+                            asyncio.create_task(self._async_update_server_status())
+                    except RuntimeError:
+                        # No event loop running, skip async task creation
+                        pass
                 
         except Exception as e:
             self.add_log_entry("System", f"Error updating data: {str(e)}", "ERROR")

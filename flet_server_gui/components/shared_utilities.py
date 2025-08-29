@@ -7,7 +7,7 @@ Common utility functions used across multiple components.
 import flet as ft
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from flet_server_gui.ui.theme_m3 import TOKENS
+from flet_server_gui.ui.unified_theme_system import TOKENS
 
 
 class FormatUtils:

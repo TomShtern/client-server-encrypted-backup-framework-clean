@@ -11,7 +11,7 @@ import flet as ft
 from flet_server_gui.ui.widgets.status_pill import StatusPill, ServerStatus, create_hero_status_pill
 from flet_server_gui.ui.widgets.notifications_panel import NotificationsPanel, create_notification, NotificationType, NotificationPriority
 from flet_server_gui.ui.widgets.activity_log_dialog import ActivityLogDialog, create_activity_entry, ActivityLevel, ActivityCategory
-from flet_server_gui.ui.theme_m3 import TOKENS
+from flet_server_gui.ui.unified_theme_system import TOKENS
 
 
 def main(page: ft.Page):

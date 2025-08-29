@@ -113,7 +113,18 @@ class ClientActionHandlers:
         """Disconnect a client from the server"""
         def confirm_disconnect():
             self._close_dialog()
-            asyncio.create_task(self._perform_disconnect(client_id))
+            # Use page.run_task if available, otherwise check for event loop
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(self._perform_disconnect(client_id))
+            else:
+                # Check if we're in an async context
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self._perform_disconnect(client_id))
+                except RuntimeError:
+                    # No event loop running, skip async task creation
+                    pass
         
         # Show confirmation dialog
         await self._show_confirmation_dialog(
@@ -143,7 +154,18 @@ class ClientActionHandlers:
         """Delete a client and all associated data"""
         def confirm_delete():
             self._close_dialog()
-            asyncio.create_task(self._perform_delete(client_id))
+            # Use page.run_task if available, otherwise check for event loop
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(self._perform_delete(client_id))
+            else:
+                # Check if we're in an async context
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self._perform_delete(client_id))
+                except RuntimeError:
+                    # No event loop running, skip async task creation
+                    pass
         
         # Show confirmation dialog with warning
         await self._show_confirmation_dialog(
@@ -214,7 +236,18 @@ class ClientActionHandlers:
         """Disconnect multiple clients"""
         def confirm_bulk_disconnect():
             self._close_dialog()
-            asyncio.create_task(self._perform_bulk_disconnect(client_ids))
+            # Use page.run_task if available, otherwise check for event loop
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(self._perform_bulk_disconnect(client_ids))
+            else:
+                # Check if we're in an async context
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self._perform_bulk_disconnect(client_ids))
+                except RuntimeError:
+                    # No event loop running, skip async task creation
+                    pass
         
         await self._show_confirmation_dialog(
             title="Confirm Bulk Disconnect",
@@ -241,7 +274,18 @@ class ClientActionHandlers:
         """Delete multiple clients"""
         def confirm_bulk_delete():
             self._close_dialog()
-            asyncio.create_task(self._perform_bulk_delete(client_ids))
+            # Use page.run_task if available, otherwise check for event loop
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(self._perform_bulk_delete(client_ids))
+            else:
+                # Check if we're in an async context
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self._perform_bulk_delete(client_ids))
+                except RuntimeError:
+                    # No event loop running, skip async task creation
+                    pass
         
         await self._show_confirmation_dialog(
             title="⚠️ Confirm Bulk Delete",

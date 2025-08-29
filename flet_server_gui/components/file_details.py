@@ -7,7 +7,8 @@ Material Design 3 component for detailed file information with enhanced UI.
 import flet as ft
 from typing import Dict, Optional, Callable
 import os
-from flet_server_gui.ui.theme_m3 import TOKENS
+# Unified theme system - consolidated theme functionality
+from flet_server_gui.ui.unified_theme_system import TOKENS
 from flet_server_gui.components.enhanced_components import (
     EnhancedCard,
     create_enhanced_button,

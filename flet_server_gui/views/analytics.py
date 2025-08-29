@@ -27,8 +27,8 @@ from flet_server_gui.ui.widgets import (
 
 # Layout fixes imports
 from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
-from flet_server_gui.ui.theme_consistency import ThemeConsistencyManager, apply_theme_consistency
-from flet_server_gui.ui.theme_m3 import TOKENS
+# Unified theme system - consolidated theme functionality
+from flet_server_gui.ui.unified_theme_system import ThemeConsistencyManager, apply_theme_consistency, TOKENS
 
 
 class AnalyticsView(BaseComponent):
@@ -93,7 +93,7 @@ class AnalyticsView(BaseComponent):
                 ft.Card(
                     content=ft.Container(
                         content=ft.Column([
-                            ft.Icon(ft.Icons.WARNING_AMBER, size=48),
+                            ft.Icon(ft.Icons.WARNING_AMBER, size=48, color=TOKENS['secondary']),
                             ft.Text("Server Connection Required", style=ft.TextThemeStyle.HEADLINE_SMALL),
                             ft.Text("Analytics requires an active server connection to display real-time performance data.",
                                    style=ft.TextThemeStyle.BODY_MEDIUM, text_align=ft.TextAlign.CENTER),
@@ -174,7 +174,7 @@ class AnalyticsView(BaseComponent):
             ], spacing=8),
             padding=16,
             border_radius=8,
-            bgcolor=TOKENS['surface_variant']
+            # Let theme handle background color automatically
         )
     
     def _build_historical_trends(self) -> ft.Container:
@@ -192,7 +192,7 @@ class AnalyticsView(BaseComponent):
             ], spacing=12),
             padding=16,
             border_radius=8,
-            bgcolor=TOKENS['surface_variant'],
+            # Let theme handle background color automatically,
             margin=ft.margin.only(top=16)
         )
     
@@ -206,7 +206,6 @@ class AnalyticsView(BaseComponent):
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
             padding=12,
             border_radius=6,
-            bgcolor=TOKENS['surface'],
             expand=True
         )
     
@@ -232,7 +231,7 @@ class AnalyticsView(BaseComponent):
             ], spacing=8),
             padding=16,
             border_radius=8,
-            border=ft.border.all(1, TOKENS['outline']),
+            # Let theme handle border color automatically,
             margin=ft.margin.only(top=16)
         )
     
