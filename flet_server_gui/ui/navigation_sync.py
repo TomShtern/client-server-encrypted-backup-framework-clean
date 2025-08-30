@@ -278,7 +278,7 @@ class NavigationSyncManager:
         try:
             callbacks = self.navigation_callbacks.get(event_type, [])
             results = []
-            
+
             for callback in callbacks:
                 try:
                     if asyncio.iscoroutinefunction(callback):
@@ -289,13 +289,13 @@ class NavigationSyncManager:
                 except Exception as e:
                     self.logger.error(f"Navigation callback error: {e}")
                     results.append(False)  # Callback failure blocks navigation
-            
+
             # For guard events, all callbacks must return True/None
-            if event_type in ["before_navigate"]:
+            if event_type in {"before_navigate"}:
                 return all(result is not False for result in results)
-            
+
             return True
-            
+
         except Exception as e:
             self.logger.error(f"Event firing error: {e}")
             return False
@@ -309,9 +309,7 @@ class NavigationSyncManager:
         """
         if view_name in self.view_instances:
             view_instance = self.view_instances[view_name]
-            view_state = self.view_states.get(view_name)
-            
-            if view_state:
+            if view_state := self.view_states.get(view_name):
                 # Extract state from view instance
                 view_state.scroll_position = getattr(view_instance, 'scroll_position', 0.0)
                 view_state.form_data = getattr(view_instance, 'get_form_data', lambda: {})()
@@ -332,25 +330,20 @@ class NavigationSyncManager:
             view_state = self.view_states.get(view_name)
             if not view_state:
                 return False
-            
+
             view_state.loading_state = "loading"
-            
-            # Load view instance if needed
-            if view_name not in self.view_instances:
-                # Dynamic view loading based on view registry
-                pass
-            
+
             # Initialize view with parameters
             if params and view_name in self.view_instances:
                 view_instance = self.view_instances[view_name]
                 # Call view initialization method with params
                 if hasattr(view_instance, 'initialize_with_params'):
                     await view_instance.initialize_with_params(params)
-            
+
             view_state.loading_state = "ready"
             view_state.is_loaded = True
             return True
-            
+
         except Exception as e:
             if view_state:
                 view_state.loading_state = "error"
@@ -367,20 +360,10 @@ class NavigationSyncManager:
             to_view: Name of view to transition to
         """
         try:
-            # Exit animation for current view
-            if from_view and from_view in self.view_instances:
-                # Animate view exit
-                pass
-            
-            # Enter animation for target view
-            if to_view in self.view_instances:
-                # Animate view enter
-                pass
-            
             # Update page content
             # This would integrate with the main application's view switching
             pass
-            
+
         except Exception as e:
             self.logger.error(f"View transition error: {e}")
     
@@ -453,7 +436,8 @@ class NavigationSyncManager:
             "history_length": len(self.navigation_history),
             "registered_views": len(self.view_instances),
             "pending_navigations": len(self.pending_navigations),
-            "loaded_views": sum(1 for state in self.view_states.values() if state.is_loaded)
+            "loaded_views": sum(bool(state.is_loaded)
+                            for state in self.view_states.values())
         }
 
 

@@ -108,36 +108,35 @@ class ErrorHandler:
                 "context": context,
                 "traceback": traceback.format_exc()
             }
-            
+
             # Log error with appropriate level
             self._log_error(error_info)
-            
+
             # Update error statistics
             self._update_error_stats(error_info)
-            
+
             # Show user notification
             if user_message and self.toast_manager:
-                if severity == ErrorSeverity.LOW:
-                    self.toast_manager.show_info(user_message)
-                elif severity == ErrorSeverity.MEDIUM:
+                if (
+                    severity == ErrorSeverity.LOW
+                    or severity == ErrorSeverity.MEDIUM
+                ):
                     self.toast_manager.show_info(user_message)
                 elif severity == ErrorSeverity.HIGH:
                     self.toast_manager.show_warning(user_message)
                 elif severity == ErrorSeverity.CRITICAL:
                     self.toast_manager.show_error(user_message)
-            
+
             # Attempt recovery if strategy exists
             recovery_success = False
             if recovery_action:
                 recovery_success = self._attempt_recovery(recovery_action, error_info)
-            
-            # Execute category-specific handling
-            category_handler = self.recovery_strategies.get(category)
-            if category_handler:
+
+            if category_handler := self.recovery_strategies.get(category):
                 return category_handler(error_info, recovery_success)
-                
+
             return severity != ErrorSeverity.CRITICAL
-            
+
         except Exception as handler_error:
             # Fallback error handling - should never fail
             self.logger.critical(f"Error handler failed: {handler_error}")
@@ -174,14 +173,14 @@ class ErrorHandler:
                         context=context,
                         user_message=user_message
                     )
-                    
+
                     if not success and fallback_return is not None:
                         return fallback_return
                     elif not success:
                         raise  # Re-raise if critical and no fallback
-                    
+
                     return fallback_return
-                    
+
             @functools.wraps(func)
             def sync_wrapper(*args, **kwargs):
                 try:
@@ -195,20 +194,17 @@ class ErrorHandler:
                         context=context,
                         user_message=user_message
                     )
-                    
+
                     if not success and fallback_return is not None:
                         return fallback_return
                     elif not success:
                         raise
-                    
+
                     return fallback_return
-            
+
             # Return appropriate wrapper based on function type
-            if asyncio.iscoroutinefunction(func):
-                return async_wrapper
-            else:
-                return sync_wrapper
-                
+            return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
+
         return decorator
     
     def _handle_network_error(self, error_info: Dict, recovery_attempted: bool) -> bool:
@@ -432,18 +428,18 @@ def with_error_handling(category: ErrorCategory,
     error_handler = get_global_error_handler()
     if error_handler:
         return error_handler.error_handler_decorator(category, severity, user_message)
-    else:
-        # Fallback to simple decorator if no global handler
-        def decorator(func: Callable) -> Callable:
-            @functools.wraps(func)
-            def wrapper(*args, **kwargs):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    print(f"Error in {func.__name__}: {e}")
-                    raise
-            return wrapper
-        return decorator
+    # Fallback to simple decorator if no global handler
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                print(f"Error in {func.__name__}: {e}")
+                raise
+        return wrapper
+
+    return decorator
 
 
 def handle_critical_error(error: Exception, context: str = "") -> None:
@@ -454,20 +450,18 @@ def handle_critical_error(error: Exception, context: str = "") -> None:
         # Log critical error
         logger = logging.getLogger(__name__)
         logger.critical(f"CRITICAL ERROR [{context}]: {str(error)}")
-        
-        # Get global error handler
-        error_handler = get_global_error_handler()
-        if error_handler:
+
+        if error_handler := get_global_error_handler():
             # Show critical error dialog
             if error_handler.toast_manager:
                 error_handler.toast_manager.show_error(f"Critical error in {context}: {str(error)[:100]}")
         else:
             # Fallback to console logging
             print(f"CRITICAL ERROR [{context}]: {str(error)}")
-            
-        # Save application state if possible (would need implementation)
-        # Potentially trigger application shutdown (would need implementation)
-        
+                
+            # Save application state if possible (would need implementation)
+            # Potentially trigger application shutdown (would need implementation)
+
     except Exception as e:
         print(f"Failed to handle critical error: {e}")
 

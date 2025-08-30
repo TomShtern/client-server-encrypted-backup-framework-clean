@@ -53,12 +53,12 @@ class SettingsResetService:
         """Get default settings for a category or all categories"""
         if category:
             return self.default_settings.get(category, {}).copy()
-        
+
         # Return all defaults flattened
         all_defaults = {}
         for cat_defaults in self.default_settings.values():
-            all_defaults.update(cat_defaults)
-        
+            all_defaults |= cat_defaults
+
         return all_defaults
     
     def reset_category(self, category: str, current_settings: Dict[str, Any], 
@@ -70,19 +70,17 @@ class SettingsResetService:
                 if self.toast_manager:
                     self.toast_manager.show_error(error_message)
                 return False, error_message, current_settings
-            
-            # Show confirmation dialog if callback provided
-            if confirm_callback and self.dialog_system:
-                self.dialog_system.show_confirmation_dialog(
-                    title=f"Reset {category.title()} Settings",
-                    message=f"Are you sure you want to reset all {category} settings to their default values? This action cannot be undone.",
-                    on_confirm=lambda: self._execute_category_reset(category, current_settings, confirm_callback),
-                    on_cancel=lambda: None
-                )
-                return True, "Reset confirmation requested", current_settings
-            else:
+
+            if not confirm_callback or not self.dialog_system:
                 return self._execute_category_reset(category, current_settings, confirm_callback)
-            
+
+            self.dialog_system.show_confirmation_dialog(
+                title=f"Reset {category.title()} Settings",
+                message=f"Are you sure you want to reset all {category} settings to their default values? This action cannot be undone.",
+                on_confirm=lambda: self._execute_category_reset(category, current_settings, confirm_callback),
+                on_cancel=lambda: None
+            )
+            return True, "Reset confirmation requested", current_settings
         except Exception as e:
             error_message = f"Failed to reset {category} settings: {str(e)}"
             if self.toast_manager:
@@ -94,21 +92,21 @@ class SettingsResetService:
         """Execute the actual category reset"""
         try:
             category_defaults = self.default_settings[category]
-            
+
             # Update current settings with defaults
             updated_settings = current_settings.copy()
-            updated_settings.update(category_defaults)
-            
+            updated_settings |= category_defaults
+
             message = f"{category.title()} settings reset to defaults"
             if self.toast_manager:
                 self.toast_manager.show_success(message)
-            
+
             # Execute callback if provided
             if callback:
                 callback(updated_settings)
-            
+
             return True, message, updated_settings
-            
+
         except Exception as e:
             error_message = f"Failed to execute {category} reset: {str(e)}"
             if self.toast_manager:
@@ -118,18 +116,16 @@ class SettingsResetService:
     def reset_all_settings(self, confirm_callback: Optional[callable] = None) -> Tuple[bool, str, Dict[str, Any]]:
         """Reset all settings to defaults"""
         try:
-            # Show confirmation dialog if callback provided
-            if confirm_callback and self.dialog_system:
-                self.dialog_system.show_confirmation_dialog(
-                    title="Reset All Settings",
-                    message="Are you sure you want to reset ALL settings to their default values? This will affect server configuration, GUI preferences, monitoring settings, and advanced options. This action cannot be undone.",
-                    on_confirm=lambda: self._execute_full_reset(confirm_callback),
-                    on_cancel=lambda: None
-                )
-                return True, "Full reset confirmation requested", {}
-            else:
+            if not confirm_callback or not self.dialog_system:
                 return self._execute_full_reset(confirm_callback)
-            
+
+            self.dialog_system.show_confirmation_dialog(
+                title="Reset All Settings",
+                message="Are you sure you want to reset ALL settings to their default values? This will affect server configuration, GUI preferences, monitoring settings, and advanced options. This action cannot be undone.",
+                on_confirm=lambda: self._execute_full_reset(confirm_callback),
+                on_cancel=lambda: None
+            )
+            return True, "Full reset confirmation requested", {}
         except Exception as e:
             error_message = f"Failed to reset all settings: {str(e)}"
             if self.toast_manager:

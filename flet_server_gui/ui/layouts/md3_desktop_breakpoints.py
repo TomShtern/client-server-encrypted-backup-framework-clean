@@ -45,10 +45,14 @@ class MD3DesktopBreakpoints:
     @staticmethod
     def get_breakpoint(window_width: int) -> DesktopBreakpoint:
         """Get the appropriate breakpoint for a given window width"""
-        for breakpoint, config in MD3DesktopBreakpoints.BREAKPOINTS.items():
-            if config["min"] <= window_width <= config["max"]:
-                return breakpoint
-        return DesktopBreakpoint.MD  # Default fallback
+        return next(
+            (
+                breakpoint
+                for breakpoint, config in MD3DesktopBreakpoints.BREAKPOINTS.items()
+                if config["min"] <= window_width <= config["max"]
+            ),
+            DesktopBreakpoint.MD,
+        )
     
     @staticmethod
     def get_column_span(window_width: int) -> int:
@@ -122,14 +126,14 @@ class EnhancedResponsiveLayout:
             "max_lines": max_lines,
             "overflow": ft.TextOverflow.ELLIPSIS
         }
-        
+
         if size:
             text_kwargs["size"] = size
         if weight:
             text_kwargs["weight"] = weight
-            
-        text_kwargs.update(kwargs)
-        
+
+        text_kwargs |= kwargs
+
         return ft.Text(**text_kwargs)
     
     @staticmethod
@@ -146,10 +150,8 @@ class EnhancedResponsiveLayout:
             "padding": padding,
             "margin": margin,
             "expand": expand,
-            "clip_behavior": ft.ClipBehavior.NONE
-        }
-        container_kwargs.update(kwargs)
-        
+            "clip_behavior": ft.ClipBehavior.NONE,
+        } | kwargs
         return ft.Container(**container_kwargs)
 
 

@@ -146,36 +146,37 @@ class StatusPill(ft.Container):
     
     def set_status(self, status: ServerStatus, animate: bool = True):
         """Update status with optional animation"""
-        if self.status != status:
-            old_status = self.status
-            self.status = status
-            
-            # Update UI components
-            self.bgcolor = self._get_status_color()
-            
-            # Update text if shown
-            if self._text:
-                self._text.value = self._get_status_text()
-            
-            # Update icon if shown
-            if self._icon:
-                self._icon.name = self._get_status_icon()
-                self._icon.color = TOKENS['on_primary']
-            
-            # Trigger animation
-            if animate:
-                self.scale = 0.95
-                self.update()
-                self.scale = 1.0
-                self.update()
-            else:
-                # Only update if attached to a page
-                try:
-                    if self.page:
-                        self.update()
-                except (AttributeError, AssertionError):
-                    # Control not attached to page, skip update
-                    pass
+        if self.status == status:
+            return
+        old_status = self.status
+        self.status = status
+
+        # Update UI components
+        self.bgcolor = self._get_status_color()
+
+        # Update text if shown
+        if self._text:
+            self._text.value = self._get_status_text()
+
+        # Update icon if shown
+        if self._icon:
+            self._icon.name = self._get_status_icon()
+            self._icon.color = TOKENS['on_primary']
+
+        # Trigger animation
+        if animate:
+            self.scale = 0.95
+            self.update()
+            self.scale = 1.0
+            self.update()
+        else:
+            # Only update if attached to a page
+            try:
+                if self.page:
+                    self.update()
+            except (AttributeError, AssertionError):
+                # Control not attached to page, skip update
+                pass
     
     def _get_status_text(self) -> str:
         """Get display text for current status"""

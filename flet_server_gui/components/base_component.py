@@ -62,35 +62,34 @@ class BaseComponent:
         confirmed = await self._show_confirmation(confirmation_text)
         if not confirmed:
             return False
-        
+
         # Set loading state
         self._set_loading_state(operation_name, True)
-        
+
         try:
             # Execute the action
             result = await action()
-            
+
             # Handle ActionResult or direct boolean results
-            if isinstance(result, ActionResult):
-                if result.success:
-                    await self._show_success(success_message)
-                    return True
-                else:
-                    await self._show_error(result.error_message or "Operation failed")
-                    return False
+            if (
+                isinstance(result, ActionResult)
+                and result.success
+                or not isinstance(result, ActionResult)
+                and result
+            ):
+                await self._show_success(success_message)
+                return True
+            elif isinstance(result, ActionResult):
+                await self._show_error(result.error_message or "Operation failed")
+                return False
             else:
-                # Assume boolean or truthy result
-                if result:
-                    await self._show_success(success_message)
-                    return True
-                else:
-                    await self._show_error("Operation failed")
-                    return False
-                    
+                await self._show_error("Operation failed")
+                return False
+
         except Exception as e:
             await self._show_error(f"Unexpected error: {str(e)}")
             return False
-            
+
         finally:
             # Clear loading state
             self._set_loading_state(operation_name, False)
@@ -119,32 +118,34 @@ class BaseComponent:
         if not selected_items:
             await self._show_error(f"No {item_type} selected for {action_name}")
             return False
-        
+
         # Show confirmation
         confirmation_text = f"{action_name.title()} {len(selected_items)} selected {item_type}?"
         confirmed = await self._show_confirmation(confirmation_text)
         if not confirmed:
             return False
-        
+
         # Set loading state
         operation_name = f"bulk_{action_name}_{item_type}"
         self._set_loading_state(operation_name, True)
-        
+
         try:
             # Execute bulk action
             result = await action(selected_items)
-            
+
             # Update progress if callback provided
             if progress_callback:
                 progress_callback(len(selected_items), len(selected_items))
-            
+
             # Handle result
             if isinstance(result, ActionResult):
                 if result.success:
-                    success_count = len(selected_items)
-                    if result.metadata and 'successful_operations' in result.metadata:
-                        success_count = result.metadata['successful_operations']
-                    
+                    success_count = (
+                        result.metadata['successful_operations']
+                        if result.metadata
+                        and 'successful_operations' in result.metadata
+                        else len(selected_items)
+                    )
                     success_message = f"Successfully processed {success_count} {item_type}"
                     await self._show_success(success_message)
                     return True
@@ -154,22 +155,20 @@ class BaseComponent:
                         # Show detailed error information
                         failure_count = result.metadata.get('failed_operations', 0)
                         error_message = f"{failure_count} {item_type} failed to {action_name}"
-                    
+
                     await self._show_error(error_message)
                     return False
+            elif result:
+                await self._show_success(f"Successfully processed {len(selected_items)} {item_type}")
+                return True
             else:
-                # Handle non-ActionResult responses
-                if result:
-                    await self._show_success(f"Successfully processed {len(selected_items)} {item_type}")
-                    return True
-                else:
-                    await self._show_error(f"Bulk {action_name} failed")
-                    return False
-                    
+                await self._show_error(f"Bulk {action_name} failed")
+                return False
+
         except Exception as e:
             await self._show_error(f"Bulk {action_name} failed: {str(e)}")
             return False
-            
+
         finally:
             self._set_loading_state(operation_name, False)
     
@@ -188,12 +187,11 @@ class BaseComponent:
                 title="Confirm Action",
                 message=message
             )
-        else:
-            # Fallback to simple confirm dialog
-            # For now, just return True to allow the action to proceed
-            # In a real app, you'd implement proper async dialog handling
-            print(f"CONFIRMATION: {message}")
-            return True  # Default to True for fallback to allow actions to proceed
+        # Fallback to simple confirm dialog
+        # For now, just return True to allow the action to proceed
+        # In a real app, you'd implement proper async dialog handling
+        print(f"CONFIRMATION: {message}")
+        return True  # Default to True for fallback to allow actions to proceed
     
     async def _show_success(self, message: str):
         """Show success notification."""

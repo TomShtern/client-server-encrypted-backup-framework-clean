@@ -100,10 +100,7 @@ class TraceCenter:
         if meta:
             try:
                 serialized = json.dumps(meta, default=str)
-                if len(serialized) > _MAX_META_LENGTH:
-                    safe_meta = {"truncated": True}
-                else:
-                    safe_meta = meta
+                safe_meta = {"truncated": True} if len(serialized) > _MAX_META_LENGTH else meta
             except Exception:
                 safe_meta = {"serialization_failure": True}
         event = TraceEvent(ts=ts, correlation_id=cid, type=type, level=level, action=action, message=message, meta=safe_meta)

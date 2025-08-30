@@ -134,20 +134,41 @@ class ConfigurationService:
     
     def _load_from_unified_config(self) -> Dict[str, Any]:
         """Load settings from unified configuration system"""
-        settings = {}
-        
-        # Server settings
-        settings['server'] = {
-            'port': self.unified_config.get('server.port', self.default_settings['server']['port']),
-            'host': self.unified_config.get('server.host', self.default_settings['server']['host']),
-            'storage_dir': self.unified_config.get('server.file_storage_dir', self.default_settings['server']['storage_dir']),
-            'max_clients': self.unified_config.get('server.max_clients', self.default_settings['server']['max_clients']),
-            'session_timeout': self.unified_config.get('server.session_timeout', self.default_settings['server']['session_timeout']),
-            'maintenance_interval': self.unified_config.get('server.maintenance_interval', self.default_settings['server']['maintenance_interval']),
-            'auto_start': self.unified_config.get('server.auto_start', self.default_settings['server']['auto_start']),
-            'log_level': self.unified_config.get('server.log_level', self.default_settings['server']['log_level'])
+        settings = {
+            'server': {
+                'port': self.unified_config.get(
+                    'server.port', self.default_settings['server']['port']
+                ),
+                'host': self.unified_config.get(
+                    'server.host', self.default_settings['server']['host']
+                ),
+                'storage_dir': self.unified_config.get(
+                    'server.file_storage_dir',
+                    self.default_settings['server']['storage_dir'],
+                ),
+                'max_clients': self.unified_config.get(
+                    'server.max_clients',
+                    self.default_settings['server']['max_clients'],
+                ),
+                'session_timeout': self.unified_config.get(
+                    'server.session_timeout',
+                    self.default_settings['server']['session_timeout'],
+                ),
+                'maintenance_interval': self.unified_config.get(
+                    'server.maintenance_interval',
+                    self.default_settings['server']['maintenance_interval'],
+                ),
+                'auto_start': self.unified_config.get(
+                    'server.auto_start',
+                    self.default_settings['server']['auto_start'],
+                ),
+                'log_level': self.unified_config.get(
+                    'server.log_level',
+                    self.default_settings['server']['log_level'],
+                ),
+            }
         }
-        
+
         # GUI settings
         settings['gui'] = {
             'theme_mode': self.unified_config.get('gui.theme_mode', self.default_settings['gui']['theme_mode']),
@@ -157,7 +178,7 @@ class ConfigurationService:
             'window_maximized': self.unified_config.get('gui.window_maximized', self.default_settings['gui']['window_maximized']),
             'confirm_deletions': self.unified_config.get('gui.confirm_deletions', self.default_settings['gui']['confirm_deletions'])
         }
-        
+
         # Monitoring settings
         settings['monitoring'] = {
             'enable_system_monitoring': self.unified_config.get('monitoring.enable_system_monitoring', self.default_settings['monitoring']['enable_system_monitoring']),
@@ -170,7 +191,7 @@ class ConfigurationService:
                 'disk_percent': self.unified_config.get('monitoring.alert_thresholds.disk_percent', self.default_settings['monitoring']['alert_thresholds']['disk_percent'])
             }
         }
-        
+
         # Advanced settings
         settings['advanced'] = {
             'backup_frequency': self.unified_config.get('advanced.backup_frequency', self.default_settings['advanced']['backup_frequency']),
@@ -178,7 +199,7 @@ class ConfigurationService:
             'cleanup_days': self.unified_config.get('advanced.cleanup_days', self.default_settings['advanced']['cleanup_days']),
             'debug_mode': self.unified_config.get('advanced.debug_mode', self.default_settings['advanced']['debug_mode'])
         }
-        
+
         logger.info("✅ Settings loaded from unified configuration")
         return settings
     
@@ -424,7 +445,7 @@ class ConfigurationService:
         Get a specific setting using dot notation.
         Example: get_setting('server.port') or get_setting('gui.theme_mode')
         """
-        settings = self._current_settings if self._current_settings else self.load_settings()
+        settings = self._current_settings or self.load_settings()
         keys = key_path.split('.')
         
         current = settings
@@ -490,27 +511,27 @@ class ConfigurationService:
         if category:
             if category not in self.default_settings:
                 raise ValidationError(f"Unknown settings category: {category}")
-            
+
             if not self._current_settings:
                 self._current_settings = self.load_settings()
-            
+
             self._current_settings[category] = self.default_settings[category].copy()
             result = self.save_settings(self._current_settings)
-            
+
             if result:
                 logger.info(f"✅ Settings category '{category}' reset to defaults")
-            return result
         else:
             # Reset all settings
             result = self.save_settings(self.default_settings.copy())
             if result:
                 logger.info("✅ All settings reset to defaults")
-            return result
+
+        return result
     
     def export_settings(self, file_path: str) -> bool:
         """Export current settings to a JSON file"""
         try:
-            settings = self._current_settings if self._current_settings else self.load_settings()
+            settings = self._current_settings or self.load_settings()
             
             export_data = {
                 'metadata': {
@@ -691,7 +712,7 @@ class SettingsBackupService:
         """Restore settings from a backup file."""
         try:
             success = self.config_service.import_settings(backup_filepath)
-            message = f"Settings restored from backup" if success else "Restore failed"
+            message = "Settings restored from backup" if success else "Restore failed"
             return success, message
         except Exception as e:
             return False, f"Failed to restore backup: {str(e)}"
@@ -753,9 +774,8 @@ def validate_settings_structure(settings: Dict[str, Any]) -> List[str]:
                 except (ValueError, TypeError):
                     errors.append("Server port must be a number")
             
-            if 'host' in server:
-                if not isinstance(server['host'], str) or not server['host'].strip():
-                    errors.append("Server host cannot be empty")
+            if 'host' in server and (not isinstance(server['host'], str) or not server['host'].strip()):
+                errors.append("Server host cannot be empty")
         
         # Add more validation as needed
         

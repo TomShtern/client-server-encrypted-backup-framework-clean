@@ -190,16 +190,12 @@ class SimpleServerBridge:
             # Try to get real system metrics, fall back to mock data
             cpu_percent = psutil.cpu_percent(interval=0.1)
             memory = psutil.virtual_memory()
-            
+
             # Use system root drive (Windows: C:\, Unix: /)
             import os
-            if os.name == 'nt':  # Windows
-                disk_path = 'C:\\'
-            else:  # Unix-like systems
-                disk_path = '/'
-            
+            disk_path = 'C:\\' if os.name == 'nt' else '/'
             disk = psutil.disk_usage(disk_path)
-            
+
             return {
                 "cpu_usage": cpu_percent,
                 "memory_usage": memory.percent,
@@ -212,7 +208,7 @@ class SimpleServerBridge:
                 "boot_time": psutil.boot_time(),
                 "timestamp": datetime.now().isoformat()
             }
-        except (ImportError, Exception):
+        except Exception:
             # Fallback mock data if psutil not available or any error occurs
             return {
                 "cpu_usage": 25.3,
@@ -273,7 +269,7 @@ class SimpleServerBridge:
         
         # Overall status
         unhealthy_checks = [check for check in health_checks.values() if check["status"] != "healthy"]
-        overall_status = "healthy" if not unhealthy_checks else "unhealthy"
+        overall_status = "unhealthy" if unhealthy_checks else "healthy"
         
         return {
             "status": overall_status,
@@ -304,7 +300,7 @@ class SimpleServerBridge:
         """Disconnect a client (mock implementation)"""
         # Find and update client status
         for client in self.mock_clients:
-            if str(client.get("id")) == str(client_id):
+            if str(client.get("id")) == client_id:
                 client["status"] = "disconnected"
                 return True
         return False
@@ -313,24 +309,20 @@ class SimpleServerBridge:
         """Delete a client (mock implementation)"""
         # Remove client from mock list
         initial_count = len(self.mock_clients)
-        self.mock_clients = [c for c in self.mock_clients if str(c.get("id")) != str(client_id)]
+        self.mock_clients = [
+            c for c in self.mock_clients if str(c.get("id")) != client_id
+        ]
         return len(self.mock_clients) < initial_count
 
     def disconnect_multiple_clients(self, client_ids: List[str]) -> int:
         """Disconnect multiple clients (mock implementation)"""
-        disconnected_count = 0
-        for client_id in client_ids:
-            if self.disconnect_client(client_id):
-                disconnected_count += 1
-        return disconnected_count
+        return sum(bool(self.disconnect_client(client_id))
+               for client_id in client_ids)
 
     def delete_multiple_clients(self, client_ids: List[str]) -> int:
         """Delete multiple clients (mock implementation)"""
-        deleted_count = 0
-        for client_id in client_ids:
-            if self.delete_client(client_id):
-                deleted_count += 1
-        return deleted_count
+        return sum(bool(self.delete_client(client_id))
+               for client_id in client_ids)
 
     async def backup_database(self, destination_path: str = None) -> bool:
         """Backup database (async version with optional destination)"""
@@ -352,7 +344,7 @@ class SimpleServerBridge:
         imported_count = 0
         for client_data in client_data_list:
             if "name" in client_data:
-                new_id = max([c.get("id", 0) for c in self.mock_clients], default=0) + 1
+                new_id = max((c.get("id", 0) for c in self.mock_clients), default=0) + 1
                 self.mock_clients.append({
                     "id": new_id,
                     "name": client_data["name"],
@@ -370,11 +362,8 @@ class SimpleServerBridge:
 
     def delete_multiple_files(self, file_infos: List[Dict[str, Any]]) -> int:
         """Delete multiple files (mock implementation)"""
-        deleted_count = 0
-        for file_info in file_infos:
-            if self.delete_file(file_info):
-                deleted_count += 1
-        return deleted_count
+        return sum(bool(self.delete_file(file_info))
+               for file_info in file_infos)
 
     def download_file(self, file_info: Dict[str, Any], destination_path: str) -> bool:
         """Download a file (mock implementation)"""

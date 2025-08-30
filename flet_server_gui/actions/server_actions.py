@@ -29,43 +29,43 @@ class ServerActions(BaseAction):
             # Check if server is already running
             status = await self.server_bridge.get_server_status()
             if status and getattr(status, 'running', False):
-                return ActionResult.error_result(
+                return ActionResult.make_error(
                     error_message="Server is already running",
                     error_code="SERVER_ALREADY_RUNNING"
                 )
-            
+
             # Attempt to start server
             success = await self.server_bridge.start_server()
-            
-            if success:
-                # Wait a moment and verify server actually started
-                await asyncio.sleep(1)
-                status = await self.server_bridge.get_server_status()
-                
-                if status and getattr(status, 'running', False):
-                    return ActionResult.success_result(
-                        data={
-                            'action': 'start_server',
-                            'server_status': 'running',
-                            'host': getattr(status, 'host', 'unknown'),
-                            'port': getattr(status, 'port', 'unknown')
-                        },
-                        metadata={
-                            'operation_type': 'server_control',
-                            'timestamp': time.time()
-                        }
-                    )
-                else:
-                    return ActionResult.error_result(
-                        error_message="Server start command succeeded but server is not running",
-                        error_code="START_VERIFICATION_FAILED"
-                    )
-            else:
+
+            if not success:
                 return ActionResult.error_result(
                     error_message="Failed to start server",
                     error_code="START_COMMAND_FAILED"
                 )
-                
+
+            # Wait a moment and verify server actually started
+            await asyncio.sleep(1)
+            status = await self.server_bridge.get_server_status()
+
+            return (
+                ActionResult.make_success(
+                    data={
+                        'action': 'start_server',
+                        'server_status': 'running',
+                        'host': getattr(status, 'host', 'unknown'),
+                        'port': getattr(status, 'port', 'unknown'),
+                    },
+                    metadata={
+                        'operation_type': 'server_control',
+                        'timestamp': time.time(),
+                    },
+                )
+                if status and getattr(status, 'running', False)
+                else ActionResult.error_result(
+                    error_message="Server start command succeeded but server is not running",
+                    error_code="START_VERIFICATION_FAILED",
+                )
+            )
         except Exception as e:
             return ActionResult.error_result(
                 error_message=f"Error starting server: {str(e)}",
@@ -87,37 +87,34 @@ class ServerActions(BaseAction):
                     error_message="Server is not currently running",
                     error_code="SERVER_NOT_RUNNING"
                 )
-            
+
             # Attempt to stop server
             success = await self.server_bridge.stop_server()
-            
-            if success:
-                # Wait a moment and verify server actually stopped
-                await asyncio.sleep(1)
-                status = await self.server_bridge.get_server_status()
-                
-                if not status or not getattr(status, 'running', False):
-                    return ActionResult.success_result(
-                        data={
-                            'action': 'stop_server',
-                            'server_status': 'stopped'
-                        },
-                        metadata={
-                            'operation_type': 'server_control',
-                            'timestamp': time.time()
-                        }
-                    )
-                else:
-                    return ActionResult.error_result(
-                        error_message="Server stop command succeeded but server is still running",
-                        error_code="STOP_VERIFICATION_FAILED"
-                    )
-            else:
+
+            if not success:
                 return ActionResult.error_result(
                     error_message="Failed to stop server",
                     error_code="STOP_COMMAND_FAILED"
                 )
-                
+
+            # Wait a moment and verify server actually stopped
+            await asyncio.sleep(1)
+            status = await self.server_bridge.get_server_status()
+
+            return (
+                ActionResult.make_success(
+                    data={'action': 'stop_server', 'server_status': 'stopped'},
+                    metadata={
+                        'operation_type': 'server_control',
+                        'timestamp': time.time(),
+                    },
+                )
+                if not status or not getattr(status, 'running', False)
+                else ActionResult.error_result(
+                    error_message="Server stop command succeeded but server is still running",
+                    error_code="STOP_VERIFICATION_FAILED",
+                )
+            )
         except Exception as e:
             return ActionResult.error_result(
                 error_message=f"Error stopping server: {str(e)}",
@@ -149,7 +146,7 @@ class ServerActions(BaseAction):
             start_result = await self.start_server()
             
             if start_result.success:
-                return ActionResult.success_result(
+                return ActionResult.make_success(
                     data={
                         'action': 'restart_server',
                         'server_status': 'running',
@@ -193,7 +190,7 @@ class ServerActions(BaseAction):
                     'version': getattr(status, 'version', 'unknown')
                 }
                 
-                return ActionResult.success_result(
+                return ActionResult.make_success(
                     data=status_data,
                     metadata={
                         'operation_type': 'server_status',
@@ -224,7 +221,7 @@ class ServerActions(BaseAction):
                 'overall_status': 'healthy',
                 'checks': {}
             }
-            
+
             # Check server status
             status_result = await self.get_server_status()
             if status_result.success:
@@ -237,7 +234,7 @@ class ServerActions(BaseAction):
                     'status': 'fail',
                     'message': f"Could not check server status: {status_result.error_message}"
                 }
-            
+
             # Check database connectivity (if available)
             try:
                 db_check = await self.server_bridge.check_database_connection()
@@ -245,12 +242,12 @@ class ServerActions(BaseAction):
                     'status': 'pass' if db_check else 'fail',
                     'message': 'Database accessible' if db_check else 'Database connection failed'
                 }
-            except:
+            except Exception:
                 health_data['checks']['database'] = {
                     'status': 'unknown',
                     'message': 'Database check not available'
                 }
-            
+
             # Check disk space (if available)
             try:
                 disk_usage = await self.server_bridge.get_disk_usage()
@@ -264,24 +261,24 @@ class ServerActions(BaseAction):
                         'status': 'warning',
                         'message': f"High disk usage: {disk_usage.get('percent_used', 0) if disk_usage else 'unknown'}%"
                     }
-            except:
+            except Exception:
                 health_data['checks']['disk_space'] = {
                     'status': 'unknown',
                     'message': 'Disk space check not available'
                 }
-            
+
             # Determine overall health
             failed_checks = [check for check in health_data['checks'].values() if check['status'] == 'fail']
             warning_checks = [check for check in health_data['checks'].values() if check['status'] == 'warning']
-            
+
             if failed_checks:
                 health_data['overall_status'] = 'unhealthy'
             elif warning_checks:
                 health_data['overall_status'] = 'warning'
             else:
                 health_data['overall_status'] = 'healthy'
-            
-            return ActionResult.success_result(
+
+            return ActionResult.make_success(
                 data=health_data,
                 metadata={
                     'operation_type': 'health_check',
@@ -291,7 +288,7 @@ class ServerActions(BaseAction):
                     'warning_checks': len(warning_checks)
                 }
             )
-            
+
         except Exception as e:
             return ActionResult.error_result(
                 error_message=f"Health check failed: {str(e)}",
@@ -311,7 +308,7 @@ class ServerActions(BaseAction):
         try:
             client_data = await self.server_bridge.get_client_details(client_id)
             if client_data:
-                return ActionResult.success_result(
+                return ActionResult.make_success(
                     data=client_data,
                     metadata={'client_id': client_id, 'operation_type': 'client_details'}
                 )
@@ -335,7 +332,7 @@ class ServerActions(BaseAction):
         """
         try:
             files = await self.server_bridge.get_file_list()
-            return ActionResult.success_result(
+            return ActionResult.make_success(
                 data=files,
                 metadata={
                     'file_count': len(files),
@@ -357,7 +354,7 @@ class ServerActions(BaseAction):
         """
         try:
             clients = await self.server_bridge.get_client_list()
-            return ActionResult.success_result(
+            return ActionResult.make_success(
                 data=clients,
                 metadata={
                     'client_count': len(clients),

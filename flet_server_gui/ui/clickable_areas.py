@@ -247,23 +247,19 @@ class ClickableAreaManager:
             List of overlap information for all detected overlaps
         """
         overlaps = []
-        
+
         try:
             element_list = list(self.clickable_elements.values())
-            
+
             # Check all pairs of elements for overlaps
             for i in range(len(element_list)):
                 for j in range(i + 1, len(element_list)):
                     element1 = element_list[i]
                     element2 = element_list[j]
-                    
-                    # Calculate intersection
-                    intersection = self._calculate_bounds_intersection(
-                        element1.bounds, 
-                        element2.bounds
-                    )
-                    
-                    if intersection:
+
+                    if intersection := self._calculate_bounds_intersection(
+                        element1.bounds, element2.bounds
+                    ):
                         # Calculate overlap area and severity
                         overlap_area = intersection[2] * intersection[3]
                         severity = self._calculate_overlap_severity(
@@ -271,7 +267,7 @@ class ClickableAreaManager:
                             element1.bounds, 
                             element2.bounds
                         )
-                        
+
                         if severity != "none":
                             overlap_info = OverlapInfo(
                                 element1_id=element1.element_id,
@@ -284,17 +280,18 @@ class ClickableAreaManager:
                                 )
                             )
                             overlaps.append(overlap_info)
-            
+
             # Cache results and fire events
             self.overlap_cache["all"] = overlaps
             if overlaps:
                 await self._fire_area_event("overlap_detected", {
                     "overlaps": len(overlaps),
-                    "critical_overlaps": sum(1 for o in overlaps if o.severity == "critical")
+                    "critical_overlaps": sum(bool(o.severity == "critical")
+                                         for o in overlaps)
                 })
-            
+
             return overlaps
-            
+
         except Exception as e:
             self.logger.error(f"Overlap detection error: {e}")
             return []
@@ -318,19 +315,16 @@ class ClickableAreaManager:
             fixes_applied = []
             
             # Fix touch target size issues
-            if not issues or "touch_target_size" in issues:
-                if await self._fix_touch_target_size(element):
-                    fixes_applied.append("touch_target_size")
+            if (not issues or "touch_target_size" in issues) and await self._fix_touch_target_size(element):
+                fixes_applied.append("touch_target_size")
             
             # Fix overlap issues
-            if not issues or "overlaps" in issues:
-                if await self._fix_element_overlaps(element):
-                    fixes_applied.append("overlaps")
+            if (not issues or "overlaps" in issues) and await self._fix_element_overlaps(element):
+                fixes_applied.append("overlaps")
             
             # Fix accessibility issues
-            if not issues or "accessibility" in issues:
-                if await self._fix_accessibility_issues(element):
-                    fixes_applied.append("accessibility")
+            if (not issues or "accessibility" in issues) and await self._fix_accessibility_issues(element):
+                fixes_applied.append("accessibility")
             
             # Update element bounds after fixes
             new_bounds = self._calculate_element_bounds(element.component)
@@ -704,7 +698,8 @@ class ClickableAreaManager:
         """
         return {
             "total_elements": len(self.clickable_elements),
-            "enabled_elements": sum(1 for e in self.clickable_elements.values() if e.current_state == ClickableState.ENABLED),
+            "enabled_elements": sum(bool(e.current_state == ClickableState.ENABLED)
+                                for e in self.clickable_elements.values()),
             "element_groups": len(self.element_groups),
             "cached_overlaps": len(self.overlap_cache.get("all", [])),
             "auto_fix_enabled": self.auto_fix_enabled,
@@ -728,16 +723,13 @@ def ensure_minimum_touch_target(component: ft.Control,
     # Calculate required padding
     min_width = area_manager.area_spec.min_width
     min_height = area_manager.area_spec.min_height
-    
-    # Wrap component if needed
-    container = ft.Container(
+
+    return ft.Container(
         content=component,
         min_width=min_width,
         min_height=min_height,
-        alignment=ft.alignment.center
+        alignment=ft.alignment.center,
     )
-    
-    return container
 
 
 def create_accessible_button(text: str, 

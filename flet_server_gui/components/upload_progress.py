@@ -110,7 +110,7 @@ class UploadProgress(EnhancedCard):
                 subtitle=ft.Column([
                     ft.Row([
                         ft.Text(
-                            f"{int(file_info.get('progress', 0) * 100)}%" if not file_info.get("error") else "Error",
+                            "Error" if file_info.get("error") else f"{int(file_info.get('progress', 0) * 100)}%",
                             style=ft.TextThemeStyle.BODY_SMALL,
                             color=TOKENS["outline"]
                         ),
@@ -132,8 +132,10 @@ class UploadProgress(EnhancedCard):
     def _create_overall_progress(self) -> ft.Control:
         """Create overall progress indicator"""
         total_files = len(self.files)
-        completed_files = sum(1 for f in self.files if f.get("progress", 0) == 1.0)
-        error_files = sum(1 for f in self.files if f.get("error"))
+        completed_files = sum(bool(f.get("progress", 0) == 1.0)
+                          for f in self.files)
+        error_files = sum(bool(f.get("error"))
+                      for f in self.files)
         overall_progress = sum(f.get("progress", 0) for f in self.files) / total_files if total_files > 0 else 0
         
         return ft.Column([
@@ -224,7 +226,8 @@ class UploadProgress(EnhancedCard):
         self._update_content()
         
         # Show completion message
-        completed_files = sum(1 for f in self.files if f.get("progress", 0) == 1.0)
+        completed_files = sum(bool(f.get("progress", 0) == 1.0)
+                          for f in self.files)
         total_files = len(self.files)
         
         if completed_files == total_files:

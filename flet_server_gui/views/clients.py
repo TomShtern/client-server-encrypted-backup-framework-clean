@@ -254,9 +254,8 @@ class ClientsView(BaseComponent):
                 raise ConnectionError("Server bridge is not initialized")
             
             # Check if server bridge has connection validation
-            if hasattr(self.server_bridge, 'is_connected'):
-                if not await self.server_bridge.is_connected():
-                    raise ConnectionError("Server is not connected. Please check server status.")
+            if hasattr(self.server_bridge, 'is_connected') and not await self.server_bridge.is_connected():
+                raise ConnectionError("Server is not connected. Please check server status.")
 
             # Get fresh client data with timeout
             clients = self.server_bridge.get_clients()
@@ -386,24 +385,23 @@ class ClientsView(BaseComponent):
             # Extract client_id and selection state from the event
             client_id = e.data
             selected = e.control.value if hasattr(e.control, 'value') else False
-            
+
             if selected:
                 if client_id not in self.selected_clients:
                     self.selected_clients.append(client_id)
-            else:
-                if client_id in self.selected_clients:
-                    self.selected_clients.remove(client_id)
-            
+            elif client_id in self.selected_clients:
+                self.selected_clients.remove(client_id)
+
             # Update select all checkbox state
             self._update_select_all_checkbox()
-            
+
             self._update_bulk_actions_visibility()
             # Thread-safe UI update
             if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
                 self.ui_updater.queue_update(lambda: None)
             else:
                 self.page.update()
-            
+
         except Exception as ex:
             if self.toast_manager:
                 self.toast_manager.show_error(f"Error in client selection: {str(ex)}")
@@ -437,14 +435,14 @@ class ClientsView(BaseComponent):
     def _update_bulk_actions_visibility(self):
         """Update visibility of bulk action buttons"""
         try:
-            has_selections = len(self.selected_clients) > 0
-            
             if self.bulk_actions_row and len(self.bulk_actions_row.controls) > 1:
+                has_selections = len(self.selected_clients) > 0
+
                 # Show/hide bulk action buttons (skip the label)
                 for i, control in enumerate(self.bulk_actions_row.controls):
                     if i > 0 and isinstance(control, ft.ElevatedButton):
                         control.visible = has_selections
-                
+
                 # Force page update to show visibility changes
                 if self.page:
                     self.page.update()

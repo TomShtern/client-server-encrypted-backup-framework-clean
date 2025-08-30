@@ -128,7 +128,7 @@ class BaseTableManager(ABC):
         """Select all rows in table"""
         if not self.data_table or not self.data_table.rows:
             return
-        
+
         # Extract all item IDs from table rows
         all_item_ids = []
         for row in self.data_table.rows:
@@ -136,20 +136,19 @@ class BaseTableManager(ABC):
             if row.cells and len(row.cells) > 0:
                 first_cell = row.cells[0]
                 if hasattr(first_cell, 'content') and hasattr(first_cell.content, 'data'):
-                    item_id = first_cell.content.data
-                    if item_id:
+                    if item_id := first_cell.content.data:
                         all_item_ids.append(item_id)
-        
+
         # Update selected_items list
         self.selected_items = all_item_ids[:]
-        
+
         # Update all checkboxes to checked state
         for row in self.data_table.rows:
             if row.cells and len(row.cells) > 0:
                 first_cell = row.cells[0]
                 if hasattr(first_cell, 'content') and isinstance(first_cell.content, ft.Checkbox):
                     first_cell.content.value = True
-        
+
         # Update the display
         self.update_table_display()
     
@@ -484,22 +483,13 @@ class BaseTableManager(ABC):
             # Clear current table state
             if self.data_table:
                 self.data_table.rows.clear()
-            
-            if new_data is not None:
-                # Update data source and refresh would be handled by parent component
-                pass
-            
-            # Apply current sorting
-            if self.sort_column:
-                # Apply sorting to data would be handled by parent component
-                pass
-            
+
             # Apply pagination would be handled by parent component
             # current_page_data = self.get_current_page_data(sorted_data)
-            
+
             # Update table display
             self.update_table_display()
-            
+
         except Exception as e:
             if self.error_handler:
                 self.error_handler.handle_error(e, "UI", "MEDIUM")
@@ -686,10 +676,9 @@ class BaseActionHandler(ABC):
     
     def _close_dialog(self):
         """Close the current dialog"""
-        if self.dialog_system and hasattr(self.dialog_system, 'current_dialog'):
-            if self.dialog_system.current_dialog:
-                self.dialog_system.current_dialog.open = False
-                self.page.update()
+        if self.dialog_system and hasattr(self.dialog_system, 'current_dialog') and self.dialog_system.current_dialog:
+            self.dialog_system.current_dialog.open = False
+            self.page.update()
     
     def _create_progress_dialog(self, title: str, message: str) -> ft.Control:
         """Create a progress dialog content"""
@@ -721,12 +710,10 @@ class BaseActionHandler(ABC):
                     on_cancel()
             else:
                 self._close_dialog()
+        elif asyncio.iscoroutinefunction(on_confirm):
+            await on_confirm()
         else:
-            # Fallback behavior - handle both sync and async callbacks
-            if asyncio.iscoroutinefunction(on_confirm):
-                await on_confirm()
-            else:
-                on_confirm()
+            on_confirm()
     
     async def _show_progress_dialog(self, title: str, message: str) -> None:
         """Show progress dialog during long operations"""

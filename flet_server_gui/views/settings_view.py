@@ -254,11 +254,11 @@ class ModularSettingsView(BaseComponent):
         """Handle when any setting changes"""
         # Collect current values from all forms
         current_values = {}
-        
+
         for form_name, form_container in self.form_containers.items():
             form_values = self.form_generator.get_form_values(form_container)
-            current_values.update(form_values)
-        
+            current_values |= form_values
+
         # Update change manager
         self.change_manager.on_setting_changed(current_values)
     
@@ -282,22 +282,21 @@ class ModularSettingsView(BaseComponent):
     def _handle_save_settings(self, settings: Dict[str, Any]):
         """Handle save settings action"""
         try:
-            # Validate settings using reset service
-            validation_errors = self.reset_service.validate_settings_values(settings)
-            
-            if validation_errors:
+            if validation_errors := self.reset_service.validate_settings_values(
+                settings
+            ):
                 error_message = "Settings validation failed:\n" + "\n".join(validation_errors)
                 self.dialog_system.show_error_dialog(
                     title="Validation Error",
                     message=error_message
                 )
                 return
-            
+
             # Save settings using settings manager
             self.settings_manager.save_settings(settings)
-            
+
             logger.info("Settings saved successfully via modular architecture")
-            
+
         except Exception as e:
             error_message = f"Failed to save settings: {str(e)}"
             logger.error(error_message)

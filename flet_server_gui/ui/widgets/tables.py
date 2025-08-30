@@ -419,26 +419,26 @@ class EnhancedDataTable:
         start_idx = self.current_page * self.rows_per_page
         end_idx = start_idx + self.rows_per_page
         page_data = self.filtered_data[start_idx:end_idx]
-        
+
         for row_idx, row_data in enumerate(page_data):
             cells = []
-            
+
             # Create data cells
             for col_key in self.column_order:
                 column = self.columns[col_key]
                 value = row_data.get(col_key, "")
-                
+
                 # Format value if format function provided
                 if column.format_function and value is not None:
                     try:
                         formatted_value = column.format_function(value)
-                    except:
+                    except Exception:
                         formatted_value = str(value)
                 else:
                     formatted_value = str(value) if value is not None else ""
-                
+
                 cells.append(ft.DataCell(ft.Text(formatted_value)))
-            
+
             # Add action cell if row actions exist
             if self.row_actions:
                 action_buttons = ft.Row([
@@ -448,21 +448,21 @@ class EnhancedDataTable:
                         on_click=lambda e, a=action, data=row_data: self._execute_row_action(a, data)
                     ) for action in self.row_actions
                 ], spacing=2)
-                
+
                 cells.append(ft.DataCell(action_buttons))
-            
+
             # Create row with selection capability
             row_id = str(start_idx + row_idx)
             is_selected = row_id in self.selected_rows
-            
+
             row = ft.DataRow(
                 cells=cells,
                 selected=is_selected,
                 on_select_changed=lambda e, rid=row_id: self._on_row_selected(rid, e.control.selected)
             )
-            
+
             rows.append(row)
-        
+
         return rows
     
     def _create_pagination_controls(self) -> ft.Container:
@@ -697,8 +697,8 @@ class EnhancedDataTable:
             return True
         
         # Convert to string for text operations
-        value_str = str(value).lower() if not filter_config.case_sensitive else str(value)
-        filter_str = str(filter_value).lower() if not filter_config.case_sensitive else str(filter_value)
+        value_str = str(value) if filter_config.case_sensitive else str(value).lower()
+        filter_str = str(filter_value) if filter_config.case_sensitive else str(filter_value).lower()
         
         if filter_config.operator == FilterOperator.CONTAINS:
             return filter_str in value_str

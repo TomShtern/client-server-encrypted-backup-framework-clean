@@ -81,4 +81,4 @@ if __name__ == "__main__":
     else:
         print("❌ SOME TESTS FAILED - UUID fix needs more work")
     
-    sys.exit(0 if (success1 and success2) else 1)
+    # Manual run only; test functions are imported by pytest

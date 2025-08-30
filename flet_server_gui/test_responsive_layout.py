@@ -44,9 +44,9 @@ def test_breakpoint_detection():
     
     print("Testing breakpoint detection...")
     for width, expected in test_cases:
-        breakpoint = BreakpointManager.get_current_breakpoint(width)
-        status = "[PASS]" if breakpoint.value == expected else "[FAIL]"
-        print(f"  {status} Width {width}px -> {breakpoint.value} (expected: {expected})")
+        current_breakpoint = BreakpointManager.get_current_breakpoint(width)
+        status = "[PASS]" if current_breakpoint.value == expected else "[FAIL]"
+        print(f"  {status} Width {width}px -> {current_breakpoint.value} (expected: {expected})")
     print()
 
 

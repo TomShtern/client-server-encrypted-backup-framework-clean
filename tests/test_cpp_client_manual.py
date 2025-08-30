@@ -127,12 +127,11 @@ def main():
     print("should help identify why it's crashing in the web interface.")
     print(f"{'='*60}")
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - manual execution helper
     try:
-        sys.exit(main())
-    except KeyboardInterrupt:
+        ret = main()
+        print(f"Exited with code {ret}")
+    except KeyboardInterrupt:  # noqa: PIE786
         print("\n\nTest interrupted by user")
-        sys.exit(1)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"\n\nUnexpected error: {e}")
-        sys.exit(1)

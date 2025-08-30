@@ -239,9 +239,6 @@ class AnalyticsView(BaseComponent):
         """Refresh analytics data"""
         print("[INFO] Refreshing analytics data...")
         self.update_data()
-        if self.performance_charts:
-            # Trigger a refresh of the performance charts
-            pass
     
     def _check_connection(self, e):
         """Check server connection status"""

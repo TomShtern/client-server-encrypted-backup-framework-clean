@@ -6,70 +6,70 @@ Provides consistent interfaces for all business logic operations.
 
 from dataclasses import dataclass
 from typing import Any, Optional, List, Dict
-from abc import ABC, abstractmethod
+from abc import ABC
+from flet_server_gui.utils.action_result import ActionResult as UnifiedActionResult
+from flet_server_gui.utils.trace_center import get_trace_center
 
 
 @dataclass
-class ActionResult:
-    """
-    Consistent return type for all action operations.
-    
-    Attributes:
-        success: Whether the operation completed successfully
-        data: Result data (if any)
-        error_message: Human-readable error message (if failed)
-        error_code: Machine-readable error code (if failed) 
-        metadata: Additional context information
+class ActionResultBridge:
+    """Backwards-compatible facade for legacy ActionResult usage within actions.
+
+    Provides success_result / error_result / from_results that emit unified
+    ActionResult objects while keeping existing call semantics minimal.
     """
     success: bool
     data: Any = None
     error_message: Optional[str] = None
     error_code: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
-    
+
+    # Factory bridging to unified ActionResult
     @classmethod
-    def success_result(cls, data: Any = None, metadata: Dict[str, Any] = None) -> 'ActionResult':
-        """Create a successful result."""
-        return cls(success=True, data=data, metadata=metadata or {})
-    
-    @classmethod 
-    def error_result(cls, error_message: str, error_code: str = None, metadata: Dict[str, Any] = None) -> 'ActionResult':
-        """Create an error result."""
-        return cls(
-            success=False, 
-            error_message=error_message,
-            error_code=error_code,
-            metadata=metadata or {}
+    def success_result(cls, data: Any = None, metadata: Dict[str, Any] = None):
+        cid = get_trace_center().new_correlation_id()
+        return UnifiedActionResult.make_success(
+            code="ACTION_OK", message="Action succeeded", correlation_id=cid, data=data if isinstance(data, dict) else ({"value": data} if data is not None else None), meta=metadata or {}
         )
-    
+
     @classmethod
-    def from_results(cls, results: List['ActionResult']) -> 'ActionResult':
-        """
-        Combine multiple results into a single result.
-        Success only if all operations succeeded.
-        """
+    def error_result(cls, error_message: str, error_code: str = None, metadata: Dict[str, Any] = None):
+        cid = get_trace_center().new_correlation_id()
+        return UnifiedActionResult.make_error(
+            code=error_code or "ACTION_ERROR", message=error_message, correlation_id=cid, error_code=error_code, meta=metadata or {}
+        )
+
+    @classmethod
+    def from_results(cls, results: List[UnifiedActionResult]):
         if not results:
             return cls.error_result("No operations to process")
-        
         successes = [r for r in results if r.success]
         failures = [r for r in results if not r.success]
-        
+        cid = get_trace_center().new_correlation_id()
         if not failures:
-            return cls.success_result(
-                data=[r.data for r in successes],
-                metadata={'total_operations': len(results), 'all_succeeded': True}
+            return UnifiedActionResult.make_success(
+                code="BATCH_OK",
+                message="All operations succeeded",
+                correlation_id=cid,
+                data={"items": [r.data for r in successes]},
+                meta={"total_operations": len(results), "all_succeeded": True},
             )
         else:
-            return cls.error_result(
-                error_message=f"{len(failures)} of {len(results)} operations failed",
-                error_code="PARTIAL_FAILURE",
-                metadata={
-                    'total_operations': len(results),
-                    'successful_operations': len(successes), 
-                    'failed_operations': len(failures),
-                    'failure_messages': [f.error_message for f in failures]
-                }
+            return UnifiedActionResult.make_partial(
+                code="BATCH_PARTIAL",
+                message=f"{len(failures)} of {len(results)} operations failed",
+                correlation_id=cid,
+                failed=[{"code": f.code, "message": f.message} for f in failures],
+                data={"successful": len(successes), "failed": len(failures), "total": len(results)},
+                meta={
+                    "total_operations": len(results),
+                    "successful_operations": len(successes),
+                    "failed_operations": len(failures),
+                },
             )
+
+# Alias used by other action modules
+ActionResult = UnifiedActionResult
 
 
 class BaseAction(ABC):
@@ -100,23 +100,35 @@ class BaseAction(ABC):
             ActionResult with operation outcome
         """
         last_error = None
-        
+
         for attempt in range(max_retries + 1):
             try:
+                cid = get_trace_center().new_correlation_id()
                 result = await operation()
-                return ActionResult.success_result(
-                    data=result,
-                    metadata={'attempts': attempt + 1}
+                data = result if isinstance(result, dict) else {"value": result}
+                return ActionResult.make_success(
+                    code="RETRY_OK",
+                    message="Operation succeeded",
+                    correlation_id=cid,
+                    data=data,
+                    meta={'attempts': attempt + 1}
                 )
             except Exception as e:
                 last_error = e
                 if attempt < max_retries:
-                    # Log retry attempt (in production, use proper logging)
-                    print(f"Attempt {attempt + 1} failed, retrying: {str(e)}")
+                    get_trace_center().emit(
+                        type="ACTION_RETRY",
+                        level="WARN",
+                        message="retrying operation",
+                        meta={"attempt": attempt + 1, "error": str(last_error)},
+                    )
                     continue
-                
-        return ActionResult.error_result(
-            error_message=f"Operation failed after {max_retries + 1} attempts: {str(last_error)}",
+        cid = get_trace_center().new_correlation_id()
+        return ActionResult.error(
+            code="MAX_RETRIES_EXCEEDED",
+            message=f"Operation failed after {max_retries + 1} attempts: {str(last_error)}",
+            correlation_id=cid,
             error_code="MAX_RETRIES_EXCEEDED",
-            metadata={'attempts': max_retries + 1, 'final_error': str(last_error)}
+            data=None,
+            meta={'attempts': max_retries + 1, 'final_error': str(last_error)}
         )

@@ -97,8 +97,8 @@ def test_functionality():
     
     # Test breakpoint detection
     from flet_server_gui.layouts.breakpoint_manager import BreakpointManager
-    breakpoint = BreakpointManager.get_current_breakpoint(1200)
-    if breakpoint.value == "xl":
+    current_breakpoint = BreakpointManager.get_current_breakpoint(1200)
+    if current_breakpoint.value == "xl":
         print("  [PASS] Breakpoint detection")
     else:
         print(f"  [FAIL] Breakpoint detection: expected 'xl', got '{breakpoint.value}'")
@@ -115,7 +115,7 @@ def test_functionality():
     
     # Test action result creation
     from flet_server_gui.actions.base_action import ActionResult
-    result = ActionResult.success_result(data={"test": "data"})
+    result = ActionResult.make_success(data={"test": "data"})
     if result.success and result.data == {"test": "data"}:
         print("  [PASS] ActionResult creation")
     else:

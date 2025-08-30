@@ -432,20 +432,30 @@ class ConnectionManager:
         """
         Get connection statistics for monitoring and debugging
         """
-        stats = {
+        return {
             "status": self.connection_info.status.value,
             "host": self.config.host,
             "port": self.config.port,
-            "connected_at": self.connection_info.connected_at.isoformat() if self.connection_info.connected_at else None,
-            "connection_duration": str(self.connection_info.connection_duration) if self.connection_info.connection_duration else None,
+            "connected_at": (
+                self.connection_info.connected_at.isoformat()
+                if self.connection_info.connected_at
+                else None
+            ),
+            "connection_duration": (
+                str(self.connection_info.connection_duration)
+                if self.connection_info.connection_duration
+                else None
+            ),
             "reconnect_attempts": self.connection_info.reconnect_attempts,
             "health_checks": self.connection_info.health_check_count,
-            "last_health_check": self.connection_info.last_health_check.isoformat() if self.connection_info.last_health_check else None,
+            "last_health_check": (
+                self.connection_info.last_health_check.isoformat()
+                if self.connection_info.last_health_check
+                else None
+            ),
             "last_error": self.connection_info.last_error,
-            "is_monitoring": self.is_monitoring
+            "is_monitoring": self.is_monitoring,
         }
-        
-        return stats
 
 
 # Convenience functions for common connection management patterns

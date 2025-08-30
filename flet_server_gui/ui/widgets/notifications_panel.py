@@ -146,22 +146,22 @@ class NotificationsPanel(ft.NavigationDrawer):
             bgcolor=priority_color,
             border_radius=ft.border_radius.all(2)
         )
-        
+
         # Icon
         icon = ft.Icon(
             self._type_icons.get(notification.type, ft.Icons.NOTIFICATIONS),
             size=20,
             color=priority_color
         )
-        
+
         # Title and message
         title = ft.Text(
             notification.title,
             size=14,
-            weight=ft.FontWeight.BOLD if not notification.read else ft.FontWeight.NORMAL,
-            color=TOKENS['on_background'] if not notification.read else TOKENS['outline']
+            weight=ft.FontWeight.NORMAL if notification.read else ft.FontWeight.BOLD,
+            color=TOKENS['outline'] if notification.read else TOKENS['on_background']
         )
-        
+
         message = ft.Text(
             notification.message,
             size=12,
@@ -169,14 +169,14 @@ class NotificationsPanel(ft.NavigationDrawer):
             max_lines=2,
             overflow=ft.TextOverflow.ELLIPSIS
         )
-        
+
         # Timestamp
         timestamp = ft.Text(
             self._format_timestamp(notification.timestamp),
             size=10,
             color=TOKENS['outline']
         )
-        
+
         # Action buttons
         action_buttons = []
         if notification.actions:
@@ -186,7 +186,7 @@ class NotificationsPanel(ft.NavigationDrawer):
                     on_click=lambda e, a=action, nid=notification.id: self._handle_action_click(nid, a)
                 )
                 action_buttons.append(btn)
-        
+
         # Main content
         content_column = ft.Column([
             ft.Row([
@@ -197,27 +197,31 @@ class NotificationsPanel(ft.NavigationDrawer):
             message,
             ft.Row(action_buttons, spacing=8) if action_buttons else ft.Container()
         ], spacing=4)
-        
-        # Card container
-        card = ft.Container(
-            content=ft.Row([
-                priority_indicator,
-                ft.Container(
-                    content=ft.Row([
-                        icon,
-                        ft.Container(content_column, expand=True)
-                    ], spacing=12),
-                    padding=ft.padding.all(12),
-                    expand=True
-                )
-            ], spacing=0),
+
+        return ft.Container(
+            content=ft.Row(
+                [
+                    priority_indicator,
+                    ft.Container(
+                        content=ft.Row(
+                            [icon, ft.Container(content_column, expand=True)],
+                            spacing=12,
+                        ),
+                        padding=ft.padding.all(12),
+                        expand=True,
+                    ),
+                ],
+                spacing=0,
+            ),
             border_radius=8,
-            bgcolor=TOKENS['surface_variant'] if not notification.read else TOKENS['surface'],
+            bgcolor=(
+                TOKENS['surface'] if notification.read else TOKENS['surface_variant']
+            ),
             ink=True,
-            on_click=lambda e, nid=notification.id: self._handle_notification_click(nid)
+            on_click=lambda e, nid=notification.id: self._handle_notification_click(
+                nid
+            ),
         )
-        
-        return card
     
     def add_notification(self, notification: NotificationItem):
         """Add a new notification"""

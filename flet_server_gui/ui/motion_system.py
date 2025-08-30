@@ -870,10 +870,14 @@ def create_motion_system(page: ft.Page) -> M3MotionSystem:
 
 def get_motion_token_by_use_case(use_case: str) -> Optional[MotionToken]:
     """Get a motion token by its use case."""
-    for token in M3MotionTokens.__dict__.values():
-        if isinstance(token, MotionToken) and use_case in token.use_cases:
-            return token
-    return None
+    return next(
+        (
+            token
+            for token in M3MotionTokens.__dict__.values()
+            if isinstance(token, MotionToken) and use_case in token.use_cases
+        ),
+        None,
+    )
 
 
 # ============================================================================

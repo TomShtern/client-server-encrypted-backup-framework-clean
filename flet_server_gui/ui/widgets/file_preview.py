@@ -151,19 +151,14 @@ class FilePreview(EnhancedCard):
         try:
             if self.file_path and os.path.exists(self.file_path):
                 size = os.path.getsize(self.file_path)
-                for unit in ['B', 'KB', 'MB', 'GB']:
-                    if size < 1024.0:
-                        return f"{size:.1f} {unit}"
-                    size /= 1024.0
-                return f"{size:.1f} TB"
             else:
                 # Estimate from content
                 size = len(self.file_content.encode('utf-8'))
-                for unit in ['B', 'KB', 'MB', 'GB']:
-                    if size < 1024.0:
-                        return f"{size:.1f} {unit}"
-                    size /= 1024.0
-                return f"{size:.1f} TB"
+            for unit in ['B', 'KB', 'MB', 'GB']:
+                if size < 1024.0:
+                    return f"{size:.1f} {unit}"
+                size /= 1024.0
+            return f"{size:.1f} TB"
         except Exception:
             return "Unknown"
     
@@ -248,21 +243,17 @@ class FilePreviewManager:
         try:
             # Get file content from server
             file_content = await self.server_bridge.get_file_content(filename)
-            
+
             if not file_content:
                 return None
-            
-            # Create preview component
-            preview = FilePreview(
+
+            return FilePreview(
                 file_path=filename,
                 file_content=file_content,
                 on_close=self._close_dialog,
                 on_download=self._download_file,
-                on_delete=self._delete_file
+                on_delete=self._delete_file,
             )
-            
-            return preview
-            
         except Exception as e:
             print(f"Error generating preview for {filename}: {e}")
             return None

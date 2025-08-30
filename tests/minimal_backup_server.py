@@ -125,5 +125,5 @@ def main():
         
     return 0
 
-if __name__ == "__main__":
-    sys.exit(main())
+if __name__ == "__main__":  # pragma: no cover - manual run helper
+    main()

@@ -156,8 +156,8 @@ class LogsView(BaseComponent):
         # Controls bar
         controls_bar = ft.Row([
             ft.ElevatedButton(
-                text="Start Monitoring" if not self.log_service.monitoring_active else "Stop Monitoring",
-                icon=ft.Icons.PLAY_ARROW if not self.log_service.monitoring_active else ft.Icons.STOP,
+                text="Stop Monitoring" if self.log_service.monitoring_active else "Start Monitoring",
+                icon=ft.Icons.STOP if self.log_service.monitoring_active else ft.Icons.PLAY_ARROW,
                 on_click=self._toggle_monitoring
             ),
             ft.VerticalDivider(width=1),
@@ -240,8 +240,7 @@ class LogsView(BaseComponent):
         while True:
             try:
                 if self.log_service.monitoring_active:
-                    pending_updates = self.log_service.get_pending_updates()
-                    if pending_updates:
+                    if pending_updates := self.log_service.get_pending_updates():
                         self._process_pending_updates(pending_updates)
                     self._update_stats()
                 await asyncio.sleep(1)  # Update every second
@@ -324,30 +323,31 @@ class LogsView(BaseComponent):
     def _refresh_logs(self, e):
         """Refresh the log display"""
         # Only refresh if the view is fully initialized
-        if hasattr(self, 'initialized') and self.initialized:
-            try:
-                # Use page.run_task if available, otherwise check for event loop
-                if hasattr(self.page, 'run_task'):
-                    self.page.run_task(self.action_handlers.refresh_logs)
-                else:
-                    # Check if we're in an async context
-                    try:
-                        loop = asyncio.get_running_loop()
-                        if loop.is_running():
-                            asyncio.create_task(self.action_handlers.refresh_logs())
-                    except RuntimeError:
-                        # No event loop running, skip refresh
-                        pass
-            except Exception:
-                # General exception handling
-                pass
+        if not hasattr(self, 'initialized') or not self.initialized:
+            return
+        try:
+            # Use page.run_task if available, otherwise check for event loop
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(self.action_handlers.refresh_logs)
+            else:
+                # Check if we're in an async context
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self.action_handlers.refresh_logs())
+                except RuntimeError:
+                    # No event loop running, skip refresh
+                    pass
+        except Exception:
+            # General exception handling
+            pass
     
     def _update_component_filter(self, logs: List[LogEntry]):
         """Update component filter dropdown with available components"""
-        components = set(["ALL"])
+        components = {"ALL"}
         for log in logs:
             components.add(log.component)
-        
+
         self.component_filter.options = [ft.dropdown.Option(comp) for comp in sorted(components)]
         if self.component_filter.value not in components:
             self.component_filter.value = "ALL"

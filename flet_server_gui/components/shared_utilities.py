@@ -199,11 +199,11 @@ class ValidationUtils:
     @staticmethod
     def is_valid_filename(filename: str) -> bool:
         """Check if filename is valid"""
-        if not filename or len(filename.strip()) == 0:
+        if not filename or not filename.strip():
             return False
-        
+
         invalid_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
-        return not any(char in filename for char in invalid_chars)
+        return all(char not in filename for char in invalid_chars)
     
     @staticmethod
     def is_valid_email(email: str) -> bool:
@@ -242,11 +242,11 @@ class AsyncUtils:
     async def run_with_timeout(coro, timeout: float = 30.0):
         """Run async operation with timeout"""
         import asyncio
-        
+
         try:
             return await asyncio.wait_for(coro, timeout=timeout)
-        except asyncio.TimeoutError:
-            raise TimeoutError(f"Operation timed out after {timeout} seconds")
+        except asyncio.TimeoutError as e:
+            raise TimeoutError(f"Operation timed out after {timeout} seconds") from e
 
 
 class DataUtils:
@@ -268,11 +268,10 @@ class DataUtils:
         """Filter items by multiple key-value pairs"""
         filtered = []
         for item in items:
-            match = True
-            for key, value in filters.items():
-                if key not in item or item[key] != value:
-                    match = False
-                    break
+            match = not any(
+                key not in item or item[key] != value
+                for key, value in filters.items()
+            )
             if match:
                 filtered.append(item)
         return filtered

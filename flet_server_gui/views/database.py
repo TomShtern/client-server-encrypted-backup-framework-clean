@@ -375,8 +375,7 @@ class DatabaseView(BaseComponent):
     
     def on_table_select(self, e):
         """Handle table selection."""
-        selected = e.control.value
-        if selected:
+        if selected := e.control.value:
             self.selected_table = selected
             self.load_table_content(selected)
     
@@ -528,21 +527,20 @@ class DatabaseView(BaseComponent):
             # Extract row_id and selection state from the event
             row_id = e.data
             selected = e.control.value if hasattr(e.control, 'value') else False
-            
+
             if selected:
                 if row_id not in self.selected_rows:
                     self.selected_rows.append(row_id)
-            else:
-                if row_id in self.selected_rows:
-                    self.selected_rows.remove(row_id)
-            
+            elif row_id in self.selected_rows:
+                self.selected_rows.remove(row_id)
+
             # Update select all checkbox state
             self._update_select_all_checkbox()
             self._update_bulk_actions_visibility()
-            
+
             if self.page:
                 self.page.update()
-            
+
         except Exception as ex:
             self._show_error(f"Error in row selection: {str(ex)}")
     
@@ -567,14 +565,14 @@ class DatabaseView(BaseComponent):
     def _update_bulk_actions_visibility(self):
         """Update visibility of bulk action buttons"""
         try:
-            has_selections = len(self.selected_rows) > 0
-            
             if self.bulk_actions_row and len(self.bulk_actions_row.controls) > 1:
+                has_selections = len(self.selected_rows) > 0
+
                 # Show/hide bulk action buttons (skip the label)
                 for i, control in enumerate(self.bulk_actions_row.controls):
                     if i > 0 and isinstance(control, ft.ElevatedButton):
                         control.visible = has_selections
-                
+
                 # Force page update to show visibility changes
                 if self.page:
                     self.page.update()

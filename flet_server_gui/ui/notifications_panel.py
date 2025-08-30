@@ -561,31 +561,19 @@ class NotificationsPanelManager:
         """
         try:
             self._current_filter = filter_criteria
-            filtered_notifications = []
-            
-            # TODO: Apply type filtering
-            # TODO: Apply priority filtering
-            # TODO: Apply status filtering
-            # TODO: Apply time-based filtering
-            # TODO: Apply text search filtering
-            # TODO: Apply tag filtering
-            # TODO: Apply sorting
-            # TODO: Update UI with results
-            # TODO: Save filter preferences
-            
-            # Placeholder filtering logic
-            for notification in self._notifications.values():
-                if self._matches_filter(notification, filter_criteria):
-                    filtered_notifications.append(notification)
-            
+            filtered_notifications = [
+                notification
+                for notification in self._notifications.values()
+                if self._matches_filter(notification, filter_criteria)
+            ]
             # Sort by priority and timestamp
             filtered_notifications.sort(key=lambda n: (n.priority.value, n.timestamp), reverse=True)
-            
+
             self._filtered_notifications = filtered_notifications
             await self._refresh_notification_display()
-            
+
             return filtered_notifications
-            
+
         except Exception as e:
             # TODO: Handle filtering errors
             return []
@@ -640,16 +628,7 @@ class NotificationsPanelManager:
         RETURNS:
         List[NotificationData]: Search results ordered by relevance
         """
-        if not search_text.strip():
-            return self._filtered_notifications
-            
-        # TODO: Implement advanced search logic
-        # TODO: Apply fuzzy matching
-        # TODO: Rank results by relevance
-        # TODO: Highlight search terms
-        # TODO: Update search UI
-        
-        return []  # Placeholder
+        return [] if search_text.strip() else self._filtered_notifications
 
     # ═══════════════════════════════════════════════════════════════════════════════════
     # BULK OPERATIONS - TODO: Batch notification management

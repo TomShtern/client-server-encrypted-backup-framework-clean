@@ -149,8 +149,8 @@ class EnhancedWidget:
         if self.config.collapsible:
             actions.append(
                 ft.IconButton(
-                    icon=ft.Icons.EXPAND_LESS if not self.is_collapsed else ft.Icons.EXPAND_MORE,
-                    tooltip="Collapse" if not self.is_collapsed else "Expand",
+                    icon=ft.Icons.EXPAND_MORE if self.is_collapsed else ft.Icons.EXPAND_LESS,
+                    tooltip="Expand" if self.is_collapsed else "Collapse",
                     on_click=self._on_toggle_collapse
                 )
             )
@@ -211,12 +211,11 @@ class EnhancedWidget:
         # Find the icon button and update it
         if hasattr(self.widget.content, 'content') and hasattr(self.widget.content.content, 'controls'):
             for control in self.widget.content.content.controls:
-                if isinstance(control, ft.Container) and hasattr(control, 'content'):
-                    if isinstance(control.content, ft.Row):
-                        for action in control.content.controls:
-                            if isinstance(action, ft.IconButton):
-                                action.icon = ft.Icons.EXPAND_LESS if not self.is_collapsed else ft.Icons.EXPAND_MORE
-                                action.tooltip = "Collapse" if not self.is_collapsed else "Expand"
+                if isinstance(control, ft.Container) and hasattr(control, 'content') and isinstance(control.content, ft.Row):
+                    for action in control.content.controls:
+                        if isinstance(action, ft.IconButton):
+                            action.icon = ft.Icons.EXPAND_MORE if self.is_collapsed else ft.Icons.EXPAND_LESS
+                            action.tooltip = "Expand" if self.is_collapsed else "Collapse"
         
         # Call callbacks
         if self.is_collapsed and self.config.on_collapse:
@@ -365,9 +364,6 @@ class ProgressWidget(EnhancedWidget):
         color: Optional[str] = None,
         **kwargs
     ):
-        # Create content
-        content_controls = []
-        
         # Progress bar
         progress_bar = ft.ProgressBar(
             value=progress,
@@ -375,11 +371,10 @@ class ProgressWidget(EnhancedWidget):
             bar_height=8,
             border_radius=4
         )
-        content_controls.append(progress_bar)
-        
+        content_controls = [progress_bar]
         # Percentage and description
         bottom_controls = []
-        
+
         if show_percentage:
             bottom_controls.append(
                 ft.Text(
@@ -388,7 +383,7 @@ class ProgressWidget(EnhancedWidget):
                     weight=ft.FontWeight.W_500
                 )
             )
-        
+
         if description:
             bottom_controls.append(
                 ft.Text(
@@ -397,7 +392,7 @@ class ProgressWidget(EnhancedWidget):
                     color=TOKENS['outline']
                 )
             )
-        
+
         if bottom_controls:
             content_controls.append(
                 ft.Row(
@@ -405,7 +400,7 @@ class ProgressWidget(EnhancedWidget):
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN
                 )
             )
-        
+
         config = WidgetConfig(
             title=title,
             widget_type=WidgetType.PROGRESS,
@@ -413,9 +408,9 @@ class ProgressWidget(EnhancedWidget):
             size=WidgetSize.SMALL,
             **kwargs
         )
-        
+
         super().__init__(page, config)
-        
+
         # Store reference to progress bar for updates
         self.progress_bar = progress_bar
     
@@ -459,10 +454,7 @@ class StatusWidget(EnhancedWidget):
         # Determine status color
         if not status_color:
             status_color = self._get_status_color(status)
-        
-        # Create content
-        content_controls = []
-        
+
         # Status indicator
         status_row = ft.Row([
             ft.Icon(
@@ -476,8 +468,7 @@ class StatusWidget(EnhancedWidget):
                 weight=ft.FontWeight.W_500
             )
         ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER)
-        content_controls.append(status_row)
-        
+        content_controls = [status_row]
         # Details
         if details:
             content_controls.append(
@@ -487,7 +478,7 @@ class StatusWidget(EnhancedWidget):
                     color=TOKENS['outline']
                 )
             )
-        
+
         # Last updated
         if last_updated:
             content_controls.append(
@@ -497,7 +488,7 @@ class StatusWidget(EnhancedWidget):
                     color=TOKENS['outline']
                 )
             )
-        
+
         config = WidgetConfig(
             title=title,
             widget_type=WidgetType.STATUS,
@@ -505,7 +496,7 @@ class StatusWidget(EnhancedWidget):
             size=WidgetSize.SMALL,
             **kwargs
         )
-        
+
         super().__init__(page, config)
     
     def _get_status_color(self, status: str) -> str:
@@ -592,23 +583,17 @@ class WidgetManager:
         for widget in self.widgets:
             # Determine column span based on widget size
             col_span = self._get_column_span(widget.config.size)
-            
+
             grid_controls.append(
                 ft.ResponsiveGridCell(
                     widget.get_control(),
                     col_span=col_span
                 )
             )
-        
-        # Create responsive grid
-        grid = ft.ResponsiveRow(
-            ref=self.grid_ref,
-            controls=grid_controls,
-            spacing=20,
-            run_spacing=20
+
+        return ft.ResponsiveRow(
+            ref=self.grid_ref, controls=grid_controls, spacing=20, run_spacing=20
         )
-        
-        return grid
     
     def _get_column_span(self, size: WidgetSize) -> int:
         """Get column span for widget size"""

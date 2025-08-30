@@ -9,11 +9,15 @@ from .base_action import ActionResult, BaseAction
 from .client_actions import ClientActions
 from .file_actions import FileActions  
 from .server_actions import ServerActions
+from .database_actions import DatabaseActions
+from .log_actions import LogActions
 
 __all__ = [
     'ActionResult',
     'BaseAction', 
     'ClientActions',
     'FileActions',
-    'ServerActions'
+    'ServerActions',
+    'DatabaseActions',
+    'LogActions'
 ]

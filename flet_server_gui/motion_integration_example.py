@@ -419,11 +419,9 @@ class MotionEnabledDashboard:
         """Remove toast from notification area."""
         try:
             if (hasattr(self.notification_area, 'content') and 
-                hasattr(self.notification_area.content, 'controls')):
-                
-                if toast in self.notification_area.content.controls:
-                    self.notification_area.content.controls.remove(toast)
-                    self.page.update()
+                            hasattr(self.notification_area.content, 'controls')) and toast in self.notification_area.content.controls:
+                self.notification_area.content.controls.remove(toast)
+                self.page.update()
         except Exception as e:
             print(f"[WARNING] Could not remove toast: {e}")
 

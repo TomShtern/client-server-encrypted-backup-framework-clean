@@ -172,31 +172,30 @@ class LogService:
         for log_file in self.log_files:
             try:
                 file_path = str(log_file)
-                
+
                 # Check if file still exists
                 if not log_file.exists():
                     continue
-                
+
                 current_size = log_file.stat().st_size
                 last_position = self.file_positions.get(file_path, 0)
-                
+
                 if current_size > last_position:
                     # Read new content
                     with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
                         f.seek(last_position)
                         new_lines = f.readlines()
-                    
+
                     # Process new lines
                     component = log_file.stem.replace('_', ' ').title()
                     for line in new_lines:
                         if line.strip():
-                            entry = LogEntry.from_line(line, component)
-                            if entry:
+                            if entry := LogEntry.from_line(line, component):
                                 self._add_log_entry(entry)
-                    
+
                     # Update position
                     self.file_positions[file_path] = current_size
-                
+
             except Exception as e:
                 logger.error(f"❌ Error reading log file {log_file}: {e}")
     
@@ -206,13 +205,13 @@ class LogService:
         self.log_history.append(entry)
         if len(self.log_history) > self.max_history:
             self.log_history = self.log_history[-self.max_history:]
-        
+
         # Add to queue for GUI updates
         try:
             self.log_queue.put_nowait(entry)
-        except:
+        except Exception:
             pass  # Queue full, skip update
-        
+
         # Notify callbacks
         for callback in self.update_callbacks:
             try:

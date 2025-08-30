@@ -584,23 +584,13 @@ class ActivityLogDialogManager:
         """
         if not search_text.strip():
             return self._filtered_activities
-            
+
         try:
-            # TODO: Validate regex if regex search enabled
-            # TODO: Apply multi-field search
-            # TODO: Rank results by relevance
-            # TODO: Apply search highlighting
-            # TODO: Save to search history
-            # TODO: Handle search errors
-            
-            search_results = []
-            # Placeholder search logic
-            for activity in self._filtered_activities:
-                if search_text.lower() in activity.message.lower():
-                    search_results.append(activity)
-            
-            return search_results
-            
+            return [
+                activity
+                for activity in self._filtered_activities
+                if search_text.lower() in activity.message.lower()
+            ]
         except Exception as e:
             # TODO: Handle search errors
             return []

@@ -149,21 +149,19 @@ def test_robust_progress_monitor():
     shutil.rmtree(test_dir)
     print(f"Cleaned up test directory: {test_dir}")
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - manual execution helper
     try:
         print("Progress Monitoring Test Suite")
         print("Testing the fixes for file receipt detection and progress polling")
         print()
-        
+
         test_file_receipt_tracker()
         test_robust_progress_monitor()
-        
+
         print("\n" + "="*50)
         print("✅ All tests completed!")
         print("="*50)
-        
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"\n❌ Test failed with error: {e}")
         import traceback
         traceback.print_exc()
-        sys.exit(1)

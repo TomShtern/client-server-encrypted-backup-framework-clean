@@ -1,13 +1,19 @@
 import unittest
-import flet as ft
-import asyncio
 from unittest.mock import Mock, patch
-from flet_server_gui.main import ServerGUIApp
-from flet_server_gui.utils.server_bridge import ServerBridge
-from flet_server_gui.components.base_table_manager import BaseTableManager
-from flet_server_gui.ui.widgets.status_pill import StatusPill
-from flet_server_gui.utils.connection_manager import ConnectionStatus
+import pytest
 
+try:
+    import flet as ft  # type: ignore
+    from flet_server_gui.main import ServerGUIApp  # type: ignore
+    from flet_server_gui.utils.server_bridge import ServerBridge  # type: ignore
+    from flet_server_gui.components.base_table_manager import BaseTableManager  # type: ignore
+    from flet_server_gui.ui.widgets.status_pill import StatusPill  # type: ignore
+    from flet_server_gui.utils.connection_manager import ConnectionStatus  # type: ignore
+    _gui_import_error = None
+except Exception as e:  # pragma: no cover - optional GUI deps missing
+    _gui_import_error = str(e)
+
+@pytest.mark.skipif(_gui_import_error is not None, reason=f"GUI stack not available: {_gui_import_error}")
 class TestGUIIntegration(unittest.TestCase):
     """Integration tests for Flet GUI components"""
     

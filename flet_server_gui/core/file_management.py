@@ -54,18 +54,13 @@ class FileManagement:
         """
         try:
             files = self.server_bridge.get_all_files()
-            
+
             # Convert to standardized format if needed
             standardized_files = []
             for file_obj in files:
-                if hasattr(file_obj, '__dict__'):
-                    # Convert object to dict
-                    file_dict = file_obj.__dict__
-                else:
-                    file_dict = file_obj
-                    
+                file_dict = file_obj.__dict__ if hasattr(file_obj, '__dict__') else file_obj
                 standardized_files.append(file_dict)
-            
+
             return {
                 'success': True,
                 'data': standardized_files,
@@ -189,9 +184,8 @@ class FileManagement:
             # Get file info first for metadata
             file_info_result = await self.get_file_details(file_id)
             file_info = file_info_result.get('data', {}) if file_info_result.get('success') else {}
-            
-            success = self.server_bridge.delete_file(file_info)
-            if success:
+
+            if success := self.server_bridge.delete_file(file_info):
                 return {
                     'success': True,
                     'data': {'file_id': file_id, 'action': 'delete', 'filename': file_info.get('filename', file_id)},
@@ -256,7 +250,7 @@ class FileManagement:
             },
             'metadata': {
                 'operation_type': 'bulk_file_delete',
-                'errors': errors if errors else None
+                'errors': errors or None
             }
         }
     
@@ -382,7 +376,7 @@ class FileManagement:
             },
             'metadata': {
                 'operation_type': 'bulk_file_download',
-                'errors': errors if errors else None
+                'errors': errors or None
             }
         }
     
@@ -510,7 +504,7 @@ class FileManagement:
             },
             'metadata': {
                 'operation_type': 'bulk_file_verification',
-                'errors': errors if errors else None
+                'errors': errors or None
             }
         }
     
@@ -690,7 +684,7 @@ class FileManagement:
                 'metadata': {
                     'operation_type': 'file_cleanup', 
                     'cutoff_date': cutoff_date.isoformat(),
-                    'errors': cleanup_errors if cleanup_errors else None
+                    'errors': cleanup_errors or None
                 }
             }
             
@@ -717,12 +711,12 @@ class FileManagement:
                 if not all_files_result.get('success'):
                     return {'total_files': 0, 'total_size': 0, 'total_size_formatted': '0 B'}
                 files_data = all_files_result['data']
-            
+
             total_files = len(files_data)
             total_size = 0
             file_types = {}
             clients = set()
-            
+
             for file_data in files_data:
                 # Calculate size
                 size = file_data.get('size', 0)
@@ -730,21 +724,19 @@ class FileManagement:
                     total_size += size
                 elif isinstance(size, str) and size.isdigit():
                     total_size += int(size)
-                
+
                 # Count file types
                 filename = file_data.get('filename', '')
                 if '.' in filename:
                     ext = filename.split('.')[-1].lower()
                     file_types[ext] = file_types.get(ext, 0) + 1
-                
-                # Count unique clients
-                client = file_data.get('client')
-                if client:
+
+                if client := file_data.get('client'):
                     clients.add(client)
-            
+
             # Format size
             total_size_formatted = self._format_file_size(total_size)
-            
+
             return {
                 'total_files': total_files,
                 'total_size': total_size,
@@ -753,7 +745,7 @@ class FileManagement:
                 'unique_clients': len(clients),
                 'average_file_size': total_size / total_files if total_files > 0 else 0
             }
-            
+
         except Exception as e:
             return {
                 'total_files': 0,

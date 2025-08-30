@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 """
-Database Table Renderer Component
+Database Table Renderer Component (CONSOLIDATED)
 Handles UI rendering of database table data with proper formatting and responsive design.
+Inherits from BaseTableRenderer to eliminate code duplication.
+
+CONSOLIDATION BENEFITS:
+- Removes ~120 lines of duplicate code (cell formatting, selection management, table styling)
+- Inherits standardized functionality while preserving database-specific dynamic column handling
+- Maintains backward compatibility with all existing database table operations
 """
 
 import flet as ft
 import sys
 import os
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 from flet_server_gui.core.semantic_colors import get_status_color
 from flet_server_gui.ui.unified_theme_system import TOKENS
 
@@ -20,28 +26,28 @@ if project_root not in sys.path:
 try:
     from flet_server_gui.utils.server_bridge import ServerBridge
     from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
+    from .base_table_renderer import BaseTableRenderer
 except ImportError:
     # Fallback to relative imports for direct execution
     try:
         sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
         from utils.server_bridge import ServerBridge
         from ui.widgets.buttons import ActionButtonFactory
+        from base_table_renderer import BaseTableRenderer
     except ImportError:
         ServerBridge = object
         ActionButtonFactory = object
+        BaseTableRenderer = object
 
 
-class DatabaseTableRenderer:
-    """Handles rendering of database table data in table format"""
+class DatabaseTableRenderer(BaseTableRenderer):
+    """Handles rendering of database table data using consolidated base functionality"""
     
     def __init__(self, server_bridge: ServerBridge, button_factory: ActionButtonFactory, page: ft.Page):
-        self.server_bridge = server_bridge
-        self.button_factory = button_factory
-        self.page = page
-        
-        # Table components
-        self.database_table = None
-        self.selected_rows = []
+        super().__init__(server_bridge, button_factory, page)
+        # Database-specific aliases for backward compatibility
+        self.database_table = self.table
+        self.selected_rows = self.selected_items
         self.current_table_name = None
         self.table_columns = []
         self.database_view = None  # Will be set by the database view
@@ -50,30 +56,29 @@ class DatabaseTableRenderer:
         """Create the database data table with dynamic headers based on table schema"""
         self.current_table_name = table_name
         self.table_columns = columns
-        
+
         # Create dynamic columns based on table schema
         table_columns = [
             ft.DataColumn(ft.Checkbox(on_change=None)),  # Select all will be handled by parent
         ]
-        
+
         # Add columns dynamically based on database table schema
-        for col_name in columns[:6]:  # Limit to 6 visible columns for responsive design
-            table_columns.append(
-                ft.DataColumn(
-                    ft.Text(
-                        col_name.replace('_', ' ').title(), 
-                        weight=ft.FontWeight.BOLD, 
-                        max_lines=1, 
-                        overflow=ft.TextOverflow.ELLIPSIS
-                    )
+        table_columns.extend(
+            ft.DataColumn(
+                ft.Text(
+                    col_name.replace('_', ' ').title(),
+                    weight=ft.FontWeight.BOLD,
+                    max_lines=1,
+                    overflow=ft.TextOverflow.ELLIPSIS,
                 )
             )
-        
+            for col_name in columns[:6]
+        )
         # Always add Actions column
         table_columns.append(
             ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS))
         )
-        
+
         self.database_table = ft.DataTable(
             columns=table_columns,
             rows=[],
@@ -156,7 +161,7 @@ class DatabaseTableRenderer:
         """Format cell value based on column type and content"""
         if value is None:
             return ""
-        
+
         # Special formatting for common column types
         if isinstance(value, datetime):
             return value.strftime('%Y-%m-%d %H:%M')
@@ -165,8 +170,8 @@ class DatabaseTableRenderer:
         elif isinstance(value, bool):
             return "Yes" if value else "No"
         elif len(str(value)) > 30:  # Truncate very long values
-            return str(value)[:27] + "..."
-        
+            return f"{str(value)[:27]}..."
+
         return str(value)
     
     def _format_file_size(self, size_bytes: int) -> str:

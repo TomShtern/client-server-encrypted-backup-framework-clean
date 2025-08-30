@@ -30,7 +30,7 @@ except ImportError as e:
 import flet as ft
 import asyncio
 from datetime import datetime
-from typing import Callable
+from typing import Callable, Optional, Dict, Any, Set, List, Union
 
 # Use only working components to avoid complex import chains
 from flet_server_gui.components.control_panel_card import ControlPanelCard
@@ -71,7 +71,7 @@ from flet_server_gui.utils.trace_center import get_trace_center  # Phase 2: trac
 class ServerGUIApp:
     """Main application class - Material Design 3 desktop server GUI"""
     
-    def __init__(self, page: ft.Page):
+    def __init__(self, page: ft.Page) -> None:
         self.page = page
         # Enable structured JSONL tracing early (Phase 2)
         try:
@@ -169,7 +169,7 @@ class ServerGUIApp:
         self.page.on_connect = self._on_page_connect
         self.page.on_close = self._on_page_close
     
-    def _safe_init_view(self, view_name: str, module_path: str, class_name: str, *args):
+    def _safe_init_view(self, view_name: str, module_path: str, class_name: str, *args: Any) -> Optional[Any]:
         """
         Safely import and initialize a view with detailed error diagnostics.
         
@@ -238,7 +238,7 @@ class ServerGUIApp:
         
         return view_instance
     
-    def _safe_init_preloaded_view(self, view_name: str, view_class, *args):
+    def _safe_init_preloaded_view(self, view_name: str, view_class: Optional[type], *args: Any) -> Optional[Any]:
         """
         Safely initialize a pre-imported view class with detailed error diagnostics.
         
@@ -276,7 +276,7 @@ class ServerGUIApp:
             task.add_done_callback(self._background_tasks.discard)
         return task
     
-    async def _cancel_all_tasks(self):
+    async def _cancel_all_tasks(self) -> None:
         """Cancel all background tasks gracefully."""
         self._is_shutting_down = True
         
@@ -303,7 +303,7 @@ class ServerGUIApp:
             
             self._background_tasks.clear()
     
-    def _cleanup_view_resources(self, view_instance):
+    def _cleanup_view_resources(self, view_instance: Optional[Any]) -> None:
         """Clean up resources for a view instance."""
         if not view_instance:
             return
@@ -329,7 +329,7 @@ class ServerGUIApp:
             except Exception as e:
                 safe_print(f"[WARNING] Error stopping view: {e}")
     
-    async def dispose(self):
+    async def dispose(self) -> None:
         """Dispose of all application resources."""
         safe_print("[INFO] Disposing application resources...")
         
@@ -353,11 +353,11 @@ class ServerGUIApp:
         
         safe_print("[INFO] Application disposed successfully")
     
-    async def _on_page_close(self, e):
+    async def _on_page_close(self, e: ft.ControlEvent) -> None:
         """Handle application close event."""
         await self.dispose()
     
-    async def _on_page_connect(self, e):
+    async def _on_page_connect(self, e: ft.ControlEvent) -> None:
         """Start background tasks when the page is connected."""
         if self._is_shutting_down:
             return
@@ -372,7 +372,7 @@ class ServerGUIApp:
             if hasattr(self.dashboard_view, 'start_dashboard_async'):
                 self._track_task(asyncio.create_task(self.dashboard_view.start_dashboard_async()))
     
-    def setup_application(self):
+    def setup_application(self) -> None:
         """Configure the desktop application and apply the theme."""
         self.page.title = "Encrypted Backup Server - Control Panel"
         
@@ -407,7 +407,7 @@ class ServerGUIApp:
         
         self.theme_tokens = self.theme_manager.get_tokens()
     
-    def build_ui(self):
+    def build_ui(self) -> None:
         """Build the main UI structure with animations."""
         self.hamburger_button = ft.IconButton(
             icon=ft.Icons.MENU,
@@ -483,7 +483,7 @@ class ServerGUIApp:
         # Remove redundant minimum size settings - already set in setup_application()
         # The responsive layout will handle sizing automatically
     
-    def toggle_navigation(self, e):
+    def toggle_navigation(self, e: ft.ControlEvent) -> None:
         """Toggle navigation rail visibility with responsive behavior"""
         self.nav_rail_visible = not self.nav_rail_visible
         self.nav_rail.visible = self.nav_rail_visible
@@ -500,7 +500,7 @@ class ServerGUIApp:
         
         self.page.update()
     
-    def handle_window_resize(self, e=None):
+    def handle_window_resize(self, e: Optional[ft.ControlEvent] = None) -> None:
         """Handle window resize events to ensure responsive layout with MD3 desktop breakpoints"""
         if not hasattr(self, 'page') or not self.page:
             return
@@ -544,8 +544,7 @@ class ServerGUIApp:
         """Create and return the dashboard view."""
         if self.dashboard_view:
             try:
-                dashboard_content = self.dashboard_view.build()
-                if dashboard_content:
+                if dashboard_content := self.dashboard_view.build():
                     # Dashboard async tasks will be started via _on_page_connect
                     return dashboard_content
                 else:
@@ -695,21 +694,20 @@ class ServerGUIApp:
     
     def get_clients_view(self) -> ft.Control:
         """Create and return the clients view."""
-        if self.clients_view:
-            try:
-                return self.clients_view.build()
-            except Exception as e:
-                print(f"[ERROR] Failed to build clients view: {e}")
-                return ft.Container(
-                    content=ft.Text(f"Clients view error: {str(e)}",
-                                   style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                                   text_align=ft.TextAlign.CENTER),
-                    padding=40,
-                    alignment=ft.alignment.center
-                )
-        else:
+        if not self.clients_view:
             return ft.Container(
                 content=ft.Text("Clients view not available",
+                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                               text_align=ft.TextAlign.CENTER),
+                padding=40,
+                alignment=ft.alignment.center
+            )
+        try:
+            return self.clients_view.build()
+        except Exception as e:
+            print(f"[ERROR] Failed to build clients view: {e}")
+            return ft.Container(
+                content=ft.Text(f"Clients view error: {str(e)}",
                                style=ft.TextThemeStyle.HEADLINE_MEDIUM,
                                text_align=ft.TextAlign.CENTER),
                 padding=40,
@@ -718,21 +716,20 @@ class ServerGUIApp:
     
     def get_files_view(self) -> ft.Control:
         """Create and return the files view."""
-        if self.files_view:
-            try:
-                return self.files_view.build()
-            except Exception as e:
-                print(f"[ERROR] Failed to build files view: {e}")
-                return ft.Container(
-                    content=ft.Text(f"Files view error: {str(e)}",
-                                   style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                                   text_align=ft.TextAlign.CENTER),
-                    padding=40,
-                    alignment=ft.alignment.center
-                )
-        else:
+        if not self.files_view:
             return ft.Container(
                 content=ft.Text("Files view not available",
+                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                               text_align=ft.TextAlign.CENTER),
+                padding=40,
+                alignment=ft.alignment.center
+            )
+        try:
+            return self.files_view.build()
+        except Exception as e:
+            print(f"[ERROR] Failed to build files view: {e}")
+            return ft.Container(
+                content=ft.Text(f"Files view error: {str(e)}",
                                style=ft.TextThemeStyle.HEADLINE_MEDIUM,
                                text_align=ft.TextAlign.CENTER),
                 padding=40,
@@ -741,21 +738,20 @@ class ServerGUIApp:
     
     def get_database_view(self) -> ft.Control:
         """Create and return the database view."""
-        if self.database_view:
-            try:
-                return self.database_view.build()
-            except Exception as e:
-                print(f"[ERROR] Failed to build database view: {e}")
-                return ft.Container(
-                    content=ft.Text(f"Database view error: {str(e)}",
-                                   style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                                   text_align=ft.TextAlign.CENTER),
-                    padding=40,
-                    alignment=ft.alignment.center
-                )
-        else:
+        if not self.database_view:
             return ft.Container(
                 content=ft.Text("Database view not available",
+                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                               text_align=ft.TextAlign.CENTER),
+                padding=40,
+                alignment=ft.alignment.center
+            )
+        try:
+            return self.database_view.build()
+        except Exception as e:
+            print(f"[ERROR] Failed to build database view: {e}")
+            return ft.Container(
+                content=ft.Text(f"Database view error: {str(e)}",
                                style=ft.TextThemeStyle.HEADLINE_MEDIUM,
                                text_align=ft.TextAlign.CENTER),
                 padding=40,
@@ -764,21 +760,20 @@ class ServerGUIApp:
     
     def get_analytics_view(self) -> ft.Control:
         """Create and return the analytics view."""
-        if self.analytics_view:
-            try:
-                return self.analytics_view.build()
-            except Exception as e:
-                print(f"[ERROR] Failed to build analytics view: {e}")
-                return ft.Container(
-                    content=ft.Text(f"Analytics view error: {str(e)}",
-                                   style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                                   text_align=ft.TextAlign.CENTER),
-                    padding=40,
-                    alignment=ft.alignment.center
-                )
-        else:
+        if not self.analytics_view:
             return ft.Container(
                 content=ft.Text("Analytics view not available",
+                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                               text_align=ft.TextAlign.CENTER),
+                padding=40,
+                alignment=ft.alignment.center
+            )
+        try:
+            return self.analytics_view.build()
+        except Exception as e:
+            print(f"[ERROR] Failed to build analytics view: {e}")
+            return ft.Container(
+                content=ft.Text(f"Analytics view error: {str(e)}",
                                style=ft.TextThemeStyle.HEADLINE_MEDIUM,
                                text_align=ft.TextAlign.CENTER),
                 padding=40,
@@ -809,7 +804,7 @@ class ServerGUIApp:
                 alignment=ft.alignment.center
             )
 
-    async def _on_backup_now(self, e):
+    async def _on_backup_now(self, e: ft.ControlEvent) -> None:
         """Handle backup now action by running the file cleanup job."""
         if self._is_shutting_down:
             return
@@ -838,7 +833,7 @@ class ServerGUIApp:
             await self.show_notification(f"Cleanup error: {str(ex)}", is_error=True)
             self.add_log_entry("Cleanup", f"Error: {str(ex)}", "ERROR")
 
-    async def _on_clear_logs(self, e):
+    async def _on_clear_logs(self, e: ft.ControlEvent) -> None:
         """Handle clear logs action."""
         if self._is_shutting_down:
             return
@@ -850,7 +845,7 @@ class ServerGUIApp:
         else:
             self.add_log_entry("System", "Activity log cleared", "INFO")
 
-    async def _on_restart_services(self, e):
+    async def _on_restart_services(self, e: ft.ControlEvent) -> None:
         """Handle restart services action."""
         if self._is_shutting_down:
             return
@@ -861,13 +856,13 @@ class ServerGUIApp:
             self.add_log_entry("System", "Restart requested", "INFO")
             await self.show_notification("Service restart initiated")
 
-    def _on_view_clients(self, e):
+    def _on_view_clients(self, e: ft.ControlEvent) -> None:
         self.switch_view("clients")
 
-    def _on_manage_files(self, e):
+    def _on_manage_files(self, e: ft.ControlEvent) -> None:
         self.switch_view("files")
 
-    def switch_view(self, view_name: str):
+    def switch_view(self, view_name: str) -> None:
         """Switch to a different view, managing component lifecycles."""
         if self.current_view == view_name:
             return
@@ -934,7 +929,7 @@ class ServerGUIApp:
             self.content_area.content = error_content
             self.page.update()
 
-    def toggle_theme(self, e):
+    def toggle_theme(self, e: ft.ControlEvent) -> None:
         self.theme_manager.toggle_theme()
         mode = self.page.theme_mode
         if mode == ft.ThemeMode.DARK:
@@ -945,23 +940,23 @@ class ServerGUIApp:
             self.theme_toggle_button.icon = ft.Icons.SETTINGS_BRIGHTNESS
         self.page.update()
 
-    def _on_notifications(self, e):
+    def _on_notifications(self, e: ft.ControlEvent) -> None:
         """Handle notifications button click."""
         # Show notifications panel
         self.notifications_panel.show()
 
-    def _on_help(self, e):
+    def _on_help(self, e: ft.ControlEvent) -> None:
         """Handle help button click."""
         self.dialog_system.show_info_dialog(
             "About",
             "Encrypted Backup Server - Control Panel\nVersion: 1.0.0\nDeveloped with Flet and Material Design 3."
         )
     
-    def _show_activity_log(self, e):
+    def _show_activity_log(self, e: ft.ControlEvent) -> None:
         """Show activity log dialog."""
         self.activity_log_dialog.show(self.page)
     
-    def _add_sample_data(self):
+    def _add_sample_data(self) -> None:
         """Add sample notifications and activities for demonstration."""
         # Add sample notifications
         notif1 = create_notification(
@@ -1021,7 +1016,7 @@ class ServerGUIApp:
         self.activity_log_dialog.add_activity(activity3)
         self.activity_log_dialog.add_activity(activity4)
     
-    async def show_notification(self, message: str, is_error: bool = False):
+    async def show_notification(self, message: str, is_error: bool = False) -> None:
         """Async method to show notification."""
         if self._is_shutting_down:
             return
@@ -1042,7 +1037,7 @@ class ServerGUIApp:
         )
         self.notifications_panel.add_notification(notification)
     
-    def add_log_entry(self, source: str, message: str, level: str = "INFO"):
+    def add_log_entry(self, source: str, message: str, level: str = "INFO") -> None:
         """Add entry to the activity log"""
         # Map string level to enum
         level_map = {
@@ -1077,7 +1072,7 @@ class ServerGUIApp:
             # Fallback to console
             safe_print(f"[LOG] {source}: {message} ({level})")
     
-    async def monitor_loop(self):
+    async def monitor_loop(self) -> None:
         """Main monitoring loop with proper resource management and meaningful functionality."""
         safe_print("[INFO] Starting application monitor loop...")
         monitor_interval = 5  # Reasonable 5-second interval
@@ -1153,7 +1148,7 @@ class ServerGUIApp:
         
         safe_print("[INFO] Monitor loop stopped")
 
-def main(page: ft.Page):
+def main(page: ft.Page) -> None:
     app = ServerGUIApp(page)
 
 if __name__ == "__main__":

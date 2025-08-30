@@ -793,10 +793,6 @@ class TopBarIntegrationManager:
         PARAMETERS:
         breadcrumb: Clicked breadcrumb item
         """
-        if self.nav_sync_manager and breadcrumb.clickable:
-            # TODO: Navigate using Navigation Sync Manager
-            # await self.nav_sync_manager.navigate_to(breadcrumb.route)
-            pass
     
     async def _on_search_submit(self, query: str):
         """
@@ -812,9 +808,6 @@ class TopBarIntegrationManager:
     
     async def _on_notification_click(self):
         """TODO: Handle notification button click"""
-        if self.notifications_manager:
-            # TODO: Show notifications panel
-            pass
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════

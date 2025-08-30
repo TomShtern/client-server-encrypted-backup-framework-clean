@@ -6,6 +6,9 @@ Pure business logic for client operations, independent of UI concerns.
 
 from typing import List, Dict, Any
 from .base_action import BaseAction, ActionResult
+from flet_server_gui.utils.trace_center import get_trace_center
+from flet_server_gui.state.selection_state import selection_state
+from flet_server_gui.services.confirmation_service import ConfirmationService
 import asyncio
 
 
@@ -27,35 +30,20 @@ class ClientActions(BaseAction):
         Returns:
             ActionResult with operation outcome
         """
-        print(f"[ACTION_TRACE] ========== CLIENT DISCONNECT ===========")
-        print(f"[ACTION_TRACE] Client ID: {client_id}")
-        print(f"[ACTION_TRACE] Server bridge: {type(self.server_bridge)}")
-        
         try:
-            print(f"[BRIDGE_TRACE] Calling server_bridge.disconnect_client({client_id})")
             success = await self.server_bridge.disconnect_client(client_id)
-            print(f"[BRIDGE_TRACE] Server bridge returned: {success} (type: {type(success)})")
-            
             if success:
-                print(f"[ACTION_TRACE] ✓ Disconnect successful, creating success result")
-                return ActionResult.success_result(
-                    data={'client_id': client_id, 'action': 'disconnect'},
-                    metadata={'operation_type': 'client_disconnect'}
+                cid = get_trace_center().new_correlation_id()
+                return ActionResult.make_success(
+                    code="CLIENT_DISCONNECT_OK", message="Client disconnected", correlation_id=cid,
+                    data={'client_id': client_id, 'action': 'disconnect'}, meta={'operation_type': 'client_disconnect'}
                 )
             else:
-                print(f"[ACTION_TRACE] ✗ Disconnect failed, creating error result")
-                return ActionResult.error_result(
-                    error_message=f"Failed to disconnect client {client_id}",
-                    error_code="DISCONNECT_FAILED"
-                )
+                cid = get_trace_center().new_correlation_id()
+                return ActionResult.error(code="DISCONNECT_FAILED", message=f"Failed to disconnect client {client_id}", correlation_id=cid, error_code="DISCONNECT_FAILED")
         except Exception as e:
-            print(f"[EXCEPTION_TRACE] Exception in disconnect_client: {e}")
-            import traceback
-            print(f"[EXCEPTION_TRACE] Traceback: {traceback.format_exc()}")
-            return ActionResult.error_result(
-                error_message=f"Error disconnecting client {client_id}: {str(e)}",
-                error_code="DISCONNECT_EXCEPTION"
-            )
+            cid = get_trace_center().new_correlation_id()
+            return ActionResult.error(code="DISCONNECT_EXCEPTION", message=f"Error disconnecting client {client_id}: {str(e)}", correlation_id=cid, error_code="DISCONNECT_EXCEPTION")
     
     async def disconnect_multiple_clients(self, client_ids: List[str]) -> ActionResult:
         """
@@ -68,7 +56,8 @@ class ClientActions(BaseAction):
             ActionResult with batch operation outcome
         """
         if not client_ids:
-            return ActionResult.error_result("No clients specified for disconnection")
+            cid = get_trace_center().new_correlation_id()
+            return ActionResult.error(code="NO_CLIENTS", message="No clients specified for disconnection", correlation_id=cid, error_code="NO_CLIENTS")
         
         # Execute disconnections in parallel for better performance
         tasks = [self.disconnect_client(client_id) for client_id in client_ids]
@@ -78,14 +67,20 @@ class ClientActions(BaseAction):
         processed_results = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                processed_results.append(ActionResult.error_result(
-                    error_message=f"Client {client_ids[i]} disconnect failed: {str(result)}",
-                    error_code="DISCONNECT_EXCEPTION"
-                ))
+                cid = get_trace_center().new_correlation_id()
+                processed_results.append(ActionResult.error(code="DISCONNECT_EXCEPTION", message=f"Client {client_ids[i]} disconnect failed: {str(result)}", correlation_id=cid, error_code="DISCONNECT_EXCEPTION"))
             else:
                 processed_results.append(result)
         
-        return ActionResult.from_results(processed_results)
+        # Attach current selection snapshot (may be identical to client_ids)
+        current_sel = selection_state.get_selected("clients")
+        combined = ActionResult.from_results(processed_results)
+        # If combined is unified ActionResult already, just enrich meta
+        if hasattr(combined, 'meta'):
+            combined.selection = current_sel or client_ids
+            if combined.meta is not None:
+                combined.meta.setdefault('requested_ids', client_ids)
+        return combined
     
     async def delete_client(self, client_id: str) -> ActionResult:
         """
@@ -97,35 +92,29 @@ class ClientActions(BaseAction):
         Returns:
             ActionResult with operation outcome
         """
-        print(f"[ACTION_TRACE] ========== CLIENT DELETE ===========")
-        print(f"[ACTION_TRACE] Client ID: {client_id}")
-        print(f"[ACTION_TRACE] Server bridge: {type(self.server_bridge)}")
-        
         try:
-            print(f"[BRIDGE_TRACE] Calling server_bridge.delete_client({client_id})")
+            # Use confirmation service (assumes server_bridge holds dialog_system attribute or adapt accordingly)
+            if hasattr(self.server_bridge, 'dialog_system'):
+                cs = ConfirmationService(self.server_bridge.dialog_system)
+                confirm_result = await cs.confirm(
+                    title="Confirm Client Deletion",
+                    message=f"Delete client '{client_id}'? This cannot be undone.",
+                    proceed_code="CLIENT_DELETE_CONFIRMED",
+                    proceed_message="Client deletion confirmed",
+                    cancel_message="Client deletion cancelled"
+                )
+                if not confirm_result.success or confirm_result.code == "CANCELLED":
+                    return confirm_result
             success = await self.server_bridge.delete_client(client_id)
-            print(f"[BRIDGE_TRACE] Server bridge returned: {success} (type: {type(success)})")
-            
             if success:
-                print(f"[ACTION_TRACE] ✓ Delete successful, creating success result")
-                return ActionResult.success_result(
-                    data={'client_id': client_id, 'action': 'delete'},
-                    metadata={'operation_type': 'client_delete', 'permanent': True}
-                )
+                cid = get_trace_center().new_correlation_id()
+                return ActionResult.make_success(code="CLIENT_DELETE_OK", message="Client deleted", correlation_id=cid, data={'client_id': client_id, 'action': 'delete'}, meta={'operation_type': 'client_delete', 'permanent': True})
             else:
-                print(f"[ACTION_TRACE] ✗ Delete failed, creating error result")
-                return ActionResult.error_result(
-                    error_message=f"Failed to delete client {client_id}",
-                    error_code="DELETE_FAILED"
-                )
+                cid = get_trace_center().new_correlation_id()
+                return ActionResult.error(code="DELETE_FAILED", message=f"Failed to delete client {client_id}", correlation_id=cid, error_code="DELETE_FAILED")
         except Exception as e:
-            print(f"[EXCEPTION_TRACE] Exception in delete_client: {e}")
-            import traceback
-            print(f"[EXCEPTION_TRACE] Traceback: {traceback.format_exc()}")
-            return ActionResult.error_result(
-                error_message=f"Error deleting client {client_id}: {str(e)}",
-                error_code="DELETE_EXCEPTION"
-            )
+            cid = get_trace_center().new_correlation_id()
+            return ActionResult.error(code="DELETE_EXCEPTION", message=f"Error deleting client {client_id}: {str(e)}", correlation_id=cid, error_code="DELETE_EXCEPTION")
     
     async def delete_multiple_clients(self, client_ids: List[str]) -> ActionResult:
         """
@@ -138,7 +127,8 @@ class ClientActions(BaseAction):
             ActionResult with batch operation outcome
         """
         if not client_ids:
-            return ActionResult.error_result("No clients specified for deletion")
+            cid = get_trace_center().new_correlation_id()
+            return ActionResult.error(code="NO_CLIENTS", message="No clients specified for deletion", correlation_id=cid, error_code="NO_CLIENTS")
         
         # Execute deletions in parallel
         tasks = [self.delete_client(client_id) for client_id in client_ids]
@@ -148,14 +138,18 @@ class ClientActions(BaseAction):
         processed_results = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                processed_results.append(ActionResult.error_result(
-                    error_message=f"Client {client_ids[i]} deletion failed: {str(result)}",
-                    error_code="DELETE_EXCEPTION"
-                ))
+                cid = get_trace_center().new_correlation_id()
+                processed_results.append(ActionResult.error(code="DELETE_EXCEPTION", message=f"Client {client_ids[i]} deletion failed: {str(result)}", correlation_id=cid, error_code="DELETE_EXCEPTION"))
             else:
                 processed_results.append(result)
         
-        return ActionResult.from_results(processed_results)
+        current_sel = selection_state.get_selected("clients")
+        combined = ActionResult.from_results(processed_results)
+        if hasattr(combined, 'meta'):
+            combined.selection = current_sel or client_ids
+            if combined.meta is not None:
+                combined.meta.setdefault('requested_ids', client_ids)
+        return combined
     
     async def export_clients(self, client_ids: List[str], export_format: str = 'csv') -> ActionResult:
         """
@@ -168,11 +162,11 @@ class ClientActions(BaseAction):
         Returns:
             ActionResult with exported data or file path
         """
-        print(f"[ACTION_TRACE] ========== CLIENT EXPORT ===========")
+        print("[ACTION_TRACE] ========== CLIENT EXPORT ===========")
         print(f"[ACTION_TRACE] Client IDs: {client_ids}")
         print(f"[ACTION_TRACE] Export format: {export_format}")
         print(f"[ACTION_TRACE] Server bridge: {type(self.server_bridge)}")
-        
+
         try:
             # Get client data from server bridge
             if client_ids:
@@ -185,31 +179,31 @@ class ClientActions(BaseAction):
                     if client_data:
                         clients_data.append(client_data)
             else:
-                print(f"[BRIDGE_TRACE] Getting all clients")
+                print("[BRIDGE_TRACE] Getting all clients")
                 clients_data = await self.server_bridge.get_all_clients()
                 print(f"[BRIDGE_TRACE] All clients received: {len(clients_data) if clients_data else 0}")
-            
+
             if not clients_data:
-                print(f"[ACTION_TRACE] ✗ No client data to export")
-                return ActionResult.error_result("No client data to export")
-            
+                print("[ACTION_TRACE] ✗ No client data to export")
+                return ActionResult.make_error(code="CLIENT_EXPORT_NO_DATA", message="No client data to export", correlation_id=get_trace_center().new_correlation_id())
+
             print(f"[ACTION_TRACE] Formatting {len(clients_data)} clients as {export_format}")
-            
+
             # Format data based on export type
             if export_format.lower() == 'csv':
-                print(f"[ACTION_TRACE] Formatting as CSV")
+                print("[ACTION_TRACE] Formatting as CSV")
                 exported_data = self._format_clients_as_csv(clients_data)
             elif export_format.lower() == 'json':
-                print(f"[ACTION_TRACE] Formatting as JSON")
+                print("[ACTION_TRACE] Formatting as JSON")
                 exported_data = self._format_clients_as_json(clients_data)
             else:
                 print(f"[ACTION_TRACE] ✗ Unsupported export format: {export_format}")
-                return ActionResult.error_result(f"Unsupported export format: {export_format}")
-            
+                return ActionResult.make_error(code="CLIENT_EXPORT_UNSUPPORTED_FORMAT", message=f"Unsupported export format: {export_format}", correlation_id=get_trace_center().new_correlation_id())
+
             print(f"[ACTION_TRACE] Export data length: {len(exported_data)}")
-            
+
             print(f"[ACTION_TRACE] ✓ Export successful, creating result")
-            return ActionResult.success_result(
+            return ActionResult.make_success(
                 data=exported_data,
                 metadata={
                     'format': export_format,
@@ -217,7 +211,7 @@ class ClientActions(BaseAction):
                     'export_timestamp': str(asyncio.get_event_loop().time())
                 }
             )
-            
+
         except Exception as e:
             print(f"[EXCEPTION_TRACE] Exception in export_clients: {e}")
             import traceback
@@ -270,7 +264,7 @@ class ClientActions(BaseAction):
                 status = client.get('status', 'unknown')
                 stats['clients_by_status'][status] = stats['clients_by_status'].get(status, 0) + 1
             
-            return ActionResult.success_result(
+            return ActionResult.make_success(
                 data=stats,
                 metadata={'calculated_at': str(asyncio.get_event_loop().time())}
             )
@@ -295,7 +289,7 @@ class ClientActions(BaseAction):
             # Get client details from server bridge
             client_data = await self.server_bridge.get_client_details(client_id)
             if client_data:
-                return ActionResult.success_result(
+                return ActionResult.make_success(
                     data=client_data,
                     metadata={'client_id': client_id, 'operation_type': 'client_details'}
                 )
@@ -325,7 +319,7 @@ class ClientActions(BaseAction):
             all_files = await self.server_bridge.get_file_list()
             client_files = [f for f in all_files if f.get('client') == client_id]
             
-            return ActionResult.success_result(
+            return ActionResult.make_success(
                 data=client_files,
                 metadata={
                     'client_id': client_id, 
@@ -390,7 +384,7 @@ class ClientActions(BaseAction):
             imported_count = self.server_bridge.import_clients_from_data(client_data_list)
             
             if imported_count > 0:
-                return ActionResult.success_result(
+                return ActionResult.make_success(
                     data={
                         'imported_clients': imported_count,
                         'total_clients_in_file': len(client_data_list),
@@ -432,28 +426,23 @@ class ClientActions(BaseAction):
         """
         try:
             import json
-            
+
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            
+
             # Handle different JSON structures
             if isinstance(data, list):
                 # Direct list of clients
                 return data
             elif isinstance(data, dict):
-                if 'clients' in data:
-                    # Wrapper with 'clients' key
-                    return data['clients']
-                else:
-                    # Single client object
-                    return [data]
+                return data['clients'] if 'clients' in data else [data]
             else:
                 raise ValueError("JSON file must contain a list of clients or a single client object")
-                
+
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON format: {str(e)}")
+            raise ValueError(f"Invalid JSON format: {str(e)}") from e
         except Exception as e:
-            raise ValueError(f"Failed to parse JSON file: {str(e)}")
+            raise ValueError(f"Failed to parse JSON file: {str(e)}") from e
     
     async def _parse_csv_import_file(self, file_path: str) -> List[Dict[str, Any]]:
         """
@@ -467,30 +456,30 @@ class ClientActions(BaseAction):
         """
         try:
             import csv
-            
+
             clients = []
-            
+
             with open(file_path, 'r', encoding='utf-8') as f:
                 # Auto-detect CSV dialect
                 sample = f.read(1024)
                 f.seek(0)
                 sniffer = csv.Sniffer()
                 dialect = sniffer.sniff(sample)
-                
+
                 reader = csv.DictReader(f, dialect=dialect)
-                
+
                 for row_num, row in enumerate(reader, start=2):  # Start at 2 because row 1 is header
                     # Skip empty rows
                     if not any(row.values()):
                         continue
-                    
+
                     # Clean up field names (strip whitespace, lowercase)
                     cleaned_row = {}
                     for key, value in row.items():
                         if key:  # Skip None keys
                             clean_key = key.strip().lower()
                             clean_value = value.strip() if value else ""
-                            
+
                             # Map common CSV column variations to standard names
                             if clean_key in ['name', 'client_name', 'clientname']:
                                 cleaned_row['name'] = clean_value
@@ -501,14 +490,14 @@ class ClientActions(BaseAction):
                             else:
                                 # Keep original key for any other fields
                                 cleaned_row[clean_key] = clean_value
-                    
+
                     if cleaned_row.get('name'):  # Only add rows with a name
                         clients.append(cleaned_row)
-            
+
             return clients
-            
+
         except Exception as e:
-            raise ValueError(f"Failed to parse CSV file: {str(e)}")
+            raise ValueError(f"Failed to parse CSV file: {str(e)}") from e
     
     def _validate_client_data(self, client_data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -523,11 +512,11 @@ class ClientActions(BaseAction):
         errors = []
         warnings = []
         valid_clients = []
-        
+
         for i, client_data in enumerate(client_data_list):
             client_errors = []
             client_warnings = []
-            
+
             # Check required fields
             name = client_data.get('name', '').strip()
             if not name:
@@ -536,16 +525,12 @@ class ClientActions(BaseAction):
                 client_errors.append(f"Client {i+1}: Name too long (max 255 characters)")
             elif not name.replace('_', '').replace('-', '').replace(' ', '').isalnum():
                 client_warnings.append(f"Client {i+1}: Name contains special characters that may cause issues")
-            
-            # Validate public key if provided
-            public_key_pem = client_data.get('public_key_pem', '').strip()
-            if public_key_pem:
+
+            if public_key_pem := client_data.get('public_key_pem', '').strip():
                 if not self._validate_pem_format(public_key_pem):
                     client_warnings.append(f"Client {i+1}: Public key does not appear to be valid PEM format")
-            
-            # Validate AES key if provided
-            aes_key_hex = client_data.get('aes_key_hex', '').strip()
-            if aes_key_hex:
+
+            if aes_key_hex := client_data.get('aes_key_hex', '').strip():
                 try:
                     bytes.fromhex(aes_key_hex)
                     # Check if it's a reasonable length for AES key
@@ -554,19 +539,19 @@ class ClientActions(BaseAction):
                         client_warnings.append(f"Client {i+1}: AES key length ({key_bytes} bytes) is not standard (16, 24, or 32 bytes)")
                 except ValueError:
                     client_errors.append(f"Client {i+1}: AES key is not valid hexadecimal")
-            
+
             if not client_errors:
                 valid_clients.append(client_data)
-            
+
             errors.extend(client_errors)
             warnings.extend(client_warnings)
-        
+
         return {
-            'valid': len(errors) == 0,
+            'valid': not errors,
             'errors': errors,
             'warnings': warnings,
             'valid_client_count': len(valid_clients),
-            'total_client_count': len(client_data_list)
+            'total_client_count': len(client_data_list),
         }
     
     def _validate_pem_format(self, pem_data: str) -> bool:
@@ -583,16 +568,16 @@ class ClientActions(BaseAction):
             lines = pem_data.strip().split('\n')
             if len(lines) < 3:
                 return False
-            
+
             # Check for PEM markers
             first_line = lines[0].strip()
             last_line = lines[-1].strip()
-            
+
             return (
                 first_line.startswith('-----BEGIN ') and 
                 first_line.endswith('-----') and
                 last_line.startswith('-----END ') and
                 last_line.endswith('-----')
             )
-        except:
+        except Exception:
             return False

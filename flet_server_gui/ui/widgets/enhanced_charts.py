@@ -145,11 +145,9 @@ class EnhancedChart:
         # Create line chart data
         line_chart_data = []
         for series in self.config.series:
-            # Convert data points
-            data_points = []
-            for point in series.data:
-                data_points.append(ft.LineChartDataPoint(point.x, point.y))
-            
+            data_points = [
+                ft.LineChartDataPoint(point.x, point.y) for point in series.data
+            ]
             line_chart_data.append(
                 ft.LineChartData(
                     data_points=data_points,
@@ -159,7 +157,7 @@ class EnhancedChart:
                     stroke_cap_round=True
                 )
             )
-        
+
         # Create chart
         chart = ft.LineChart(
             data_series=line_chart_data,
@@ -177,7 +175,7 @@ class EnhancedChart:
             width=width,
             height=height
         )
-        
+
         return self._wrap_chart(chart)
     
     def _create_bar_chart(self, width: int, height: int) -> ft.Control:
@@ -185,18 +183,20 @@ class EnhancedChart:
         # Create bar chart data
         bar_chart_data = []
         for series in self.config.series:
-            # Convert data points
-            data_points = []
-            for point in series.data:
-                data_points.append(ft.BarChartGroup(x=point.x, bar_rods=[ft.BarChartRod(to_y=point.y, color=series.color)]))
-            
+            data_points = [
+                ft.BarChartGroup(
+                    x=point.x,
+                    bar_rods=[ft.BarChartRod(to_y=point.y, color=series.color)],
+                )
+                for point in series.data
+            ]
             bar_chart_data.append(
                 ft.BarChartGroup(
                     x=len(bar_chart_data),
                     bar_rods=[ft.BarChartRod(to_y=0, color=series.color)]  # Initial state for animation
                 )
             )
-        
+
         # Create chart
         chart = ft.BarChart(
             bar_groups=bar_chart_data,
@@ -211,7 +211,7 @@ class EnhancedChart:
             width=width,
             height=height
         )
-        
+
         return self._wrap_chart(chart)
     
     def _create_pie_chart(self, width: int, height: int) -> ft.Control:
@@ -248,11 +248,9 @@ class EnhancedChart:
         # Create line chart data
         line_chart_data = []
         for series in self.config.series:
-            # Convert data points
-            data_points = []
-            for point in series.data:
-                data_points.append(ft.LineChartDataPoint(point.x, point.y))
-            
+            data_points = [
+                ft.LineChartDataPoint(point.x, point.y) for point in series.data
+            ]
             line_chart_data.append(
                 ft.LineChartData(
                     data_points=data_points,
@@ -262,7 +260,7 @@ class EnhancedChart:
                     curved=True
                 )
             )
-        
+
         # Create chart
         chart = ft.LineChart(
             data_series=line_chart_data,
@@ -280,7 +278,7 @@ class EnhancedChart:
             width=width,
             height=height
         )
-        
+
         return self._wrap_chart(chart)
     
     def _create_scatter_chart(self, width: int, height: int) -> ft.Control:
@@ -288,11 +286,9 @@ class EnhancedChart:
         # Create scatter chart data
         line_chart_data = []
         for series in self.config.series:
-            # Convert data points
-            data_points = []
-            for point in series.data:
-                data_points.append(ft.LineChartDataPoint(point.x, point.y))
-            
+            data_points = [
+                ft.LineChartDataPoint(point.x, point.y) for point in series.data
+            ]
             line_chart_data.append(
                 ft.LineChartData(
                     data_points=data_points,
@@ -304,7 +300,7 @@ class EnhancedChart:
                     color=None  # No line connecting points
                 )
             )
-        
+
         # Create chart
         chart = ft.LineChart(
             data_series=line_chart_data,
@@ -322,13 +318,13 @@ class EnhancedChart:
             width=width,
             height=height
         )
-        
+
         return self._wrap_chart(chart)
     
     def _wrap_chart(self, chart: ft.Control) -> ft.Control:
         """Wrap chart with title and legend if needed"""
         controls = []
-        
+
         # Add title
         if self.config.title:
             controls.append(
@@ -339,26 +335,27 @@ class EnhancedChart:
                     text_align=ft.TextAlign.CENTER
                 )
             )
-        
+
         # Add chart
         controls.append(chart)
-        
+
         # Add legend
         if self.config.show_legend and len(self.config.series) > 1:
-            legend_items = []
-            for series in self.config.series:
-                legend_items.append(
-                    ft.Row([
+            legend_items = [
+                ft.Row(
+                    [
                         ft.Container(
                             width=12,
                             height=12,
                             bgcolor=series.color,
-                            border_radius=6
+                            border_radius=6,
                         ),
-                        ft.Text(series.name, size=12)
-                    ], spacing=4)
+                        ft.Text(series.name, size=12),
+                    ],
+                    spacing=4,
                 )
-            
+                for series in self.config.series
+            ]
             controls.append(
                 ft.Row(
                     legend_items,
@@ -366,7 +363,7 @@ class EnhancedChart:
                     spacing=16
                 )
             )
-        
+
         return ft.Column(
             controls,
             spacing=12,
@@ -412,29 +409,20 @@ def create_line_chart(
     **kwargs
 ) -> EnhancedChart:
     """Create a line chart"""
-    # Convert data to ChartDataPoint
-    points = []
-    for item in data:
-        points.append(
-            ChartDataPoint(
-                x=item[x_key],
-                y=item[y_key]
-            )
-        )
-    
+    points = [ChartDataPoint(x=item[x_key], y=item[y_key]) for item in data]
     series = ChartSeries(
         name=series_name,
         data=points,
         color=color
     )
-    
+
     config = EnhancedChartConfig(
         title=title,
         series=[series],
         chart_type=ChartType.LINE,
         **kwargs
     )
-    
+
     return EnhancedChart(page, config)
 
 
@@ -449,29 +437,20 @@ def create_bar_chart(
     **kwargs
 ) -> EnhancedChart:
     """Create a bar chart"""
-    # Convert data to ChartDataPoint
-    points = []
-    for item in data:
-        points.append(
-            ChartDataPoint(
-                x=item[x_key],
-                y=item[y_key]
-            )
-        )
-    
+    points = [ChartDataPoint(x=item[x_key], y=item[y_key]) for item in data]
     series = ChartSeries(
         name=series_name,
         data=points,
         color=color
     )
-    
+
     config = EnhancedChartConfig(
         title=title,
         series=[series],
         chart_type=ChartType.BAR,
         **kwargs
     )
-    
+
     return EnhancedChart(page, config)
 
 
@@ -486,21 +465,21 @@ def create_pie_chart(
     """Create a pie chart"""
     # Convert data to ChartSeries
     series_list = []
-    for i, item in enumerate(data):
+    for item in data:
         points = [ChartDataPoint(x=0, y=item[value_key], label=item[label_key])]
         series = ChartSeries(
             name=item[label_key],
             data=points
         )
         series_list.append(series)
-    
+
     config = EnhancedChartConfig(
         title=title,
         series=series_list,
         chart_type=ChartType.PIE,
         **kwargs
     )
-    
+
     return EnhancedChart(page, config)
 
 

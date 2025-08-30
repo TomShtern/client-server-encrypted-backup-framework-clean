@@ -25,7 +25,7 @@ def test_multiple_button_actions_trace_capture(monkeypatch):
     # Prepare dummy async actions
     async def ok_action():
         await asyncio.sleep(0)
-        return ActionResult.success(code="OK", message="done")
+    return ActionResult.make_success(code="OK", message="done")
 
     async def warn_action():
         await asyncio.sleep(0)

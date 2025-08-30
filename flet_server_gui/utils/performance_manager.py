@@ -72,15 +72,13 @@ class PerformanceManager:
     
     def get_performance_report(self) -> Dict[str, Dict[str, float]]:
         """Generate performance report"""
-        report = {}
-        
-        for operation, measurements in self._metrics.items():
-            if measurements:
-                report[operation] = {
-                    'avg_duration': sum(measurements) / len(measurements),
-                    'max_duration': max(measurements),
-                    'min_duration': min(measurements),
-                    'call_count': len(measurements)
-                }
-        
-        return report
+        return {
+            operation: {
+                'avg_duration': sum(measurements) / len(measurements),
+                'max_duration': max(measurements),
+                'min_duration': min(measurements),
+                'call_count': len(measurements),
+            }
+            for operation, measurements in self._metrics.items()
+            if measurements
+        }

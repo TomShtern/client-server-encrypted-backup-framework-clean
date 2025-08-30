@@ -102,18 +102,17 @@ class EnhancedButton:
             "tooltip": self.config.tooltip,
             "disabled": self.config.disabled,
             "autofocus": self.config.autofocus,
-            "expand": self.config.expand
+            "expand": self.config.expand,
+            "height": (
+                self.SIZE_HEIGHTS.get(self.config.size, 40)
+                if self.config.height is None
+                else self.config.height
+            ),
         }
-        
-        # Add size properties
-        if self.config.height is None:
-            common_props["height"] = self.SIZE_HEIGHTS.get(self.config.size, 40)
-        else:
-            common_props["height"] = self.config.height
-            
+
         if self.config.width:
             common_props["width"] = self.config.width
-        
+
         # Create button based on variant
         if self.config.variant == ButtonVariant.FILLED:
             return self._create_filled_button(common_props)
@@ -133,117 +132,118 @@ class EnhancedButton:
     def _create_filled_button(self, common_props: Dict) -> ft.ElevatedButton:
         """Create filled button (primary action)"""
         content = self._create_button_content()
-        
-        button = ft.ElevatedButton(
+
+        return ft.ElevatedButton(
             content=content,
             on_click=self._on_click,
             on_hover=self._on_hover,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=self.config.border_radius),
                 elevation=self.config.elevation,
-                padding=ft.Padding(20, 0, 20, 0) if self.config.size != ButtonSize.SMALL else ft.Padding(16, 0, 16, 0)
+                padding=(
+                    ft.Padding(20, 0, 20, 0)
+                    if self.config.size != ButtonSize.SMALL
+                    else ft.Padding(16, 0, 16, 0)
+                ),
             ),
             **common_props
         )
-        
-        return button
     
     def _create_tonal_button(self, common_props: Dict) -> ft.FilledButton:
         """Create tonal button (secondary action)"""
         content = self._create_button_content()
-        
-        button = ft.FilledButton(
+
+        return ft.FilledButton(
             content=content,
             on_click=self._on_click,
             on_hover=self._on_hover,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=self.config.border_radius),
                 elevation=self.config.elevation,
-                padding=ft.Padding(20, 0, 20, 0) if self.config.size != ButtonSize.SMALL else ft.Padding(16, 0, 16, 0)
+                padding=(
+                    ft.Padding(20, 0, 20, 0)
+                    if self.config.size != ButtonSize.SMALL
+                    else ft.Padding(16, 0, 16, 0)
+                ),
             ),
             **common_props
         )
-        
-        return button
     
     def _create_outlined_button(self, common_props: Dict) -> ft.OutlinedButton:
         """Create outlined button (alternative action)"""
         content = self._create_button_content()
-        
-        button = ft.OutlinedButton(
+
+        return ft.OutlinedButton(
             content=content,
             on_click=self._on_click,
             on_hover=self._on_hover,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=self.config.border_radius),
-                padding=ft.Padding(20, 0, 20, 0) if self.config.size != ButtonSize.SMALL else ft.Padding(16, 0, 16, 0)
+                padding=(
+                    ft.Padding(20, 0, 20, 0)
+                    if self.config.size != ButtonSize.SMALL
+                    else ft.Padding(16, 0, 16, 0)
+                ),
             ),
             **common_props
         )
-        
-        return button
     
     def _create_text_button(self, common_props: Dict) -> ft.TextButton:
         """Create text button (low emphasis action)"""
         content = self._create_button_content()
-        
-        button = ft.TextButton(
+
+        return ft.TextButton(
             content=content,
             on_click=self._on_click,
             on_hover=self._on_hover,
             style=ft.ButtonStyle(
-                padding=ft.Padding(12, 0, 12, 0) if self.config.size != ButtonSize.SMALL else ft.Padding(8, 0, 8, 0)
+                padding=(
+                    ft.Padding(12, 0, 12, 0)
+                    if self.config.size != ButtonSize.SMALL
+                    else ft.Padding(8, 0, 8, 0)
+                )
             ),
             **common_props
         )
-        
-        return button
     
     def _create_icon_button(self, common_props: Dict) -> ft.IconButton:
         """Create icon button (minimal action)"""
-        button = ft.IconButton(
+        return ft.IconButton(
             icon=self.config.icon,
             on_click=self._on_click,
             on_hover=self._on_hover,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=self.config.border_radius),
-                padding=8
+                padding=8,
             ),
             **common_props
         )
-        
-        return button
     
     def _create_fab_button(self, common_props: Dict) -> ft.FloatingActionButton:
         """Create floating action button"""
-        button = ft.FloatingActionButton(
+        return ft.FloatingActionButton(
             icon=self.config.icon,
             on_click=self._on_click,
             on_hover=self._on_hover,
             **common_props
         )
-        
-        return button
     
     def _create_button_content(self) -> Optional[ft.Control]:
         """Create button content (text + icon)"""
-        if not self.config.text and not self.config.icon:
-            return None
-            
         if not self.config.text:
             return None
-            
+
         # Create text
         text_style = self.SIZE_TEXT_STYLES.get(self.config.size, ft.TextThemeStyle.BODY_LARGE)
         text_control = ft.Text(self.config.text, style=text_style)
-        
+
         # If no icon, return just text
         if not self.config.icon:
             return text_control
-            
+
         # Create icon
         icon_control = ft.Icon(self.config.icon)
-        
+
         # Create row with icon and text
         return ft.Row(
             [icon_control, text_control],
@@ -253,9 +253,9 @@ class EnhancedButton:
     
     def _on_click(self, e):
         """Handle button click"""
-        if self.current_state == ButtonState.DISABLED or self.current_state == ButtonState.LOADING:
+        if self.current_state in [ButtonState.DISABLED, ButtonState.LOADING]:
             return
-            
+
         try:
             if self.original_on_click:
                 self.original_on_click(e)

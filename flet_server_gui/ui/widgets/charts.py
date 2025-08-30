@@ -88,39 +88,42 @@ class EnhancedPerformanceCharts:
     def build(self) -> ft.Container:
         """Build the enhanced performance monitoring dashboard with responsive design"""
         
-        # Main layout with responsive rows
-        dashboard = ft.Container(
-            content=ft.Column([
-                # Control panel
-                self._create_control_panel(),
-                
-                # Alert panel (shows threshold violations)
-                self._create_alert_panel(),
-                
-                # Metrics overview cards - responsive grid
-                ft.ResponsiveRow([
-                    ft.Container(
-                        content=self._create_metrics_grid(),
-                        col={"sm": 12, "md": 12, "lg": 12},
-                        expand=True
-                    )
-                ], expand=True),
-                
-                # Charts section - responsive grid
-                ft.ResponsiveRow([
-                    ft.Container(
-                        content=self._create_charts_section(),
-                        col={"sm": 12, "md": 12, "lg": 12},
-                        expand=True
-                    )
-                ], expand=True)
-                
-            ], spacing=10, expand=True),
+        return ft.Container(
+            content=ft.Column(
+                [
+                    # Control panel
+                    self._create_control_panel(),
+                    # Alert panel (shows threshold violations)
+                    self._create_alert_panel(),
+                    # Metrics overview cards - responsive grid
+                    ft.ResponsiveRow(
+                        [
+                            ft.Container(
+                                content=self._create_metrics_grid(),
+                                col={"sm": 12, "md": 12, "lg": 12},
+                                expand=True,
+                            )
+                        ],
+                        expand=True,
+                    ),
+                    # Charts section - responsive grid
+                    ft.ResponsiveRow(
+                        [
+                            ft.Container(
+                                content=self._create_charts_section(),
+                                col={"sm": 12, "md": 12, "lg": 12},
+                                expand=True,
+                            )
+                        ],
+                        expand=True,
+                    ),
+                ],
+                spacing=10,
+                expand=True,
+            ),
             padding=ft.padding.all(10),
-            expand=True
+            expand=True,
         )
-        
-        return dashboard
     
     def _create_control_panel(self) -> ft.Container:
         """Create responsive control panel with monitoring controls"""
@@ -406,15 +409,12 @@ class EnhancedPerformanceCharts:
             self._stop_monitoring()
             e.control.text = "Start Monitoring"
             e.control.icon = ft.Icons.PLAY_ARROW
-            # Use theme-aware colors instead of hardcoded colors
-            e.control.bgcolor = None  # Let button inherit theme colors
         else:
             self._start_monitoring()
             e.control.text = "Stop Monitoring"
             e.control.icon = ft.Icons.STOP
-            # Use theme-aware colors instead of hardcoded colors
-            e.control.bgcolor = None  # Let button inherit theme colors
-        
+        # Use theme-aware colors instead of hardcoded colors
+        e.control.bgcolor = None  # Let button inherit theme colors
         e.control.update()
     
     def _start_monitoring(self):
@@ -450,11 +450,11 @@ class EnhancedPerformanceCharts:
             try:
                 # Get real system metrics
                 metrics = self._get_system_metrics()
-                
+
                 if metrics.get('available', False):
                     current_time = datetime.now()
                     self.metrics_history['timestamps'].append(current_time)
-                    
+
                     # Process each metric
                     metric_values = {
                         'cpu': metrics.get('cpu_percent', 0),
@@ -463,34 +463,33 @@ class EnhancedPerformanceCharts:
                         'network': min((metrics.get('network_bytes_sent', 0) + 
                                       metrics.get('network_bytes_recv', 0)) / 1024 / 1024, 100)
                     }
-                    
+
                     # Store metric values and check thresholds
                     alerts = []
                     for metric_name, value in metric_values.items():
                         self.metrics_history[metric_name].append(value)
-                        
+
                         # Check for threshold violations
                         if self.thresholds[metric_name].enabled:
-                            alert = self._check_threshold(metric_name, value)
-                            if alert:
+                            if alert := self._check_threshold(metric_name, value):
                                 alerts.append(alert)
-                    
+
                     # Update UI
                     self._update_enhanced_displays(metric_values)
                     self._update_enhanced_charts()
-                    
+
                     # Handle alerts
                     if alerts:
                         self.active_alerts = alerts
                         self._update_alert_panel(alerts)
-                    elif not alerts and self.active_alerts:
+                    elif self.active_alerts:
                         self.active_alerts = []
                         self._update_alert_panel([])
-                    
+
                     self.last_update = current_time
-                
+
                 await asyncio.sleep(self.settings.update_interval)
-                
+
             except Exception as e:
                 logger.error(f"❌ Error in enhanced monitoring loop: {e}")
                 await asyncio.sleep(5)
@@ -548,26 +547,24 @@ class EnhancedPerformanceCharts:
         """Update enhanced metric displays with statistics"""
         for metric_name, current_value in metric_values.items():
             if metric_name in self.stat_displays:
-                card = self.stat_displays[metric_name]
-                
-                # Get historical data for statistics
-                data = list(self.metrics_history[metric_name])
-                if data:
+                if data := list(self.metrics_history[metric_name]):
                     avg_val = sum(data) / len(data)
                     max_val = max(data)
-                    
+
+                    card = self.stat_displays[metric_name]
+
                     # Update card content
                     card_content = card.content.content
-                    
+
                     # Current value (third Text component)
                     card_content.controls[2].value = f"{current_value:.1f}%"
-                    
+
                     # Average value (fourth Text component)
                     card_content.controls[3].value = f"Avg: {avg_val:.1f}%"
-                    
+
                     # Max value (fifth Text component)
                     card_content.controls[4].value = f"Max: {max_val:.1f}%"
-                    
+
                     # Status indicator color based on thresholds
                     status_indicator = card_content.controls[0].controls[2]
                     if current_value >= self.thresholds[metric_name].critical:
@@ -576,7 +573,7 @@ class EnhancedPerformanceCharts:
                         status_indicator.bgcolor = TOKENS['tertiary']
                     else:
                         status_indicator.bgcolor = TOKENS['secondary']
-                    
+
                     # Only update if the card is attached to the page
                     if hasattr(card, '_attached') and card._attached:
                         card.update()
@@ -586,27 +583,26 @@ class EnhancedPerformanceCharts:
     def _update_enhanced_charts(self):
         """Update charts with enhanced visualization"""
         for metric_name, container in self.chart_containers.items():
-            data = list(self.metrics_history[metric_name])
-            if data:
+            if data := list(self.metrics_history[metric_name]):
                 self._update_single_enhanced_chart(container, data, metric_name)
     
     def _update_single_enhanced_chart(self, container: ft.Container, data: List[float], metric_name: str):
         """Update single chart with enhanced visualization"""
         try:
             chart_display = container.content.controls[1]  # Second control is chart display
-            
+
             # Create simple text-based chart for now (can be enhanced with actual chart library)
-            if len(data) > 0:
+            if data:
                 latest_value = data[-1]
                 trend = "↑" if len(data) > 1 and data[-1] > data[-2] else "↓" if len(data) > 1 and data[-1] < data[-2] else "→"
-                
+
                 # Create a simple progress bar representation
                 progress_bar = ft.ProgressBar(
                     value=min(latest_value / 100.0, 1.0),
                     height=20,
                     border_radius=4
                 )
-                
+
                 chart_content = ft.Column([
                     ft.Row([
                         ft.Text(f"Current: {latest_value:.1f}% {trend}", 
@@ -621,7 +617,7 @@ class EnhancedPerformanceCharts:
                            style=ft.TextThemeStyle.BODY_SMALL,
                            color=TOKENS['outline'])
                 ], spacing=5)
-                
+
                 chart_display.content = chart_content
                 # Only update if the container is attached to the page
                 if hasattr(chart_display, 'page') and chart_display.page:
@@ -633,7 +629,7 @@ class EnhancedPerformanceCharts:
         """Update alert panel with current alerts"""
         if not self.alert_panel:
             return
-            
+
         # Safely navigate the container structure
         try:
             panel_content = self.alert_panel.content
@@ -662,7 +658,7 @@ class EnhancedPerformanceCharts:
             # Fallback to direct access if structure is different
             alert_content = self.alert_panel.content
             clear_content = None
-        
+
         # Create alert content
         if alerts:
             # Show alerts
@@ -677,19 +673,17 @@ class EnhancedPerformanceCharts:
                         ft.Text(alert['message'], size=12, color=TOKENS['on_background'])
                     ], spacing=4)
                 )
-            
+
             # Update alert content
             if hasattr(alert_content, 'controls'):
                 alert_content.controls = alert_texts
-            else:
-                # If it's a container, update its content
-                if hasattr(alert_content, 'content'):
-                    alert_content.content = ft.Column(alert_texts, spacing=4) if alert_texts else None
-            
+            elif hasattr(alert_content, 'content'):
+                alert_content.content = ft.Column(alert_texts, spacing=4) if alert_texts else None
+
             # Update clear button visibility
             if clear_content:
                 clear_content.visible = True
-                
+
             # Update background color using theme-aware colors
             if hasattr(self.alert_panel, 'bgcolor'):
                 self.alert_panel.bgcolor = TOKENS['error'] if any(a['level'] == 'critical' for a in alerts) else None  # Let inherit from parent theme
@@ -699,7 +693,7 @@ class EnhancedPerformanceCharts:
                 ft.Icon(ft.Icons.CHECK_CIRCLE, color=TOKENS['on_primary'], size=16),
                 ft.Text("All systems normal", size=12, color=TOKENS['outline'])
             ], spacing=4)
-            
+
             # Update alert content
             if hasattr(alert_content, 'controls'):
                 alert_content.controls = [normal_alert]
@@ -707,15 +701,15 @@ class EnhancedPerformanceCharts:
                 # If it's a container, update its content
                 if hasattr(alert_content, 'content'):
                     alert_content.content = normal_alert
-            
+
             # Update clear button visibility
             if clear_content:
                 clear_content.visible = False
-                
+
             # Update background color using theme-aware colors
             if hasattr(self.alert_panel, 'bgcolor'):
                 self.alert_panel.bgcolor = None  # Let inherit from parent theme_HIGHEST
-        
+
         # Update the panel only if it's attached to the page
         if hasattr(self.alert_panel, 'page') and self.alert_panel.page:
             self.alert_panel.update()
@@ -814,24 +808,22 @@ class EnhancedBarChart(ft.Container):
 
         max_y = max(item[self.y_field] for item in self.data) if self.data else 1
 
-        bar_groups = []
-        for i, item in enumerate(self.data):
-            bar_groups.append(
-                ft.BarChartGroup(
-                    x=i,
-                    bar_rods=[
-                        ft.BarChartRod(
-                            from_y=0,
-                            to_y=item[self.y_field],
-                            width=20,
-                            color=self.bar_color,
-                            tooltip=f"{item[self.x_field]}: {item[self.y_field]}",
-                            border_radius=4,
-                        ),
-                    ],
-                )
+        bar_groups = [
+            ft.BarChartGroup(
+                x=i,
+                bar_rods=[
+                    ft.BarChartRod(
+                        from_y=0,
+                        to_y=item[self.y_field],
+                        width=20,
+                        color=self.bar_color,
+                        tooltip=f"{item[self.x_field]}: {item[self.y_field]}",
+                        border_radius=4,
+                    ),
+                ],
             )
-
+            for i, item in enumerate(self.data)
+        ]
         chart = ft.BarChart(
             bar_groups=bar_groups,
             bottom_axis=ft.ChartAxis(

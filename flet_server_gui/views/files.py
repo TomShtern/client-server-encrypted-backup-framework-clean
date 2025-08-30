@@ -220,9 +220,8 @@ class FilesView(BaseComponent):
                 raise ConnectionError("Server bridge is not initialized")
             
             # Check if server bridge has connection validation
-            if hasattr(self.server_bridge, 'is_connected'):
-                if not await self.server_bridge.is_connected():
-                    raise ConnectionError("Server is not connected. Please check server status.")
+            if hasattr(self.server_bridge, 'is_connected') and not await self.server_bridge.is_connected():
+                raise ConnectionError("Server is not connected. Please check server status.")
             
             # Get fresh file data with timeout
             files = self.server_bridge.get_files()
@@ -350,24 +349,23 @@ class FilesView(BaseComponent):
             # Extract file_id and selection state from the event
             file_id = e.data
             selected = e.control.value if hasattr(e.control, 'value') else False
-            
+
             if selected:
                 if file_id not in self.selected_files:
                     self.selected_files.append(file_id)
-            else:
-                if file_id in self.selected_files:
-                    self.selected_files.remove(file_id)
-            
+            elif file_id in self.selected_files:
+                self.selected_files.remove(file_id)
+
             # Update select all checkbox state
             self._update_select_all_checkbox()
-            
+
             self._update_bulk_actions_visibility()
             # Thread-safe UI update
             if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
                 self.ui_updater.queue_update(lambda: None)
             else:
                 self.page.update()
-            
+
         except Exception as ex:
             if self.toast_manager:
                 self.toast_manager.show_error(f"Error in file selection: {str(ex)}")
@@ -401,9 +399,9 @@ class FilesView(BaseComponent):
     def _update_bulk_actions_visibility(self):
         """Update visibility of bulk action buttons"""
         try:
-            has_selections = len(self.selected_files) > 0
-            
             if self.bulk_actions_row and len(self.bulk_actions_row.controls) > 1:
+                has_selections = len(self.selected_files) > 0
+
                 # Show/hide bulk action buttons (skip the label)
                 for i, control in enumerate(self.bulk_actions_row.controls):
                     if i > 0 and isinstance(control, ft.ElevatedButton):

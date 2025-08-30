@@ -86,12 +86,7 @@ class EnhancedIconButton(ft.IconButton):
         
     def _on_hover(self, e):
         """Handle hover events for enhanced feedback"""
-        if e.data == "true":
-            # Hover enter
-            self.scale = self.hover_scale
-        else:
-            # Hover exit
-            self.scale = 1
+        self.scale = self.hover_scale if e.data == "true" else 1
         self.page.update()
 
 
@@ -138,17 +133,12 @@ class EnhancedDataTable(ft.DataTable):
     
     def _on_row_hover(self, e):
         """Handle row hover events"""
+        # Hover enter - lighten background
+        row = e.control
         if e.data == "true":
-            # Hover enter - lighten background
-            row = e.control
-            if hasattr(row, 'bgcolor') and row.bgcolor:
-                # Store original color and lighten
-                pass
-            else:
+            if not hasattr(row, 'bgcolor') or not row.bgcolor:
                 row.bgcolor = TOKENS['surface_variant']
         else:
-            # Hover exit - restore original
-            row = e.control
             row.bgcolor = None
         self.page.update()
     
@@ -177,7 +167,7 @@ class EnhancedDataTable(ft.DataTable):
             for row in self.original_rows:
                 match_found = False
                 # Check specified columns or all columns
-                columns_to_check = column_indices if column_indices else range(len(row.cells))
+                columns_to_check = column_indices or range(len(row.cells))
                 for col_idx in columns_to_check:
                     if col_idx < len(row.cells):
                         cell_content = str(getattr(row.cells[col_idx].content, 'value', ''))
@@ -217,12 +207,7 @@ class EnhancedChip(ft.Chip):
     
     def _on_hover(self, e):
         """Handle hover events for enhanced feedback"""
-        if e.data == "true":
-            # Hover enter
-            self.scale = self.hover_scale
-        else:
-            # Hover exit
-            self.scale = 1
+        self.scale = self.hover_scale if e.data == "true" else 1
         self.page.update()
     
     def toggle_selection(self):

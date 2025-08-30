@@ -4,6 +4,7 @@ Simple test script to verify Flet GUI can run
 """
 
 import sys
+import pytest
 import os
 
 # Add project root to path
@@ -26,7 +27,7 @@ try:
     print("Flet imported successfully")
 except ImportError as e:
     print("Failed to import Flet:", e)
-    sys.exit(1)
+    pytest.skip(f"Skipping legacy Flet GUI test: {e}")
 
 # Try importing the main GUI app
 try:
@@ -37,7 +38,7 @@ except ImportError as e:
     # Print more details about the error
     import traceback
     traceback.print_exc()
-    sys.exit(1)
+    pytest.fail(f"Critical import failure: {e}")
 
 print("All imports successful!")
 

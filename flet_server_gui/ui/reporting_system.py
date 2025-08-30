@@ -363,20 +363,13 @@ class ReportingSystem:
         Returns:
             Created report template
         """
-        # TODO: Validate template configuration structure
-        # TODO: Create template sections from configuration
-        # TODO: Assign unique template ID
-        # TODO: Store template in templates registry
-        # TODO: Validate data sources and dependencies
-        # TODO: Set appropriate default values
-        template = ReportTemplate(
+        return ReportTemplate(
             template_id="",
             name="",
             description="",
             report_type=ReportType.CUSTOM,
-            sections=[]
+            sections=[],
         )
-        return template
     
     def get_system_templates(self) -> List[ReportTemplate]:
         """
@@ -461,18 +454,12 @@ class ReportingSystem:
         Returns:
             Created report schedule
         """
-        # TODO: Validate schedule configuration
-        # TODO: Create ReportSchedule instance
-        # TODO: Calculate initial next_run time
-        # TODO: Store schedule in schedules registry
-        # TODO: Start schedule monitoring if not active
-        schedule = ReportSchedule(
+        return ReportSchedule(
             schedule_id="",
             report_template_id="",
             frequency=ScheduleFrequency.DAILY,
-            start_date=datetime.now()
+            start_date=datetime.now(),
         )
-        return schedule
     
     async def start_schedule_monitoring(self) -> bool:
         """
@@ -706,13 +693,7 @@ def create_reporting_system_manager(page: ft.Page, server_bridge=None,
     Returns:
         Configured reporting system manager
     """
-    # TODO: Initialize reporting system with provided dependencies
-    # TODO: Load system templates and default configurations
-    # TODO: Set up integration with Phase 3-5 components
-    # TODO: Configure default data providers
-    # TODO: Apply theme and accessibility settings
-    manager = ReportingSystem(page, server_bridge, theme_manager, analytics_dashboard)
-    return manager
+    return ReportingSystem(page, server_bridge, theme_manager, analytics_dashboard)
 
 
 def create_system_report_templates() -> List[ReportTemplate]:
@@ -722,14 +703,7 @@ def create_system_report_templates() -> List[ReportTemplate]:
     Returns:
         List of system report templates
     """
-    # TODO: Create performance analysis template
-    # TODO: Create security audit template
-    # TODO: Create usage statistics template
-    # TODO: Create error analysis template
-    # TODO: Create capacity planning template
-    # TODO: Configure appropriate sections for each template
-    templates = []
-    return templates
+    return []
 
 
 def create_sample_report_request(template_id: str = "system_overview") -> ReportRequest:

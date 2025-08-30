@@ -82,72 +82,57 @@ class EnhancedCard:
         # Common properties
         common_props = {
             "ref": self.card_ref,
-            "expand": self.config.expand
+            "expand": self.config.expand,
+            "width": (
+                self.SIZE_WIDTHS.get(self.config.size, 320)
+                if self.config.width is None
+                else self.config.width
+            ),
         }
-        
-        # Add size properties
-        if self.config.width is None:
-            common_props["width"] = self.SIZE_WIDTHS.get(self.config.size, 320)
-        else:
-            common_props["width"] = self.config.width
-            
+
         if self.config.height:
             common_props["height"] = self.config.height
-        
+
         # Create card content
         content = self._create_card_content()
-        
+
         # Create card based on variant
         if self.config.variant == CardVariant.ELEVATED:
-            card = ft.Card(
-                content=content,
-                elevation=self.config.elevation,
-                **common_props
+            return ft.Card(
+                content=content, elevation=self.config.elevation, **common_props
             )
         elif self.config.variant == CardVariant.FILLED:
-            card = ft.Card(
-                content=content,
-                color=TOKENS['surface_variant'],
-                **common_props
+            return ft.Card(
+                content=content, color=TOKENS['surface_variant'], **common_props
             )
         elif self.config.variant == CardVariant.OUTLINED:
-            card = ft.Card(
-                content=content,
-                variant=ft.CardVariant.OUTLINE,
-                **common_props
+            return ft.Card(
+                content=content, variant=ft.CardVariant.OUTLINE, **common_props
             )
         else:
-            card = ft.Card(
-                content=content,
-                elevation=self.config.elevation,
-                **common_props
+            return ft.Card(
+                content=content, elevation=self.config.elevation, **common_props
             )
-        
-        return card
     
     def _create_card_content(self) -> ft.Control:
         """Create card content with header, body, and footer"""
         controls = []
-        
+
         # Header
         if self.config.show_header and (self.config.title or self.config.subtitle):
-            header = self._create_header()
-            if header:
+            if header := self._create_header():
                 controls.append(header)
                 if self.config.show_divider:
                     controls.append(ft.Divider(height=1))
-        
-        # Body content
-        body = self._create_body()
-        if body:
+
+        if body := self._create_body():
             controls.append(body)
-        
+
         # Footer/Actions
         if self.config.show_footer and self.config.actions:
-            footer = self._create_footer()
-            if footer:
+            if footer := self._create_footer():
                 controls.append(footer)
-        
+
         # Wrap in container for padding
         return ft.Container(
             content=ft.Column(
@@ -353,23 +338,17 @@ class DataCard(EnhancedCard):
             # Determine columns
             if not columns:
                 columns = list(data[0].keys()) if data else []
-            
-            # Create table rows
-            rows = []
-            
-            # Header row
-            header_cells = []
-            for col in columns:
-                header_cells.append(
-                    ft.DataCell(
-                        ft.Text(
-                            str(col).replace("_", " ").title(),
-                            weight=ft.FontWeight.W_500
-                        )
+
+            header_cells = [
+                ft.DataCell(
+                    ft.Text(
+                        str(col).replace("_", " ").title(),
+                        weight=ft.FontWeight.W_500,
                     )
                 )
-            rows.append(ft.DataRow(cells=header_cells))
-            
+                for col in columns
+            ]
+            rows = [ft.DataRow(cells=header_cells)]
             # Data rows
             for item in data:
                 cells = []
@@ -377,7 +356,7 @@ class DataCard(EnhancedCard):
                     value = item.get(col, "")
                     cells.append(ft.DataCell(ft.Text(str(value))))
                 rows.append(ft.DataRow(cells=cells))
-            
+
             # Create table
             content = ft.DataTable(
                 columns=[ft.DataColumn(ft.Text("")) for _ in columns],
@@ -385,7 +364,7 @@ class DataCard(EnhancedCard):
                 heading_row_color=TOKENS['surface_variant'],
                 border=ft.BorderSide(1, TOKENS['outline'])
             )
-        
+
         config = EnhancedCardConfig(
             title=title,
             content=content,
@@ -393,7 +372,7 @@ class DataCard(EnhancedCard):
             size=CardSize.LARGE,
             **kwargs
         )
-        
+
         super().__init__(page, config)
 
 

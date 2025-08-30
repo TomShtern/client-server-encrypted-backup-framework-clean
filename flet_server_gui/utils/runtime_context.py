@@ -60,9 +60,7 @@ class _RuntimeContextHolder:
 
     @classmethod
     def get(cls) -> RuntimeContext:
-        if cls._instance is None:
-            return cls.init()
-        return cls._instance
+        return cls.init() if cls._instance is None else cls._instance
 
     @classmethod
     def set_offline_mode(cls, value: bool) -> RuntimeContext:

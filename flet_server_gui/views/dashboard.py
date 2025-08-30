@@ -8,7 +8,7 @@ UI: Professional grid layout with Material Design 3 styling
 import flet as ft
 import asyncio
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict, Any, Callable
 import psutil
 import os
 from flet_server_gui.utils.server_bridge import ServerBridge
@@ -22,7 +22,7 @@ from flet_server_gui.ui.unified_theme_system import TOKENS
 
 
 class DashboardView(BaseComponent):
-    def __init__(self, page: ft.Page, server_bridge: Optional[ServerBridge] = None, dialog_system=None, toast_manager=None):
+    def __init__(self, page: ft.Page, server_bridge: Optional[ServerBridge] = None, dialog_system: Optional[Any] = None, toast_manager: Optional[Any] = None) -> None:
         # Initialize parent BaseComponent
         super().__init__(page, dialog_system, toast_manager)
         
@@ -61,7 +61,7 @@ class DashboardView(BaseComponent):
         self.log_entries = []
         self.max_log_entries = 10
     
-    def _create_status_row(self, label: str, value_ref: ft.Ref[ft.Text], default_value: str, value_color=None) -> ft.Row:
+    def _create_status_row(self, label: str, value_ref: ft.Ref[ft.Text], default_value: str, value_color: Optional[str] = None) -> ft.Row:
         """Create a consistent status row with label and value"""
         return ft.Row([
             ft.Text(f"{label}:", 
@@ -75,7 +75,7 @@ class DashboardView(BaseComponent):
                    color=value_color or TOKENS['on_surface'])
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         
-    def build(self):
+    def build(self) -> ft.Control:
         """Build the dashboard view with professional responsive design"""
         # Header with timestamp and system theme integration
         header = ft.Container(
@@ -172,7 +172,7 @@ class DashboardView(BaseComponent):
             expand=True
         )
     
-    def _create_server_status_card(self):
+    def _create_server_status_card(self) -> ft.Card:
         """Create the Server Status card with Material Design 3 styling"""
         return ft.Card(
             content=ft.Container(content=ft.Column([
@@ -197,7 +197,7 @@ class DashboardView(BaseComponent):
             margin=ft.margin.all(0)
         )
     
-    def _create_client_stats_card(self):
+    def _create_client_stats_card(self) -> ft.Card:
         """Create the Client Stats card with Material Design 3 styling"""
         return ft.Card(
             content=ft.Container(content=ft.Column([
@@ -237,7 +237,7 @@ class DashboardView(BaseComponent):
             margin=ft.margin.all(0)
         )
     
-    def _create_control_panel_card(self):
+    def _create_control_panel_card(self) -> ft.Card:
         """Create the Control Panel card with Material Design 3 buttons"""
         return ft.Card(
             content=ft.Container(content=ft.Column([
@@ -331,7 +331,7 @@ class DashboardView(BaseComponent):
             margin=ft.margin.all(0)
         )
     
-    def _create_transfer_stats_card(self):
+    def _create_transfer_stats_card(self) -> ft.Card:
         """Create the Transfer Stats card with Material Design 3 styling"""
         return ft.Card(
             content=ft.Container(content=ft.Column([
@@ -354,7 +354,7 @@ class DashboardView(BaseComponent):
             margin=ft.margin.all(0)
         )
     
-    def _create_maintenance_card(self):
+    def _create_maintenance_card(self) -> ft.Card:
         """Create the Maintenance card with Material Design 3 styling"""
         return ft.Card(
             content=ft.Container(content=ft.Column([
@@ -377,7 +377,7 @@ class DashboardView(BaseComponent):
             margin=ft.margin.all(0)
         )
     
-    def _create_performance_chart_card(self):
+    def _create_performance_chart_card(self) -> ft.Card:
         """Create the Live System Performance card with responsive chart"""
         # Create a professional performance visualization
         chart_content = ft.Container(content=ft.Column([
@@ -459,7 +459,7 @@ class DashboardView(BaseComponent):
             margin=ft.margin.all(0)
         )
     
-    def _create_activity_log_card(self):
+    def _create_activity_log_card(self) -> ft.Card:
         """Create the Activity Log card with responsive design"""
         return ft.Card(
             content=ft.Container(content=ft.Column([
@@ -511,7 +511,7 @@ class DashboardView(BaseComponent):
         )
     
     # Event handlers for control panel buttons
-    async def _on_start_server(self, e):
+    async def _on_start_server(self, e: ft.ControlEvent) -> None:
         """Handle start server button with real functionality"""
         self.add_log_entry("System", "Starting backup server...", "INFO")
         try:
@@ -524,7 +524,7 @@ class DashboardView(BaseComponent):
         except Exception as ex:
             self.add_log_entry("System", f"Start error: {str(ex)}", "ERROR")
         
-    async def _on_stop_server(self, e):
+    async def _on_stop_server(self, e: ft.ControlEvent) -> None:
         """Handle stop server button with real functionality"""
         self.add_log_entry("System", "Stopping backup server...", "INFO")
         try:
@@ -537,7 +537,7 @@ class DashboardView(BaseComponent):
         except Exception as ex:
             self.add_log_entry("System", f"Stop error: {str(ex)}", "ERROR")
         
-    async def _on_restart_server(self, e):
+    async def _on_restart_server(self, e: ft.ControlEvent) -> None:
         """Handle restart server button with real functionality"""
         self.add_log_entry("System", "Restarting backup server...", "INFO")
         try:
@@ -550,7 +550,7 @@ class DashboardView(BaseComponent):
         except Exception as ex:
             self.add_log_entry("System", f"Restart error: {str(ex)}", "ERROR")
         
-    async def _on_backup_db(self, e):
+    async def _on_backup_db(self, e: ft.ControlEvent) -> None:
         """Handle backup database button with real functionality"""
         self.add_log_entry("Database", "Creating database backup...", "INFO")
         try:
@@ -562,7 +562,7 @@ class DashboardView(BaseComponent):
         except Exception as ex:
             self.add_log_entry("Database", f"Backup error: {str(ex)}", "ERROR")
         
-    async def _on_exit_gui(self, e):
+    async def _on_exit_gui(self, e: ft.ControlEvent) -> None:
         """Handle exit GUI button"""
         self.add_log_entry("System", "Closing GUI...", "INFO")
         # Use the correct method to close the window
@@ -573,7 +573,7 @@ class DashboardView(BaseComponent):
             self.page.window_visible = False
             self.page.update()
     
-    def _clear_activity_log(self, e):
+    def _clear_activity_log(self, e: ft.ControlEvent) -> None:
         """Clear the activity log with visual feedback"""
         if self.activity_log_container.current:
             # Clear existing entries
@@ -603,7 +603,7 @@ class DashboardView(BaseComponent):
             # Add system log entry
             self.add_log_entry("System", "Activity log manually cleared", "INFO")
     
-    def add_log_entry(self, source: str, message: str, level: str = "INFO"):
+    def add_log_entry(self, source: str, message: str, level: str = "INFO") -> None:
         """Add entry to activity log with smooth animations"""
         if not self.activity_log_container.current:
             return
@@ -665,19 +665,17 @@ class DashboardView(BaseComponent):
         
         # Keep only recent entries
         controls = self.activity_log_container.current.controls
-        if len(controls) >= self.max_log_entries:
-            # Animate out the oldest entry
-            if controls:
-                oldest = controls[0]
-                oldest.opacity = 0
-                oldest.scale = ft.Scale(0.8)
-                # Thread-safe UI update
-                if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
-                    self.ui_updater.queue_update(lambda: None)
-                else:
-                    self.page.update()
-                # Remove after animation
-                asyncio.create_task(self._remove_old_entry())
+        if len(controls) >= self.max_log_entries and controls:
+            oldest = controls[0]
+            oldest.opacity = 0
+            oldest.scale = ft.Scale(0.8)
+            # Thread-safe UI update
+            if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
+                self.ui_updater.queue_update(lambda: None)
+            else:
+                self.page.update()
+            # Remove after animation
+            asyncio.create_task(self._remove_old_entry())
         
         # Remove placeholder if present
         if (len(controls) == 1 and 
@@ -704,7 +702,7 @@ class DashboardView(BaseComponent):
             animate_entry()
             self.page.update()
     
-    async def _remove_old_entry(self):
+    async def _remove_old_entry(self) -> None:
         """Remove old entry after fade animation"""
         await asyncio.sleep(0.3)
         if (self.activity_log_container.current and 
@@ -716,14 +714,14 @@ class DashboardView(BaseComponent):
             else:
                 self.page.update()
     
-    def start_dashboard_sync(self):
+    def start_dashboard_sync(self) -> None:
         """Initialize dashboard UI elements (synchronous part)"""
         # Add welcome messages to demonstrate the polished log system
         self.add_log_entry("System", "Dashboard initialized successfully", "SUCCESS")
         self.add_log_entry("Theme", "Material Design 3 theme applied", "INFO")
         self.add_log_entry("Monitor", "Starting real-time monitoring...", "INFO")
     
-    async def start_dashboard_async(self):
+    async def start_dashboard_async(self) -> None:
         """Initialize dashboard background tasks (asynchronous part)"""
         # Start the thread-safe UI updater
         if not self._updater_started:
@@ -738,7 +736,7 @@ class DashboardView(BaseComponent):
         # Start the background monitoring loop
         asyncio.create_task(self._real_time_update_loop())
     
-    async def _real_time_update_loop(self):
+    async def _real_time_update_loop(self) -> None:
         """Background task for real-time dashboard updates"""
         update_count = 0
         while True:
@@ -760,7 +758,7 @@ class DashboardView(BaseComponent):
                 self.add_log_entry("Monitor", f"Update error: {str(e)}", "ERROR")
                 await asyncio.sleep(10)  # Wait longer on error
     
-    async def _update_system_stats(self):
+    async def _update_system_stats(self) -> None:
         """Update system performance statistics"""
         try:
             # Get real system stats
@@ -779,7 +777,7 @@ class DashboardView(BaseComponent):
         except Exception as e:
             self.add_log_entry("Performance", f"Stats update failed: {str(e)}", "ERROR")
     
-    async def _check_server_health(self):
+    async def _check_server_health(self) -> None:
         """Perform server health check"""
         try:
             if self.server_bridge:
@@ -793,7 +791,7 @@ class DashboardView(BaseComponent):
         except Exception as e:
             self.add_log_entry("Health", f"Health check failed: {str(e)}", "ERROR")
     
-    def update_data(self):
+    def update_data(self) -> None:
         """Update dashboard data with real system information"""
         try:
             # Update system performance data
@@ -820,14 +818,12 @@ class DashboardView(BaseComponent):
         except Exception as e:
             self.add_log_entry("System", f"Error updating data: {str(e)}", "ERROR")
     
-    async def _async_update_server_status(self):
+    async def _async_update_server_status(self) -> None:
         """Async update server status display"""
         try:
             server_info = await self.server_bridge.get_server_status()
             if server_info and self.server_status_text.current:
-                # Update status displays
-                is_running = getattr(server_info, 'running', False)
-                if is_running:
+                if is_running := getattr(server_info, 'running', False):
                     self.server_status_text.current.value = "Online"
                     self.server_status_text.current.color = get_status_color("success")
                     if self.server_address_text.current:
@@ -837,18 +833,18 @@ class DashboardView(BaseComponent):
                     self.server_status_text.current.color = get_status_color("error")
                     if self.server_address_text.current:
                         self.server_address_text.current.value = "N/A"
-                        
+
                 # Update client counts
                 if self.connected_clients_text.current:
                     self.connected_clients_text.current.value = str(getattr(server_info, 'connected_clients', 0))
                 if self.total_clients_text.current:
                     self.total_clients_text.current.value = str(getattr(server_info, 'total_clients', 0))
-                
+
                 # Thread-safe UI update
                 if hasattr(self, 'ui_updater') and self.ui_updater.is_running():
                     self.ui_updater.queue_update(lambda: None)
                 else:
                     self.page.update()
-                
+
         except Exception as e:
             self.add_log_entry("Status", f"Failed to update server status: {str(e)}", "ERROR")

@@ -634,7 +634,7 @@ class ActionButtonFactory:
         if result is None:
             return ActionResult.warn(code="ACTION_NOOP", message="Action returned no result", correlation_id=cid)
         # Non-standard truthy result
-        return ActionResult.success(code=f"{config.action_method.upper()}_OK", message=config.success_message or "Action completed", correlation_id=cid, data={"raw": result})
+        return ActionResult.make_success(code=f"{config.action_method.upper()}_OK", message=config.success_message or "Action completed", correlation_id=cid, data={"raw": result})
     
     def _prepare_method_params(
         self, 
@@ -653,16 +653,16 @@ class ActionButtonFactory:
         Returns:
             Dictionary of method parameters
         """
-        print(f"[BUTTON_TRACE] ========== PARAMETER PREPARATION ==========")
+        print("[BUTTON_TRACE] ========== PARAMETER PREPARATION ==========")
         print(f"[BUTTON_TRACE] Config: {config.action_key}, Method: {config.action_method}")
         print(f"[BUTTON_TRACE] Selected items: {selected_items}")
         print(f"[BUTTON_TRACE] Additional params: {additional_params}")
-        
+
         params = {}
-        
+
         # Special handling for perform_bulk_action method
         if config.action_method == "perform_bulk_action":
-            print(f"[BUTTON_TRACE] Using bulk action parameter mapping")
+            print("[BUTTON_TRACE] Using bulk action parameter mapping")
             # For bulk actions, we need to pass the action type and filenames
             action_type_map = {
                 'file_download_bulk': 'download',
@@ -673,7 +673,7 @@ class ActionButtonFactory:
             }
             if config.action_key in action_type_map:
                 params["action"] = action_type_map[config.action_key]
-                params["filenames"] = selected_items if "file" in config.action_key else selected_items
+                params["filenames"] = selected_items
                 # For client actions, use client_ids parameter
                 if "client" in config.action_key:
                     params["client_ids"] = selected_items
@@ -687,10 +687,10 @@ class ActionButtonFactory:
                     params["filenames"] = selected_items
                 print(f"[BUTTON_TRACE] Default bulk action: action={params.get('action')}, filenames={params.get('filenames')}, client_ids={params.get('client_ids')}")
         else:
-            print(f"[BUTTON_TRACE] Using standard parameter mapping")
+            print("[BUTTON_TRACE] Using standard parameter mapping")
             # Add selected items based on method signature
             if "client_id" in config.action_method and selected_items:
-                print(f"[BUTTON_TRACE] Method has 'client_id' in name")
+                print("[BUTTON_TRACE] Method has 'client_id' in name")
                 # For single client actions, pass client_id as a single value
                 if config.operation_type == "single" and len(selected_items) == 1:
                     params["client_id"] = selected_items[0]
@@ -750,17 +750,17 @@ class ActionButtonFactory:
                     else:
                         params["items"] = selected_items
                         print(f"[BUTTON_TRACE] Generic items parameter: {params['items']}")
-            
+
             # Add export format if specified
             if config.export_format:
                 params["export_format"] = config.export_format
                 print(f"[BUTTON_TRACE] Added export format: {config.export_format}")
-        
+
         # Add any additional parameters
         if additional_params:
             print(f"[BUTTON_TRACE] Adding additional parameters: {additional_params}")
-            params.update(additional_params)
-        
+            params |= additional_params
+
         print(f"[BUTTON_TRACE] Final parameters: {params}")
         print(f"[BUTTON_TRACE] ========== PARAMETER PREPARATION COMPLETE ===========")
         return params

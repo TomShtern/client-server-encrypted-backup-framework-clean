@@ -264,49 +264,50 @@ class NavigationManager:
     def navigate_to(self, view_name: str, add_to_history: bool = True) -> bool:
         """Programmatically navigate to a specific view."""
         try:
-            # Find the view index
-            view_index = None
-            for i, item in enumerate(self.nav_items):
-                if item["view"] == view_name:
-                    view_index = i
-                    break
-            
+            view_index = next(
+                (
+                    i
+                    for i, item in enumerate(self.nav_items)
+                    if item["view"] == view_name
+                ),
+                None,
+            )
             if view_index is None:
                 print(f"[ERROR] Unknown view: {view_name}")
                 return False
-            
+
             # Check permissions
             if not self._check_view_permission(view_name):
                 self._show_permission_denied_dialog(view_name)
                 return False
-            
+
             # Update navigation rail
             if self.nav_rail:
                 self.nav_rail.selected_index = view_index
-            
+
             # Update state
             old_view = self.current_view.value if self.current_view else None
             self.current_index = view_index
             self.current_view = NavigationView(view_name)
-            
+
             # Update history
             if add_to_history:
                 self._update_navigation_history(view_name)
-            
+
             # Clear badge
             self._clear_view_badge(view_name)
-            
+
             # Trigger callbacks
             if old_view:
                 self._trigger_navigation_callbacks(old_view, view_name)
-            
+
             # Execute main switch callback
             self.switch_callback(view_name)
-            
+
             # Update UI
             self.page.update()
             return True
-            
+
         except Exception as e:
             print(f"[ERROR] Navigation failed: {e}")
             return False
@@ -372,8 +373,7 @@ class NavigationManager:
         # Find the view configuration
         for item in self.nav_items:
             if item["view"] == view_name:
-                required_permission = item.get("requires_permission")
-                if required_permission:
+                if required_permission := item.get("requires_permission"):
                     # Implement permission checking logic here
                     # For now, return True (no restrictions)
                     return True

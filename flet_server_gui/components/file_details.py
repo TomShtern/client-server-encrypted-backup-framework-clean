@@ -166,21 +166,21 @@ class FileDetails(EnhancedCard):
     def _create_metadata_section(self) -> ft.Control:
         """Create metadata section"""
         metadata = self.file_info.get("metadata", {})
-        
+
         if not metadata:
             return ft.Container()
-        
-        # Create metadata items
-        metadata_items = []
-        for key, value in metadata.items():
-            metadata_items.append(
-                ft.ListTile(
-                    title=ft.Text(key.replace("_", " ").title(), style=ft.TextThemeStyle.BODY_MEDIUM),
-                    subtitle=ft.Text(str(value), style=ft.TextThemeStyle.BODY_SMALL),
-                    dense=True
-                )
+
+        metadata_items = [
+            ft.ListTile(
+                title=ft.Text(
+                    key.replace("_", " ").title(),
+                    style=ft.TextThemeStyle.BODY_MEDIUM,
+                ),
+                subtitle=ft.Text(str(value), style=ft.TextThemeStyle.BODY_SMALL),
+                dense=True,
             )
-        
+            for key, value in metadata.items()
+        ]
         return ft.Column([
             ft.Text("Metadata", style=ft.TextThemeStyle.TITLE_MEDIUM),
             ft.Card(

@@ -108,9 +108,9 @@ class BreakpointManager:
         return cls.COLUMN_CONFIGS.get(breakpoint, cls.COLUMN_CONFIGS[Breakpoint.MD])
     
     @classmethod
-    def get_columns_for_width(cls, width: float, layout_type: str = "default") -> int:
+    def get_columns_for_layout(cls, width: float, layout_type: str = "default") -> int:
         """
-        Get column count for a given width and layout type.
+        Get number of columns for a specific layout type at the given width.
         
         Args:
             width: Screen width in pixels
@@ -119,8 +119,8 @@ class BreakpointManager:
         Returns:
             Number of columns to use
         """
-        breakpoint = cls.get_current_breakpoint(width)
-        config = cls.get_column_config(breakpoint)
+        current_breakpoint = cls.get_current_breakpoint(width)
+        config = cls.get_column_config(current_breakpoint)
         return config.get(layout_type, config["default"])
     
     @classmethod
@@ -293,32 +293,29 @@ class ResponsiveBuilder:
             Configured ResponsiveRow with responsive controls
         """
         responsive_controls = []
-        
+
         for i, control in enumerate(controls):
             # Set column configuration if provided
             if column_configs:
                 if i < len(column_configs):
                     config_key = list(column_configs.keys())[i]
                     col_config = column_configs[config_key]
-                    
-                    # Apply column configuration to control
+
                     if hasattr(control, 'col'):
-                        if isinstance(col_config, dict):
-                            control.col = col_config
-                        else:
-                            # Create default responsive config
-                            control.col = {"xs": 12, "sm": 6, "md": 4, "lg": col_config}
-            else:
-                # Apply default responsive behavior
-                if not hasattr(control, 'col') or control.col is None:
-                    control.col = {"xs": 12, "sm": 6, "md": 4, "lg": 3}
-                        
+                        control.col = (
+                            col_config
+                            if isinstance(col_config, dict)
+                            else {"xs": 12, "sm": 6, "md": 4, "lg": col_config}
+                        )
+            elif not hasattr(control, 'col') or control.col is None:
+                control.col = {"xs": 12, "sm": 6, "md": 4, "lg": 3}
+
             # Ensure expand is set for responsive behavior
             if not hasattr(control, 'expand') or control.expand is None:
                 control.expand = True
-                
+
             responsive_controls.append(control)
-        
+
         return ft.ResponsiveRow(
             controls=responsive_controls,
             spacing=spacing or 20,
@@ -396,11 +393,8 @@ class ResponsiveBuilder:
             Padding value or ft.Padding object
         """
         padding_value = BreakpointManager.get_responsive_spacing(width, size)
-        
-        if symmetric:
-            return ft.padding.all(padding_value)
-        else:
-            return padding_value
+
+        return ft.padding.all(padding_value) if symmetric else padding_value
     
     @staticmethod
     def get_adaptive_margin(
@@ -420,11 +414,8 @@ class ResponsiveBuilder:
             Margin value or ft.Margin object
         """
         margin_value = BreakpointManager.get_responsive_spacing(width, size)
-        
-        if symmetric:
-            return ft.margin.all(margin_value)
-        else:
-            return margin_value
+
+        return ft.margin.all(margin_value) if symmetric else margin_value
     
     @staticmethod
     def get_responsive_font_size(

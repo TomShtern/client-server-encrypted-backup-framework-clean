@@ -89,15 +89,14 @@ class EnhancedDialog:
         width = self.SIZE_WIDTHS.get(self.config.size)
         if width is None:  # FULL size
             width = self.page.width * 0.9 if self.page.width else 600
-            
+
         # Create content
         content = self._create_content()
-        
+
         # Create actions
         actions = self._create_actions()
-        
-        # Create dialog
-        dialog = ft.AlertDialog(
+
+        return ft.AlertDialog(
             ref=self.dialog_ref,
             modal=True,
             title=ft.Text(self.config.title, style=ft.TextThemeStyle.TITLE_MEDIUM),
@@ -109,8 +108,6 @@ class EnhancedDialog:
             bgcolor=TOKENS['surface'],
             surface_tint_color=TOKENS['primary'],
         )
-        
-        return dialog
     
     def _create_content(self) -> ft.Control:
         """Create dialog content"""

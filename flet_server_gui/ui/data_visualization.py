@@ -524,20 +524,14 @@ class DataVisualizationManager:
         Returns:
             Created visualization template
         """
-        # TODO: Validate template configuration structure
-        # TODO: Create VisualizationTemplate instance
-        # TODO: Generate unique template ID
-        # TODO: Store template in templates registry
-        # TODO: Apply default styling and configuration
-        template = VisualizationTemplate(
+        return VisualizationTemplate(
             template_id="",
             name="",
             description="",
             chart_type=ChartType.LINE_CHART,
             default_config=None,
-            required_data_fields=[]
+            required_data_fields=[],
         )
-        return template
     
     # Advanced Visualization Features
     
@@ -756,13 +750,7 @@ def create_data_visualization_manager(page: ft.Page, theme_manager=None,
     Returns:
         Configured data visualization manager
     """
-    # TODO: Initialize visualization manager with dependencies
-    # TODO: Load system templates and color palettes
-    # TODO: Set up integration with Phase 3-5 components
-    # TODO: Configure default chart settings
-    # TODO: Apply theme and accessibility settings
-    manager = DataVisualizationManager(page, theme_manager, analytics_dashboard)
-    return manager
+    return DataVisualizationManager(page, theme_manager, analytics_dashboard)
 
 
 def create_sample_chart_data(chart_type: ChartType, data_points: int = 50) -> List[DataPoint]:

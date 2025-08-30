@@ -617,13 +617,7 @@ def create_analytics_dashboard_manager(page: ft.Page, server_bridge=None,
     Returns:
         Configured analytics dashboard manager
     """
-    # TODO: Initialize dashboard manager with provided dependencies
-    # TODO: Set up default configuration and widgets
-    # TODO: Establish integration with Phase 3-4 components
-    # TODO: Configure default metric collectors
-    # TODO: Apply theme and accessibility settings
-    manager = AdvancedAnalyticsDashboard(page, server_bridge, theme_manager)
-    return manager
+    return AdvancedAnalyticsDashboard(page, server_bridge, theme_manager)
 
 
 def create_sample_analytics_widget(widget_type: str = "performance") -> AnalyticsWidget:

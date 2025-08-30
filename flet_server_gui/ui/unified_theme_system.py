@@ -411,10 +411,8 @@ class ThemeValidator:
             # Validate color format first
             if not color or len(color) < 3:
                 return 0.5  # Default luminance
-            
-            if color.startswith("#"):
-                color = color[1:]
-            
+
+            color = color.removeprefix("#")
             # Ensure we have at least 6 hex characters
             if len(color) < 6:
                 # Try to expand short hex codes (e.g., "abc" -> "aabbcc")
@@ -422,22 +420,22 @@ class ThemeValidator:
                     color = color[0] + color[0] + color[1] + color[1] + color[2] + color[2]
                 else:
                     return 0.5  # Default luminance for invalid colors
-            
+
             # Validate hex characters before parsing
-            if not all(c in '0123456789abcdefABCDEF' for c in color[:6]):
+            if any(c not in '0123456789abcdefABCDEF' for c in color[:6]):
                 return 0.5  # Default luminance for invalid hex
-            
-            r = int(color[0:2], 16) / 255.0
-            g = int(color[2:4], 16) / 255.0  
+
+            r = int(color[:2], 16) / 255.0
+            g = int(color[2:4], 16) / 255.0
             b = int(color[4:6], 16) / 255.0
-            
+
             # Apply gamma correction
             r = r / 12.92 if r <= 0.03928 else ((r + 0.055) / 1.055) ** 2.4
             g = g / 12.92 if g <= 0.03928 else ((g + 0.055) / 1.055) ** 2.4
             b = b / 12.92 if b <= 0.03928 else ((b + 0.055) / 1.055) ** 2.4
-            
+
             return 0.2126 * r + 0.7152 * g + 0.0722 * b
-            
+
         except Exception as e:
             # Silently handle invalid colors with default luminance
             return 0.5
@@ -445,43 +443,38 @@ class ThemeValidator:
     def is_accessible(self, foreground: str, background: str, level: str = "AA") -> bool:
         """Check if color combination meets accessibility standards"""
         ratio = self.calculate_contrast_ratio(foreground, background)
-        if level == "AAA":
-            return ratio >= 7.0
-        return ratio >= 4.5  # WCAG AA standard
+        return ratio >= 7.0 if level == "AAA" else ratio >= 4.5
     
     def validate_color_token(self, color: str) -> bool:
         """Validate color token format"""
         if not isinstance(color, str):
             return False
-        
+
         if color.startswith("#"):
             try:
                 int(color[1:], 16)
-                return len(color) in [4, 5, 7, 9]
+                return len(color) in {4, 5, 7, 9}
             except ValueError:
                 return False
-        
+
         return hasattr(ft.Colors, color.upper())
     
     def validate_typography_token(self, typography: Dict[str, Any]) -> bool:
         """Validate typography token structure"""
         if not isinstance(typography, dict):
             return False
-        
+
         required_fields = ["size", "weight"]
         for field in required_fields:
             if field not in typography:
                 return False
-        
+
         if not isinstance(typography["size"], (int, float)):
             return False
-        
+
         valid_weights = ["W_100", "W_200", "W_300", "W_400", "W_500", "W_600", "W_700", "W_800", "W_900"]
         weight = str(typography["weight"]).upper()
-        if not any(weight.endswith(vw) for vw in valid_weights):
-            return False
-        
-        return True
+        return any((weight.endswith(vw) for vw in valid_weights))
 
 
 # ============================================================================
@@ -773,18 +766,17 @@ class UnifiedThemeManager:
                 bg_color = self.tokens.colors.get(bg_role)
                 fg_color = self.tokens.colors.get(fg_role)
                 
-                if bg_color and fg_color:
-                    if not self.validator.is_accessible(fg_color, bg_color):
-                        warning = {
-                            "type": "contrast_violation",
-                            "background_role": bg_role.value,
-                            "foreground_role": fg_role.value,
-                            "background_color": bg_color,
-                            "foreground_color": fg_color,
-                            "contrast_ratio": self.validator.calculate_contrast_ratio(fg_color, bg_color),
-                            "severity": "high"
-                        }
-                        self.accessibility_warnings.append(warning)
+                if bg_color and fg_color and not self.validator.is_accessible(fg_color, bg_color):
+                    warning = {
+                        "type": "contrast_violation",
+                        "background_role": bg_role.value,
+                        "foreground_role": fg_role.value,
+                        "background_color": bg_color,
+                        "foreground_color": fg_color,
+                        "contrast_ratio": self.validator.calculate_contrast_ratio(fg_color, bg_color),
+                        "severity": "high"
+                    }
+                    self.accessibility_warnings.append(warning)
             
             # Fire event if warnings found
             if self.accessibility_warnings:
@@ -875,15 +867,9 @@ class ThemeUtilities:
         cache_key = f"button_{variant}"
         if cache_key in self.theme_manager._cache.get("styles", {}):
             return self.theme_manager._cache["styles"][cache_key]
-        
+
         try:
-            if variant == "filled":
-                style = ft.ButtonStyle(
-                    bgcolor=self.get_color(ColorRole.PRIMARY),
-                    color=self.get_color(ColorRole.ON_PRIMARY),
-                    shape=ft.RoundedRectangleBorder(radius=self.get_corner_radius("medium")),
-                )
-            elif variant == "outlined":
+            if variant == "outlined":
                 style = ft.ButtonStyle(
                     side=ft.BorderSide(1, self.get_color(ColorRole.OUTLINE)),
                     color=self.get_color(ColorRole.PRIMARY),
@@ -900,14 +886,14 @@ class ThemeUtilities:
                     color=self.get_color(ColorRole.ON_PRIMARY),
                     shape=ft.RoundedRectangleBorder(radius=self.get_corner_radius("medium")),
                 )
-            
+
             # Cache the style
             if "styles" not in self.theme_manager._cache:
                 self.theme_manager._cache["styles"] = {}
             self.theme_manager._cache["styles"][cache_key] = style
-            
+
             return style
-            
+
         except Exception as e:
             self.logger.error(f"Button style creation error: {e}")
             return ft.ButtonStyle()
@@ -1055,14 +1041,13 @@ def gradient_button(content: Union[str, ft.Control],
                    on_click: Optional[Callable] = None, 
                    radius: int = 12) -> ft.Container:
     """Create gradient button - backward compatibility"""
-    utilities = get_theme_utilities()
-    if utilities:
+    if utilities := get_theme_utilities():
         return utilities.create_gradient_button(content, width, height, on_click, radius)
-    
+
     # Fallback implementation
     if isinstance(content, str):
         content = ft.Text(content, color=TOKENS["on_primary"])
-    
+
     return ft.Container(
         width=width,
         height=height,
@@ -1091,19 +1076,16 @@ def surface_container(child: ft.Control, padding: int = 12,
 
 def create_theme(use_material3: bool = True, dark: bool = False) -> ft.Theme:
     """Create Flet theme - backward compatibility"""
-    manager = get_theme_manager()
-    if manager:
+    if manager := get_theme_manager():
         return manager._create_flet_theme(dark)
-    
+
     # Fallback implementation
     seed = TOKENS["primary"]
-    theme = ft.Theme(
+    return ft.Theme(
         use_material3=use_material3,
         color_scheme_seed=seed,
-        font_family="Inter"
+        font_family="Inter",
     )
-    
-    return theme
 
 
 def create_themed_button(text: str, icon=None, button_type: str = "filled", **kwargs) -> ft.Control:
@@ -1224,8 +1206,7 @@ class ThemeConsistencyManager:
     
     def get_component_colors(self, component_type: str = "surface"):
         """Get component colors - backward compatibility"""
-        utilities = get_theme_utilities()
-        if utilities:
+        if utilities := get_theme_utilities():
             if component_type == "surface":
                 return {
                     "bg": utilities.get_color(ColorRole.SURFACE),
@@ -1273,8 +1254,7 @@ class DynamicTokens:
     
     def _get_current_theme_mode(self):
         """Get current theme mode"""
-        theme_manager = self._get_theme_manager()
-        if theme_manager:
+        if theme_manager := self._get_theme_manager():
             return theme_manager.current_mode
         return ThemeMode.SYSTEM
     

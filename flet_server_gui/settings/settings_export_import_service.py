@@ -60,24 +60,22 @@ class SettingsExportImportService:
                 if self.toast_manager:
                     self.toast_manager.show_error(error_message)
                 return False, error_message, None
-            
+
             # Read and parse file
             with open(file_path, 'r', encoding='utf-8') as f:
                 import_data = json.load(f)
-            
+
             # Validate structure
-            if 'settings' not in import_data:
-                # Try to handle legacy format (direct settings object)
-                if isinstance(import_data, dict) and 'port' in import_data:  # Assume direct settings format
-                    settings_data = import_data
-                else:
-                    error_message = "Invalid settings file format"
-                    if self.toast_manager:
-                        self.toast_manager.show_error(error_message)
-                    return False, error_message, None
-            else:
+            if 'settings' in import_data:
                 settings_data = import_data['settings']
-            
+
+            elif isinstance(import_data, dict) and 'port' in import_data:  # Assume direct settings format
+                settings_data = import_data
+            else:
+                error_message = "Invalid settings file format"
+                if self.toast_manager:
+                    self.toast_manager.show_error(error_message)
+                return False, error_message, None
             # Validate settings data structure
             validation_result = self._validate_settings_structure(settings_data)
             if not validation_result[0]:
@@ -85,19 +83,19 @@ class SettingsExportImportService:
                 if self.toast_manager:
                     self.toast_manager.show_error(error_message)
                 return False, error_message, None
-            
+
             message = f"Settings imported successfully from {file_path}"
             if self.toast_manager:
                 self.toast_manager.show_success(message)
-            
+
             return True, message, settings_data
-            
+
         except json.JSONDecodeError as e:
             error_message = f"Invalid JSON format: {str(e)}"
             if self.toast_manager:
                 self.toast_manager.show_error(error_message)
             return False, error_message, None
-            
+
         except Exception as e:
             error_message = f"Failed to import settings: {str(e)}"
             if self.toast_manager:
@@ -109,7 +107,7 @@ class SettingsExportImportService:
         try:
             if not isinstance(settings_data, dict):
                 return False, "Settings data must be a dictionary"
-            
+
             # Define expected structure with types
             expected_structure = {
                 'port': (int, str),  # Allow string for conversion
@@ -133,26 +131,26 @@ class SettingsExportImportService:
                 'cleanup_days': (int, str),
                 'debug_mode': bool
             }
-            
+
             # Check for required keys (at least some basic ones)
             required_keys = ['port', 'host', 'theme_mode']
-            missing_keys = [key for key in required_keys if key not in settings_data]
-            
-            if missing_keys:
+            if missing_keys := [
+                key for key in required_keys if key not in settings_data
+            ]:
                 return False, f"Missing required settings: {', '.join(missing_keys)}"
-            
+
             # Validate types for present keys
             for key, value in settings_data.items():
                 if key in expected_structure:
                     expected_types = expected_structure[key]
                     if not isinstance(expected_types, tuple):
                         expected_types = (expected_types,)
-                    
+
                     if not isinstance(value, expected_types):
                         return False, f"Invalid type for '{key}': expected {expected_types}, got {type(value)}"
-            
+
             return True, "Settings structure is valid"
-            
+
         except Exception as e:
             return False, f"Validation error: {str(e)}"
     

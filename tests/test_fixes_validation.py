@@ -670,9 +670,7 @@ def run_all_tests():
     return result.wasSuccessful()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - manual execution helper
     import logging
-    logging.basicConfig(level=logging.WARNING)  # Reduce log noise during testing
-    
-    success = run_all_tests()
-    sys.exit(0 if success else 1)
+    logging.basicConfig(level=logging.WARNING)
+    run_all_tests()

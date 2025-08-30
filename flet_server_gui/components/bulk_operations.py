@@ -102,18 +102,18 @@ class BulkOperations(EnhancedCard):
         """Create list of selected files"""
         if not self.selected_files:
             return ft.Text("No files selected", italic=True, color=TOKENS["outline"])
-        
-        file_items = []
-        for file_info in self.selected_files[:10]:  # Show only first 10 files
-            file_items.append(
-                ft.ListTile(
-                    leading=ft.Icon(ft.Icons.DESCRIPTION, size=16),
-                    title=ft.Text(file_info.get("name", "Unknown")),
-                    subtitle=ft.Text(f"{file_info.get('size', 'Unknown')} • {file_info.get('modified', 'Unknown')}"),
-                    dense=True
-                )
+
+        file_items = [
+            ft.ListTile(
+                leading=ft.Icon(ft.Icons.DESCRIPTION, size=16),
+                title=ft.Text(file_info.get("name", "Unknown")),
+                subtitle=ft.Text(
+                    f"{file_info.get('size', 'Unknown')} • {file_info.get('modified', 'Unknown')}"
+                ),
+                dense=True,
             )
-        
+            for file_info in self.selected_files[:10]
+        ]
         # If there are more files, add a note
         if len(self.selected_files) > 10:
             file_items.append(
@@ -122,7 +122,7 @@ class BulkOperations(EnhancedCard):
                     dense=True
                 )
             )
-        
+
         return ft.Column(file_items, spacing=2)
     
     def _on_download(self, e):

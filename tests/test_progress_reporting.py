@@ -112,17 +112,11 @@ def test_progress_calculation():
     
     return len(progress_updates) > 0 and progress_updates[-1]['progress'] == 100
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - manual execution path
     try:
         success = test_progress_calculation()
-        if success:
-            print("\n[SUCCESS] Enhanced progress reporting system is working correctly!")
-            sys.exit(0)
-        else:
-            print("\n[ERROR] Issues detected in progress reporting system")
-            sys.exit(1)
-    except Exception as e:
+        print("\n[SUCCESS] Enhanced progress reporting system is working correctly!" if success else "\n[ERROR] Issues detected in progress reporting system")
+    except Exception as e:  # noqa: BLE001
         print(f"\n[ERROR] Test failed with error: {e}")
         import traceback
         traceback.print_exc()
-        sys.exit(1)

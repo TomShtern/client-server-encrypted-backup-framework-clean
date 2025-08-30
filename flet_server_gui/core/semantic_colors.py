@@ -673,21 +673,6 @@ def THEME_TOKENS(key: str, theme_mode: Optional[str] = None) -> str:
     # Fallback to original TOKENS for unknown keys
     from ui.unified_theme_system import TOKENS
     return TOKENS.get(key, "#000000")
-    
-    @staticmethod
-    def get_button_color(state: str = "default", theme_mode: Optional[str] = None) -> str:
-        """Get button color for specific state"""
-        return get_ui_state_color("button", state, theme_mode)
-    
-    @staticmethod
-    def get_card_color(state: str = "default", theme_mode: Optional[str] = None) -> str:
-        """Get card color for specific state"""
-        return get_ui_state_color("card", state, theme_mode)
-    
-    @staticmethod
-    def get_row_color(state: str = "default", theme_mode: Optional[str] = None) -> str:
-        """Get table row color for specific state"""
-        return get_ui_state_color("row", state, theme_mode)
 
 
 # Export the main classes and functions

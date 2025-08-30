@@ -120,8 +120,8 @@ except ImportError:
             color_map = {
                 ColorRole.PRIMARY: TOKENS['primary'],
                 ColorRole.ON_PRIMARY: TOKENS['on_primary'],
-                ColorRole.SURFACE: TOKENS['surface'] if not is_dark else TOKENS['surface_dark'],
-                ColorRole.ON_SURFACE: TOKENS['on_background'] if not is_dark else "#FFFFFF",
+                ColorRole.SURFACE: TOKENS['surface_dark'] if is_dark else TOKENS['surface'],
+                ColorRole.ON_SURFACE: "#FFFFFF" if is_dark else TOKENS['on_background'],
                 ColorRole.ERROR: TOKENS['error'],
                 ColorRole.OUTLINE: TOKENS['outline'],
             }
@@ -488,20 +488,17 @@ class M3ComponentFactory:
         """
         # Handle string conversion for cards
         if isinstance(style, str):
-            if style == "elevated":
+            if style == "elevated" or style not in ["filled", "outlined"]:
                 style = ComponentStyle.ELEVATED_CARD
             elif style == "filled":
                 style = ComponentStyle.FILLED_CARD
-            elif style == "outlined":
-                style = ComponentStyle.OUTLINED_CARD
             else:
-                style = ComponentStyle.ELEVATED_CARD
-        
+                style = ComponentStyle.OUTLINED_CARD
         if config is None:
             config = M3CardConfig(style=style, content=content, title=title)
-        
+
         is_dark = self.theme_system.current_mode == ThemeMode.DARK if self.theme_system else False
-        
+
         if style == ComponentStyle.ELEVATED_CARD:
             return self._create_elevated_card(config, is_dark, **kwargs)
         elif style == ComponentStyle.FILLED_CARD:
@@ -610,13 +607,11 @@ class M3ComponentFactory:
         if config.responsive:
             card.expand = True
         
-        if config.min_width:
-            if hasattr(card, 'width'):
-                card.width = max(card.width or 0, config.min_width)
+        if config.min_width and hasattr(card, 'width'):
+            card.width = max(card.width or 0, config.min_width)
         
-        if config.max_width:
-            if hasattr(card, 'width'):
-                card.width = min(card.width or config.max_width, config.max_width)
+        if config.max_width and hasattr(card, 'width'):
+            card.width = min(card.width or config.max_width, config.max_width)
         
         return card
     
@@ -768,22 +763,26 @@ class M3ComponentFactory:
     ) -> ft.ListTile:
         """Create M3 compliant list tile"""
         is_dark = self.theme_system.current_mode == ThemeMode.DARK
-        
-        tile = ft.ListTile(
+
+        return ft.ListTile(
             title=ft.Text(
                 title,
-                size=get_typography_token(TypographyRole.BODY_LARGE)["font_size"]
+                size=get_typography_token(TypographyRole.BODY_LARGE)["font_size"],
             ),
-            subtitle=ft.Text(
-                subtitle,
-                size=get_typography_token(TypographyRole.BODY_MEDIUM)["font_size"]
-            ) if subtitle else None,
+            subtitle=(
+                ft.Text(
+                    subtitle,
+                    size=get_typography_token(TypographyRole.BODY_MEDIUM)[
+                        "font_size"
+                    ],
+                )
+                if subtitle
+                else None
+            ),
             leading=leading,
             trailing=trailing,
             **kwargs
         )
-        
-        return tile
     
     # ========== Navigation Components ==========
     
@@ -795,15 +794,13 @@ class M3ComponentFactory:
     ) -> ft.NavigationRail:
         """Create M3 compliant navigation rail"""
         is_dark = self.theme_system.current_mode == ThemeMode.DARK
-        
-        rail = ft.NavigationRail(
+
+        return ft.NavigationRail(
             destinations=destinations,
             selected_index=selected_index,
             bgcolor=self._resolve_color(ColorRole.SURFACE, is_dark),
             **kwargs
         )
-        
-        return rail
     
     # ========== Utility Methods ==========
     

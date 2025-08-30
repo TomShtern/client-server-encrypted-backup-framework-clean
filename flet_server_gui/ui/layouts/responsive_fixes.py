@@ -38,16 +38,16 @@ class ResponsiveLayoutFixes:
             "clip_behavior": ft.ClipBehavior.NONE,  # Prevent clipping
             "expand": True,
         }
-        
+
         # Add optional constraints
         if min_width:
             container_kwargs["min_width"] = min_width
         if min_height:
             container_kwargs["min_height"] = min_height
-            
+
         # Add any additional kwargs
-        container_kwargs.update(kwargs)
-        
+        container_kwargs |= kwargs
+
         return ft.Container(**container_kwargs)
     
     @staticmethod
@@ -73,16 +73,16 @@ class ResponsiveLayoutFixes:
             "alignment": alignment,
             "clip_behavior": ft.ClipBehavior.NONE,
         }
-        
+
         # Add sizing if specified
         if width:
             container_kwargs["width"] = width
         if height:
             container_kwargs["height"] = height
-            
+
         # Add any additional kwargs
-        container_kwargs.update(kwargs)
-        
+        container_kwargs |= kwargs
+
         return ft.Container(**container_kwargs)
     
     @staticmethod
@@ -103,25 +103,25 @@ class ResponsiveLayoutFixes:
         """
         # Wrap content in a scrollable column
         scrollable_content = ft.Column(
-            controls=[content] if not isinstance(content, (ft.Column, ft.Row)) else content.controls,
+            controls=content.controls if isinstance(content, (ft.Column, ft.Row)) else [content],
             scroll=ft.ScrollMode.AUTO,
             expand=True,
         )
-        
+
         container_kwargs = {
             "content": scrollable_content,
             "padding": padding,
             "expand": True,
             "clip_behavior": ft.ClipBehavior.NONE,
         }
-        
+
         # Add max height if specified
         if max_height:
             container_kwargs["max_height"] = max_height
-            
+
         # Add any additional kwargs
-        container_kwargs.update(kwargs)
-        
+        container_kwargs |= kwargs
+
         return ft.Container(**container_kwargs)
     
     @staticmethod

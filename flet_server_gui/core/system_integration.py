@@ -399,15 +399,10 @@ class FileIntegrityManager:
     def _update_results_table(self):
         """Update the results table with scan results"""
         rows = []
-        
+
         for result in self.scan_results[-50:]:  # Show last 50 results
             # Status indicator with color
-            if result.status == "valid":
-                status_cell = ft.DataCell(ft.Row([
-                    ft.Icon(ft.icons.check_circle, color=TOKENS["secondary"], size=16),
-                    ft.Text("Valid", color=TOKENS["secondary"])
-                ]))
-            elif result.status == "corrupted":
+            if result.status == "corrupted":
                 status_cell = ft.DataCell(ft.Row([
                     ft.Icon(ft.icons.error, color=TOKENS["error"], size=16),
                     ft.Text("Corrupted", color=TOKENS["error"])
@@ -417,28 +412,40 @@ class FileIntegrityManager:
                     ft.Icon(ft.icons.help, color=TOKENS["secondary"], size=16),
                     ft.Text("Missing", color=TOKENS["secondary"])
                 ]))
+            elif result.status == "valid":
+                status_cell = ft.DataCell(ft.Row([
+                    ft.Icon(ft.icons.check_circle, color=TOKENS["secondary"], size=16),
+                    ft.Text("Valid", color=TOKENS["secondary"])
+                ]))
             else:
                 status_cell = ft.DataCell(ft.Row([
                     ft.Icon(ft.icons.info, color=TOKENS["primary"], size=16),
                     ft.Text("Unknown", color=TOKENS["primary"])
                 ]))
-            
+
             # Action buttons
             actions = []
             if result.status == "corrupted":
-                actions.append(ft.IconButton(
-                    icon=ft.icons.refresh,
-                    tooltip="Verify Again",
-                    on_click=lambda e, path=result.filepath: self._reverify_file(path)
-                ))
-                actions.append(ft.IconButton(
-                    icon=ft.icons.delete,
-                    tooltip="Delete Corrupted File",
-                    on_click=lambda e, path=result.filepath: self._delete_corrupted_file(path)
-                ))
-            
+                actions.extend(
+                    (
+                        ft.IconButton(
+                            icon=ft.icons.refresh,
+                            tooltip="Verify Again",
+                            on_click=lambda e, path=result.filepath: self._reverify_file(
+                                path
+                            ),
+                        ),
+                        ft.IconButton(
+                            icon=ft.icons.delete,
+                            tooltip="Delete Corrupted File",
+                            on_click=lambda e, path=result.filepath: self._delete_corrupted_file(
+                                path
+                            ),
+                        ),
+                    )
+                )
             actions_cell = ft.DataCell(ft.Row(actions))
-            
+
             row = ft.DataRow([
                 ft.DataCell(ft.Text(Path(result.filepath).name, size=12)),
                 status_cell,
@@ -446,9 +453,9 @@ class FileIntegrityManager:
                 ft.DataCell(ft.Text(result.modified_time.strftime("%Y-%m-%d %H:%M"), size=12)),
                 actions_cell
             ])
-            
+
             rows.append(row)
-        
+
         self.results_table.rows = rows
         self.results_table.update()
     
@@ -733,7 +740,7 @@ class AdvancedClientSessionManager:
     def _update_sessions_table(self):
         """Update sessions table with current data"""
         rows = []
-        
+
         for session in self.session_history:
             # Status indicator
             if session.status == "active":
@@ -746,7 +753,7 @@ class AdvancedClientSessionManager:
                     ft.Icon(ft.icons.circle, color=TOKENS["outline"], size=12),
                     ft.Text("Disconnected", color=TOKENS["outline"], size=12)
                 ]))
-            
+
             # Action buttons
             actions = [
                 ft.IconButton(
@@ -755,26 +762,34 @@ class AdvancedClientSessionManager:
                     on_click=lambda e, s=session: self._show_session_details(s)
                 )
             ]
-            
+
             if session.status == "active":
                 actions.append(ft.IconButton(
                     icon=ft.icons.close,
                     tooltip="Disconnect",
                     on_click=lambda e, s=session: self._disconnect_session(s)
                 ))
-            
-            row = ft.DataRow([
-                ft.DataCell(ft.Text(session.client_id[:8] + "...", size=12)),
-                ft.DataCell(ft.Text(session.ip_address, size=12)),
-                status_cell,
-                ft.DataCell(ft.Text(session.connection_time.strftime("%H:%M:%S"), size=12)),
-                ft.DataCell(ft.Text(str(session.files_transferred), size=12)),
-                ft.DataCell(ft.Text(f"{session.bytes_transferred // 1024} KB", size=12)),
-                ft.DataCell(ft.Row(actions))
-            ])
-            
+
+            row = ft.DataRow(
+                [
+                    ft.DataCell(ft.Text(f"{session.client_id[:8]}...", size=12)),
+                    ft.DataCell(ft.Text(session.ip_address, size=12)),
+                    status_cell,
+                    ft.DataCell(
+                        ft.Text(
+                            session.connection_time.strftime("%H:%M:%S"), size=12
+                        )
+                    ),
+                    ft.DataCell(ft.Text(str(session.files_transferred), size=12)),
+                    ft.DataCell(
+                        ft.Text(f"{session.bytes_transferred // 1024} KB", size=12)
+                    ),
+                    ft.DataCell(ft.Row(actions)),
+                ]
+            )
+
             rows.append(row)
-        
+
         self.sessions_table.rows = rows
         self.sessions_table.update()
     
@@ -852,8 +867,7 @@ class AdvancedClientSessionManager:
     def _disconnect_session(self, session: ClientSession):
         """Disconnect a client session"""
         try:
-            success = self.server_bridge.disconnect_client(session.client_id)
-            if success:
+            if success := self.server_bridge.disconnect_client(session.client_id):
                 session.status = "disconnected"
                 self._update_sessions_table()
                 logger.info(f"ג… Disconnected client session: {session.client_id}")

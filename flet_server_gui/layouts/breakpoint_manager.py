@@ -105,19 +105,19 @@ class BreakpointManager:
         return cls.COLUMN_CONFIGS.get(breakpoint, cls.COLUMN_CONFIGS[Breakpoint.MD])
     
     @classmethod
-    def get_columns_for_width(cls, width: float, layout_type: str = "default") -> int:
+    def get_columns_for_layout(cls, width: float, layout_type: str = "default") -> int:
         """
-        Get column count for a given width and layout type.
+        Get number of columns for a specific layout type at the given width.
         
         Args:
             width: Screen width in pixels
-            layout_type: Type of layout ("default", "half", "third", "quarter")
+            layout_type: Type of layout ("default", "compact", "spacious")
             
         Returns:
             Number of columns to use
         """
-        breakpoint = cls.get_current_breakpoint(width)
-        config = cls.get_column_config(breakpoint)
+        current_breakpoint = cls.get_current_breakpoint(width)
+        config = cls.get_column_config(current_breakpoint)
         return config.get(layout_type, config["default"])
     
     @classmethod
@@ -131,8 +131,8 @@ class BreakpointManager:
         Returns:
             True if mobile (xs or sm), False otherwise
         """
-        breakpoint = cls.get_current_breakpoint(width)
-        return breakpoint in [Breakpoint.XS, Breakpoint.SM]
+        current_breakpoint = cls.get_current_breakpoint(width)
+        return current_breakpoint in [Breakpoint.XS, Breakpoint.SM]
     
     @classmethod
     def is_tablet(cls, width: float) -> bool:

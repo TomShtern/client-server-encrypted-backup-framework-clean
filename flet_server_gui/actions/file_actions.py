@@ -33,17 +33,17 @@ class FileActions(BaseAction):
         try:
             success = await self.server_bridge.delete_file(file_id)
             if success:
-                return ActionResult.success_result(
+                return ActionResult.make_success(
                     data={'file_id': file_id, 'action': 'delete'},
                     metadata={'operation_type': 'file_delete', 'permanent': True}
                 )
             else:
-                return ActionResult.error_result(
+                return ActionResult.make_error(
                     error_message=f"Failed to delete file {file_id}",
                     error_code="DELETE_FAILED"
                 )
         except Exception as e:
-            return ActionResult.error_result(
+            return ActionResult.make_error(
                 error_message=f"Error deleting file {file_id}: {str(e)}",
                 error_code="DELETE_EXCEPTION"
             )
@@ -59,7 +59,7 @@ class FileActions(BaseAction):
             ActionResult with batch operation outcome
         """
         if not file_ids:
-            return ActionResult.error_result("No files specified for deletion")
+            return ActionResult.make_error(code="FILE_DELETE_EMPTY", message="No files specified for deletion", correlation_id=get_trace_center().new_correlation_id())
         
         # Execute deletions in parallel for better performance
         tasks = [self.delete_file(file_id) for file_id in file_ids]
@@ -113,7 +113,7 @@ class FileActions(BaseAction):
             with open(destination_path, 'wb') as f:
                 f.write(file_content)
             
-            return ActionResult.success_result(
+            return ActionResult.make_success(
                 data={
                     'file_id': file_id,
                     'destination_path': destination_path,
@@ -209,7 +209,7 @@ class FileActions(BaseAction):
             # Compare checksums
             is_valid = calculated_checksum == stored_checksum
             
-            return ActionResult.success_result(
+            return ActionResult.make_success(
                 data={
                     'file_id': file_id,
                     'is_valid': is_valid,
@@ -310,7 +310,7 @@ class FileActions(BaseAction):
             else:
                 return ActionResult.error_result(f"Unsupported export format: {export_format}")
             
-            return ActionResult.success_result(
+            return ActionResult.make_success(
                 data=exported_data,
                 metadata={
                     'format': export_format,
@@ -366,7 +366,7 @@ class FileActions(BaseAction):
             # Get all files from database
             all_files = self.server_bridge.data_manager.db_manager.get_all_files()
             if not all_files:
-                return ActionResult.success_result(
+                return ActionResult.make_success(
                     data={'cleaned_files': 0, 'days_threshold': days_threshold, 'total_files': 0},
                     metadata={'operation_type': 'file_cleanup', 'reason': 'no_files_found'}
                 )
@@ -403,7 +403,7 @@ class FileActions(BaseAction):
                     print(f"Failed to cleanup file {filename}: {e}")
                     continue
 
-            return ActionResult.success_result(
+            return ActionResult.make_success(
                 data={
                     'cleaned_files': cleaned_count,
                     'days_threshold': days_threshold,
@@ -433,7 +433,7 @@ class FileActions(BaseAction):
             # Get file details from server bridge
             file_data = await self.server_bridge.get_file_details(file_id)
             if file_data:
-                return ActionResult.success_result(
+                return ActionResult.make_success(
                     data=file_data,
                     metadata={'file_id': file_id, 'operation_type': 'file_details'}
                 )
@@ -460,20 +460,20 @@ class FileActions(BaseAction):
         """
         try:
             # Get file content from server bridge
-            file_content = await self.server_bridge.get_file_content(file_id)
+            file_content = self.server_bridge.get_file_content(file_id)
             if file_content is not None:
-                return ActionResult.success_result(
+                return ActionResult.make_success(
                     data=file_content,
                     metadata={'file_id': file_id, 'operation_type': 'file_content'}
                 )
             else:
-                return ActionResult.error_result(
-                    error_message=f"File {file_id} content not available",
+                return ActionResult.make_error(
+                    message=f"File {file_id} content not available",
                     error_code="FILE_CONTENT_UNAVAILABLE"
                 )
         except Exception as e:
-            return ActionResult.error_result(
-                error_message=f"Error getting file content for {file_id}: {str(e)}",
+            return ActionResult.make_error(
+                message=f"Error getting file content for {file_id}: {str(e)}",
                 error_code="FILE_CONTENT_EXCEPTION"
             )
 

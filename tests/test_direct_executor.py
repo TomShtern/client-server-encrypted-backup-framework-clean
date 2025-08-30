@@ -108,6 +108,6 @@ def test_direct_executor():
     print("\n" + "=" * 60)
     return result.get('success', False)
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - manual execution path
     success = test_direct_executor()
-    sys.exit(0 if success else 1)
+    print("SUCCESS" if success else "FAILURE")

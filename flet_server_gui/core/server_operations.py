@@ -77,42 +77,47 @@ class ServerOperations:
                     'error': 'Server is already running',
                     'error_code': 'SERVER_ALREADY_RUNNING'
                 }
-            
+
             # Attempt to start server
             success = await self.server_bridge.start_server()
-            
-            if success:
-                # Wait a moment and verify server actually started
-                await asyncio.sleep(1)
-                status_check = await self.get_server_status()
-                
-                if status_check.get('success') and status_check.get('data', {}).get('running'):
-                    return {
-                        'success': True,
-                        'data': {
-                            'action': 'start_server',
-                            'server_status': 'running',
-                            'host': status_check.get('data', {}).get('host', 'unknown'),
-                            'port': status_check.get('data', {}).get('port', 'unknown')
-                        },
-                        'metadata': {
-                            'operation_type': 'server_control',
-                            'timestamp': time.time()
-                        }
-                    }
-                else:
-                    return {
-                        'success': False,
-                        'error': 'Server start command succeeded but server is not running',
-                        'error_code': 'START_VERIFICATION_FAILED'
-                    }
-            else:
+
+            if not success:
                 return {
                     'success': False,
                     'error': 'Failed to start server',
                     'error_code': 'START_COMMAND_FAILED'
                 }
-                
+
+            # Wait a moment and verify server actually started
+            await asyncio.sleep(1)
+            status_check = await self.get_server_status()
+
+            return (
+                {
+                    'success': True,
+                    'data': {
+                        'action': 'start_server',
+                        'server_status': 'running',
+                        'host': status_check.get('data', {}).get(
+                            'host', 'unknown'
+                        ),
+                        'port': status_check.get('data', {}).get(
+                            'port', 'unknown'
+                        ),
+                    },
+                    'metadata': {
+                        'operation_type': 'server_control',
+                        'timestamp': time.time(),
+                    },
+                }
+                if status_check.get('success')
+                and status_check.get('data', {}).get('running')
+                else {
+                    'success': False,
+                    'error': 'Server start command succeeded but server is not running',
+                    'error_code': 'START_VERIFICATION_FAILED',
+                }
+            )
         except Exception as e:
             return {
                 'success': False,
@@ -136,40 +141,38 @@ class ServerOperations:
                     'error': 'Server is not currently running',
                     'error_code': 'SERVER_NOT_RUNNING'
                 }
-            
+
             # Attempt to stop server
             success = await self.server_bridge.stop_server()
-            
-            if success:
-                # Wait a moment and verify server actually stopped
-                await asyncio.sleep(1)
-                status_check = await self.get_server_status()
-                
-                if not status_check.get('success') or not status_check.get('data', {}).get('running'):
-                    return {
-                        'success': True,
-                        'data': {
-                            'action': 'stop_server',
-                            'server_status': 'stopped'
-                        },
-                        'metadata': {
-                            'operation_type': 'server_control',
-                            'timestamp': time.time()
-                        }
-                    }
-                else:
-                    return {
-                        'success': False,
-                        'error': 'Server stop command succeeded but server is still running',
-                        'error_code': 'STOP_VERIFICATION_FAILED'
-                    }
-            else:
+
+            if not success:
                 return {
                     'success': False,
                     'error': 'Failed to stop server',
                     'error_code': 'STOP_COMMAND_FAILED'
                 }
-                
+
+            # Wait a moment and verify server actually stopped
+            await asyncio.sleep(1)
+            status_check = await self.get_server_status()
+
+            return (
+                {
+                    'success': True,
+                    'data': {'action': 'stop_server', 'server_status': 'stopped'},
+                    'metadata': {
+                        'operation_type': 'server_control',
+                        'timestamp': time.time(),
+                    },
+                }
+                if not status_check.get('success')
+                or not status_check.get('data', {}).get('running')
+                else {
+                    'success': False,
+                    'error': 'Server stop command succeeded but server is still running',
+                    'error_code': 'STOP_VERIFICATION_FAILED',
+                }
+            )
         except Exception as e:
             return {
                 'success': False,

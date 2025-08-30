@@ -139,11 +139,8 @@ class ResponsiveBuilder:
             Padding value or ft.Padding object
         """
         padding_value = BreakpointManager.get_responsive_spacing(width, size)
-        
-        if symmetric:
-            return ft.padding.all(padding_value)
-        else:
-            return padding_value
+
+        return ft.padding.all(padding_value) if symmetric else padding_value
     
     @staticmethod
     def get_adaptive_margin(
@@ -163,11 +160,8 @@ class ResponsiveBuilder:
             Margin value or ft.Margin object
         """
         margin_value = BreakpointManager.get_responsive_spacing(width, size)
-        
-        if symmetric:
-            return ft.margin.all(margin_value)
-        else:
-            return margin_value
+
+        return ft.margin.all(margin_value) if symmetric else margin_value
     
     @staticmethod
     def get_responsive_font_size(

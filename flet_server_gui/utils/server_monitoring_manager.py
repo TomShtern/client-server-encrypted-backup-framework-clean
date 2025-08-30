@@ -100,7 +100,7 @@ class ServerMonitoringManager:
         """Get server-specific performance metrics"""
         try:
             base_metrics = self.get_system_metrics()
-            
+
             # Add server-specific metrics
             server_metrics = {
                 'server_status': 'running' if (self.server_instance and self.server_instance.running) else 'stopped',
@@ -108,24 +108,26 @@ class ServerMonitoringManager:
                 'total_threads': 0,
                 'memory_usage_mb': 0
             }
-            
+
             if self.monitoring_enabled:
                 try:
                     # Get current process info
                     process = psutil.Process()
-                    server_metrics.update({
+                    server_metrics |= {
                         'total_threads': process.num_threads(),
-                        'memory_usage_mb': round(process.memory_info().rss / (1024**2), 2)
-                    })
+                        'memory_usage_mb': round(
+                            process.memory_info().rss / (1024**2), 2
+                        ),
+                    }
                 except Exception as e:
                     print(f"[WARNING] Could not get process metrics: {e}")
-            
+
             # Combine system and server metrics
             return {
                 **base_metrics,
                 'server': server_metrics
             }
-            
+
         except Exception as e:
             print(f"[ERROR] Failed to get server performance metrics: {e}")
             return self._get_fallback_server_metrics()

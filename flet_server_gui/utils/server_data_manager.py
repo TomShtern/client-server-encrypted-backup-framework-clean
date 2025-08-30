@@ -42,7 +42,7 @@ class ServerDataManager:
     def __init__(self, server_instance: Optional[BackupServer] = None, database_name: Optional[str] = None):
         self.server_instance = server_instance
         self.db_manager = None
-        
+
         # Use MockaBase when running standalone (no server instance)
         if database_name is None and server_instance is None:
             # Check if MockaBase exists, if not create it
@@ -52,42 +52,42 @@ class ServerDataManager:
             else:
                 database_name = mockabase_path
                 print(f"[INFO] Using MockaBase: {database_name}")
-        
+
         if DATABASE_AVAILABLE:
             try:
                 self.db_manager = DatabaseManager(database_name)
                 print(f"[INFO] Database connection established ({database_name or 'default'})")
             except Exception as e:
                 print(f"[ERROR] Database initialization failed: {e}")
-                raise RuntimeError(f"Database connection required: {e}")
+                raise RuntimeError(f"Database connection required: {e}") from e
         else:
             raise RuntimeError("Database integration required but not available")
     
     def get_all_clients(self) -> List[RealClient]:
         """Get list of all clients from database"""
-        print(f"[DB_TRACE] ========== DATA MANAGER GET ALL CLIENTS ==========")
+        print("[DB_TRACE] ========== DATA MANAGER GET ALL CLIENTS ==========")
         print(f"[DB_TRACE] Database manager: {self.db_manager is not None}")
         print(f"[DB_TRACE] Server instance: {self.server_instance is not None}")
-        
+
         try:
             clients = []
-            
+
             if self.db_manager:
-                print(f"[DB_TRACE] Calling db_manager.get_all_clients()")
+                print("[DB_TRACE] Calling db_manager.get_all_clients()")
                 # Get clients from database
                 client_records = self.db_manager.get_all_clients()
                 print(f"[DB_TRACE] Database returned {len(client_records)} client records")
-                
+
                 active_client_ids = []
                 if self.server_instance and hasattr(self.server_instance, 'clients'):
                     active_client_ids = list(self.server_instance.clients.keys())
                     print(f"[DB_TRACE] Active client IDs: {active_client_ids}")
-                
+
                 for i, record in enumerate(client_records):
                     print(f"[DB_TRACE] Processing client record {i}: {record}")
                     client_id = record.get('id', 'unknown')
                     is_connected = client_id in active_client_ids
-                    
+
                     client = RealClient(
                         client_id=client_id,
                         address=record.get('ip_address', 'unknown'),
@@ -98,13 +98,13 @@ class ServerDataManager:
                     clients.append(client)
                     print(f"[DB_TRACE] Created client: {client.client_id} ({client.status})")
             else:
-                print(f"[DB_TRACE] ⚠ No database manager available")
-            
-            print(f"[DB_TRACE] ✓ Returning {len(clients)} clients")
+                print("[DB_TRACE] ! No database manager available")
+
+            print(f"[DB_TRACE] OK Returning {len(clients)} clients")
             return clients
-            
+
         except Exception as e:
-            print(f"[DB_TRACE] ✗ Failed to get client list: {e}")
+            print(f"[DB_TRACE] X Failed to get client list: {e}")
             import traceback
             print(f"[DB_TRACE] Traceback: {traceback.format_exc()}")
             return []
@@ -112,10 +112,7 @@ class ServerDataManager:
     def get_all_files(self) -> List[Dict[str, Any]]:
         """Get list of all files from database"""
         try:
-            if self.db_manager:
-                return self.db_manager.get_all_files()
-            return []
-            
+            return self.db_manager.get_all_files() if self.db_manager else []
         except Exception as e:
             print(f"[ERROR] Failed to get file list: {e}")
             return []
@@ -144,10 +141,10 @@ class ServerDataManager:
     
     def disconnect_client(self, client_id: str) -> bool:
         """Disconnect a specific client"""
-        print(f"[DB_TRACE] ========== DATA MANAGER DISCONNECT CLIENT ==========")
+        print("[DB_TRACE] ========== DATA MANAGER DISCONNECT CLIENT ==========")
         print(f"[DB_TRACE] Client ID: {client_id}")
         print(f"[DB_TRACE] Server instance: {self.server_instance is not None}")
-        
+
         try:
             if self.server_instance:
                 print(f"[DB_TRACE] Server instance clients: {list(self.server_instance.clients.keys()) if self.server_instance.clients else []}")
@@ -161,9 +158,9 @@ class ServerDataManager:
                     print(f"[DB_TRACE] ⚠ Client {client_id} not found in active clients")
                     return False
             else:
-                print(f"[DB_TRACE] ⚠ No server instance available")
+                print("[DB_TRACE] ⚠ No server instance available")
                 return False
-                
+
         except Exception as e:
             print(f"[DB_TRACE] ✗ Failed to disconnect client {client_id}: {e}")
             import traceback
@@ -172,10 +169,10 @@ class ServerDataManager:
     
     def delete_client(self, client_id: str) -> bool:
         """Delete a client from database"""
-        print(f"[DB_TRACE] ========== DATA MANAGER DELETE CLIENT ==========")
+        print("[DB_TRACE] ========== DATA MANAGER DELETE CLIENT ==========")
         print(f"[DB_TRACE] Client ID: {client_id}")
         print(f"[DB_TRACE] Database manager: {self.db_manager is not None}")
-        
+
         try:
             if self.db_manager:
                 print(f"[DB_TRACE] Database manager type: {type(self.db_manager)}")
@@ -186,9 +183,9 @@ class ServerDataManager:
                     print(f"[DB_TRACE] ✓ Client {client_id} deleted from database")
                 return success
             else:
-                print(f"[DB_TRACE] ✗ No database manager available")
+                print("[DB_TRACE] ✗ No database manager available")
                 return False
-            
+
         except Exception as e:
             print(f"[DB_TRACE] ✗ Failed to delete client {client_id}: {e}")
             import traceback
@@ -197,19 +194,13 @@ class ServerDataManager:
     
     def disconnect_multiple_clients(self, client_ids: List[str]) -> int:
         """Disconnect multiple clients"""
-        success_count = 0
-        for client_id in client_ids:
-            if self.disconnect_client(client_id):
-                success_count += 1
-        return success_count
+        return sum(bool(self.disconnect_client(client_id))
+               for client_id in client_ids)
     
     def delete_multiple_clients(self, client_ids: List[str]) -> int:
         """Delete multiple clients from database"""
-        success_count = 0
-        for client_id in client_ids:
-            if self.delete_client(client_id):
-                success_count += 1
-        return success_count
+        return sum(bool(self.delete_client(client_id))
+               for client_id in client_ids)
     
     def delete_file(self, file_info: Dict[str, Any]) -> bool:
         """Delete a file from database and storage"""
@@ -242,11 +233,8 @@ class ServerDataManager:
     
     def delete_multiple_files(self, file_infos: List[Dict[str, Any]]) -> int:
         """Delete multiple files"""
-        success_count = 0
-        for file_info in file_infos:
-            if self.delete_file(file_info):
-                success_count += 1
-        return success_count
+        return sum(bool(self.delete_file(file_info))
+               for file_info in file_infos)
     
     def backup_database(self, destination_path: str) -> bool:
         """Create database backup"""
@@ -273,10 +261,7 @@ class ServerDataManager:
     def get_database_tables(self) -> List[str]:
         """Get list of database tables"""
         try:
-            if self.db_manager:
-                return self.db_manager.get_table_names()
-            return []
-            
+            return self.db_manager.get_table_names() if self.db_manager else []
         except Exception as e:
             print(f"[ERROR] Failed to get database tables: {e}")
             return []

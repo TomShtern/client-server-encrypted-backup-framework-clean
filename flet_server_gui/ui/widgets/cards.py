@@ -89,12 +89,10 @@ class ClientStatsCard:
                 self.connection_indicator.current.color = self.page.theme.color_scheme.primary
                 
                 # Add pulse animation for new connections
-                if hasattr(self.connected_count.current, '_last_value'):
-                    if int(server_info.connected_clients) > int(self.connected_count.current._last_value):
-                        # Pulse animation
-                        self.connection_indicator.current.scale = ft.Scale(1.3)
-                        self.page.update()
-                        asyncio.create_task(self._reset_icon_scale())
+                if hasattr(self.connected_count.current, '_last_value') and int(server_info.connected_clients) > int(self.connected_count.current._last_value):
+                    self.connection_indicator.current.scale = ft.Scale(1.3)
+                    self.page.update()
+                    asyncio.create_task(self._reset_icon_scale())
                         
                 self.connected_count.current._last_value = str(server_info.connected_clients)
             else:
@@ -576,10 +574,6 @@ class EnhancedStatsCard:
 
     def _on_view_details(self, e):
         """Handle view details button click"""
-        # Placeholder for view details functionality
-        pass
-
-
         return self.BUTTON_CONFIGS.copy()
 
 

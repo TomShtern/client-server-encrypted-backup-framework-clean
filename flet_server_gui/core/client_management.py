@@ -51,18 +51,13 @@ class ClientManagement:
         """
         try:
             clients = self.server_bridge.get_all_clients()
-            
+
             # Convert to standardized format if needed
             standardized_clients = []
             for client in clients:
-                if hasattr(client, '__dict__'):
-                    # Convert object to dict
-                    client_dict = client.__dict__
-                else:
-                    client_dict = client
-                    
+                client_dict = client.__dict__ if hasattr(client, '__dict__') else client
                 standardized_clients.append(client_dict)
-            
+
             return {
                 'success': True,
                 'data': standardized_clients,
@@ -171,8 +166,7 @@ class ClientManagement:
             Dictionary containing operation result
         """
         try:
-            success = self.server_bridge.disconnect_client(client_id)
-            if success:
+            if success := self.server_bridge.disconnect_client(client_id):
                 return {
                     'success': True,
                     'data': {'client_id': client_id, 'action': 'disconnect'},
@@ -237,7 +231,7 @@ class ClientManagement:
             },
             'metadata': {
                 'operation_type': 'bulk_client_disconnect',
-                'errors': errors if errors else None
+                'errors': errors or None
             }
         }
     
@@ -252,8 +246,7 @@ class ClientManagement:
             Dictionary containing operation result
         """
         try:
-            success = self.server_bridge.delete_client(client_id)
-            if success:
+            if success := self.server_bridge.delete_client(client_id):
                 return {
                     'success': True,
                     'data': {'client_id': client_id, 'action': 'delete'},
@@ -318,7 +311,7 @@ class ClientManagement:
             },
             'metadata': {
                 'operation_type': 'bulk_client_delete',
-                'errors': errors if errors else None
+                'errors': errors or None
             }
         }
     
@@ -505,49 +498,46 @@ class ClientManagement:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            
+
             # Handle different JSON structures
             if isinstance(data, list):
                 return data
             elif isinstance(data, dict):
-                if 'clients' in data:
-                    return data['clients']
-                else:
-                    return [data]
+                return data['clients'] if 'clients' in data else [data]
             else:
                 raise ValueError("JSON file must contain a list of clients or a single client object")
-                
+
         except json.JSONDecodeError as e:
-            raise ValueError(f'Invalid JSON format: {str(e)}')
+            raise ValueError(f'Invalid JSON format: {str(e)}') from e
         except Exception as e:
-            raise ValueError(f'Failed to parse JSON file: {str(e)}')
+            raise ValueError(f'Failed to parse JSON file: {str(e)}') from e
     
     def _parse_csv_import_file(self, file_path: str) -> List[Dict[str, Any]]:
         """Parse CSV client import file."""
         try:
             clients = []
-            
+
             with open(file_path, 'r', encoding='utf-8') as f:
                 # Auto-detect CSV dialect
                 sample = f.read(1024)
                 f.seek(0)
                 sniffer = csv.Sniffer()
                 dialect = sniffer.sniff(sample)
-                
+
                 reader = csv.DictReader(f, dialect=dialect)
-                
+
                 for row_num, row in enumerate(reader, start=2):
                     # Skip empty rows
                     if not any(row.values()):
                         continue
-                    
+
                     # Clean up field names and values
                     cleaned_row = {}
                     for key, value in row.items():
                         if key:
                             clean_key = key.strip().lower()
                             clean_value = value.strip() if value else ""
-                            
+
                             # Map common CSV column variations to standard names
                             if clean_key in ['name', 'client_name', 'clientname']:
                                 cleaned_row['name'] = clean_value
@@ -557,25 +547,25 @@ class ClientManagement:
                                 cleaned_row['aes_key_hex'] = clean_value
                             else:
                                 cleaned_row[clean_key] = clean_value
-                    
+
                     if cleaned_row.get('name'):
                         clients.append(cleaned_row)
-            
+
             return clients
-            
+
         except Exception as e:
-            raise ValueError(f'Failed to parse CSV file: {str(e)}')
+            raise ValueError(f'Failed to parse CSV file: {str(e)}') from e
     
     def _validate_client_data(self, client_data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Validate client data for import."""
         errors = []
         warnings = []
         valid_clients = []
-        
+
         for i, client_data in enumerate(client_data_list):
             client_errors = []
             client_warnings = []
-            
+
             # Check required fields
             name = client_data.get('name', '').strip()
             if not name:
@@ -584,16 +574,12 @@ class ClientManagement:
                 client_errors.append(f'Client {i+1}: Name too long (max 255 characters)')
             elif not name.replace('_', '').replace('-', '').replace(' ', '').isalnum():
                 client_warnings.append(f'Client {i+1}: Name contains special characters that may cause issues')
-            
-            # Validate public key if provided
-            public_key_pem = client_data.get('public_key_pem', '').strip()
-            if public_key_pem:
+
+            if public_key_pem := client_data.get('public_key_pem', '').strip():
                 if not self._validate_pem_format(public_key_pem):
                     client_warnings.append(f'Client {i+1}: Public key does not appear to be valid PEM format')
-            
-            # Validate AES key if provided
-            aes_key_hex = client_data.get('aes_key_hex', '').strip()
-            if aes_key_hex:
+
+            if aes_key_hex := client_data.get('aes_key_hex', '').strip():
                 try:
                     bytes.fromhex(aes_key_hex)
                     key_bytes = len(aes_key_hex) // 2
@@ -601,19 +587,19 @@ class ClientManagement:
                         client_warnings.append(f'Client {i+1}: AES key length ({key_bytes} bytes) is not standard (16, 24, or 32 bytes)')
                 except ValueError:
                     client_errors.append(f'Client {i+1}: AES key is not valid hexadecimal')
-            
+
             if not client_errors:
                 valid_clients.append(client_data)
-            
+
             errors.extend(client_errors)
             warnings.extend(client_warnings)
-        
+
         return {
-            'valid': len(errors) == 0,
+            'valid': not errors,
             'errors': errors,
             'warnings': warnings,
             'valid_client_count': len(valid_clients),
-            'total_client_count': len(client_data_list)
+            'total_client_count': len(client_data_list),
         }
     
     def _validate_pem_format(self, pem_data: str) -> bool:

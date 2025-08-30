@@ -128,7 +128,7 @@ def truncate_text(text: str, max_length: int = 50, suffix: str = "...") -> str:
 def pluralize(count: int, singular: str, plural: Optional[str] = None) -> str:
     """Return singular or plural form based on count."""
     if plural is None:
-        plural = singular + "s"
+        plural = f"{singular}s"
     return singular if count == 1 else plural
 
 
@@ -250,14 +250,13 @@ def get_theme_tokens() -> Dict[str, str]:
     global _cached_tokens
     if _cached_tokens is not None:
         return _cached_tokens
-    
+
     try:
         from flet_server_gui.ui.unified_theme_system import TOKENS
         _cached_tokens = TOKENS
         return TOKENS
     except ImportError:
-        # Return default tokens if theme is not available
-        _cached_tokens = {
+        return {
             "primary_gradient": ["#A8CBF3", "#7C5CD9"],
             "primary": "#7C5CD9",
             "on_primary": "#FFFFFF",
@@ -268,15 +267,14 @@ def get_theme_tokens() -> Dict[str, str]:
             "container": "#38A298",
             "on_container": "#FFFFFF",
             "surface": "#F6F8FB",
-            "surface_variant": "#E7EDF7", 
+            "surface_variant": "#E7EDF7",
             "surface_dark": "#0F1720",
             "background": "#FFFFFF",
             "on_background": "#000000",
             "outline": "#666666",
             "error": "#B00020",
-            "on_error": "#FFFFFF"
+            "on_error": "#FFFFFF",
         }
-        return _cached_tokens
 
 
 def get_theme_color(color_name: str, default: str = "#000000") -> str:

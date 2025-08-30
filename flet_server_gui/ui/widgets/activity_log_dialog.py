@@ -182,12 +182,11 @@ class ActivityLogDialog(ft.AlertDialog):
             ft.DataColumn(ft.Text("Source", size=12, weight=ft.FontWeight.BOLD)),
             ft.DataColumn(ft.Text("Message", size=12, weight=ft.FontWeight.BOLD))
         ]
-        
-        # Create rows
-        rows = []
-        for activity in self.filtered_activities[:100]:  # Limit to 100 for performance
-            rows.append(self._create_activity_row(activity))
-        
+
+        rows = [
+            self._create_activity_row(activity)
+            for activity in self.filtered_activities[:100]
+        ]
         return ft.DataTable(
             columns=columns,
             rows=rows,
@@ -299,14 +298,13 @@ class ActivityLogDialog(ft.AlertDialog):
     def _export_logs(self, e):
         """Export logs to clipboard"""
         # Create export content
-        export_lines = []
-        export_lines.append("Timestamp,Level,Category,Source,Message")
+        export_lines = ["Timestamp,Level,Category,Source,Message"]
         for activity in self.filtered_activities:
             line = f"{activity.timestamp.isoformat()},{activity.level.value},{activity.category.value},{activity.source},\"{activity.message}\""
             export_lines.append(line)
-        
+
         export_content = "\n".join(export_lines)
-        
+
         # Show confirmation
         if hasattr(self.page, 'snack_bar'):
             self.page.snack_bar = ft.SnackBar(

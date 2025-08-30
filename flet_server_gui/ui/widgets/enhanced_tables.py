@@ -91,10 +91,10 @@ class EnhancedTable:
         """Create the enhanced table"""
         # Create columns
         columns = self._create_columns()
-        
+
         # Create rows
         rows = self._create_rows()
-        
+
         # Determine row height based on size
         if self.config.size == TableSize.SMALL:
             data_row_height = 32
@@ -102,9 +102,8 @@ class EnhancedTable:
             data_row_height = 56
         else:
             data_row_height = 48
-        
-        # Create table
-        table = ft.DataTable(
+
+        return ft.DataTable(
             ref=self.table_ref,
             columns=columns,
             rows=rows,
@@ -113,12 +112,16 @@ class EnhancedTable:
             border=ft.BorderSide(1, TOKENS['outline']),
             horizontal_lines=ft.BorderSide(0.5, TOKENS['outline']),
             show_checkbox_column=self.config.show_checkboxes,
-            on_select_all=self._on_select_all if self.config.show_checkboxes else None,
+            on_select_all=(
+                self._on_select_all if self.config.show_checkboxes else None
+            ),
             sort_ascending=self.config.sort_direction == SortDirection.ASC,
-            sort_column_index=self._get_column_index(self.config.sort_column) if self.config.sort_column else None
+            sort_column_index=(
+                self._get_column_index(self.config.sort_column)
+                if self.config.sort_column
+                else None
+            ),
         )
-        
-        return table
     
     def _create_columns(self) -> List[ft.DataColumn]:
         """Create table columns"""
@@ -154,33 +157,37 @@ class EnhancedTable:
     def _create_rows(self) -> List[ft.DataRow]:
         """Create table rows"""
         rows = []
-        
+
         # Apply filtering
         filtered_data = self._apply_filter(self.config.data)
-        
+
         # Apply sorting
         sorted_data = self._apply_sort(filtered_data)
-        
+
         # Apply pagination
         paged_data = self._apply_pagination(sorted_data)
-        
+
         # Create rows
         for i, item in enumerate(paged_data):
             cells = []
-            
+
             for column in self.config.columns:
                 value = item.get(column.name, "")
                 # Format value based on type
-                if isinstance(value, datetime):
-                    formatted_value = value.strftime("%Y-%m-%d %H:%M")
-                elif isinstance(value, (int, float)):
-                    if column.numeric:
-                        formatted_value = f"{value:,}"
-                    else:
-                        formatted_value = str(value)
-                else:
+                if (
+                    not isinstance(value, datetime)
+                    and isinstance(value, (int, float))
+                    and column.numeric
+                ):
+                    formatted_value = f"{value:,}"
+                elif (
+                    not isinstance(value, datetime)
+                    and isinstance(value, (int, float))
+                    or not isinstance(value, datetime)
+                ):
                     formatted_value = str(value)
-                
+                else:
+                    formatted_value = value.strftime("%Y-%m-%d %H:%M")
                 cells.append(
                     ft.DataCell(
                         ft.Text(
@@ -189,16 +196,16 @@ class EnhancedTable:
                         )
                     )
                 )
-            
+
             # Create data row
             row = ft.DataRow(
                 cells=cells,
                 on_select_changed=lambda e, idx=i: self._on_row_select(e, idx) if self.config.show_checkboxes else None,
                 on_tap=lambda e, data=item: self._on_row_click(e, data) if self.config.on_row_click else None
             )
-            
+
             rows.append(row)
-        
+
         return rows
     
     def _create_pagination(self) -> Optional[ft.Control]:
@@ -272,14 +279,13 @@ class EnhancedTable:
         """Apply sorting to data"""
         if not self.config.sort_column:
             return data
-        
+
         try:
-            sorted_data = sorted(
+            return sorted(
                 data,
                 key=lambda x: x.get(self.config.sort_column, ""),
-                reverse=(self.config.sort_direction == SortDirection.DESC)
+                reverse=(self.config.sort_direction == SortDirection.DESC),
             )
-            return sorted_data
         except Exception as ex:
             logger.error(f"Error sorting data: {ex}")
             return data
@@ -296,10 +302,14 @@ class EnhancedTable:
     
     def _get_column_index(self, column_name: str) -> Optional[int]:
         """Get column index by name"""
-        for i, column in enumerate(self.config.columns):
-            if column.name == column_name:
-                return i
-        return None
+        return next(
+            (
+                i
+                for i, column in enumerate(self.config.columns)
+                if column.name == column_name
+            ),
+            None,
+        )
     
     def _on_column_sort(self, column_name: str):
         """Handle column sort"""
@@ -427,11 +437,8 @@ def create_simple_table(
 ) -> EnhancedTable:
     """Create a simple table with automatic column detection"""
     # Determine columns
-    if not columns and data:
-        columns = list(data[0].keys())
-    elif not columns:
-        columns = []
-    
+    if not columns:
+        columns = list(data[0].keys()) if data else []
     # Create column definitions
     column_defs = []
     for col in columns:
@@ -440,7 +447,7 @@ def create_simple_table(
         if data:
             sample_value = data[0].get(col)
             is_numeric = isinstance(sample_value, (int, float))
-        
+
         column_defs.append(
             TableColumn(
                 name=col,
@@ -448,13 +455,13 @@ def create_simple_table(
                 numeric=is_numeric
             )
         )
-    
+
     config = TableConfig(
         columns=column_defs,
         data=data,
         **kwargs
     )
-    
+
     return EnhancedTable(page, config)
 
 
@@ -516,45 +523,46 @@ def create_file_table(
 async def test_enhanced_tables(page: ft.Page):
     """Test enhanced tables functionality"""
     print("Testing enhanced tables...")
-    
-    # Generate sample data
-    clients = []
-    for i in range(25):
-        clients.append({
+
+    clients = [
+        {
             "id": i + 1,
             "name": f"Client {i + 1}",
             "ip_address": f"192.168.1.{i + 1}",
             "status": random.choice(["Online", "Offline", "Away"]),
-            "last_seen": (datetime.now() - timedelta(minutes=random.randint(0, 1440))).strftime("%Y-%m-%d %H:%M"),
-            "files_count": random.randint(0, 1000)
-        })
-    
+            "last_seen": (
+                datetime.now() - timedelta(minutes=random.randint(0, 1440))
+            ).strftime("%Y-%m-%d %H:%M"),
+            "files_count": random.randint(0, 1000),
+        }
+        for i in range(25)
+    ]
     # Create client table
     client_table = create_client_table(
         page,
         clients,
         on_row_click=lambda data: print(f"Clicked client: {data['name']}")
     )
-    
+
     # Create layout
     layout = ft.Column([
         ft.Text("Enhanced Tables Test", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
         client_table.get_control()
     ], spacing=20, alignment=ft.MainAxisAlignment.CENTER)
-    
+
     # Add to page
     page.add(layout)
     page.update()
-    
+
     # Test data updates
     await asyncio.sleep(2)
     new_clients = clients[:5]  # Show only first 5 clients
     client_table.set_data(new_clients)
-    
+
     # Test filtering
     await asyncio.sleep(1)
     client_table.set_filter("Online", "status")
-    
+
     print("Enhanced tables test completed")
 
 

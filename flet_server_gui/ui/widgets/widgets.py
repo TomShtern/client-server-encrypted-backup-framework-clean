@@ -93,9 +93,6 @@ class DashboardWidget(ft.Card):
     
     def _build_widget(self) -> ft.Container:
         """Build the complete widget with header and content."""
-        # Header with title and controls
-        header_controls = []
-        
         # Title
         title_text = ft.Text(
             self.title,
@@ -103,8 +100,7 @@ class DashboardWidget(ft.Card):
             weight=ft.FontWeight.BOLD,
             expand=True
         )
-        header_controls.append(title_text)
-        
+        header_controls = [title_text]
         # Collapsible button if enabled
         if self.collapsible:
             collapse_button = ft.IconButton(
@@ -114,7 +110,7 @@ class DashboardWidget(ft.Card):
                 icon_size=20
             )
             header_controls.append(collapse_button)
-        
+
         # Refresh button if callback provided
         if self.on_refresh_callback:
             refresh_button = ft.IconButton(
@@ -124,32 +120,27 @@ class DashboardWidget(ft.Card):
                 icon_size=20
             )
             header_controls.append(refresh_button)
-        
+
         # Header row
         header = ft.Row(
             header_controls,
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER
         )
-        
+
         # Divider
         divider = ft.Divider(height=1, thickness=1)
-        
+
         # Widget content
         widget_content = ft.Column([
             header,
             divider,
             self.content_container
         ], spacing=12, expand=True)
-        
-        # Card container
-        card_container = ft.Container(
-            content=widget_content,
-            padding=ft.padding.all(16),
-            expand=True
+
+        return ft.Container(
+            content=widget_content, padding=ft.padding.all(16), expand=True
         )
-        
-        return card_container
     
     def _toggle_collapse(self, e):
         """Toggle widget collapse state with animation."""
@@ -337,16 +328,16 @@ class ActivityFeedWidget(DashboardWidget):
     def _create_feed_content(self) -> ft.Control:
         """Create activity feed content."""
         activity_items = []
-        
+
         # Limit to max_activities
         display_activities = self.activities[-self.max_activities:] if len(self.activities) > self.max_activities else self.activities
-        
+
         for activity in display_activities:
             timestamp = activity.get("timestamp", "")
             message = activity.get("message", "")
             source = activity.get("source", "")
             level = activity.get("level", "INFO")
-            
+
             # Determine icon and color based on level
             level_configs = {
                 "INFO": (ft.Icons.INFO_OUTLINE, TOKENS['primary']),
@@ -354,24 +345,22 @@ class ActivityFeedWidget(DashboardWidget):
                 "WARNING": (ft.Icons.WARNING_AMBER, TOKENS['tertiary']),
                 "ERROR": (ft.Icons.ERROR_OUTLINE, TOKENS['error'])
             }
-            
+
             icon, color = level_configs.get(level.upper(), (ft.Icons.INFO_OUTLINE, TOKENS['primary']))
-            
+
             activity_item = ft.ListTile(
                 leading=ft.Icon(icon, color=color, size=16),
                 title=ft.Text(message, size=13),
                 subtitle=ft.Text(f"{source} • {timestamp}", size=11, color=TOKENS['outline']),
                 dense=True
             )
-            
-            activity_items.append(activity_item)
-            activity_items.append(ft.Divider(height=1))
-        
+
+            activity_items.extend((activity_item, ft.Divider(height=1)))
         if not activity_items:
             activity_items.append(
                 ft.Text("No recent activity", italic=True, color=TOKENS['outline'])
             )
-        
+
         return ft.Column(activity_items, spacing=2, expand=True)
     
     def add_activity(self, activity: Dict[str, str]):

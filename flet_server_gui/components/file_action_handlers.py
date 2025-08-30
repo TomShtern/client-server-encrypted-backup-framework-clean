@@ -10,6 +10,9 @@ import os
 from typing import List, Dict, Any, Optional, Callable
 from ..utils.server_bridge import ServerBridge
 from ..actions import FileActions
+from ..utils.action_result import ActionResult
+from ..utils.trace_center import get_trace_center
+from ..services.confirmation_service import ConfirmationService
 
 
 class FileActionHandlers:
@@ -60,394 +63,524 @@ class FileActionHandlers:
             else:
                 on_confirm()
     
-    async def download_file(self, filename: str, destination_path: str = None) -> bool:
-        """Download a single file"""
-        print(f"[DEBUG] download_file called with filename: {filename}")
-        print(f"[DEBUG] dialog_system: {self.dialog_system}")
-        print(f"[DEBUG] toast_manager: {self.toast_manager}")
-        
-        if not self.dialog_system:
-            print("[ERROR] Dialog system not initialized!")
-            print(f"[FALLBACK] Attempting direct download of {filename}")
-            # Try to download without progress dialog
-            try:
-                success = await self.file_actions.download_file(filename, destination_path or os.path.join(os.path.expanduser("~"), "Downloads", filename))
-                print(f"[FALLBACK] Download result: {success}")
-                return success
-            except Exception as e:
-                print(f"[FALLBACK ERROR] Download failed: {str(e)}")
-                return False
-        
+    async def download_file(self, filename: str, destination_path: str = None) -> ActionResult:
+        """Download a single file (with progress dialog if available)."""
+        trace = get_trace_center()
+        cid = trace.new_correlation_id()
         try:
-            # Use default download path if none specified
             if not destination_path:
                 destination_path = os.path.join(os.path.expanduser("~"), "Downloads", filename)
-            
-            # Show progress dialog
+            if not self.dialog_system:
+                success = await self.file_actions.download_file(filename, destination_path)
+                if success:
+                    if self.toast_manager:
+                        self.toast_manager.show_success(f"Downloaded '{filename}'")
+                    return ActionResult.make_success(
+                        code="FILE_DOWNLOAD_OK",
+                        message="File downloaded",
+                        correlation_id=cid,
+                        data={"filename": filename, "path": destination_path},
+                        selection=[filename],
+                    )
+                if self.toast_manager:
+                    self.toast_manager.show_error(f"Failed to download '{filename}'")
+                return ActionResult.make_error(
+                    code="FILE_DOWNLOAD_FAILED",
+                    message="Download failed",
+                    correlation_id=cid,
+                    error_code="FAILED",
+                    data={"filename": filename},
+                    selection=[filename],
+                )
             progress_dialog = self._create_progress_dialog("Downloading File", f"Downloading {filename}...")
             self.dialog_system.show_custom_dialog(
                 title="Download Progress",
                 content=progress_dialog,
-                actions=[]
+                actions=[],
             )
-            
-            # Execute download
             success = await self.file_actions.download_file(filename, destination_path)
-            
-            # Close progress dialog
             self._close_dialog()
-            
             if success:
-                self.toast_manager.show_success(f"File '{filename}' downloaded successfully to {destination_path}")
-                return True
-            else:
+                if self.toast_manager:
+                    self.toast_manager.show_success(f"File '{filename}' downloaded to {destination_path}")
+                return ActionResult.make_success(
+                    code="FILE_DOWNLOAD_OK",
+                    message="File downloaded",
+                    correlation_id=cid,
+                    data={"filename": filename, "path": destination_path},
+                    selection=[filename],
+                )
+            if self.toast_manager:
                 self.toast_manager.show_error(f"Failed to download file '{filename}'")
-                return False
-                
-        except Exception as e:
-            self._close_dialog()
-            self.toast_manager.show_error(f"Error downloading file: {str(e)}")
-            return False
-    
-    async def verify_file(self, filename: str) -> bool:
-        """Verify file integrity"""
-        try:
-            # Show verification dialog
-            self.dialog_system.show_info_dialog(
-                title="Verifying File",
-                message=f"Verifying integrity of '{filename}'...",
+            return ActionResult.make_error(
+                code="FILE_DOWNLOAD_FAILED",
+                message="Download failed",
+                correlation_id=cid,
+                error_code="FAILED",
+                data={"filename": filename},
+                selection=[filename],
             )
-            
-            # Execute verification
-            verification_result = await self.file_actions.verify_file(filename)
-            
-            # Close dialog
+        except Exception as e:  # noqa: BLE001
             self._close_dialog()
-            
-            if verification_result.get('valid', False):
-                self.toast_manager.show_success(f"File '{filename}' verification successful")
-                return True
-            else:
-                error_msg = verification_result.get('error', 'Unknown verification error')
-                self.toast_manager.show_error(f"File '{filename}' verification failed: {error_msg}")
-                return False
-                
-        except Exception as e:
-            self._close_dialog()
-            self.toast_manager.show_error(f"Error verifying file: {str(e)}")
-            return False
+            if self.toast_manager:
+                self.toast_manager.show_error(f"Error downloading file: {e}")
+            return ActionResult.make_error(
+                code="FILE_DOWNLOAD_ERROR",
+                message=str(e),
+                correlation_id=cid,
+                error_code="EXCEPTION",
+                data={"filename": filename},
+                selection=[filename],
+            )
     
-    async def preview_file(self, filename: str = None, file_id: str = None) -> None:
-        """Preview file content using FilePreviewManager"""
-        # Handle both filename and file_id parameters (file_id is used by button factory)
-        target_file = filename or file_id
-        
-        print(f"[DEBUG] preview_file called with filename: {filename}, file_id: {file_id}")
-        print(f"[DEBUG] target_file: {target_file}")
-        print(f"[DEBUG] dialog_system: {self.dialog_system}")
-        print(f"[DEBUG] toast_manager: {self.toast_manager}")
-        
-        if not target_file:
-            print("[ERROR] No filename or file_id provided!")
-            return False
-            
-        if not self.dialog_system:
-            print("[ERROR] Dialog system not initialized!")
-            print(f"[FALLBACK] Cannot preview {target_file} - dialog system required")
-            return False
-        
+    async def verify_file(self, filename: str) -> ActionResult:
+        """Verify file integrity."""
+        trace = get_trace_center()
+        cid = trace.new_correlation_id()
         try:
-            # Show loading indicator
+            if self.dialog_system:
+                self.dialog_system.show_info_dialog(
+                    title="Verifying File",
+                    message=f"Verifying integrity of '{filename}'...",
+                )
+            verification_result = await self.file_actions.verify_file(filename)
+            if self.dialog_system:
+                self._close_dialog()
+            valid = verification_result.get("valid", False)
+            if valid:
+                if self.toast_manager:
+                    self.toast_manager.show_success(f"File '{filename}' verified")
+                return ActionResult.make_success(
+                    code="FILE_VERIFY_OK",
+                    message="File verified",
+                    correlation_id=cid,
+                    data={"filename": filename, "details": verification_result},
+                    selection=[filename],
+                )
+            error_msg = verification_result.get("error", "Verification failed")
+            if self.toast_manager:
+                self.toast_manager.show_error(f"File '{filename}' verification failed: {error_msg}")
+            return ActionResult.make_error(
+                code="FILE_VERIFY_FAILED",
+                message=error_msg,
+                correlation_id=cid,
+                error_code="FAILED",
+                data={"filename": filename, "details": verification_result},
+                selection=[filename],
+            )
+        except Exception as e:  # noqa: BLE001
+            if self.dialog_system:
+                self._close_dialog()
+            if self.toast_manager:
+                self.toast_manager.show_error(f"Error verifying file: {e}")
+            return ActionResult.make_error(
+                code="FILE_VERIFY_ERROR",
+                message=str(e),
+                correlation_id=cid,
+                error_code="EXCEPTION",
+                data={"filename": filename},
+                selection=[filename],
+            )
+    
+    async def preview_file(self, filename: str = None, file_id: str = None) -> ActionResult:
+        """Preview file content using FilePreviewManager."""
+        trace = get_trace_center()
+        cid = trace.new_correlation_id()
+        target_file = filename or file_id
+        if not target_file:
+            return ActionResult.make_error(
+                    code="FILE_PREVIEW_NO_TARGET",
+                    message="No filename provided",
+                    correlation_id=cid,
+                    error_code="INVALID_INPUT",
+                )
+        if not self.dialog_system:
+            return ActionResult.make_error(
+                code="FILE_PREVIEW_NO_DIALOG",
+                message="Dialog system required for preview",
+                correlation_id=cid,
+                error_code="UNAVAILABLE",
+                selection=[target_file],
+            )
+        try:
             self.dialog_system.show_info_dialog(
                 title="Loading Preview",
                 message=f"Loading preview for '{target_file}'...",
             )
-            
-            # Get file content through FileActions
             result = await self.file_actions.get_file_content(target_file)
-            
-            # Close loading dialog
             self._close_dialog()
-            
-            if result.success:
-                # Show preview using FilePreviewManager
-                if hasattr(self, 'parent_view') and hasattr(self.parent_view, 'preview_manager'):
-                    # If we have access to the preview manager through parent view
-                    await self.parent_view.preview_manager.show_file_preview(filename)
-                elif hasattr(self, 'preview_manager'):
-                    # If preview manager is directly available
-                    await self.preview_manager.show_file_preview(filename)
+            if getattr(result, "success", False):
+                content_displayed = False
+                if hasattr(self, "parent_view") and hasattr(self.parent_view, "preview_manager"):
+                    await self.parent_view.preview_manager.show_file_preview(target_file)
+                    content_displayed = True
+                elif hasattr(self, "preview_manager"):
+                    await self.preview_manager.show_file_preview(target_file)
+                    content_displayed = True
                 else:
-                    # Fallback: show content in a simple dialog
                     file_content = result.data
                     self.dialog_system.show_info_dialog(
                         title=f"Preview: {target_file}",
-                        message=file_content[:1000] + "..." if len(file_content) > 1000 else file_content
+                        message=(file_content[:1000] + "..." if isinstance(file_content, str) and len(file_content) > 1000 else file_content),
                     )
-            else:
-                self.toast_manager.show_error(f"Failed to load preview for '{target_file}': {result.error_message}")
-                
-        except Exception as e:
-            print(f"[ERROR] Exception in preview_file: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            self._close_dialog()
-            self.toast_manager.show_error(f"Error previewing file: {str(e)}")
+                    content_displayed = True
+                if self.toast_manager:
+                    self.toast_manager.show_success(f"Preview loaded for '{target_file}'")
+                return ActionResult.make_success(
+                    code="FILE_PREVIEW_OK",
+                    message="Preview shown" if content_displayed else "Preview fetched",
+                    correlation_id=cid,
+                    data={"filename": target_file},
+                    selection=[target_file],
+                )
+            if self.toast_manager:
+                self.toast_manager.show_error(f"Failed to load preview for '{target_file}'")
+            return ActionResult.make_error(
+                    code="FILE_PREVIEW_FAILED",
+                    message="Preview load failed",
+                    correlation_id=cid,
+                    error_code="FAILED",
+                    selection=[target_file],
+                )
+        except Exception as e:  # noqa: BLE001
+            if self.dialog_system:
+                self._close_dialog()
+            if self.toast_manager:
+                self.toast_manager.show_error(f"Error previewing file: {e}")
+            return ActionResult.make_error(
+                code="FILE_PREVIEW_ERROR",
+                message=str(e),
+                correlation_id=cid,
+                error_code="EXCEPTION",
+                selection=[target_file],
+            )
     
-    async def delete_file(self, filename: str) -> None:
-        """Delete a file with confirmation"""
-        print(f"[DEBUG] delete_file called with filename: {filename}")
-        print(f"[DEBUG] dialog_system: {self.dialog_system}")
-        print(f"[DEBUG] toast_manager: {self.toast_manager}")
-        
-        if not self.dialog_system:
-            print("[ERROR] Dialog system not initialized!")
-            print(f"[FALLBACK] Directly deleting file {filename} without confirmation")
-            await self._perform_delete(filename)
-            return
-        
-        def confirm_delete():
-            self._close_dialog()
-            # Use page.run_task if available, otherwise check for event loop
-            if hasattr(self.page, 'run_task'):
-                self.page.run_task(self._perform_delete(filename))
-            else:
-                # Check if we're in an async context
-                try:
-                    loop = asyncio.get_running_loop()
-                    if loop.is_running():
-                        asyncio.create_task(self._perform_delete(filename))
-                except RuntimeError:
-                    # No event loop running, skip async task creation
-                    pass
-        
-        # Show confirmation dialog
-        await self._show_confirmation_dialog(
-            title="⚠️ Confirm Delete",
-            message=f"Are you sure you want to permanently delete '{filename}'? This action cannot be undone.",
-            on_confirm=confirm_delete,
-            on_cancel=lambda: self._close_dialog()
-        )
+    async def delete_file(self, filename: str) -> ActionResult:
+        """Delete a file with confirmation."""
+        trace = get_trace_center()
+        cid = trace.new_correlation_id()
+        confirmed = True
+        if self.dialog_system:
+            confirmed = await self.dialog_system.show_confirmation_async(
+                title="⚠️ Confirm Delete",
+                message=f"Delete '{filename}'? This cannot be undone.",
+            )
+        if not confirmed:
+            return ActionResult.make_cancelled(
+                code="FILE_DELETE_CANCELLED",
+                message="User cancelled delete",
+                correlation_id=cid,
+                selection=[filename],
+            )
+        return await self._perform_delete(filename, correlation_id=cid)
     
-    async def _perform_delete(self, filename: str) -> None:
+    async def _perform_delete(self, filename: str, correlation_id: Optional[str] = None) -> ActionResult:
         """Actually perform the file deletion"""
+        cid = correlation_id or get_trace_center().new_correlation_id()
         try:
-            # Execute delete via file actions
             success = await self.file_actions.delete_file(filename)
-            
             if success:
-                self.toast_manager.show_success(f"File '{filename}' deleted successfully")
+                if self.toast_manager:
+                    self.toast_manager.show_success(f"File '{filename}' deleted")
                 if self.on_data_changed:
                     await self.on_data_changed()
-            else:
+                return ActionResult.make_success(
+                    code="FILE_DELETE_OK",
+                    message="File deleted",
+                    correlation_id=cid,
+                    selection=[filename],
+                )
+            if self.toast_manager:
                 self.toast_manager.show_error(f"Failed to delete file '{filename}'")
-                
-        except Exception as e:
-            self.toast_manager.show_error(f"Error deleting file: {str(e)}")
+            return ActionResult.make_error(
+                code="FILE_DELETE_FAILED",
+                message="Delete failed",
+                correlation_id=cid,
+                error_code="FAILED",
+                selection=[filename],
+            )
+        except Exception as e:  # noqa: BLE001
+            if self.toast_manager:
+                self.toast_manager.show_error(f"Error deleting file: {e}")
+            return ActionResult.make_error(
+                code="FILE_DELETE_ERROR",
+                message=str(e),
+                correlation_id=cid,
+                error_code="EXCEPTION",
+                selection=[filename],
+            )
     
-    async def view_file_details(self, filename: str = None, file_id: str = None) -> None:
-        """View detailed information about a file"""
-        # Handle both filename and file_id parameters (file_id is used by button factory)
+    async def view_file_details(self, filename: str = None, file_id: str = None) -> ActionResult:
+        """View detailed information about a file."""
+        trace = get_trace_center()
+        cid = trace.new_correlation_id()
         target_file = filename or file_id
-        
-        print(f"[DEBUG] view_file_details called with filename: {filename}, file_id: {file_id}")
-        print(f"[DEBUG] target_file: {target_file}")
-        print(f"[DEBUG] dialog_system: {self.dialog_system}")
-        print(f"[DEBUG] toast_manager: {self.toast_manager}")
-        
         if not target_file:
-            print("[ERROR] No filename or file_id provided!")
-            return False
-            
+            return ActionResult.make_error(
+                code="FILE_DETAILS_NO_TARGET",
+                message="No filename provided",
+                correlation_id=cid,
+                error_code="INVALID_INPUT",
+            )
         if not self.dialog_system:
-            print("[ERROR] Dialog system not initialized!")
-            print(f"[FALLBACK] Showing file details for {target_file} in console")
-            # Try to get and display file details in console
-            try:
-                file_details = await self._get_file_details(target_file)
-                if file_details:
-                    print(f"[FALLBACK DETAILS] File {target_file} details:")
-                    for key, value in file_details.items():
-                        print(f"[FALLBACK DETAILS]   {key}: {value}")
-                    if self.toast_manager:
-                        self.toast_manager.show_success(f"File details for {target_file} shown in console")
-                else:
-                    print(f"[FALLBACK ERROR] No details found for file {target_file}")
-                    if self.toast_manager:
-                        self.toast_manager.show_error(f"No details found for file {target_file}")
-            except Exception as e:
-                print(f"[FALLBACK ERROR] Failed to get file details: {str(e)}")
+            details = await self._get_file_details(target_file)
+            if not details:
                 if self.toast_manager:
-                    self.toast_manager.show_error(f"Failed to get file details: {str(e)}")
-            return True
-        
+                    self.toast_manager.show_error(f"No details for {target_file}")
+                return ActionResult.make_error(
+                    code="FILE_DETAILS_NOT_FOUND",
+                    message="Details not found",
+                    correlation_id=cid,
+                    error_code="NOT_FOUND",
+                    selection=[target_file],
+                )
+            if self.toast_manager:
+                self.toast_manager.show_success(f"Details (console) for {target_file}")
+            return ActionResult.make_info(
+                code="FILE_DETAILS_FALLBACK",
+                message="Details fetched (no dialog system)",
+                correlation_id=cid,
+                data={"details": details},
+                selection=[target_file],
+            )
         try:
-            # Get file details from server
-            file_details_result = await self._get_file_details(target_file)
-            
-            # Handle ActionResult vs direct dictionary return
-            if hasattr(file_details_result, 'success'):
-                # It's an ActionResult object
-                if not file_details_result.success:
-                    self.toast_manager.show_error(f"Could not retrieve details for file: {filename}")
-                    return
-                file_details = file_details_result.data or {}
-            else:
-                # It's a direct dictionary or None
-                file_details = file_details_result or {}
-                
-            if not file_details:
-                self.toast_manager.show_error(f"Could not retrieve details for file: {filename}")
-                return
-            
-            # Create detailed view content
-            details_content = self._create_file_details_content(file_details)
-            
-            # Show details dialog
+            details = await self._get_file_details(target_file)
+            if not details:
+                if self.toast_manager:
+                    self.toast_manager.show_error(f"No details for {target_file}")
+                return ActionResult.make_error(
+                    code="FILE_DETAILS_NOT_FOUND",
+                    message="Details not found",
+                    correlation_id=cid,
+                    error_code="NOT_FOUND",
+                    selection=[target_file],
+                )
+            details_content = self._create_file_details_content(details)
             self.dialog_system.show_custom_dialog(
                 title=f"File Details: {target_file}",
                 content=details_content,
                 actions=[
-                    ft.TextButton("Download", on_click=lambda e: self._safe_async_task(self._download_from_dialog(target_file))),
-                    ft.TextButton("Close", on_click=lambda e: self._close_dialog())
-                ]
+                    ft.TextButton(
+                        "Download",
+                        on_click=lambda e: self._safe_async_task(self._download_from_dialog(target_file)),
+                    ),
+                    ft.TextButton("Close", on_click=lambda e: self._close_dialog()),
+                ],
             )
-            
-        except Exception as e:
-            print(f"[ERROR] Exception in view_file_details: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            self.toast_manager.show_error(f"Error viewing file details: {str(e)}")
+            return ActionResult.make_success(
+                code="FILE_DETAILS_OK",
+                message="Details shown",
+                correlation_id=cid,
+                data={"details": details},
+                selection=[target_file],
+            )
+        except Exception as e:  # noqa: BLE001
+            if self.toast_manager:
+                self.toast_manager.show_error(f"Error viewing file details: {e}")
+            return ActionResult.make_error(
+                code="FILE_DETAILS_ERROR",
+                message=str(e),
+                correlation_id=cid,
+                error_code="EXCEPTION",
+                selection=[target_file],
+            )
     
     async def _download_from_dialog(self, filename: str) -> None:
         """Download file from details dialog"""
         self._close_dialog()
         await self.download_file(filename)
     
-    async def show_file_statistics(self, filename: str) -> None:
-        """Show detailed statistics for a file"""
+    async def show_file_statistics(self, filename: str) -> ActionResult:
+        """Show detailed statistics for a file."""
+        trace = get_trace_center()
+        cid = trace.new_correlation_id()
         try:
-            # Get file statistics
             stats = await self._get_file_statistics(filename)
-            
             if not stats:
-                self.toast_manager.show_error(f"Could not retrieve statistics for file: {filename}")
-                return
-            
-            # Create statistics content
-            stats_content = self._create_file_stats_content(stats)
-            
-            # Show statistics dialog
-            self.dialog_system.show_custom_dialog(
-                title=f"Statistics for File: {filename}",
-                content=stats_content,
-                actions=[
-                    ft.TextButton("Close", on_click=lambda e: self._close_dialog())
-                ]
+                if self.toast_manager:
+                    self.toast_manager.show_error(f"No statistics for {filename}")
+                return ActionResult.make_error(
+                    code="FILE_STATS_NOT_FOUND",
+                    message="Statistics not found",
+                    correlation_id=cid,
+                    error_code="NOT_FOUND",
+                    selection=[filename],
+                )
+            if self.dialog_system:
+                stats_content = self._create_file_stats_content(stats)
+                self.dialog_system.show_custom_dialog(
+                    title=f"Statistics for File: {filename}",
+                    content=stats_content,
+                    actions=[ft.TextButton("Close", on_click=lambda e: self._close_dialog())],
+                )
+                return ActionResult.make_success(
+                    code="FILE_STATS_OK",
+                    message="Statistics shown",
+                    correlation_id=cid,
+                    data={"stats": stats},
+                    selection=[filename],
+                )
+            if self.toast_manager:
+                self.toast_manager.show_info(f"Statistics (fallback) for {filename}")
+            return ActionResult.make_info(
+                code="FILE_STATS_FALLBACK",
+                message="Stats fetched (no dialog system)",
+                correlation_id=cid,
+                data={"stats": stats},
+                selection=[filename],
             )
-            
-        except Exception as e:
-            self.toast_manager.show_error(f"Error showing file statistics: {str(e)}")
+        except Exception as e:  # noqa: BLE001
+            if self.toast_manager:
+                self.toast_manager.show_error(f"Error showing file statistics: {e}")
+            return ActionResult.make_error(
+                code="FILE_STATS_ERROR",
+                message=str(e),
+                correlation_id=cid,
+                error_code="EXCEPTION",
+                selection=[filename],
+            )
     
-    async def perform_bulk_action(self, action: str, filenames: List[str]) -> None:
-        """Perform bulk action on multiple files"""
+    async def perform_bulk_action(self, action: str, filenames: List[str]) -> ActionResult:
+        """Perform bulk action on multiple files."""
         if not filenames:
-            self.toast_manager.show_warning("No files selected")
-            return
-        
-        action_map = {
-            "download": self._bulk_download,
-            "verify": self._bulk_verify,
-            "delete": self._bulk_delete,
-        }
-        
-        if action in action_map:
-            await action_map[action](filenames)
-        else:
-            self.toast_manager.show_error(f"Unknown bulk action: {action}")
+            if self.toast_manager:
+                self.toast_manager.show_warning("No files selected")
+            return ActionResult.make_error(
+                code="FILE_BULK_EMPTY",
+                message="No files selected",
+                error_code="NO_SELECTION",
+            )
+        action_map = {"download": self._bulk_download, "verify": self._bulk_verify, "delete": self._bulk_delete}
+        if action not in action_map:
+            if self.toast_manager:
+                self.toast_manager.show_error(f"Unknown bulk action: {action}")
+            return ActionResult.make_error(
+                code="FILE_BULK_UNKNOWN",
+                message="Unknown bulk action",
+                error_code="UNKNOWN_ACTION",
+                data={"action": action},
+            )
+        return await action_map[action](filenames)
     
-    async def _bulk_download(self, filenames: List[str]) -> None:
-        """Download multiple files"""
-        def confirm_bulk_download():
-            self._close_dialog()
-            # Use page.run_task if available, otherwise check for event loop
-            if hasattr(self.page, 'run_task'):
-                self.page.run_task(self._perform_bulk_download(filenames))
-            else:
-                # Check if we're in an async context
-                try:
-                    loop = asyncio.get_running_loop()
-                    if loop.is_running():
-                        asyncio.create_task(self._perform_bulk_download(filenames))
-                except RuntimeError:
-                    # No event loop running, skip async task creation
-                    pass
-        
-        await self._show_confirmation_dialog(
-            title="Confirm Bulk Download",
-            message=f"Are you sure you want to download {len(filenames)} files to your Downloads folder?",
-            on_confirm=confirm_bulk_download,
-            on_cancel=lambda: self._close_dialog()
-        )
+    async def _bulk_download(self, filenames: List[str]) -> ActionResult:
+        """Download multiple files (with confirmation)."""
+        trace = get_trace_center()
+        cid = trace.new_correlation_id()
+        if not filenames:
+            return ActionResult.make_error(
+                code="FILE_BULK_DOWNLOAD_EMPTY",
+                message="No files selected",
+                error_code="NO_SELECTION",
+            )
+        confirmed = True
+        if self.dialog_system:
+            confirmed = await self.dialog_system.show_confirmation_async(
+                title="Confirm Bulk Download",
+                message=f"Download {len(filenames)} files to Downloads?",
+            )
+        if not confirmed:
+            return ActionResult.make_cancelled(
+                code="FILE_BULK_DOWNLOAD_CANCELLED",
+                message="User cancelled bulk download",
+                correlation_id=cid,
+                selection=filenames,
+            )
+        return await self._perform_bulk_download(filenames, correlation_id=cid)
     
-    async def _perform_bulk_download(self, filenames: List[str]) -> None:
+    async def _perform_bulk_download(self, filenames: List[str], correlation_id: Optional[str] = None) -> ActionResult:
         """Actually perform bulk download"""
+        cid = correlation_id or get_trace_center().new_correlation_id()
         success_count = 0
         download_path = os.path.join(os.path.expanduser("~"), "Downloads")
-        
-        # Create progress dialog
-        progress_content = ft.Column([
-            ft.Text(f"Downloading {len(filenames)} files..."),
-            ft.ProgressBar(),
-            ft.Text("", key="progress_text")
-        ])
-        
-        self.dialog_system.show_custom_dialog(
-            title="Bulk Download Progress",
-            content=progress_content,
-            actions=[]
+        if self.dialog_system:
+            progress_content = ft.Column([
+                ft.Text(f"Downloading {len(filenames)} files..."),
+                ft.ProgressBar(),
+                ft.Text("", key="progress_text"),
+            ])
+            self.dialog_system.show_custom_dialog(
+                title="Bulk Download Progress",
+                content=progress_content,
+                actions=[],
+            )
+        for i, fname in enumerate(filenames):
+            try:
+                if self.dialog_system:
+                    progress_text = progress_content.controls[2]
+                    progress_text.value = f"Downloading {fname} ({i+1}/{len(filenames)})"
+                    self.page.update()
+                dest = os.path.join(download_path, fname)
+                if await self.file_actions.download_file(fname, dest):
+                    success_count += 1
+            except Exception:  # noqa: BLE001
+                continue
+        if self.dialog_system:
+            self._close_dialog()
+        if self.toast_manager:
+            self.toast_manager.show_success(f"Downloaded {success_count}/{len(filenames)} files")
+        code = "FILE_BULK_DOWNLOAD_OK" if success_count == len(filenames) else "FILE_BULK_DOWNLOAD_PARTIAL"
+        if success_count == len(filenames):
+            return ActionResult.make_success(
+                code=code,
+                message="All files downloaded",
+                correlation_id=cid,
+                selection=filenames,
+                data={"success": success_count, "total": len(filenames), "path": download_path},
+            )
+        return ActionResult.make_partial(
+            code=code,
+            message=f"{success_count}/{len(filenames)} downloaded",
+            correlation_id=cid,
+            selection=filenames,
+            failed=[],
+            data={"success": success_count, "total": len(filenames)}
         )
-        
+    
+    async def _bulk_verify(self, filenames: List[str]) -> ActionResult:
+        """Verify multiple files with confirmation and ActionResult."""
+        trace = get_trace_center()
+        cid = trace.new_correlation_id()
+        if not filenames:
+            return ActionResult.make_error(code="FILE_BULK_VERIFY_EMPTY", message="No files selected", error_code="NO_SELECTION")
+        confirmed = True
+        if self.dialog_system:
+            cs = ConfirmationService(self.dialog_system)
+            cresult = await cs.confirm(
+                title="Confirm Bulk Verification",
+                message=f"Verify integrity of {len(filenames)} files?",
+                proceed_code="FILE_BULK_VERIFY_STARTED",
+                proceed_message="Bulk verification started",
+                cancel_message="Bulk verification cancelled"
+            )
+            if cresult.code == "CANCELLED":
+                return ActionResult.make_cancelled(code="FILE_BULK_VERIFY_CANCELLED", message=cresult.message, correlation_id=cid, selection=filenames)
+        success_count = 0
+        if self.dialog_system:
+            progress_content = ft.Column([
+                ft.Text(f"Verifying {len(filenames)} files..."),
+                ft.ProgressBar(),
+                ft.Text("", key="progress_text")
+            ])
+            self.dialog_system.show_custom_dialog(title="Bulk Verification Progress", content=progress_content, actions=[])
         for i, filename in enumerate(filenames):
             try:
-                # Update progress
-                progress_text = progress_content.controls[2]
-                progress_text.value = f"Downloading {filename} ({i+1}/{len(filenames)})"
-                self.page.update()
-                
-                destination = os.path.join(download_path, filename)
-                if await self.file_actions.download_file(filename, destination):
+                if self.dialog_system:
+                    progress_text = progress_content.controls[2]
+                    progress_text.value = f"Verifying {filename} ({i+1}/{len(filenames)})"
+                    self.page.update()
+                result = await self.file_actions.verify_file(filename)
+                if result.get('valid', False):
                     success_count += 1
-                    
             except Exception:
                 continue
-        
-        self._close_dialog()
-        self.toast_manager.show_success(f"Downloaded {success_count}/{len(filenames)} files to {download_path}")
-    
-    async def _bulk_verify(self, filenames: List[str]) -> None:
-        """Verify multiple files"""
-        def confirm_bulk_verify():
+        if self.dialog_system:
             self._close_dialog()
-            # Use page.run_task if available, otherwise check for event loop
-            if hasattr(self.page, 'run_task'):
-                self.page.run_task(self._perform_bulk_verify(filenames))
-            else:
-                # Check if we're in an async context
-                try:
-                    loop = asyncio.get_running_loop()
-                    if loop.is_running():
-                        asyncio.create_task(self._perform_bulk_verify(filenames))
-                except RuntimeError:
-                    # No event loop running, skip async task creation
-                    pass
-        
-        await self._show_confirmation_dialog(
-            title="Confirm Bulk Verification",
-            message=f"Are you sure you want to verify {len(filenames)} files?",
-            on_confirm=confirm_bulk_verify,
-            on_cancel=lambda: self._close_dialog()
-        )
+        if self.toast_manager:
+            self.toast_manager.show_success(f"Verified {success_count}/{len(filenames)} files")
+        code = "FILE_BULK_VERIFY_OK" if success_count == len(filenames) else "FILE_BULK_VERIFY_PARTIAL"
+        if success_count == len(filenames):
+            return ActionResult.make_success(code=code, message="All files verified", correlation_id=cid, selection=filenames, data={"success": success_count, "total": len(filenames)})
+        return ActionResult.make_partial(code=code, message=f"{success_count}/{len(filenames)} verified", correlation_id=cid, selection=filenames, failed=[], data={"success": success_count, "total": len(filenames)})
     
     async def _perform_bulk_verify(self, filenames: List[str]) -> None:
         """Actually perform bulk verification"""
@@ -483,32 +616,23 @@ class FileActionHandlers:
         self._close_dialog()
         self.toast_manager.show_success(f"Verified {success_count}/{len(filenames)} files successfully")
     
-    async def _bulk_delete(self, filenames: List[str]) -> None:
-        """Delete multiple files"""
-        def confirm_bulk_delete():
-            self._close_dialog()
-            # Use page.run_task if available, otherwise check for event loop
-            if hasattr(self.page, 'run_task'):
-                self.page.run_task(self._perform_bulk_delete(filenames))
-            else:
-                # Check if we're in an async context
-                try:
-                    loop = asyncio.get_running_loop()
-                    if loop.is_running():
-                        asyncio.create_task(self._perform_bulk_delete(filenames))
-                except RuntimeError:
-                    # No event loop running, skip async task creation
-                    pass
-        
-        await self._show_confirmation_dialog(
-            title="⚠️ Confirm Bulk Delete",
-            message=f"Are you sure you want to permanently delete {len(filenames)} files? This action cannot be undone.",
-            on_confirm=confirm_bulk_delete,
-            on_cancel=lambda: self._close_dialog()
-        )
-    
-    async def _perform_bulk_delete(self, filenames: List[str]) -> None:
-        """Actually perform bulk deletion"""
+    async def _bulk_delete(self, filenames: List[str]) -> ActionResult:
+        """Delete multiple files with confirmation and ActionResult."""
+        trace = get_trace_center()
+        cid = trace.new_correlation_id()
+        if not filenames:
+            return ActionResult.make_error(code="FILE_BULK_DELETE_EMPTY", message="No files selected", error_code="NO_SELECTION")
+        if self.dialog_system:
+            cs = ConfirmationService(self.dialog_system)
+            cresult = await cs.confirm(
+                title="⚠️ Confirm Bulk Delete",
+                message=f"Permanently delete {len(filenames)} files? This cannot be undone.",
+                proceed_code="FILE_BULK_DELETE_STARTED",
+                proceed_message="Bulk deletion started",
+                cancel_message="Bulk deletion cancelled"
+            )
+            if cresult.code == "CANCELLED":
+                return ActionResult.make_cancelled(code="FILE_BULK_DELETE_CANCELLED", message=cresult.message, correlation_id=cid, selection=filenames)
         success_count = 0
         for filename in filenames:
             try:
@@ -516,10 +640,16 @@ class FileActionHandlers:
                     success_count += 1
             except Exception:
                 continue
-        
-        self.toast_manager.show_success(f"Deleted {success_count}/{len(filenames)} files")
+        if self.toast_manager:
+            self.toast_manager.show_success(f"Deleted {success_count}/{len(filenames)} files")
         if self.on_data_changed:
             await self.on_data_changed()
+        code = "FILE_BULK_DELETE_OK" if success_count == len(filenames) else "FILE_BULK_DELETE_PARTIAL"
+        if success_count == len(filenames):
+            return ActionResult.make_success(code=code, message="All files deleted", correlation_id=cid, selection=filenames, data={"success": success_count, "total": len(filenames)})
+        return ActionResult.make_partial(code=code, message=f"{success_count}/{len(filenames)} deleted", correlation_id=cid, selection=filenames, failed=[], data={"success": success_count, "total": len(filenames)})
+    
+    # Removed _perform_bulk_delete (logic merged into _bulk_delete returning ActionResult)
     
     # Helper methods for data retrieval and UI creation
     
@@ -537,21 +667,41 @@ class FileActionHandlers:
         except Exception:
             return None
     
-    def _create_file_details_content(self, file_data: Dict) -> ft.Control:
+    def _create_file_details_content(self, file_data) -> ft.Control:
         """Create file details display content"""
+        # Handle case where file_data is an ActionResult instead of a dict
+        if hasattr(file_data, 'data') and file_data.data:
+            # Extract the actual data from ActionResult
+            data_dict = file_data.data
+        else:
+            data_dict = file_data
+            
         details_text = []
-        for key, value in file_data.items():
-            details_text.append(f"{key.replace('_', ' ').title()}: {value}")
+        if isinstance(data_dict, dict):
+            for key, value in data_dict.items():
+                details_text.append(f"{key.replace('_', ' ').title()}: {value}")
+        else:
+            details_text.append(f"Details: {data_dict}")
         
         return ft.Column([
             ft.Text("\n".join(details_text), size=12)
         ], scroll=ft.ScrollMode.AUTO)
     
-    def _create_file_stats_content(self, stats_data: Dict) -> ft.Control:
+    def _create_file_stats_content(self, stats_data) -> ft.Control:
         """Create file statistics display content"""
+        # Handle case where stats_data is an ActionResult instead of a dict
+        if hasattr(stats_data, 'data') and stats_data.data:
+            # Extract the actual data from ActionResult
+            data_dict = stats_data.data
+        else:
+            data_dict = stats_data
+            
         stats_text = []
-        for key, value in stats_data.items():
-            stats_text.append(f"{key.replace('_', ' ').title()}: {value}")
+        if isinstance(data_dict, dict):
+            for key, value in data_dict.items():
+                stats_text.append(f"{key.replace('_', ' ').title()}: {value}")
+        else:
+            stats_text.append(f"Statistics: {data_dict}")
         
         return ft.Column([
             ft.Text("\n".join(stats_text), size=12)
@@ -567,19 +717,9 @@ class FileActionHandlers:
     
     def _close_dialog(self):
         """Close the current dialog"""
-        print(f"[DEBUG] _close_dialog called")
-        print(f"[DEBUG] dialog_system available: {self.dialog_system is not None}")
-        
-        if self.dialog_system and hasattr(self.dialog_system, 'current_dialog'):
-            print(f"[DEBUG] current_dialog exists: {self.dialog_system.current_dialog is not None}")
-            if self.dialog_system.current_dialog:
-                self.dialog_system.current_dialog.open = False
-                self.page.update()
-                print(f"[DEBUG] Dialog closed successfully")
-            else:
-                print(f"[DEBUG] No current dialog to close")
-        else:
-            print(f"[DEBUG] Cannot close dialog - dialog_system not properly initialized")
+        if self.dialog_system and hasattr(self.dialog_system, 'current_dialog') and self.dialog_system.current_dialog:
+            self.dialog_system.current_dialog.open = False
+            self.page.update()
     
     def _safe_async_task(self, coro):
         """Safely create an async task with proper error handling"""

@@ -27,7 +27,7 @@ def _print(header: str, value):  # Simple consistent output helper
 
 
 def test_action_result() -> None:
-    ar = ActionResult.success("TEST_OK", "Worked", correlation_id="abc123", data={"x": 1})
+    ar = ActionResult.make_success("TEST_OK", "Worked", correlation_id="abc123", data={"x": 1})
     assert ar.status == "success"
     assert ar.to_dict()["code"] == "TEST_OK"
     _print("ActionResult", ar.to_dict())

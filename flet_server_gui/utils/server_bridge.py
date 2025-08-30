@@ -7,7 +7,7 @@ Replaces the monolithic server_bridge.py with focused single-responsibility modu
 
 import sys
 import os
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Callable
 
 # Add project root to path
 project_root = os.path.join(os.path.dirname(__file__), "..", "..")
@@ -30,7 +30,7 @@ except ImportError:
 class ModularServerBridge:
     """Refactored server bridge using composition pattern with specialized managers."""
     
-    def __init__(self, server_instance: Optional[BackupServer] = None, database_name: Optional[str] = None):
+    def __init__(self, server_instance: Optional[BackupServer] = None, database_name: Optional[str] = None) -> None:
         """Initialize with modular component managers."""
         
         if not SERVER_AVAILABLE:
@@ -82,15 +82,15 @@ class ModularServerBridge:
     
     def get_all_clients(self) -> List[RealClient]:
         """Get all clients"""
-        print(f"[BRIDGE_TRACE] ========== BRIDGE GET ALL CLIENTS ==========")
+        print("[BRIDGE_TRACE] ========== BRIDGE GET ALL CLIENTS ==========")
         print(f"[BRIDGE_TRACE] Data manager: {type(self.data_manager)}")
-        
+
         try:
             result = self.data_manager.get_all_clients()
             print(f"[BRIDGE_TRACE] Data manager returned {len(result)} clients")
             return result
         except Exception as e:
-            print(f"[BRIDGE_TRACE] ✗ Exception in get_all_clients: {e}")
+            print(f"[BRIDGE_TRACE] X Exception in get_all_clients: {e}")
             import traceback
             print(f"[BRIDGE_TRACE] Traceback: {traceback.format_exc()}")
             return []
@@ -110,10 +110,10 @@ class ModularServerBridge:
     # Client operations
     def disconnect_client(self, client_id: str) -> bool:
         """Disconnect a client"""
-        print(f"[BRIDGE_TRACE] ========== BRIDGE DISCONNECT CLIENT ==========")
+        print("[BRIDGE_TRACE] ========== BRIDGE DISCONNECT CLIENT ==========")
         print(f"[BRIDGE_TRACE] Client ID: {client_id}")
         print(f"[BRIDGE_TRACE] Data manager: {type(self.data_manager)}")
-        
+
         try:
             result = self.data_manager.disconnect_client(client_id)
             print(f"[BRIDGE_TRACE] Data manager returned: {result}")
@@ -126,10 +126,10 @@ class ModularServerBridge:
     
     def delete_client(self, client_id: str) -> bool:
         """Delete a client"""
-        print(f"[BRIDGE_TRACE] ========== BRIDGE DELETE CLIENT ==========")
+        print("[BRIDGE_TRACE] ========== BRIDGE DELETE CLIENT ==========")
         print(f"[BRIDGE_TRACE] Client ID: {client_id}")
         print(f"[BRIDGE_TRACE] Data manager: {type(self.data_manager)}")
-        
+
         try:
             result = self.data_manager.delete_client(client_id)
             print(f"[BRIDGE_TRACE] Data manager returned: {result}")
@@ -171,9 +171,7 @@ class ModularServerBridge:
     
     def delete_file(self, file_info: Dict[str, Any]) -> bool:
         """Delete a file"""
-        # Use data_manager for database operations, file_manager for file system
-        success = self.data_manager.delete_file(file_info)
-        return success
+        return self.data_manager.delete_file(file_info)
     
     def delete_multiple_files(self, file_infos: List[Dict[str, Any]]) -> int:
         """Delete multiple files"""
@@ -269,12 +267,12 @@ class ModularServerBridge:
     def get_notifications(self) -> List[Dict[str, Any]]:
         """Get pending notifications (standardized API)"""
         notifications = []
-        
+
         try:
             # Get system status notifications
             health = self.get_health_status()
             server_running = self.is_server_running()
-            
+
             # Add server status notification
             notifications.append({
                 "id": 1,
@@ -283,7 +281,7 @@ class ModularServerBridge:
                 "timestamp": health.get('timestamp', 'unknown'),
                 "severity": "info" if server_running else "warning"
             })
-            
+
             # Add health notifications
             if health.get('status') == 'unhealthy':
                 notifications.append({
@@ -293,22 +291,23 @@ class ModularServerBridge:
                     "timestamp": health.get('timestamp', 'unknown'),
                     "severity": "error"
                 })
-            
+
             # Get recent activity for activity notifications  
             recent_activity = self.get_recent_activity(5)
-            for i, activity in enumerate(recent_activity[:3]):  # Limit to 3 recent
-                notifications.append({
+            notifications.extend(
+                {
                     "id": 10 + i,
                     "type": "activity",
                     "message": f"{activity.get('action', 'Unknown action')}: {activity.get('details', 'No details')}",
                     "timestamp": activity.get('timestamp', 'unknown'),
-                    "severity": "info"
-                })
-            
+                    "severity": "info",
+                }
+                for i, activity in enumerate(recent_activity[:3])
+            )
             # Add client/file count notifications
             clients = self.get_clients()
             files = self.get_files()
-            
+
             notifications.append({
                 "id": 20,
                 "type": "stats",
@@ -316,7 +315,7 @@ class ModularServerBridge:
                 "timestamp": health.get('timestamp', 'unknown'),
                 "severity": "info"
             })
-            
+
         except Exception as e:
             # Fallback notification if data retrieval fails
             notifications.append({
@@ -326,14 +325,14 @@ class ModularServerBridge:
                 "timestamp": "error",
                 "severity": "error"
             })
-        
+
         # Sort by severity (error, warning, info) then by timestamp
         severity_order = {"error": 0, "warning": 1, "info": 2}
         notifications.sort(key=lambda x: (severity_order.get(x.get('severity', 'info'), 3), x.get('timestamp', '')))
-        
+
         return notifications
 
-    def register_connection_callback(self, callback):
+    def register_connection_callback(self, callback: Callable[[Any], None]) -> None:
         """Register callback for connection status changes"""
         # Use the connection manager to register the callback
         if hasattr(self.connection_manager, 'register_callback'):

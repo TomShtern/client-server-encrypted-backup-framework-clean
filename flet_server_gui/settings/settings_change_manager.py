@@ -183,25 +183,25 @@ class SettingsChangeManager:
         """Update action bar state based on changes"""
         if hasattr(self, 'save_button'):
             self.save_button.disabled = not self.has_changes
-        
+
         if hasattr(self, 'cancel_button'):
             self.cancel_button.disabled = not self.has_changes
-        
+
         if hasattr(self, 'changes_indicator'):
             # Update changes indicator
             indicator_row = self.changes_indicator.content
-            
+
             # Update icon
             indicator_row.controls[0].name = ft.Icons.EDIT if self.has_changes else ft.Icons.CHECK_CIRCLE
-            indicator_row.controls[0].color = TOKENS['secondary'] if self.has_changes else TOKENS['secondary']
-            
+            indicator_row.controls[0].color = TOKENS['secondary']
+
             # Update text
             indicator_row.controls[1].value = f"{len(self.get_changed_settings())} changes" if self.has_changes else "No changes"
-            indicator_row.controls[1].color = TOKENS['secondary'] if self.has_changes else TOKENS['secondary']
-            
+            indicator_row.controls[1].color = TOKENS['secondary']
+
             # Update container background
-            self.changes_indicator.bgcolor = TOKENS['surface_variant'] if self.has_changes else TOKENS['surface_variant']
-        
+            self.changes_indicator.bgcolor = TOKENS['surface_variant']
+
         if self.page:
             self.page.update()
     
