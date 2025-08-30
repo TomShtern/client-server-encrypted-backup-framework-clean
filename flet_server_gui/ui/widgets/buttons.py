@@ -15,6 +15,8 @@ from typing import Dict, List, Callable, Optional, Any
 from dataclasses import dataclass
 from flet_server_gui.actions import ClientActions, FileActions, ServerActions
 from flet_server_gui.actions.base_action import ActionResult
+from flet_server_gui.utils.action_executor import get_action_executor
+from flet_server_gui.utils.trace_center import get_trace_center
 from flet_server_gui.components.base_component import BaseComponent
 from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
 
@@ -503,37 +505,57 @@ class ActionButtonFactory:
         return button
     
     def _safe_handle_button_click(self, e, config: ButtonConfig, get_selected_items: Callable[[], List[str]], additional_params: Optional[Dict[str, Any]]):
-        """Safely handle button click using Flet's native async pattern"""
-        print(f"[BUTTON_TRACE] ========== BUTTON CLICK DETECTED ==========")
-        print(f"[BUTTON_TRACE] Button: {config.action_key} ({config.text})")
-        print(f"[BUTTON_TRACE] Action: {config.action_class}.{config.action_method}")
-        print(f"[BUTTON_TRACE] Event object: {type(e)}, button state: {getattr(e, 'control', 'unknown')}")
-        print(f"[BUTTON_TRACE] Page available: {self.page is not None}")
-        print(f"[BUTTON_TRACE] Base component: {type(self.base_component)}")
-        
-        # Use Flet's native async task handling - stays on main UI thread
-        try:
-            async def async_button_handler():
+        """Entry point for button clicks; delegates to ActionExecutor with structured tracing.
+
+        This replaces verbose ad-hoc print tracing with centralized TraceCenter
+        events. Selection + mutation requirements are derived from config.
+        """
+        trace = get_trace_center()
+        executor = get_action_executor()
+
+        # Derive action_name (stable, machine friendly)
+        action_name = config.action_key or f"{config.action_class}.{config.action_method}".lower()
+
+        def selection_provider():
+            if config.requires_selection:
                 try:
-                    print(f"[BUTTON_TRACE] Starting async handler for {config.action_key}")
-                    result = await self._handle_button_click(config, get_selected_items, additional_params)
-                    print(f"[BUTTON_TRACE] Async handler completed for {config.action_key}: {result}")
-                    return result
-                except Exception as ex:
-                    print(f"[BUTTON_TRACE] ✗ Async handler error for {config.action_key}: {ex}")
-                    import traceback
-                    print(f"[BUTTON_TRACE] Stack trace: {traceback.format_exc()}")
-                    await self.base_component._show_error(f"Action failed: {ex}")
-                    return False
-            
-            print(f"[BUTTON_TRACE] Scheduling async task via page.run_task")
+                    return list(get_selected_items())
+                except Exception:
+                    return []
+            return []
+
+        async def async_button_handler():
+            result: ActionResult = await executor.run(
+                action_name=action_name,
+                action_coro=lambda: self._handle_button_click(config, get_selected_items, additional_params),
+                selection_provider=selection_provider if config.requires_selection else None,
+                require_selection=config.requires_selection,
+                mutate=config.operation_type in {"bulk", "single", "import"},
+                meta={
+                    "ui_text": config.text,
+                    "style": config.button_style,
+                    "op_type": config.operation_type,
+                },
+            )
+            # Minimal UX feedback (success/warn/error) via base component dialogs
+            if result.status == "error":
+                await self.base_component._show_error(result.message or "Action failed")
+            elif result.status == "warn":
+                # Only show warn if meaningful (e.g., empty selection)
+                if result.code in {"EMPTY_SELECTION", "OFFLINE_NOOP"}:
+                    await self.base_component._show_warning(result.message)
+            elif result.status == "success" and config.success_message:
+                await self.base_component._show_success(config.success_message)
+            return result
+
+        try:
+            # Schedule using Flet's task runner (keeps UI thread responsive)
             self.page.run_task(async_button_handler)
-            print(f"[BUTTON_TRACE] Async task scheduled successfully for {config.action_key}")
-            
-        except Exception as ex:
-            print(f"[BUTTON_TRACE] ✗ Task scheduling failed for {config.action_key}: {ex}")
-            import traceback
-            print(f"[BUTTON_TRACE] Scheduling error stack: {traceback.format_exc()}")
+        except Exception as ex:  # Fallback logging
+            trace.emit("BUTTON_SCHEDULE_ERROR", meta={
+                "action": action_name,
+                "error": str(ex),
+            })
     
     async def _handle_button_click(
         self,
@@ -541,174 +563,78 @@ class ActionButtonFactory:
         get_selected_items: Callable[[], List[str]],
         additional_params: Optional[Dict[str, Any]]
     ):
+        """Execute underlying action and return ActionResult.
+
+        Translates legacy selection / handler resolution / method invocation
+        outcomes into standardized ActionResult forms consumed by
+        ActionExecutor wrapper.
         """
-        Handle button click with comprehensive error handling and user feedback.
-        
-        Args:
-            config: Button configuration
-            get_selected_items: Function to get selected items
-            additional_params: Additional parameters for the action
-        """
-        print(f"[BUTTON_TRACE] ========== BUTTON HANDLER EXECUTION ==========")
-        print(f"[BUTTON_TRACE] Processing: {config.action_key}")
-        print(f"[BUTTON_TRACE] Requires selection: {config.requires_selection}")
-        
+        from flet_server_gui.utils.action_result import ActionResult
+        from flet_server_gui.utils.trace_center import get_trace_center
+
+        trace = get_trace_center()
+        cid = trace.new_correlation_id()
+        action_name = config.action_key or f"{config.action_class}.{config.action_method}".lower()
+
+        # Selection handling
         try:
-            # Validate selection requirements
-            print(f"[BUTTON_TRACE] Getting selected items...")
             selected_items = get_selected_items() if config.requires_selection else []
-            print(f"[BUTTON_TRACE] Selected items: {selected_items} (count: {len(selected_items)})")
-            
-            if config.requires_selection:
-                print(f"[BUTTON_TRACE] Validating selection requirements: min={config.min_selection}, max={config.max_selection}")
-                if len(selected_items) < config.min_selection:
-                    print(f"[BUTTON_TRACE] ✗ Selection validation failed: need {config.min_selection}, got {len(selected_items)}")
-                    await self.base_component._show_error(f"Please select at least {config.min_selection} item(s)")
-                    return False
-                
-                if config.max_selection and len(selected_items) > config.max_selection:
-                    print(f"[BUTTON_TRACE] ✗ Selection validation failed: max {config.max_selection}, got {len(selected_items)}")
-                    await self.base_component._show_error(f"Please select no more than {config.max_selection} item(s)")
-                    return False
-                
-                print(f"[BUTTON_TRACE] ✓ Selection validation passed")
-            
-            # Get the action instance and method
-            print(f"[ACTION_TRACE] ========== ACTION RESOLUTION ==========")
-            print(f"[ACTION_TRACE] Resolving action class: {config.action_class}")
-            print(f"[ACTION_TRACE] Available actions: {list(self.actions.keys())}")
-            
-            action_instance = self.actions.get(config.action_class)
-            print(f"[ACTION_TRACE] Direct action lookup result: {action_instance is not None}")
-            
-            # For action handlers that are set by views, get them from the base component if they're None
-            if action_instance is None and config.action_class.endswith("ActionHandlers"):
-                print(f"[ACTION_TRACE] Action handler not found directly, checking base component...")
-                handler_attr_map = {
-                    "ClientActionHandlers": "action_handlers",
-                    "FileActionHandlers": "file_action_handlers", 
-                    "DatabaseActionHandlers": "database_action_handlers",
-                    "ServerActionHandlers": "server_action_handlers"
-                }
-                
-                attr_name = handler_attr_map.get(config.action_class)
-                print(f"[ACTION_TRACE] Looking for attribute: {attr_name}")
-                
-                if attr_name and hasattr(self.base_component, attr_name):
-                    action_instance = getattr(self.base_component, attr_name)
-                    print(f"[ACTION_TRACE] Found via base component attribute: {action_instance is not None}")
-                elif hasattr(self.base_component, 'actions'):
-                    action_instance = self.base_component.actions.get(config.action_class)
-                    print(f"[ACTION_TRACE] Found via base component actions dict: {action_instance is not None}")
-                else:
-                    print(f"[ACTION_TRACE] Base component has no 'actions' attribute")
-            
-            print(f"[ACTION_TRACE] Final action instance: {type(action_instance) if action_instance else None}")
-            
-            if action_instance is None:
-                print(f"[ACTION_TRACE] ✗ Handler {config.action_class} not available")
-                print(f"[ACTION_TRACE] Base component attributes: {[attr for attr in dir(self.base_component) if not attr.startswith('_')]}")
-                await self.base_component._show_error(f"Action handler {config.action_class} not available")
-                return False
-            
-            try:
-                print(f"[ACTION_TRACE] Resolving method: {config.action_method}")
-                print(f"[ACTION_TRACE] Available methods on {type(action_instance)}: {[m for m in dir(action_instance) if not m.startswith('_') and callable(getattr(action_instance, m))]}")
-                action_method = getattr(action_instance, config.action_method)
-                print(f"[ACTION_TRACE] ✓ Method resolved: {action_method}")
-            except AttributeError:
-                print(f"[ACTION_TRACE] ✗ Method {config.action_method} not found on {type(action_instance)}")
-                await self.base_component._show_error(f"Action method {config.action_method} not found")
-                return False
-            
-            # Prepare method parameters and execute
-            print(f"[ACTION_TRACE] ========== METHOD EXECUTION ==========")
-            method_params = self._prepare_method_params(config, selected_items, additional_params)
-            print(f"[ACTION_TRACE] Prepared parameters: {method_params}")
-            print(f"[ACTION_TRACE] Calling: {config.action_method}(**{list(method_params.keys())})")
-            
-            try:
-                result = await action_method(**method_params)
-                print(f"[ACTION_TRACE] ✓ Method call completed successfully")
-            except Exception as method_ex:
-                print(f"[ACTION_TRACE] ✗ Method call failed: {method_ex}")
-                import traceback
-                print(f"[ACTION_TRACE] Method execution stack: {traceback.format_exc()}")
-                raise
-            
-            # EXHAUSTIVE EXECUTION TRACING - Expose the illusion
-            print(f"[ACTION_TRACE] ========== RESULT ANALYSIS ==========")
-            print(f"[ACTION_TRACE] Raw result: {result}")
-            print(f"[ACTION_TRACE] Result type: {type(result)}")
-            print(f"[ACTION_TRACE] Result repr: {repr(result)}")
-            
-            if result is False:
-                print(f"[ACTION_TRACE] ✗ Method explicitly returned False - operation failed")
-                return False
-            elif result is None:
-                print(f"[ACTION_TRACE] ⚠ Method returned None - potential mock/stub implementation")
-                print(f"[ACTION_TRACE] REALITY CHECK: None return suggests no actual work was performed")
-            else:
-                print(f"[ACTION_TRACE] ✓ Method returned non-null result")
-                if hasattr(result, 'success'):
-                    print(f"[ACTION_TRACE] ActionResult.success: {result.success}")
-                    if hasattr(result, 'data'):
-                        print(f"[ACTION_TRACE] ActionResult.data: {result.data}")
-                    if hasattr(result, 'metadata'):
-                        print(f"[ACTION_TRACE] ActionResult.metadata: {result.metadata}")
-                        if result.metadata and result.metadata.get('simulated'):
-                            print(f"[ACTION_TRACE] *** DETECTED SIMULATED OPERATION - NOT REAL ***")
-                elif isinstance(result, bool) and result:
-                    print(f"[ACTION_TRACE] Boolean True result - operation appears successful")
-                elif isinstance(result, (int, str)) and result:
-                    print(f"[ACTION_TRACE] Non-empty scalar result: {result}")
-                
-            print(f"[ACTION_TRACE] ========== EXECUTION COMPLETE ==========")
-            return True
-            
-            # Original confirmation system (commented for bypass testing)
-            print(f"[DEBUG] About to execute method. Operation type: {config.operation_type}")
-            if False and config.operation_type == "bulk":
-                print(f"[DEBUG] Executing bulk action")
-                success = await self.base_component.execute_bulk_action(
-                    action=lambda items: action_method(**method_params),
-                    selected_items=selected_items,
-                    item_type=self._get_item_type(config.action_class),
-                    action_name=config.action_method.replace("_multiple_", "_").replace("_", " ")
-                )
-            else:
-                # Prepare confirmation text
-                confirmation_text = config.confirmation_text
-                if "{count}" in confirmation_text:
-                    confirmation_text = confirmation_text.format(count=len(selected_items))
-                elif "{item}" in confirmation_text and selected_items:
-                    confirmation_text = confirmation_text.format(item=selected_items[0] if len(selected_items) == 1 else f"{len(selected_items)} items")
-                
-                print(f"[DEBUG] Executing single action with confirmation")
-                print(f"[DEBUG] Base component type: {type(self.base_component)}")
-                print(f"[DEBUG] Has execute_with_confirmation: {hasattr(self.base_component, 'execute_with_confirmation')}")
-                success = await self.base_component.execute_with_confirmation(
-                    action=lambda: action_method(**method_params),
-                    confirmation_text=confirmation_text,
-                    success_message=config.success_message,
-                    operation_name=config.action_method
-                )
-            
-            # Handle special post-action operations
-            if success:
-                await self._handle_post_action(config, method_params)
-                
-            return success
-            
-        except Exception as e:
-            print(f"[BUTTON_TRACE] ========== EXCEPTION HANDLER ==========")
-            print(f"[EXCEPTION_TRACE] Button action failed: {str(e)}")
-            print(f"[EXCEPTION_TRACE] Exception type: {type(e)}")
-            import traceback
-            print(f"[EXCEPTION_TRACE] Full traceback:")
-            traceback.print_exc()
-            await self.base_component._show_error(f"Button action failed: {str(e)}")
-            return False
+        except Exception as sel_ex:
+            trace.emit(type="BUTTON_SELECTION_ERROR", level="ERROR", action=action_name, correlation_id=cid, message=str(sel_ex))
+            return ActionResult.warn(code="SELECTION_PROVIDER_ERROR", message="Failed to obtain selection", correlation_id=cid)
+
+        if config.requires_selection:
+            if len(selected_items) < config.min_selection:
+                return ActionResult.warn(code="EMPTY_SELECTION", message="Please select required items", correlation_id=cid, data={"required_min": config.min_selection})
+            if config.max_selection and len(selected_items) > config.max_selection:
+                return ActionResult.warn(code="SELECTION_TOO_MANY", message="Too many items selected", correlation_id=cid, data={"max": config.max_selection, "count": len(selected_items)})
+
+        # Resolve handler instance
+        action_instance = self.actions.get(config.action_class)
+        if action_instance is None and config.action_class.endswith("ActionHandlers"):
+            handler_attr_map = {
+                "ClientActionHandlers": "action_handlers",
+                "FileActionHandlers": "file_action_handlers",
+                "DatabaseActionHandlers": "database_action_handlers",
+                "ServerActionHandlers": "server_action_handlers"
+            }
+            attr_name = handler_attr_map.get(config.action_class)
+            if attr_name and hasattr(self.base_component, attr_name):
+                action_instance = getattr(self.base_component, attr_name)
+            elif hasattr(self.base_component, 'actions'):
+                action_instance = self.base_component.actions.get(config.action_class)
+
+        if action_instance is None:
+            return ActionResult.error(code="HANDLER_NOT_FOUND", message=f"Handler {config.action_class} unavailable", correlation_id=cid, data={"action_class": config.action_class})
+
+        # Resolve method
+        try:
+            action_method = getattr(action_instance, config.action_method)
+        except AttributeError:
+            return ActionResult.error(code="METHOD_NOT_FOUND", message=f"Method {config.action_method} missing", correlation_id=cid, data={"method": config.action_method})
+
+        # Prepare params
+        method_params = self._prepare_method_params(config, selected_items, additional_params)
+
+        # Execute
+        try:
+            result = await action_method(**method_params)
+        except Exception as ex:  # noqa: BLE001
+            trace.emit(type="BUTTON_METHOD_ERROR", level="ERROR", action=action_name, correlation_id=cid, message=str(ex))
+            return ActionResult.error(code="METHOD_EXCEPTION", message=str(ex), correlation_id=cid)
+
+        # Normalize return
+        if isinstance(result, ActionResult):
+            # Pass through but ensure correlation id if absent
+            if not result.correlation_id:
+                result.correlation_id = cid  # type: ignore[attr-defined]
+            return result
+        if result is False:
+            return ActionResult.error(code="ACTION_FALSE", message="Action returned False", correlation_id=cid)
+        if result is None:
+            return ActionResult.warn(code="ACTION_NOOP", message="Action returned no result", correlation_id=cid)
+        # Non-standard truthy result
+        return ActionResult.success(code=f"{config.action_method.upper()}_OK", message=config.success_message or "Action completed", correlation_id=cid, data={"raw": result})
     
     def _prepare_method_params(
         self, 

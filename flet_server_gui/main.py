@@ -65,6 +65,7 @@ try:
 except ImportError:
     LogsView = None
 from flet_server_gui.actions import FileActions
+from flet_server_gui.utils.trace_center import get_trace_center  # Phase 2: tracing
 
 
 class ServerGUIApp:
@@ -72,6 +73,13 @@ class ServerGUIApp:
     
     def __init__(self, page: ft.Page):
         self.page = page
+        # Enable structured JSONL tracing early (Phase 2)
+        try:
+            get_trace_center().enable_file_logging(os.path.join("logs", "ui_trace.log"))
+            print("[TRACE] JSONL trace logging enabled at logs/ui_trace.log")
+        except Exception as e:  # noqa: BLE001
+            print(f"[TRACE_WARN] Failed to enable trace file logging: {e}")
+
         # Use MockaBase when running standalone (no server connection)
         mockabase_path = "MockaBase.db"
         if os.path.exists(mockabase_path):
