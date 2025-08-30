@@ -408,12 +408,28 @@ class ThemeValidator:
     def _calculate_relative_luminance(self, color: str) -> float:
         """Calculate relative luminance using WCAG formula"""
         try:
+            # Validate color format first
+            if not color or len(color) < 3:
+                return 0.5  # Default luminance
+            
             if color.startswith("#"):
                 color = color[1:]
             
-            r = int(color[0:2], 16) / 255.0 if len(color) >= 2 else 0
-            g = int(color[2:4], 16) / 255.0 if len(color) >= 4 else 0
-            b = int(color[4:6], 16) / 255.0 if len(color) >= 6 else 0
+            # Ensure we have at least 6 hex characters
+            if len(color) < 6:
+                # Try to expand short hex codes (e.g., "abc" -> "aabbcc")
+                if len(color) == 3:
+                    color = color[0] + color[0] + color[1] + color[1] + color[2] + color[2]
+                else:
+                    return 0.5  # Default luminance for invalid colors
+            
+            # Validate hex characters before parsing
+            if not all(c in '0123456789abcdefABCDEF' for c in color[:6]):
+                return 0.5  # Default luminance for invalid hex
+            
+            r = int(color[0:2], 16) / 255.0
+            g = int(color[2:4], 16) / 255.0  
+            b = int(color[4:6], 16) / 255.0
             
             # Apply gamma correction
             r = r / 12.92 if r <= 0.03928 else ((r + 0.055) / 1.055) ** 2.4
@@ -423,8 +439,8 @@ class ThemeValidator:
             return 0.2126 * r + 0.7152 * g + 0.0722 * b
             
         except Exception as e:
-            self.logger.error(f"Luminance calculation error: {e}")
-            return 0.0
+            # Silently handle invalid colors with default luminance
+            return 0.5
     
     def is_accessible(self, foreground: str, background: str, level: str = "AA") -> bool:
         """Check if color combination meets accessibility standards"""

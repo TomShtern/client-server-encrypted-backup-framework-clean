@@ -93,9 +93,7 @@ class ClientsView(BaseComponent):
         
         # Setup callbacks
         self.filter_manager.on_filter_changed = self._on_filtered_data_changed
-        print(f"[DEBUG] Setting on_data_changed callback: {self._refresh_clients}")
         self.action_handlers.set_data_changed_callback(self._refresh_clients)
-        print(f"[DEBUG] on_data_changed callback set successfully")
         
         # UI Components
         self.status_text = None
@@ -280,7 +278,6 @@ class ClientsView(BaseComponent):
             if self.select_all_checkbox:
                 self.select_all_checkbox.value = False
             
-            print(f"[DEBUG] _refresh_clients completed successfully, loaded {len(clients)} clients")
             
         except asyncio.TimeoutError:
             if self.status_text:
@@ -288,7 +285,6 @@ class ClientsView(BaseComponent):
                 # Use theme-aware color or let it inherit from theme
             if self.toast_manager:
                 self.toast_manager.show_error("Timeout loading client data. Please try again.")
-            print(f"[ERROR] Timeout error in _refresh_clients")
             
         except Exception as e:
             if self.status_text:
@@ -296,7 +292,6 @@ class ClientsView(BaseComponent):
                 # Use theme-aware color or let it inherit from theme
             if self.toast_manager:
                 self.toast_manager.show_error(f"Error loading client data: {str(e)}")
-            print(f"[ERROR] Exception in _refresh_clients: {e}")
             import traceback
             traceback.print_exc()
             
@@ -361,7 +356,12 @@ class ClientsView(BaseComponent):
         try:
             if e.control.value:  # Select all
                 filtered_clients = self.filter_manager.get_filtered_clients()
-                self.selected_clients = [client['id'] for client in filtered_clients]
+                # Extract client_id safely from each client
+                self.selected_clients = []
+                for client in filtered_clients:
+                    client_id = getattr(client, 'client_id', None) or (client['client_id'] if hasattr(client, '__getitem__') and 'client_id' in client else (client.get('id', 'Unknown') if hasattr(client, 'get') else 'Unknown'))
+                    if client_id and client_id != 'Unknown':
+                        self.selected_clients.append(client_id)
                 # Update table selection
                 self.table_renderer.select_all_rows()
             else:  # Deselect all
@@ -444,8 +444,13 @@ class ClientsView(BaseComponent):
                 for i, control in enumerate(self.bulk_actions_row.controls):
                     if i > 0 and isinstance(control, ft.ElevatedButton):
                         control.visible = has_selections
-        except Exception:
-            pass  # Ignore errors in visibility updates
+                
+                # Force page update to show visibility changes
+                if self.page:
+                    self.page.update()
+        except Exception as ex:
+            import traceback
+            traceback.print_exc()
     
     async def _bulk_disconnect(self, e):
         """Handle bulk disconnect action"""

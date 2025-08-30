@@ -20,6 +20,7 @@ from flet_server_gui.ui.widgets.cards import DatabaseStatsCard
 from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
 from flet_server_gui.components.base_component import BaseComponent
 from flet_server_gui.components.database_action_handlers import DatabaseActionHandlers
+from flet_server_gui.components.database_table_renderer import DatabaseTableRenderer
 
 # Enhanced components imports
 from flet_server_gui.ui.widgets import (
@@ -64,6 +65,11 @@ class DatabaseView(BaseComponent):
         # Initialize button factory
         self.button_factory = ActionButtonFactory(self, server_bridge, page)
         
+        # Initialize table renderer with database view reference
+        self.table_renderer = DatabaseTableRenderer(server_bridge, self.button_factory, page)
+        # Set database view reference for button callbacks
+        self.table_renderer.database_view = self
+        
         # Set action handlers in button factory
         self.button_factory.actions["DatabaseActionHandlers"] = self.action_handlers
         
@@ -78,6 +84,12 @@ class DatabaseView(BaseComponent):
         self.table_content = None
         self.stats_cards = None
         self.refresh_button = None
+        self.bulk_actions_row = None
+        self.select_all_checkbox = None
+        
+        # Data
+        self.selected_rows = []
+        self.current_table_data = []
         
     def build(self) -> ft.Control:
         """Build the database browser view."""
@@ -107,26 +119,31 @@ class DatabaseView(BaseComponent):
             options=[]  # Will be populated by refresh
         )
         
-        # Database controls - Apply responsive layout fixes
-        def empty_getter():
-            return []
-            
+        # Database controls - Use direct buttons instead of factory for better reliability
         db_controls = ft.Row([
-            self.button_factory.create_action_button(
-                "database_backup",
-                empty_getter
+            ft.ElevatedButton(
+                "Backup Database",
+                icon=ft.Icons.BACKUP,
+                on_click=self.backup_database,
+                tooltip="Create database backup"
             ),
-            self.button_factory.create_action_button(
-                "database_optimize", 
-                empty_getter
+            ft.ElevatedButton(
+                "Optimize Database", 
+                icon=ft.Icons.SPEED,
+                on_click=self.optimize_database,
+                tooltip="Optimize database performance"
             ),
-            self.button_factory.create_action_button(
-                "database_analyze", 
-                empty_getter
+            ft.ElevatedButton(
+                "Analyze Database", 
+                icon=ft.Icons.ANALYTICS,
+                on_click=self.analyze_database,
+                tooltip="Analyze database statistics"
             ),
-            self.button_factory.create_action_button(
-                "database_execute_query", 
-                empty_getter
+            ft.ElevatedButton(
+                "Execute Query", 
+                icon=ft.Icons.PLAY_ARROW,
+                on_click=self.show_query_dialog,
+                tooltip="Execute custom SQL query"
             ),
         ], spacing=10)
         
@@ -140,20 +157,37 @@ class DatabaseView(BaseComponent):
             if isinstance(control, ft.ElevatedButton):
                 control = ResponsiveLayoutFixes.fix_button_hitbox(control)
         
-        # Table content area (scrollable) - Apply responsive layout fixes
-        self.table_content = ft.Container(
-            content=ft.Text("Select a table to view its contents", 
-                          style=ft.TextThemeStyle.BODY_LARGE),
-            # Remove fixed height to allow responsive scaling
-            # Let theme handle border color automatically,
-            border_radius=8,
-            padding=20,
-            expand=True
+        # Row selection controls
+        self.select_all_checkbox = ft.Checkbox(
+            label="Select All",
+            on_change=self._on_select_all
         )
         
-        # Apply clipping fixes to table content
-        self.table_content = ResponsiveLayoutFixes.create_clipping_safe_container(
-            self.table_content
+        # Bulk actions row
+        self.bulk_actions_row = ft.Row([
+            ft.Text("Row Actions:", weight=ft.FontWeight.BOLD),
+            ft.ElevatedButton(
+                "Delete Selected",
+                icon=ft.Icons.DELETE,
+                on_click=self._bulk_delete_rows,
+                visible=False
+            ),
+            ft.ElevatedButton(
+                "Export Selected",
+                icon=ft.Icons.DOWNLOAD,
+                on_click=self._bulk_export_rows,
+                visible=False
+            ),
+        ], spacing=10)
+        
+        # Table content area using new renderer (initially empty)
+        self.table_content = self.table_renderer.get_table_container()
+        
+        # Create the table content container that we'll update
+        self.table_content_container = ft.Container(
+            content=self.table_content,
+            expand=True,
+            clip_behavior=ft.ClipBehavior.NONE
         )
         
         # Main content - Apply responsive layout fixes
@@ -169,11 +203,13 @@ class DatabaseView(BaseComponent):
             ], alignment=ft.MainAxisAlignment.START),
             ft.Container(height=20),  # Spacer
             ft.Text("Table Contents", style=ft.TextThemeStyle.TITLE_LARGE),
-            ft.Container(
-                content=self.table_content,
-                expand=True,
-                clip_behavior=ft.ClipBehavior.NONE
-            ),
+            # Selection controls
+            ft.Row([
+                self.select_all_checkbox,
+                ft.VerticalDivider(width=20),
+            ], alignment=ft.MainAxisAlignment.START),
+            self.bulk_actions_row,
+            self.table_content_container,
         ], spacing=20, expand=True, scroll=ft.ScrollMode.ADAPTIVE)
         
         # Apply windowed mode compatibility
@@ -345,7 +381,7 @@ class DatabaseView(BaseComponent):
             self.load_table_content(selected)
     
     def load_table_content(self, table_name: str):
-        """Load and display table content."""
+        """Load and display table content using new table renderer."""
         try:
             if not self.server_bridge.data_manager.db_manager:
                 self._show_error("Database not available")
@@ -355,52 +391,39 @@ class DatabaseView(BaseComponent):
             columns, rows = self.server_bridge.data_manager.db_manager.get_table_content(table_name)
             
             if not columns:
-                self.table_content.content = ft.Text(
-                    f"Table '{table_name}' is empty or cannot be read",
-                    color=TOKENS['outline']
-                )
-                self.table_content.update()
+                self._show_error(f"Table '{table_name}' is empty or cannot be read")
                 return
             
-            # Create data table
-            data_table = ft.DataTable(
-                columns=[
-                    ft.DataColumn(ft.Text(col, weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)) 
-                    for col in columns
-                ],
-                rows=[
-                    ft.DataRow(cells=[
-                        ft.DataCell(ft.Text(str(row.get(col, '')), selectable=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS))
-                        for col in columns
-                    ])
-                    for row in rows[:50]  # Limit to first 50 rows for performance
-                ],
-                # Let theme handle border colors automatically,
-                border_radius=8,
-                # Let theme handle grid line colors automatically,
-                # Let theme handle grid line colors automatically,
+            # Convert rows to list of dictionaries for table renderer
+            table_data = []
+            for row in rows[:50]:  # Limit to first 50 rows for performance
+                row_dict = {col: row.get(col, '') for col in columns}
+                table_data.append(row_dict)
+            
+            # Store current table data for bulk operations
+            self.current_table_data = table_data
+            
+            # Update table using new renderer
+            self.table_renderer.update_table_data(
+                table_data=table_data,
+                table_name=table_name,
+                columns=columns,
+                on_row_select=self._on_row_selected,
+                selected_rows=self.selected_rows
             )
             
-            # Status text
-            status_text = ft.Text(
-                f"Showing {min(len(rows), 50)} of {len(rows)} rows from '{table_name}'",
-                size=12,
-                color=TOKENS['outline']
-            )
+            # Update the existing table content container
+            new_table_content = self.table_renderer.get_table_container()
+            self.table_content_container.content = new_table_content
+            self.table_content = new_table_content
             
-            # Update table content
-            self.table_content.content = ft.Column([
-                status_text,
-                data_table
-            ], spacing=10, scroll=ft.ScrollMode.AUTO)
+            # Update selection UI
+            self._update_bulk_actions_visibility()
             
-            # Force update the UI if the container is added to the page
-            try:
-                if self.table_content.page:
-                    self.table_content.update()
-            except Exception:
-                # Control not yet added to page, that's OK
-                pass
+            # Force page update to refresh the UI
+            if self.page:
+                self.page.update()
+            
             print(f"[INFO] Loaded {len(rows)} rows from table '{table_name}'")
             
         except Exception as e:
@@ -411,7 +434,7 @@ class DatabaseView(BaseComponent):
         """Handle database backup."""
         # Use page.run_task if available, otherwise check for event loop
         if hasattr(self.page, 'run_task'):
-            self.page.run_task(self.action_handlers.backup_database())
+            self.page.run_task(self._backup_database_async)
         else:
             # Check if we're in an async context
             try:
@@ -426,7 +449,7 @@ class DatabaseView(BaseComponent):
         """Handle database optimization."""
         # Use page.run_task if available, otherwise check for event loop
         if hasattr(self.page, 'run_task'):
-            self.page.run_task(self.action_handlers.optimize_database())
+            self.page.run_task(self._optimize_database_async)
         else:
             # Check if we're in an async context
             try:
@@ -441,7 +464,7 @@ class DatabaseView(BaseComponent):
         """Handle database analysis."""
         # Use page.run_task if available, otherwise check for event loop
         if hasattr(self.page, 'run_task'):
-            self.page.run_task(self.action_handlers.analyze_database())
+            self.page.run_task(self._analyze_database_async)
         else:
             # Check if we're in an async context
             try:
@@ -465,3 +488,216 @@ class DatabaseView(BaseComponent):
             self.toast_manager.show_success(message)
         else:
             print(f"[SUCCESS] {message}")
+    
+    def show_query_dialog(self, e):
+        """Show custom SQL query dialog."""
+        # Use page.run_task if available, otherwise check for event loop
+        if hasattr(self.page, 'run_task'):
+            self.page.run_task(self._show_query_dialog_async)
+        else:
+            # Check if we're in an async context
+            try:
+                import asyncio
+                loop = asyncio.get_running_loop()
+                if loop.is_running():
+                    asyncio.create_task(self.action_handlers.show_query_dialog())
+            except RuntimeError:
+                # No event loop running, skip async task creation
+                pass
+    
+    def _on_select_all(self, e):
+        """Handle select all checkbox changes."""
+        try:
+            if e.control.value:  # Select all
+                self.table_renderer.select_all_rows()
+                self.selected_rows = self.table_renderer.selected_rows.copy()
+            else:  # Deselect all
+                self.table_renderer.deselect_all_rows()
+                self.selected_rows.clear()
+            
+            self._update_bulk_actions_visibility()
+            if self.page:
+                self.page.update()
+            
+        except Exception as ex:
+            self._show_error(f"Error in selection: {str(ex)}")
+    
+    def _on_row_selected(self, e):
+        """Handle individual row selection from table."""
+        try:
+            # Extract row_id and selection state from the event
+            row_id = e.data
+            selected = e.control.value if hasattr(e.control, 'value') else False
+            
+            if selected:
+                if row_id not in self.selected_rows:
+                    self.selected_rows.append(row_id)
+            else:
+                if row_id in self.selected_rows:
+                    self.selected_rows.remove(row_id)
+            
+            # Update select all checkbox state
+            self._update_select_all_checkbox()
+            self._update_bulk_actions_visibility()
+            
+            if self.page:
+                self.page.update()
+            
+        except Exception as ex:
+            self._show_error(f"Error in row selection: {str(ex)}")
+    
+    def _update_select_all_checkbox(self):
+        """Update select all checkbox based on current selection state."""
+        try:
+            if not self.select_all_checkbox:
+                return
+            
+            total_rows = len(self.current_table_data)
+            selected_count = len(self.selected_rows)
+            
+            if selected_count == 0:
+                self.select_all_checkbox.value = False
+            elif selected_count == total_rows:
+                self.select_all_checkbox.value = True
+            else:
+                self.select_all_checkbox.value = None  # Indeterminate state
+        except Exception:
+            pass  # Ignore errors in checkbox updates
+    
+    def _update_bulk_actions_visibility(self):
+        """Update visibility of bulk action buttons"""
+        try:
+            has_selections = len(self.selected_rows) > 0
+            
+            if self.bulk_actions_row and len(self.bulk_actions_row.controls) > 1:
+                # Show/hide bulk action buttons (skip the label)
+                for i, control in enumerate(self.bulk_actions_row.controls):
+                    if i > 0 and isinstance(control, ft.ElevatedButton):
+                        control.visible = has_selections
+                
+                # Force page update to show visibility changes
+                if self.page:
+                    self.page.update()
+        except Exception:
+            pass  # Ignore errors in bulk action updates
+    
+    def _bulk_delete_rows(self, e):
+        """Handle bulk delete action for selected rows."""
+        try:
+            if not self.selected_rows:
+                self._show_error("No rows selected")
+                return
+            
+            # Use action handlers for bulk delete
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(self.action_handlers.bulk_delete_rows(self.selected_rows))
+            else:
+                try:
+                    import asyncio
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self.action_handlers.bulk_delete_rows(self.selected_rows))
+                except RuntimeError:
+                    pass
+            
+            # Clear selection after action
+            self.selected_rows.clear()
+            self._update_bulk_actions_visibility()
+            
+        except Exception as ex:
+            self._show_error(f"Error in bulk delete: {str(ex)}")
+    
+    def _bulk_export_rows(self, e):
+        """Handle bulk export action for selected rows."""
+        try:
+            if not self.selected_rows:
+                self._show_error("No rows selected")
+                return
+            
+            # Use action handlers for bulk export
+            if hasattr(self.page, 'run_task'):
+                self.page.run_task(self.action_handlers.bulk_export_rows(self.selected_rows, self.selected_table))
+            else:
+                try:
+                    import asyncio
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self.action_handlers.bulk_export_rows(self.selected_rows, self.selected_table))
+                except RuntimeError:
+                    pass
+            
+        except Exception as ex:
+            self._show_error(f"Error in bulk export: {str(ex)}")
+    
+    def show_row_details(self, row_id: str, row_data: Dict[str, Any]):
+        """Show detailed view of database row - called by table renderer."""
+        try:
+            # Use action handlers for row details
+            if hasattr(self.page, 'run_task'):
+                async def show_details_wrapper():
+                    await self.action_handlers.show_row_details(row_id, row_data)
+                self.page.run_task(show_details_wrapper)
+            else:
+                try:
+                    import asyncio
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self.action_handlers.show_row_details(row_id, row_data))
+                except RuntimeError:
+                    pass
+        except Exception as ex:
+            self._show_error(f"Error showing row details: {str(ex)}")
+    
+    def edit_row(self, row_id: str, row_data: Dict[str, Any]):
+        """Edit database row - called by table renderer."""
+        try:
+            # Use action handlers for row editing
+            if hasattr(self.page, 'run_task'):
+                async def edit_row_wrapper():
+                    await self.action_handlers.edit_row(row_id, row_data)
+                self.page.run_task(edit_row_wrapper)
+            else:
+                try:
+                    import asyncio
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self.action_handlers.edit_row(row_id, row_data))
+                except RuntimeError:
+                    pass
+        except Exception as ex:
+            self._show_error(f"Error editing row: {str(ex)}")
+    
+    def delete_row(self, row_id: str, row_data: Dict[str, Any]):
+        """Delete database row - called by table renderer."""
+        try:
+            # Use action handlers for row deletion
+            if hasattr(self.page, 'run_task'):
+                async def delete_row_wrapper():
+                    await self.action_handlers.delete_row(row_id, row_data)
+                self.page.run_task(delete_row_wrapper)
+            else:
+                try:
+                    import asyncio
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self.action_handlers.delete_row(row_id, row_data))
+                except RuntimeError:
+                    pass
+        except Exception as ex:
+            self._show_error(f"Error deleting row: {str(ex)}")
+    
+    async def _backup_database_async(self):
+        """Async wrapper for backup database."""
+        await self.action_handlers.backup_database()
+    
+    async def _optimize_database_async(self):
+        """Async wrapper for optimize database."""
+        await self.action_handlers.optimize_database()
+    
+    async def _analyze_database_async(self):
+        """Async wrapper for analyze database."""
+        await self.action_handlers.analyze_database()
+    
+    async def _show_query_dialog_async(self):
+        """Async wrapper for show query dialog."""
+        await self.action_handlers.show_query_dialog()

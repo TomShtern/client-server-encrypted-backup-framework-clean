@@ -152,67 +152,46 @@ class ClientActionHandlers:
     
     async def delete_client(self, client_id: str) -> None:
         """Delete a client and all associated data"""
-        print(f"[DEBUG] delete_client STARTED with client_id: {client_id}")
         try:
             def confirm_delete():
-                print(f"[DEBUG] confirm_delete CALLED for client_id: {client_id}")
-                try:
-                    self._close_dialog()
-                    # Use page.run_task if available, otherwise check for event loop
-                    if hasattr(self.page, 'run_task'):
-                        print(f"[DEBUG] Using page.run_task for _perform_delete with client_id: {client_id}")
-                        self.page.run_task(self._perform_delete(client_id))
-                    else:
-                        # Check if we're in an async context
-                        try:
-                            loop = asyncio.get_running_loop()
-                            if loop.is_running():
-                                print(f"[DEBUG] Creating task for _perform_delete with client_id: {client_id}")
-                                asyncio.create_task(self._perform_delete(client_id))
-                        except RuntimeError:
-                            # No event loop running, skip async task creation
-                            print(f"[DEBUG] No event loop running, skipping async task for client_id: {client_id}")
-                            pass
-                except Exception as e:
-                    print(f"[ERROR] Exception in confirm_delete for client_id {client_id}: {e}")
-                    import traceback
-                    traceback.print_exc()
+                self._close_dialog()
+                # Use consistent async task creation
+                if hasattr(self.page, 'run_task'):
+                    self.page.run_task(self._perform_delete(client_id))
+                else:
+                    try:
+                        import asyncio
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(self._perform_delete(client_id))
+                    except RuntimeError:
+                        pass  # No event loop available
             
             def cancel_delete():
-                print(f"[DEBUG] cancel_delete CALLED for client_id: {client_id}")
                 self._close_dialog()
             
             # Show confirmation dialog with warning
-            print(f"[DEBUG] About to show confirmation dialog for deleting client_id: {client_id}")
             await self._show_confirmation_dialog(
                 title="⚠️ Confirm Delete",
                 message=f"Are you sure you want to permanently delete client '{client_id}' and all associated data? This action cannot be undone.",
                 on_confirm=confirm_delete,
                 on_cancel=cancel_delete
             )
-            print(f"[DEBUG] Confirmation dialog shown for client_id: {client_id}")
         except Exception as e:
-            print(f"[ERROR] Exception in delete_client for client_id {client_id}: {e}")
             import traceback
             traceback.print_exc()
             self.toast_manager.show_error(f"Error deleting client: {str(e)}")
     
     async def _perform_delete(self, client_id: str) -> None:
         """Actually perform the client deletion"""
-        print(f"[DEBUG] _perform_delete started for client_id: {client_id}")
         try:
             # Execute delete via client actions
-            print(f"[DEBUG] Calling client_actions.delete_client for client_id: {client_id}")
             success = await self.client_actions.delete_client(client_id)
-            print(f"[DEBUG] client_actions.delete_client returned success: {success} for client_id: {client_id}")
             
             if success:
-                print(f"[DEBUG] Delete successful for client_id: {client_id}")
                 self.toast_manager.show_success(f"Client '{client_id}' deleted successfully")
                 # Instead of relying on callback, directly refresh the UI
                 if hasattr(self, 'page') and self.page:
                     # Find the parent clients view and refresh it
-                    print(f"[DEBUG] Attempting to refresh UI directly for client_id: {client_id}")
                     # Create a task to refresh the UI
                     async def refresh_ui():
                         try:
@@ -224,11 +203,10 @@ class ClientActionHandlers:
                                 for view in self.page.views:
                                     if hasattr(view, '__class__') and 'ClientsView' in view.__class__.__name__:
                                         if hasattr(view, '_refresh_clients'):
-                                            print(f"[DEBUG] Calling _refresh_clients directly for client_id: {client_id}")
                                             await view._refresh_clients()
                                             break
                         except Exception as e:
-                            print(f"[ERROR] Exception in refresh_ui for client_id {client_id}: {e}")
+                            pass  # Ignore refresh errors
                     
                     # Schedule the refresh
                     if hasattr(self.page, 'run_task'):
@@ -241,11 +219,9 @@ class ClientActionHandlers:
                         except RuntimeError:
                             pass
             else:
-                print(f"[DEBUG] Delete failed for client_id: {client_id}")
                 self.toast_manager.show_error(f"Failed to delete client '{client_id}'")
                 
         except Exception as e:
-            print(f"[ERROR] Exception in _perform_delete for client_id {client_id}: {e}")
             import traceback
             traceback.print_exc()
             self.toast_manager.show_error(f"Error deleting client: {str(e)}")
@@ -361,19 +337,6 @@ class ClientActionHandlers:
             on_cancel=lambda: self._close_dialog()
         )
     
-    async def bulk_disconnect_clients(self, client_ids: List[str]) -> None:
-        """Disconnect multiple clients from the server"""
-        success_count = 0
-        for client_id in client_ids:
-            try:
-                if await self.client_actions.disconnect_client(client_id):
-                    success_count += 1
-            except Exception:
-                continue
-        
-        self.toast_manager.show_success(f"Disconnected {success_count}/{len(client_ids)} clients")
-        if self.on_data_changed:
-            await self.on_data_changed()
     
     async def _bulk_delete(self, client_ids: List[str]) -> None:
         """Delete multiple clients"""

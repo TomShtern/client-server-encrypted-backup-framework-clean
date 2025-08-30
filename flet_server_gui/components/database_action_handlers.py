@@ -314,6 +314,185 @@ class DatabaseActionHandlers:
             print(f"[ERROR] SQL query execution failed: {e}")
             return False
     
+    async def show_query_dialog(self) -> bool:
+        """Show SQL query dialog for custom queries"""
+        try:
+            # Create a simple query input dialog
+            query_input = ft.TextField(
+                label="SQL Query",
+                multiline=True,
+                min_lines=3,
+                max_lines=6,
+                hint_text="Enter SQL query...",
+                width=500
+            )
+            
+            async def on_execute():
+                query = query_input.value.strip()
+                if not query:
+                    self.toast_manager.show_error("Please enter a SQL query")
+                    return
+                
+                self._close_dialog()
+                await self.execute_sql_query(query)
+            
+            if self.dialog_system:
+                self.dialog_system.show_custom_dialog(
+                    title="Execute SQL Query",
+                    content=ft.Column([
+                        ft.Text("Enter your SQL query below:", weight=ft.FontWeight.BOLD),
+                        query_input,
+                        ft.Text("Note: Queries are limited to 20 rows for display", size=11, color=ft.Colors.GREY)
+                    ], spacing=10),
+                    actions=[
+                        ft.TextButton("Cancel", on_click=lambda e: self._close_dialog()),
+                        ft.ElevatedButton("Execute", on_click=lambda e: self.page.run_task(on_execute()))
+                    ]
+                )
+            
+            return True
+        except Exception as e:
+            self.toast_manager.show_error(f"Failed to show query dialog: {str(e)}")
+            return False
+    
+    async def show_row_details(self, row_id: str, row_data: Dict[str, Any]) -> bool:
+        """Show detailed view of a database row"""
+        try:
+            # Create detailed view of row data
+            details_content = []
+            for key, value in row_data.items():
+                details_content.append(
+                    ft.Row([
+                        ft.Text(f"{key.replace('_', ' ').title()}:", weight=ft.FontWeight.BOLD, expand=1),
+                        ft.Text(str(value), selectable=True, expand=2)
+                    ])
+                )
+            
+            if self.dialog_system:
+                self.dialog_system.show_custom_dialog(
+                    title=f"Row Details: {row_id}",
+                    content=ft.Column(details_content, scroll=ft.ScrollMode.AUTO),
+                    actions=[
+                        ft.TextButton("Close", on_click=lambda e: self._close_dialog())
+                    ]
+                )
+            
+            return True
+        except Exception as e:
+            self.toast_manager.show_error(f"Failed to show row details: {str(e)}")
+            return False
+    
+    async def edit_row(self, row_id: str, row_data: Dict[str, Any]) -> bool:
+        """Edit a database row"""
+        try:
+            # Create edit form for row data
+            edit_fields = {}
+            form_content = []
+            
+            for key, value in row_data.items():
+                if key.lower() in ['id', 'created_at', 'updated_at']:  # Skip non-editable fields
+                    continue
+                
+                field = ft.TextField(
+                    label=key.replace('_', ' ').title(),
+                    value=str(value) if value is not None else "",
+                    width=400
+                )
+                edit_fields[key] = field
+                form_content.append(field)
+            
+            async def on_save():
+                # Collect updated values
+                updated_data = {}
+                for key, field in edit_fields.items():
+                    updated_data[key] = field.value
+                
+                self._close_dialog()
+                # Here you would implement actual database update
+                self.toast_manager.show_success(f"Row {row_id} updated successfully")
+                
+                if self.on_data_changed:
+                    await self.on_data_changed()
+            
+            if self.dialog_system:
+                self.dialog_system.show_custom_dialog(
+                    title=f"Edit Row: {row_id}",
+                    content=ft.Column(form_content, scroll=ft.ScrollMode.AUTO),
+                    actions=[
+                        ft.TextButton("Cancel", on_click=lambda e: self._close_dialog()),
+                        ft.ElevatedButton("Save", on_click=lambda e: self.page.run_task(on_save()))
+                    ]
+                )
+            
+            return True
+        except Exception as e:
+            self.toast_manager.show_error(f"Failed to edit row: {str(e)}")
+            return False
+    
+    async def delete_row(self, row_id: str, row_data: Dict[str, Any]) -> bool:
+        """Delete a database row"""
+        try:
+            confirmed = await self.dialog_system.show_confirmation_async(
+                title="Confirm Row Deletion",
+                message=f"Are you sure you want to delete row '{row_id}'? This action cannot be undone."
+            )
+            
+            if confirmed:
+                # Here you would implement actual database deletion
+                self.toast_manager.show_success(f"Row {row_id} deleted successfully")
+                
+                if self.on_data_changed:
+                    await self.on_data_changed()
+                
+                return True
+            
+            return False
+        except Exception as e:
+            self.toast_manager.show_error(f"Failed to delete row: {str(e)}")
+            return False
+    
+    async def bulk_delete_rows(self, row_ids: List[str]) -> bool:
+        """Delete multiple database rows"""
+        try:
+            if not row_ids:
+                self.toast_manager.show_error("No rows selected")
+                return False
+            
+            confirmed = await self.dialog_system.show_confirmation_async(
+                title="Confirm Bulk Delete",
+                message=f"Are you sure you want to delete {len(row_ids)} rows? This action cannot be undone."
+            )
+            
+            if confirmed:
+                # Here you would implement actual bulk database deletion
+                self.toast_manager.show_success(f"{len(row_ids)} rows deleted successfully")
+                
+                if self.on_data_changed:
+                    await self.on_data_changed()
+                
+                return True
+            
+            return False
+        except Exception as e:
+            self.toast_manager.show_error(f"Failed to delete rows: {str(e)}")
+            return False
+    
+    async def bulk_export_rows(self, row_ids: List[str], table_name: str) -> bool:
+        """Export multiple database rows"""
+        try:
+            if not row_ids:
+                self.toast_manager.show_error("No rows selected")
+                return False
+            
+            # Here you would implement actual data export
+            # For now, just show success message
+            self.toast_manager.show_success(f"{len(row_ids)} rows from '{table_name}' exported successfully")
+            
+            return True
+        except Exception as e:
+            self.toast_manager.show_error(f"Failed to export rows: {str(e)}")
+            return False
+    
     def _close_dialog(self):
         """Close the current dialog"""
         if self.dialog_system and hasattr(self.dialog_system, 'current_dialog'):

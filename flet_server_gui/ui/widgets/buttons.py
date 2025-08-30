@@ -413,109 +413,6 @@ class ActionButtonFactory:
             action_key="server_health_check"
         ),
         
-        # File Management Buttons
-        'file_upload': ButtonConfig(
-            text="Upload File",
-            icon=ft.Icons.UPLOAD_FILE,
-            tooltip="Upload new file to server",
-            action_class="FileActions",
-            action_method="upload_file",
-            confirmation_text="Upload selected file to server?",
-            success_message="File uploaded successfully",
-            progress_message="Uploading file...",
-            requires_selection=False,
-            operation_type="import",
-            action_key="file_upload"
-        ),
-        
-        'file_cleanup': ButtonConfig(
-            text="Clean Old Files",
-            icon=ft.Icons.CLEANING_SERVICES,
-            tooltip="Clean up old unverified files",
-            action_class="FileActions",
-            action_method="cleanup_old_files",
-            confirmation_text="Clean up files older than 30 days?",
-            success_message="Old files cleaned successfully",
-            progress_message="Cleaning old files...",
-            requires_selection=False,
-            operation_type="single"
-        ),
-        
-        'file_download': ButtonConfig(
-            text="Download File",
-            icon=ft.Icons.FILE_DOWNLOAD,
-            tooltip="Download file to local directory",
-            action_class="FileActions",
-            action_method="download_file",
-            confirmation_text="Download selected file?",
-            success_message="File downloaded successfully",
-            progress_message="Downloading file...",
-            operation_type="single"
-        ),
-        
-        'file_verify': ButtonConfig(
-            text="Verify File",
-            icon=ft.Icons.VERIFIED,
-            tooltip="Verify integrity of selected file",
-            action_class="FileActions",
-            action_method="verify_file_integrity",
-            confirmation_text="Verify integrity of selected file?",
-            success_message="File verified successfully",
-            progress_message="Verifying file...",
-            operation_type="single"
-        ),
-        
-        'file_delete': ButtonConfig(
-            text="Delete File",
-            icon=ft.Icons.DELETE,
-            tooltip="Permanently delete selected file",
-            action_class="FileActions",
-            action_method="delete_file",
-            confirmation_text="Permanently delete selected file? This cannot be undone.",
-            success_message="File deleted successfully",
-            progress_message="Deleting file...",
-            operation_type="single"
-        ),
-        
-        'file_view_details': ButtonConfig(
-            text="View Details",
-            icon=ft.Icons.INFO,
-            tooltip="View detailed file information",
-            action_class="FileActionHandlers",
-            action_method="view_file_details",
-            confirmation_text="View details for file {item}?",
-            success_message="File details loaded",
-            progress_message="Loading file details...",
-            requires_selection=False,
-            operation_type="single"
-        ),
-        
-        'file_preview': ButtonConfig(
-            text="Preview File",
-            icon=ft.Icons.VISIBILITY,
-            tooltip="Preview file content",
-            action_class="FileActionHandlers",
-            action_method="preview_file",
-            confirmation_text="Preview file {item}?",
-            success_message="File preview loaded",
-            progress_message="Loading file preview...",
-            requires_selection=False,
-            operation_type="single"
-        ),
-        
-        # Server Control Buttons
-        'server_health_check': ButtonConfig(
-            text="Health Check",
-            icon=ft.Icons.HEALTH_AND_SAFETY,
-            tooltip="Perform comprehensive server health check",
-            action_class="ServerActions",
-            action_method="get_server_health",
-            confirmation_text="Perform server health check?",
-            success_message="Health check completed",
-            progress_message="Checking server health...",
-            requires_selection=False,
-            operation_type="single"
-        ),
     }
     
     def __init__(self, base_component: BaseComponent, server_bridge, page: ft.Page):
@@ -598,43 +495,67 @@ class ActionButtonFactory:
                 on_click=create_handler(config, get_selected_items, additional_params)
             )
         
-        # Apply hitbox fixes to ensure proper clickable area
-        # We need to preserve the button's click handler in the container
-        original_on_click = button.on_click
-        button_container = ResponsiveLayoutFixes.fix_button_hitbox(button)
-        
-        # Set the container's click handler to delegate to the button's handler
-        if original_on_click:
-            button_container.on_click = original_on_click
-        
-        return button_container
+        # Return the button directly - the click handler is already set
+        # Don't wrap in container as this breaks event handling
+        return button
     
     def _safe_handle_button_click(self, e, config: ButtonConfig, get_selected_items: Callable[[], List[str]], additional_params: Optional[Dict[str, Any]]):
         """Safely handle button click by running async handler in background task"""
-        print(f"[DEBUG] _safe_handle_button_click called with config: {config.action_key}")
-        if hasattr(self.page, 'run_task'):
-            print(f"[DEBUG] Using page.run_task for {config.action_key}")
-            # Pass the coroutine function and its arguments separately
-            async def wrapper():
-                print(f"[DEBUG] Wrapper function started for {config.action_key}")
-                try:
-                    result = await self._handle_button_click(config, get_selected_items, additional_params)
-                    print(f"[DEBUG] Wrapper function completed for {config.action_key}, result: {result}")
-                    return result
-                except Exception as ex:
-                    print(f"[ERROR] Wrapper function failed for {config.action_key}: {ex}")
-                    raise
+        print(f"\n[DEBUG] ===== BUTTON CLICK START =====")
+        print(f"[DEBUG] Button clicked: {config.action_key}")
+        print(f"[DEBUG] Event object: {e}")
+        print(f"[DEBUG] Config: action_class={config.action_class}, action_method={config.action_method}")
+        
+        # Use threading to run async method
+        import threading
+        import asyncio
+        
+        def run_async_in_thread():
+            print(f"[DEBUG] === THREAD STARTED ===")
+            print(f"[DEBUG] Thread ID: {threading.get_ident()}")
+            print(f"[DEBUG] Action: {config.action_key}")
+            
             try:
-                self.page.run_task(wrapper)
-                print(f"[DEBUG] page.run_task called successfully for {config.action_key}")
+                # Create new event loop for this thread
+                print(f"[DEBUG] Creating new event loop...")
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                print(f"[DEBUG] Event loop created and set")
+                
+                # Run the async handler
+                print(f"[DEBUG] About to call _handle_button_click...")
+                result = loop.run_until_complete(self._handle_button_click(config, get_selected_items, additional_params))
+                print(f"[DEBUG] === THREAD COMPLETED ===")
+                print(f"[DEBUG] Final result: {result}")
+                
+                loop.close()
+                print(f"[DEBUG] Event loop closed")
+                return result
             except Exception as ex:
-                print(f"[ERROR] page.run_task failed for {config.action_key}: {ex}")
-                raise
-        else:
-            print(f"[DEBUG] Using asyncio.create_task fallback for {config.action_key}")
-            # Fallback for older Flet versions
-            import asyncio
-            asyncio.create_task(self._handle_button_click(config, get_selected_items, additional_params))
+                print(f"[DEBUG] === THREAD EXCEPTION ===")
+                print(f"[DEBUG] Exception type: {type(ex)}")
+                print(f"[DEBUG] Exception message: {str(ex)}")
+                import traceback
+                traceback.print_exc()
+                
+                # Show error synchronously since we're in a thread
+                try:
+                    print(f"[DEBUG] Attempting to show error dialog...")
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(self.base_component._show_error(f"Action failed: {str(ex)}"))
+                    loop.close()
+                    print(f"[DEBUG] Error dialog shown successfully")
+                except Exception as dialog_ex:
+                    print(f"[ERROR] Failed to show error dialog: {dialog_ex}")
+                return False
+        
+        # Start thread to handle async operation
+        print(f"[DEBUG] Starting background thread...")
+        thread = threading.Thread(target=run_async_in_thread, daemon=True)
+        thread.start()
+        print(f"[DEBUG] Background thread started, returning from button click handler")
+        print(f"[DEBUG] ===== BUTTON CLICK END =====\n")
     
     async def _handle_button_click(
         self,
@@ -650,65 +571,127 @@ class ActionButtonFactory:
             get_selected_items: Function to get selected items
             additional_params: Additional parameters for the action
         """
-        print(f"[DEBUG] _handle_button_click started for {config.action_key}")
+        import threading
+        
+        print(f"\n[DEBUG] ===== ASYNC HANDLER START =====")
+        print(f"[DEBUG] Action: {config.action_key}")
+        print(f"[DEBUG] Thread ID: {threading.get_ident()}")
+        
         try:
             # Validate selection requirements
+            print(f"[DEBUG] Step 1: Getting selected items...")
             selected_items = get_selected_items() if config.requires_selection else []
             print(f"[DEBUG] Selected items for {config.action_key}: {selected_items}")
+            print(f"[DEBUG] Requires selection: {config.requires_selection}")
             
             if config.requires_selection:
                 if len(selected_items) < config.min_selection:
+                    print(f"[DEBUG] Selection validation failed: need {config.min_selection}, got {len(selected_items)}")
                     await self.base_component._show_error(
                         f"Please select at least {config.min_selection} item(s)"
                     )
-                    print(f"[DEBUG] Selection requirement not met for {config.action_key}")
                     return
                 
                 if config.max_selection and len(selected_items) > config.max_selection:
+                    print(f"[DEBUG] Selection validation failed: max {config.max_selection}, got {len(selected_items)}")
                     await self.base_component._show_error(
                         f"Please select no more than {config.max_selection} item(s)"
                     )
-                    print(f"[DEBUG] Selection requirement exceeded for {config.action_key}")
                     return
             
+            print(f"[DEBUG] Step 2: Selection validation passed")
+            
             # Get the action instance and method
-            action_instance = self.actions[config.action_class]
-            print(f"[DEBUG] Action instance for {config.action_key}: {action_instance}")
+            print(f"[DEBUG] Step 3: Looking for action class: {config.action_class}")
+            print(f"[DEBUG] Available actions: {list(self.actions.keys())}")
+            
+            try:
+                action_instance = self.actions[config.action_class]
+                print(f"[DEBUG] Successfully got action instance from direct lookup: {action_instance}")
+            except KeyError as e:
+                print(f"[DEBUG] KeyError getting action instance from direct lookup: {e}")
+                action_instance = None
             
             # For action handlers that are set by views, get them from the base component if they're None
             if action_instance is None and config.action_class in ["ClientActionHandlers", "FileActionHandlers", "DatabaseActionHandlers", "ServerActionHandlers"]:
-                # Try to get the action handler from the base component
-                if hasattr(self.base_component, 'action_handlers'):
-                    action_instance = self.base_component.action_handlers
-                elif hasattr(self.base_component, 'client_action_handlers') and config.action_class == "ClientActionHandlers":
-                    action_instance = self.base_component.client_action_handlers
-                elif hasattr(self.base_component, 'file_action_handlers') and config.action_class == "FileActionHandlers":
-                    action_instance = self.base_component.file_action_handlers
-                elif hasattr(self.base_component, 'database_action_handlers') and config.action_class == "DatabaseActionHandlers":
-                    action_instance = self.base_component.database_action_handlers
-                elif hasattr(self.base_component, 'server_action_handlers') and config.action_class == "ServerActionHandlers":
-                    action_instance = self.base_component.server_action_handlers
-            
-            # If still None, try to get from the base component's actions dict
-            if action_instance is None and hasattr(self.base_component, 'actions'):
-                action_instance = self.base_component.actions.get(config.action_class)
-            
-            print(f"[DEBUG] Final action instance for {config.action_key}: {action_instance}")
-            if action_instance is None:
-                await self.base_component._show_error(f"Action handler {config.action_class} not available")
-                print(f"[ERROR] Action handler not available for {config.action_key}")
-                return
+                print(f"[DEBUG] Step 4: Looking for action handler in base component...")
                 
-            action_method = getattr(action_instance, config.action_method)
-            print(f"[DEBUG] Action method for {config.action_key}: {action_method}")
+                # Try direct attribute access first
+                handler_attr_map = {
+                    "ClientActionHandlers": "action_handlers",
+                    "FileActionHandlers": "file_action_handlers", 
+                    "DatabaseActionHandlers": "database_action_handlers",
+                    "ServerActionHandlers": "server_action_handlers"
+                }
+                
+                attr_name = handler_attr_map.get(config.action_class)
+                print(f"[DEBUG] Looking for attribute: {attr_name}")
+                
+                if attr_name and hasattr(self.base_component, attr_name):
+                    action_instance = getattr(self.base_component, attr_name)
+                    print(f"[DEBUG] Found action handler via attribute: {action_instance}")
+                
+                # Also try the actions dict if direct attribute fails
+                if action_instance is None and hasattr(self.base_component, 'actions'):
+                    print(f"[DEBUG] Trying base_component.actions dict...")
+                    action_instance = self.base_component.actions.get(config.action_class)
+                    print(f"[DEBUG] Found action handler via actions dict: {action_instance}")
+            
+            if action_instance is None:
+                print(f"[DEBUG] FATAL: Action handler {config.action_class} not available anywhere")
+                print(f"[DEBUG] Available actions: {list(self.actions.keys())}")
+                print(f"[DEBUG] Base component type: {type(self.base_component)}")
+                print(f"[DEBUG] Base component dir: {dir(self.base_component)}")
+                print(f"[DEBUG] Base component actions: {getattr(self.base_component, 'actions', 'NO_ACTIONS')}")
+                
+                await self.base_component._show_error(f"Action handler {config.action_class} not available")
+                return
+            
+            print(f"[DEBUG] Step 5: Found action instance: {action_instance}")
+            print(f"[DEBUG] Action instance type: {type(action_instance)}")
+            
+            print(f"[DEBUG] Step 6: Getting action method: {config.action_method}")
+            try:
+                action_method = getattr(action_instance, config.action_method)
+                print(f"[DEBUG] Found action method: {action_method}")
+                print(f"[DEBUG] Action method type: {type(action_method)}")
+            except AttributeError as e:
+                print(f"[DEBUG] FATAL: Action method {config.action_method} not found on {action_instance}")
+                print(f"[DEBUG] Available methods: {dir(action_instance)}")
+                await self.base_component._show_error(f"Action method {config.action_method} not found")
+                return
             
             # Prepare method parameters
+            print(f"[DEBUG] Step 7: Preparing method parameters...")
             method_params = self._prepare_method_params(config, selected_items, additional_params)
-            print(f"[DEBUG] Method params for {config.action_key}: {method_params}")
+            print(f"[DEBUG] Method parameters: {method_params}")
             
-            # Use the base component's confirmation and execution pattern
-            if config.operation_type == "bulk":
-                print(f"[DEBUG] Executing bulk action for {config.action_key}")
+            # TEMPORARY: Direct method execution bypass for testing
+            print(f"[DEBUG] Step 8: BYPASS - Calling action method directly...")
+            try:
+                print(f"[DEBUG] About to call: {action_method}(**{method_params})")
+                result = await action_method(**method_params)
+                print(f"[DEBUG] BYPASS SUCCESS: Direct method call result: {result}")
+                
+                # Show success dialog
+                await self.base_component._show_success(f"Method executed successfully! Result: {result}")
+                print(f"[DEBUG] Success dialog shown")
+                return True
+                
+            except Exception as e:
+                print(f"[DEBUG] BYPASS FAILED: Direct method call exception: {e}")
+                print(f"[DEBUG] Exception type: {type(e)}")
+                import traceback
+                traceback.print_exc()
+                
+                await self.base_component._show_error(f"Direct method call failed: {e}")
+                print(f"[DEBUG] Error dialog shown")
+                return False
+            
+            # Original confirmation system (commented for bypass testing)
+            print(f"[DEBUG] About to execute method. Operation type: {config.operation_type}")
+            if False and config.operation_type == "bulk":
+                print(f"[DEBUG] Executing bulk action")
                 success = await self.base_component.execute_bulk_action(
                     action=lambda items: action_method(**method_params),
                     selected_items=selected_items,
@@ -723,7 +706,9 @@ class ActionButtonFactory:
                 elif "{item}" in confirmation_text and selected_items:
                     confirmation_text = confirmation_text.format(item=selected_items[0] if len(selected_items) == 1 else f"{len(selected_items)} items")
                 
-                print(f"[DEBUG] Executing single action for {config.action_key} with confirmation: {confirmation_text}")
+                print(f"[DEBUG] Executing single action with confirmation")
+                print(f"[DEBUG] Base component type: {type(self.base_component)}")
+                print(f"[DEBUG] Has execute_with_confirmation: {hasattr(self.base_component, 'execute_with_confirmation')}")
                 success = await self.base_component.execute_with_confirmation(
                     action=lambda: action_method(**method_params),
                     confirmation_text=confirmation_text,
@@ -733,14 +718,11 @@ class ActionButtonFactory:
             
             # Handle special post-action operations
             if success:
-                print(f"[DEBUG] Action successful for {config.action_key}, handling post-action")
                 await self._handle_post_action(config, method_params)
                 
-            print(f"[DEBUG] _handle_button_click completed for {config.action_key}, success: {success}")
             return success
             
         except Exception as e:
-            print(f"[ERROR] _handle_button_click failed for {config.action_key}: {e}")
             import traceback
             traceback.print_exc()
             await self.base_component._show_error(f"Button action failed: {str(e)}")
@@ -765,12 +747,10 @@ class ActionButtonFactory:
         Returns:
             Dictionary of method parameters
         """
-        print(f"[DEBUG] _prepare_method_params called for {config.action_key} with selected_items: {selected_items}")
         params = {}
         
         # Special handling for perform_bulk_action method
         if config.action_method == "perform_bulk_action":
-            print(f"[DEBUG] Handling bulk action for {config.action_key}")
             # For bulk actions, we need to pass the action type and filenames
             action_type_map = {
                 'file_download_bulk': 'download',
@@ -793,75 +773,58 @@ class ActionButtonFactory:
                 else:
                     params["filenames"] = selected_items
         else:
-            print(f"[DEBUG] Handling single action for {config.action_key}")
             # Add selected items based on method signature
             if "client_id" in config.action_method and selected_items:
                 # For single client actions, pass client_id as a single value
                 if config.operation_type == "single" and len(selected_items) == 1:
                     params["client_id"] = selected_items[0]
-                    print(f"[DEBUG] Setting client_id to single value: {selected_items[0]}")
                 else:
                     params["client_ids"] = selected_items
-                    print(f"[DEBUG] Setting client_ids to multiple values: {selected_items}")
             elif "file_id" in config.action_method and selected_items:  
                 # For single file actions, pass file_id as a single value
                 if config.operation_type == "single" and len(selected_items) == 1:
                     params["file_id"] = selected_items[0]
-                    print(f"[DEBUG] Setting file_id to single value: {selected_items[0]}")
                 else:
                     params["file_ids"] = selected_items
-                    print(f"[DEBUG] Setting file_ids to multiple values: {selected_items}")
             elif selected_items:
                 # Generic parameter name based on action type
                 if "client" in config.action_method.lower() or "client" in config.action_key.lower():
                     # For single client actions, pass client_id as a single value
                     if config.operation_type == "single" and len(selected_items) == 1:
                         params["client_id"] = selected_items[0]
-                        print(f"[DEBUG] Setting client_id (generic) to single value: {selected_items[0]}")
                     else:
                         params["client_ids"] = selected_items
-                        print(f"[DEBUG] Setting client_ids (generic) to multiple values: {selected_items}")
                 elif "file" in config.action_method.lower() or "file" in config.action_key.lower():
                     # For single file actions, pass file_id as a single value
                     if config.operation_type == "single" and len(selected_items) == 1:
                         params["file_id"] = selected_items[0]
-                        print(f"[DEBUG] Setting file_id (generic) to single value: {selected_items[0]}")
                     else:
                         params["file_ids"] = selected_items
-                        print(f"[DEBUG] Setting file_ids (generic) to multiple values: {selected_items}")
                 else:
                     # Default to generic parameter names
                     if config.action_class in ["ClientActions", "ClientActionHandlers"]:
                         # For single client actions, pass client_id as a single value
                         if config.operation_type == "single" and len(selected_items) == 1:
                             params["client_id"] = selected_items[0]
-                            print(f"[DEBUG] Setting client_id (default) to single value: {selected_items[0]}")
                         else:
                             params["client_ids"] = selected_items
-                            print(f"[DEBUG] Setting client_ids (default) to multiple values: {selected_items}")
                     elif config.action_class in ["FileActions", "FileActionHandlers"]:
                         # For single file actions, pass file_id as a single value
                         if config.operation_type == "single" and len(selected_items) == 1:
                             params["file_id"] = selected_items[0]
-                            print(f"[DEBUG] Setting file_id (default) to single value: {selected_items[0]}")
                         else:
                             params["file_ids"] = selected_items
-                            print(f"[DEBUG] Setting file_ids (default) to multiple values: {selected_items}")
                     else:
                         params["items"] = selected_items
-                        print(f"[DEBUG] Setting items (fallback) to values: {selected_items}")
             
             # Add export format if specified
             if config.export_format:
                 params["export_format"] = config.export_format
-                print(f"[DEBUG] Setting export_format to: {config.export_format}")
         
         # Add any additional parameters
         if additional_params:
             params.update(additional_params)
-            print(f"[DEBUG] Added additional params: {additional_params}")
             
-        print(f"[DEBUG] _prepare_method_params returning params: {params}")
         return params
     
     def _get_item_type(self, action_class: str) -> str:

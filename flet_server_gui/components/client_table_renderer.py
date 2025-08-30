@@ -60,9 +60,13 @@ class ClientTableRenderer:
             border=ft.border.all(1, TOKENS['outline']),
             border_radius=8,
             heading_row_color=TOKENS['surface_variant'],
-            heading_row_height=50,
-            data_row_max_height=60,
+            heading_row_height=44,  # Optimized for touch targets
+            data_row_max_height=None,  # Allow flexible row height
+            data_row_min_height=40,   # Minimum touch target height
             show_checkbox_column=False,  # We handle checkboxes manually
+            horizontal_lines=ft.border.BorderSide(0.5, TOKENS['outline']),
+            column_spacing=4,  # Tighter spacing for windowed mode
+            clip_behavior=ft.ClipBehavior.NONE,  # Prevent content clipping
         )
         return self.client_table
     
@@ -82,17 +86,19 @@ class ClientTableRenderer:
             # Create a wrapper function to capture the client_id
             def create_checkbox_handler(client_id):
                 def handler(e):
+                    # Update local selection state immediately
+                    if e.control.value:  # Checkbox is now checked
+                        if client_id not in self.selected_clients:
+                            self.selected_clients.append(client_id)
+                    else:  # Checkbox is now unchecked
+                        if client_id in self.selected_clients:
+                            self.selected_clients.remove(client_id)
+                    
                     # Call the parent's selection handler if provided
                     if on_client_select:
-                        # Create a mock event with the client_id as data
-                        class MockEvent:
-                            def __init__(self, client_id, checked):
-                                self.data = client_id
-                                self.control = type('Control', (), {'value': checked})()
-                        # Determine new state (opposite of current)
-                        new_state = not (client_id in self.selected_clients)
-                        mock_event = MockEvent(client_id, new_state)
-                        on_client_select(mock_event)
+                        # Pass the actual event with proper data
+                        e.data = client_id
+                        on_client_select(e)
                 return handler
             
             client_checkbox = ft.Checkbox(
@@ -204,35 +210,29 @@ class ClientTableRenderer:
         """Create action buttons for a client row"""
         # Get client ID safely
         client_id = getattr(client, 'client_id', None) or (client['client_id'] if hasattr(client, '__getitem__') and 'client_id' in client else (client.get('id', 'Unknown') if hasattr(client, 'get') else 'Unknown'))
-        print(f"[DEBUG] Creating action buttons for client: {client_id}")
         
         # Create wrapper functions to properly capture client_id
         def make_client_getter(client_id):
             def getter():
                 result = [client_id]
-                print(f"[DEBUG] Client getter returning: {result}")
                 return result
             return getter
         
-        print(f"[DEBUG] Creating client view details button for: {client_id}")
         view_details_button = self.button_factory.create_action_button(
             'client_view_details', 
             make_client_getter(client_id)
         )
         
-        print(f"[DEBUG] Creating client view files button for: {client_id}")
         view_files_button = self.button_factory.create_action_button(
             'client_view_files', 
             make_client_getter(client_id)
         )
         
-        print(f"[DEBUG] Creating client disconnect button for: {client_id}")
         disconnect_button = self.button_factory.create_action_button(
             'client_disconnect', 
             make_client_getter(client_id)
         )
         
-        print(f"[DEBUG] Creating client delete button for: {client_id}")
         delete_button = self.button_factory.create_action_button(
             'client_delete', 
             make_client_getter(client_id)
@@ -245,7 +245,6 @@ class ClientTableRenderer:
             delete_button,
         ], tight=True, spacing=5)
         
-        print(f"[DEBUG] Created action buttons row for client: {client_id}")
         return buttons_row
     
     def get_table_container(self) -> ft.Container:
@@ -264,24 +263,26 @@ class ClientTableRenderer:
                 rows=[]
             )
         
-        # Create a scrollable container for the table with proper responsive properties
-        table_scroll_container = ft.Container(
-            content=ft.Column([
-                self.client_table
-            ], scroll=ft.ScrollMode.AUTO, expand=True),
+        # Create a responsive scrollable container for the table
+        table_column = ft.Column(
+            controls=[self.client_table],
+            scroll=ft.ScrollMode.AUTO,
             expand=True,
-            clip_behavior=ft.ClipBehavior.NONE
+            spacing=0,
+            tight=True  # Reduce extra spacing
         )
         
-        # Wrap in a responsive container with proper sizing
+        # Wrap in a responsive container optimized for windowed mode
         return ft.Container(
-            content=table_scroll_container,
+            content=table_column,
             border=ft.border.all(1, TOKENS['outline']),
             border_radius=8,
-            padding=10,
+            padding=6,  # Reduced padding for tighter fit
             expand=True,
             clip_behavior=ft.ClipBehavior.NONE,
-            width=float("inf")  # Allow infinite width for proper scaling
+            # Responsive sizing
+            width=None,  # Auto width
+            height=None  # Auto height
         )
     
     def update_table_data(self, filtered_clients: List[Any], on_client_select: callable = None, 
@@ -303,12 +304,16 @@ class ClientTableRenderer:
         if not self.client_table:
             return
             
-        # Update all checkboxes in the table
+        # Update all checkboxes in the table and sync selection state
         for row in self.client_table.rows:
             if row.cells and len(row.cells) > 0:
                 checkbox = row.cells[0].content
                 if isinstance(checkbox, ft.Checkbox):
                     checkbox.value = True
+                    # Get client_id from checkbox data
+                    client_id = checkbox.data
+                    if client_id and client_id not in self.selected_clients:
+                        self.selected_clients.append(client_id)
                     
         if self.page:
             self.page.update()
@@ -318,12 +323,16 @@ class ClientTableRenderer:
         if not self.client_table:
             return
             
-        # Update all checkboxes in the table
+        # Update all checkboxes in the table and sync selection state
         for row in self.client_table.rows:
             if row.cells and len(row.cells) > 0:
                 checkbox = row.cells[0].content
                 if isinstance(checkbox, ft.Checkbox):
                     checkbox.value = False
+                    # Get client_id from checkbox data
+                    client_id = checkbox.data
+                    if client_id and client_id in self.selected_clients:
+                        self.selected_clients.remove(client_id)
                     
         if self.page:
             self.page.update()
