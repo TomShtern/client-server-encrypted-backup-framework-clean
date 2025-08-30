@@ -297,7 +297,7 @@ class LogsView(BaseComponent):
                 ft.Container(content=ft.Text(time_str, size=10), width=60),
                 ft.Container(content=ft.Text(entry.level, size=10, weight=ft.FontWeight.BOLD), width=60),
                 ft.Container(content=ft.Text(entry.component, size=10), width=80),
-                ft.Expanded(child=ft.Text(entry.message, size=12, overflow=ft.TextOverflow.ELLIPSIS))
+                ft.Container(content=ft.Text(entry.message, size=12, overflow=ft.TextOverflow.ELLIPSIS)).expand()
             ]),
             padding=ft.padding.symmetric(horizontal=8, vertical=2),
             border_radius=4,

@@ -261,8 +261,6 @@ class ActionExecutor:
                 code=f"{action_name.upper()}_ERROR",
                 message=str(e),
                 correlation_id=cid,
-                data={"stack": stack},
-                duration_ms=elapsed,
             )
             get_notification_center().publish(wrapped)
             busy.stop()

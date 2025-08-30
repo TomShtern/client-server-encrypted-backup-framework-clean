@@ -588,7 +588,9 @@ class DatabaseView(BaseComponent):
             
             # Use action handlers for bulk delete
             if hasattr(self.page, 'run_task'):
-                self.page.run_task(self.action_handlers.bulk_delete_rows(self.selected_rows))
+                async def bulk_delete_wrapper():
+                    await self.action_handlers.bulk_delete_rows(self.selected_rows)
+                self.page.run_task(bulk_delete_wrapper)
             else:
                 try:
                     import asyncio
@@ -614,7 +616,9 @@ class DatabaseView(BaseComponent):
             
             # Use action handlers for bulk export
             if hasattr(self.page, 'run_task'):
-                self.page.run_task(self.action_handlers.bulk_export_rows(self.selected_rows, self.selected_table))
+                async def bulk_export_wrapper():
+                    await self.action_handlers.bulk_export_rows(self.selected_rows, self.selected_table)
+                self.page.run_task(bulk_export_wrapper)
             else:
                 try:
                     import asyncio

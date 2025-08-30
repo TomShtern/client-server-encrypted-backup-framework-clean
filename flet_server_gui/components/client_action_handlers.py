@@ -31,7 +31,7 @@ class ClientActionHandlers(BaseActionHandler, UIActionMixin):
         """View detailed information about a client."""
         return await self.execute_action(
             action_name=f"View Client Details ({client_id})",
-            action_coro=self._view_client_details_action(client_id),
+            action_coro=lambda: self._view_client_details_action(client_id),
             require_selection=False,
             trigger_data_change=False,
             show_success_toast=False
@@ -59,7 +59,7 @@ class ClientActionHandlers(BaseActionHandler, UIActionMixin):
         """View files associated with a client."""
         return await self.execute_action(
             action_name=f"View Client Files ({client_id})",
-            action_coro=self._view_client_files_action(client_id),
+            action_coro=lambda: self._view_client_files_action(client_id),
             require_selection=False,
             trigger_data_change=False,
             show_success_toast=False
@@ -91,12 +91,12 @@ class ClientActionHandlers(BaseActionHandler, UIActionMixin):
         """Disconnect a client from the server (with confirmation)."""
         return await self.execute_action(
             action_name=f"Disconnect Client ({client_id})",
-            action_coro=self._disconnect_client_action(client_id),
-            confirmation_text=f"Disconnect client '{client_id}'?",
-            confirmation_title="Confirm Disconnect",
+            action_coro=lambda: self._disconnect_client_action(client_id),
+            confirmation_text=f"Disconnect client {client_id} from the server?",
+            confirmation_title="Confirm Client Disconnection",
             require_selection=False,
             trigger_data_change=True,
-            success_message=f"Client '{client_id}' disconnected"
+            success_message=f"Client {client_id} disconnected successfully"
         )
     
     async def _disconnect_client_action(self, client_id: str):
@@ -108,15 +108,15 @@ class ClientActionHandlers(BaseActionHandler, UIActionMixin):
         return {"client_id": client_id}
     
     async def delete_client(self, client_id: str) -> ActionResult:
-        """Delete a client and all associated data (with confirmation)."""
+        """Delete a client from the server (with confirmation)."""
         return await self.execute_action(
             action_name=f"Delete Client ({client_id})",
-            action_coro=self._delete_client_action(client_id),
-            confirmation_text=f"Delete client '{client_id}' and all associated data? This cannot be undone.",
-            confirmation_title="⚠️ Confirm Delete",
+            action_coro=lambda: self._delete_client_action(client_id),
+            confirmation_text=f"Permanently delete client {client_id} and all associated data? This cannot be undone.",
+            confirmation_title="Confirm Client Deletion",
             require_selection=False,
             trigger_data_change=True,
-            success_message=f"Client '{client_id}' deleted"
+            success_message=f"Client {client_id} deleted successfully"
         )
     
     async def _delete_client_action(self, client_id: str):

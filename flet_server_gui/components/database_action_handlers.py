@@ -125,7 +125,7 @@ class DatabaseActionHandlers(BaseActionHandler, UIActionMixin):
         """Show SQL query dialog for custom queries"""
         return await self.execute_action(
             action_name="Show Query Dialog",
-            action_coro=self._show_query_dialog_action(),
+            action_coro=lambda: self._show_query_dialog_action(),
             require_selection=False,
             trigger_data_change=False,
             show_success_toast=False
@@ -172,7 +172,7 @@ class DatabaseActionHandlers(BaseActionHandler, UIActionMixin):
         """Show detailed view of a database row"""
         return await self.execute_action(
             action_name=f"Show Row Details ({row_id})",
-            action_coro=self._show_row_details_action(row_id, row_data),
+            action_coro=lambda: self._show_row_details_action(row_id, row_data),
             require_selection=False,
             trigger_data_change=False,
             show_success_toast=False
@@ -216,7 +216,7 @@ class DatabaseActionHandlers(BaseActionHandler, UIActionMixin):
         
         return await self.execute_action(
             action_name=f"Bulk Delete Rows ({len(row_ids)} rows)",
-            action_coro=self._bulk_delete_rows_action(row_ids),
+            action_coro=lambda: self._bulk_delete_rows_action(row_ids),
             confirmation_text=f"Are you sure you want to delete {len(row_ids)} rows? This action cannot be undone.",
             confirmation_title="Confirm Bulk Delete",
             require_selection=False,
@@ -231,6 +231,24 @@ class DatabaseActionHandlers(BaseActionHandler, UIActionMixin):
         succeeded = len(row_ids)
         return {"deleted": succeeded, "total": len(row_ids)}
     
+    async def edit_row(self, row_id: str, row_data: Dict[str, Any]) -> ActionResult:
+        """Edit a database row"""
+        return await self.execute_action(
+            action_name=f"Edit Row {row_id}",
+            action_coro=lambda: self._edit_row_action(row_id, row_data),
+            confirmation_text=f"Save changes to row {row_id}?",
+            confirmation_title="Confirm Row Edit",
+            require_selection=False,
+            trigger_data_change=True,
+            success_message=f"Row {row_id} updated successfully"
+        )
+    
+    async def _edit_row_action(self, row_id: str, row_data: Dict[str, Any]):
+        """Action implementation for editing a row"""
+        # TODO: Implement actual row editing
+        # For now, just return success
+        return {"row_id": row_id, "data": row_data}
+    
     async def bulk_export_rows(self, row_ids: List[str], table_name: str) -> ActionResult:
         """Export multiple database rows"""
         if not row_ids:
@@ -242,7 +260,7 @@ class DatabaseActionHandlers(BaseActionHandler, UIActionMixin):
         
         return await self.execute_action(
             action_name=f"Bulk Export Rows ({len(row_ids)} rows from {table_name})",
-            action_coro=self._bulk_export_rows_action(row_ids, table_name),
+            action_coro=lambda: self._bulk_export_rows_action(row_ids, table_name),
             confirmation_text=f"Export {len(row_ids)} rows from '{table_name}'?",
             confirmation_title="Confirm Export",
             require_selection=False,

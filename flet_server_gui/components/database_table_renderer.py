@@ -52,6 +52,111 @@ class DatabaseTableRenderer(BaseTableRenderer):
         self.table_columns = []
         self.database_view = None  # Will be set by the database view
     
+    def get_table_columns(self) -> List[ft.DataColumn]:
+        """Get table columns for database tables"""
+        if not self.table_columns:
+            return [
+                ft.DataColumn(ft.Text("ID", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Type", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Size", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Created", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD))
+            ]
+        
+        # Create dynamic columns based on table schema
+        columns = [
+            ft.DataColumn(ft.Checkbox(on_change=None)),  # Select all will be handled by parent
+        ]
+        
+        # Add columns dynamically based on database table schema
+        columns.extend(
+            ft.DataColumn(
+                ft.Text(
+                    col_name.replace('_', ' ').title(),
+                    weight=ft.FontWeight.BOLD,
+                    max_lines=1,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                )
+            )
+            for col_name in self.table_columns[:6]
+        )
+        # Always add Actions column
+        columns.append(
+            ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS))
+        )
+        
+        return columns
+    
+    def get_item_identifier(self, item: Any) -> str:
+        """Get unique identifier for database item"""
+        if isinstance(item, dict):
+            # Try common ID fields
+            for id_field in ['id', 'rowid', 'ID', '_id']:
+                if id_field in item:
+                    return str(item[id_field])
+            # Fallback to string representation
+            return str(item)
+        return str(item)
+    
+    def create_row_cells(self, item: Any, on_item_select: Callable) -> List[ft.DataCell]:
+        """Create table row cells for database items"""
+        cells = []
+        
+        # Checkbox cell
+        item_id = self.get_item_identifier(item)
+        checkbox = ft.Checkbox(
+            value=item_id in self.selected_items,
+            on_change=lambda e: on_item_select(item_id, e.control.value),
+            data=item_id
+        )
+        cells.append(ft.DataCell(checkbox))
+        
+        # Data cells
+        if isinstance(item, dict):
+            # Add data cells based on column order
+            for col_name in self.table_columns[:6]:
+                cell_value = item.get(col_name, "")
+                # Format cell content
+                if isinstance(cell_value, (int, float)):
+                    formatted_value = str(cell_value)
+                elif isinstance(cell_value, datetime):
+                    formatted_value = cell_value.strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    formatted_value = str(cell_value)[:50]  # Truncate long values
+                    
+                cells.append(ft.DataCell(ft.Text(formatted_value, size=12)))
+        else:
+            # Fallback for non-dict items
+            cells.append(ft.DataCell(ft.Text(str(item), size=12)))
+        
+        # Actions cell
+        actions_cell = self._create_actions_cell(item)
+        cells.append(actions_cell)
+        
+        return cells
+    
+    def _create_actions_cell(self, item: Any) -> ft.DataCell:
+        """Create actions cell for database row"""
+        # Simplified actions for database rows
+        actions_row = ft.Row(
+            [
+                ft.IconButton(
+                    icon=ft.icons.INFO,
+                    tooltip="View Details",
+                    icon_size=16,
+                    on_click=lambda e: self._view_item_details(item)
+                )
+            ],
+            spacing=2
+        )
+        return ft.DataCell(actions_row)
+    
+    def _view_item_details(self, item: Any) -> None:
+        """Handle view item details action"""
+        if self.database_view and hasattr(self.database_view, 'view_item_details'):
+            self.database_view.view_item_details(item)
+    
     def create_database_table(self, table_name: str, columns: List[str]) -> ft.DataTable:
         """Create the database data table with dynamic headers based on table schema"""
         self.current_table_name = table_name
