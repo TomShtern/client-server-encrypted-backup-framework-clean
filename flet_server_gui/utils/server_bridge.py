@@ -82,7 +82,18 @@ class ModularServerBridge:
     
     def get_all_clients(self) -> List[RealClient]:
         """Get all clients"""
-        return self.data_manager.get_all_clients()
+        print(f"[BRIDGE_TRACE] ========== BRIDGE GET ALL CLIENTS ==========")
+        print(f"[BRIDGE_TRACE] Data manager: {type(self.data_manager)}")
+        
+        try:
+            result = self.data_manager.get_all_clients()
+            print(f"[BRIDGE_TRACE] Data manager returned {len(result)} clients")
+            return result
+        except Exception as e:
+            print(f"[BRIDGE_TRACE] ✗ Exception in get_all_clients: {e}")
+            import traceback
+            print(f"[BRIDGE_TRACE] Traceback: {traceback.format_exc()}")
+            return []
     
     def get_all_files(self) -> List[Dict[str, Any]]:
         """Get all files"""
@@ -99,11 +110,35 @@ class ModularServerBridge:
     # Client operations
     def disconnect_client(self, client_id: str) -> bool:
         """Disconnect a client"""
-        return self.data_manager.disconnect_client(client_id)
+        print(f"[BRIDGE_TRACE] ========== BRIDGE DISCONNECT CLIENT ==========")
+        print(f"[BRIDGE_TRACE] Client ID: {client_id}")
+        print(f"[BRIDGE_TRACE] Data manager: {type(self.data_manager)}")
+        
+        try:
+            result = self.data_manager.disconnect_client(client_id)
+            print(f"[BRIDGE_TRACE] Data manager returned: {result}")
+            return result
+        except Exception as e:
+            print(f"[BRIDGE_TRACE] ✗ Exception in disconnect_client: {e}")
+            import traceback
+            print(f"[BRIDGE_TRACE] Traceback: {traceback.format_exc()}")
+            return False
     
     def delete_client(self, client_id: str) -> bool:
         """Delete a client"""
-        return self.data_manager.delete_client(client_id)
+        print(f"[BRIDGE_TRACE] ========== BRIDGE DELETE CLIENT ==========")
+        print(f"[BRIDGE_TRACE] Client ID: {client_id}")
+        print(f"[BRIDGE_TRACE] Data manager: {type(self.data_manager)}")
+        
+        try:
+            result = self.data_manager.delete_client(client_id)
+            print(f"[BRIDGE_TRACE] Data manager returned: {result}")
+            return result
+        except Exception as e:
+            print(f"[BRIDGE_TRACE] ✗ Exception in delete_client: {e}")
+            import traceback
+            print(f"[BRIDGE_TRACE] Traceback: {traceback.format_exc()}")
+            return False
     
     def disconnect_multiple_clients(self, client_ids: List[str]) -> int:
         """Disconnect multiple clients"""

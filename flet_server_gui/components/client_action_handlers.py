@@ -4,6 +4,9 @@ Client Action Handlers Component
 Handles all client-related actions including view, disconnect, delete, and bulk operations.
 """
 
+# Import UTF-8 solution for Unicode handling
+import Shared.utils.utf8_solution
+
 import flet as ft
 import asyncio
 from typing import List, Dict, Any, Optional, Callable
@@ -61,6 +64,35 @@ class ClientActionHandlers:
     
     async def view_client_details(self, client_id: str) -> None:
         """View detailed information about a client"""
+        print(f"[ACTION_TRACE] ========== CLIENT ACTION HANDLER: VIEW DETAILS ==========")
+        print(f"[ACTION_TRACE] Method: view_client_details")
+        print(f"[ACTION_TRACE] Client ID: {client_id}")
+        print(f"[ACTION_TRACE] Dialog system available: {self.dialog_system is not None}")
+        print(f"[ACTION_TRACE] Toast manager available: {self.toast_manager is not None}")
+        print(f"[ACTION_TRACE] Server bridge: {type(self.server_bridge)}")
+        
+        if not self.dialog_system:
+            print("[ERROR] Dialog system not initialized!")
+            print(f"[FALLBACK] Showing client details for {client_id} in console")
+            # Try to get and display client data in console
+            try:
+                client_data = await self._get_client_details(client_id)
+                if client_data:
+                    print(f"[FALLBACK DETAILS] Client {client_id} data:")
+                    for key, value in client_data.items():
+                        print(f"[FALLBACK DETAILS]   {key}: {value}")
+                    if self.toast_manager:
+                        self.toast_manager.show_success(f"Client details for {client_id} shown in console")
+                else:
+                    print(f"[FALLBACK ERROR] No data found for client {client_id}")
+                    if self.toast_manager:
+                        self.toast_manager.show_error(f"No data found for client {client_id}")
+            except Exception as e:
+                print(f"[FALLBACK ERROR] Failed to get client details: {str(e)}")
+                if self.toast_manager:
+                    self.toast_manager.show_error(f"Failed to get client details: {str(e)}")
+            return True
+        
         try:
             # Get client details from server
             client_data = await self._get_client_details(client_id)
@@ -86,6 +118,32 @@ class ClientActionHandlers:
     
     async def view_client_files(self, client_id: str) -> None:
         """View files associated with a client"""
+        print(f"[DEBUG] view_client_files called with client_id: {client_id}")
+        print(f"[DEBUG] dialog_system: {self.dialog_system}")
+        print(f"[DEBUG] toast_manager: {self.toast_manager}")
+        
+        if not self.dialog_system:
+            print("[ERROR] Dialog system not initialized!")
+            print(f"[FALLBACK] Showing client files for {client_id} in console")
+            # Try to get and display client files in console
+            try:
+                client_files = await self._get_client_files(client_id)
+                if client_files:
+                    print(f"[FALLBACK FILES] Client {client_id} files:")
+                    for i, file_info in enumerate(client_files):
+                        print(f"[FALLBACK FILES]   {i+1}. {file_info.get('filename', 'Unknown')} ({file_info.get('size', 0)} bytes)")
+                    if self.toast_manager:
+                        self.toast_manager.show_success(f"Found {len(client_files)} files for client {client_id} (shown in console)")
+                else:
+                    print(f"[FALLBACK INFO] No files found for client {client_id}")
+                    if self.toast_manager:
+                        self.toast_manager.show_info(f"No files found for client {client_id}")
+            except Exception as e:
+                print(f"[FALLBACK ERROR] Failed to get client files: {str(e)}")
+                if self.toast_manager:
+                    self.toast_manager.show_error(f"Failed to get client files: {str(e)}")
+            return True
+        
         try:
             # Get client files from server
             client_files = await self._get_client_files(client_id)
@@ -111,6 +169,19 @@ class ClientActionHandlers:
     
     async def disconnect_client(self, client_id: str) -> None:
         """Disconnect a client from the server"""
+        print(f"[ACTION_TRACE] ========== CLIENT ACTION HANDLER: DISCONNECT ==========")
+        print(f"[ACTION_TRACE] Method: disconnect_client")
+        print(f"[ACTION_TRACE] Client ID: {client_id}")
+        print(f"[ACTION_TRACE] Dialog system available: {self.dialog_system is not None}")
+        print(f"[ACTION_TRACE] Toast manager available: {self.toast_manager is not None}")
+        print(f"[ACTION_TRACE] Server bridge: {type(self.server_bridge)}")
+        
+        if not self.dialog_system:
+            print("[ERROR] Dialog system not initialized!")
+            print(f"[FALLBACK] Directly disconnecting client {client_id}")
+            await self._perform_disconnect(client_id)
+            return
+        
         def confirm_disconnect():
             self._close_dialog()
             # Use page.run_task if available, otherwise check for event loop
@@ -136,22 +207,42 @@ class ClientActionHandlers:
     
     async def _perform_disconnect(self, client_id: str) -> None:
         """Actually perform the client disconnection"""
+        print(f"[ACTION_TRACE] ========== PERFORMING DISCONNECT ==========")
+        print(f"[ACTION_TRACE] Client ID: {client_id}")
+        print(f"[ACTION_TRACE] Client actions: {type(self.client_actions)}")
+        
         try:
+            print(f"[ACTION_TRACE] Calling client_actions.disconnect_client({client_id})")
             # Execute disconnect via client actions
             success = await self.client_actions.disconnect_client(client_id)
+            print(f"[ACTION_TRACE] Disconnect result: {success} (type: {type(success)})")
             
             if success:
+                print(f"[ACTION_TRACE] ✓ Disconnect successful, showing success toast")
                 self.toast_manager.show_success(f"Client '{client_id}' disconnected successfully")
                 if self.on_data_changed:
+                    print(f"[ACTION_TRACE] Triggering data refresh callback")
                     await self.on_data_changed()
+                else:
+                    print(f"[ACTION_TRACE] No data refresh callback available")
             else:
+                print(f"[ACTION_TRACE] ✗ Disconnect failed, showing error toast")
                 self.toast_manager.show_error(f"Failed to disconnect client '{client_id}'")
                 
         except Exception as e:
+            print(f"[EXCEPTION_TRACE] Exception in _perform_disconnect: {e}")
+            import traceback
+            print(f"[EXCEPTION_TRACE] Traceback: {traceback.format_exc()}")
             self.toast_manager.show_error(f"Error disconnecting client: {str(e)}")
     
     async def delete_client(self, client_id: str) -> None:
         """Delete a client and all associated data"""
+        print(f"[ACTION_TRACE] ========== CLIENT ACTION HANDLER: DELETE ==========")
+        print(f"[ACTION_TRACE] Method: delete_client")
+        print(f"[ACTION_TRACE] Client ID: {client_id}")
+        print(f"[ACTION_TRACE] Dialog system available: {self.dialog_system is not None}")
+        print(f"[ACTION_TRACE] Toast manager available: {self.toast_manager is not None}")
+        print(f"[ACTION_TRACE] About to show confirmation dialog")
         try:
             def confirm_delete():
                 self._close_dialog()
@@ -183,11 +274,38 @@ class ClientActionHandlers:
     
     async def _perform_delete(self, client_id: str) -> None:
         """Actually perform the client deletion"""
+        print(f"[ACTION_TRACE] ========== PERFORMING DELETE ==========")
+        print(f"[ACTION_TRACE] Client ID: {client_id}")
+        print(f"[ACTION_TRACE] Client actions: {type(self.client_actions)}")
+        print(f"[ACTION_TRACE] About to call client_actions.delete_client({client_id})")
         try:
+            print(f"[ACTION_TRACE] Calling client_actions.delete_client({client_id})")
             # Execute delete via client actions
             success = await self.client_actions.delete_client(client_id)
+            print(f"[ACTION_TRACE] Delete result: {success} (type: {type(success)})")
+            print(f"[ACTION_TRACE] Analyzing result...")
+            
+            # REALITY CHECK - Verify the client was actually deleted
+            print(f"[ACTION_TRACE] ========== REALITY CHECK ==========")
+            if hasattr(self.client_actions, 'server_bridge') and hasattr(self.client_actions.server_bridge, 'get_clients'):
+                print(f"[ACTION_TRACE] Verifying client was actually deleted from backend...")
+                try:
+                    remaining_clients = await self.client_actions.server_bridge.get_clients()
+                    print(f"[ACTION_TRACE] Backend returned {len(remaining_clients)} clients")
+                    client_still_exists = any(client.get('id') == client_id for client in remaining_clients)
+                    print(f"[ACTION_TRACE] Client {client_id} still exists in backend: {client_still_exists}")
+                    if client_still_exists and success:
+                        print(f"[ACTION_TRACE] *** WARNING: Backend says success but client still exists! FAKE SUCCESS ***")
+                    else:
+                        print(f"[ACTION_TRACE] Reality check passed - client properly deleted")
+                except Exception as verify_ex:
+                    print(f"[ACTION_TRACE] Could not verify deletion: {verify_ex}")
+            else:
+                print(f"[ACTION_TRACE] Cannot verify deletion - no access to backend state")
+            print(f"[ACTION_TRACE] ========== REALITY CHECK COMPLETE ==========")
             
             if success:
+                print(f"[ACTION_TRACE] ✓ Delete successful, showing success toast")
                 self.toast_manager.show_success(f"Client '{client_id}' deleted successfully")
                 # Instead of relying on callback, directly refresh the UI
                 if hasattr(self, 'page') and self.page:
@@ -219,11 +337,13 @@ class ClientActionHandlers:
                         except RuntimeError:
                             pass
             else:
+                print(f"[ACTION_TRACE] ✗ Delete failed, showing error toast")
                 self.toast_manager.show_error(f"Failed to delete client '{client_id}'")
                 
         except Exception as e:
+            print(f"[EXCEPTION_TRACE] Exception in _perform_delete: {e}")
             import traceback
-            traceback.print_exc()
+            print(f"[EXCEPTION_TRACE] Traceback: {traceback.format_exc()}")
             self.toast_manager.show_error(f"Error deleting client: {str(e)}")
     
     async def show_client_statistics(self, client_id: str) -> None:
@@ -269,25 +389,41 @@ class ClientActionHandlers:
     
     async def bulk_disconnect_clients(self, client_ids: List[str]) -> None:
         """Disconnect multiple clients from the server"""
+        print(f"[ACTION_TRACE] ========== BULK DISCONNECT CLIENTS ==========")
+        print(f"[ACTION_TRACE] Client IDs: {client_ids}")
+        print(f"[ACTION_TRACE] Count: {len(client_ids)}")
+        
         if not client_ids:
+            print(f"[ACTION_TRACE] ⚠ No clients selected")
             self.toast_manager.show_warning("No clients selected")
             return
             
         success_count = 0
-        for client_id in client_ids:
+        for i, client_id in enumerate(client_ids):
+            print(f"[ACTION_TRACE] Processing client {i+1}/{len(client_ids)}: {client_id}")
             try:
-                if await self.client_actions.disconnect_client(client_id):
+                result = await self.client_actions.disconnect_client(client_id)
+                print(f"[ACTION_TRACE] Disconnect result for {client_id}: {result}")
+                if result:
                     success_count += 1
-            except Exception:
+            except Exception as e:
+                print(f"[ACTION_TRACE] Exception disconnecting {client_id}: {e}")
                 continue
         
+        print(f"[ACTION_TRACE] Bulk disconnect completed: {success_count}/{len(client_ids)} successful")
         self.toast_manager.show_success(f"Disconnected {success_count}/{len(client_ids)} clients")
         if self.on_data_changed:
+            print(f"[ACTION_TRACE] Triggering data refresh callback")
             await self.on_data_changed()
     
     async def bulk_delete_clients(self, client_ids: List[str]) -> None:
         """Delete multiple clients from the server"""
+        print(f"[ACTION_TRACE] ========== BULK DELETE CLIENTS ==========")
+        print(f"[ACTION_TRACE] Client IDs: {client_ids}")
+        print(f"[ACTION_TRACE] Count: {len(client_ids)}")
+        
         if not client_ids:
+            print(f"[ACTION_TRACE] ⚠ No clients selected")
             self.toast_manager.show_warning("No clients selected")
             return
             
@@ -435,7 +571,16 @@ class ClientActionHandlers:
     
     def _close_dialog(self):
         """Close the current dialog"""
+        print(f"[DEBUG] _close_dialog called")
+        print(f"[DEBUG] dialog_system available: {self.dialog_system is not None}")
+        
         if self.dialog_system and hasattr(self.dialog_system, 'current_dialog'):
+            print(f"[DEBUG] current_dialog exists: {self.dialog_system.current_dialog is not None}")
             if self.dialog_system.current_dialog:
                 self.dialog_system.current_dialog.open = False
                 self.page.update()
+                print(f"[DEBUG] Dialog closed successfully")
+            else:
+                print(f"[DEBUG] No current dialog to close")
+        else:
+            print(f"[DEBUG] Cannot close dialog - dialog_system not properly initialized")

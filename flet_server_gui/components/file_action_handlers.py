@@ -62,6 +62,22 @@ class FileActionHandlers:
     
     async def download_file(self, filename: str, destination_path: str = None) -> bool:
         """Download a single file"""
+        print(f"[DEBUG] download_file called with filename: {filename}")
+        print(f"[DEBUG] dialog_system: {self.dialog_system}")
+        print(f"[DEBUG] toast_manager: {self.toast_manager}")
+        
+        if not self.dialog_system:
+            print("[ERROR] Dialog system not initialized!")
+            print(f"[FALLBACK] Attempting direct download of {filename}")
+            # Try to download without progress dialog
+            try:
+                success = await self.file_actions.download_file(filename, destination_path or os.path.join(os.path.expanduser("~"), "Downloads", filename))
+                print(f"[FALLBACK] Download result: {success}")
+                return success
+            except Exception as e:
+                print(f"[FALLBACK ERROR] Download failed: {str(e)}")
+                return False
+        
         try:
             # Use default download path if none specified
             if not destination_path:
@@ -121,17 +137,34 @@ class FileActionHandlers:
             self.toast_manager.show_error(f"Error verifying file: {str(e)}")
             return False
     
-    async def preview_file(self, filename: str) -> None:
+    async def preview_file(self, filename: str = None, file_id: str = None) -> None:
         """Preview file content using FilePreviewManager"""
+        # Handle both filename and file_id parameters (file_id is used by button factory)
+        target_file = filename or file_id
+        
+        print(f"[DEBUG] preview_file called with filename: {filename}, file_id: {file_id}")
+        print(f"[DEBUG] target_file: {target_file}")
+        print(f"[DEBUG] dialog_system: {self.dialog_system}")
+        print(f"[DEBUG] toast_manager: {self.toast_manager}")
+        
+        if not target_file:
+            print("[ERROR] No filename or file_id provided!")
+            return False
+            
+        if not self.dialog_system:
+            print("[ERROR] Dialog system not initialized!")
+            print(f"[FALLBACK] Cannot preview {target_file} - dialog system required")
+            return False
+        
         try:
             # Show loading indicator
             self.dialog_system.show_info_dialog(
                 title="Loading Preview",
-                message=f"Loading preview for '{filename}'...",
+                message=f"Loading preview for '{target_file}'...",
             )
             
             # Get file content through FileActions
-            result = await self.file_actions.get_file_content(filename)
+            result = await self.file_actions.get_file_content(target_file)
             
             # Close loading dialog
             self._close_dialog()
@@ -148,18 +181,31 @@ class FileActionHandlers:
                     # Fallback: show content in a simple dialog
                     file_content = result.data
                     self.dialog_system.show_info_dialog(
-                        title=f"Preview: {filename}",
+                        title=f"Preview: {target_file}",
                         message=file_content[:1000] + "..." if len(file_content) > 1000 else file_content
                     )
             else:
-                self.toast_manager.show_error(f"Failed to load preview for '{filename}': {result.error_message}")
+                self.toast_manager.show_error(f"Failed to load preview for '{target_file}': {result.error_message}")
                 
         except Exception as e:
+            print(f"[ERROR] Exception in preview_file: {str(e)}")
+            import traceback
+            traceback.print_exc()
             self._close_dialog()
             self.toast_manager.show_error(f"Error previewing file: {str(e)}")
     
     async def delete_file(self, filename: str) -> None:
         """Delete a file with confirmation"""
+        print(f"[DEBUG] delete_file called with filename: {filename}")
+        print(f"[DEBUG] dialog_system: {self.dialog_system}")
+        print(f"[DEBUG] toast_manager: {self.toast_manager}")
+        
+        if not self.dialog_system:
+            print("[ERROR] Dialog system not initialized!")
+            print(f"[FALLBACK] Directly deleting file {filename} without confirmation")
+            await self._perform_delete(filename)
+            return
+        
         def confirm_delete():
             self._close_dialog()
             # Use page.run_task if available, otherwise check for event loop
@@ -199,12 +245,57 @@ class FileActionHandlers:
         except Exception as e:
             self.toast_manager.show_error(f"Error deleting file: {str(e)}")
     
-    async def view_file_details(self, filename: str) -> None:
+    async def view_file_details(self, filename: str = None, file_id: str = None) -> None:
         """View detailed information about a file"""
+        # Handle both filename and file_id parameters (file_id is used by button factory)
+        target_file = filename or file_id
+        
+        print(f"[DEBUG] view_file_details called with filename: {filename}, file_id: {file_id}")
+        print(f"[DEBUG] target_file: {target_file}")
+        print(f"[DEBUG] dialog_system: {self.dialog_system}")
+        print(f"[DEBUG] toast_manager: {self.toast_manager}")
+        
+        if not target_file:
+            print("[ERROR] No filename or file_id provided!")
+            return False
+            
+        if not self.dialog_system:
+            print("[ERROR] Dialog system not initialized!")
+            print(f"[FALLBACK] Showing file details for {target_file} in console")
+            # Try to get and display file details in console
+            try:
+                file_details = await self._get_file_details(target_file)
+                if file_details:
+                    print(f"[FALLBACK DETAILS] File {target_file} details:")
+                    for key, value in file_details.items():
+                        print(f"[FALLBACK DETAILS]   {key}: {value}")
+                    if self.toast_manager:
+                        self.toast_manager.show_success(f"File details for {target_file} shown in console")
+                else:
+                    print(f"[FALLBACK ERROR] No details found for file {target_file}")
+                    if self.toast_manager:
+                        self.toast_manager.show_error(f"No details found for file {target_file}")
+            except Exception as e:
+                print(f"[FALLBACK ERROR] Failed to get file details: {str(e)}")
+                if self.toast_manager:
+                    self.toast_manager.show_error(f"Failed to get file details: {str(e)}")
+            return True
+        
         try:
             # Get file details from server
-            file_details = await self._get_file_details(filename)
+            file_details_result = await self._get_file_details(target_file)
             
+            # Handle ActionResult vs direct dictionary return
+            if hasattr(file_details_result, 'success'):
+                # It's an ActionResult object
+                if not file_details_result.success:
+                    self.toast_manager.show_error(f"Could not retrieve details for file: {filename}")
+                    return
+                file_details = file_details_result.data or {}
+            else:
+                # It's a direct dictionary or None
+                file_details = file_details_result or {}
+                
             if not file_details:
                 self.toast_manager.show_error(f"Could not retrieve details for file: {filename}")
                 return
@@ -214,15 +305,18 @@ class FileActionHandlers:
             
             # Show details dialog
             self.dialog_system.show_custom_dialog(
-                title=f"File Details: {filename}",
+                title=f"File Details: {target_file}",
                 content=details_content,
                 actions=[
-                    ft.TextButton("Download", on_click=lambda e: self._safe_async_task(self._download_from_dialog(filename))),
+                    ft.TextButton("Download", on_click=lambda e: self._safe_async_task(self._download_from_dialog(target_file))),
                     ft.TextButton("Close", on_click=lambda e: self._close_dialog())
                 ]
             )
             
         except Exception as e:
+            print(f"[ERROR] Exception in view_file_details: {str(e)}")
+            import traceback
+            traceback.print_exc()
             self.toast_manager.show_error(f"Error viewing file details: {str(e)}")
     
     async def _download_from_dialog(self, filename: str) -> None:
@@ -473,10 +567,19 @@ class FileActionHandlers:
     
     def _close_dialog(self):
         """Close the current dialog"""
+        print(f"[DEBUG] _close_dialog called")
+        print(f"[DEBUG] dialog_system available: {self.dialog_system is not None}")
+        
         if self.dialog_system and hasattr(self.dialog_system, 'current_dialog'):
+            print(f"[DEBUG] current_dialog exists: {self.dialog_system.current_dialog is not None}")
             if self.dialog_system.current_dialog:
                 self.dialog_system.current_dialog.open = False
                 self.page.update()
+                print(f"[DEBUG] Dialog closed successfully")
+            else:
+                print(f"[DEBUG] No current dialog to close")
+        else:
+            print(f"[DEBUG] Cannot close dialog - dialog_system not properly initialized")
     
     def _safe_async_task(self, coro):
         """Safely create an async task with proper error handling"""

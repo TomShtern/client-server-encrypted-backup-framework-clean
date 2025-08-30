@@ -65,29 +65,48 @@ class ServerDataManager:
     
     def get_all_clients(self) -> List[RealClient]:
         """Get list of all clients from database"""
+        print(f"[DB_TRACE] ========== DATA MANAGER GET ALL CLIENTS ==========")
+        print(f"[DB_TRACE] Database manager: {self.db_manager is not None}")
+        print(f"[DB_TRACE] Server instance: {self.server_instance is not None}")
+        
         try:
             clients = []
             
             if self.db_manager:
+                print(f"[DB_TRACE] Calling db_manager.get_all_clients()")
                 # Get clients from database
                 client_records = self.db_manager.get_all_clients()
+                print(f"[DB_TRACE] Database returned {len(client_records)} client records")
                 
-                for record in client_records:
+                active_client_ids = []
+                if self.server_instance and hasattr(self.server_instance, 'clients'):
+                    active_client_ids = list(self.server_instance.clients.keys())
+                    print(f"[DB_TRACE] Active client IDs: {active_client_ids}")
+                
+                for i, record in enumerate(client_records):
+                    print(f"[DB_TRACE] Processing client record {i}: {record}")
+                    client_id = record.get('id', 'unknown')
+                    is_connected = client_id in active_client_ids
+                    
                     client = RealClient(
-                        client_id=record.get('id', 'unknown'),
+                        client_id=client_id,
                         address=record.get('ip_address', 'unknown'),
                         connected_at=record.get('connected_at', datetime.now()),
                         last_activity=record.get('last_activity', datetime.now()),
-                        status="Connected" if record.get('id') in 
-                               (self.server_instance.clients.keys() if self.server_instance else [])
-                               else "Offline"
+                        status="Connected" if is_connected else "Offline"
                     )
                     clients.append(client)
+                    print(f"[DB_TRACE] Created client: {client.client_id} ({client.status})")
+            else:
+                print(f"[DB_TRACE] ⚠ No database manager available")
             
+            print(f"[DB_TRACE] ✓ Returning {len(clients)} clients")
             return clients
             
         except Exception as e:
-            print(f"[ERROR] Failed to get client list: {e}")
+            print(f"[DB_TRACE] ✗ Failed to get client list: {e}")
+            import traceback
+            print(f"[DB_TRACE] Traceback: {traceback.format_exc()}")
             return []
     
     def get_all_files(self) -> List[Dict[str, Any]]:
@@ -125,32 +144,55 @@ class ServerDataManager:
     
     def disconnect_client(self, client_id: str) -> bool:
         """Disconnect a specific client"""
+        print(f"[DB_TRACE] ========== DATA MANAGER DISCONNECT CLIENT ==========")
+        print(f"[DB_TRACE] Client ID: {client_id}")
+        print(f"[DB_TRACE] Server instance: {self.server_instance is not None}")
+        
         try:
-            if self.server_instance and client_id in self.server_instance.clients:
-                client = self.server_instance.clients[client_id]
-                client.disconnect()
-                print(f"[SUCCESS] Client {client_id} disconnected")
-                return True
+            if self.server_instance:
+                print(f"[DB_TRACE] Server instance clients: {list(self.server_instance.clients.keys()) if self.server_instance.clients else []}")
+                if client_id in self.server_instance.clients:
+                    client = self.server_instance.clients[client_id]
+                    print(f"[DB_TRACE] Found client object: {type(client)}")
+                    client.disconnect()
+                    print(f"[DB_TRACE] ✓ Client {client_id} disconnected")
+                    return True
+                else:
+                    print(f"[DB_TRACE] ⚠ Client {client_id} not found in active clients")
+                    return False
             else:
-                print(f"[WARNING] Client {client_id} not found or not connected")
+                print(f"[DB_TRACE] ⚠ No server instance available")
                 return False
                 
         except Exception as e:
-            print(f"[ERROR] Failed to disconnect client {client_id}: {e}")
+            print(f"[DB_TRACE] ✗ Failed to disconnect client {client_id}: {e}")
+            import traceback
+            print(f"[DB_TRACE] Traceback: {traceback.format_exc()}")
             return False
     
     def delete_client(self, client_id: str) -> bool:
         """Delete a client from database"""
+        print(f"[DB_TRACE] ========== DATA MANAGER DELETE CLIENT ==========")
+        print(f"[DB_TRACE] Client ID: {client_id}")
+        print(f"[DB_TRACE] Database manager: {self.db_manager is not None}")
+        
         try:
             if self.db_manager:
+                print(f"[DB_TRACE] Database manager type: {type(self.db_manager)}")
+                print(f"[DB_TRACE] Calling db_manager.delete_client({client_id})")
                 success = self.db_manager.delete_client(client_id)
+                print(f"[DB_TRACE] Database manager returned: {success}")
                 if success:
-                    print(f"[SUCCESS] Client {client_id} deleted from database")
+                    print(f"[DB_TRACE] ✓ Client {client_id} deleted from database")
                 return success
-            return False
+            else:
+                print(f"[DB_TRACE] ✗ No database manager available")
+                return False
             
         except Exception as e:
-            print(f"[ERROR] Failed to delete client {client_id}: {e}")
+            print(f"[DB_TRACE] ✗ Failed to delete client {client_id}: {e}")
+            import traceback
+            print(f"[DB_TRACE] Traceback: {traceback.format_exc()}")
             return False
     
     def disconnect_multiple_clients(self, client_ids: List[str]) -> int:

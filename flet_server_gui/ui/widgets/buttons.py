@@ -7,6 +7,9 @@ Logic: Button creation, styling, and event handling
 UI: Button rendering and Material Design 3 styling
 """
 
+# Import UTF-8 solution for Unicode handling
+import Shared.utils.utf8_solution
+
 import flet as ft
 from typing import Dict, List, Callable, Optional, Any
 from dataclasses import dataclass
@@ -143,7 +146,7 @@ class ActionButtonFactory:
             confirmation_text="View details for client {item}?",
             success_message="Client details loaded",
             progress_message="Loading client details...",
-            requires_selection=False,
+            requires_selection=True,
             operation_type="single",
             action_key="client_view_details"
         ),
@@ -157,7 +160,7 @@ class ActionButtonFactory:
             confirmation_text="View files for client {item}?",
             success_message="Client files loaded",
             progress_message="Loading client files...",
-            requires_selection=False,
+            requires_selection=True,
             operation_type="single",
             action_key="client_view_files"
         ),
@@ -379,7 +382,7 @@ class ActionButtonFactory:
             confirmation_text="View details for file {item}?",
             success_message="File details loaded",
             progress_message="Loading file details...",
-            requires_selection=False,
+            requires_selection=True,
             operation_type="single",
             action_key="file_view_details"
         ),
@@ -393,7 +396,7 @@ class ActionButtonFactory:
             confirmation_text="Preview file {item}?",
             success_message="File preview loaded",
             progress_message="Loading file preview...",
-            requires_selection=False,
+            requires_selection=True,
             operation_type="single",
             action_key="file_preview"
         ),
@@ -500,62 +503,37 @@ class ActionButtonFactory:
         return button
     
     def _safe_handle_button_click(self, e, config: ButtonConfig, get_selected_items: Callable[[], List[str]], additional_params: Optional[Dict[str, Any]]):
-        """Safely handle button click by running async handler in background task"""
-        print(f"\n[DEBUG] ===== BUTTON CLICK START =====")
-        print(f"[DEBUG] Button clicked: {config.action_key}")
-        print(f"[DEBUG] Event object: {e}")
-        print(f"[DEBUG] Config: action_class={config.action_class}, action_method={config.action_method}")
+        """Safely handle button click using Flet's native async pattern"""
+        print(f"[BUTTON_TRACE] ========== BUTTON CLICK DETECTED ==========")
+        print(f"[BUTTON_TRACE] Button: {config.action_key} ({config.text})")
+        print(f"[BUTTON_TRACE] Action: {config.action_class}.{config.action_method}")
+        print(f"[BUTTON_TRACE] Event object: {type(e)}, button state: {getattr(e, 'control', 'unknown')}")
+        print(f"[BUTTON_TRACE] Page available: {self.page is not None}")
+        print(f"[BUTTON_TRACE] Base component: {type(self.base_component)}")
         
-        # Use threading to run async method
-        import threading
-        import asyncio
-        
-        def run_async_in_thread():
-            print(f"[DEBUG] === THREAD STARTED ===")
-            print(f"[DEBUG] Thread ID: {threading.get_ident()}")
-            print(f"[DEBUG] Action: {config.action_key}")
-            
-            try:
-                # Create new event loop for this thread
-                print(f"[DEBUG] Creating new event loop...")
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                print(f"[DEBUG] Event loop created and set")
-                
-                # Run the async handler
-                print(f"[DEBUG] About to call _handle_button_click...")
-                result = loop.run_until_complete(self._handle_button_click(config, get_selected_items, additional_params))
-                print(f"[DEBUG] === THREAD COMPLETED ===")
-                print(f"[DEBUG] Final result: {result}")
-                
-                loop.close()
-                print(f"[DEBUG] Event loop closed")
-                return result
-            except Exception as ex:
-                print(f"[DEBUG] === THREAD EXCEPTION ===")
-                print(f"[DEBUG] Exception type: {type(ex)}")
-                print(f"[DEBUG] Exception message: {str(ex)}")
-                import traceback
-                traceback.print_exc()
-                
-                # Show error synchronously since we're in a thread
+        # Use Flet's native async task handling - stays on main UI thread
+        try:
+            async def async_button_handler():
                 try:
-                    print(f"[DEBUG] Attempting to show error dialog...")
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    loop.run_until_complete(self.base_component._show_error(f"Action failed: {str(ex)}"))
-                    loop.close()
-                    print(f"[DEBUG] Error dialog shown successfully")
-                except Exception as dialog_ex:
-                    print(f"[ERROR] Failed to show error dialog: {dialog_ex}")
-                return False
-        
-        # Start thread to handle async operation
-        print(f"[DEBUG] Starting background thread...")
-        thread = threading.Thread(target=run_async_in_thread, daemon=True)
-        thread.start()
-        print(f"[DEBUG] Background thread started, returning from button click handler")
-        print(f"[DEBUG] ===== BUTTON CLICK END =====\n")
+                    print(f"[BUTTON_TRACE] Starting async handler for {config.action_key}")
+                    result = await self._handle_button_click(config, get_selected_items, additional_params)
+                    print(f"[BUTTON_TRACE] Async handler completed for {config.action_key}: {result}")
+                    return result
+                except Exception as ex:
+                    print(f"[BUTTON_TRACE] ✗ Async handler error for {config.action_key}: {ex}")
+                    import traceback
+                    print(f"[BUTTON_TRACE] Stack trace: {traceback.format_exc()}")
+                    await self.base_component._show_error(f"Action failed: {ex}")
+                    return False
+            
+            print(f"[BUTTON_TRACE] Scheduling async task via page.run_task")
+            self.page.run_task(async_button_handler)
+            print(f"[BUTTON_TRACE] Async task scheduled successfully for {config.action_key}")
+            
+        except Exception as ex:
+            print(f"[BUTTON_TRACE] ✗ Task scheduling failed for {config.action_key}: {ex}")
+            import traceback
+            print(f"[BUTTON_TRACE] Scheduling error stack: {traceback.format_exc()}")
     
     async def _handle_button_click(
         self,
@@ -571,52 +549,41 @@ class ActionButtonFactory:
             get_selected_items: Function to get selected items
             additional_params: Additional parameters for the action
         """
-        import threading
-        
-        print(f"\n[DEBUG] ===== ASYNC HANDLER START =====")
-        print(f"[DEBUG] Action: {config.action_key}")
-        print(f"[DEBUG] Thread ID: {threading.get_ident()}")
+        print(f"[BUTTON_TRACE] ========== BUTTON HANDLER EXECUTION ==========")
+        print(f"[BUTTON_TRACE] Processing: {config.action_key}")
+        print(f"[BUTTON_TRACE] Requires selection: {config.requires_selection}")
         
         try:
             # Validate selection requirements
-            print(f"[DEBUG] Step 1: Getting selected items...")
+            print(f"[BUTTON_TRACE] Getting selected items...")
             selected_items = get_selected_items() if config.requires_selection else []
-            print(f"[DEBUG] Selected items for {config.action_key}: {selected_items}")
-            print(f"[DEBUG] Requires selection: {config.requires_selection}")
+            print(f"[BUTTON_TRACE] Selected items: {selected_items} (count: {len(selected_items)})")
             
             if config.requires_selection:
+                print(f"[BUTTON_TRACE] Validating selection requirements: min={config.min_selection}, max={config.max_selection}")
                 if len(selected_items) < config.min_selection:
-                    print(f"[DEBUG] Selection validation failed: need {config.min_selection}, got {len(selected_items)}")
-                    await self.base_component._show_error(
-                        f"Please select at least {config.min_selection} item(s)"
-                    )
-                    return
+                    print(f"[BUTTON_TRACE] ✗ Selection validation failed: need {config.min_selection}, got {len(selected_items)}")
+                    await self.base_component._show_error(f"Please select at least {config.min_selection} item(s)")
+                    return False
                 
                 if config.max_selection and len(selected_items) > config.max_selection:
-                    print(f"[DEBUG] Selection validation failed: max {config.max_selection}, got {len(selected_items)}")
-                    await self.base_component._show_error(
-                        f"Please select no more than {config.max_selection} item(s)"
-                    )
-                    return
-            
-            print(f"[DEBUG] Step 2: Selection validation passed")
+                    print(f"[BUTTON_TRACE] ✗ Selection validation failed: max {config.max_selection}, got {len(selected_items)}")
+                    await self.base_component._show_error(f"Please select no more than {config.max_selection} item(s)")
+                    return False
+                
+                print(f"[BUTTON_TRACE] ✓ Selection validation passed")
             
             # Get the action instance and method
-            print(f"[DEBUG] Step 3: Looking for action class: {config.action_class}")
-            print(f"[DEBUG] Available actions: {list(self.actions.keys())}")
+            print(f"[ACTION_TRACE] ========== ACTION RESOLUTION ==========")
+            print(f"[ACTION_TRACE] Resolving action class: {config.action_class}")
+            print(f"[ACTION_TRACE] Available actions: {list(self.actions.keys())}")
             
-            try:
-                action_instance = self.actions[config.action_class]
-                print(f"[DEBUG] Successfully got action instance from direct lookup: {action_instance}")
-            except KeyError as e:
-                print(f"[DEBUG] KeyError getting action instance from direct lookup: {e}")
-                action_instance = None
+            action_instance = self.actions.get(config.action_class)
+            print(f"[ACTION_TRACE] Direct action lookup result: {action_instance is not None}")
             
             # For action handlers that are set by views, get them from the base component if they're None
-            if action_instance is None and config.action_class in ["ClientActionHandlers", "FileActionHandlers", "DatabaseActionHandlers", "ServerActionHandlers"]:
-                print(f"[DEBUG] Step 4: Looking for action handler in base component...")
-                
-                # Try direct attribute access first
+            if action_instance is None and config.action_class.endswith("ActionHandlers"):
+                print(f"[ACTION_TRACE] Action handler not found directly, checking base component...")
                 handler_attr_map = {
                     "ClientActionHandlers": "action_handlers",
                     "FileActionHandlers": "file_action_handlers", 
@@ -625,68 +592,79 @@ class ActionButtonFactory:
                 }
                 
                 attr_name = handler_attr_map.get(config.action_class)
-                print(f"[DEBUG] Looking for attribute: {attr_name}")
+                print(f"[ACTION_TRACE] Looking for attribute: {attr_name}")
                 
                 if attr_name and hasattr(self.base_component, attr_name):
                     action_instance = getattr(self.base_component, attr_name)
-                    print(f"[DEBUG] Found action handler via attribute: {action_instance}")
-                
-                # Also try the actions dict if direct attribute fails
-                if action_instance is None and hasattr(self.base_component, 'actions'):
-                    print(f"[DEBUG] Trying base_component.actions dict...")
+                    print(f"[ACTION_TRACE] Found via base component attribute: {action_instance is not None}")
+                elif hasattr(self.base_component, 'actions'):
                     action_instance = self.base_component.actions.get(config.action_class)
-                    print(f"[DEBUG] Found action handler via actions dict: {action_instance}")
+                    print(f"[ACTION_TRACE] Found via base component actions dict: {action_instance is not None}")
+                else:
+                    print(f"[ACTION_TRACE] Base component has no 'actions' attribute")
+            
+            print(f"[ACTION_TRACE] Final action instance: {type(action_instance) if action_instance else None}")
             
             if action_instance is None:
-                print(f"[DEBUG] FATAL: Action handler {config.action_class} not available anywhere")
-                print(f"[DEBUG] Available actions: {list(self.actions.keys())}")
-                print(f"[DEBUG] Base component type: {type(self.base_component)}")
-                print(f"[DEBUG] Base component dir: {dir(self.base_component)}")
-                print(f"[DEBUG] Base component actions: {getattr(self.base_component, 'actions', 'NO_ACTIONS')}")
-                
+                print(f"[ACTION_TRACE] ✗ Handler {config.action_class} not available")
+                print(f"[ACTION_TRACE] Base component attributes: {[attr for attr in dir(self.base_component) if not attr.startswith('_')]}")
                 await self.base_component._show_error(f"Action handler {config.action_class} not available")
-                return
-            
-            print(f"[DEBUG] Step 5: Found action instance: {action_instance}")
-            print(f"[DEBUG] Action instance type: {type(action_instance)}")
-            
-            print(f"[DEBUG] Step 6: Getting action method: {config.action_method}")
-            try:
-                action_method = getattr(action_instance, config.action_method)
-                print(f"[DEBUG] Found action method: {action_method}")
-                print(f"[DEBUG] Action method type: {type(action_method)}")
-            except AttributeError as e:
-                print(f"[DEBUG] FATAL: Action method {config.action_method} not found on {action_instance}")
-                print(f"[DEBUG] Available methods: {dir(action_instance)}")
-                await self.base_component._show_error(f"Action method {config.action_method} not found")
-                return
-            
-            # Prepare method parameters
-            print(f"[DEBUG] Step 7: Preparing method parameters...")
-            method_params = self._prepare_method_params(config, selected_items, additional_params)
-            print(f"[DEBUG] Method parameters: {method_params}")
-            
-            # TEMPORARY: Direct method execution bypass for testing
-            print(f"[DEBUG] Step 8: BYPASS - Calling action method directly...")
-            try:
-                print(f"[DEBUG] About to call: {action_method}(**{method_params})")
-                result = await action_method(**method_params)
-                print(f"[DEBUG] BYPASS SUCCESS: Direct method call result: {result}")
-                
-                # Show success dialog
-                await self.base_component._show_success(f"Method executed successfully! Result: {result}")
-                print(f"[DEBUG] Success dialog shown")
-                return True
-                
-            except Exception as e:
-                print(f"[DEBUG] BYPASS FAILED: Direct method call exception: {e}")
-                print(f"[DEBUG] Exception type: {type(e)}")
-                import traceback
-                traceback.print_exc()
-                
-                await self.base_component._show_error(f"Direct method call failed: {e}")
-                print(f"[DEBUG] Error dialog shown")
                 return False
+            
+            try:
+                print(f"[ACTION_TRACE] Resolving method: {config.action_method}")
+                print(f"[ACTION_TRACE] Available methods on {type(action_instance)}: {[m for m in dir(action_instance) if not m.startswith('_') and callable(getattr(action_instance, m))]}")
+                action_method = getattr(action_instance, config.action_method)
+                print(f"[ACTION_TRACE] ✓ Method resolved: {action_method}")
+            except AttributeError:
+                print(f"[ACTION_TRACE] ✗ Method {config.action_method} not found on {type(action_instance)}")
+                await self.base_component._show_error(f"Action method {config.action_method} not found")
+                return False
+            
+            # Prepare method parameters and execute
+            print(f"[ACTION_TRACE] ========== METHOD EXECUTION ==========")
+            method_params = self._prepare_method_params(config, selected_items, additional_params)
+            print(f"[ACTION_TRACE] Prepared parameters: {method_params}")
+            print(f"[ACTION_TRACE] Calling: {config.action_method}(**{list(method_params.keys())})")
+            
+            try:
+                result = await action_method(**method_params)
+                print(f"[ACTION_TRACE] ✓ Method call completed successfully")
+            except Exception as method_ex:
+                print(f"[ACTION_TRACE] ✗ Method call failed: {method_ex}")
+                import traceback
+                print(f"[ACTION_TRACE] Method execution stack: {traceback.format_exc()}")
+                raise
+            
+            # EXHAUSTIVE EXECUTION TRACING - Expose the illusion
+            print(f"[ACTION_TRACE] ========== RESULT ANALYSIS ==========")
+            print(f"[ACTION_TRACE] Raw result: {result}")
+            print(f"[ACTION_TRACE] Result type: {type(result)}")
+            print(f"[ACTION_TRACE] Result repr: {repr(result)}")
+            
+            if result is False:
+                print(f"[ACTION_TRACE] ✗ Method explicitly returned False - operation failed")
+                return False
+            elif result is None:
+                print(f"[ACTION_TRACE] ⚠ Method returned None - potential mock/stub implementation")
+                print(f"[ACTION_TRACE] REALITY CHECK: None return suggests no actual work was performed")
+            else:
+                print(f"[ACTION_TRACE] ✓ Method returned non-null result")
+                if hasattr(result, 'success'):
+                    print(f"[ACTION_TRACE] ActionResult.success: {result.success}")
+                    if hasattr(result, 'data'):
+                        print(f"[ACTION_TRACE] ActionResult.data: {result.data}")
+                    if hasattr(result, 'metadata'):
+                        print(f"[ACTION_TRACE] ActionResult.metadata: {result.metadata}")
+                        if result.metadata and result.metadata.get('simulated'):
+                            print(f"[ACTION_TRACE] *** DETECTED SIMULATED OPERATION - NOT REAL ***")
+                elif isinstance(result, bool) and result:
+                    print(f"[ACTION_TRACE] Boolean True result - operation appears successful")
+                elif isinstance(result, (int, str)) and result:
+                    print(f"[ACTION_TRACE] Non-empty scalar result: {result}")
+                
+            print(f"[ACTION_TRACE] ========== EXECUTION COMPLETE ==========")
+            return True
             
             # Original confirmation system (commented for bypass testing)
             print(f"[DEBUG] About to execute method. Operation type: {config.operation_type}")
@@ -723,12 +701,14 @@ class ActionButtonFactory:
             return success
             
         except Exception as e:
+            print(f"[BUTTON_TRACE] ========== EXCEPTION HANDLER ==========")
+            print(f"[EXCEPTION_TRACE] Button action failed: {str(e)}")
+            print(f"[EXCEPTION_TRACE] Exception type: {type(e)}")
             import traceback
+            print(f"[EXCEPTION_TRACE] Full traceback:")
             traceback.print_exc()
             await self.base_component._show_error(f"Button action failed: {str(e)}")
-                
-        except Exception as e:
-            await self.base_component._show_error(f"Button action failed: {str(e)}")
+            return False
     
     def _prepare_method_params(
         self, 
@@ -747,10 +727,16 @@ class ActionButtonFactory:
         Returns:
             Dictionary of method parameters
         """
+        print(f"[BUTTON_TRACE] ========== PARAMETER PREPARATION ==========")
+        print(f"[BUTTON_TRACE] Config: {config.action_key}, Method: {config.action_method}")
+        print(f"[BUTTON_TRACE] Selected items: {selected_items}")
+        print(f"[BUTTON_TRACE] Additional params: {additional_params}")
+        
         params = {}
         
         # Special handling for perform_bulk_action method
         if config.action_method == "perform_bulk_action":
+            print(f"[BUTTON_TRACE] Using bulk action parameter mapping")
             # For bulk actions, we need to pass the action type and filenames
             action_type_map = {
                 'file_download_bulk': 'download',
@@ -765,6 +751,7 @@ class ActionButtonFactory:
                 # For client actions, use client_ids parameter
                 if "client" in config.action_key:
                     params["client_ids"] = selected_items
+                print(f"[BUTTON_TRACE] Bulk action mapped: action={params.get('action')}, filenames={params.get('filenames')}, client_ids={params.get('client_ids')}")
             else:
                 # Default handling for bulk actions
                 params["action"] = config.action_key.replace("_bulk", "").split("_")[-1]
@@ -772,59 +759,84 @@ class ActionButtonFactory:
                     params["client_ids"] = selected_items
                 else:
                     params["filenames"] = selected_items
+                print(f"[BUTTON_TRACE] Default bulk action: action={params.get('action')}, filenames={params.get('filenames')}, client_ids={params.get('client_ids')}")
         else:
+            print(f"[BUTTON_TRACE] Using standard parameter mapping")
             # Add selected items based on method signature
             if "client_id" in config.action_method and selected_items:
+                print(f"[BUTTON_TRACE] Method has 'client_id' in name")
                 # For single client actions, pass client_id as a single value
                 if config.operation_type == "single" and len(selected_items) == 1:
                     params["client_id"] = selected_items[0]
+                    print(f"[BUTTON_TRACE] Single client_id: {params['client_id']}")
                 else:
                     params["client_ids"] = selected_items
+                    print(f"[BUTTON_TRACE] Multiple client_ids: {params['client_ids']}")
             elif "file_id" in config.action_method and selected_items:  
+                print(f"[BUTTON_TRACE] Method has 'file_id' in name")
                 # For single file actions, pass file_id as a single value
                 if config.operation_type == "single" and len(selected_items) == 1:
                     params["file_id"] = selected_items[0]
+                    print(f"[BUTTON_TRACE] Single file_id: {params['file_id']}")
                 else:
                     params["file_ids"] = selected_items
+                    print(f"[BUTTON_TRACE] Multiple file_ids: {params['file_ids']}")
             elif selected_items:
+                print(f"[BUTTON_TRACE] Using generic parameter detection")
                 # Generic parameter name based on action type
                 if "client" in config.action_method.lower() or "client" in config.action_key.lower():
+                    print(f"[BUTTON_TRACE] Detected client-related action")
                     # For single client actions, pass client_id as a single value
                     if config.operation_type == "single" and len(selected_items) == 1:
                         params["client_id"] = selected_items[0]
+                        print(f"[BUTTON_TRACE] Single client_id: {params['client_id']}")
                     else:
                         params["client_ids"] = selected_items
+                        print(f"[BUTTON_TRACE] Multiple client_ids: {params['client_ids']}")
                 elif "file" in config.action_method.lower() or "file" in config.action_key.lower():
+                    print(f"[BUTTON_TRACE] Detected file-related action")
                     # For single file actions, pass file_id as a single value
                     if config.operation_type == "single" and len(selected_items) == 1:
                         params["file_id"] = selected_items[0]
+                        print(f"[BUTTON_TRACE] Single file_id: {params['file_id']}")
                     else:
                         params["file_ids"] = selected_items
+                        print(f"[BUTTON_TRACE] Multiple file_ids: {params['file_ids']}")
                 else:
+                    print(f"[BUTTON_TRACE] Using action class fallback mapping")
                     # Default to generic parameter names
                     if config.action_class in ["ClientActions", "ClientActionHandlers"]:
                         # For single client actions, pass client_id as a single value
                         if config.operation_type == "single" and len(selected_items) == 1:
                             params["client_id"] = selected_items[0]
+                            print(f"[BUTTON_TRACE] Class-based single client_id: {params['client_id']}")
                         else:
                             params["client_ids"] = selected_items
+                            print(f"[BUTTON_TRACE] Class-based multiple client_ids: {params['client_ids']}")
                     elif config.action_class in ["FileActions", "FileActionHandlers"]:
                         # For single file actions, pass file_id as a single value
                         if config.operation_type == "single" and len(selected_items) == 1:
                             params["file_id"] = selected_items[0]
+                            print(f"[BUTTON_TRACE] Class-based single file_id: {params['file_id']}")
                         else:
                             params["file_ids"] = selected_items
+                            print(f"[BUTTON_TRACE] Class-based multiple file_ids: {params['file_ids']}")
                     else:
                         params["items"] = selected_items
+                        print(f"[BUTTON_TRACE] Generic items parameter: {params['items']}")
             
             # Add export format if specified
             if config.export_format:
                 params["export_format"] = config.export_format
+                print(f"[BUTTON_TRACE] Added export format: {config.export_format}")
         
         # Add any additional parameters
         if additional_params:
+            print(f"[BUTTON_TRACE] Adding additional parameters: {additional_params}")
             params.update(additional_params)
-            
+        
+        print(f"[BUTTON_TRACE] Final parameters: {params}")
+        print(f"[BUTTON_TRACE] ========== PARAMETER PREPARATION COMPLETE ===========")
         return params
     
     def _get_item_type(self, action_class: str) -> str:

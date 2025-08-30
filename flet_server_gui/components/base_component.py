@@ -198,8 +198,14 @@ class BaseComponent:
     async def _show_success(self, message: str):
         """Show success notification."""
         try:
-            if self.toast_manager:
-                await self.toast_manager.show_success(message)
+            if self.toast_manager and hasattr(self.toast_manager, 'show_success'):
+                # Check if the method returns an awaitable
+                result = self.toast_manager.show_success(message)
+                if hasattr(result, '__await__'):
+                    await result
+                else:
+                    # If it's not awaitable, just call it
+                    result
             else:
                 # Fallback - could show snackbar or other notification
                 print(f"SUCCESS: {message}")
@@ -211,8 +217,14 @@ class BaseComponent:
     async def _show_error(self, message: str):
         """Show error notification.""" 
         try:
-            if self.toast_manager:
-                await self.toast_manager.show_error(message)
+            if self.toast_manager and hasattr(self.toast_manager, 'show_error'):
+                # Check if the method returns an awaitable
+                result = self.toast_manager.show_error(message)
+                if hasattr(result, '__await__'):
+                    await result
+                else:
+                    # If it's not awaitable, just call it
+                    result
             else:
                 # Fallback - could show snackbar or other notification
                 print(f"ERROR: {message}")

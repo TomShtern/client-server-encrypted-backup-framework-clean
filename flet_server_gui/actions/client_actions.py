@@ -27,19 +27,31 @@ class ClientActions(BaseAction):
         Returns:
             ActionResult with operation outcome
         """
+        print(f"[ACTION_TRACE] ========== CLIENT DISCONNECT ===========")
+        print(f"[ACTION_TRACE] Client ID: {client_id}")
+        print(f"[ACTION_TRACE] Server bridge: {type(self.server_bridge)}")
+        
         try:
+            print(f"[BRIDGE_TRACE] Calling server_bridge.disconnect_client({client_id})")
             success = await self.server_bridge.disconnect_client(client_id)
+            print(f"[BRIDGE_TRACE] Server bridge returned: {success} (type: {type(success)})")
+            
             if success:
+                print(f"[ACTION_TRACE] ✓ Disconnect successful, creating success result")
                 return ActionResult.success_result(
                     data={'client_id': client_id, 'action': 'disconnect'},
                     metadata={'operation_type': 'client_disconnect'}
                 )
             else:
+                print(f"[ACTION_TRACE] ✗ Disconnect failed, creating error result")
                 return ActionResult.error_result(
                     error_message=f"Failed to disconnect client {client_id}",
                     error_code="DISCONNECT_FAILED"
                 )
         except Exception as e:
+            print(f"[EXCEPTION_TRACE] Exception in disconnect_client: {e}")
+            import traceback
+            print(f"[EXCEPTION_TRACE] Traceback: {traceback.format_exc()}")
             return ActionResult.error_result(
                 error_message=f"Error disconnecting client {client_id}: {str(e)}",
                 error_code="DISCONNECT_EXCEPTION"
@@ -85,19 +97,31 @@ class ClientActions(BaseAction):
         Returns:
             ActionResult with operation outcome
         """
+        print(f"[ACTION_TRACE] ========== CLIENT DELETE ===========")
+        print(f"[ACTION_TRACE] Client ID: {client_id}")
+        print(f"[ACTION_TRACE] Server bridge: {type(self.server_bridge)}")
+        
         try:
+            print(f"[BRIDGE_TRACE] Calling server_bridge.delete_client({client_id})")
             success = await self.server_bridge.delete_client(client_id)
+            print(f"[BRIDGE_TRACE] Server bridge returned: {success} (type: {type(success)})")
+            
             if success:
+                print(f"[ACTION_TRACE] ✓ Delete successful, creating success result")
                 return ActionResult.success_result(
                     data={'client_id': client_id, 'action': 'delete'},
                     metadata={'operation_type': 'client_delete', 'permanent': True}
                 )
             else:
+                print(f"[ACTION_TRACE] ✗ Delete failed, creating error result")
                 return ActionResult.error_result(
                     error_message=f"Failed to delete client {client_id}",
                     error_code="DELETE_FAILED"
                 )
         except Exception as e:
+            print(f"[EXCEPTION_TRACE] Exception in delete_client: {e}")
+            import traceback
+            print(f"[EXCEPTION_TRACE] Traceback: {traceback.format_exc()}")
             return ActionResult.error_result(
                 error_message=f"Error deleting client {client_id}: {str(e)}",
                 error_code="DELETE_EXCEPTION"
@@ -144,28 +168,47 @@ class ClientActions(BaseAction):
         Returns:
             ActionResult with exported data or file path
         """
+        print(f"[ACTION_TRACE] ========== CLIENT EXPORT ===========")
+        print(f"[ACTION_TRACE] Client IDs: {client_ids}")
+        print(f"[ACTION_TRACE] Export format: {export_format}")
+        print(f"[ACTION_TRACE] Server bridge: {type(self.server_bridge)}")
+        
         try:
             # Get client data from server bridge
             if client_ids:
+                print(f"[BRIDGE_TRACE] Getting details for {len(client_ids)} specific clients")
                 clients_data = []
                 for client_id in client_ids:
+                    print(f"[BRIDGE_TRACE] Getting details for client: {client_id}")
                     client_data = await self.server_bridge.get_client_details(client_id)
+                    print(f"[BRIDGE_TRACE] Client data received: {client_data is not None}")
                     if client_data:
                         clients_data.append(client_data)
             else:
+                print(f"[BRIDGE_TRACE] Getting all clients")
                 clients_data = await self.server_bridge.get_all_clients()
+                print(f"[BRIDGE_TRACE] All clients received: {len(clients_data) if clients_data else 0}")
             
             if not clients_data:
+                print(f"[ACTION_TRACE] ✗ No client data to export")
                 return ActionResult.error_result("No client data to export")
+            
+            print(f"[ACTION_TRACE] Formatting {len(clients_data)} clients as {export_format}")
             
             # Format data based on export type
             if export_format.lower() == 'csv':
+                print(f"[ACTION_TRACE] Formatting as CSV")
                 exported_data = self._format_clients_as_csv(clients_data)
             elif export_format.lower() == 'json':
+                print(f"[ACTION_TRACE] Formatting as JSON")
                 exported_data = self._format_clients_as_json(clients_data)
             else:
+                print(f"[ACTION_TRACE] ✗ Unsupported export format: {export_format}")
                 return ActionResult.error_result(f"Unsupported export format: {export_format}")
             
+            print(f"[ACTION_TRACE] Export data length: {len(exported_data)}")
+            
+            print(f"[ACTION_TRACE] ✓ Export successful, creating result")
             return ActionResult.success_result(
                 data=exported_data,
                 metadata={
@@ -176,6 +219,9 @@ class ClientActions(BaseAction):
             )
             
         except Exception as e:
+            print(f"[EXCEPTION_TRACE] Exception in export_clients: {e}")
+            import traceback
+            print(f"[EXCEPTION_TRACE] Traceback: {traceback.format_exc()}")
             return ActionResult.error_result(
                 error_message=f"Export failed: {str(e)}",
                 error_code="EXPORT_EXCEPTION"
