@@ -201,13 +201,13 @@ class ServerGUIApp:
             safe_print(f"[DEBUG] Import error details: {e}")
             import traceback
             safe_print(f"[DEBUG] Full traceback: {traceback.format_exc()}")
-            return None
+            return self._create_error_view(view_name, f"Module '{module_path}' not found: {str(e)}", "import")
         except Exception as e:
             safe_print(f"[ERROR] {view_name} import failed: Unexpected error importing '{module_path}'")
             safe_print(f"[DEBUG] Error details: {e}")
             import traceback
             safe_print(f"[DEBUG] Full traceback: {traceback.format_exc()}")
-            return None
+            return self._create_error_view(view_name, f"Unexpected import error: {str(e)}", "import")
             
         # Step 2: Try to get the class from the module
         try:
@@ -216,11 +216,11 @@ class ServerGUIApp:
         except AttributeError as e:
             safe_print(f"[ERROR] {view_name} class not found: '{class_name}' not in '{module_path}'")
             safe_print(f"[DEBUG] Available classes: {[name for name in dir(module) if not name.startswith('_')]}")
-            return None
+            return self._create_error_view(view_name, f"Class '{class_name}' not found in module '{module_path}'", "class_lookup")
         except Exception as e:
             safe_print(f"[ERROR] {view_name} class access failed: Unexpected error accessing '{class_name}'")
             safe_print(f"[DEBUG] Error details: {e}")
-            return None
+            return self._create_error_view(view_name, f"Class access error: {str(e)}", "class_access")
         
         # Step 3: Try to initialize the view
         try:
@@ -230,13 +230,145 @@ class ServerGUIApp:
             safe_print(f"[ERROR] {view_name} initialization failed: Invalid arguments for constructor")
             safe_print(f"[DEBUG] Constructor error: {e}")
             safe_print(f"[DEBUG] Provided args: {len(args)} arguments")
-            return None
+            return self._create_error_view(view_name, f"Constructor arguments error: {str(e)} (provided {len(args)} arguments)", "initialization")
         except Exception as e:
             safe_print(f"[ERROR] {view_name} initialization failed: Runtime error during construction")
             safe_print(f"[DEBUG] Runtime error: {e}")
-            return None
+            return self._create_error_view(view_name, f"Runtime error during construction: {str(e)}", "initialization")
         
         return view_instance
+    
+    def _create_error_view(self, view_name: str, error_message: str, error_type: str = "initialization") -> ft.Control:
+        """
+        Create a standardized error view for failed view initializations.
+        
+        Args:
+            view_name: Name of the view that failed to load
+            error_message: Detailed error message
+            error_type: Type of error (initialization, import, etc.)
+        
+        Returns:
+            ft.Control: A user-friendly error view with retry options
+        """
+        safe_print(f"[ERROR_VIEW] Creating error view for {view_name}: {error_message}")
+        
+        # Create retry button with proper callback
+        def retry_view(_):
+            """Retry loading the view"""
+            safe_print(f"[RETRY] User requested retry for {view_name}")
+            try:
+                # Show loading indicator
+                if hasattr(self, 'toast_manager') and self.toast_manager:
+                    self.toast_manager.show_info(f"Retrying {view_name} initialization...")
+                
+                # Trigger view refresh - this will attempt to reload the view
+                if hasattr(self, 'refresh_current_view'):
+                    self.refresh_current_view()
+                else:
+                    # Fallback: just show a message
+                    if hasattr(self, 'toast_manager') and self.toast_manager:
+                        self.toast_manager.show_warning(f"Manual refresh required for {view_name}")
+            except Exception as e:
+                safe_print(f"[RETRY_ERROR] Failed to retry {view_name}: {e}")
+                if hasattr(self, 'toast_manager') and self.toast_manager:
+                    self.toast_manager.show_error(f"Retry failed: {str(e)}")
+        
+        # Create the error view with Material Design 3 styling
+        error_view = ft.Container(
+            content=ft.Column(
+                [
+                    # Error icon and title
+                    ft.Row(
+                        [
+                            ft.Icon(
+                                ft.Icons.ERROR_OUTLINE,
+                                color=TOKENS.get('error', ft.Colors.RED),
+                                size=48
+                            ),
+                            ft.Column(
+                                [
+                                    ft.Text(
+                                        f"{view_name} Failed to Load",
+                                        size=20,
+                                        weight=ft.FontWeight.BOLD,
+                                        color=TOKENS.get('error', ft.Colors.RED)
+                                    ),
+                                    ft.Text(
+                                        f"{error_type.title()} Error",
+                                        size=14,
+                                        color=TOKENS.get('on_surface_variant', ft.Colors.GREY_600)
+                                    ),
+                                ],
+                                spacing=4,
+                                expand=True
+                            )
+                        ],
+                        alignment=ft.MainAxisAlignment.START,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=16
+                    ),
+                    
+                    # Error details in a card
+                    ft.Card(
+                        content=ft.Container(
+                            content=ft.Column(
+                                [
+                                    ft.Text(
+                                        "Error Details:",
+                                        weight=ft.FontWeight.BOLD,
+                                        color=TOKENS.get('on_surface', ft.Colors.BLACK)
+                                    ),
+                                    ft.Text(
+                                        error_message,
+                                        size=12,
+                                        color=TOKENS.get('on_surface_variant', ft.Colors.GREY_700),
+                                        selectable=True
+                                    ),
+                                ],
+                                spacing=8
+                            ),
+                            padding=16
+                        ),
+                        margin=ft.margin.symmetric(vertical=8)
+                    ),
+                    
+                    # Action buttons
+                    ft.Row(
+                        [
+                            ft.OutlinedButton(
+                                "Retry",
+                                icon=ft.Icons.REFRESH,
+                                on_click=retry_view
+                            ),
+                            ft.TextButton(
+                                "View Logs",
+                                icon=ft.Icons.DESCRIPTION,
+                                on_click=lambda _: safe_print(f"[USER_ACTION] View logs requested for {view_name}")
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.START,
+                        spacing=12
+                    ),
+                    
+                    # Help text
+                    ft.Text(
+                        "This error has been logged. Try refreshing or contact support if the issue persists.",
+                        size=11,
+                        color=TOKENS.get('on_surface_variant', ft.Colors.GREY_600),
+                        italic=True
+                    ),
+                ],
+                spacing=16,
+                horizontal_alignment=ft.CrossAxisAlignment.START
+            ),
+            padding=24,
+            margin=16,
+            border_radius=8,
+            bgcolor=TOKENS.get('surface', ft.Colors.WHITE),
+            border=ft.border.all(1, TOKENS.get('outline_variant', ft.Colors.GREY_300))
+        )
+        
+        return error_view
     
     def _safe_init_preloaded_view(self, view_name: str, view_class: Optional[type], *args: Any) -> Optional[Any]:
         """
@@ -253,7 +385,7 @@ class ServerGUIApp:
         if view_class is None:
             safe_print(f"[WARNING] {view_name} view not available: Class was not imported successfully")
             safe_print(f"[INFO] {view_name} will show 'not available' message to users")
-            return None
+            return self._create_error_view(view_name, f"View class was not imported successfully", "import")
         
         try:
             view_instance = view_class(*args)
@@ -263,11 +395,11 @@ class ServerGUIApp:
             safe_print(f"[ERROR] {view_name} initialization failed: Invalid arguments for constructor")
             safe_print(f"[DEBUG] Constructor error: {e}")
             safe_print(f"[DEBUG] Provided args: {len(args)} arguments")
-            return None
+            return self._create_error_view(view_name, f"Constructor arguments error (preloaded): {str(e)} (provided {len(args)} arguments)", "initialization")
         except Exception as e:
             safe_print(f"[ERROR] {view_name} initialization failed: Runtime error during construction")
             safe_print(f"[DEBUG] Runtime error: {e}")
-            return None
+            return self._create_error_view(view_name, f"Runtime error during construction (preloaded): {str(e)}", "initialization")
     
     def _track_task(self, task: asyncio.Task) -> asyncio.Task:
         """Track an async task for cleanup."""

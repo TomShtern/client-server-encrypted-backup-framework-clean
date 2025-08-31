@@ -312,3 +312,59 @@ class DatabaseActions(BaseAction):
                 error_message=f"Error exporting database table: {str(e)}",
                 error_code="TABLE_EXPORT_EXCEPTION"
             )
+    
+    async def update_database_row(self, row_id: str, update_data: Dict[str, Any], table_name: str = "clients") -> ActionResult:
+        """
+        Update a row in a database table.
+        
+        Args:
+            row_id: ID of the row to update
+            update_data: Dictionary of fields and values to update
+            table_name: Name of the table (defaults to "clients")
+            
+        Returns:
+            ActionResult with update outcome
+        """
+        try:
+            if not row_id or not update_data:
+                return ActionResult.error_result(
+                    error_message="Row ID and update data are required",
+                    error_code="INVALID_UPDATE_PARAMETERS"
+                )
+            
+            # For now, assume it's a client update since that's the primary use case
+            # This can be expanded later to handle different table types
+            if table_name == "clients" or table_name == "default":
+                update_result = await self.server_bridge.update_client(row_id, update_data)
+            else:
+                # Generic database row update for other tables
+                update_result = await self.server_bridge.update_database_row(table_name, row_id, update_data)
+            
+            if update_result:
+                return ActionResult.make_success(
+                    data={
+                        'action': 'update_database_row',
+                        'table_name': table_name,
+                        'row_id': row_id,
+                        'updated_fields': list(update_data.keys()),
+                        'timestamp': time.time(),
+                    },
+                    metadata={
+                        'operation_type': 'database_row_update',
+                        'table_name': table_name,
+                        'row_id': row_id,
+                        'field_count': len(update_data),
+                        'timestamp': time.time(),
+                    },
+                )
+            else:
+                return ActionResult.error_result(
+                    error_message=f"Failed to update row {row_id} in table {table_name}",
+                    error_code="ROW_UPDATE_FAILED"
+                )
+                
+        except Exception as e:
+            return ActionResult.error_result(
+                error_message=f"Error updating database row: {str(e)}",
+                error_code="ROW_UPDATE_EXCEPTION"
+            )

@@ -6,6 +6,10 @@ UI: Performance charts, statistics, and analytical displays
 """
 
 import flet as ft
+from enum import Enum, auto
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from typing import Dict, Any, Tuple, List
 
 # Existing imports
 from flet_server_gui.core.server_operations import ServerOperations
@@ -29,6 +33,162 @@ from flet_server_gui.ui.widgets import (
 from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
 # Unified theme system - consolidated theme functionality
 from flet_server_gui.ui.unified_theme_system import ThemeConsistencyManager, apply_theme_consistency, TOKENS
+
+
+# Analytics data structures and utilities (extracted from advanced_analytics_dashboard.py)
+
+class MetricType(Enum):
+    """Types of metrics for analytics tracking"""
+    PERFORMANCE = auto()
+    USAGE = auto()
+    ERROR_RATE = auto()
+    THROUGHPUT = auto()
+    LATENCY = auto()
+    STORAGE = auto()
+    SECURITY = auto()
+    CUSTOM = auto()
+
+
+class AnalyticsTimeRange(Enum):
+    """Time range options for analytics data"""
+    REAL_TIME = "real_time"
+    LAST_HOUR = "1h"
+    LAST_4_HOURS = "4h"
+    LAST_24_HOURS = "24h"
+    LAST_7_DAYS = "7d"
+    LAST_30_DAYS = "30d"
+    LAST_90_DAYS = "90d"
+    CUSTOM = "custom"
+
+
+class ChartType(Enum):
+    """Chart types for data visualization"""
+    LINE_CHART = auto()
+    BAR_CHART = auto()
+    PIE_CHART = auto()
+    GAUGE_CHART = auto()
+    HEATMAP = auto()
+    SCATTER_PLOT = auto()
+    HISTOGRAM = auto()
+    AREA_CHART = auto()
+
+
+@dataclass
+class MetricData:
+    """Data structure for individual metrics with comprehensive metadata"""
+    metric_id: str
+    metric_type: MetricType
+    value: float
+    unit: str
+    timestamp: datetime
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)
+    
+    def format_value(self, precision: int = 2) -> str:
+        """Format metric value for display"""
+        return format_metric_value(self.value, self.unit, precision)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert metric data to dictionary for serialization"""
+        return {
+            "metric_id": self.metric_id,
+            "metric_type": self.metric_type.name,
+            "value": self.value,
+            "unit": self.unit,
+            "timestamp": self.timestamp.isoformat(),
+            "metadata": self.metadata,
+            "tags": self.tags
+        }
+
+
+def format_metric_value(value: float, unit: str, precision: int = 2) -> str:
+    """
+    Format metric value for display with appropriate units and scaling.
+    
+    Args:
+        value: Numeric value to format
+        unit: Unit of measurement
+        precision: Decimal precision for display
+        
+    Returns:
+        Formatted string for UI display
+    """
+    # Handle different unit types with human-readable scaling
+    if unit.lower() in ['bytes', 'b']:
+        # Convert bytes to human-readable format
+        for scale_unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if value < 1024:
+                return f"{value:.{precision}f} {scale_unit}"
+            value /= 1024
+        return f"{value:.{precision}f} PB"
+    
+    elif unit == '%' or unit.lower() == 'percent':
+        # Format percentage values
+        return f"{value:.{precision}f}%"
+    
+    elif unit.lower() in ['seconds', 'sec', 's', 'ms', 'milliseconds']:
+        # Format time values
+        if unit.lower() in ['ms', 'milliseconds'] and value >= 1000:
+            return f"{value/1000:.{precision}f} sec"
+        return f"{value:.{precision}f} {unit}"
+    
+    else:
+        # Default formatting
+        return f"{value:.{precision}f} {unit}"
+
+
+def calculate_time_boundaries(time_range: AnalyticsTimeRange) -> Tuple[datetime, datetime]:
+    """
+    Calculate start and end times for analytics time range.
+    
+    Args:
+        time_range: Time range specification
+        
+    Returns:
+        Tuple of (start_time, end_time)
+    """
+    now = datetime.now()
+    
+    if time_range == AnalyticsTimeRange.REAL_TIME:
+        return (now - timedelta(minutes=5), now)
+    elif time_range == AnalyticsTimeRange.LAST_HOUR:
+        return (now - timedelta(hours=1), now)
+    elif time_range == AnalyticsTimeRange.LAST_4_HOURS:
+        return (now - timedelta(hours=4), now)
+    elif time_range == AnalyticsTimeRange.LAST_24_HOURS:
+        return (now - timedelta(days=1), now)
+    elif time_range == AnalyticsTimeRange.LAST_7_DAYS:
+        return (now - timedelta(days=7), now)
+    elif time_range == AnalyticsTimeRange.LAST_30_DAYS:
+        return (now - timedelta(days=30), now)
+    elif time_range == AnalyticsTimeRange.LAST_90_DAYS:
+        return (now - timedelta(days=90), now)
+    else:
+        # Default to last 24 hours
+        return (now - timedelta(days=1), now)
+
+
+def create_sample_metric_data(metric_type: MetricType, value: float, unit: str) -> MetricData:
+    """
+    Create sample metric data for testing and demonstration.
+    
+    Args:
+        metric_type: Type of metric
+        value: Metric value
+        unit: Unit of measurement
+        
+    Returns:
+        MetricData instance with sample data
+    """
+    return MetricData(
+        metric_id=f"sample_{metric_type.name.lower()}",
+        metric_type=metric_type,
+        value=value,
+        unit=unit,
+        timestamp=datetime.now(),
+        metadata={"source": "sample_data"},
+        tags=["sample", "demo"]
+    )
 
 
 class AnalyticsView(BaseComponent):

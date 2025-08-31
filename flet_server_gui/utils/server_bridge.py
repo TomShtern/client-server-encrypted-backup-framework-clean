@@ -165,6 +165,41 @@ class ModularServerBridge:
         """Import clients from data"""
         return self.data_manager.import_clients_from_data(client_data_list)
     
+    def update_client(self, client_id: str, update_data: Dict[str, Any]) -> bool:
+        """Update a client's record"""
+        print("[BRIDGE_TRACE] ========== BRIDGE UPDATE CLIENT ==========")
+        print(f"[BRIDGE_TRACE] Client ID: {client_id}")
+        print(f"[BRIDGE_TRACE] Update Data: {update_data}")
+        print(f"[BRIDGE_TRACE] Data manager: {type(self.data_manager)}")
+
+        try:
+            result = self.data_manager.update_client(client_id, update_data)
+            print(f"[BRIDGE_TRACE] Data manager returned: {result}")
+            return result
+        except Exception as e:
+            print(f"[BRIDGE_TRACE] ✗ Exception in update_client: {e}")
+            import traceback
+            print(f"[BRIDGE_TRACE] Traceback: {traceback.format_exc()}")
+            return False
+    
+    def update_database_row(self, table_name: str, row_id: str, update_data: Dict[str, Any]) -> bool:
+        """Update a row in a database table"""
+        print("[BRIDGE_TRACE] ========== BRIDGE UPDATE DATABASE ROW ==========")
+        print(f"[BRIDGE_TRACE] Table: {table_name}")
+        print(f"[BRIDGE_TRACE] Row ID: {row_id}")
+        print(f"[BRIDGE_TRACE] Update Data: {update_data}")
+        print(f"[BRIDGE_TRACE] Data manager: {type(self.data_manager)}")
+
+        try:
+            result = self.data_manager.update_database_row(table_name, row_id, update_data)
+            print(f"[BRIDGE_TRACE] Data manager returned: {result}")
+            return result
+        except Exception as e:
+            print(f"[BRIDGE_TRACE] ✗ Exception in update_database_row: {e}")
+            import traceback
+            print(f"[BRIDGE_TRACE] Traceback: {traceback.format_exc()}")
+            return False
+    
     # ============================================================================
     # FILE OPERATIONS (delegated to file_manager)
     # ============================================================================

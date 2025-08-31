@@ -276,3 +276,56 @@ class ServerDataManager:
         except Exception as e:
             print(f"[ERROR] Failed to import clients: {e}")
             return 0
+    
+    def update_client(self, client_id: str, update_data: Dict[str, Any]) -> bool:
+        """Update a client's information in the database"""
+        print("[DB_TRACE] ========== DATA MANAGER UPDATE CLIENT ==========")
+        print(f"[DB_TRACE] Client ID: {client_id}")
+        print(f"[DB_TRACE] Update Data: {update_data}")
+        print(f"[DB_TRACE] Database manager: {self.db_manager is not None}")
+
+        try:
+            if self.db_manager:
+                print(f"[DB_TRACE] Database manager type: {type(self.db_manager)}")
+                print(f"[DB_TRACE] Calling db_manager.update_client({client_id}, {update_data})")
+                success = self.db_manager.update_client(client_id, update_data)
+                print(f"[DB_TRACE] Database manager returned: {success}")
+                if success:
+                    print(f"[DB_TRACE] ✓ Client {client_id} updated in database")
+                return success
+            else:
+                print("[DB_TRACE] ✗ No database manager available")
+                return False
+
+        except Exception as e:
+            print(f"[DB_TRACE] ✗ Failed to update client {client_id}: {e}")
+            import traceback
+            print(f"[DB_TRACE] Traceback: {traceback.format_exc()}")
+            return False
+    
+    def update_database_row(self, table_name: str, row_id: str, update_data: Dict[str, Any]) -> bool:
+        """Generic method to update a row in any database table"""
+        print("[DB_TRACE] ========== DATA MANAGER UPDATE DATABASE ROW ==========")
+        print(f"[DB_TRACE] Table: {table_name}")
+        print(f"[DB_TRACE] Row ID: {row_id}")
+        print(f"[DB_TRACE] Update Data: {update_data}")
+        print(f"[DB_TRACE] Database manager: {self.db_manager is not None}")
+
+        try:
+            if self.db_manager:
+                print(f"[DB_TRACE] Database manager type: {type(self.db_manager)}")
+                print(f"[DB_TRACE] Calling db_manager.update_row({table_name}, {row_id}, {update_data})")
+                success = self.db_manager.update_row(table_name, row_id, update_data)
+                print(f"[DB_TRACE] Database manager returned: {success}")
+                if success:
+                    print(f"[DB_TRACE] ✓ Row {row_id} updated in table {table_name}")
+                return success
+            else:
+                print("[DB_TRACE] ✗ No database manager available")
+                return False
+
+        except Exception as e:
+            print(f"[DB_TRACE] ✗ Failed to update row in {table_name}: {e}")
+            import traceback
+            print(f"[DB_TRACE] Traceback: {traceback.format_exc()}")
+            return False

@@ -5,7 +5,27 @@ Utilities to fix content clipping and hitbox misalignment issues.
 """
 
 import flet as ft
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Callable, Set
+from enum import Enum
+from dataclasses import dataclass
+
+
+class InteractionMethod(Enum):
+    """Types of user interaction methods for touch target optimization"""
+    MOUSE = "mouse"
+    TOUCH = "touch"
+    KEYBOARD = "keyboard"
+    ACCESSIBILITY = "accessibility"
+
+
+@dataclass
+class TouchTargetSpec:
+    """Touch target specifications for accessibility compliance"""
+    min_width: int = 44          # Material Design minimum (44dp)
+    min_height: int = 44         # Material Design minimum (44dp)
+    min_spacing: int = 8         # Minimum spacing between targets
+    touch_padding: int = 12      # Additional padding for touch
+    accessibility_margin: int = 4   # Extra margin for accessibility
 
 
 class ResponsiveLayoutFixes:
@@ -181,6 +201,89 @@ class ResponsiveLayoutFixes:
             expand=True,
             clip_behavior=ft.ClipBehavior.NONE,
             **kwargs
+        )
+    
+    @staticmethod
+    def ensure_minimum_touch_target(
+        component: ft.Control, 
+        spec: TouchTargetSpec = None,
+        interaction_methods: Set[InteractionMethod] = None
+    ) -> ft.Container:
+        """
+        Ensure component meets minimum touch target requirements with flexible configuration.
+        
+        Args:
+            component: Component to wrap with proper touch target
+            spec: Touch target specifications (uses default if None)
+            interaction_methods: Supported interaction methods (auto-detects if None)
+            
+        Returns:
+            Container with guaranteed minimum touch target size
+        """
+        if spec is None:
+            spec = TouchTargetSpec()
+            
+        if interaction_methods is None:
+            interaction_methods = {InteractionMethod.MOUSE, InteractionMethod.TOUCH}
+        
+        # Calculate required dimensions based on interaction methods
+        min_width = spec.min_width
+        min_height = spec.min_height
+        
+        # Add accessibility margin if accessibility support is needed
+        if InteractionMethod.ACCESSIBILITY in interaction_methods:
+            min_width += spec.accessibility_margin * 2
+            min_height += spec.accessibility_margin * 2
+        
+        return ft.Container(
+            content=component,
+            min_width=min_width,
+            min_height=min_height,
+            alignment=ft.alignment.center,
+            clip_behavior=ft.ClipBehavior.NONE,
+        )
+    
+    @staticmethod
+    def create_accessible_button(
+        text: str, 
+        on_click: Callable,
+        spec: TouchTargetSpec = None,
+        interaction_methods: Set[InteractionMethod] = None,
+        **button_kwargs
+    ) -> ft.ElevatedButton:
+        """
+        Create button with accessibility-compliant touch target sizing.
+        
+        Args:
+            text: Button text
+            on_click: Click handler function
+            spec: Touch target specifications (uses default if None) 
+            interaction_methods: Supported interaction methods
+            **button_kwargs: Additional button properties
+            
+        Returns:
+            ElevatedButton with proper accessibility sizing
+        """
+        if spec is None:
+            spec = TouchTargetSpec()
+            
+        if interaction_methods is None:
+            interaction_methods = {InteractionMethod.MOUSE, InteractionMethod.TOUCH, InteractionMethod.ACCESSIBILITY}
+        
+        # Calculate minimum width based on text length and specifications
+        estimated_text_width = len(text) * 8 + 32  # Rough estimate
+        min_width = max(estimated_text_width, spec.min_width)
+        
+        # Add accessibility margin if needed
+        if InteractionMethod.ACCESSIBILITY in interaction_methods:
+            min_width += spec.accessibility_margin * 2
+        
+        return ft.ElevatedButton(
+            text=text,
+            on_click=on_click,
+            height=max(spec.min_height, 44),  # Ensure minimum height
+            width=min_width,
+            **button_kwargs
         )
 
 
