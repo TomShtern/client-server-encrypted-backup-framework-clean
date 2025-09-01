@@ -12,7 +12,7 @@ This is a **4-layer encrypted backup system** with hybrid web-to-native architec
 Web UI → Flask API Bridge → C++ Client (subprocess) → Python Server
   ↓           ↓                    ↓                     ↓
 HTTP      RealBackupExecutor    --batch mode       Custom Binary
-requests  process management   + transfer.info     TCP Protocol
+requests  process management   + transfer.info     Custom Binary TCP Protocol
 ```
 
 **Critical Understanding**: Flask API Bridge (`cyberbackup_api_server.py` + `real_backup_executor.py`) is the coordination hub. Web UI communicates ONLY with Flask API, never directly with C++ client or Python server.
@@ -107,6 +107,7 @@ If anything here is unclear or you'd like more detail on a specific file (exampl
 
 ## WORKFLOW & RELEASE RULES
 - Before running integration tests (tests/integration/*), use strict Python analysis and AI code actions to fix type and lint issues.
+- After decomposing each God Component into its single-responsibility classes, refactor the original God Component class to act as a Facade. It should instantiate the new classes and delegate public method calls to them, providing a single, stable interface for the application.
 
 ## TESTS AND VERIFICATION
 - Run `scripts/one_click_build_and_run.py` in the integrated terminal to smoke-test the full pipeline.
@@ -123,4 +124,36 @@ If anything here is unclear or you'd like more detail on a specific file (exampl
 - To deactivate the virtual environment:
 ```powershell
 deactivate
+```
+
+## PYTHON ANALYSIS CONFIGURATION
+
+- To avoid "End of file expected" errors in `pyrightconfig.json`, ensure the file contains valid JSON with a single root object. Merge any duplicate or misplaced configurations into a single, well-formed JSON structure. Example:
+
+```json
+{
+  "typeCheckingMode": "standard",
+  "include": ["python_server", "api_server", "Shared", "scripts", "Database", "."],
+  "exclude": [
+    "tests/",
+    "test/",
+    "**/tests/",
+    "**/test/", 
+    "test_*.py",
+    "*_test.py",
+    "**/test_*.py",
+    "**/*_test.py",
+    "venv",
+    "kivy_venv_new",
+    "__pycache__",
+    ".git"
+  ],
+  "reportMissingImports": true,
+  "reportUnusedVariable": true,
+  "reportUnknownMemberType": true,
+  "reportUnboundVariable": true,
+  "venvPath": "C:\\Users\\tom7s\\Desktopp\\Claude_Folder_2\\Client_Server_Encrypted_Backup_Framework",
+  "venv": "kivy_venv_new",
+  "stubPath": "stubs"
+}
 ```

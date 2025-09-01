@@ -55,15 +55,14 @@ except Exception as e:
     from flet_server_gui.utils.simple_server_bridge import SimpleServerBridge as ServerBridge
     BRIDGE_TYPE = "SimpleServerBridge (Fallback)"
     print(f"[INFO] Using {BRIDGE_TYPE}")
-# Direct import to avoid __init__.py issues
-try:
-    from flet_server_gui.views.settings_view import SettingsView
-except ImportError:
-    SettingsView = None
-try:
-    from flet_server_gui.views.logs_view import LogsView
-except ImportError:
-    LogsView = None
+# --- DIRECTLY IMPORT YOUR VIEWS ---
+from flet_server_gui.views.dashboard import DashboardView
+from flet_server_gui.views.clients import ClientsView
+from flet_server_gui.views.files import FilesView
+from flet_server_gui.views.database import DatabaseView
+from flet_server_gui.views.analytics import AnalyticsView
+from flet_server_gui.views.settings_view import SettingsView
+from flet_server_gui.views.logs_view import LogsView
 from flet_server_gui.actions import FileActions
 from flet_server_gui.utils.trace_center import get_trace_center  # Phase 2: tracing
 
@@ -126,40 +125,15 @@ class ServerGUIApp:
             on_manage_files=self._on_manage_files
         )
         
-        # Initialize view objects with robust error handling
-        self.dashboard_view = self._safe_init_view(
-            "Dashboard", "flet_server_gui.views.dashboard", "DashboardView", 
-            page, self.server_bridge
-        )
-        
-        self.clients_view = self._safe_init_view(
-            "Clients", "flet_server_gui.views.clients", "ClientsView",
-            self.server_bridge, self.dialog_system, self.toast_manager, page
-        )
-        
-        self.files_view = self._safe_init_view(
-            "Files", "flet_server_gui.views.files", "FilesView",
-            self.server_bridge, self.dialog_system, self.toast_manager, page
-        )
-        
-        self.database_view = self._safe_init_view(
-            "Database", "flet_server_gui.views.database", "DatabaseView",
-            self.server_bridge, self.dialog_system, self.toast_manager, page
-        )
-        
-        self.analytics_view = self._safe_init_view(
-            "Analytics", "flet_server_gui.views.analytics", "AnalyticsView",
-            page, self.server_bridge, self.dialog_system, self.toast_manager
-        )
-        
-        # Handle pre-imported views (SettingsView and LogsView)
-        self.settings_view = self._safe_init_preloaded_view(
-            "Settings", SettingsView, page, self.dialog_system, self.toast_manager
-        )
-        
-        self.logs_view = self._safe_init_preloaded_view(
-            "Logs", LogsView, page, self.dialog_system, self.toast_manager
-        )
+        # --- SIMPLIFIED VIEW INITIALIZATION ---
+        # No more complex wrappers. If something breaks here, we know immediately.
+        self.dashboard_view = DashboardView(page, self.server_bridge)
+        self.clients_view = ClientsView(self.server_bridge, self.dialog_system, self.toast_manager, page)
+        self.files_view = FilesView(self.server_bridge, self.dialog_system, self.toast_manager, page)
+        self.database_view = DatabaseView(self.server_bridge, self.dialog_system, self.toast_manager, page)
+        self.analytics_view = AnalyticsView(page, self.server_bridge, self.dialog_system, self.toast_manager)
+        self.settings_view = SettingsView(page, self.dialog_system, self.toast_manager)
+        self.logs_view = LogsView(page, self.dialog_system, self.toast_manager)
         # Navigation manager will be initialized after content_area is created in build_ui
 
         self.build_ui()
@@ -171,237 +145,8 @@ class ServerGUIApp:
         self.page.on_connect = self._on_page_connect
         self.page.on_close = self._on_page_close
     
-    def _safe_init_view(self, view_name: str, module_path: str, class_name: str, *args: Any) -> Optional[Any]:
-        """
-        Safely import and initialize a view with detailed error diagnostics.
-        
-        Args:
-            view_name: Human-readable name for logging (e.g., "Dashboard")
-            module_path: Module path for import (e.g., "flet_server_gui.views.dashboard")
-            class_name: Class name to import (e.g., "DashboardView")
-            *args: Arguments to pass to the view constructor
-            
-        Returns:
-            View instance if successful, None if failed
-        """
-        view_instance = None
-        
-        # Debug: Print current working directory and Python path
-        import os
-        safe_print(f"[DEBUG] Current working directory: {os.getcwd()}")
-        import sys
-        safe_print(f"[DEBUG] Python path (first 5 entries): {sys.path[:5]}")
-        
-        # Step 1: Try to import the module
-        try:
-            import importlib
-            safe_print(f"[DEBUG] Attempting to import module: {module_path}")
-            module = importlib.import_module(module_path)
-            safe_print(f"[SUCCESS] {view_name} module imported successfully from {module_path}")
-        except ImportError as e:
-            safe_print(f"[ERROR] {view_name} import failed: Module '{module_path}' not found")
-            safe_print(f"[DEBUG] Import error details: {e}")
-            import traceback
-            safe_print(f"[DEBUG] Full traceback: {traceback.format_exc()}")
-            return self._create_error_view(view_name, f"Module '{module_path}' not found: {str(e)}", "import")
-        except Exception as e:
-            safe_print(f"[ERROR] {view_name} import failed: Unexpected error importing '{module_path}'")
-            safe_print(f"[DEBUG] Error details: {e}")
-            import traceback
-            safe_print(f"[DEBUG] Full traceback: {traceback.format_exc()}")
-            return self._create_error_view(view_name, f"Unexpected import error: {str(e)}", "import")
-            
-        # Step 2: Try to get the class from the module
-        try:
-            view_class = getattr(module, class_name)
-            safe_print(f"[SUCCESS] {view_name} class '{class_name}' found in module")
-        except AttributeError as e:
-            safe_print(f"[ERROR] {view_name} class not found: '{class_name}' not in '{module_path}'")
-            safe_print(f"[DEBUG] Available classes: {[name for name in dir(module) if not name.startswith('_')]}")
-            return self._create_error_view(view_name, f"Class '{class_name}' not found in module '{module_path}'", "class_lookup")
-        except Exception as e:
-            safe_print(f"[ERROR] {view_name} class access failed: Unexpected error accessing '{class_name}'")
-            safe_print(f"[DEBUG] Error details: {e}")
-            return self._create_error_view(view_name, f"Class access error: {str(e)}", "class_access")
-        
-        # Step 3: Try to initialize the view
-        try:
-            view_instance = view_class(*args)
-            safe_print(f"[SUCCESS] {view_name} view initialized successfully")
-        except TypeError as e:
-            safe_print(f"[ERROR] {view_name} initialization failed: Invalid arguments for constructor")
-            safe_print(f"[DEBUG] Constructor error: {e}")
-            safe_print(f"[DEBUG] Provided args: {len(args)} arguments")
-            return self._create_error_view(view_name, f"Constructor arguments error: {str(e)} (provided {len(args)} arguments)", "initialization")
-        except Exception as e:
-            safe_print(f"[ERROR] {view_name} initialization failed: Runtime error during construction")
-            safe_print(f"[DEBUG] Runtime error: {e}")
-            return self._create_error_view(view_name, f"Runtime error during construction: {str(e)}", "initialization")
-        
-        return view_instance
     
-    def _create_error_view(self, view_name: str, error_message: str, error_type: str = "initialization") -> ft.Control:
-        """
-        Create a standardized error view for failed view initializations.
-        
-        Args:
-            view_name: Name of the view that failed to load
-            error_message: Detailed error message
-            error_type: Type of error (initialization, import, etc.)
-        
-        Returns:
-            ft.Control: A user-friendly error view with retry options
-        """
-        safe_print(f"[ERROR_VIEW] Creating error view for {view_name}: {error_message}")
-        
-        # Create retry button with proper callback
-        def retry_view(_):
-            """Retry loading the view"""
-            safe_print(f"[RETRY] User requested retry for {view_name}")
-            try:
-                # Show loading indicator
-                if hasattr(self, 'toast_manager') and self.toast_manager:
-                    self.toast_manager.show_info(f"Retrying {view_name} initialization...")
-                
-                # Trigger view refresh - this will attempt to reload the view
-                if hasattr(self, 'refresh_current_view'):
-                    self.refresh_current_view()
-                else:
-                    # Fallback: just show a message
-                    if hasattr(self, 'toast_manager') and self.toast_manager:
-                        self.toast_manager.show_warning(f"Manual refresh required for {view_name}")
-            except Exception as e:
-                safe_print(f"[RETRY_ERROR] Failed to retry {view_name}: {e}")
-                if hasattr(self, 'toast_manager') and self.toast_manager:
-                    self.toast_manager.show_error(f"Retry failed: {str(e)}")
-        
-        # Create the error view with Material Design 3 styling
-        error_view = ft.Container(
-            content=ft.Column(
-                [
-                    # Error icon and title
-                    ft.Row(
-                        [
-                            ft.Icon(
-                                ft.Icons.ERROR_OUTLINE,
-                                color=ft.Colors.ERROR,
-                                size=48
-                            ),
-                            ft.Column(
-                                [
-                                    ft.Text(
-                                        f"{view_name} Failed to Load",
-                                        size=20,
-                                        weight=ft.FontWeight.BOLD,
-                                        color=ft.Colors.ERROR
-                                    ),
-                                    ft.Text(
-                                        f"{error_type.title()} Error",
-                                        size=14,
-                                        color=ft.Colors.ON_SURFACE_VARIANT
-                                    ),
-                                ],
-                                spacing=4,
-                                expand=True
-                            )
-                        ],
-                        alignment=ft.MainAxisAlignment.START,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        spacing=16
-                    ),
-                    
-                    # Error details in a card
-                    ft.Card(
-                        content=ft.Container(
-                            content=ft.Column(
-                                [
-                                    ft.Text(
-                                        "Error Details:",
-                                        weight=ft.FontWeight.BOLD,
-                                        color=ft.Colors.ON_SURFACE
-                                    ),
-                                    ft.Text(
-                                        error_message,
-                                        size=12,
-                                        color=ft.Colors.ON_SURFACE_VARIANT,
-                                        selectable=True
-                                    ),
-                                ],
-                                spacing=8
-                            ),
-                            padding=16
-                        ),
-                        margin=ft.margin.symmetric(vertical=8)
-                    ),
-                    
-                    # Action buttons
-                    ft.Row(
-                        [
-                            ft.OutlinedButton(
-                                "Retry",
-                                icon=ft.Icons.REFRESH,
-                                on_click=retry_view
-                            ),
-                            ft.TextButton(
-                                "View Logs",
-                                icon=ft.Icons.DESCRIPTION,
-                                on_click=lambda _: safe_print(f"[USER_ACTION] View logs requested for {view_name}")
-                            ),
-                        ],
-                        alignment=ft.MainAxisAlignment.START,
-                        spacing=12
-                    ),
-                    
-                    # Help text
-                    ft.Text(
-                        "This error has been logged. Try refreshing or contact support if the issue persists.",
-                        size=11,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                        italic=True
-                    ),
-                ],
-                spacing=16,
-                horizontal_alignment=ft.CrossAxisAlignment.START
-            ),
-            padding=24,
-            margin=16,
-            border_radius=8,
-            bgcolor=ft.Colors.SURFACE,
-            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT)
-        )
-        
-        return error_view
     
-    def _safe_init_preloaded_view(self, view_name: str, view_class: Optional[type], *args: Any) -> Optional[Any]:
-        """
-        Safely initialize a pre-imported view class with detailed error diagnostics.
-        
-        Args:
-            view_name: Human-readable name for logging (e.g., "Settings")
-            view_class: Pre-imported class (could be None if import failed)
-            *args: Arguments to pass to the view constructor
-        
-        Returns:
-            View instance if successful, None if failed
-        """
-        if view_class is None:
-            safe_print(f"[WARNING] {view_name} view not available: Class was not imported successfully")
-            safe_print(f"[INFO] {view_name} will show 'not available' message to users")
-            return self._create_error_view(view_name, f"View class was not imported successfully", "import")
-        
-        try:
-            view_instance = view_class(*args)
-            safe_print(f"[SUCCESS] {view_name} view initialized successfully from pre-imported class")
-            return view_instance
-        except TypeError as e:
-            safe_print(f"[ERROR] {view_name} initialization failed: Invalid arguments for constructor")
-            safe_print(f"[DEBUG] Constructor error: {e}")
-            safe_print(f"[DEBUG] Provided args: {len(args)} arguments")
-            return self._create_error_view(view_name, f"Constructor arguments error (preloaded): {str(e)} (provided {len(args)} arguments)", "initialization")
-        except Exception as e:
-            safe_print(f"[ERROR] {view_name} initialization failed: Runtime error during construction")
-            safe_print(f"[DEBUG] Runtime error: {e}")
-            return self._create_error_view(view_name, f"Runtime error during construction (preloaded): {str(e)}", "initialization")
     
     def _track_task(self, task: asyncio.Task) -> asyncio.Task:
         """Track an async task for cleanup."""
@@ -510,19 +255,14 @@ class ServerGUIApp:
         """Configure the desktop application and apply the theme."""
         self.page.title = "Encrypted Backup Server - Control Panel"
         
-        # Adaptive window sizing - use percentage of screen or reasonable defaults
-        # Remove hardcoded dimensions to allow natural sizing
-        self.page.window_width = None  # Let Flet determine optimal width
-        self.page.window_height = None  # Let Flet determine optimal height
-        
-        # More reasonable minimum sizes for standard screens
-        self.page.window_min_width = 1024  # Minimum for proper layout
-        self.page.window_min_height = 768   # Standard 4:3 aspect ratio
+        # --- SIMPLIFIED WINDOW SETUP ---
+        # Set the desired starting size and the minimum allowed size.
+        self.page.window_width = 1280
+        self.page.window_height = 800
+        self.page.window_min_width = 1024
+        self.page.window_min_height = 768
         self.page.window_resizable = True
-        
-        # Set preferred window size on first launch
-        self.page.window_width = 1200  # Reasonable default that works on most screens
-        self.page.window_height = 800   # Balanced height for content
+        # -------------------------------
         
         # Initialize theme system
         saved_theme = self.page.client_storage.get("theme_name") or DEFAULT_THEME_NAME
@@ -577,11 +317,11 @@ class ServerGUIApp:
             ]
         )
         
-        initial_view = self.get_dashboard_view()
-        self.active_view_instance = initial_view
+        # Set initial view as dashboard
+        self.active_view_instance = self.dashboard_view
 
         self.content_area = ft.AnimatedSwitcher(
-            content=initial_view,
+            content=self.dashboard_view.build() if self.dashboard_view else ft.Text("Dashboard not available"),
             transition=ft.AnimatedSwitcherTransition.FADE,
             duration=200,
             reverse_duration=150,
@@ -682,28 +422,6 @@ class ServerGUIApp:
         # Update layout
         self.page.update()
     
-    def get_dashboard_view(self) -> ft.Control:
-        """Create and return the dashboard view."""
-        if self.dashboard_view:
-            try:
-                if dashboard_content := self.dashboard_view.build():
-                    # Dashboard async tasks will be started via _on_page_connect
-                    return dashboard_content
-                else:
-                    # Fallback to simplified dashboard if build returns None
-                    return self._build_simplified_dashboard()
-            except Exception as e:
-                print(f"[ERROR] Failed to build dashboard view: {e}")
-                return ft.Container(
-                    content=ft.Text(f"Dashboard view error: {str(e)}",
-                                   style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                                   text_align=ft.TextAlign.CENTER),
-                    padding=40,
-                    alignment=ft.alignment.center
-                )
-        else:
-            # Fallback to simplified dashboard if view not available
-            return self._build_simplified_dashboard()
     
     def _build_simplified_dashboard(self) -> ft.Control:
         """Build a simplified dashboard when full dashboard is not available."""
@@ -834,117 +552,11 @@ class ServerGUIApp:
             clip_behavior=ft.ClipBehavior.NONE
         )
     
-    def get_clients_view(self) -> ft.Control:
-        """Create and return the clients view."""
-        if not self.clients_view:
-            return ft.Container(
-                content=ft.Text("Clients view not available",
-                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                               text_align=ft.TextAlign.CENTER),
-                padding=40,
-                alignment=ft.alignment.center
-            )
-        try:
-            return self.clients_view.build()
-        except Exception as e:
-            print(f"[ERROR] Failed to build clients view: {e}")
-            return ft.Container(
-                content=ft.Text(f"Clients view error: {str(e)}",
-                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                               text_align=ft.TextAlign.CENTER),
-                padding=40,
-                alignment=ft.alignment.center
-            )
     
-    def get_files_view(self) -> ft.Control:
-        """Create and return the files view."""
-        if not self.files_view:
-            return ft.Container(
-                content=ft.Text("Files view not available",
-                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                               text_align=ft.TextAlign.CENTER),
-                padding=40,
-                alignment=ft.alignment.center
-            )
-        try:
-            return self.files_view.build()
-        except Exception as e:
-            print(f"[ERROR] Failed to build files view: {e}")
-            return ft.Container(
-                content=ft.Text(f"Files view error: {str(e)}",
-                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                               text_align=ft.TextAlign.CENTER),
-                padding=40,
-                alignment=ft.alignment.center
-            )
     
-    def get_database_view(self) -> ft.Control:
-        """Create and return the database view."""
-        if not self.database_view:
-            return ft.Container(
-                content=ft.Text("Database view not available",
-                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                               text_align=ft.TextAlign.CENTER),
-                padding=40,
-                alignment=ft.alignment.center
-            )
-        try:
-            return self.database_view.build()
-        except Exception as e:
-            print(f"[ERROR] Failed to build database view: {e}")
-            return ft.Container(
-                content=ft.Text(f"Database view error: {str(e)}",
-                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                               text_align=ft.TextAlign.CENTER),
-                padding=40,
-                alignment=ft.alignment.center
-            )
     
-    def get_analytics_view(self) -> ft.Control:
-        """Create and return the analytics view."""
-        if not self.analytics_view:
-            return ft.Container(
-                content=ft.Text("Analytics view not available",
-                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                               text_align=ft.TextAlign.CENTER),
-                padding=40,
-                alignment=ft.alignment.center
-            )
-        try:
-            return self.analytics_view.build()
-        except Exception as e:
-            print(f"[ERROR] Failed to build analytics view: {e}")
-            return ft.Container(
-                content=ft.Text(f"Analytics view error: {str(e)}",
-                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                               text_align=ft.TextAlign.CENTER),
-                padding=40,
-                alignment=ft.alignment.center
-            )
     
-    def get_logs_view(self) -> ft.Control:
-        if self.logs_view:
-            return self.logs_view
-        else:
-            return ft.Container(
-                content=ft.Text("Logs view - Import issues being resolved",
-                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                               text_align=ft.TextAlign.CENTER),
-                padding=40,
-                alignment=ft.alignment.center
-            )
     
-    def get_settings_view(self) -> ft.Control:
-        if self.settings_view:
-            return self.settings_view.create_settings_view()
-        else:
-            return ft.Container(
-                content=ft.Text("Settings view - Import issues being resolved",
-                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                               text_align=ft.TextAlign.CENTER),
-                padding=40,
-                alignment=ft.alignment.center
-            )
 
     async def _on_backup_now(self, e: ft.ControlEvent) -> None:
         """Handle backup now action by running the file cleanup job."""
@@ -1005,71 +617,62 @@ class ServerGUIApp:
         self.switch_view("files")
 
     def switch_view(self, view_name: str) -> None:
-        """Switch to a different view, managing component lifecycles."""
+        """Switch to a different view by showing the pre-instantiated control."""
         if self.current_view == view_name:
             return
 
-        # Clean up the current view properly
-        self._cleanup_view_resources(self.active_view_instance)
+        # Call a lifecycle method on the old view if it exists
+        if hasattr(self.active_view_instance, 'on_hide'):
+            self.active_view_instance.on_hide()
 
         self.current_view = view_name
+        
+        # --- A SIMPLE DICTIONARY LOOKUP ---
+        # No rebuilding, no complex logic.
         view_map = {
-            "dashboard": self.get_dashboard_view,
-            "clients": self.get_clients_view,
-            "files": self.get_files_view,
-            "database": self.get_database_view,
-            "analytics": self.get_analytics_view,
-            "logs": self.get_logs_view,
-            "settings": self.get_settings_view
+            "dashboard": self.dashboard_view,
+            "clients": self.clients_view,
+            "files": self.files_view,
+            "database": self.database_view,
+            "analytics": self.analytics_view,
+            "logs": self.logs_view,
+            "settings": self.settings_view
         }
+
+        # Get the new view instance from our map
+        self.active_view_instance = view_map.get(view_name)
         
-        view_builder = view_map.get(view_name, self.get_dashboard_view)
-        
-        try:
-            new_content_instance = view_builder()
-            
-            # Special handling for view classes vs created controls
-            if view_name == "logs" and self.logs_view:
-                self.active_view_instance = self.logs_view
-                new_content = self.logs_view.create_logs_view()
-            else:
-                self.active_view_instance = new_content_instance
-                new_content = new_content_instance
-
-            # Ensure new_content is not None
-            if new_content is None:
-                new_content = ft.Container(
-                    content=ft.Text(f"View '{view_name}' is not available", 
-                                   style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                                   text_align=ft.TextAlign.CENTER),
-                    padding=40,
-                    alignment=ft.alignment.center,
-                    expand=True
-                )
-
-            # Start the new view if it has a start method
-            if hasattr(self.active_view_instance, 'start'):
-                self.active_view_instance.start()
-
-            self.content_area.content = new_content
-            
-            # Sync navigation state
-            if hasattr(self, 'navigation') and self.navigation:
-                self.navigation.sync_navigation_state(view_name)
+        # Change the content of the AnimatedSwitcher
+        if self.active_view_instance:
+            try:
+                # Get the content from the view's build method
+                if view_name == "settings" and hasattr(self.active_view_instance, 'create_settings_view'):
+                    new_content = self.active_view_instance.create_settings_view()
+                elif view_name == "logs" and hasattr(self.active_view_instance, 'create_logs_view'):
+                    new_content = self.active_view_instance.create_logs_view()
+                elif hasattr(self.active_view_instance, 'build'):
+                    new_content = self.active_view_instance.build()
+                else:
+                    # View instance itself is the content
+                    new_content = self.active_view_instance
+                    
+                self.content_area.content = new_content
                 
-            self.page.update()
-        except Exception as e:
-            print(f"[ERROR] Failed to switch to view '{view_name}': {e}")
-            error_content = ft.Container(
-                content=ft.Text(f"Error loading view '{view_name}': {str(e)}", 
-                               style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                               text_align=ft.TextAlign.CENTER),
-                padding=40,
-                alignment=ft.alignment.center,
-                expand=True
-            )
-            self.content_area.content = error_content
-            self.page.update()
+                # Call a lifecycle method on the new view if it exists
+                if hasattr(self.active_view_instance, 'on_show'):
+                    self.active_view_instance.on_show()
+            except Exception as e:
+                print(f"[ERROR] Failed to build view '{view_name}': {e}")
+                # Fallback to simplified dashboard if any view fails
+                self.content_area.content = self._build_simplified_dashboard()
+        else:
+            # Fallback for an unknown view name
+            self.content_area.content = ft.Text(f"Error: View '{view_name}' not found.")
+
+        # Sync navigation state
+        if hasattr(self, 'navigation') and self.navigation:
+            self.navigation.sync_navigation_state(view_name)
+        self.page.update()
 
     def toggle_theme(self, e: ft.ControlEvent) -> None:
         """Toggle between light and dark mode."""

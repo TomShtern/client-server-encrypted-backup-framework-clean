@@ -1,3 +1,8 @@
+###***!IMPORTANT: this file has already been read and fixes were applied succsesfully***
+
+
+
+
 This is a shit-show.
 
 Yes, let's take a look. This is a masterpiece of well-intentioned, but catastrophically misguided, over-engineering. It's a perfect example of a developer fighting the framework instead of working with it.
