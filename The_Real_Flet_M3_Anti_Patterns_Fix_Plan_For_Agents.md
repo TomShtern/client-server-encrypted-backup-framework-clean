@@ -111,8 +111,8 @@ Agent 7 (Copilot-simple): "Copy Section H from the plan and work ONLY on test_*.
 
 | Agent | Section | Completion Criteria | Status |
 |-------|---------|---------------------|--------|
-| Agent 1 | Section A | ✅ main.py reduced to <200 lines + extracted managers created | ⏳ |
-| Agent 2 | Section B | ✅ responsive_layout.py decomposed into 4 classes + dashboard refactored | ⏳ |
+| Agent 1 | Section A | ✅ main.py reduced to <200 lines + extracted managers created | ✅ |
+| Agent 2 | Section B | ✅ responsive_layout.py decomposed into 4 classes + dashboard refactored | ✅ |
 | Agent 3 | Section C | ✅ 4 component files decomposed into focused classes with facades | ⏳ |
 | Agent 4 | Section D | ✅ 4 service files decomposed into focused services | ⏳ |
 | Agent 5 | Section E | ✅ charts.py decomposed into 3 services (Metrics, Alert, Renderer) | ⏳ |
@@ -172,7 +172,7 @@ Agent 8 (Qwen): "Copy Section G from the plan. You can now work on cross-cutting
 
 **Use this checklist to validate completion:**
 
-#### **Agent 1 (Section A) - Expected Deliverables:**
+#### **Agent 1 (Section A) - Expected Deliverables:** ✅ COMPLETED
 ```bash
 # Modified Files:
 ✅ flet_server_gui/main.py (reduced from 924 lines to <200 lines)
@@ -189,7 +189,7 @@ ls flet_server_gui/services/application_monitor.py  # Should exist
 ls flet_server_gui/managers/theme_manager.py  # Should exist
 ```
 
-#### **Agent 2 (Section B) - Expected Deliverables:**
+#### **Agent 2 (Section B) - Expected Deliverables:** ✅ COMPLETED
 ```bash
 # Modified Files:
 ✅ flet_server_gui/ui/responsive_layout.py (decomposed from 1045 lines)

@@ -77,90 +77,55 @@ class DashboardView(BaseComponent):
         
     def build(self) -> ft.Control:
         """Build the dashboard view with professional responsive design"""
-        # Header with timestamp and system theme integration
-        header = ft.Container(
-            content=ft.ResponsiveRow([
-                ft.Container(
-                    content=ft.Text(
-                        "Encrypted Backup Server",
-                        style=ft.TextThemeStyle.HEADLINE_MEDIUM,
-                        weight=ft.FontWeight.W_600,
-                        color=TOKENS['on_surface']
+        # Header with timestamp and system theme integration - eliminated outer container
+        header = ft.ResponsiveRow([
+            ft.Text(
+                "Encrypted Backup Server",
+                style=ft.TextThemeStyle.HEADLINE_MEDIUM,
+                weight=ft.FontWeight.W_600,
+                color=TOKENS['on_surface'],
+                col={"sm": 12, "md": 8}
+            ),
+            ft.Column([
+                ft.Text(
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    style=ft.TextThemeStyle.BODY_MEDIUM,
+                    color=TOKENS['outline']
+                ),
+                ft.Row([
+                    ft.Text("Server", style=ft.TextThemeStyle.BODY_SMALL, color=TOKENS['outline']),
+                    ft.Icon(
+                        ft.Icons.CIRCLE,
+                        color=get_status_color("error"),
+                        size=12
                     ),
-                    col={"sm": 12, "md": 8},
-                    alignment=ft.alignment.center_left
-                ),
-                ft.Container(content=ft.Column([
-                        ft.Text(
-                            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            style=ft.TextThemeStyle.BODY_MEDIUM,
-                            color=TOKENS['outline']
-                        ),
-                        ft.Row([
-                            ft.Text("Server", style=ft.TextThemeStyle.BODY_SMALL, color=TOKENS['outline']),
-                            ft.Icon(
-                                ft.Icons.CIRCLE,
-                                color=get_status_color("error"),
-                                size=12
-                            ),
-                            ft.Text("Offline", style=ft.TextThemeStyle.BODY_SMALL, color=get_status_color("error"))
-                        ], spacing=6, alignment=ft.MainAxisAlignment.END)
-                    ], horizontal_alignment=ft.CrossAxisAlignment.END, spacing=4),
-                    col={"sm": 12, "md": 4},
-                    alignment=ft.alignment.center_right
-                )
-            ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            padding=ft.padding.only(bottom=20),
-            margin=ft.margin.only(bottom=8)
-        )
+                    ft.Text("Offline", style=ft.TextThemeStyle.BODY_SMALL, color=get_status_color("error"))
+                ], spacing=6, alignment=ft.MainAxisAlignment.END)
+            ], horizontal_alignment=ft.CrossAxisAlignment.END, spacing=4,
+            col={"sm": 12, "md": 4})
+        ], vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        padding=ft.padding.only(bottom=20),
+        margin=ft.margin.only(bottom=8))
         
-        # Main content with proper responsive grid
+        # Main content with proper responsive grid - eliminated container wrappers
         content = ft.Column([
-            # Status cards row - equal height cards
+            # Status cards row - cards directly in responsive row
             ft.ResponsiveRow([
-                ft.Container(
-                    content=self._create_server_status_card(),
-                    col={"xs": 12, "sm": 12, "md": 4, "lg": 4},
-                    expand=False
-                ),
-                ft.Container(
-                    content=self._create_client_stats_card(),
-                    col={"xs": 12, "sm": 12, "md": 4, "lg": 4},
-                    expand=False
-                ),
-                ft.Container(
-                    content=self._create_control_panel_card(),
-                    col={"xs": 12, "sm": 12, "md": 4, "lg": 4},
-                    expand=False
-                )
+                ft.Column([self._create_server_status_card()], col={"xs": 12, "sm": 12, "md": 4, "lg": 4}),
+                ft.Column([self._create_client_stats_card()], col={"xs": 12, "sm": 12, "md": 4, "lg": 4}),
+                ft.Column([self._create_control_panel_card()], col={"xs": 12, "sm": 12, "md": 4, "lg": 4})
             ], spacing=12, run_spacing=12),
             
-            # Stats row
+            # Stats row - cards directly in responsive row
             ft.ResponsiveRow([
-                ft.Container(
-                    content=self._create_transfer_stats_card(),
-                    col={"xs": 12, "sm": 12, "md": 6, "lg": 6},
-                    expand=False
-                ),
-                ft.Container(
-                    content=self._create_maintenance_card(),
-                    col={"xs": 12, "sm": 12, "md": 6, "lg": 6},
-                    expand=False
-                )
+                ft.Column([self._create_transfer_stats_card()], col={"xs": 12, "sm": 12, "md": 6, "lg": 6}),
+                ft.Column([self._create_maintenance_card()], col={"xs": 12, "sm": 12, "md": 6, "lg": 6})
             ], spacing=12, run_spacing=12),
             
-            # Chart and log row
+            # Chart and log row - cards directly in responsive row
             ft.ResponsiveRow([
-                ft.Container(
-                    content=self._create_performance_chart_card(),
-                    col={"xs": 12, "sm": 12, "md": 8, "lg": 8},
-                    expand=False
-                ),
-                ft.Container(
-                    content=self._create_activity_log_card(),
-                    col={"xs": 12, "sm": 12, "md": 4, "lg": 4},
-                    expand=False
-                )
+                ft.Column([self._create_performance_chart_card()], col={"xs": 12, "sm": 12, "md": 8, "lg": 8}),
+                ft.Column([self._create_activity_log_card()], col={"xs": 12, "sm": 12, "md": 4, "lg": 4})
             ], spacing=12, run_spacing=12)
         ], spacing=16, scroll=ft.ScrollMode.AUTO, expand=True)
         
@@ -175,180 +140,145 @@ class DashboardView(BaseComponent):
     def _create_server_status_card(self) -> ft.Card:
         """Create the Server Status card with Material Design 3 styling"""
         return ft.Card(
-            content=ft.Container(content=ft.Column([
-                    ft.Text("Server Status", 
-                           style=ft.TextThemeStyle.TITLE_LARGE, 
-                           weight=ft.FontWeight.W_500),
-                    ft.Divider(height=1, color=TOKENS['outline']),
-                    ft.Container(content=ft.Column([
-                            self._create_status_row("Status", self.server_status_text, "Stopped", get_status_color("error")),
-                            self._create_status_row("Address", self.server_address_text, "N/A"),
-                            self._create_status_row("Uptime", self.server_uptime_text, "00:00:00")
-                        ], spacing=12),
-                        padding=ft.padding.symmetric(vertical=8)
-                    )
-                ], spacing=16),
-                padding=ft.padding.all(20),
-                width=None,  # Let it flex
-                expand=False
-            ),
+            content=ft.Column([
+                ft.Text("Server Status", 
+                       style=ft.TextThemeStyle.TITLE_LARGE, 
+                       weight=ft.FontWeight.W_500),
+                ft.Divider(height=1, color=TOKENS['outline']),
+                # Direct Column without container wrapper
+                ft.Column([
+                    self._create_status_row("Status", self.server_status_text, "Stopped", get_status_color("error")),
+                    self._create_status_row("Address", self.server_address_text, "N/A"),
+                    self._create_status_row("Uptime", self.server_uptime_text, "00:00:00")
+                ], spacing=12, padding=ft.padding.symmetric(vertical=8))
+            ], spacing=16, padding=ft.padding.all(20)),
             elevation=2,
-            # Let theme handle surface tint color automatically,
             margin=ft.margin.all(0)
         )
     
     def _create_client_stats_card(self) -> ft.Card:
         """Create the Client Stats card with Material Design 3 styling"""
         return ft.Card(
-            content=ft.Container(content=ft.Column([
-                    ft.Text("Client Stats", 
-                           style=ft.TextThemeStyle.TITLE_LARGE, 
-                           weight=ft.FontWeight.W_500),
+            content=ft.Column([
+                ft.Text("Client Stats", 
+                       style=ft.TextThemeStyle.TITLE_LARGE, 
+                       weight=ft.FontWeight.W_500),
+                ft.Divider(height=1, color=TOKENS['outline']),
+                # Direct Column without container wrapper
+                ft.Column([
+                    # Prominent connected clients display - direct Column styling
+                    ft.Column([
+                        ft.Text(ref=self.connected_clients_text, value="0",
+                               style=ft.TextThemeStyle.DISPLAY_SMALL,
+                               weight=ft.FontWeight.W_600,
+                               color=TOKENS['primary'],
+                               text_align=ft.TextAlign.CENTER),
+                        ft.Text("Connected Clients",
+                               style=ft.TextThemeStyle.BODY_MEDIUM,
+                               color=TOKENS['outline'],
+                               text_align=ft.TextAlign.CENTER)
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, 
+                    spacing=4, padding=ft.padding.symmetric(vertical=8)),
                     ft.Divider(height=1, color=TOKENS['outline']),
-                    ft.Container(content=ft.Column([
-                            # Prominent connected clients display
-                            ft.Container(content=ft.Column([
-                                    ft.Text(ref=self.connected_clients_text, value="0",
-                                           style=ft.TextThemeStyle.DISPLAY_SMALL,
-                                           weight=ft.FontWeight.W_600,
-                                           color=TOKENS['primary'],
-                                           text_align=ft.TextAlign.CENTER),
-                                    ft.Text("Connected Clients",
-                                           style=ft.TextThemeStyle.BODY_MEDIUM,
-                                           color=TOKENS['outline'],
-                                           text_align=ft.TextAlign.CENTER)
-                                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
-                                alignment=ft.alignment.center,
-                                padding=ft.padding.symmetric(vertical=8)
-                            ),
-                            ft.Divider(height=1, color=TOKENS['outline']),
-                            self._create_status_row("Total Registered", self.total_clients_text, "0"),
-                            self._create_status_row("Active Transfers", self.active_transfers_text, "0")
-                        ], spacing=12),
-                        padding=ft.padding.symmetric(vertical=8)
-                    )
-                ], spacing=16),
-                padding=ft.padding.all(20),
-                width=None,
-                expand=False
-            ),
+                    self._create_status_row("Total Registered", self.total_clients_text, "0"),
+                    self._create_status_row("Active Transfers", self.active_transfers_text, "0")
+                ], spacing=12, padding=ft.padding.symmetric(vertical=8))
+            ], spacing=16, padding=ft.padding.all(20)),
             elevation=2,
-            # Let theme handle surface tint color automatically,
             margin=ft.margin.all(0)
         )
     
     def _create_control_panel_card(self) -> ft.Card:
         """Create the Control Panel card with Material Design 3 buttons"""
         return ft.Card(
-            content=ft.Container(content=ft.Column([
-                    ft.Text("Control Panel", 
-                           style=ft.TextThemeStyle.TITLE_LARGE, 
-                           weight=ft.FontWeight.W_500),
-                    ft.Divider(height=1, color=TOKENS['outline']),
-                    ft.Container(content=ft.Column([
-                            # Primary actions row
-                            ft.ResponsiveRow([
-                                ft.Container(
-                                    content=ft.FilledButton(
-                                        ref=self.start_button,
-                                        content=ft.Row([
-                                            ft.Icon(ft.Icons.PLAY_ARROW, size=20),
-                                            ft.Text("Start", weight=ft.FontWeight.W_500)
-                                        ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
-                                        bgcolor=get_status_color("success"),
-                                        # Let theme handle text color automatically,
-                                        on_click=self._on_start_server
-                                    ),
-                                    col={"sm": 12, "md": 6},
-                                    expand=True
-                                ),
-                                ft.Container(
-                                    content=ft.FilledButton(
-                                        ref=self.stop_button,
-                                        content=ft.Row([
-                                            ft.Icon(ft.Icons.STOP, size=20),
-                                            ft.Text("Stop", weight=ft.FontWeight.W_500)
-                                        ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
-                                        bgcolor=get_status_color("error"),
-                                        # Let theme handle text color automatically,
-                                        on_click=self._on_stop_server
-                                    ),
-                                    col={"sm": 12, "md": 6},
-                                    expand=True
-                                )
-                            ], spacing=12, run_spacing=8),
-                            
-                            # Secondary actions
-                            ft.ResponsiveRow([
-                                ft.Container(
-                                    content=ft.OutlinedButton(
-                                        ref=self.restart_button,
-                                        content=ft.Row([
-                                            ft.Icon(ft.Icons.REFRESH, size=20, color=get_status_color("warning")),
-                                            ft.Text("Restart", weight=ft.FontWeight.W_500, color=get_status_color("warning"))
-                                        ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
-                                        on_click=self._on_restart_server
-                                    ),
-                                    col={"sm": 12, "md": 12},
-                                    expand=True
-                                )
-                            ], spacing=12, run_spacing=8),
-                            
-                            # Utility actions
-                            ft.ResponsiveRow([
-                                ft.Container(
-                                    content=ft.OutlinedButton(
-                                        content=ft.Row([
-                                            ft.Icon(ft.Icons.STORAGE, size=18, color=get_status_color("info")),
-                                            ft.Text("Backup DB", weight=ft.FontWeight.W_400, color=get_status_color("info"))
-                                        ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
-                                        on_click=self._on_backup_db
-                                    ),
-                                    col={"sm": 12, "md": 6},
-                                    expand=True
-                                ),
-                                ft.Container(
-                                    content=ft.TextButton(
-                                        content=ft.Row([
-                                            ft.Icon(ft.Icons.EXIT_TO_APP, size=18, color=TOKENS['outline']),
-                                            ft.Text("Exit GUI", weight=ft.FontWeight.W_400, color=TOKENS['outline'])
-                                        ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
-                                        on_click=self._on_exit_gui
-                                    ),
-                                    col={"sm": 12, "md": 6},
-                                    expand=True
-                                )
-                            ], spacing=12, run_spacing=8)
-                        ], spacing=16),
-                        padding=ft.padding.symmetric(vertical=8)
-                    )
-                ], spacing=16),
-                padding=ft.padding.all(20),
-                expand=False
-            ),
+            content=ft.Column([
+                ft.Text("Control Panel", 
+                       style=ft.TextThemeStyle.TITLE_LARGE, 
+                       weight=ft.FontWeight.W_500),
+                ft.Divider(height=1, color=TOKENS['outline']),
+                # Direct Column without container wrapper
+                ft.Column([
+                    # Primary actions row - buttons directly in responsive row
+                    ft.ResponsiveRow([
+                        ft.FilledButton(
+                            ref=self.start_button,
+                            content=ft.Row([
+                                ft.Icon(ft.Icons.PLAY_ARROW, size=20),
+                                ft.Text("Start", weight=ft.FontWeight.W_500)
+                            ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
+                            bgcolor=get_status_color("success"),
+                            on_click=self._on_start_server,
+                            col={"sm": 12, "md": 6},
+                            expand=True
+                        ),
+                        ft.FilledButton(
+                            ref=self.stop_button,
+                            content=ft.Row([
+                                ft.Icon(ft.Icons.STOP, size=20),
+                                ft.Text("Stop", weight=ft.FontWeight.W_500)
+                            ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
+                            bgcolor=get_status_color("error"),
+                            on_click=self._on_stop_server,
+                            col={"sm": 12, "md": 6},
+                            expand=True
+                        )
+                    ], spacing=12, run_spacing=8),
+                    
+                    # Secondary actions - button directly in responsive row
+                    ft.ResponsiveRow([
+                        ft.OutlinedButton(
+                            ref=self.restart_button,
+                            content=ft.Row([
+                                ft.Icon(ft.Icons.REFRESH, size=20, color=get_status_color("warning")),
+                                ft.Text("Restart", weight=ft.FontWeight.W_500, color=get_status_color("warning"))
+                            ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
+                            on_click=self._on_restart_server,
+                            col={"sm": 12, "md": 12},
+                            expand=True
+                        )
+                    ], spacing=12, run_spacing=8),
+                    
+                    # Utility actions - buttons directly in responsive row
+                    ft.ResponsiveRow([
+                        ft.OutlinedButton(
+                            content=ft.Row([
+                                ft.Icon(ft.Icons.STORAGE, size=18, color=get_status_color("info")),
+                                ft.Text("Backup DB", weight=ft.FontWeight.W_400, color=get_status_color("info"))
+                            ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
+                            on_click=self._on_backup_db,
+                            col={"sm": 12, "md": 6},
+                            expand=True
+                        ),
+                        ft.TextButton(
+                            content=ft.Row([
+                                ft.Icon(ft.Icons.EXIT_TO_APP, size=18, color=TOKENS['outline']),
+                                ft.Text("Exit GUI", weight=ft.FontWeight.W_400, color=TOKENS['outline'])
+                            ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
+                            on_click=self._on_exit_gui,
+                            col={"sm": 12, "md": 6},
+                            expand=True
+                        )
+                    ], spacing=12, run_spacing=8)
+                ], spacing=16, padding=ft.padding.symmetric(vertical=8))
+            ], spacing=16, padding=ft.padding.all(20)),
             elevation=2,
-            # Let theme handle surface tint color automatically,
             margin=ft.margin.all(0)
         )
     
     def _create_transfer_stats_card(self) -> ft.Card:
         """Create the Transfer Stats card with Material Design 3 styling"""
         return ft.Card(
-            content=ft.Container(content=ft.Column([
-                    ft.Text("Transfer Stats", 
-                           style=ft.TextThemeStyle.TITLE_LARGE, 
-                           weight=ft.FontWeight.W_500),
-                    ft.Divider(height=1, color=TOKENS['outline']),
-                    ft.Container(content=ft.Column([
-                            self._create_status_row("Total Transferred", self.total_transferred_text, "0 MB", TOKENS['primary']),
-                            self._create_status_row("Transfer Rate", self.transfer_rate_text, "0 KB/s")
-                        ], spacing=16),
-                        padding=ft.padding.symmetric(vertical=8)
-                    )
-                ], spacing=16),
-                padding=ft.padding.all(20),
-                expand=False
-            ),
+            content=ft.Column([
+                ft.Text("Transfer Stats", 
+                       style=ft.TextThemeStyle.TITLE_LARGE, 
+                       weight=ft.FontWeight.W_500),
+                ft.Divider(height=1, color=TOKENS['outline']),
+                # Direct Column without container wrapper
+                ft.Column([
+                    self._create_status_row("Total Transferred", self.total_transferred_text, "0 MB", TOKENS['primary']),
+                    self._create_status_row("Transfer Rate", self.transfer_rate_text, "0 KB/s")
+                ], spacing=16, padding=ft.padding.symmetric(vertical=8))
+            ], spacing=16, padding=ft.padding.all(20)),
             elevation=2,
             surface_tint_color=TOKENS['primary'],
             margin=ft.margin.all(0)
@@ -357,21 +287,17 @@ class DashboardView(BaseComponent):
     def _create_maintenance_card(self) -> ft.Card:
         """Create the Maintenance card with Material Design 3 styling"""
         return ft.Card(
-            content=ft.Container(content=ft.Column([
-                    ft.Text("Maintenance", 
-                           style=ft.TextThemeStyle.TITLE_LARGE, 
-                           weight=ft.FontWeight.W_500),
-                    ft.Divider(height=1, color=TOKENS['outline']),
-                    ft.Container(content=ft.Column([
-                            self._create_status_row("Last Cleanup", self.last_cleanup_text, "Never"),
-                            self._create_status_row("Files Cleaned", self.files_cleaned_text, "0")
-                        ], spacing=16),
-                        padding=ft.padding.symmetric(vertical=8)
-                    )
-                ], spacing=16),
-                padding=ft.padding.all(20),
-                expand=False
-            ),
+            content=ft.Column([
+                ft.Text("Maintenance", 
+                       style=ft.TextThemeStyle.TITLE_LARGE, 
+                       weight=ft.FontWeight.W_500),
+                ft.Divider(height=1, color=TOKENS['outline']),
+                # Direct Column without container wrapper
+                ft.Column([
+                    self._create_status_row("Last Cleanup", self.last_cleanup_text, "Never"),
+                    self._create_status_row("Files Cleaned", self.files_cleaned_text, "0")
+                ], spacing=16, padding=ft.padding.symmetric(vertical=8))
+            ], spacing=16, padding=ft.padding.all(20)),
             elevation=2,
             surface_tint_color=TOKENS['primary'],
             margin=ft.margin.all(0)
@@ -379,81 +305,60 @@ class DashboardView(BaseComponent):
     
     def _create_performance_chart_card(self) -> ft.Card:
         """Create the Live System Performance card with responsive chart"""
-        # Create a professional performance visualization
-        chart_content = ft.Container(content=ft.Column([
-                # Chart placeholder with gradient background
-                ft.Container(content=ft.Column([
-                        # Background gradient as separate container
-                        ft.Container(
-                            gradient=ft.LinearGradient(
-                                begin=ft.alignment.top_center,
-                                end=ft.alignment.bottom_center,
-                                colors=[TOKENS['surface_variant'], "transparent"]
-                            ),
-                            border_radius=8,
-                            height=180,
-                            width=float("inf")
-                        ),
-                        # Chart lines simulation - positioned absolutely
-                        ft.Container(content=ft.Column([
-                                ft.Text("System Performance Monitoring",
-                                       style=ft.TextThemeStyle.BODY_LARGE,
-                                       color=TOKENS['outline'],
-                                       text_align=ft.TextAlign.CENTER),
-                                ft.Container(
-                                    content=ft.Row([
-                                        ft.Icon(ft.Icons.TRENDING_UP, 
-                                               color=TOKENS['primary'], size=48),
-                                        ft.Column([
-                                            ft.Text("CPU: 12%", 
-                                                   style=ft.TextThemeStyle.BODY_MEDIUM,
-                                                   color=get_status_color("info")),
-                                            ft.Text("Memory: 34%", 
-                                                   style=ft.TextThemeStyle.BODY_MEDIUM,
-                                                   color=get_status_color("info"))
-                                        ], spacing=4)
-                                    ], alignment=ft.MainAxisAlignment.CENTER, spacing=16),
-                                    expand=True
-                                )
-                            ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                            alignment=ft.alignment.center,
-                            padding=ft.padding.all(16)
-                        )
-                    ]),
-                    height=180,  # Flexible height
-                    border_radius=8,
-                    # Let theme handle border color automatically
-                ),
-                # Chart legend
-                ft.Row([
+        return ft.Card(
+            content=ft.Column([
+                ft.Text("Live System Performance", 
+                       style=ft.TextThemeStyle.TITLE_LARGE, 
+                       weight=ft.FontWeight.W_500),
+                ft.Divider(height=1, color=TOKENS['outline']),
+                # Chart content - eliminated 3 layers of container nesting
+                ft.Column([
+                    # Chart area with gradient background - direct styling
                     ft.Container(
-                        content=ft.Row([
+                        gradient=ft.LinearGradient(
+                            begin=ft.alignment.top_center,
+                            end=ft.alignment.bottom_center,
+                            colors=[TOKENS['surface_variant'], "transparent"]
+                        ),
+                        border_radius=8,
+                        height=180,
+                        # Chart content directly inside - no wrapper container
+                        content=ft.Column([
+                            ft.Text("System Performance Monitoring",
+                                   style=ft.TextThemeStyle.BODY_LARGE,
+                                   color=TOKENS['outline'],
+                                   text_align=ft.TextAlign.CENTER),
+                            # Direct Row without container wrapper
+                            ft.Row([
+                                ft.Icon(ft.Icons.TRENDING_UP, 
+                                       color=TOKENS['primary'], size=48),
+                                ft.Column([
+                                    ft.Text("CPU: 12%", 
+                                           style=ft.TextThemeStyle.BODY_MEDIUM,
+                                           color=get_status_color("info")),
+                                    ft.Text("Memory: 34%", 
+                                           style=ft.TextThemeStyle.BODY_MEDIUM,
+                                           color=get_status_color("info"))
+                                ], spacing=4)
+                            ], alignment=ft.MainAxisAlignment.CENTER, spacing=16, expand=True)
+                        ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        alignment=ft.MainAxisAlignment.CENTER),
+                        alignment=ft.alignment.center,
+                        padding=ft.padding.all(16)
+                    ),
+                    # Chart legend - eliminated container wrappers
+                    ft.Row([
+                        ft.Row([
                             ft.Container(width=12, height=3, bgcolor=get_status_color("info"), border_radius=2),
                             ft.Text("CPU %", style=ft.TextThemeStyle.BODY_SMALL)
-                        ], spacing=6)
-                    ),
-                    ft.Container(
-                        content=ft.Row([
+                        ], spacing=6),
+                        ft.Row([
                             ft.Container(width=12, height=3, bgcolor=get_status_color("info"), border_radius=2),
                             ft.Text("Memory %", style=ft.TextThemeStyle.BODY_SMALL)
                         ], spacing=6)
-                    )
-                ], alignment=ft.MainAxisAlignment.CENTER, spacing=24)
-            ], spacing=12),
-            padding=ft.padding.symmetric(vertical=8)
-        )
-        
-        return ft.Card(
-            content=ft.Container(content=ft.Column([
-                    ft.Text("Live System Performance", 
-                           style=ft.TextThemeStyle.TITLE_LARGE, 
-                           weight=ft.FontWeight.W_500),
-                    ft.Divider(height=1, color=TOKENS['outline']),
-                    chart_content
-                ], spacing=16),
-                padding=ft.padding.all(20),
-                expand=False
-            ),
+                    ], alignment=ft.MainAxisAlignment.CENTER, spacing=24)
+                ], spacing=12, padding=ft.padding.symmetric(vertical=8))
+            ], spacing=16, padding=ft.padding.all(20)),
             elevation=2,
             surface_tint_color=TOKENS['primary'],
             margin=ft.margin.all(0)
@@ -462,49 +367,40 @@ class DashboardView(BaseComponent):
     def _create_activity_log_card(self) -> ft.Card:
         """Create the Activity Log card with responsive design"""
         return ft.Card(
-            content=ft.Container(content=ft.Column([
-                    ft.Row([
-                        ft.Text("Activity Log", 
-                               style=ft.TextThemeStyle.TITLE_LARGE, 
-                               weight=ft.FontWeight.W_500),
-                        ft.Container(expand=True),
-                        ft.IconButton(
-                            icon=ft.Icons.CLEAR_ALL,
-                            tooltip="Clear log",
-                            icon_size=18,
-                            on_click=self._clear_activity_log
-                        )
-                    ]),
-                    ft.Divider(height=1, color=TOKENS['outline']),
-                    ft.Container(
-                        content=ft.Column(
-                            ref=self.activity_log_container,
-                            controls=[
-                                ft.Container(
-                                    content=ft.Text(
-                                        "No recent activity",
-                                        style=ft.TextThemeStyle.BODY_SMALL,
-                                        color=TOKENS['outline'],
-                                        italic=True
-                                    ),
-                                    alignment=ft.alignment.center,
-                                    padding=ft.padding.all(16)
-                                )
-                            ],
-                            scroll=ft.ScrollMode.AUTO,
-                            spacing=2,
-                            expand=True
-                        ),
-                        expand=True,  # Let it flex with the card
-                        padding=ft.padding.all(8),
-                        border_radius=8,
-                        # Let theme handle background color
-                        # Let theme handle border color
+            content=ft.Column([
+                ft.Row([
+                    ft.Text("Activity Log", 
+                           style=ft.TextThemeStyle.TITLE_LARGE, 
+                           weight=ft.FontWeight.W_500),
+                    ft.Container(expand=True),
+                    ft.IconButton(
+                        icon=ft.Icons.CLEAR_ALL,
+                        tooltip="Clear log",
+                        icon_size=18,
+                        on_click=self._clear_activity_log
                     )
-                ], spacing=16, expand=True),
-                padding=ft.padding.all(20),
-                expand=False
-            ),
+                ]),
+                ft.Divider(height=1, color=TOKENS['outline']),
+                # Direct Column without container wrapper
+                ft.Column(
+                    ref=self.activity_log_container,
+                    controls=[
+                        # Initial placeholder without container wrapper
+                        ft.Text(
+                            "No recent activity",
+                            style=ft.TextThemeStyle.BODY_SMALL,
+                            color=TOKENS['outline'],
+                            italic=True,
+                            text_align=ft.TextAlign.CENTER
+                        )
+                    ],
+                    scroll=ft.ScrollMode.AUTO,
+                    spacing=2,
+                    expand=True,
+                    padding=ft.padding.all(8),
+                    border_radius=8
+                )
+            ], spacing=16, expand=True, padding=ft.padding.all(20)),
             elevation=2,
             surface_tint_color=TOKENS['primary'],
             margin=ft.margin.all(0)

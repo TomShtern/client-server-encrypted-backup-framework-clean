@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 """
-UTF-8 Solution - Simple and Reliable Unicode Support with ACTUAL Emoji Display and RTL Hebrew
+UTF-8 Solution - Simple and Reliable Unicode Support with Automatic Detection and Smart Bidirectional Text
 
-SINGLE WORKING APPROACH: Direct buffer writing for emoji display + Environment Setup
+SINGLE WORKING APPROACH: Direct buffer writing for emoji display + Environment Setup + Auto Detection + Smart Bidirectional Text
 
 HOW IT WORKS:
 1. Import this module in any Python file that needs UTF-8 support
 2. All subprocess calls from that process automatically get UTF-8 environment
 3. Environment variables propagate to child processes (C++ client)
 4. ACTUAL emoji display using direct buffer writing
-5. Hebrew text can be displayed in RTL visual order when needed
-6. No global monkey-patching - predictable behavior
+5. Hebrew text can be displayed with proper bidirectional text handling when needed
+6. Automatic environment detection and configuration
+7. Enhanced file operations with UTF-8 support
+8. Context managers for RTL printing
+9. Enhanced error reporting
+10. No global monkey-patching - predictable behavior
 
 USAGE:
     import Shared.utils.utf8_solution  # Add to each file that needs UTF-8
@@ -22,8 +26,9 @@ USAGE:
     utf8_solution.safe_print("🎉 Emojis work perfectly")
     utf8_solution.safe_print("שלום עולם")  # Appears as: שלום עולם (logical order)
     
-    # For Hebrew in RTL visual order:
-    utf8_solution.rtl_print("שלום עולם")  # Appears as: םלוע םולש (visual RTL order)
+    # For Hebrew with smart bidirectional handling:
+    utf8_solution.rtl_print("שלום עולם")  # Appears as: םולש םלוע (visual RTL order)
+    utf8_solution.rtl_print("Hello שלום World עולם")  # Appears as: Hello םולש World םלוע
 
 SOLVES:
 - Hebrew filenames with emoji: קובץ_עברי_🎉_test.txt
@@ -31,7 +36,10 @@ SOLVES:
 - Windows console encoding issues
 - 'charmap' codec errors
 - ACTUAL emoji display in Windows environments
-- Hebrew RTL visual display when needed
+- Proper bidirectional text handling for Hebrew/English mixed text
+- Automatic environment detection
+- UTF-8 file operations
+- Enhanced error reporting
 """
 
 
@@ -40,7 +48,11 @@ import os
 import sys
 import subprocess
 import threading
-from typing import Dict, Optional, Any, Union, List
+import locale
+import time
+import functools
+import tempfile
+from typing import Dict, Optional, Any, Union, List, TextIO, BinaryIO
 
 # Import ctypes with proper error handling for Windows
 try:
@@ -55,6 +67,7 @@ class UTF8Support:
     _original_console_cp: Optional[int] = None
     _original_console_output_cp: Optional[int] = None
     _lock: threading.Lock = threading.Lock()
+    _auto_configured: bool = False
     
     @classmethod
     def setup(cls) -> bool:
@@ -73,6 +86,9 @@ class UTF8Support:
                 
                 # Fix console streams encoding
                 cls._fix_console_streams()
+                
+                # Auto-configure environment if needed
+                cls._auto_configure_environment()
                 
                 cls._initialized = True
                 return True
@@ -131,6 +147,32 @@ class UTF8Support:
             pass
 
     @classmethod
+    def _auto_configure_environment(cls) -> None:
+        """Auto-configure environment based on detection."""
+        if cls._auto_configured:
+            return
+            
+        try:
+            # Detect if we're in PowerShell
+            is_powershell = 'PROMPT' in os.environ or 'PSModulePath' in os.environ
+            
+            # Detect if we're in Windows Terminal
+            is_windows_terminal = 'WT_SESSION' in os.environ
+            
+            # Auto-configure based on environment
+            if sys.platform == 'win32':
+                if is_powershell or is_windows_terminal:
+                    # PowerShell or Windows Terminal - optimize for better UTF-8 support
+                    if hasattr(sys.stdout, 'reconfigure'):
+                        sys.stdout.reconfigure(encoding='utf-8')
+                        sys.stderr.reconfigure(encoding='utf-8')
+                        
+            cls._auto_configured = True
+        except Exception:
+            # Silent failure to avoid breaking existing functionality
+            pass
+
+    @classmethod
     def get_env(cls, base_env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         """
         Get environment with UTF-8 settings for subprocess calls.
@@ -168,6 +210,119 @@ class UTF8Support:
                 kernel32 = ctypes.windll.kernel32
                 kernel32.SetConsoleCP(cls._original_console_cp)
                 kernel32.SetConsoleOutputCP(cls._original_console_output_cp)
+
+# === SMART BIDIRECTIONAL TEXT PROCESSING ===
+def is_hebrew_char(char: str) -> bool:
+    """Check if a character is Hebrew."""
+    return '\u0590' <= char <= '\u05FF' or '\uFB00' <= char <= '\uFB4F'
+
+def process_bidirectional_text(text: str) -> str:
+    """
+    Process text with proper bidirectional handling.
+    Hebrew characters go RTL, English/Latin characters go LTR within their segments.
+    
+    Args:
+        text: Input text that may contain mixed Hebrew/English
+        
+    Returns:
+        Processed text with proper bidirectional handling for visual display
+    """
+    if not text:
+        return text
+        
+    # Split text into segments of the same script
+    segments = []
+    current_segment = ""
+    current_type = None  # None, 'hebrew', 'non_hebrew'
+    
+    for char in text:
+        char_type = 'hebrew' if is_hebrew_char(char) else 'non_hebrew'
+        
+        if current_type is None:
+            current_type = char_type
+            current_segment = char
+        elif current_type == char_type:
+            current_segment += char
+        else:
+            # Type changed, save current segment and start new one
+            segments.append((current_type, current_segment))
+            current_type = char_type
+            current_segment = char
+    
+    # Don't forget the last segment
+    if current_segment:
+        segments.append((current_type, current_segment))
+    
+    # Process segments: reverse Hebrew segments for visual order, keep non-Hebrew as-is
+    processed_segments = []
+    for seg_type, segment in segments:
+        if seg_type == 'hebrew':
+            # For Hebrew, reverse to achieve visual RTL order
+            processed_segments.append(segment[::-1])
+        else:
+            # For non-Hebrew, keep as-is (LTR order)
+            processed_segments.append(segment)
+    
+    # Join all segments
+    return ''.join(processed_segments)
+
+# === CORE UTF-8 FUNCTIONS ===
+def safe_print(message: str) -> None:
+    """Safely print message with ACTUAL emoji display support.
+    
+    This function ensures that all Unicode characters (including emojis and Hebrew)
+    display correctly in Windows console environments.
+    
+    Usage:
+        safe_print("🎉 This emoji will display correctly")
+        safe_print("שלום עולם")  # Hebrew displays in logical order
+        safe_print("Mixed: Hello 🌍 שלום עולם ✅")
+        
+    Note: For Hebrew in RTL visual order, use rtl_print() instead.
+    """
+    try:
+        # Try direct buffer writing for proper emoji display
+        sys.stdout.buffer.write(f"{message}\n".encode('utf-8'))
+        sys.stdout.buffer.flush()
+    except Exception:
+        try:
+            # Fallback to regular print with error handling
+            print(message)
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            try:
+                # Ultimate fallback: ASCII with replacement
+                safe_message = message.encode('ascii', errors='replace').decode('ascii')
+                print(safe_message)
+            except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
+                # More specific exception handling
+                print("UTF-8 Solution: Message encoding failed")
+
+def rtl_print(message: str) -> None:
+    """Print text with smart bidirectional text handling.
+    
+    This function processes text with proper bidirectional handling:
+    - Hebrew characters are reversed for visual RTL order
+    - English/Latin characters remain in LTR order
+    - Mixed text is handled properly with each script in its natural direction
+    
+    Usage:
+        rtl_print("שלום עולם")  # Displays as: םולש םלוע
+        rtl_print("Hello שלום World עולם")  # Displays as: Hello םולש World םלוע
+        rtl_print("בדיקה test ✅")  # Displays as: הקידב test ✅
+        
+    Note: 
+        - Use this function for Hebrew text that should appear in RTL order
+        - For normal text (English, emojis), use safe_print()
+        - This function provides smart bidirectional text processing
+    """
+    try:
+        # Process text with smart bidirectional handling
+        processed_text = process_bidirectional_text(message)
+        safe_print(processed_text)
+    except Exception as e:
+        # Fallback to regular safe_print if processing fails
+        safe_print(f"RTL processing error: {e}")
+        safe_print(message)
 
 # Convenience functions that match the CyberBackup Framework patterns
 def get_env(base_env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
@@ -232,62 +387,208 @@ def test_utf8() -> bool:
         # Specific exceptions for encoding issues
         return False
 
-def safe_print(message: str) -> None:
-    """Safely print message with ACTUAL emoji display support.
-    
-    This function ensures that all Unicode characters (including emojis and Hebrew)
-    display correctly in Windows console environments.
-    
-    Usage:
-        safe_print("🎉 This emoji will display correctly")
-        safe_print("שלום עולם")  # Hebrew displays in logical order
-        safe_print("Mixed: Hello 🌍 שלום עולם ✅")
-        
-    Note: For Hebrew in RTL visual order, use rtl_print() instead.
+# === ENHANCED FILE OPERATIONS ===
+def open_utf8(file: Union[str, bytes, int], mode: str = 'r', **kwargs: Any) -> Union[TextIO, BinaryIO]:
     """
-    try:
-        # Try direct buffer writing for proper emoji display
-        sys.stdout.buffer.write(f"{message}\n".encode('utf-8'))
-        sys.stdout.buffer.flush()
-    except Exception:
-        try:
-            # Fallback to regular print with error handling
-            print(message)
-        except (UnicodeEncodeError, UnicodeDecodeError):
-            try:
-                # Ultimate fallback: ASCII with replacement
-                safe_message = message.encode('ascii', errors='replace').decode('ascii')
-                print(safe_message)
-            except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
-                # More specific exception handling
-                print("UTF-8 Solution: Message encoding failed")
+    Enhanced open function with automatic UTF-8 handling.
+    
+    This function automatically sets UTF-8 encoding and robust error handling
+    for all file operations.
+    
+    Args:
+        file: File path or file descriptor
+        mode: File mode ('r', 'w', 'a', etc.)
+        **kwargs: Additional arguments passed to open()
+    
+    Returns:
+        File object with UTF-8 support
+        
+    Usage:
+        # Read UTF-8 file
+        with utf8.open_utf8('test.txt', 'r') as f:
+            content = f.read()
+            
+        # Write UTF-8 file
+        with utf8.open_utf8('output.txt', 'w') as f:
+            f.write('Hello 🌍 שלום עולם ✅')
+    """
+    # Set default encoding to UTF-8 if not specified
+    if 'encoding' not in kwargs and ('b' not in mode):
+        kwargs['encoding'] = 'utf-8'
+    
+    # Set default error handling for robustness
+    if 'errors' not in kwargs:
+        kwargs['errors'] = 'replace'
+    
+    return open(file, mode, **kwargs)
 
-def rtl_print(message: str) -> None:
-    """Print Hebrew text in RTL (Right-to-Left) visual order.
+def read_file(filepath: Union[str, bytes], encoding: Optional[str] = None, errors: Optional[str] = None) -> Optional[str]:
+    """
+    Read file with UTF-8 support.
     
-    This function reverses Hebrew text to display it in visual RTL order,
-    which is how Hebrew is traditionally read.
+    This function reads a file with proper UTF-8 encoding and error handling.
     
-    Usage:
-        rtl_print("שלום עולם")  # Displays as: םלוע םולש
-        rtl_print("בדיקה ✅")   # Displays as: ✅ הקידב
-        rtl_print("טעות ❌")   # Displays as: ❌ תועט
+    Args:
+        filepath: Path to the file to read
+        encoding: Encoding to use (default: utf-8)
+        errors: Error handling strategy (default: replace)
+    
+    Returns:
+        File content as string, or None if error occurs
         
-    Note: 
-        - Use this function ONLY for Hebrew text that should appear in RTL order
-        - For normal text (English, emojis, Hebrew in logical order), use safe_print()
-        - This function is specifically for visual RTL display, not for Unicode RTL controls
+    Usage:
+        content = utf8.read_file('test.txt')
+        if content:
+            print(f"File content: {content}")
     """
     try:
-        # Reverse the string to achieve visual RTL order
-        reversed_message = message[::-1]
-        safe_print(reversed_message)
+        enc = encoding or 'utf-8'
+        err = errors or 'replace'
+        with open_utf8(filepath, 'r', encoding=enc, errors=err) as f:
+            return f.read()
     except Exception as e:
-        # Fallback to regular safe_print if reversal fails
-        safe_print(f"RTL conversion error: {e}")
-        safe_print(message)
+        safe_print(f"Error reading file {filepath}: {e}")
+        return None
 
-def enhanced_safe_print(message: str, use_emoji: bool = True) -> None:
+def write_file(filepath: Union[str, bytes], content: str, encoding: Optional[str] = None, errors: Optional[str] = None) -> bool:
+    """
+    Write file with UTF-8 support.
+    
+    This function writes content to a file with proper UTF-8 encoding and error handling.
+    
+    Args:
+        filepath: Path to the file to write
+        content: Content to write
+        encoding: Encoding to use (default: utf-8)
+        errors: Error handling strategy (default: replace)
+    
+    Returns:
+        True if successful, False if error occurs
+        
+    Usage:
+        success = utf8.write_file('output.txt', 'Hello 🌍 שלום עולם ✅')
+        if success:
+            print("File written successfully")
+    """
+    try:
+        enc = encoding or 'utf-8'
+        err = errors or 'replace'
+        with open_utf8(filepath, 'w', encoding=enc, errors=err) as f:
+            f.write(content)
+        return True
+    except Exception as e:
+        safe_print(f"Error writing file {filepath}: {e}")
+        return False
+
+# === CONTEXT MANAGERS ===
+class RTLContext:
+    """Context manager for temporary RTL printing."""
+    
+    def print(self, text: str) -> None:
+        """Print text with smart bidirectional handling within the context."""
+        rtl_print(text)
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+def rtl_context() -> RTLContext:
+    """
+    Context manager for temporary RTL printing.
+    
+    This context manager allows you to temporarily use RTL printing
+    mode within a specific code block with smart bidirectional text handling.
+    
+    Usage:
+        with utf8.rtl_context() as rtl:
+            rtl.print("שלום עולם")
+            rtl.print("Hello שלום World עולם")
+            
+    Note: This provides smart bidirectional text processing for mixed scripts.
+    """
+    return RTLContext()
+
+# === ENHANCED ERROR REPORTING ===
+def diagnose_utf8_environment() -> Dict[str, Any]:
+    """
+    Provide detailed UTF-8 environment diagnosis.
+    
+    This function returns detailed information about the current UTF-8
+    environment configuration for debugging purposes.
+    
+    Returns:
+        Dictionary with environment diagnosis information
+        
+    Usage:
+        diagnosis = utf8.diagnose_utf8_environment()
+        print(f"UTF-8 test: {diagnosis['utf8_test']}")
+    """
+    diagnosis = {
+        'platform': sys.platform,
+        'python_version': sys.version,
+        'default_encoding': sys.getdefaultencoding(),
+        'filesystem_encoding': sys.getfilesystemencoding(),
+        'preferred_encoding': locale.getpreferredencoding(),
+        'stdout_encoding': getattr(sys.stdout, 'encoding', 'Unknown'),
+        'stderr_encoding': getattr(sys.stderr, 'encoding', 'Unknown'),
+        'environment_variables': {
+            'PYTHONUTF8': os.environ.get('PYTHONUTF8', 'NOT SET'),
+            'PYTHONIOENCODING': os.environ.get('PYTHONIOENCODING', 'NOT SET')
+        }
+    }
+    
+    try:
+        diagnosis['utf8_test'] = test_utf8()
+        env = get_env()
+        diagnosis['utf8_environment'] = {
+            'PYTHONUTF8': env.get('PYTHONUTF8', 'NOT SET'),
+            'PYTHONIOENCODING': env.get('PYTHONIOENCODING', 'NOT SET')
+        }
+    except Exception as e:
+        diagnosis['utf8_test_error'] = str(e)
+    
+    return diagnosis
+
+def enhanced_safe_print(message: str, show_diagnostics: bool = False) -> None:
+    """
+    Enhanced safe print with optional diagnostics.
+    
+    This function provides enhanced printing with optional environment
+    diagnosis for troubleshooting UTF-8 issues.
+    
+    Args:
+        message: Message to print
+        show_diagnostics: Whether to show environment diagnosis
+        
+    Usage:
+        utf8.enhanced_safe_print("Hello 🌍", show_diagnostics=True)
+    """
+    if show_diagnostics:
+        diagnosis = diagnose_utf8_environment()
+        safe_print("UTF-8 Environment Diagnosis:")
+        safe_print("==========================")
+        for key, value in diagnosis.items():
+            if isinstance(value, dict):
+                safe_print(f"{key}:")
+                for sub_key, sub_value in value.items():
+                    safe_print(f"  {sub_key}: {sub_value}")
+            else:
+                safe_print(f"{key}: {value}")
+        safe_print("")
+    
+    try:
+        safe_print(message)
+    except Exception as e:
+        safe_print(f"Printing failed: {e}")
+        # Try ultimate fallback
+        try:
+            print(message.encode('ascii', errors='replace').decode('ascii'))
+        except Exception:
+            print("UTF-8 Solution: Message display failed completely")
+
+def enhanced_safe_print_with_emoji(message: str, use_emoji: bool = True) -> None:
     """Enhanced safe print with emoji support.
     
     This function provides backward compatibility with the original enhanced output.
@@ -318,8 +619,17 @@ __all__ = [
     'test_utf8',         # Test UTF-8 capability
     'UTF8Support',       # Main class
     'safe_print',        # Safe printing function with ACTUAL emoji display
-    'rtl_print',         # Hebrew RTL visual display function
-    'enhanced_safe_print' # Enhanced safe printing with emoji support
+    'rtl_print',         # Hebrew smart bidirectional display function
+    'enhanced_safe_print_with_emoji', # Enhanced safe printing with emoji support
+    # Enhanced file operations
+    'open_utf8',         # UTF-8 enabled file opening
+    'read_file',         # UTF-8 enabled file reading
+    'write_file',        # UTF-8 enabled file writing
+    # Context managers
+    'rtl_context',       # RTL context manager
+    # Enhanced error reporting
+    'diagnose_utf8_environment', # Environment diagnosis
+    'enhanced_safe_print', # Enhanced safe printing with diagnostics
 ]
 
 # Automatic setup when imported (with error handling)
