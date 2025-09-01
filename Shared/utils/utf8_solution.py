@@ -1,26 +1,37 @@
 #!/usr/bin/env python3
 """
-UTF-8 Solution - Simple and Reliable Unicode Support
+UTF-8 Solution - Simple and Reliable Unicode Support with ACTUAL Emoji Display and RTL Hebrew
 
-SINGLE WORKING APPROACH: Explicit Import + Environment Setup
+SINGLE WORKING APPROACH: Direct buffer writing for emoji display + Environment Setup
 
 HOW IT WORKS:
 1. Import this module in any Python file that needs UTF-8 support
 2. All subprocess calls from that process automatically get UTF-8 environment
 3. Environment variables propagate to child processes (C++ client)
-4. No global monkey-patching - predictable behavior
+4. ACTUAL emoji display using direct buffer writing
+5. Hebrew text can be displayed in RTL visual order when needed
+6. No global monkey-patching - predictable behavior
 
 USAGE:
     import Shared.utils.utf8_solution  # Add to each file that needs UTF-8
     
     # Now all subprocess calls work with UTF-8
     subprocess.run([exe, "--batch"], encoding='utf-8', env=utf8_solution.get_env())
+    
+    # For normal text (emojis, English, Hebrew in logical order):
+    utf8_solution.safe_print("🎉 Emojis work perfectly")
+    utf8_solution.safe_print("שלום עולם")  # Appears as: שלום עולם (logical order)
+    
+    # For Hebrew in RTL visual order:
+    utf8_solution.rtl_print("שלום עולם")  # Appears as: םלוע םולש (visual RTL order)
 
 SOLVES:
 - Hebrew filenames with emoji: קובץ_עברי_🎉_test.txt
 - Subprocess communication with C++ client
 - Windows console encoding issues
 - 'charmap' codec errors
+- ACTUAL emoji display in Windows environments
+- Hebrew RTL visual display when needed
 """
 
 
@@ -115,10 +126,6 @@ class UTF8Support:
             if hasattr(sys.stdout, 'reconfigure'):
                 sys.stdout.reconfigure(encoding='utf-8')
                 sys.stderr.reconfigure(encoding='utf-8')
-            else:
-                # For older Python versions, we can't easily change encoding of existing streams
-                # But we can ensure new streams use UTF-8
-                pass
         except Exception:
             # Not critical, continue with existing setup
             pass
@@ -226,27 +233,76 @@ def test_utf8() -> bool:
         return False
 
 def safe_print(message: str) -> None:
-    """Safely print message with UTF-8 fallback."""
+    """Safely print message with ACTUAL emoji display support.
+    
+    This function ensures that all Unicode characters (including emojis and Hebrew)
+    display correctly in Windows console environments.
+    
+    Usage:
+        safe_print("🎉 This emoji will display correctly")
+        safe_print("שלום עולם")  # Hebrew displays in logical order
+        safe_print("Mixed: Hello 🌍 שלום עולם ✅")
+        
+    Note: For Hebrew in RTL visual order, use rtl_print() instead.
+    """
     try:
-        print(message)
-    except (UnicodeEncodeError, UnicodeDecodeError):
+        # Try direct buffer writing for proper emoji display
+        sys.stdout.buffer.write(f"{message}\n".encode('utf-8'))
+        sys.stdout.buffer.flush()
+    except Exception:
         try:
-            # Fallback: ASCII with replacement
-            safe_message = message.encode('ascii', errors='replace').decode('ascii')
-            print(safe_message)
-        except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
-            # More specific exception handling
-            print("UTF-8 Solution: Message encoding failed")
+            # Fallback to regular print with error handling
+            print(message)
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            try:
+                # Ultimate fallback: ASCII with replacement
+                safe_message = message.encode('ascii', errors='replace').decode('ascii')
+                print(safe_message)
+            except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
+                # More specific exception handling
+                print("UTF-8 Solution: Message encoding failed")
+
+def rtl_print(message: str) -> None:
+    """Print Hebrew text in RTL (Right-to-Left) visual order.
+    
+    This function reverses Hebrew text to display it in visual RTL order,
+    which is how Hebrew is traditionally read.
+    
+    Usage:
+        rtl_print("שלום עולם")  # Displays as: םלוע םולש
+        rtl_print("בדיקה ✅")   # Displays as: ✅ הקידב
+        rtl_print("טעות ❌")   # Displays as: ❌ תועט
+        
+    Note: 
+        - Use this function ONLY for Hebrew text that should appear in RTL order
+        - For normal text (English, emojis, Hebrew in logical order), use safe_print()
+        - This function is specifically for visual RTL display, not for Unicode RTL controls
+    """
+    try:
+        # Reverse the string to achieve visual RTL order
+        reversed_message = message[::-1]
+        safe_print(reversed_message)
+    except Exception as e:
+        # Fallback to regular safe_print if reversal fails
+        safe_print(f"RTL conversion error: {e}")
+        safe_print(message)
 
 def enhanced_safe_print(message: str, use_emoji: bool = True) -> None:
-    """Enhanced safe print with emoji support."""
+    """Enhanced safe print with emoji support.
+    
+    This function provides backward compatibility with the original enhanced output.
+    
+    Args:
+        message: The message to print
+        use_emoji: Whether to use emoji formatting (if enhanced_output is available)
+    """
     # Try to import enhanced output function - simplified approach
     try:
         from Shared.utils.enhanced_output import success_print
         if use_emoji:
             success_print(message, "UTF-8")
         else:
-            print(f"UTF-8: {message}")
+            safe_print(f"UTF-8: {message}")
     except ImportError:
         # Fallback to basic safe print if enhanced_output not available
         safe_print(f"UTF-8: {message}")
@@ -261,7 +317,8 @@ __all__ = [
     'Popen_utf8',        # UTF-8 enabled subprocess.Popen  
     'test_utf8',         # Test UTF-8 capability
     'UTF8Support',       # Main class
-    'safe_print',        # Safe printing function
+    'safe_print',        # Safe printing function with ACTUAL emoji display
+    'rtl_print',         # Hebrew RTL visual display function
     'enhanced_safe_print' # Enhanced safe printing with emoji support
 ]
 
