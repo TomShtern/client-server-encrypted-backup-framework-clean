@@ -28,7 +28,7 @@ from flet_server_gui.actions.file_actions import FileActions
 from flet_server_gui.components.base_component import BaseComponent
 from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes, fix_content_clipping, fix_button_clickable_areas, ensure_windowed_compatibility
 
-from flet_server_gui.ui.unified_theme_system import TOKENS
+from flet_server_gui.core.theme_compatibility import TOKENS
 
 
 

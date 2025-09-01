@@ -31,11 +31,10 @@ Usage:
 from .server_operations import ServerOperations
 from .client_management import ClientManagement
 from .file_management import FileManagement
-from ..ui.unified_theme_system import MaterialDesign3ThemeSystem, theme_system, get_theme_system
-from ..ui.unified_theme_system import (
-    ColorRole, TypographyRole, LIGHT_COLOR_TOKENS, DARK_COLOR_TOKENS,
-    TYPOGRAPHY_TOKENS, SPACING_TOKENS, ELEVATION_TOKENS,
-    get_color_token, get_typography_token, get_spacing_token, get_elevation_token
+# Legacy theme system imports - using compatibility layer
+from .theme_compatibility import (
+    TOKENS, ThemeManager, ThemeConsistencyManager,
+    get_semantic_color, setup_theme_system
 )
 from .responsive_layout import (
     ResponsiveLayoutSystem, BreakpointSize, DeviceType, Breakpoint,

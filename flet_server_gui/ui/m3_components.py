@@ -24,7 +24,7 @@ from typing import Dict, List, Callable, Optional, Any, Union, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 import logging
-from flet_server_gui.ui.unified_theme_system import TOKENS
+from flet_server_gui.core.theme_compatibility import TOKENS
 
 # Configure logging first
 logger = logging.getLogger(__name__)
@@ -33,121 +33,137 @@ logger = logging.getLogger(__name__)
 THEME_SYSTEM_AVAILABLE = False
 DESIGN_TOKENS_AVAILABLE = False
 
+# Define classes that are always needed at module level
+class ThemeMode:
+    LIGHT = "light"
+    DARK = "dark"
+
+class ColorRole:
+    PRIMARY = "primary"
+    ON_PRIMARY = "on_primary"
+    SECONDARY = "secondary"
+    ON_SECONDARY = "on_secondary"
+    PRIMARY_CONTAINER = "primary_container"
+    ON_PRIMARY_CONTAINER = "on_primary_container"
+    SECONDARY_CONTAINER = "secondary_container"
+    ON_SECONDARY_CONTAINER = "on_secondary_container"
+    TERTIARY = "tertiary"
+    ON_TERTIARY = "on_tertiary"
+    TERTIARY_CONTAINER = "tertiary_container"
+    ON_TERTIARY_CONTAINER = "on_tertiary_container"
+    ERROR = "error"
+    ON_ERROR = "on_error"
+    ERROR_CONTAINER = "error_container"
+    ON_ERROR_CONTAINER = "on_error_container"
+    SURFACE = "surface"
+    ON_SURFACE = "on_surface"
+    SURFACE_VARIANT = "surface_variant"
+    ON_SURFACE_VARIANT = "on_surface_variant"
+    OUTLINE = "outline"
+    OUTLINE_VARIANT = "outline_variant"
+    SHADOW = "shadow"
+    SCRIM = "scrim"
+
+class TypographyRole:
+    DISPLAY_LARGE = "display_large"
+    DISPLAY_MEDIUM = "display_medium"
+    DISPLAY_SMALL = "display_small"
+    HEADLINE_LARGE = "headline_large"
+    HEADLINE_MEDIUM = "headline_medium"
+    HEADLINE_SMALL = "headline_small"
+    TITLE_LARGE = "title_large"
+    TITLE_MEDIUM = "title_medium"
+    TITLE_SMALL = "title_small"
+    BODY_LARGE = "body_large"
+    BODY_MEDIUM = "body_medium"
+    BODY_SMALL = "body_small"
+    LABEL_LARGE = "label_large"
+    LABEL_MEDIUM = "label_medium"
+    LABEL_SMALL = "label_small"
+
 try:
-    from .unified_theme_system import get_theme_system, ThemeMode
-    from .unified_theme_system import (
-        ColorRole, TypographyRole, get_color_token, get_typography_token,
-        get_spacing_token, get_elevation_token, BUTTON_TOKENS, CARD_TOKENS,
-        BORDER_RADIUS_TOKENS, ANIMATION_TOKENS
+    from ..core.theme_compatibility import (
+        TOKENS, ThemeManager, get_semantic_color, setup_theme_system
     )
     THEME_SYSTEM_AVAILABLE = True
     DESIGN_TOKENS_AVAILABLE = True
+    
+    # Compatibility functions
+    def get_theme_system():
+        return None  # Use Flet's native theming
+    
+    def get_color_token(role):
+        return TOKENS.get(role, ft.Colors.PRIMARY)
+    
+    def get_typography_token(role):
+        return "14"  # Default font size
+    
+    def get_spacing_token(role):
+        return 8  # Default spacing
+    
+    def get_elevation_token(role):
+        return 2  # Default elevation
+        
 except ImportError:
-    # Fallback for relative imports when run from within the package
-    try:
-        from ..ui.unified_theme_system import get_theme_system, ThemeMode
-        from ..ui.unified_theme_system import (
-            ColorRole, TypographyRole, get_color_token, get_typography_token,
-            get_spacing_token, get_elevation_token, BUTTON_TOKENS, CARD_TOKENS,
-            BORDER_RADIUS_TOKENS, ANIMATION_TOKENS
-        )
-        THEME_SYSTEM_AVAILABLE = True
-        DESIGN_TOKENS_AVAILABLE = True
-    except ImportError:
-        # Final fallback - create basic implementations
-        logger.warning("Could not import theme system, using fallbacks")
+    THEME_SYSTEM_AVAILABLE = False
+    DESIGN_TOKENS_AVAILABLE = False
+    # Final fallback - create basic implementations
+    logger.warning("Could not import theme system, using fallbacks")
+    
+    # Use basic fallback colors when theme system is not available
+    TOKENS = {
+        'primary': ft.Colors.BLUE,
+        'on_primary': ft.Colors.WHITE,
+        'surface': ft.Colors.WHITE,
+        'on_background': ft.Colors.BLACK,
+        'error': ft.Colors.RED,
+        'outline': ft.Colors.GREY_400,
+    }
+    
+    class FallbackThemeSystem:
+        def __init__(self):
+            self.current_mode = ThemeMode.DARK
         
-        class ThemeMode:
-            LIGHT = "light"
-            DARK = "dark"
+        def switch_theme(self, mode):
+            self.current_mode = mode
+            return None
+    
+    def get_theme_system():
+        return FallbackThemeSystem()
+    
+    def get_color_token(role, is_dark=False):
+        # Basic color mapping for fallback
+        color_map = {
+            ColorRole.PRIMARY: TOKENS['primary'],
+            ColorRole.ON_PRIMARY: TOKENS['on_primary'],
+            ColorRole.SURFACE: TOKENS['surface'],
+            ColorRole.ON_SURFACE: TOKENS['on_background'],
+            ColorRole.ERROR: TOKENS['error'],
+            ColorRole.OUTLINE: TOKENS['outline'],
+        }
+        return color_map.get(role, TOKENS['primary'])
         
-        class ColorRole:
-            PRIMARY = "primary"
-            ON_PRIMARY = "on_primary"
-            PRIMARY_CONTAINER = "primary_container"
-            ON_PRIMARY_CONTAINER = "on_primary_container"
-            SECONDARY = "secondary"
-            ON_SECONDARY = "on_secondary"
-            SECONDARY_CONTAINER = "secondary_container"
-            ON_SECONDARY_CONTAINER = "on_secondary_container"
-            TERTIARY = "tertiary"
-            ON_TERTIARY = "on_tertiary"
-            TERTIARY_CONTAINER = "tertiary_container"
-            ON_TERTIARY_CONTAINER = "on_tertiary_container"
-            ERROR = "error"
-            ON_ERROR = "on_error"
-            ERROR_CONTAINER = "error_container"
-            ON_ERROR_CONTAINER = "on_error_container"
-            SURFACE = "surface"
-            ON_SURFACE = "on_surface"
-            SURFACE_VARIANT = "surface_variant"
-            ON_SURFACE_VARIANT = "on_surface_variant"
-            OUTLINE = "outline"
-            OUTLINE_VARIANT = "outline_variant"
-            SHADOW = "shadow"
-            SCRIM = "scrim"
+    def get_typography_token(role):
+        # Basic typography mapping for fallback
+        typography_map = {
+            TypographyRole.TITLE_LARGE: {"font_size": 22, "font_weight": ft.FontWeight.NORMAL},
+            TypographyRole.BODY_LARGE: {"font_size": 16, "font_weight": ft.FontWeight.NORMAL},
+            TypographyRole.BODY_MEDIUM: {"font_size": 14, "font_weight": ft.FontWeight.NORMAL},
+        }
+        return typography_map.get(role, {"font_size": 14, "font_weight": ft.FontWeight.NORMAL})
+    
+    def get_spacing_token(size):
+        spacing_map = {"xs": 4, "sm": 8, "md": 16, "lg": 24, "xl": 32}
+        return spacing_map.get(size, 16)
         
-        class TypographyRole:
-            DISPLAY_LARGE = "display_large"
-            DISPLAY_MEDIUM = "display_medium"
-            DISPLAY_SMALL = "display_small"
-            HEADLINE_LARGE = "headline_large"
-            HEADLINE_MEDIUM = "headline_medium"
-            HEADLINE_SMALL = "headline_small"
-            TITLE_LARGE = "title_large"
-            TITLE_MEDIUM = "title_medium"
-            TITLE_SMALL = "title_small"
-            BODY_LARGE = "body_large"
-            BODY_MEDIUM = "body_medium"
-            BODY_SMALL = "body_small"
-            LABEL_LARGE = "label_large"
-            LABEL_MEDIUM = "label_medium"
-            LABEL_SMALL = "label_small"
-        
-        class FallbackThemeSystem:
-            def __init__(self):
-                self.current_mode = ThemeMode.DARK
-            
-            def switch_theme(self, mode):
-                self.current_mode = mode
-                return None
-        
-        def get_theme_system():
-            return FallbackThemeSystem()
-            
-        def get_color_token(role, is_dark=False):
-            # Basic color mapping for fallback using TOKENS
-            color_map = {
-                ColorRole.PRIMARY: TOKENS['primary'],
-                ColorRole.ON_PRIMARY: TOKENS['on_primary'],
-                ColorRole.SURFACE: TOKENS['surface_dark'] if is_dark else TOKENS['surface'],
-                ColorRole.ON_SURFACE: "#FFFFFF" if is_dark else TOKENS['on_background'],
-                ColorRole.ERROR: TOKENS['error'],
-                ColorRole.OUTLINE: TOKENS['outline'],
-            }
-            return color_map.get(role, TOKENS['primary'])
-            
-        def get_typography_token(role):
-            # Basic typography mapping for fallback
-            typography_map = {
-                TypographyRole.TITLE_LARGE: {"font_size": 22, "font_weight": ft.FontWeight.NORMAL},
-                TypographyRole.BODY_LARGE: {"font_size": 16, "font_weight": ft.FontWeight.NORMAL},
-                TypographyRole.BODY_MEDIUM: {"font_size": 14, "font_weight": ft.FontWeight.NORMAL},
-            }
-            return typography_map.get(role, {"font_size": 14, "font_weight": ft.FontWeight.NORMAL})
-            
-        def get_spacing_token(size):
-            spacing_map = {"xs": 4, "sm": 8, "md": 16, "lg": 24, "xl": 32}
-            return spacing_map.get(size, 16)
-            
-        def get_elevation_token(level):
-            elevation_map = {"level0": 0, "level1": 1, "level2": 3, "level3": 6}
-            return elevation_map.get(level, 1)
-        
-        BUTTON_TOKENS = {"height": 40, "border_radius": 12}
-        CARD_TOKENS = {"border_radius": 12, "padding": 16}
-        BORDER_RADIUS_TOKENS = {"none": 0, "xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 20}
-        ANIMATION_TOKENS = {"duration_medium": 250}
+    def get_elevation_token(level):
+        elevation_map = {"level0": 0, "level1": 1, "level2": 3, "level3": 6}
+        return elevation_map.get(level, 1)
+    
+    BUTTON_TOKENS = {"height": 40, "border_radius": 12}
+    CARD_TOKENS = {"border_radius": 12, "padding": 16}
+    BORDER_RADIUS_TOKENS = {"none": 0, "xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 20}
+    ANIMATION_TOKENS = {"duration_medium": 250}
 
 
 class ComponentStyle(Enum):

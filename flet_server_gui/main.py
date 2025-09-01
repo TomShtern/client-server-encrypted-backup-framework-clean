@@ -37,8 +37,8 @@ from flet_server_gui.components.control_panel_card import ControlPanelCard
 from flet_server_gui.components.quick_actions import QuickActions
 from flet_server_gui.ui.navigation import NavigationManager
 from flet_server_gui.ui.dialogs import DialogSystem, ToastManager
-# Unified theme system - consolidates all theme functionality
-from flet_server_gui.ui.unified_theme_system import ThemeManager, TOKENS
+# Clean theme system
+from theme import THEMES, DEFAULT_THEME_NAME
 from flet_server_gui.ui.layouts.responsive_fixes import apply_layout_fixes
 # Import new Phase 4 components
 from flet_server_gui.ui.widgets.status_pill import StatusPill, ServerStatus
@@ -86,7 +86,9 @@ class ServerGUIApp:
             self.server_bridge = ServerBridge(database_name=mockabase_path)
         else:
             self.server_bridge = ServerBridge()
-        self.theme_manager = ThemeManager(page)
+        # Theme management
+        self.current_theme_name = None
+        self.theme_dropdown = None
         self.current_view = "dashboard"
         self.active_view_instance = None
         self.nav_rail_visible = True
@@ -282,7 +284,7 @@ class ServerGUIApp:
                         [
                             ft.Icon(
                                 ft.Icons.ERROR_OUTLINE,
-                                color=TOKENS.get('error', ft.Colors.RED),
+                                color=ft.Colors.ERROR,
                                 size=48
                             ),
                             ft.Column(
@@ -291,12 +293,12 @@ class ServerGUIApp:
                                         f"{view_name} Failed to Load",
                                         size=20,
                                         weight=ft.FontWeight.BOLD,
-                                        color=TOKENS.get('error', ft.Colors.RED)
+                                        color=ft.Colors.ERROR
                                     ),
                                     ft.Text(
                                         f"{error_type.title()} Error",
                                         size=14,
-                                        color=TOKENS.get('on_surface_variant', ft.Colors.GREY_600)
+                                        color=ft.Colors.ON_SURFACE_VARIANT
                                     ),
                                 ],
                                 spacing=4,
@@ -316,12 +318,12 @@ class ServerGUIApp:
                                     ft.Text(
                                         "Error Details:",
                                         weight=ft.FontWeight.BOLD,
-                                        color=TOKENS.get('on_surface', ft.Colors.BLACK)
+                                        color=ft.Colors.ON_SURFACE
                                     ),
                                     ft.Text(
                                         error_message,
                                         size=12,
-                                        color=TOKENS.get('on_surface_variant', ft.Colors.GREY_700),
+                                        color=ft.Colors.ON_SURFACE_VARIANT,
                                         selectable=True
                                     ),
                                 ],
@@ -354,7 +356,7 @@ class ServerGUIApp:
                     ft.Text(
                         "This error has been logged. Try refreshing or contact support if the issue persists.",
                         size=11,
-                        color=TOKENS.get('on_surface_variant', ft.Colors.GREY_600),
+                        color=ft.Colors.ON_SURFACE_VARIANT,
                         italic=True
                     ),
                 ],
@@ -364,8 +366,8 @@ class ServerGUIApp:
             padding=24,
             margin=16,
             border_radius=8,
-            bgcolor=TOKENS.get('surface', ft.Colors.WHITE),
-            border=ft.border.all(1, TOKENS.get('outline_variant', ft.Colors.GREY_300))
+            bgcolor=ft.Colors.SURFACE,
+            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT)
         )
         
         return error_view
@@ -522,7 +524,10 @@ class ServerGUIApp:
         self.page.window_width = 1200  # Reasonable default that works on most screens
         self.page.window_height = 800   # Balanced height for content
         
-        self.theme_manager.apply_theme()
+        # Initialize theme system
+        saved_theme = self.page.client_storage.get("theme_name") or DEFAULT_THEME_NAME
+        self.page.theme_mode = ft.ThemeMode.SYSTEM
+        self.apply_themes(saved_theme)
         
         # Reduced padding for better space utilization
         self.page.padding = ft.padding.all(12)
@@ -531,13 +536,8 @@ class ServerGUIApp:
         # Apply layout fixes for clipping and hitbox issues
         apply_layout_fixes(self.page)
         
-        # Apply theme
-        self.theme_manager.apply_theme()
-        
         # Register window resize handler for responsive behavior
         self.page.on_window_event = self.handle_window_resize
-        
-        self.theme_tokens = self.theme_manager.get_tokens()
     
     def build_ui(self) -> None:
         """Build the main UI structure with animations."""
@@ -552,6 +552,15 @@ class ServerGUIApp:
             tooltip="Toggle Theme (Light/Dark/System)",
             on_click=self.toggle_theme
         )
+        
+        # Initialize theme dropdown
+        self.theme_dropdown = ft.Dropdown(
+            label="Theme",
+            options=[ft.dropdown.Option(name) for name in THEMES.keys()],
+            value=self.current_theme_name,
+            on_change=self.change_theme_name,
+            width=120,
+        )
 
         # Initialize status pill as OFFLINE since we're not connected to a server
         self.status_pill.set_status(ServerStatus.STOPPED)  # OFFLINE status
@@ -562,6 +571,7 @@ class ServerGUIApp:
             actions=[
                 self.status_pill,  # Status pill is not clickable
                 ft.IconButton(ft.Icons.NOTIFICATIONS, tooltip="Notifications", on_click=self._on_notifications),
+                self.theme_dropdown,  # Theme selector dropdown
                 self.theme_toggle_button,
                 ft.IconButton(ft.Icons.HELP, tooltip="Help", on_click=self._on_help),
             ]
@@ -708,7 +718,7 @@ class ServerGUIApp:
                             ft.Row([
                                 ft.Text("Status:", size=12),
                                 ft.Container(expand=True),
-                                ft.Text("Offline", color=TOKENS['error'], size=12, weight=ft.FontWeight.BOLD)
+                                ft.Text("Offline", color=ft.Colors.ERROR, size=12, weight=ft.FontWeight.BOLD)
                             ]),
                             ft.Row([
                                 ft.Text("Port:", size=12),
@@ -1062,7 +1072,16 @@ class ServerGUIApp:
             self.page.update()
 
     def toggle_theme(self, e: ft.ControlEvent) -> None:
-        self.theme_manager.toggle_theme()
+        """Toggle between light and dark mode."""
+        self.page.theme_mode = (
+            ft.ThemeMode.DARK if self.page.theme_mode == ft.ThemeMode.LIGHT 
+            else ft.ThemeMode.LIGHT
+        )
+        self._update_theme_icon()
+        self.page.update()
+    
+    def _update_theme_icon(self) -> None:
+        """Update the theme toggle button icon based on current theme mode."""
         mode = self.page.theme_mode
         if mode == ft.ThemeMode.DARK:
             self.theme_toggle_button.icon = ft.Icons.LIGHT_MODE
@@ -1070,7 +1089,21 @@ class ServerGUIApp:
             self.theme_toggle_button.icon = ft.Icons.WB_SUNNY
         else:
             self.theme_toggle_button.icon = ft.Icons.SETTINGS_BRIGHTNESS
-        self.page.update()
+
+    def apply_themes(self, theme_name: str):
+        """Apply selected light and dark themes."""
+        if theme_name in THEMES:
+            light_theme, dark_theme = THEMES[theme_name]
+            self.page.theme = light_theme
+            self.page.dark_theme = dark_theme
+            self.current_theme_name = theme_name
+            self.page.update()
+
+    def change_theme_name(self, e):
+        """Handle theme dropdown change."""
+        selected_theme_name = e.control.value
+        self.page.client_storage.set("theme_name", selected_theme_name)
+        self.apply_themes(selected_theme_name)
 
     def _on_notifications(self, e: ft.ControlEvent) -> None:
         """Handle notifications button click."""

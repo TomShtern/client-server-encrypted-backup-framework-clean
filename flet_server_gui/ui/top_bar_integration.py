@@ -34,7 +34,7 @@ from enum import Enum, auto
 import asyncio
 from datetime import datetime, timedelta
 import flet as ft
-from flet_server_gui.ui.unified_theme_system import TOKENS
+from flet_server_gui.core.theme_compatibility import TOKENS
 
 
 class TopBarLayout(Enum):

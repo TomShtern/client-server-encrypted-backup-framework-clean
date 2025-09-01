@@ -1,3 +1,8 @@
+---
+description: AI rules derived by SpecStory from the project AI interaction history
+globs: *
+---
+
 # CyberBackup Framework - AI Coding Agent Instructions
 
 ## Architecture Overview
@@ -53,3 +58,69 @@ High-level agent contract:
 
 If anything here is unclear or you'd like more detail on a specific file (example: exact RealBackupExecutor flow or transfer.info lifecycle), tell me which file and I'll expand the section.
 # 3. Build C++ client (after any C++ changes)
+
+## TECH STACK
+- Python 3.13+
+- vcpkg/CMake for C++ builds
+
+## DEVELOPMENT ENVIRONMENT
+
+- Editor/IDE: Feature-rich environment with GitHub Copilot, Inline Chat, and AI code actions for Python.
+- GitHub Copilot: Use Copilot Chat for high-level design and contextual code snippets. Utilize inline completions, next-edit suggestions, code generation and test generation.
+- Inline Chat: Use for in-context code edits and questions.
+- Python Analysis: Strict Python analysis (python.analysis.typeCheckingMode = "strict") should be used to catch type issues early. Pair with AI code actions to fix type errors.
+- C/C++ Tooling: Enhanced colorization and workspace parsing control for native client build and debugging.
+- Terminal: Integrated terminal for running build scripts (e.g., `scripts/one_click_build_and_run.py`) and tests. Integrated terminal with smooth scrolling, copy-on-selection, automation profile.
+- Remote SSH: Support for remote development to run builds on remote Linux targets.
+- Exclusions & watchers: Files/folders excluded from search and watchers (build, logs, received_files, etc.) to reduce noise.
+- Notebook and testing helpers: Notebook improvements, consolidated run button, test/code lenses for generating tests.
+- Misc AI & assistant settings: Local models/servers configured (Gemini/Copilot models), advanced next-edit suggestions and agent behavior.
+
+## DEBUGGING
+
+- Check ports 9090 and 1256 for conflicts before starting services.
+
+## CODING TOOLS & LIBRARIES
+
+- AI code actions for Python (python.analysis.aiCodeActions): Auto-generate docstrings, implement abstract classes, generate symbols, refactor format strings.
+  - Recommended configuration:
+    ````jsonc
+    {
+    	// Safe / recommended (non-intrusive) actions
+    	"generateDocstring": true,            // adds docstrings for functions/classes
+    	"implementAbstractClasses": true,     // scaffold missing abstract methods
+    	"generateSymbol": true,               // create stubs for referenced-but-missing symbols
+    	"convertFormatString": true,          // convert %/.format to f-strings
+    	"addMissingImports": true,            // suggest/add missing imports
+    	"organizeImports": true,              // sort/remove unused imports
+    	"suggestTypeAnnotations": true,       // propose type annotations
+
+    	// Conservative: don't auto-fix types or apply potentially breaking edits without review
+    	"fixTypeErrors": false               // set true only after manual review
+    	// Optional aggressive helpers (uncomment if you want more automatic edits)
+    	// "autoApplyEdits": false,           // if supported by your extension: whether edits auto-apply
+    	// "fixLintIssues": false,            // auto-fix lint issues (may be intrusive)
+    	// "applyRefactorings": false         // enable to allow automated refactorings
+    }
+    ````
+- Consider using sequential thinking mcp server after every 3-5 tool calls to organize thoughts and enhance reasoning.
+
+## WORKFLOW & RELEASE RULES
+- Before running integration tests (tests/integration/*), use strict Python analysis and AI code actions to fix type and lint issues.
+
+## TESTS AND VERIFICATION
+- Run `scripts/one_click_build_and_run.py` in the integrated terminal to smoke-test the full pipeline.
+
+## VIRTUAL ENVIRONMENT
+- To activate the `flet_venv` virtual environment in PowerShell, use the following command within the project directory:
+```powershell
+& .\flet_venv\Scripts\Activate.ps1
+```
+- Alternatively, use the full absolute path:
+```powershell
+& C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\flet_venv\Scripts\Activate.ps1
+```
+- To deactivate the virtual environment:
+```powershell
+deactivate
+```

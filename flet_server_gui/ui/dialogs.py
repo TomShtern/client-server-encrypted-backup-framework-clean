@@ -9,7 +9,7 @@ import flet as ft
 from typing import Optional, Callable, Any, Dict, List
 import asyncio
 from enum import Enum
-from flet_server_gui.ui.unified_theme_system import TOKENS
+from flet_server_gui.core.theme_compatibility import TOKENS
 
 # ============================================================================
 # DIALOG TYPES AND CONFIGURATIONS

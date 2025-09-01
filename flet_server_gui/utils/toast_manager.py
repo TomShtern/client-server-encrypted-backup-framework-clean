@@ -23,7 +23,7 @@ from typing import Dict, List, Optional, Callable, Any
 from enum import Enum
 from datetime import datetime, timedelta
 from dataclasses import dataclass
-from flet_server_gui.ui.unified_theme_system import TOKENS
+from flet_server_gui.core.theme_compatibility import TOKENS
 
 
 class ToastType(Enum):

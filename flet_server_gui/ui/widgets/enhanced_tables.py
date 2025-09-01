@@ -15,7 +15,7 @@ import asyncio
 import logging
 import random
 from datetime import datetime
-from flet_server_gui.ui.unified_theme_system import TOKENS
+from flet_server_gui.core.theme_compatibility import TOKENS
 
 logger = logging.getLogger(__name__)
 

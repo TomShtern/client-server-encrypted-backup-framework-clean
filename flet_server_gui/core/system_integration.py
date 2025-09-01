@@ -13,7 +13,7 @@ Phase 7.3 Implementation: Professional system administration features
 import flet as ft
 import os
 import hashlib
-from ..ui.unified_theme_system import TOKENS
+from .theme_compatibility import TOKENS
 import json
 import asyncio
 import threading

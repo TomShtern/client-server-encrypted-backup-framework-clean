@@ -24,7 +24,7 @@ from typing import Optional, Callable, Dict, Any
 from datetime import datetime
 
 from .error_context import ErrorContext, ErrorFormatter
-from ..ui.unified_theme_system import TOKENS
+from ..core.theme_compatibility import TOKENS
 
 
 class ErrorDialog:

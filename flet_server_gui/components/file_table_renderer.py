@@ -15,7 +15,7 @@ import sys
 import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Callable
-from flet_server_gui.ui.unified_theme_system import TOKENS
+from flet_server_gui.core.theme_compatibility import TOKENS
 
 # Add project root to path for imports
 project_root = os.path.join(os.path.dirname(__file__), "..", "..")

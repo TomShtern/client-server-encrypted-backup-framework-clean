@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import json
 import re
-from flet_server_gui.ui.unified_theme_system import TOKENS
+from flet_server_gui.core.theme_compatibility import TOKENS
 
 
 class ActivityLevel(Enum):

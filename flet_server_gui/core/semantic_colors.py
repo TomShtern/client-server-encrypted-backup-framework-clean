@@ -671,7 +671,7 @@ def THEME_TOKENS(key: str, theme_mode: Optional[str] = None) -> str:
     if key in tokens:
         return tokens[key]()
     # Fallback to original TOKENS for unknown keys
-    from ui.unified_theme_system import TOKENS
+    from .theme_compatibility import TOKENS
     return TOKENS.get(key, "#000000")
 
 

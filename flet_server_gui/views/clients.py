@@ -30,7 +30,7 @@ from flet_server_gui.layouts.breakpoint_manager import BreakpointManager
 from flet_server_gui.components.base_component import BaseComponent
 
 # Theme consistency import
-from flet_server_gui.ui.unified_theme_system import apply_theme_consistency
+from flet_server_gui.core.theme_compatibility import apply_theme_consistency
 
 # Enhanced components imports
 from flet_server_gui.ui.widgets import (
@@ -49,7 +49,7 @@ from flet_server_gui.ui.widgets import (
 # Layout fixes imports
 from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
 # Unified theme system - consolidated theme functionality
-from flet_server_gui.ui.unified_theme_system import ThemeConsistencyManager, TOKENS
+from flet_server_gui.core.theme_compatibility import ThemeConsistencyManager, TOKENS
 
 
 

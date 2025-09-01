@@ -16,7 +16,7 @@ from typing import Optional, Callable, List, Dict, Union, Any
 from enum import Enum
 import asyncio
 from datetime import datetime
-from flet_server_gui.ui.unified_theme_system import TOKENS
+from flet_server_gui.core.theme_compatibility import TOKENS
 
 
 class WidgetSize(Enum):
