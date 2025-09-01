@@ -47,11 +47,7 @@ import contextlib
 import os
 import sys
 import subprocess
-import threading
 import locale
-import time
-import functools
-import tempfile
 from typing import Dict, Optional, Any, Union, List, TextIO, BinaryIO
 
 # Import ctypes with proper error handling for Windows
@@ -66,35 +62,32 @@ class UTF8Support:
     _initialized: bool = False
     _original_console_cp: Optional[int] = None
     _original_console_output_cp: Optional[int] = None
-    _lock: threading.Lock = threading.Lock()
-    _auto_configured: bool = False
     
     @classmethod
     def setup(cls) -> bool:
         """Setup UTF-8 support for current process and subprocesses."""
-        with cls._lock:
-            if cls._initialized:
-                return True
+        if cls._initialized:
+            return True
+        
+        try:
+            # Set environment variables that propagate to subprocesses
+            os.environ['PYTHONIOENCODING'] = 'utf-8'
+            os.environ['PYTHONUTF8'] = '1'
             
-            try:
-                # Set environment variables that propagate to subprocesses
-                os.environ['PYTHONIOENCODING'] = 'utf-8'
-                os.environ['PYTHONUTF8'] = '1'
-                
-                # Configure Windows console if available
-                cls._setup_windows_console()
-                
-                # Fix console streams encoding
-                cls._fix_console_streams()
-                
-                # Auto-configure environment if needed
-                cls._auto_configure_environment()
-                
-                cls._initialized = True
-                return True
-            except (OSError, AttributeError, RuntimeError):
-                # More specific exception handling for setup failures
-                return False
+            # Configure Windows console if available
+            cls._setup_windows_console()
+            
+            # Fix console streams encoding
+            cls._fix_console_streams()
+            
+            # Auto-configure environment if needed
+            cls._auto_configure_environment()
+            
+            cls._initialized = True
+            return True
+        except (OSError, AttributeError, RuntimeError):
+            # More specific exception handling for setup failures
+            return False
     
     @classmethod
     def _setup_windows_console(cls) -> None:
@@ -149,9 +142,6 @@ class UTF8Support:
     @classmethod
     def _auto_configure_environment(cls) -> None:
         """Auto-configure environment based on detection."""
-        if cls._auto_configured:
-            return
-            
         try:
             # Detect if we're in PowerShell
             is_powershell = 'PROMPT' in os.environ or 'PSModulePath' in os.environ
@@ -166,8 +156,6 @@ class UTF8Support:
                     if hasattr(sys.stdout, 'reconfigure'):
                         sys.stdout.reconfigure(encoding='utf-8')
                         sys.stderr.reconfigure(encoding='utf-8')
-                        
-            cls._auto_configured = True
         except Exception:
             # Silent failure to avoid breaking existing functionality
             pass
@@ -287,15 +275,18 @@ def safe_print(message: str) -> None:
     except Exception:
         try:
             # Fallback to regular print with error handling
-            print(message)
+            sys.stdout.buffer.write(f"{message}\n".encode('utf-8'))
+            sys.stdout.buffer.flush()
         except (UnicodeEncodeError, UnicodeDecodeError):
             try:
                 # Ultimate fallback: ASCII with replacement
                 safe_message = message.encode('ascii', errors='replace').decode('ascii')
-                print(safe_message)
+                sys.stdout.buffer.write(f"{safe_message}\n".encode('utf-8'))
+                sys.stdout.buffer.flush()
             except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
                 # More specific exception handling
-                print("UTF-8 Solution: Message encoding failed")
+                sys.stdout.buffer.write(b"UTF-8 Solution: Message encoding failed\n")
+                sys.stdout.buffer.flush()
 
 def rtl_print(message: str) -> None:
     """Print text with smart bidirectional text handling.
@@ -439,7 +430,7 @@ def read_file(filepath: Union[str, bytes], encoding: Optional[str] = None, error
     Usage:
         content = utf8.read_file('test.txt')
         if content:
-            print(f"File content: {content}")
+            utf8.safe_print(f"File content: {content}")
     """
     try:
         enc = encoding or 'utf-8'
@@ -468,7 +459,7 @@ def write_file(filepath: Union[str, bytes], content: str, encoding: Optional[str
     Usage:
         success = utf8.write_file('output.txt', 'Hello 🌍 שלום עולם ✅')
         if success:
-            print("File written successfully")
+            utf8.safe_print("File written successfully")
     """
     try:
         enc = encoding or 'utf-8'
@@ -523,7 +514,7 @@ def diagnose_utf8_environment() -> Dict[str, Any]:
         
     Usage:
         diagnosis = utf8.diagnose_utf8_environment()
-        print(f"UTF-8 test: {diagnosis['utf8_test']}")
+        utf8.safe_print(f"UTF-8 test: {diagnosis['utf8_test']}")
     """
     diagnosis = {
         'platform': sys.platform,
@@ -551,65 +542,20 @@ def diagnose_utf8_environment() -> Dict[str, Any]:
     
     return diagnosis
 
-def enhanced_safe_print(message: str, show_diagnostics: bool = False) -> None:
-    """
-    Enhanced safe print with optional diagnostics.
-    
-    This function provides enhanced printing with optional environment
-    diagnosis for troubleshooting UTF-8 issues.
-    
-    Args:
-        message: Message to print
-        show_diagnostics: Whether to show environment diagnosis
-        
-    Usage:
-        utf8.enhanced_safe_print("Hello 🌍", show_diagnostics=True)
-    """
-    if show_diagnostics:
-        diagnosis = diagnose_utf8_environment()
-        safe_print("UTF-8 Environment Diagnosis:")
-        safe_print("==========================")
-        for key, value in diagnosis.items():
-            if isinstance(value, dict):
-                safe_print(f"{key}:")
-                for sub_key, sub_value in value.items():
-                    safe_print(f"  {sub_key}: {sub_value}")
-            else:
-                safe_print(f"{key}: {value}")
-        safe_print("")
-    
-    try:
-        safe_print(message)
-    except Exception as e:
-        safe_print(f"Printing failed: {e}")
-        # Try ultimate fallback
-        try:
-            print(message.encode('ascii', errors='replace').decode('ascii'))
-        except Exception:
-            print("UTF-8 Solution: Message display failed completely")
-
 def enhanced_safe_print_with_emoji(message: str, use_emoji: bool = True) -> None:
     """Enhanced safe print with emoji support.
     
-    This function provides backward compatibility with the original enhanced output.
+    This function provides emoji-enhanced printing within this module.
     
     Args:
         message: The message to print
-        use_emoji: Whether to use emoji formatting (if enhanced_output is available)
+        use_emoji: Whether to use emoji formatting
     """
-    # Try to import enhanced output function - simplified approach
-    try:
-        from Shared.utils.enhanced_output import success_print
-        if use_emoji:
-            success_print(message, "UTF-8")
-        else:
-            safe_print(f"UTF-8: {message}")
-    except ImportError:
-        # Fallback to basic safe print if enhanced_output not available
+    if use_emoji:
+        # Use a simple emoji prefix for visual enhancement
+        safe_print(f"🌍 {message}")
+    else:
         safe_print(f"UTF-8: {message}")
-    except (AttributeError, TypeError):
-        # Handle other specific errors with enhanced_output
-        safe_print(message)
 
 # Export key functions for CyberBackup Framework usage
 __all__ = [
@@ -629,7 +575,6 @@ __all__ = [
     'rtl_context',       # RTL context manager
     # Enhanced error reporting
     'diagnose_utf8_environment', # Environment diagnosis
-    'enhanced_safe_print', # Enhanced safe printing with diagnostics
 ]
 
 # Automatic setup when imported (with error handling)

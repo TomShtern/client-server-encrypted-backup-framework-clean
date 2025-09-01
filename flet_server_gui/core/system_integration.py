@@ -803,12 +803,12 @@ class AdvancedClientSessionManager:
             self.monitoring_active = True
             e.control.text = "Stop Monitoring"
             e.control.bgcolor = TOKENS["error"]
-            threading.Thread(target=self._monitor_sessions, daemon=True).start()
+            asyncio.create_task(self._monitor_sessions())  # ✅ NON-BLOCKING: Use async task instead of thread
         
         e.control.update()
         logger.info(f"{'ג… Started' if self.monitoring_active else 'ג¹ן¸ Stopped'} session monitoring")
     
-    def _monitor_sessions(self):
+    async def _monitor_sessions(self):
         """Monitor sessions in background and schedule UI updates safely."""
         while self.monitoring_active:
             try:
@@ -819,10 +819,10 @@ class AdvancedClientSessionManager:
                 if hasattr(self, 'page') and self.page:
                     self.page.run_threadsafe(self._update_sessions_with_data, sessions_data)
                 
-                time.sleep(10)  # Update every 10 seconds
+                await asyncio.sleep(10)  # ✅ NON-BLOCKING: Update every 10 seconds
             except Exception as ex:
                 logger.error(f"ג Error in session monitoring: {ex}")
-                time.sleep(30)  # Wait longer on error
+                await asyncio.sleep(30)  # ✅ NON-BLOCKING: Wait longer on error
     
     def _get_sessions_data_blocking(self):
         """Get sessions data in a thread-safe way (ADDED: thread-safe helper)"""
