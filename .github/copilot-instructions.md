@@ -157,3 +157,61 @@ deactivate
   "stubPath": "stubs"
 }
 ```
+
+## MARKDOWN FORMAT
+
+- This project uses GitHub Flavored Markdown (GFM) for documentation. GFM features include:
+    - Headings with `#`
+    - Bullet and numbered lists
+    - Code blocks with syntax highlighting (e.g., ```python)
+    - Tables with pipe separators (`|`)
+    - Bold (`**`) and italic (`*`) text
+    - Links and references
+
+### Types of Markdown
+
+Markdown is a lightweight markup language for formatting text. There are several variants (flavors) with different features. Here's an overview:
+
+#### Common Markdown Types/Flavors
+1. **Standard Markdown** (Original by John Gruber, 2004)
+   - Basic syntax: headers, lists, links, emphasis, code blocks.
+   - No tables, strikethrough, or advanced features.
+
+2. **GitHub Flavored Markdown (GFM)**
+   - Extends standard Markdown with GitHub-specific features.
+   - Includes: tables, task lists, strikethrough, fenced code blocks with syntax highlighting, autolinks, and more.
+   - Widely used on GitHub, GitLab, and similar platforms.
+
+3. **CommonMark**
+   - A standardized specification (2014) for consistent Markdown parsing.
+   - Aims to be unambiguous and compatible with most implementations.
+   - Supports basic features; extensions for tables, etc., are separate.
+
+4. **MultiMarkdown**
+   - Adds features like tables, footnotes, citations, and metadata.
+   - Used for academic and technical writing.
+
+5. **Markdown Extra** (PHP Markdown Extra)
+   - Extends standard Markdown with tables, definition lists, footnotes, and abbreviations.
+   - Popular in static site generators like Jekyll.
+
+6. **Other Variants**
+   - **Pandoc Markdown**: Supports complex features like citations, cross-references, and multiple output formats.
+   - **R Markdown**: For R programming, includes code execution and output embedding.
+   - **Dialects**: Platform-specific like Reddit's or Stack Overflow's (similar to GFM).
+
+#### How to Identify Which Type You're Using
+- **Check Features**: Look for specific syntax in your file.
+  - Tables (`| Header |`): Likely GFM, MultiMarkdown, or Markdown Extra.
+  - Strikethrough (`~~text~~`): GFM or CommonMark with extensions.
+  - Task lists (`- [x] Item`): GFM.
+  - Fenced code blocks with language (````python`): GFM or CommonMark.
+- **Context/Platform**: 
+  - GitHub/GitLab repos: Usually GFM.
+  - Static sites (e.g., Jekyll): Markdown Extra.
+  - Academic tools: MultiMarkdown or Pandoc.
+- **Parser/Renderer**: The tool processing the Markdown determines support (e.g., GitHub's renderer uses GFM).
+- **File Extension**: All use `.md`, but content reveals the flavor.
+- **Test Parsing**: Use online tools like Dillinger or Markdown parsers to see what renders.
+
+The project's specified format is GitHub Flavored Markdown (GFM), as indicated by its use of tables, fenced code blocks with language specifiers, and other GFM-specific features. While it could be parsed by other Markdown processors (e.g., CommonMark or MultiMarkdown) with varying levels of support, GFM should be preferred. If you encounter parsing issues, check for GFM-specific syntax.

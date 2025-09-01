@@ -60,6 +60,9 @@ class UTF8Support:
                 # Configure Windows console if available
                 cls._setup_windows_console()
                 
+                # Fix console streams encoding
+                cls._fix_console_streams()
+                
                 cls._initialized = True
                 return True
             except (OSError, AttributeError, RuntimeError):
@@ -87,10 +90,38 @@ class UTF8Support:
             if current_output_cp != 65001:
                 kernel32.SetConsoleOutputCP(65001)
                 
+            # Enable virtual terminal processing for better Unicode support
+            try:
+                STD_OUTPUT_HANDLE = -11
+                ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+                
+                handle = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+                mode = ctypes.c_ulong()
+                kernel32.GetConsoleMode(handle, ctypes.byref(mode))
+                kernel32.SetConsoleMode(handle, mode.value | ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+            except Exception:
+                pass  # Not critical
+                
         except (AttributeError, OSError):
             # More specific exception handling
             cls._original_console_cp = None
             cls._original_console_output_cp = None
+
+    @classmethod
+    def _fix_console_streams(cls) -> None:
+        """Fix console streams to use UTF-8 encoding."""
+        try:
+            # Reconfigure stdout and stderr to use UTF-8 if possible
+            if hasattr(sys.stdout, 'reconfigure'):
+                sys.stdout.reconfigure(encoding='utf-8')
+                sys.stderr.reconfigure(encoding='utf-8')
+            else:
+                # For older Python versions, we can't easily change encoding of existing streams
+                # But we can ensure new streams use UTF-8
+                pass
+        except Exception:
+            # Not critical, continue with existing setup
+            pass
 
     @classmethod
     def get_env(cls, base_env: Optional[Dict[str, str]] = None) -> Dict[str, str]:

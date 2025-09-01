@@ -43,10 +43,10 @@ except ImportError:
         sys.path.insert(0, settings_path)
         sys_path_added = True
     
-    from settings_form_generator import SettingsFormGenerator
-    from settings_export_import_service import SettingsExportImportService
-    from settings_reset_service import SettingsResetService
-    from settings_change_manager import SettingsChangeManager
+    from flet_server_gui.settings.settings_form_generator import SettingsFormGenerator
+    from flet_server_gui.settings.settings_export_import_service import SettingsExportImportService
+    from flet_server_gui.settings.settings_reset_service import SettingsResetService
+    from flet_server_gui.settings.settings_change_manager import SettingsChangeManager
 
 from flet_server_gui.utils.settings_manager import SettingsManager
 from flet_server_gui.components.base_component import BaseComponent

@@ -13,6 +13,7 @@
         "d-biehl.robotcode",
         "sobytes.flet-control-wrap",
         "fill-labs.dependi",
-        "prisma.prisma"
+        "prisma.prisma",
+        "bierner.markdown-mermaid"
     ]
 }
