@@ -37,7 +37,6 @@ requests>=2.32.0
 urllib3>=2.2.0
 
 #considering to add these:
-rich>=13.7.0                    # Enhanced console output with colors and styles; use for better debugging logs in subprocess invocations or build outputs in one_click_build_and_run.py
 loguru>=0.7.0                   # Structured logging library; simplifies logging in Flask API Bridge or Python Server, with rotation and formatting for better error tracking
 pytest>=7.0.0                   # Testing framework; essential for unit testing integration flows (e.g., Flask API to C++ client) and verifying file receipts in server/received_files/
 cryptography>=41.0.0            # Advanced cryptography library; enhances encryption in Flask API communications or C++ client, but test integration carefully to avoid conflicts with pycryptodome
@@ -48,6 +47,12 @@ hashlib                         # Built-in hashing module; already available, us
 seaborn>=0.12.0                 # Statistical visualization; enhances matplotlib in GUI for advanced analytics plots, integrating with backup data from Python Server
 textual>=0.38.0                 # TUI (text-based UI) framework; creates console dashboards for monitoring backups, useful for debugging or headless operations
 typer>=0.9.0                    # CLI building toolkit; builds command-line tools for manual testing of C++ client or server, complementing one_click_build_and_run.py
+
+# Optional enhancements for utf8_solution.py (automatically detected when available)
+python-bidi>=0.4.2              # Proper Unicode Bidirectional Algorithm for Hebrew/Arabic text processing
+wcwidth>=0.2.6                  # Accurate Unicode character width calculation for text alignment
+rich>=13.7.0                    # Enhanced console output with colors and styles; use for better debugging logs in subprocess invocations or build outputs in one_click_build_and_run.py
+# Additional libraries for extended functionality
 click>=8.1.0                    # Command-line interface framework; similar to typer, for creating CLI utilities to interact with the backup system
 websockets>=11.0                # WebSocket library; enhances flask-socketio for real-time updates in web UI, enabling live backup progress notifications
 sse-starlette>=1.6.0            # Server-Sent Events for Starlette/FastAPI; adds live event streaming from Flask API to web UI for backup status updates

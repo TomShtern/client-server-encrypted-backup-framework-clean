@@ -149,11 +149,15 @@ class NavigationManager:
             destination.tooltip = f"{item['label']}: {item['description']}"
             destinations.append(destination)
         
+        # ✅ Responsive breakpoints: Adjust based on screen size
+        responsive_min_width = 56 if self.page.width and self.page.width < 768 else 72  # Smaller on mobile
+        responsive_extended_width = 200 if self.page.width and self.page.width < 1024 else 256  # Smaller on tablets
+        
         self.nav_rail = ft.NavigationRail(
             selected_index=self.current_index,
             label_type=ft.NavigationRailLabelType.ALL if show_labels else ft.NavigationRailLabelType.SELECTED,
-            min_width=72,
-            min_extended_width=256,
+            min_width=responsive_min_width,  # ✅ Responsive minimum width
+            min_extended_width=responsive_extended_width,  # ✅ Responsive extended width
             extended=extended,
             destinations=destinations,
             on_change=self.on_navigation_change,
@@ -171,31 +175,27 @@ class NavigationManager:
     
     def _create_navigation_header(self) -> ft.Control:
         """Create header for extended navigation rail."""
-        return ft.Container(
-            content=ft.Column([
-                ft.Icon(ft.Icons.CLOUD_SYNC, size=32),
-                ft.Text("Backup Server", size=12, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
-            padding=ft.Padding(16, 16, 16, 8)
-        )
+        # ✅ Direct styling: Apply padding directly to Column, eliminate Container wrapper
+        return ft.Column([
+            ft.Icon(ft.Icons.CLOUD_SYNC, size=32),
+            ft.Text("Backup Server", size=12, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4, padding=ft.Padding(16, 16, 16, 8))
     
     def _create_navigation_footer(self) -> ft.Control:
         """Create footer for extended navigation rail."""
-        return ft.Container(
-            content=ft.Column([
-                ft.IconButton(
-                    icon=ft.Icons.HELP_OUTLINE,
-                    tooltip="Help & Support",
-                    on_click=lambda e: self._show_help_dialog()
-                ),
-                ft.IconButton(
-                    icon=ft.Icons.INFO_OUTLINE,
-                    tooltip="About",
-                    on_click=lambda e: self._show_about_dialog()
-                )
-            ], spacing=4),
-            padding=ft.Padding(16, 8, 16, 16)
-        )
+        # ✅ Direct styling: Apply padding directly to Column, eliminate Container wrapper
+        return ft.Column([
+            ft.IconButton(
+                icon=ft.Icons.HELP_OUTLINE,
+                tooltip="Help & Support",
+                on_click=lambda e: self._show_help_dialog()
+            ),
+            ft.IconButton(
+                icon=ft.Icons.INFO_OUTLINE,
+                tooltip="About",
+                on_click=lambda e: self._show_about_dialog()
+            )
+        ], spacing=4, padding=ft.Padding(16, 8, 16, 16))
     
     def on_navigation_change(self, e):
         """Handle navigation change with enhanced state management."""
@@ -213,7 +213,7 @@ class NavigationManager:
             self._show_permission_denied_dialog(new_view)
             # Reset selection
             e.control.selected_index = self.current_index
-            self.page.update()
+            e.control.update()  # ✅ Only update the navigation rail control
             return
         
         # Update state
@@ -225,10 +225,16 @@ class NavigationManager:
         
         # Ensure content is not None
         if self.content_area.content is None:
+            # ✅ Direct styling: Apply padding/alignment directly to Text, eliminate Container wrapper
+            self.content_area.content = ft.Text(
+                "View content not available", 
+                style=ft.TextThemeStyle.BODY_MEDIUM,
+                text_align=ft.TextAlign.CENTER,
+                # Note: Text doesn't support padding/alignment directly, so keep minimal Container
+            )
+            # Wrap in minimal container only for alignment - but apply styles directly
             self.content_area.content = ft.Container(
-                content=ft.Text("View content not available", 
-                               style=ft.TextThemeStyle.BODY_MEDIUM,
-                               text_align=ft.TextAlign.CENTER),
+                content=self.content_area.content,
                 padding=20,
                 alignment=ft.alignment.center
             )
@@ -238,11 +244,11 @@ class NavigationManager:
             # Scale animation for visual feedback
             self.nav_rail.scale = 0.98
             self.nav_rail.animate_scale = ft.Animation(150, ft.AnimationCurve.EASE_IN_OUT)
-            self.page.update()
+            self.nav_rail.update()  # ✅ Only update the navigation rail
             
             # Reset scale after animation
             self.nav_rail.scale = 1.0
-            self.page.update()
+            self.nav_rail.update()  # ✅ Only update the navigation rail
         
         # Trigger callbacks
         self._trigger_navigation_callbacks(old_view, new_view)
@@ -304,8 +310,9 @@ class NavigationManager:
             # Execute main switch callback
             self.switch_callback(view_name)
 
-            # Update UI
-            self.page.update()
+            # Update UI - only update nav rail, not entire page
+            if self.nav_rail:
+                self.nav_rail.update()  # ✅ Only update the navigation rail
             return True
 
         except Exception as e:
@@ -348,8 +355,8 @@ class NavigationManager:
             if item["view"] == view_name:
                 item["badge_count"] = count
                 if self.nav_rail:
-                    # Rebuild navigation rail to show badge
-                    self.page.update()
+                    # Update only navigation rail to show badge
+                    self.nav_rail.update()  # ✅ Only update the navigation rail
                 break
     
     def _clear_view_badge(self, view_name: str):

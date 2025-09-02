@@ -5,6 +5,7 @@ Real-time server log integration and management
 
 import os
 import time
+import asyncio
 import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Callable
@@ -141,8 +142,9 @@ class LogService:
                 self.file_positions[str(log_file)] = log_file.stat().st_size
             
             self.monitoring_active = True
-            self.monitor_thread = threading.Thread(target=self._monitor_logs, daemon=True)
-            self.monitor_thread.start()
+            # ✅ NON-BLOCKING: Use async task instead of thread
+            self.monitor_task = asyncio.create_task(self._monitor_logs())
+            self.monitor_thread = None  # Keep for backward compatibility
             
             logger.info("✅ Real-time log monitoring started")
             return True
@@ -157,15 +159,15 @@ class LogService:
             self.monitor_thread.join(timeout=2)
         logger.info("✅ Log monitoring stopped")
     
-    def _monitor_logs(self):
+    async def _monitor_logs(self):
         """Background thread for monitoring log files"""
         while self.monitoring_active:
             try:
                 self._check_log_files()
-                time.sleep(1)  # Check every second
+                await asyncio.sleep(1)  # ✅ NON-BLOCKING: Check every second
             except Exception as e:
                 logger.error(f"❌ Error in log monitoring: {e}")
-                time.sleep(5)  # Wait longer on error
+                await asyncio.sleep(5)  # ✅ NON-BLOCKING: Wait longer on error
     
     def _check_log_files(self):
         """Check log files for new content"""
