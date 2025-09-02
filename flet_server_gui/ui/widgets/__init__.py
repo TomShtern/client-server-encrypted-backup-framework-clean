@@ -11,25 +11,46 @@ Consolidated UI widget components for the Flet Server GUI:
 - widgets.py: Dashboard widgets with enhanced interactions
 """
 
+# New Flet-style components
 from .buttons import (
-    ButtonConfig,
-    ActionButtonFactory
+    Button,
+    FilledButton,
+    OutlinedButton,
+    TextButton,
+    IconButton,
+    FloatingActionButton,
+    create_filled_button,
+    create_outlined_button,
+    create_text_button,
+    create_icon_button,
+    create_floating_action_button,
+    create_primary_button,
+    create_secondary_button
 )
 
 from .cards import (
-    ClientStatsCard,
-    ServerStatusCard,
-    ActivityLogCard,
-    EnhancedStatsCard,
-    DatabaseStatsCard,
-    create_client_stats_card,
-    create_server_status_card,
-    create_activity_log_card,
-    create_enhanced_stats_card,
-    create_database_stats_card
+    Card,
+    StatisticCard,
+    DataTableCard,
+    create_basic_card,
+    create_statistic_card,
+    create_data_table_card,
+    create_info_card,
+    create_notification_card
 )
 
-
+from .dialogs import (
+    Dialog,
+    AlertDialog,
+    ConfirmDialog,
+    create_info_dialog,
+    create_success_dialog,
+    create_warning_dialog,
+    create_error_dialog,
+    create_confirmation_dialog,
+    create_progress_dialog,
+    create_input_dialog
+)
 
 from .charts import (
     MetricThreshold,
@@ -68,42 +89,6 @@ from .widgets import (
     create_dashboard_widget
 )
 
-# Enhanced components
-from .enhanced_buttons import (
-    ButtonVariant,
-    ButtonSize,
-    ButtonState,
-    EnhancedButtonConfig,
-    EnhancedButton,
-    create_primary_button,
-    create_secondary_button,
-    create_outline_button,
-    create_text_button,
-    create_icon_button,
-    create_fab_button
-)
-
-from .enhanced_cards import (
-    CardVariant,
-    CardSize,
-    EnhancedCardConfig,
-    EnhancedCard,
-    StatCard,
-    DataCard
-)
-
-from .enhanced_dialogs import (
-    DialogType,
-    DialogSize,
-    DialogConfig,
-    EnhancedDialog,
-    EnhancedAlertDialog,
-    ConfirmationDialog
-)
-
-# Enhanced chart imports now come from the consolidated charts.py
-# The enhanced_charts.py components are now integrated into charts.py
-
 from .enhanced_tables import (
     # Core table data structures (absorbed from unified_table_base.py)
     TableSize,
@@ -134,21 +119,41 @@ from .enhanced_tables import (
 
 __all__ = [
     # Button components
-    'ButtonConfig',
-    'ActionButtonFactory',
+    'Button',
+    'FilledButton',
+    'OutlinedButton',
+    'TextButton',
+    'IconButton',
+    'FloatingActionButton',
+    'create_filled_button',
+    'create_outlined_button',
+    'create_text_button',
+    'create_icon_button',
+    'create_floating_action_button',
+    'create_primary_button',
+    'create_secondary_button',
     
     # Card components
-    'ClientStatsCard',
-    'ServerStatusCard', 
-    'ActivityLogCard',
-    'EnhancedStatsCard',
-    'DatabaseStatsCard',
-    'create_client_stats_card',
-    'create_server_status_card',
-    'create_activity_log_card',
-    'create_enhanced_stats_card',
-    'create_database_stats_card',
+    'Card',
+    'StatisticCard',
+    'DataTableCard',
+    'create_basic_card',
+    'create_statistic_card',
+    'create_data_table_card',
+    'create_info_card',
+    'create_notification_card',
     
+    # Dialog components
+    'Dialog',
+    'AlertDialog',
+    'ConfirmDialog',
+    'create_info_dialog',
+    'create_success_dialog',
+    'create_warning_dialog',
+    'create_error_dialog',
+    'create_confirmation_dialog',
+    'create_progress_dialog',
+    'create_input_dialog',
     
     # Chart components (consolidated)
     'MetricThreshold',
@@ -183,39 +188,6 @@ __all__ = [
     'create_stat_widget',
     'create_activity_widget',
     'create_dashboard_widget',
-    
-    # Enhanced dialog components
-    'DialogType',
-    'DialogSize',
-    'DialogConfig',
-    'EnhancedDialog',
-    'EnhancedAlertDialog',
-    'ConfirmationDialog',
-    
-    # Enhanced button components
-    'ButtonVariant',
-    'ButtonSize',
-    'ButtonState',
-    'EnhancedButtonConfig',
-    'EnhancedButton',
-    'create_primary_button',
-    'create_secondary_button',
-    'create_outline_button',
-    'create_text_button',
-    'create_icon_button',
-    'create_fab_button',
-    
-    # Enhanced card components
-    'CardVariant',
-    'CardSize',
-    'EnhancedCardConfig',
-    'EnhancedCard',
-    'StatCard',
-    'DataCard',
-    
-    # Enhanced chart components (now available from consolidated charts.py via separate imports)
-    # 'ChartType', 'ChartSize', 'ChartDataPoint', 'ChartSeries', 
-    # 'EnhancedChartConfig', 'EnhancedChart' - available via direct import from .charts
     
     # Enhanced table components (ALL table functionality consolidated)
     'TableSize',

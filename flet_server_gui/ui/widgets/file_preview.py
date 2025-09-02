@@ -10,14 +10,12 @@ import flet as ft
 import base64
 import os
 from typing import Optional, Callable, List, Dict, Any
-from ...components.enhanced_components import (
-    EnhancedCard
-)
+from .cards import Card
 from flet_server_gui.managers.theme_manager import TOKENS
 from flet_server_gui.managers.toast_manager import ToastManager
 
 
-class FilePreview(EnhancedCard):
+class FilePreview(Card):
     """File preview component with enhanced UI and actions"""
     
     def __init__(self, 
@@ -28,7 +26,7 @@ class FilePreview(EnhancedCard):
                  on_delete: Optional[Callable] = None,
                  animate_duration: int = 200,
                  **kwargs):
-        # Call parent constructor with minimal parameters to avoid errors
+        # Initialize parent Card with appropriate parameters
         super().__init__(**kwargs)
         self.file_path = file_path
         self.file_content = file_content
@@ -36,7 +34,6 @@ class FilePreview(EnhancedCard):
         self.on_download = on_download
         self.on_delete = on_delete
         self.animate_duration = animate_duration
-
 
 def create_file_preview(
     file_path: str,
@@ -73,7 +70,6 @@ class FilePreviewManager:
     def get_preview(self, preview_id: str) -> Optional[FilePreview]:
         """Get a file preview by ID"""
         return self.previews.get(preview_id)
-
 
 def create_file_preview_manager() -> FilePreviewManager:
     """Create a file preview manager"""
