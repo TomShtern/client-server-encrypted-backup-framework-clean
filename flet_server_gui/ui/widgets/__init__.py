@@ -29,16 +29,7 @@ from .cards import (
     create_database_stats_card
 )
 
-from .tables import (
-    SortDirection,
-    FilterOperator,
-    ColumnFilter,
-    ColumnSort,
-    TableColumn,
-    TableAction,
-    EnhancedDataTable,
-    create_enhanced_data_table
-)
+
 
 from .charts import (
     MetricThreshold,
@@ -47,10 +38,17 @@ from .charts import (
     EnhancedBarChart,
     EnhancedLineChart,
     EnhancedPieChart,
-    create_enhanced_performance_charts,
+    create_performance_chart as create_enhanced_performance_charts,
+    create_enhanced_bar_chart,
+    create_enhanced_line_chart,
+    create_enhanced_pie_chart,
     create_bar_chart,
     create_line_chart,
-    create_pie_chart
+    create_pie_chart,
+    format_metric_value,
+    ChartType,
+    ChartDataPoint,
+    MetricType
 )
 
 from .file_preview import (
@@ -71,15 +69,6 @@ from .widgets import (
 )
 
 # Enhanced components
-from .enhanced_dialogs import (
-    DialogType,
-    DialogSize,
-    DialogConfig,
-    EnhancedDialog,
-    EnhancedAlertDialog,
-    ConfirmationDialog
-)
-
 from .enhanced_buttons import (
     ButtonVariant,
     ButtonSize,
@@ -103,38 +92,44 @@ from .enhanced_cards import (
     DataCard
 )
 
-from .enhanced_charts import (
-    ChartType,
-    ChartSize,
-    ChartDataPoint,
-    ChartSeries,
-    EnhancedChartConfig,
-    EnhancedChart,
-    create_line_chart as create_enhanced_line_chart,
-    create_bar_chart as create_enhanced_bar_chart,
-    create_pie_chart as create_enhanced_pie_chart
+from .enhanced_dialogs import (
+    DialogType,
+    DialogSize,
+    DialogConfig,
+    EnhancedDialog,
+    EnhancedAlertDialog,
+    ConfirmationDialog
 )
+
+# Enhanced chart imports now come from the consolidated charts.py
+# The enhanced_charts.py components are now integrated into charts.py
 
 from .enhanced_tables import (
+    # Core table data structures (absorbed from unified_table_base.py)
     TableSize,
-    SortDirection as EnhancedSortDirection,
-    TableColumn as EnhancedTableColumn,
+    SortDirection,
+    FilterOperator,
+    ColumnFilter,
+    ColumnSort,
+    EnhancedTableColumn,
+    TableAction,
     TableConfig,
+    
+    # Main table class with all absorbed functionality
     EnhancedTable,
+    
+    # Factory functions for all table types (absorbed from specialized_tables.py)
     create_simple_table,
     create_client_table,
-    create_file_table
-)
-
-from .enhanced_widgets import (
-    WidgetType,
-    WidgetSize as EnhancedWidgetSize,
-    WidgetConfig,
-    EnhancedWidget,
-    StatWidget,
-    ProgressWidget,
-    StatusWidget,
-    WidgetManager
+    create_file_table,
+    create_database_table,
+    create_enhanced_data_table,
+    
+    # Utility functions (absorbed functionality)
+    get_file_statistics,
+    
+    # Test function
+    test_enhanced_tables
 )
 
 __all__ = [
@@ -154,17 +149,8 @@ __all__ = [
     'create_enhanced_stats_card',
     'create_database_stats_card',
     
-    # Table components
-    'SortDirection',
-    'FilterOperator',
-    'ColumnFilter',
-    'ColumnSort',
-    'TableColumn',
-    'TableAction',
-    'EnhancedDataTable',
-    'create_enhanced_data_table',
     
-    # Chart components
+    # Chart components (consolidated)
     'MetricThreshold',
     'ChartSettings',
     'EnhancedPerformanceCharts',
@@ -172,9 +158,16 @@ __all__ = [
     'EnhancedLineChart',
     'EnhancedPieChart',
     'create_enhanced_performance_charts',
+    'create_enhanced_bar_chart',
+    'create_enhanced_line_chart',
+    'create_enhanced_pie_chart',
     'create_bar_chart',
     'create_line_chart',
     'create_pie_chart',
+    'format_metric_value',
+    'ChartType',
+    'ChartDataPoint',
+    'MetricType',
     
     # File preview components
     'FilePreview',
@@ -220,34 +213,25 @@ __all__ = [
     'StatCard',
     'DataCard',
     
-    # Enhanced chart components
-    'ChartType',
-    'ChartSize',
-    'ChartDataPoint',
-    'ChartSeries',
-    'EnhancedChartConfig',
-    'EnhancedChart',
-    'create_enhanced_line_chart',
-    'create_enhanced_bar_chart',
-    'create_enhanced_pie_chart',
+    # Enhanced chart components (now available from consolidated charts.py via separate imports)
+    # 'ChartType', 'ChartSize', 'ChartDataPoint', 'ChartSeries', 
+    # 'EnhancedChartConfig', 'EnhancedChart' - available via direct import from .charts
     
-    # Enhanced table components
+    # Enhanced table components (ALL table functionality consolidated)
     'TableSize',
-    'EnhancedSortDirection',
+    'SortDirection',
+    'FilterOperator',
+    'ColumnFilter',
+    'ColumnSort',
     'EnhancedTableColumn',
+    'TableAction',
     'TableConfig',
     'EnhancedTable',
     'create_simple_table',
     'create_client_table',
     'create_file_table',
-    
-    # Enhanced widget components
-    'WidgetType',
-    'EnhancedWidgetSize',
-    'WidgetConfig',
-    'EnhancedWidget',
-    'StatWidget',
-    'ProgressWidget',
-    'StatusWidget',
-    'WidgetManager'
+    'create_database_table',
+    'create_enhanced_data_table',
+    'get_file_statistics',
+    'test_enhanced_tables'
 ]

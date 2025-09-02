@@ -25,7 +25,7 @@ from flet_server_gui.ui.widgets import (
 
 # Layout fixes imports
 from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
-from flet_server_gui.core.theme_compatibility import ThemeConsistencyManager, apply_theme_consistency
+from flet_server_gui.managers.theme_manager import ThemeManager
 
 # Import modular settings components
 sys_path_added = False
@@ -48,7 +48,7 @@ except ImportError:
     from flet_server_gui.settings.settings_reset_service import SettingsResetService
     from flet_server_gui.settings.settings_change_manager import SettingsChangeManager
 
-from flet_server_gui.utils.settings_manager import SettingsManager
+from flet_server_gui.managers.settings_manager import SettingsManager
 from flet_server_gui.components.base_component import BaseComponent
 
 logger = logging.getLogger(__name__)

@@ -27,7 +27,7 @@ class TestPhase3Fixes(unittest.TestCase):
     def test_navigation_synchronization(self):
         """Test navigation synchronization fix."""
         try:
-            from flet_server_gui.ui.navigation import NavigationManager
+            from flet_server_gui.managers.navigation_manager import NavigationManager
             
             # Create navigation manager
             nav_manager = NavigationManager(self.test_page, lambda x: None)

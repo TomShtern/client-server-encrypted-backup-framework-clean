@@ -9,7 +9,7 @@ import Shared.utils.utf8_solution
 
 import flet as ft
 from typing import Dict, Any, Callable, Optional, List
-from flet_server_gui.core.theme_compatibility import TOKENS
+from flet_server_gui.managers.theme_manager import TOKENS
 
 
 class SettingsChangeManager:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Server Data Manager
+Database Manager
 Handles database operations, client/file data retrieval, and bulk operations.
 """
 
@@ -19,7 +19,7 @@ sys.path.insert(0, project_root)
 
 try:
     from python_server.server.server import BackupServer
-    from python_server.server.database import DatabaseManager
+    from python_server.server.database import DatabaseManager as CoreDatabaseManager
     DATABASE_AVAILABLE = True
 except ImportError:
     DATABASE_AVAILABLE = False
@@ -36,8 +36,10 @@ class RealClient:
     status: str = "Connected"
 
 
-class ServerDataManager:
-    """Manages server data operations and database interactions"""
+class DatabaseManager:
+    """
+    Manages database operations and data retrieval
+    (Renamed from DataManager to better reflect database-specific responsibilities)"""
     
     def __init__(self, server_instance: Optional[BackupServer] = None, database_name: Optional[str] = None):
         self.server_instance = server_instance
@@ -48,18 +50,16 @@ class ServerDataManager:
             # Check if MockaBase exists, if not create it
             mockabase_path = "MockaBase.db"
             if not os.path.exists(mockabase_path):
-                print("[INFO] MockaBase not found, will use default database")
+                print("[INFO] Creating MockaBase.db for standalone operation")
             else:
-                database_name = mockabase_path
-                print(f"[INFO] Using MockaBase: {database_name}")
+                print("[INFO] Using existing MockaBase.db")
 
         if DATABASE_AVAILABLE:
             try:
-                self.db_manager = DatabaseManager(database_name)
-                print(f"[INFO] Database connection established ({database_name or 'default'})")
+                self.db_manager = CoreDatabaseManager(database_name or "MockaBase.db")
+                print("[INFO] Database manager initialized successfully")
             except Exception as e:
-                print(f"[ERROR] Database initialization failed: {e}")
-                raise RuntimeError(f"Database connection required: {e}") from e
+                print(f"[WARNING] Database manager initialization failed: {e}")
         else:
             raise RuntimeError("Database integration required but not available")
     

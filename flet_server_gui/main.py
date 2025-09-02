@@ -46,7 +46,7 @@ from flet_server_gui.managers.theme_manager import ThemeManager
 # Essential components
 from flet_server_gui.components.control_panel_card import ControlPanelCard
 from flet_server_gui.components.quick_actions import QuickActions
-from flet_server_gui.ui.navigation import NavigationManager
+from flet_server_gui.managers.navigation_manager import NavigationManager
 from flet_server_gui.ui.dialogs import DialogSystem, ToastManager
 from flet_server_gui.theme import THEMES, DEFAULT_THEME_NAME
 from flet_server_gui.ui.layouts.responsive_fixes import apply_layout_fixes
@@ -106,7 +106,7 @@ class ServerGUIApp:
         
         # Initialize specialized managers (Single Responsibility Principle)
         self.application_monitor = ApplicationMonitor(self.server_bridge)
-        self.theme_manager = ThemeManager(self.page, THEMES, DEFAULT_THEME_NAME)
+        self.theme_manager = ThemeManager(self.page)
         
         # Configure page and setup application
         self._setup_application()

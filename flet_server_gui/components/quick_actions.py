@@ -169,7 +169,7 @@ class QuickActions(EnhancedCard):
     def _on_settings(self, e):
         """Handle settings action"""
         # Show settings dialog using ToastManager
-        from flet_server_gui.ui.dialogs import ToastManager
+        from flet_server_gui.managers.toast_manager import ToastManager
         toast_manager = ToastManager(self.page)
         toast_manager.show_info("Settings dialog would open here")
 

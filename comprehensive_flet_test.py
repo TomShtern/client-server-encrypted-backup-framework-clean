@@ -44,7 +44,7 @@ def test_imports():
         return False
     
     try:
-        from flet_server_gui.ui.navigation import NavigationManager
+        from flet_server_gui.managers.navigation_manager import NavigationManager
         safe_print("[OK] NavigationManager import successful")
     except ImportError as e:
         safe_print(f"[ERROR] NavigationManager import failed: {e}")

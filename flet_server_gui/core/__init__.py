@@ -6,7 +6,7 @@ separated from UI components for better maintainability and testability.
 
 Classes:
     ServerOperations: Core server management operations
-    ClientManagement: Core client management operations  
+    ClientManagement: Core client management operations
     FileManagement: Core file management operations
     
 Phase 4 Consolidation:
@@ -31,15 +31,29 @@ Usage:
 from .server_operations import ServerOperations
 from .client_management import ClientManagement
 from .file_management import FileManagement
-# Legacy theme system imports - using compatibility layer
-from .theme_compatibility import (
-    TOKENS, ThemeManager, ThemeConsistencyManager,
-    get_semantic_color, setup_theme_system
-)
+
+# Updated theme imports - using new theme system
+try:
+    # Import from the new theme structure
+    from ..theme import THEMES
+    from ..managers.theme_manager import ThemeManager, TOKENS
+except ImportError:
+    # Fallback for direct execution or missing modules
+    THEMES = {}
+    TOKENS = {}
+    class ThemeManager:
+        def __init__(self, *args, **kwargs):
+            pass
+
 from .responsive_layout import (
     ResponsiveLayoutSystem, BreakpointSize, DeviceType, Breakpoint,
     responsive_layout_system, get_responsive_layout_system
 )
+
+# Create aliases for backward compatibility
+MaterialDesign3ThemeSystem = ThemeManager
+theme_system = None  # Will be initialized with page context
+get_theme_system = lambda page: ThemeManager(page)
 
 __all__ = [
     # Original core classes
@@ -51,19 +65,6 @@ __all__ = [
     'MaterialDesign3ThemeSystem',
     'theme_system',
     'get_theme_system',
-    
-    # Phase 4 design tokens
-    'ColorRole',
-    'TypographyRole',
-    'LIGHT_COLOR_TOKENS',
-    'DARK_COLOR_TOKENS',
-    'TYPOGRAPHY_TOKENS',
-    'SPACING_TOKENS',
-    'ELEVATION_TOKENS',
-    'get_color_token',
-    'get_typography_token',
-    'get_spacing_token',
-    'get_elevation_token',
     
     # Phase 4 responsive layout system
     'ResponsiveLayoutSystem',

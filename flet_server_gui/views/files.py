@@ -17,18 +17,27 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Callable
 from flet_server_gui.core.file_management import FileManagement
-from flet_server_gui.ui.widgets.tables import EnhancedDataTable
 from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
 from flet_server_gui.utils.thread_safe_ui import ThreadSafeUIUpdater, ui_safe_update
-from flet_server_gui.components.file_table_renderer import FileTableRenderer
-from flet_server_gui.components.file_filter_manager import FileFilterManager
+from flet_server_gui.ui.widgets.enhanced_tables import create_file_table
+from flet_server_gui.managers.file_operations_manager import FileOperationsManager
 from flet_server_gui.components.file_action_handlers import FileActionHandlers
 from flet_server_gui.ui.widgets.file_preview import FilePreviewManager
 from flet_server_gui.actions.file_actions import FileActions
 from flet_server_gui.components.base_component import BaseComponent
 from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes, fix_content_clipping, fix_button_clickable_areas, ensure_windowed_compatibility
 
-from flet_server_gui.core.theme_compatibility import TOKENS
+from flet_server_gui.managers.theme_manager import TOKENS
+
+# Enhanced components imports
+from flet_server_gui.ui.widgets import (
+    EnhancedTable,
+    EnhancedTableColumn,
+    TableAction,
+    FilterOperator,
+    ColumnFilter,
+    ColumnSort
+)
 
 
 
@@ -54,13 +63,14 @@ class FilesView(BaseComponent):
         self.button_factory = ActionButtonFactory(self, server_bridge, page)
         
         # Initialize modular components
-        self.table_renderer = FileTableRenderer(server_bridge, self.button_factory, page)
-        self.filter_manager = FileFilterManager(page, toast_manager)
+        self.table_renderer = create_file_table(server_bridge, self.button_factory, page)
+        self.file_ops_manager = FileOperationsManager(page, toast_manager=toast_manager)
         self.action_handlers = FileActionHandlers(server_bridge, dialog_system, toast_manager, page)
         self.preview_manager = FilePreviewManager(server_bridge, dialog_system, page)
         
-        # Setup callbacks
-        self.filter_manager.on_filter_changed = self._on_filtered_data_changed
+        # Setup callbacks - using file operations manager for filtering
+        # Note: file_ops_manager.filter_manager provides filtering functionality
+        self.file_ops_manager.filter_manager.on_filter_changed = self._on_filtered_data_changed
         self.action_handlers.set_data_changed_callback(self._refresh_files)
         
         # Set action handlers in button factory
@@ -103,8 +113,8 @@ class FilesView(BaseComponent):
             )
         )
         
-        # Search and filter controls from filter manager
-        search_controls = self.filter_manager.create_search_controls(self._on_filtered_data_changed)
+        # Search and filter controls from file operations manager
+        search_controls = self.file_ops_manager.create_file_filter_controls(self._on_filtered_data_changed)
         
         # File table from table renderer
         file_table_container = self.table_renderer.get_table_container()
@@ -227,10 +237,10 @@ class FilesView(BaseComponent):
             files = self.server_bridge.get_files()
             
             # Update filter manager with new data
-            self.filter_manager.update_file_data(files)
+            self.file_ops_manager.set_file_data_for_filtering(files)
             
             # Update table with filtered data
-            filtered_files = self.filter_manager.get_filtered_files()
+            filtered_files = self.file_ops_manager.get_filtered_files()
             self.table_renderer.update_table_data(filtered_files, self._on_file_selected, self.selected_files)
             
             # Update status
@@ -293,7 +303,7 @@ class FilesView(BaseComponent):
             
             # Update status text
             if self.status_text:
-                total_files = len(self.filter_manager.all_files)
+                total_files = len(self.file_ops_manager.filter_manager.all_data)
                 self.status_text.value = f"Showing {len(filtered_files)} of {total_files} files"
                 # Let theme handle text color automatically
             

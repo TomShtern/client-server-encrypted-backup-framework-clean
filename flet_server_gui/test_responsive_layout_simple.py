@@ -25,7 +25,7 @@ except ImportError as e:
         print("[WARNING] utf8_solution import failed, continuing without it")
         print(f"[DEBUG] Import error: {e}")
 
-from flet_server_gui.layouts.breakpoint_manager import BreakpointManager, Breakpoint
+from flet_server_gui.layout.breakpoint_manager import BreakpointManager, StandardBreakpoint as Breakpoint
 
 
 def test_breakpoint_detection():

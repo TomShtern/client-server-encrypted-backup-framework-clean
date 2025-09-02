@@ -9,7 +9,7 @@ import flet as ft
 from typing import Optional, Callable, Any, Dict, List
 import asyncio
 from enum import Enum
-from flet_server_gui.core.theme_compatibility import TOKENS
+from flet_server_gui.managers.theme_manager import TOKENS
 
 # ============================================================================
 # DIALOG TYPES AND CONFIGURATIONS
@@ -507,78 +507,12 @@ class DialogSystem:
         return await future
 
 # ============================================================================
-# TOAST NOTIFICATION SYSTEM
-# ============================================================================
-
-class ToastManager:
-    """Toast notification system for quick feedback."""
-    
-    def __init__(self, page: ft.Page):
-        self.page = page
-        
-    def show_success(self, message: str, duration: int = 3):
-        """Show success toast."""
-        self.page.snack_bar = ft.SnackBar(
-            content=ft.Row([
-                ft.Icon(ft.Icons.CHECK_CIRCLE, color=TOKENS['on_secondary']),
-                ft.Text(message, color=TOKENS['on_secondary'])
-            ]),
-            bgcolor=TOKENS['secondary'],
-            duration=duration * 1000
-        )
-        self.page.snack_bar.open = True
-        self.page.update()
-    
-    def show_error(self, message: str, duration: int = 5):
-        """Show error toast."""
-        self.page.snack_bar = ft.SnackBar(
-            content=ft.Row([
-                ft.Icon(ft.Icons.ERROR, color=TOKENS['on_error']),
-                ft.Text(message, color=TOKENS['on_error'])
-            ]),
-            bgcolor=TOKENS['error'],
-            duration=duration * 1000
-        )
-        self.page.snack_bar.open = True
-        self.page.update()
-    
-    def show_warning(self, message: str, duration: int = 4):
-        """Show warning toast."""
-        self.page.snack_bar = ft.SnackBar(
-            content=ft.Row([
-                ft.Icon(ft.Icons.WARNING, color=TOKENS['on_secondary']),
-                ft.Text(message, color=TOKENS['on_secondary'])
-            ]),
-            bgcolor=TOKENS['secondary'],
-            duration=duration * 1000
-        )
-        self.page.snack_bar.open = True
-        self.page.update()
-    
-    def show_info(self, message: str, duration: int = 3):
-        """Show info toast."""
-        self.page.snack_bar = ft.SnackBar(
-            content=ft.Row([
-                ft.Icon(ft.Icons.INFO, color=TOKENS['on_primary']),
-                ft.Text(message, color=TOKENS['on_primary'])
-            ]),
-            bgcolor=TOKENS['primary'],
-            duration=duration * 1000
-        )
-        self.page.snack_bar.open = True
-        self.page.update()
-
-# ============================================================================
 # FACTORY FUNCTIONS
 # ============================================================================
 
 def create_dialog_system(page: ft.Page) -> DialogSystem:
     """Create and initialize a dialog system for the page."""
     return DialogSystem(page)
-
-def create_toast_manager(page: ft.Page) -> ToastManager:
-    """Create and initialize a toast manager for the page."""
-    return ToastManager(page)
 
 # Legacy compatibility functions (integrated from original dialog_system.py)
 def create_enhanced_dialog_system(page: ft.Page) -> DialogSystem:

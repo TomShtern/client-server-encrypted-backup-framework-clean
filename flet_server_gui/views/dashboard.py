@@ -18,7 +18,7 @@ from flet_server_gui.core.semantic_colors import get_status_color
 from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes, fix_content_clipping, fix_button_clickable_areas, ensure_windowed_compatibility
 
 # Unified theme system - consolidated theme functionality
-from flet_server_gui.core.theme_compatibility import TOKENS
+from flet_server_gui.managers.theme_manager import TOKENS
 
 
 class DashboardView(BaseComponent):

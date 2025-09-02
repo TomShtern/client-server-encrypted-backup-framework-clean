@@ -8,7 +8,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import flet as ft
-from flet_server_gui.ui.navigation import NavigationManager
+from flet_server_gui.managers.navigation_manager import NavigationManager
 
 def switch_view(view_name: str):
     print(f"Switching to view: {view_name}")

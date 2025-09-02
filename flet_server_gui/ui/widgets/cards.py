@@ -11,7 +11,7 @@ import flet as ft
 import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, TYPE_CHECKING
-from flet_server_gui.core.theme_compatibility import TOKENS
+from flet_server_gui.managers.theme_manager import TOKENS
 
 if TYPE_CHECKING:
     from flet_server_gui.utils.server_bridge import ServerBridge, ServerInfo

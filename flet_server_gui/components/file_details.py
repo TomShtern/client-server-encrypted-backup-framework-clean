@@ -8,7 +8,7 @@ import flet as ft
 from typing import Dict, Optional, Callable
 import os
 # Unified theme system - consolidated theme functionality
-from flet_server_gui.core.theme_compatibility import TOKENS
+from flet_server_gui.managers.theme_manager import TOKENS
 from flet_server_gui.components.enhanced_components import (
     EnhancedCard,
     create_enhanced_button,

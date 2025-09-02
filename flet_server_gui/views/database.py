@@ -20,7 +20,7 @@ from flet_server_gui.ui.widgets.cards import DatabaseStatsCard
 from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
 from flet_server_gui.components.base_component import BaseComponent
 from flet_server_gui.components.database_action_handlers import DatabaseActionHandlers
-from flet_server_gui.components.database_table_renderer import DatabaseTableRenderer
+from flet_server_gui.ui.widgets.enhanced_tables import create_database_table
 
 # Enhanced components imports
 from flet_server_gui.ui.widgets import (
@@ -38,8 +38,8 @@ from flet_server_gui.ui.widgets import (
 
 # Layout fixes imports
 from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
-from flet_server_gui.core.theme_compatibility import ThemeConsistencyManager, apply_theme_consistency
-from flet_server_gui.core.theme_compatibility import TOKENS
+from flet_server_gui.managers.theme_manager import ThemeManager
+from flet_server_gui.managers.theme_manager import TOKENS
 
 
 
@@ -66,7 +66,7 @@ class DatabaseView(BaseComponent):
         self.button_factory = ActionButtonFactory(self, server_bridge, page)
         
         # Initialize table renderer with database view reference
-        self.table_renderer = DatabaseTableRenderer(server_bridge, self.button_factory, page)
+        self.table_renderer = create_database_table(server_bridge, self.button_factory, page)
         # Set database view reference for button callbacks
         self.table_renderer.database_view = self
         

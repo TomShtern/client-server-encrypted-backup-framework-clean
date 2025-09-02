@@ -34,7 +34,7 @@ def test_imports():
     
     # Test toast manager
     try:
-        from flet_server_gui.utils.toast_manager import ToastManager
+        from flet_server_gui.managers.toast_manager import ToastManager
         print("  [PASS] ToastManager import")
     except Exception as e:
         print(f"  [FAIL] ToastManager import: {e}")
@@ -50,10 +50,10 @@ def test_imports():
     
     # Test connection manager
     try:
-        from flet_server_gui.utils.connection_manager import ConnectionManager
-        print("  [PASS] ConnectionManager import")
+        from flet_server_gui.managers.connection_status_manager import ConnectionStatusManager
+        print("  [PASS] ConnectionStatusManager import")
     except Exception as e:
-        print(f"  [FAIL] ConnectionManager import: {e}")
+        print(f"  [FAIL] ConnectionStatusManager import: {e}")
         return False
     
     # Test base table manager
@@ -71,7 +71,7 @@ def test_toast_manager():
     print("\nTesting ToastManager functionality...")
     
     try:
-        from flet_server_gui.utils.toast_manager import ToastManager, ToastType, ToastConfig
+        from flet_server_gui.managers.toast_manager import ToastManager, ToastType, ToastConfig
         
         # Test that ToastType enum is complete
         expected_types = ['SUCCESS', 'INFO', 'WARNING', 'ERROR']
@@ -167,12 +167,12 @@ def test_error_handler():
         print(f"  [FAIL] ErrorHandler testing: {e}")
         return False
 
-def test_connection_manager():
-    """Test that connection manager has all required functionality"""
-    print("\nTesting ConnectionManager functionality...")
+def test_connection_status_manager():
+    """Test that connection status manager has all required functionality"""
+    print("\nTesting ConnectionStatusManager functionality...")
     
     try:
-        from flet_server_gui.utils.connection_manager import ConnectionManager, ConnectionConfig, ConnectionStatus
+        from flet_server_gui.managers.connection_status_manager import ConnectionStatusManager, ConnectionConfig, ConnectionStatus
         
         # Test that ConnectionStatus enum is complete
         expected_statuses = ['DISCONNECTED', 'CONNECTING', 'CONNECTED', 'RECONNECTING', 'ERROR', 'TIMEOUT']
@@ -197,16 +197,16 @@ def test_connection_manager():
         ]
         
         config = ConnectionConfig()
-        connection_manager = ConnectionManager(config)
+        connection_manager = ConnectionStatusManager(config)
         
         for method in required_methods:
             if hasattr(connection_manager, method):
-                print(f"  [PASS] ConnectionManager.{method} method exists")
+                print(f"  [PASS] ConnectionStatusManager.{method} method exists")
             else:
-                print(f"  [FAIL] ConnectionManager.{method} method missing")
+                print(f"  [FAIL] ConnectionStatusManager.{method} method missing")
                 return False
                 
-        print("  [PASS] All ConnectionManager functionality verified")
+        print("  [PASS] All ConnectionStatusManager functionality verified")
         return True
         
     except Exception as e:
@@ -274,8 +274,8 @@ def main():
         return 1
     
     # Test connection manager
-    if not test_connection_manager():
-        print("\n[FAIL] ConnectionManager tests failed!")
+    if not test_connection_status_manager():
+        print("\n[FAIL] ConnectionStatusManager tests failed!")
         return 1
     
     # Test base table manager
@@ -287,7 +287,7 @@ def main():
     print("\nKey Components Verified:")
     print("  [PASS] ToastManager - Standardized user notifications")
     print("  [PASS] ErrorHandler - Centralized error handling")
-    print("  [PASS] ConnectionManager - Server connection management")
+    print("  [PASS] ConnectionStatusManager - Server connection status monitoring")
     print("  [PASS] BaseTableManager - Advanced table features")
     print("  [PASS] All imports working correctly")
     print("  [PASS] All required methods implemented")

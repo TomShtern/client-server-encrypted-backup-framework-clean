@@ -18,38 +18,18 @@ from typing import List, Dict, Any, Optional, Callable
 
 # Existing imports
 from flet_server_gui.core.client_management import ClientManagement
-from flet_server_gui.ui.widgets.tables import EnhancedDataTable
 from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
 from flet_server_gui.utils.thread_safe_ui import ThreadSafeUIUpdater, ui_safe_update
-from flet_server_gui.components.client_table_renderer import ClientTableRenderer
-from flet_server_gui.components.client_filter_manager import ClientFilterManager
+from flet_server_gui.ui.widgets.enhanced_tables import create_client_table
+from flet_server_gui.managers.unified_filter_manager import create_client_filter_manager
 from flet_server_gui.components.client_action_handlers import ClientActionHandlers
 from flet_server_gui.actions.client_actions import ClientActions
 from flet_server_gui.layouts.responsive_utils import ResponsiveBuilder
-from flet_server_gui.layouts.breakpoint_manager import BreakpointManager
+from flet_server_gui.layout.breakpoint_manager import BreakpointManager
 from flet_server_gui.components.base_component import BaseComponent
 
-# Theme consistency import
-from flet_server_gui.core.theme_compatibility import apply_theme_consistency
-
-# Enhanced components imports
-from flet_server_gui.ui.widgets import (
-    EnhancedButton,
-    EnhancedCard,
-    EnhancedTable,
-    EnhancedWidget,
-    EnhancedButtonConfig,
-    ButtonVariant,
-    CardVariant,
-    TableSize,
-    WidgetSize,
-    WidgetType
-)
-
-# Layout fixes imports
-from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
-# Unified theme system - consolidated theme functionality
-from flet_server_gui.core.theme_compatibility import ThemeConsistencyManager, TOKENS
+# Theme imports
+from flet_server_gui.managers.theme_manager import ThemeManager, TOKENS
 
 
 
@@ -79,8 +59,8 @@ class ClientsView(BaseComponent):
         self.button_factory = ActionButtonFactory(self, server_bridge, page)
         
         # Initialize modular components
-        self.table_renderer = ClientTableRenderer(server_bridge, self.button_factory, page)
-        self.filter_manager = ClientFilterManager(page, toast_manager)
+        self.table_renderer = create_client_table(server_bridge, self.button_factory, page)
+        self.filter_manager = create_client_filter_manager(page, toast_manager)
         self.action_handlers = ClientActionHandlers(server_bridge, dialog_system, toast_manager, page)
         
         # Set action handlers in button factory

@@ -252,7 +252,7 @@ def get_theme_tokens() -> Dict[str, str]:
         return _cached_tokens
 
     try:
-        from flet_server_gui.core.theme_compatibility import TOKENS
+        from flet_server_gui.managers.theme_manager import TOKENS
         _cached_tokens = TOKENS
         return TOKENS
     except ImportError:
@@ -311,13 +311,9 @@ def get_gradient_colors() -> list:
 
 def get_linear_gradient(begin=ft.alignment.top_left, end=ft.alignment.bottom_right, stops=None) -> ft.LinearGradient:
     """Create a linear gradient using theme colors."""
-    try:
-        from flet_server_gui.core.theme_compatibility import linear_gradient
-        return linear_gradient(begin=begin, end=end, stops=stops)
-    except ImportError:
-        # Fallback gradient
-        colors = get_gradient_colors()
-        return ft.LinearGradient(colors=colors, begin=begin, end=end, stops=stops)
+    # Use proper Flet theming - simple gradient with theme colors
+    colors = get_gradient_colors()
+    return ft.LinearGradient(colors=colors, begin=begin, end=end, stops=stops)
 
 
 def get_gradient_button_style() -> Dict[str, Any]:
@@ -337,12 +333,7 @@ def apply_theme_to_component(component: ft.Control, page: ft.Page) -> None:
 
 def create_themed_button(text: str, icon=None, button_type: str = "filled", **kwargs) -> ft.Control:
     """Create a themed button using the appropriate theme colors."""
-    try:
-        from flet_server_gui.core.theme_compatibility import gradient_button
-        if button_type == "gradient":
-            return gradient_button(ft.Row([ft.Icon(icon), ft.Text(text)]) if icon else ft.Text(text), **kwargs)
-    except ImportError:
-        pass
+    # Use proper Flet theming - standard buttons with theme colors
     
     # Fallback to standard buttons
     if button_type == "filled":

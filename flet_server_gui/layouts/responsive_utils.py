@@ -7,7 +7,7 @@ responsive layouts, containers, and UI elements that adapt to different screen s
 
 import flet as ft
 from typing import List, Dict, Any, Optional, Union, Callable
-from .breakpoint_manager import BreakpointManager, Breakpoint
+from flet_server_gui.layout.breakpoint_manager import BreakpointManager, StandardBreakpoint as Breakpoint
 
 
 class ResponsiveBuilder:

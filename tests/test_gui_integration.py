@@ -137,7 +137,7 @@ class TestGUIIntegration(unittest.TestCase):
     
     def test_navigation_state_sync(self):
         """Test navigation state synchronization"""
-        from flet_server_gui.ui.navigation import NavigationManager
+        from flet_server_gui.managers.navigation_manager import NavigationManager
         
         switch_callback = Mock()
         nav_manager = NavigationManager(self.test_page, switch_callback)

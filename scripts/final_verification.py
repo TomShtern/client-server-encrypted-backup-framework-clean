@@ -138,7 +138,7 @@ def test_phase_3_ui_stability() -> bool:
     """Test Phase 3: UI stability and navigation"""
     try:
         # Test NavigationManager
-        from flet_server_gui.ui.navigation import NavigationManager
+        from flet_server_gui.managers.navigation_manager import NavigationManager
         from unittest.mock import Mock
         import flet as ft
         

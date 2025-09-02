@@ -26,7 +26,7 @@ from datetime import datetime
 from enum import Enum
 from dataclasses import dataclass, field
 import asyncio
-from flet_server_gui.core.theme_compatibility import TOKENS
+from flet_server_gui.managers.theme_manager import TOKENS
 
 
 class NotificationType(Enum):

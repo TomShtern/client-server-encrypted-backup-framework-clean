@@ -13,7 +13,7 @@ from enum import Enum
 import asyncio
 from datetime import datetime, timedelta
 from flet_server_gui.core.semantic_colors import get_status_color
-from flet_server_gui.core.theme_compatibility import TOKENS
+from flet_server_gui.managers.theme_manager import TOKENS
 
 
 class ServerStatus(Enum):

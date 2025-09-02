@@ -12,7 +12,7 @@ Main Classes:
     ResponsiveBuilder: Static methods for creating responsive UI components
 """
 
-from .breakpoint_manager import BreakpointManager
+from flet_server_gui.layout.breakpoint_manager import BreakpointManager
 from .responsive_utils import ResponsiveBuilder
 
 __all__ = [

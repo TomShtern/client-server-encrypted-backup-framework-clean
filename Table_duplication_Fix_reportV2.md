@@ -7,17 +7,19 @@
 
 ## 🎯 **CORE PROBLEM & SOLUTION**
 
-**Problem**: Two competing table widget systems + duplicated renderer pattern  
-**Solution**: Merge `tables.py` features into `enhanced_tables.py`, preserve successful renderer consolidation
+**Problem**: Two competing table widget systems creating duplication, import confusion, and maintenance burden  
+**Solution**: **CONSOLIDATE EVERYTHING INTO ONE FILE** - merge all useful features from `tables.py` into `enhanced_tables.py`, then DELETE redundant files
 
-**Primary Decision**: **Use `enhanced_tables.py` as consolidation base** - better Material Design 3 integration, configuration approach, and architecture.
+**Primary Goal**: **ELIMINATE DUPLICATION** - Go from 8 table files (2,639 lines) to 1 unified table system that contains all the best features
+
+**Primary Decision**: **Use `enhanced_tables.py` as the single consolidated file** - better Material Design 3 integration, configuration approach, and architecture.
 
 ---
 
 ## 📋 **FILE STATUS MATRIX**
 
-| File                                    | Lines | Status         | Action                            |
-|-----------------------------------------|-------|----------------|-----------------------------------|
+| File                                    | Lines | Status         | Action                             |
+|-----------------------------------------|-------|----------------|------------------------------------|
 | `ui/widgets/enhanced_tables.py`         | 570   | ✅ **TARGET**   | Integrate features from tables.py |
 | `ui/widgets/tables.py`                  | 864   | ❌ **SOURCE**   | Extract features → DELETE         |
 | `components/base_table_manager.py`      | 942   | ✅ **KEEP**     | Management layer foundation       |
@@ -25,7 +27,7 @@
 | `components/client_table_renderer.py`   | 232   | ✅ **KEEP**     | Inherits from base (good)         |
 | `components/database_table_renderer.py` | 439   | ✅ **KEEP**     | Inherits from base (good)         |
 | `components/file_table_renderer.py`     | 258   | ✅ **KEEP**     | Inherits from base (good)         |
-| `components/enhanced_components.py`     | 363   | 🔄 **PARTIAL** | Remove table class, keep others   |
+| `components/enhanced_components.py`     | 363   | 🔄 **PARTIAL** | Remove table class, keep others    |
 
 ---
 

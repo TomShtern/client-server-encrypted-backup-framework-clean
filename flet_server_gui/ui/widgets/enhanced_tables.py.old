@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-UI Widgets - Tables
+Enhanced Table Components - Advanced table system with animations and Material Design 3
 
-Purpose: Advanced data table component with filtering, sorting, actions
-Logic: Data processing, filtering algorithms, sort operations
-UI: Table rendering, Material Design 3 styling, responsive layout
+Purpose: Provide consistent, animated table components with proper styling
+Logic: Table creation, data handling, sorting, filtering, and pagination
+UI: Material Design 3 styled tables with interactive features
 """
 
 import flet as ft
@@ -13,18 +13,32 @@ import re
 import os
 import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Callable, Tuple
+from typing import Dict, List, Any, Optional, Callable, Tuple, Union
 from dataclasses import dataclass, field
 from enum import Enum
 import logging
 
 logger = logging.getLogger(__name__)
 
+# Import from theme compatibility
+from flet_server_gui.core.theme_compatibility import TOKENS
+
+
+class TableSize(Enum):
+    """Table sizes"""
+    SMALL = "small"    # Compact rows
+    MEDIUM = "medium"  # Default row height
+    LARGE = "large"    # Spacious rows
+
+
 class SortDirection(Enum):
+    """Sort directions"""
     ASC = "asc"
     DESC = "desc"
 
+
 class FilterOperator(Enum):
+    """Filter operators for advanced filtering"""
     EQUALS = "equals"
     CONTAINS = "contains"
     STARTS_WITH = "starts_with"
@@ -34,6 +48,7 @@ class FilterOperator(Enum):
     REGEX = "regex"
     DATE_RANGE = "date_range"
 
+
 @dataclass
 class ColumnFilter:
     """Filter configuration for a column"""
@@ -42,14 +57,16 @@ class ColumnFilter:
     enabled: bool = True
     case_sensitive: bool = False
 
+
 @dataclass
 class ColumnSort:
     """Sort configuration for a column"""
     direction: SortDirection
     priority: int = 0  # For multi-column sorting
 
+
 @dataclass
-class TableColumn:
+class EnhancedTableColumn:
     """Enhanced table column definition"""
     key: str
     title: str
@@ -59,6 +76,9 @@ class TableColumn:
     data_type: str = "text"  # text, number, date, bool
     format_function: Optional[Callable] = None
     alignment: ft.MainAxisAlignment = ft.MainAxisAlignment.START
+    text_align: ft.TextAlign = ft.TextAlign.LEFT
+    numeric: bool = False
+
 
 @dataclass
 class TableAction:
@@ -70,36 +90,62 @@ class TableAction:
     separator_after: bool = False
 
 
-class EnhancedDataTable:
+@dataclass
+class TableConfig:
+    """Configuration for enhanced tables"""
+    columns: List[EnhancedTableColumn] = field(default_factory=list)
+    data: List[Dict[str, Any]] = field(default_factory=list)
+    size: TableSize = TableSize.MEDIUM
+    show_header: bool = True
+    show_footer: bool = True
+    show_checkboxes: bool = False
+    show_pagination: bool = False
+    page_size: int = 10
+    sort_column: Optional[str] = None
+    sort_direction: SortDirection = SortDirection.ASC
+    filter_text: str = ""
+    filter_column: Optional[str] = None
+    on_row_click: Optional[Callable] = None
+    on_selection_change: Optional[Callable] = None
+    on_sort: Optional[Callable] = None
+    on_filter: Optional[Callable] = None
+    expand: Union[bool, int] = False
+    border_radius: int = 12
+    elevation: int = 1
+    
+    # Advanced features from tables.py
+    data_source: Optional[Callable[[], List[Dict[str, Any]]]] = None
+    row_actions: List[TableAction] = field(default_factory=list)
+    bulk_actions: List[TableAction] = field(default_factory=list)
+
+
+class EnhancedTable:
     """
     Advanced data table with sophisticated filtering, sorting, and context menu functionality.
     Professional table management with responsive design and Material Design 3 styling.
     """
     
-    def __init__(self, 
-                 columns: List[TableColumn],
-                 data_source: Callable[[], List[Dict[str, Any]]],
-                 row_actions: Optional[List[TableAction]] = None,
-                 bulk_actions: Optional[List[TableAction]] = None):
-        """Initialize enhanced table with column definitions and data source"""
+    def __init__(self, page: ft.Page, config: TableConfig):
+        """Initialize enhanced table with configuration"""
         
-        self.columns = {col.key: col for col in columns}
-        self.column_order = [col.key for col in columns]
-        self.data_source = data_source
-        self.row_actions = row_actions or []
-        self.bulk_actions = bulk_actions or []
+        self.page = page
+        self.config = config
         
-        # Table state
-        self.raw_data: List[Dict[str, Any]] = []
-        self.filtered_data: List[Dict[str, Any]] = []
+        # Initialize data - unified approach
+        if self.config.data_source:
+            self.raw_data: List[Dict[str, Any]] = self.config.data_source()
+        else:
+            self.raw_data: List[Dict[str, Any]] = self.config.data.copy()
+            
+        self.filtered_data: List[Dict[str, Any]] = self.raw_data.copy()
         self.selected_rows: set = set()
         self.current_page = 0
-        self.rows_per_page = 50
+        self.rows_per_page = self.config.page_size
         
-        # Filter and sort state
+        # Unified filter and sort state
         self.column_filters: Dict[str, ColumnFilter] = {}
         self.column_sorts: Dict[str, ColumnSort] = {}
-        self.global_search = ""
+        self.global_search = self.config.filter_text
         
         # UI components with responsive design
         self.table_container = ft.Container(expand=True)
@@ -115,8 +161,15 @@ class EnhancedDataTable:
         
         logger.info("✅ Enhanced data table initialized")
     
-    def create_enhanced_table(self) -> ft.Container:
+    def build(self) -> ft.Container:
         """Create the main enhanced table view with responsive design"""
+        
+        # Header with title and status
+        self.status_text = ft.Text(
+            "Loading table data...",
+            size=14,
+            color=TOKENS['primary']
+        )
         
         # Header with search and controls
         header = self._create_table_header()
@@ -239,7 +292,11 @@ class EnhancedDataTable:
         
         filter_controls = []
         
-        for col_key, column in self.columns.items():
+        # Convert config columns to dictionary for easier access
+        columns_dict = {col.key: col for col in self.config.columns}
+        column_order = [col.key for col in self.config.columns]
+        
+        for col_key, column in columns_dict.items():
             if not column.filterable:
                 continue
                 
@@ -349,7 +406,7 @@ class EnhancedDataTable:
                 ),
                 col={"sm": 12, "md": 6, "lg": 4},
                 expand=True
-            ) for action in self.bulk_actions
+            ) for action in self.config.bulk_actions
         ], visible=False, spacing=8, expand=True)
         
         return ft.Container(
@@ -364,10 +421,14 @@ class EnhancedDataTable:
     def _create_data_table(self) -> ft.Container:
         """Create the main data table with responsive design"""
         
+        # Convert config columns to dictionary for easier access
+        columns_dict = {col.key: col for col in self.config.columns}
+        column_order = [col.key for col in self.config.columns]
+        
         # Create column headers with sort capability
         headers = []
-        for col_key in self.column_order:
-            column = self.columns[col_key]
+        for col_key in column_order:
+            column = columns_dict[col_key]
             
             header_content = ft.Row([
                 ft.Text(column.title, expand=True),
@@ -392,7 +453,7 @@ class EnhancedDataTable:
             headers.append(ft.DataColumn(header))
         
         # Add action column if row actions exist
-        if self.row_actions:
+        if self.config.row_actions:
             headers.append(ft.DataColumn(ft.Text("Actions")))
         
         # Create data rows
@@ -420,12 +481,16 @@ class EnhancedDataTable:
         end_idx = start_idx + self.rows_per_page
         page_data = self.filtered_data[start_idx:end_idx]
 
+        # Convert config columns to dictionary for easier access
+        columns_dict = {col.key: col for col in self.config.columns}
+        column_order = [col.key for col in self.config.columns]
+
         for row_idx, row_data in enumerate(page_data):
             cells = []
 
             # Create data cells
-            for col_key in self.column_order:
-                column = self.columns[col_key]
+            for col_key in column_order:
+                column = columns_dict[col_key]
                 value = row_data.get(col_key, "")
 
                 # Format value if format function provided
@@ -440,13 +505,13 @@ class EnhancedDataTable:
                 cells.append(ft.DataCell(ft.Text(formatted_value)))
 
             # Add action cell if row actions exist
-            if self.row_actions:
+            if self.config.row_actions:
                 action_buttons = ft.Row([
                     ft.IconButton(
                         icon=action.icon,
                         tooltip=action.name,
                         on_click=lambda e, a=action, data=row_data: self._execute_row_action(a, data)
-                    ) for action in self.row_actions
+                    ) for action in self.config.row_actions
                 ], spacing=2)
 
                 cells.append(ft.DataCell(action_buttons))
@@ -538,7 +603,8 @@ class EnhancedDataTable:
     def _refresh_data(self, e=None):
         """Refresh table data from data source"""
         try:
-            self.raw_data = self.data_source()
+            if self.config.data_source:
+                self.raw_data = self.config.data_source()
             self._apply_filters()
             self._apply_sorting()
             self._update_table_display()
@@ -553,10 +619,12 @@ class EnhancedDataTable:
         # Apply global search
         if self.global_search.strip():
             search_term = self.global_search.lower()
+            # Convert config columns to dictionary for easier access
+            column_order = [col.key for col in self.config.columns]
             self.filtered_data = [
                 row for row in self.filtered_data
                 if any(search_term in str(row.get(col_key, "")).lower() 
-                      for col_key in self.column_order)
+                      for col_key in column_order)
             ]
         
         # Apply column filters
@@ -605,9 +673,9 @@ class EnhancedDataTable:
         self.bulk_action_bar.visible = selected_count > 0
         
         # Recreate table content
-        self.table_container.content = self.create_enhanced_table().content
+        self.table_container.content = self.build().content
     
-    # Additional event handlers (abbreviated for space)
+    # Additional event handlers
     
     def _clear_search(self, e=None):
         """Clear global search"""
@@ -715,14 +783,15 @@ class EnhancedDataTable:
     def _get_sort_key(self, row: Dict[str, Any], col_key: str):
         """Get sort key for a row and column"""
         value = row.get(col_key, "")
-        column = self.columns[col_key]
+        # Find the column in config
+        column = next((col for col in self.config.columns if col.key == col_key), None)
         
-        if column.data_type == "number":
+        if column and column.data_type == "number":
             try:
                 return float(value) if value else 0
             except (ValueError, TypeError):
                 return 0
-        elif column.data_type == "date":
+        elif column and column.data_type == "date":
             try:
                 return datetime.fromisoformat(str(value))
             except (ValueError, TypeError):
@@ -824,12 +893,12 @@ class EnhancedDataTable:
 
     def add_row_action(self, action: TableAction):
         """Dynamically add a row action"""
-        self.row_actions.append(action)
+        self.config.row_actions.append(action)
         logger.info(f"✅ Added row action: {action.name}")
 
     def add_bulk_action(self, action: TableAction):
         """Dynamically add a bulk action"""
-        self.bulk_actions.append(action)
+        self.config.bulk_actions.append(action)
         logger.info(f"✅ Added bulk action: {action.name}")
 
     def get_selected_data(self) -> List[Dict[str, Any]]:
@@ -853,13 +922,186 @@ class EnhancedDataTable:
             'active_sorts': len(self.column_sorts)
         }
 
+    # Convenience methods for backward compatibility
+    
+    def set_data(self, data: List[Dict[str, Any]]):
+        """Set table data"""
+        self.config.data = data
+        self.raw_data = data.copy()
+        self.filtered_data = data.copy()
+        self.current_page = 0
+        self.selected_rows.clear()
+        self._refresh_data()
+    
+    def set_filter(self, filter_text: str, column: Optional[str] = None):
+        """Set filter text and column"""
+        self.global_search = filter_text
+        self.config.filter_column = column
+        self.current_page = 0
+        self.selected_rows.clear()
+        self._refresh_data()
+        
+        # Call filter callback if provided
+        if self.config.on_filter:
+            self.config.on_filter(filter_text, column)
+    
+    def get_control(self) -> ft.Control:
+        """Get the Flet control"""
+        return self.build()
 
 # Factory function for easy table creation
 def create_enhanced_data_table(
-    columns: List[TableColumn],
+    columns: List[EnhancedTableColumn],
     data_source: Callable[[], List[Dict[str, Any]]],
     row_actions: Optional[List[TableAction]] = None,
     bulk_actions: Optional[List[TableAction]] = None
-) -> EnhancedDataTable:
+) -> EnhancedTable:
     """Create an enhanced data table with the specified configuration"""
-    return EnhancedDataTable(columns, data_source, row_actions, bulk_actions)
+    config = TableConfig(
+        columns=columns,
+        data_source=data_source,
+        row_actions=row_actions or [],
+        bulk_actions=bulk_actions or []
+    )
+    # We need a page object, so we'll create a minimal config-based table
+    # In practice, this would be created within a page context
+    return EnhancedTable(page=None, config=config)
+
+# Convenience functions for common table types
+def create_simple_table(
+    page: ft.Page,
+    data: List[Dict[str, Any]],
+    columns: Optional[List[str]] = None,
+    **kwargs
+) -> EnhancedTable:
+    """Create a simple table with automatic column detection"""
+    # Determine columns
+    if not columns:
+        columns = list(data[0].keys()) if data else []
+    # Create column definitions
+    column_defs = []
+    for col in columns:
+        # Try to determine if column is numeric
+        is_numeric = False
+        if data:
+            sample_value = data[0].get(col)
+            is_numeric = isinstance(sample_value, (int, float))
+
+        column_defs.append(
+            EnhancedTableColumn(
+                key=col,
+                title=col.replace("_", " ").title(),
+                numeric=is_numeric
+            )
+        )
+
+    config = TableConfig(
+        columns=column_defs,
+        data=data,
+        **kwargs
+    )
+
+    return EnhancedTable(page, config)
+
+def create_client_table(
+    page: ft.Page,
+    clients: List[Dict[str, Any]],
+    **kwargs
+) -> EnhancedTable:
+    """Create a specialized client table"""
+    columns = [
+        EnhancedTableColumn(key="id", title="ID", numeric=True, width=60),
+        EnhancedTableColumn(key="name", title="Name"),
+        EnhancedTableColumn(key="ip_address", title="IP Address"),
+        EnhancedTableColumn(key="status", title="Status"),
+        EnhancedTableColumn(key="last_seen", title="Last Seen"),
+        EnhancedTableColumn(key="files_count", title="Files", numeric=True)
+    ]
+    
+    config = TableConfig(
+        columns=columns,
+        data=clients,
+        show_checkboxes=True,
+        show_pagination=True,
+        page_size=10,
+        **kwargs
+    )
+    
+    return EnhancedTable(page, config)
+
+def create_file_table(
+    page: ft.Page,
+    files: List[Dict[str, Any]],
+    **kwargs
+) -> EnhancedTable:
+    """Create a specialized file table"""
+    columns = [
+        EnhancedTableColumn(key="name", title="File Name"),
+        EnhancedTableColumn(key="size", title="Size", numeric=True),
+        EnhancedTableColumn(key="type", title="Type"),
+        EnhancedTableColumn(key="owner", title="Owner"),
+        EnhancedTableColumn(key="modified", title="Modified"),
+        EnhancedTableColumn(key="status", title="Status")
+    ]
+    
+    config = TableConfig(
+        columns=columns,
+        data=files,
+        show_checkboxes=True,
+        show_pagination=True,
+        page_size=10,
+        **kwargs
+    )
+    
+    return EnhancedTable(page, config)
+
+# Test function
+async def test_enhanced_tables(page: ft.Page):
+    """Test enhanced tables functionality"""
+    print("Testing enhanced tables...")
+
+    clients = [
+        {
+            "id": i + 1,
+            "name": f"Client {i + 1}",
+            "ip_address": f"192.168.1.{i + 1}",
+            "status": random.choice(["Online", "Offline", "Away"]),
+            "last_seen": (
+                datetime.now() - timedelta(minutes=random.randint(0, 1440))
+            ).strftime("%Y-%m-%d %H:%M"),
+            "files_count": random.randint(0, 1000),
+        }
+        for i in range(25)
+    ]
+    # Create client table
+    client_table = create_client_table(
+        page,
+        clients,
+        on_row_click=lambda data: print(f"Clicked client: {data['name']}")
+    )
+
+    # Create layout
+    layout = ft.Column([
+        ft.Text("Enhanced Tables Test", style=ft.TextThemeStyle.HEADLINE_MEDIUM),
+        client_table.get_control()
+    ], spacing=20, alignment=ft.MainAxisAlignment.CENTER)
+
+    # Add to page
+    page.add(layout)
+    page.update()
+
+    # Test data updates
+    await asyncio.sleep(2)
+    new_clients = clients[:5]  # Show only first 5 clients
+    client_table.set_data(new_clients)
+
+    # Test filtering
+    await asyncio.sleep(1)
+    client_table.set_filter("Online", "status")
+
+    print("Enhanced tables test completed")
+
+
+if __name__ == "__main__":
+    print("Enhanced Table Components Module")
+    print("This module provides enhanced table components for the Flet Server GUI")

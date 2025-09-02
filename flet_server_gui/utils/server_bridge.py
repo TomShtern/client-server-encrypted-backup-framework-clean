@@ -13,11 +13,10 @@ from typing import Optional, List, Dict, Any, Callable
 project_root = os.path.join(os.path.dirname(__file__), "..", "..")
 sys.path.insert(0, project_root)
 
-# Import modular components
-from .server_connection_manager import ServerConnectionManager, ServerInfo
-from .server_data_manager import ServerDataManager, RealClient
-from .server_monitoring_manager import ServerMonitoringManager
-from .server_file_manager import ServerFileManager
+# Import modular components from managers directory
+from ..managers.server_manager import ServerManager, ServerInfo
+from ..managers.database_manager import DatabaseManager as ServerDataManager, RealClient
+from ..managers.file_operations_manager import FileOperationsManager
 
 try:
     from python_server.server.server import BackupServer
@@ -38,21 +37,21 @@ class ModularServerBridge:
         
         self.server_instance = server_instance
         
-        # Initialize component managers with dependency injection
-        self.connection_manager = ServerConnectionManager(server_instance)
+                # Initialize UNIFIED server manager (consolidates lifecycle + monitoring + connection status)
+        self.server_manager = ServerManager(server_instance)
+        
+        # Initialize database manager
         self.data_manager = ServerDataManager(server_instance, database_name)
-        self.monitoring_manager = ServerMonitoringManager(server_instance)
-        self.file_manager = ServerFileManager()
         
         print(f"[SUCCESS] Modular server bridge initialized with specialized managers ({database_name or 'default database'})")
     
     # ============================================================================
-    # SERVER LIFECYCLE OPERATIONS (delegated to connection_manager)
+    # SERVER OPERATIONS (delegated to unified server_manager)
     # ============================================================================
     
     async def get_server_status(self) -> ServerInfo:
         """Get current server status"""
-        status = await self.connection_manager.get_server_status()
+        status = await self.server_manager.get_server_status()
         
         # Enhance with database stats from data manager
         try:
@@ -66,15 +65,15 @@ class ModularServerBridge:
     
     async def start_server(self) -> bool:
         """Start the server"""
-        return await self.connection_manager.start_server()
+        return await self.server_manager.start_server()
     
     async def stop_server(self) -> bool:
         """Stop the server"""
-        return await self.connection_manager.stop_server()
+        return await self.server_manager.stop_server()
     
     async def restart_server(self) -> bool:
         """Restart the server"""
-        return await self.connection_manager.restart_server()
+        return await self.server_manager.restart_server()
     
     # ============================================================================
     # DATA OPERATIONS (delegated to data_manager)
@@ -233,24 +232,24 @@ class ModularServerBridge:
         return self.file_manager.get_file_content(filename)
     
     # ============================================================================
-    # MONITORING OPERATIONS (delegated to monitoring_manager)
+    # MONITORING OPERATIONS (delegated to unified server_manager)
     # ============================================================================
     
     def get_system_metrics(self) -> Dict[str, Any]:
         """Get system metrics"""
-        return self.monitoring_manager.get_system_metrics()
+        return self.server_manager.get_system_metrics()
     
     def get_server_performance_metrics(self) -> Dict[str, Any]:
         """Get server performance metrics"""
-        return self.monitoring_manager.get_server_performance_metrics()
+        return self.server_manager.get_server_performance_metrics()
     
     def get_health_status(self) -> Dict[str, Any]:
         """Get system health status"""
-        return self.monitoring_manager.get_health_status()
+        return self.server_manager.get_health_status()
     
     def is_monitoring_available(self) -> bool:
         """Check if monitoring is available"""
-        return self.monitoring_manager.is_monitoring_available()
+        return self.server_manager.is_monitoring_available()
     
     # ============================================================================
     # COMPATIBILITY AND UTILITY METHODS
@@ -263,15 +262,13 @@ class ModularServerBridge:
     def get_component_stats(self) -> Dict[str, Any]:
         """Get statistics about all components"""
         return {
-            'connection_manager': {
-                'server_running': self.connection_manager.is_server_running(),
-                'uptime_start': self.connection_manager.get_uptime()
+            'server_manager': {
+                'server_running': self.server_manager.is_server_running(),
+                'uptime_start': self.server_manager.get_uptime(),
+                'health_status': self.server_manager.get_health_status(),
+                'monitoring_available': self.server_manager.is_monitoring_available()
             },
             'data_manager': self.data_manager.get_database_stats(),
-            'monitoring_manager': {
-                'available': self.monitoring_manager.is_monitoring_available(),
-                'health': self.monitoring_manager.get_health_status()
-            },
             'file_manager': self.file_manager.get_storage_stats()
         }
     
@@ -289,7 +286,7 @@ class ModularServerBridge:
     
     def is_server_running(self) -> bool:
         """Check if backup server is running (standardized API)"""
-        return self.connection_manager.is_server_running()
+        return self.server_manager.is_server_running()
     
     def get_clients(self) -> List[RealClient]:
         """Get list of connected clients (standardized API)"""
@@ -369,9 +366,9 @@ class ModularServerBridge:
 
     def register_connection_callback(self, callback: Callable[[Any], None]) -> None:
         """Register callback for connection status changes"""
-        # Use the connection manager to register the callback
-        if hasattr(self.connection_manager, 'register_callback'):
-            self.connection_manager.register_callback(callback)
+        # Use the server lifecycle manager to register the callback
+        if hasattr(self.server_lifecycle_manager, 'register_callback'):
+            self.server_lifecycle_manager.register_callback(callback)
 
 
 # Backward compatibility alias
