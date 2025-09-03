@@ -174,13 +174,19 @@ class FletV2App(ft.Row):
             elif view_name == "files":
                 content = self._create_files_view()
             elif view_name == "database":
-                content = self._create_database_view()
+                # Import and create database view
+                from views.database import create_database_view
+                content = create_database_view(self.server_bridge, self.page)
             elif view_name == "analytics":
-                content = self._create_analytics_view()
+                # Import and create analytics view
+                from views.analytics import create_analytics_view
+                content = create_analytics_view(self.server_bridge, self.page)
             elif view_name == "logs":
                 content = self._create_logs_view()
             elif view_name == "settings":
-                content = self._create_settings_view()
+                # Import and create settings view
+                from views.settings import create_settings_view
+                content = create_settings_view(self.server_bridge, self.page)
             else:
                 content = self._create_dashboard_view()
             
