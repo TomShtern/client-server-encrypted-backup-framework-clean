@@ -1,17 +1,24 @@
 """
-Manager Classes - Single Responsibility Coordinators
-Following the Duplication Mindset and Manager Class Consolidation Plan
+Manager Classes - Consolidated & Framework-Native Architecture
+Following the Duplication Mindset and Flet Framework Best Practices
 
 Consolidated Architecture:
 - NO manager duplication (eliminated "Slightly Different" Fallacy)
-- Clear naming without redundant prefixes
+- Clear naming without redundant prefixes  
 - Each manager owns ONE clear domain
 - Uses Flet framework patterns instead of custom implementations
+- Theme management uses native Flet theming (no custom ThemeManager)
 """
 
 # Core managers
 from .view_manager import ViewManager
-from .theme_manager import ThemeManager
+
+# Theme management - NATIVE FLET APPROACH (no custom manager needed)
+from ..theme import (
+    THEMES, DEFAULT_THEME_NAME, 
+    apply_theme_to_page, toggle_theme_mode, 
+    get_current_theme_colors, setup_default_theme
+)
 
 # Data and server lifecycle (CONSOLIDATED)
 from .database_manager import DatabaseManager
@@ -31,7 +38,14 @@ from .toast_manager import ToastManager
 __all__ = [
     # Core managers
     "ViewManager",
-    "ThemeManager", 
+    
+    # Theme management - NATIVE FLET FUNCTIONS (work WITH framework)
+    "THEMES", 
+    "DEFAULT_THEME_NAME",
+    "apply_theme_to_page",
+    "toggle_theme_mode", 
+    "get_current_theme_colors",
+    "setup_default_theme",
     
     # Data and server lifecycle (CONSOLIDATED)
     "DatabaseManager",

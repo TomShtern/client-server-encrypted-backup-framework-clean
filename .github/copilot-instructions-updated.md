@@ -49,34 +49,6 @@ Shared/utils/file_lifecycle.py              # Race condition prevention for tran
 flet_server_gui/main.py                     # Flet GUI facade (refactored to <200 lines)
 ```
 
-## Concrete examples & exact references (use these when changing integration code)
-
-- transfer.info generation (managed path):
-    - File: `api_server/real_backup_executor.py`
-    - Function: the managed transfer.info generator writes a 3-line file and calls
-        `self.file_manager.create_managed_file("transfer.info", content)`
-    - Example log lines you will see in the executor: `transfer.info content:\n---\n{content}---` and `Generated managed transfer.info: {transfer_info_path}`
-
-- Subprocess invocation (exact pattern to preserve):
-    - File: `api_server/real_backup_executor.py` (and `scripts/fixed_launcher.py`)
-    - Pattern: `subprocess.Popen([str(self.client_exe), "--batch"], cwd=working_dir, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=utf8_solution.get_env())`
-    - Exact call location: search for `[str(self.client_exe), "--batch"]` (multiple tests and scripts exercise this exact call)
-
-- transfer.info search locations (unified_config):
-    - File: `Shared/utils/unified_config.py`
-    - Search order includes: `base_path / "transfer.info"`, `base_path / "build" / "Release" / "transfer.info"`, `base_path / "client" / "transfer.info"`, and `Path.cwd() / "transfer.info"`.
-    - The helper logs invalid formats and falls back if no valid 3-line file is found.
-
-- ServerBridge fallback pattern used by the GUI:
-    - File: `flet_server_gui/main.py` (also `validate_gui_functionality.py`, `scripts/final_verification.py`)
-    - Pattern: `try: from flet_server_gui.utils.server_bridge import ServerBridge` then `except: from flet_server_gui.utils.simple_server_bridge import SimpleServerBridge as ServerBridge` — keep this fallback when editing server bridge code.
-
-- UTF-8 / subprocess helpers:
-    - File: `Shared/utils/utf8_solution.py` (see `UTF8_SOLUTION.md` for usage)
-    - Pattern: use `utf8_solution.get_env()` or `utf8.Popen_utf8([...])` when launching native executables so Unicode filenames (emoji/hebrew) work on Windows.
-
-Use these exact files/strings when searching the repository to find related code paths and tests rapidly.
-
 ### Data Flow Patterns
 **Web Path**: `Web UI → Flask API (9090) → RealBackupExecutor → C++ Client (--batch) → Python Server (1256)`
 **Direct Path**: `C++ Client → Python Server (1256)`
@@ -303,41 +275,6 @@ except Exception as ex:
 
 ## 🚨 Anti-Patterns to Avoid
 
-## Discoverable patterns & exact traces (repo-first)
-These are small, exact places in the repo you should inspect before editing integration code. Copy/paste the paths/strings into your search tool.
-
-- transfer.info generation (logs & managed file):
-    - File: `api_server/real_backup_executor.py`
-    - Look for: `transfer.info content:\n---\n{content}---` and `Generated managed transfer.info: {transfer_info_path}` (around the managed-file generator)
-    - Behavior: executor calls `self.file_manager.create_managed_file("transfer.info", content)`, then attempts to copy it into the C++ client working dir and logs success/failure (`Copied managed transfer.info to working dir` or `Failed to copy managed transfer.info to working dir`).
-
-- Subprocess launch exact call:
-    - File: `api_server/real_backup_executor.py` (line with `subprocess.Popen([str(self.client_exe), "--batch"],`) — this is the canonical call. Also referenced in `scripts/fixed_launcher.py` and tests like `tests/test_simple_transfer.py`.
-    - Preserve: `--batch`, `cwd` set to the transfer.info directory (or client working dir), and `env=utf8_solution.get_env()`.
-
-- transfer.info search helper (fallback locations):
-    - File: `Shared/utils/unified_config.py`
-    - Exact search order: `base_path / "transfer.info"`, `base_path / "build" / "Release" / "transfer.info"`, `base_path / "client" / "transfer.info"`, `Path.cwd() / "transfer.info"`.
-
-- FileReceiptProgress rules:
-    - Search for `FileReceiptProgressTracker` and `CallbackMultiplexer` in `api_server` and `python_server` modules.
-    - Priority rule: Layer 0 (appearance in `received_files/`) should immediately mark a transfer 100% complete. Do not rely on subprocess exit codes.
-
-- ServerBridge fallback usage:
-    - Files: `flet_server_gui/main.py`, `validate_gui_functionality.py`, `scripts/final_verification.py`, tests under `flet_server_gui/`.
-    - Look for the pattern:
-        try: `from flet_server_gui.utils.server_bridge import ServerBridge`
-        except: `from flet_server_gui.utils.simple_server_bridge import SimpleServerBridge as ServerBridge`
-
-- UTF-8 helpers & Popen wrappers:
-    - Files: `Shared/utils/utf8_solution.py`, `Shared/utils/UTF8_SOLUTION.md`
-    - Look for helpers: `utf8.Popen_utf8(...)` and `utf8_solution.get_env()`; tests reference `utf8.safe_print` and many modules `import Shared.utils.utf8_solution`.
-
-- Tests that create / expect transfer.info:
-    - `tests/test_cpp_client_manual.py`, `tests/test_high_priority_fixes.py`, `tests/test_critical_fixes.py`, `tests/test_66kb_debug.py` — these create or copy `transfer.info` into `build/Release/` or into the CWD; inspect them to see how the executor and client are exercised.
-
-Read these exact snippets before touching integration glue — they capture the repository's behavioral contracts.
-
 ### Code Architecture Anti-Patterns
 - **God Components**: Files >500 lines with multiple responsibilities
 - **Hardcoded Styling**: Direct color values instead of theme tokens
@@ -448,7 +385,7 @@ async def test_complete_backup_flow():
 - ✅ Async operations don't block UI thread
 
 ### Code Quality
-- ✅ Single-responsibility components (<1000 lines each)
+- ✅ Single-responsibility components (<300 lines each)
 - ✅ Proper async patterns for background operations
 - ✅ Theme TOKENS used instead of hardcoded colors
 - ✅ No linting errors with strict Python analysis
@@ -456,40 +393,3 @@ async def test_complete_backup_flow():
 ---
 
 **Remember**: This is a complex system with multiple integration points. Always verify changes by checking `received_files/` for actual file transfers, not just exit codes. Use the canonical launcher (`one_click_build_and_run.py`) for testing complete workflows.
-
-## Flet Desktop Guide (AI)
-
-Added resources: `ai-context/FLET_DESKTOP_GUIDE.md` (repository) + authoritative Flet docs (Context7) were combined into the short guidance below so AI agents follow "the Flet way" for desktop/laptop apps (Flet 0.28.3).
-
-Why this matters
-- Keeps generated UI idiomatic and maintainable.
-- Prevents overengineering by using Flet primitives (Page, Pagelet, ListView, Views, NavigationRail, AppBar).
-
-Key, copy-pasteable patterns and contracts (high-impact)
-- Use `page.open_dialog()`, `page.open_bottom_sheet()`, `page.open_banner()` for overlays instead of building modal systems by hand.
-- Use `flet.Page` theme properties (`theme`, `dark_theme`) and nested container theming rather than hardcoded colors.
-- Use `ft.ListView` with `cache_extent` and consider `item_extent` or `first_item_prototype=True` for large lists to improve scroll performance.
-- Prefer `Pagelet` for small reusable UI sections that encapsulate logic and presentation.
-- Use `page.run_task()` for async coroutines and threads for blocking I/O; avoid blocking event handlers.
-
-Window & lifecycle notes
-- Desktop window manager: when embedding in custom Flutter hosts call `setupDesktop()` before `runApp()` (Flet desktop init). Adjust `page.set_window_size()` and other window APIs as needed.
-- Use `page.on_app_lifecycle_change` or `page.on_route_change` for lifecycle and routing behavior.
-
-Testing & automation
-- Use `flet.testing.tester.Tester` to simulate clicks, key events, route changes and to assert control state. Build lightweight UI tests for critical flows.
-
-Accessibility
-- Use `SemanticsService` to apply accessible labels and hints for controls that need it (menus, complex lists).
-
-Where to put files in this repo
-- `ai-context/FLET_DESKTOP_GUIDE.md` — canonical guidance file (already added).
-- `flet_server_gui/views/` — add focused views.
-- `flet_server_gui/components/` — Pagelets and small reusable components.
-- `flet_server_gui/managers/` — non-UI concerns (theme_manager, navigation_manager, view_manager).
-
-Reference sources included
-- Flet docs: ListView, Page overlay methods (open_dialog/open_bottom_sheet/open_banner), Pagelet, SafeArea, theming, MenuBar, BottomSheet, Tester class.
-
-If you want, I will extract a small `.ai_snippets/flet_desktop_snippets.md` with exact minimal examples (app shell, Pagelet, ListView performance, background task) and add it to the repo so agents can copy-paste safely.
-

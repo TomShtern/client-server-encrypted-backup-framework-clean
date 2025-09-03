@@ -36,7 +36,7 @@ from .file_management import FileManagement
 try:
     # Import from the new theme structure
     from ..theme import THEMES
-    from ..managers.theme_manager import ThemeManager, TOKENS
+    from ..theme import apply_theme_to_page, setup_default_theme, TOKENS
 except ImportError:
     # Fallback for direct execution or missing modules
     THEMES = {}
@@ -53,7 +53,7 @@ from .responsive_layout import (
 # Create aliases for backward compatibility
 MaterialDesign3ThemeSystem = ThemeManager
 theme_system = None  # Will be initialized with page context
-get_theme_system = lambda page: ThemeManager(page)
+get_theme_system = lambda page: setup_default_theme(page)
 
 __all__ = [
     # Original core classes

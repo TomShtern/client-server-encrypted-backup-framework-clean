@@ -70,3 +70,108 @@ THEMES = {
 }
 
 DEFAULT_THEME_NAME = "Teal"
+
+
+# ==============================================================================
+# FLET-NATIVE THEME MANAGEMENT FUNCTIONS
+# Following Flet Framework Best Practices - work WITH the framework, not against it
+# ==============================================================================
+
+def apply_theme_to_page(page: ft.Page, theme_name: str) -> bool:
+    """
+    Apply a theme to a page using Flet's native theming system.
+    
+    This is the PROPER way to handle themes in Flet - using the framework's power.
+    
+    Args:
+        page: The Flet page to apply the theme to
+        theme_name: Name of the theme to apply (must exist in THEMES)
+        
+    Returns:
+        bool: True if theme was applied successfully, False otherwise
+    """
+    if theme_name not in THEMES:
+        return False
+        
+    theme_data = THEMES[theme_name]
+    if isinstance(theme_data, tuple):
+        # Light/dark theme pair - apply both
+        light_theme, dark_theme = theme_data
+        page.theme = light_theme
+        page.dark_theme = dark_theme
+    else:
+        # Single theme
+        page.theme = theme_data
+    
+    page.update()
+    return True
+
+
+def toggle_theme_mode(page: ft.Page) -> None:
+    """
+    Toggle between light and dark theme modes using Flet's native ThemeMode.
+    
+    This leverages Flet's built-in theme switching capabilities.
+    
+    Args:
+        page: The Flet page to toggle theme mode for
+    """
+    if page.theme_mode == ft.ThemeMode.LIGHT:
+        page.theme_mode = ft.ThemeMode.DARK
+    elif page.theme_mode == ft.ThemeMode.DARK:
+        page.theme_mode = ft.ThemeMode.LIGHT
+    else:
+        # Default to LIGHT if SYSTEM or None
+        page.theme_mode = ft.ThemeMode.LIGHT
+    
+    page.update()
+
+
+def get_current_theme_colors(page: ft.Page) -> dict:
+    """
+    Get current theme colors using Flet's built-in color system.
+    
+    Provides fallback colors that work with Flet's color scheme.
+    This replaces custom color token systems with native Flet patterns.
+    
+    Args:
+        page: The Flet page to get colors from
+        
+    Returns:
+        dict: Dictionary of semantic color names to Flet color values
+    """
+    return {
+        'primary': ft.Colors.PRIMARY,
+        'secondary': ft.Colors.SECONDARY,
+        'tertiary': ft.Colors.TERTIARY,
+        'error': ft.Colors.ERROR,
+        'surface': ft.Colors.SURFACE,
+        'background': ft.Colors.SURFACE,  # Use SURFACE as background fallback
+        'on_primary': ft.Colors.ON_PRIMARY,
+        'on_secondary': ft.Colors.ON_SECONDARY,
+        'on_surface': ft.Colors.ON_SURFACE,
+        'on_background': ft.Colors.ON_SURFACE,  # Use ON_SURFACE as fallback
+        'outline': ft.Colors.OUTLINE,
+        'shadow': ft.Colors.SHADOW,
+        'scrim': ft.Colors.SCRIM,
+    }
+
+
+def setup_default_theme(page: ft.Page) -> None:
+    """
+    Set up the default theme for a page using Flet best practices.
+    
+    This applies the default theme and sets up proper theme mode handling.
+    
+    Args:
+        page: The Flet page to set up
+    """
+    apply_theme_to_page(page, DEFAULT_THEME_NAME)
+    
+    # Set default theme mode if not already set
+    if page.theme_mode is None:
+        page.theme_mode = ft.ThemeMode.SYSTEM
+
+
+# Backward compatibility for existing TOKENS usage
+TOKENS = get_current_theme_colors(None)

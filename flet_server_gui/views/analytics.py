@@ -30,9 +30,9 @@ from flet_server_gui.ui.widgets import (
 )
 
 # Layout fixes imports
-from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
+from flet_server_gui.layout.responsive import ResponsiveLayoutFixes
 # Unified theme system - consolidated theme functionality
-from flet_server_gui.managers.theme_manager import ThemeManager, TOKENS
+from flet_server_gui.theme import TOKENS
 
 
 # Analytics data structures and utilities (extracted from advanced_analytics_dashboard.py)

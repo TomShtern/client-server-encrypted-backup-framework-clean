@@ -4,7 +4,7 @@ from flet_server_gui.services.notification_center import NotificationCenter
 from flet_server_gui.services.busy_indicator import get_busy_indicator
 from flet_server_gui.services.confirmation_service import ConfirmationService
 from flet_server_gui.state.selection_state import SelectionState
-from flet_server_gui.layout.adaptive_columns import AdaptiveColumnManager, ColumnSpec
+from flet_server_gui.components.adaptive_columns import AdaptiveColumnManager, ColumnSpec
 from flet_server_gui.utils.action_result import ActionResult
 
 

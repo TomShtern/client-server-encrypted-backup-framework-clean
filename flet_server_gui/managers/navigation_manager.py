@@ -8,7 +8,7 @@ UI: Navigation rail, routing controls
 import flet as ft
 from typing import Callable, Dict, Any, Optional, List
 from enum import Enum
-from flet_server_gui.managers.theme_manager import TOKENS
+from flet_server_gui.theme import TOKENS
 
 # ============================================================================
 # NAVIGATION DEFINITIONS

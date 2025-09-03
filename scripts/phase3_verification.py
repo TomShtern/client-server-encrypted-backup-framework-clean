@@ -45,7 +45,7 @@ class TestPhase3Fixes(unittest.TestCase):
     def test_responsive_layout_fixes(self):
         """Test responsive layout fixes."""
         try:
-            from flet_server_gui.ui.layouts.responsive_fixes import (
+            from flet_server_gui.layout.responsive import (
                 ResponsiveLayoutFixes,
                 fix_content_clipping,
                 fix_button_clickable_areas,
@@ -158,7 +158,7 @@ class TestPhase3Fixes(unittest.TestCase):
             mock_page.controls = []
             
             # Test layout fixes function
-            from flet_server_gui.ui.layouts.responsive_fixes import apply_layout_fixes
+            from flet_server_gui.layout.responsive import apply_layout_fixes
             apply_layout_fixes(mock_page)
             
             # Should set minimum window size

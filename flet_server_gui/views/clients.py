@@ -24,12 +24,12 @@ from flet_server_gui.ui.widgets.enhanced_tables import create_client_table
 from flet_server_gui.managers.unified_filter_manager import create_client_filter_manager
 from flet_server_gui.components.client_action_handlers import ClientActionHandlers
 from flet_server_gui.actions.client_actions import ClientActions
-from flet_server_gui.layouts.responsive_utils import ResponsiveBuilder
-from flet_server_gui.layout.breakpoint_manager import BreakpointManager
+from flet_server_gui.layout.responsive import ResponsiveBuilder
+from flet_server_gui.layout.responsive import BreakpointManager
 from flet_server_gui.components.base_component import BaseComponent
 
 # Theme imports
-from flet_server_gui.managers.theme_manager import ThemeManager, TOKENS
+from flet_server_gui.theme import TOKENS
 
 
 

@@ -41,7 +41,7 @@ from typing import Optional
 # Extracted managers (Single Responsibility Principle)
 from flet_server_gui.managers.view_manager import ViewManager
 from flet_server_gui.services.application_monitor import ApplicationMonitor
-from flet_server_gui.managers.theme_manager import ThemeManager
+from flet_server_gui.theme import apply_theme_to_page, setup_default_theme, TOKENS
 
 # Essential components
 from flet_server_gui.components.control_panel_card import ControlPanelCard
@@ -49,7 +49,7 @@ from flet_server_gui.components.quick_actions import QuickActions
 from flet_server_gui.managers.navigation_manager import NavigationManager
 from flet_server_gui.ui.dialogs import DialogSystem, ToastManager
 from flet_server_gui.theme import THEMES, DEFAULT_THEME_NAME
-from flet_server_gui.ui.layouts.responsive_fixes import apply_layout_fixes
+from flet_server_gui.layout.responsive import apply_layout_fixes
 from flet_server_gui.ui.widgets.status_pill import StatusPill, ServerStatus, StatusPillConfig
 from flet_server_gui.ui.widgets.notifications_panel import NotificationsPanel, create_notification, NotificationType, NotificationPriority
 from flet_server_gui.ui.widgets.activity_log_dialog import ActivityLogDialog, create_activity_entry, ActivityLevel, ActivityCategory
@@ -106,7 +106,9 @@ class ServerGUIApp:
         
         # Initialize specialized managers (Single Responsibility Principle)
         self.application_monitor = ApplicationMonitor(self.server_bridge)
-        self.theme_manager = ThemeManager(self.page)
+        
+        # Setup native Flet theme (no custom manager needed)
+        setup_default_theme(self.page)
         
         # Configure page and setup application
         self._setup_application()

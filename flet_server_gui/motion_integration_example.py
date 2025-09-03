@@ -7,7 +7,7 @@ Shows how to integrate M3 Motion System with existing Flet GUI components.
 import flet as ft
 import asyncio
 from typing import Optional
-from .managers.theme_manager import TOKENS
+from .theme import TOKENS
 
 # Import the motion system
 from flet_server_gui.ui.motion_system import (
@@ -22,7 +22,7 @@ from flet_server_gui.ui.motion_system import (
 try:
     from flet_server_gui.ui.widgets.cards import ServerStatusCard, ClientStatsCard
     from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
-    from flet_server_gui.managers.theme_manager import ThemeManager
+    from flet_server_gui.theme import apply_theme_to_page, setup_default_theme
     HAS_COMPONENTS = True
 except ImportError:
     HAS_COMPONENTS = False
@@ -39,10 +39,9 @@ class MotionEnabledDashboard:
         self.page = page
         self.motion_system = create_motion_system(page)
         
-        # Initialize theme
+        # Initialize theme using native Flet approach
         if HAS_COMPONENTS:
-            self.theme_manager = ThemeManager(page)
-            self.theme_manager.apply_theme()
+            setup_default_theme(page)
         
         # Dashboard components
         self.server_card = None

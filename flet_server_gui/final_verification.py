@@ -31,14 +31,14 @@ def test_imports():
     
     # Test layout modules
     try:
-        from flet_server_gui.layout.breakpoint_manager import BreakpointManager
+        from flet_server_gui.layout.responsive import BreakpointManager
         print("  [PASS] BreakpointManager import")
     except Exception as e:
         print(f"  [FAIL] BreakpointManager import: {e}")
         return False
     
     try:
-        from flet_server_gui.layouts.responsive_utils import ResponsiveBuilder
+        from flet_server_gui.layout.responsive import ResponsiveBuilder
         print("  [PASS] ResponsiveBuilder import")
     except Exception as e:
         print(f"  [FAIL] ResponsiveBuilder import: {e}")
@@ -96,7 +96,7 @@ def test_functionality():
     print("\nTesting core functionality...")
     
     # Test breakpoint detection
-    from flet_server_gui.layout.breakpoint_manager import BreakpointManager
+    from flet_server_gui.layout.responsive import BreakpointManager
     current_breakpoint = BreakpointManager.get_current_breakpoint(1200)
     if current_breakpoint.value == "xl":
         print("  [PASS] Breakpoint detection")

@@ -25,7 +25,7 @@ from flet_server_gui.components.file_action_handlers import FileActionHandlers
 from flet_server_gui.ui.widgets.file_preview import FilePreviewManager
 from flet_server_gui.actions.file_actions import FileActions
 from flet_server_gui.components.base_component import BaseComponent
-from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes, fix_content_clipping, fix_button_clickable_areas, ensure_windowed_compatibility
+from flet_server_gui.layout.responsive import ResponsiveLayoutFixes, fix_content_clipping, fix_button_clickable_areas, ensure_windowed_compatibility
 
 from flet_server_gui.managers.theme_manager import TOKENS
 

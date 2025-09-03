@@ -24,8 +24,8 @@ from flet_server_gui.ui.widgets import (
 )
 
 # Layout fixes imports
-from flet_server_gui.ui.layouts.responsive_fixes import ResponsiveLayoutFixes
-from flet_server_gui.managers.theme_manager import ThemeManager
+from flet_server_gui.layout.responsive import ResponsiveLayoutFixes
+from flet_server_gui.theme import apply_theme_to_page, toggle_theme_mode
 
 # Import modular settings components
 sys_path_added = False

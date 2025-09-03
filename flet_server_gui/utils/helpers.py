@@ -183,7 +183,7 @@ def is_file_type(filename: str, extensions: List[str]) -> bool:
 
 
 # ============================================================================
-# RESPONSIVE DESIGN UTILITIES (from layouts/responsive_utils.py)
+# RESPONSIVE DESIGN UTILITIES (consolidated in layouts/responsive.py)
 # ============================================================================
 
 def get_breakpoint(width: float) -> str:
