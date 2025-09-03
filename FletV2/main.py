@@ -1,26 +1,21 @@
 #!/usr/bin/env python3
 """
-HIROSHIMA IDEAL: Simplified Flet Desktop App
+FletV2 - Clean Desktop Application
+A properly implemented Flet desktop application following best practices.
 
-This demonstrates the clean architecture after Semi-Nuclear transformation:
-- ~150 lines total (vs 1000+ in the original)
+This demonstrates the clean architecture:
 - Uses Flet built-ins exclusively (no framework fighting)
 - Simple NavigationRail.on_change callback (no complex routing)
 - Proper theme.py integration
 - Server bridge with fallback
 - UTF-8 support
 - Resizable desktop app configuration
-
-This is what the architecture looks like after eliminating overengineering.
 """
 
 import flet as ft
 import asyncio
 import sys
 import os
-import traceback
-from typing import Optional
-from datetime import datetime
 
 # Auto-enable UTF-8 for all subprocess operations
 import sys
@@ -34,9 +29,6 @@ project_root = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, project_root)
 
 # Use our clean utilities
-from utils.navigation_enums import NavigationView
-from utils.simple_navigation import SimpleNavigationState, create_simple_navigation_rail
-from utils.accessibility_helpers import ensure_windowed_compatibility
 from theme import setup_default_theme, toggle_theme_mode
 
 # Server bridge with fallback
@@ -48,9 +40,9 @@ except Exception:
     BRIDGE_TYPE = "SimpleServerBridge (Fallback)"
 
 
-class SimpleDesktopApp(ft.Row):
+class FletV2App(ft.Row):
     """
-    Hiroshima Ideal: Simple desktop app using pure Flet patterns.
+    Clean FletV2 desktop app using pure Flet patterns.
     
     This demonstrates maximum framework harmony:
     - NavigationRail.on_change for navigation (no custom managers)
@@ -61,15 +53,11 @@ class SimpleDesktopApp(ft.Row):
     
     def __init__(self, page: ft.Page):
         super().__init__()
-        
         self.page = page
         self.expand = True
         
         # Configure desktop window
         self._configure_desktop_window()
-        
-        # Initialize navigation state (simple tracking, no complex managers)
-        self.nav_state = SimpleNavigationState()
         
         # Initialize server bridge with fallback
         try:
@@ -82,12 +70,8 @@ class SimpleDesktopApp(ft.Row):
         # Create content area
         self.content_area = ft.Container(expand=True)
         
-        # Create navigation rail (using our clean utility)
-        self.nav_rail = create_simple_navigation_rail(
-            nav_state=self.nav_state,
-            on_change_callback=self._on_navigation_change,
-            extended=False
-        )
+        # Create navigation rail (using simple approach)
+        self.nav_rail = self._create_navigation_rail()
         
         # Build layout: NavigationRail + content area (pure Flet pattern)
         self.controls = [
@@ -102,13 +86,15 @@ class SimpleDesktopApp(ft.Row):
     
     def _on_page_connect(self, e):
         """Called when page is connected - safe to load initial view."""
-        self._load_view(NavigationView.DASHBOARD.value)
+        self._load_view("dashboard")
     
     def _configure_desktop_window(self):
         """Configure window for desktop application."""
         # Window settings
-        self.page.window_min_width = 800
-        self.page.window_min_height = 600
+        self.page.window_min_width = 1024
+        self.page.window_min_height = 768
+        self.page.window_width = 1200
+        self.page.window_height = 800
         self.page.window_resizable = True
         self.page.title = "Backup Server Management"
         
@@ -118,56 +104,94 @@ class SimpleDesktopApp(ft.Row):
         # Set desktop-appropriate padding
         self.page.padding = ft.Padding(0, 0, 0, 0)
     
-    def _on_navigation_change(self, view_name: str):
+    def _create_navigation_rail(self):
+        """Create simple navigation rail."""
+        return ft.NavigationRail(
+            selected_index=0,
+            label_type=ft.NavigationRailLabelType.ALL,
+            min_width=100,
+            min_height=400,
+            group_alignment=-0.9,
+            destinations=[
+                ft.NavigationRailDestination(
+                    icon=ft.icons.DASHBOARD_OUTLINED,
+                    selected_icon=ft.icons.DASHBOARD,
+                    label="Dashboard",
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.icons.PEOPLE_OUTLINE,
+                    selected_icon=ft.icons.PEOPLE,
+                    label="Clients",
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.icons.FOLDER_OUTLINED,
+                    selected_icon=ft.icons.FOLDER,
+                    label="Files",
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.icons.STORAGE_OUTLINED,
+                    selected_icon=ft.icons.STORAGE,
+                    label="Database",
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.icons.AUTO_GRAPH_OUTLINED,
+                    selected_icon=ft.icons.AUTO_GRAPH,
+                    label="Analytics",
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.icons.ARTICLE_OUTLINED,
+                    selected_icon=ft.icons.ARTICLE,
+                    label="Logs",
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.icons.SETTINGS_OUTLINED,
+                    selected_icon=ft.icons.SETTINGS,
+                    label="Settings",
+                ),
+            ],
+            on_change=self._on_navigation_change,
+        )
+    
+    def _on_navigation_change(self, e):
         """Simple navigation callback - no complex routing."""
-        print(f"[NAVIGATION] Switching to: {view_name}")
-        self._load_view(view_name)
+        # Map index to view names
+        view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
+        selected_view = view_names[e.control.selected_index] if e.control.selected_index < len(view_names) else "dashboard"
+        
+        print(f"[NAVIGATION] Switching to: {selected_view}")
+        self._load_view(selected_view)
     
     def _load_view(self, view_name: str):
         """Load view using simple function calls - no complex view managers."""
         try:
             # Simple view switching with direct function calls
-            if view_name == NavigationView.DASHBOARD.value:
+            if view_name == "dashboard":
                 content = self._create_dashboard_view()
-            elif view_name == NavigationView.CLIENTS.value:
-                content = self._create_clients_view()
-            elif view_name == NavigationView.FILES.value:
+            elif view_name == "clients":
+                # Import and create clients view
+                from views.clients import create_clients_view
+                content = create_clients_view(self.server_bridge, self.page)
+            elif view_name == "files":
                 content = self._create_files_view()
-            elif view_name == NavigationView.DATABASE.value:
+            elif view_name == "database":
                 content = self._create_database_view()
-            elif view_name == NavigationView.ANALYTICS.value:
+            elif view_name == "analytics":
                 content = self._create_analytics_view()
-            elif view_name == NavigationView.LOGS.value:
+            elif view_name == "logs":
                 content = self._create_logs_view()
-            elif view_name == NavigationView.SETTINGS.value:
+            elif view_name == "settings":
                 content = self._create_settings_view()
             else:
                 content = self._create_dashboard_view()
             
-            # Use accessibility helper to ensure windowed compatibility
-            accessible_content = ensure_windowed_compatibility(content)
-            
             # Update content area (simple assignment, no complex managers)
-            self.content_area.content = accessible_content
+            self.content_area.content = content
             # Only update if the control is attached to the page
             if self.page and hasattr(self.content_area, 'page') and self.content_area.page:
                 self.content_area.update()
             
         except Exception as e:
-            error_details = f"[ERROR] Failed to load view {view_name}: {e}\n"
-            error_details += f"[TYPE] {type(e)}\n"
-            try:
-                tb_str = traceback.format_exc()
-                error_details += f"[TRACEBACK]\n{tb_str}"
-            except Exception as tb_e:
-                error_details += f"[TRACEBACK_ERROR] Could not format traceback: {tb_e}"
-
-            print(error_details)  # Try printing to console
-            
-            # Write to a debug file as a reliable fallback
-            with open("debug_error.log", "a") as f:
-                f.write(f"---\n{{datetime.now()}}---\n{{error_details}}\n\n")
-
+            print(f"[ERROR] Failed to load view {view_name}: {e}")
             # Fallback to simple error view
             self.content_area.content = self._create_error_view(str(e))
             # Only update if the control is attached to the page
@@ -238,25 +262,23 @@ class SimpleDesktopApp(ft.Row):
             ])
         ], expand=True, scroll=ft.ScrollMode.AUTO)
     
-    def _create_clients_view(self) -> ft.Control:
-        """Placeholder for clients view."""
+    def _create_files_view(self) -> ft.Control:
+        """Simple files view."""
         return ft.Container(
             content=ft.Column([
-                ft.Text("Client Management", size=24, weight=ft.FontWeight.BOLD),
-                ft.Text("Client view is under reconstruction.", size=16),
-            ]),
+                ft.Text("File Management", size=24, weight=ft.FontWeight.BOLD),
+                ft.Text("Transferred files and file operations.", size=16),
+                ft.Card(
+                    content=ft.Container(
+                        content=ft.Text("File browser functionality will be integrated here."),
+                        padding=20
+                    ),
+                    expand=True
+                )
+            ], spacing=20),
             padding=20,
             expand=True
         )
-    
-    def _create_files_view(self) -> ft.Control:
-        """Creates the 'Files' view using the new simplified implementation."""
-        try:
-            from flet_server_gui.views.new_files_view import create_files_view
-            return create_files_view()
-        except Exception as e:
-            print(f"[ERROR] Failed to create files view: {e}")
-            return self._create_error_view(f"Failed to load Files view: {e}")
     
     def _create_database_view(self) -> ft.Control:
         """Simple database view."""
@@ -347,7 +369,7 @@ class SimpleDesktopApp(ft.Row):
                 ft.Text(f"An error occurred: {error_message}", size=16),
                 ft.ElevatedButton(
                     "Return to Dashboard",
-                    on_click=lambda _: self._load_view(NavigationView.DASHBOARD.value)
+                    on_click=lambda _: self._load_view("dashboard")
                 )
             ], spacing=20),
             padding=20,
@@ -360,10 +382,10 @@ def main(page: ft.Page):
     """Simple main function - no complex initialization."""
     try:
         # Create and add the simple desktop app
-        app = SimpleDesktopApp(page)
+        app = FletV2App(page)
         page.add(app)
         
-        print(f"[SUCCESS] Hiroshima Ideal App started - {BRIDGE_TYPE} active")
+        print(f"[SUCCESS] FletV2 App started - {BRIDGE_TYPE} active")
         
     except Exception as e:
         print(f"[ERROR] Failed to start application: {e}")

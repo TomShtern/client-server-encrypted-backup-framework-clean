@@ -6,7 +6,7 @@ Material Design 3 component for bulk file operations with enhanced UI.
 
 import flet as ft
 from typing import List, Dict, Optional, Callable
-from flet_server_gui.managers.theme_manager import TOKENS
+from flet_server_gui.theme import TOKENS
 from flet_server_gui.components.enhanced_components import (
     create_enhanced_button,
     create_enhanced_icon_button,

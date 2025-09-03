@@ -1,4 +1,0 @@
-This is a test file with emojis: 🚀✅📁💻🔒
-Hebrew text: הקובץ הזה מכיל גם טקסט עברי
-Mixed content: File created successfully! ✨
-Test completed at 2025-08-15

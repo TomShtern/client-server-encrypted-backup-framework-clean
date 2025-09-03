@@ -18,7 +18,7 @@ from datetime import datetime
 from .error_context import ErrorContext, ErrorFormatter
 # Updated import to use new theme structure
 try:
-    from ..managers.theme_manager import TOKENS
+    from ..theme import TOKENS
 except ImportError:
     # Fallback for direct execution or missing modules
     TOKENS = {
