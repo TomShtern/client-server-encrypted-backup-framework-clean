@@ -374,10 +374,10 @@ def create_stats_cards(server_bridge):
 ## 🎯 **EXECUTION CHECKLIST**
 
 ### **Pre-Flight Verification**
-- [ ] Backup current state: `git checkout -b backup-before-hiroshima`
-- [ ] Document current file count: `find flet_server_gui -name "*.py" | wc -l`
+- [ ] Backup current state: `git checkout -b backup-before-hiroshima` - NO NEED, I HAVE ALREDY JUST COMMITED MYSELF.
+- [ ] Document current file count: `find flet_server_gui -name "*.py" | wc -l` - THAT COULD BE USEFUL DO THAT.
 - [ ] Verify theme.py location and contents
-- [ ] Test current system works before changes
+- [ ] Test current system works before changes(dont know if it will work at all at its current state, doesnt matter)
 
 ### **Phase 1 Checklist: Reconnaissance**
 - [ ] Classify all files: PRESERVE/ANALYZE/NUKE/CONSOLIDATE
