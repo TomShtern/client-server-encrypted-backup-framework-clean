@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script to isolate navigation rail issues
+Test script for simple navigation rail system
 """
 
 import sys
@@ -8,21 +8,25 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import flet as ft
-from flet_server_gui.managers.navigation_manager import NavigationManager
+from flet_server_gui.utils.simple_navigation import SimpleNavigationState, create_simple_navigation_rail
 
 def switch_view(view_name: str):
     print(f"Switching to view: {view_name}")
 
 def main(page: ft.Page):
-    page.title = "Navigation Rail Test"
+    page.title = "Simple Navigation Rail Test"
     page.window_width = 1000
     page.window_height = 700
     
-    # Create navigation manager
-    navigation = NavigationManager(page, switch_view)
+    # Create simple navigation state
+    nav_state = SimpleNavigationState()
     
-    # Build navigation rail
-    nav_rail = navigation.build()
+    # Create simple navigation rail
+    nav_rail = create_simple_navigation_rail(
+        nav_state,
+        switch_view,
+        extended=False
+    )
     
     # Create simple content
     content = ft.Container(

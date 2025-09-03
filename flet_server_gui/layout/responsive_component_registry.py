@@ -18,7 +18,7 @@ from datetime import datetime
 import flet as ft
 
 # Import screen size enum from breakpoint manager
-from flet_server_gui.layout.responsive import ScreenSize
+from flet_server_gui.utils.responsive_enums import ScreenSize
 
 
 @dataclass

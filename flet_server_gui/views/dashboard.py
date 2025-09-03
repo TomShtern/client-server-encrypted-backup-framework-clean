@@ -15,7 +15,7 @@ from flet_server_gui.utils.server_bridge import ServerBridge
 from flet_server_gui.utils.thread_safe_ui import ThreadSafeUIUpdater, ui_safe_update
 from flet_server_gui.components.base_component import BaseComponent
 from flet_server_gui.core.semantic_colors import get_status_color
-from flet_server_gui.layout.responsive import ResponsiveLayoutFixes, fix_content_clipping, fix_button_clickable_areas, ensure_windowed_compatibility
+from flet_server_gui.utils.accessibility_helpers import ResponsiveLayoutFixes, fix_content_clipping, fix_button_clickable_areas, ensure_windowed_compatibility
 
 # Unified theme system - consolidated theme functionality
 from flet_server_gui.managers.theme_manager import TOKENS

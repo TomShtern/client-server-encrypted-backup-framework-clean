@@ -29,7 +29,7 @@ from .file_operations_manager import FileOperationsManager  # Unified file opera
 
 # Filtering (CONSOLIDATED) 
 from .unified_filter_manager import UnifiedFilterManager, FilterDataType, create_client_filter_manager, create_file_filter_manager
-from .navigation_manager import NavigationManager
+# Navigation utilities moved to utils/simple_navigation.py (no custom manager needed)
 
 # UI and settings
 from .settings_manager import SettingsManager
@@ -59,7 +59,7 @@ __all__ = [
     "FilterDataType", 
     "create_client_filter_manager",
     "create_file_filter_manager",
-    "NavigationManager",
+    # NavigationManager removed - replaced by simple navigation utilities
     
     # UI and settings
     "SettingsManager",

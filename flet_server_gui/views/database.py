@@ -37,7 +37,7 @@ from flet_server_gui.ui.widgets import (
 )
 
 # Layout fixes imports
-from flet_server_gui.layout.responsive import ResponsiveLayoutFixes
+from flet_server_gui.utils.accessibility_helpers import ResponsiveLayoutFixes
 from flet_server_gui.theme import apply_theme_to_page
 from flet_server_gui.theme import TOKENS
 

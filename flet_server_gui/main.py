@@ -46,10 +46,10 @@ from flet_server_gui.theme import apply_theme_to_page, setup_default_theme, TOKE
 # Essential components
 from flet_server_gui.components.control_panel_card import ControlPanelCard
 from flet_server_gui.components.quick_actions import QuickActions
-from flet_server_gui.managers.navigation_manager import NavigationManager
+from flet_server_gui.utils.simple_navigation import SimpleNavigationState, create_simple_navigation_rail, navigate_programmatically, sync_navigation_state
 from flet_server_gui.ui.dialogs import DialogSystem, ToastManager
 from flet_server_gui.theme import THEMES, DEFAULT_THEME_NAME
-from flet_server_gui.layout.responsive import apply_layout_fixes
+from flet_server_gui.utils.accessibility_helpers import apply_layout_fixes
 from flet_server_gui.ui.widgets.status_pill import StatusPill, ServerStatus, StatusPillConfig
 from flet_server_gui.ui.widgets.notifications_panel import NotificationsPanel, create_notification, NotificationType, NotificationPriority
 from flet_server_gui.ui.widgets.activity_log_dialog import ActivityLogDialog, create_activity_entry, ActivityLevel, ActivityCategory
@@ -198,10 +198,14 @@ class ServerGUIApp:
         self.view_manager = ViewManager(self.page, self.content_area)
         self._register_all_views()
         
-        # Initialize navigation
-        self.navigation = NavigationManager(self.page, self.view_manager.switch_view, self.content_area)
-        self.nav_rail = self.navigation.build()
-        self.view_manager.set_navigation_manager(self.navigation)
+        # Initialize simple navigation
+        self.navigation_state = SimpleNavigationState()
+        self.nav_rail = create_simple_navigation_rail(
+            self.navigation_state,
+            self.view_manager.switch_view,
+            extended=False
+        )
+        self.view_manager.set_navigation_state(self.navigation_state)
         
         # Build main layout
         self._build_main_layout()

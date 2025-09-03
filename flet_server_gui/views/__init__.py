@@ -8,7 +8,7 @@ from .analytics import AnalyticsView
 from .logs_view import LogsView
 from .settings_view import SettingsView
 from .database import DatabaseView
-from flet_server_gui.layout.responsive import ResponsiveLayoutFixes, fix_content_clipping, fix_button_clickable_areas, ensure_windowed_compatibility
+from flet_server_gui.utils.accessibility_helpers import ResponsiveLayoutFixes, fix_content_clipping, fix_button_clickable_areas, ensure_windowed_compatibility
 
 
 # Export all view classes

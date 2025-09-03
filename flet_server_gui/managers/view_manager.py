@@ -38,8 +38,8 @@ class ViewManager:
         # View registry - populated by main app
         self.view_registry: Dict[str, Any] = {}
         
-        # Navigation manager reference (set later)
-        self.navigation_manager = None
+        # Navigation state reference (set later)
+        self.navigation_state = None
         
         # View lifecycle callbacks
         self.view_change_callbacks: list[Callable] = []
@@ -58,9 +58,9 @@ class ViewManager:
         if view_name == "dashboard":
             self.active_view_instance = view_instance
     
-    def set_navigation_manager(self, navigation_manager: Any) -> None:
-        """Set the navigation manager for state synchronization."""
-        self.navigation_manager = navigation_manager
+    def set_navigation_state(self, navigation_state: Any) -> None:
+        """Set the navigation state for synchronization."""
+        self.navigation_state = navigation_state
     
     def add_view_change_callback(self, callback: Callable[[str], None]) -> None:
         """Add callback to be called when view changes."""
@@ -113,9 +113,9 @@ class ViewManager:
                     # Call lifecycle method on the new view
                     self._call_view_lifecycle_method(new_view_instance, 'on_show')
                     
-                    # Sync navigation state
-                    if self.navigation_manager:
-                        self.navigation_manager.sync_navigation_state(view_name)
+                    # Update navigation state
+                    if self.navigation_state:
+                        self.navigation_state.update_current_view(view_name)
                     
                     # Notify callbacks
                     for callback in self.view_change_callbacks:
@@ -244,4 +244,4 @@ class ViewManager:
         
         # Clear references
         self.active_view_instance = None
-        self.navigation_manager = None
+        self.navigation_state = None
