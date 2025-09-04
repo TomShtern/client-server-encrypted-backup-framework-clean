@@ -46,15 +46,11 @@ Anti-patterns to avoid
 - Overly complex custom controls when composition suffices.
 
 Small idiomatic examples
-- App skeleton, Pagelet, background task, and ListView examples (see `.ai_snippets` in repo for copy-paste-ready snippets).
-
-Where to add new UI code in this repo
-- `flet_server_gui/views/` — add focused views (dashboard, logs, clients)
-- `flet_server_gui/components/` — small Pagelets and reusable components
-- `flet_server_gui/managers/` — non-UI logic (view_manager, theme_manager, navigation_manager)
+- App skeleton, Pagelet, background task, and ListView examples (see `Flet_Documentation_From_Context7_&_web` folder in repo for comprehensive documentaion).
+- See other files in the `important_docs` folder for more important context.
 
 Quick checklist for generated code
-- Keep each component < 300 LOC.
+- Keep each component < 800 LOC.
 - No blocking calls in event handlers.
 - Use theme TOKENS for colors.
 - Use `page.run_task()` for async work.

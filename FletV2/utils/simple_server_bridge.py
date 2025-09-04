@@ -6,6 +6,10 @@ A minimal server bridge implementation for fallback scenarios.
 
 import flet as ft
 from typing import List, Dict, Any, Optional
+from utils.debug_setup import get_logger
+from config import show_mock_data
+
+logger = get_logger(__name__)
 
 
 class SimpleServerBridge:
@@ -28,36 +32,38 @@ class SimpleServerBridge:
             List[Dict[str, Any]]: List of client dictionaries
         """
         try:
-            return [
-                {
-                    "client_id": "client_001",
-                    "address": "192.168.1.101:54321",
-                    "status": "Connected",
-                    "connected_at": "2025-09-03 10:30:15",
-                    "last_activity": "2025-09-03 14:45:30"
-                },
-                {
-                    "client_id": "client_002",
-                    "address": "192.168.1.102:54322",
-                    "status": "Registered",
-                    "connected_at": "2025-09-02 09:15:22",
-                    "last_activity": "2025-09-03 12:20:45"
-                },
-                {
-                    "client_id": "client_003",
-                    "address": "192.168.1.103:54323",
-                    "status": "Offline",
-                    "connected_at": "2025-09-01 14:22:10",
-                    "last_activity": "2025-09-02 16:33:55"
-                },
-                {
-                    "client_id": "client_004",
-                    "address": "192.168.1.104:54324",
-                    "status": "Connected",
-                    "connected_at": "2025-09-03 11:45:05",
-                    "last_activity": "2025-09-03 15:12:33"
-                }
-            ]
+            if show_mock_data():
+                return [
+                    {
+                        "client_id": "client_001",
+                        "address": "192.168.1.101:54321",
+                        "status": "Connected",
+                        "connected_at": "2025-09-03 10:30:15",
+                        "last_activity": "2025-09-03 14:45:30"
+                    },
+                    {
+                        "client_id": "client_002",
+                        "address": "192.168.1.102:54322",
+                        "status": "Registered",
+                        "connected_at": "2025-09-02 09:15:22",
+                        "last_activity": "2025-09-03 12:20:45"
+                    },
+                    {
+                        "client_id": "client_003",
+                        "address": "192.168.1.103:54323",
+                        "status": "Offline",
+                        "connected_at": "2025-09-01 14:22:10",
+                        "last_activity": "2025-09-02 16:33:55"
+                    },
+                    {
+                        "client_id": "client_004",
+                        "address": "192.168.1.104:54324",
+                        "status": "Connected",
+                        "connected_at": "2025-09-03 11:45:05",
+                        "last_activity": "2025-09-03 15:12:33"
+                    }
+                ]
+            return []
         except Exception as e:
             logger.error(f"Error getting clients: {e}")
             return []
@@ -70,22 +76,24 @@ class SimpleServerBridge:
             List[Dict[str, Any]]: List of file dictionaries
         """
         try:
-            return [
-                {
-                    "file_id": "file_001",
-                    "filename": "document1.pdf",
-                    "size": 1024000,
-                    "uploaded_at": "2025-09-03 10:30:15",
-                    "client_id": "client_001"
-                },
-                {
-                    "file_id": "file_002",
-                    "filename": "image1.jpg",
-                    "size": 2048000,
-                    "uploaded_at": "2025-09-03 11:45:30",
-                    "client_id": "client_002"
-                }
-            ]
+            if show_mock_data():
+                return [
+                    {
+                        "file_id": "file_001",
+                        "filename": "document1.pdf",
+                        "size": 1024000,
+                        "uploaded_at": "2025-09-03 10:30:15",
+                        "client_id": "client_001"
+                    },
+                    {
+                        "file_id": "file_002",
+                        "filename": "image1.jpg",
+                        "size": 2048000,
+                        "uploaded_at": "2025-09-03 11:45:30",
+                        "client_id": "client_002"
+                    }
+                ]
+            return []
         except Exception as e:
             logger.error(f"Error getting files: {e}")
             return []
@@ -98,20 +106,17 @@ class SimpleServerBridge:
             Dict[str, Any]: Database information
         """
         try:
-            return {
-                "status": "Connected",
-                "tables": 5,
-                "records": 1250,
-                "size": "45.2 MB"
-            }
+            if show_mock_data():
+                return {
+                    "status": "Connected",
+                    "tables": 5,
+                    "records": 1250,
+                    "size": "45.2 MB"
+                }
+            return {}
         except Exception as e:
             logger.error(f"Error getting database info: {e}")
-            return {
-                "status": "Error",
-                "tables": 0,
-                "records": 0,
-                "size": "0 MB"
-            }
+            return {}
     
     def disconnect_client(self, client_id: str) -> bool:
         """

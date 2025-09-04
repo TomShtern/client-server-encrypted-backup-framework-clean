@@ -1,5 +1,5 @@
 # theme.py
-# This file now contains multiple, selectable themes for the application.
+# This file now contains multiple, selectable themes for the application with proper button styles.
 
 import flet as ft
 
@@ -31,41 +31,43 @@ teal_dark_colors = {
 teal_elevated_button_style = ft.ButtonStyle(
     color={
         ft.ControlState.DEFAULT: ft.Colors.ON_PRIMARY,
+        ft.ControlState.HOVERED: ft.Colors.ON_PRIMARY,
+        ft.ControlState.PRESSED: ft.Colors.ON_PRIMARY,
     },
     bgcolor={
         ft.ControlState.DEFAULT: teal_light_colors["primary"],
-        ft.ControlState.HOVERED: teal_light_colors["primary"],
-        ft.ControlState.PRESSED: teal_light_colors["primary"],
-    }
+        ft.ControlState.HOVERED: ft.Colors.with_opacity(0.8, teal_light_colors["primary"]),
+        ft.ControlState.PRESSED: ft.Colors.with_opacity(0.9, teal_light_colors["primary"]),
+    },
+    shape=ft.RoundedRectangleBorder(radius=4),
+    padding=ft.Padding(16, 8, 16, 8)
 )
 
 teal_dark_elevated_button_style = ft.ButtonStyle(
     color={
         ft.ControlState.DEFAULT: ft.Colors.ON_PRIMARY,
+        ft.ControlState.HOVERED: ft.Colors.ON_PRIMARY,
+        ft.ControlState.PRESSED: ft.Colors.ON_PRIMARY,
     },
     bgcolor={
         ft.ControlState.DEFAULT: teal_dark_colors["primary"],
-        ft.ControlState.HOVERED: teal_dark_colors["primary"],
-        ft.ControlState.PRESSED: teal_dark_colors["primary"],
-    }
+        ft.ControlState.HOVERED: ft.Colors.with_opacity(0.8, teal_dark_colors["primary"]),
+        ft.ControlState.PRESSED: ft.Colors.with_opacity(0.9, teal_dark_colors["primary"]),
+    },
+    shape=ft.RoundedRectangleBorder(radius=4),
+    padding=ft.Padding(16, 8, 16, 8)
 )
 
 TealTheme = ft.Theme(
     color_scheme=ft.ColorScheme(**teal_light_colors), 
     font_family="Inter",
-    elevated_button_theme=ft.ElevatedButtonTheme(
-        foreground_color=ft.Colors.ON_PRIMARY,
-        bgcolor=teal_light_colors["primary"]
-    )
+    elevated_button_theme=ft.ElevatedButtonTheme(style=teal_elevated_button_style)
 )
 
 TealDarkTheme = ft.Theme(
     color_scheme=ft.ColorScheme(**teal_dark_colors), 
     font_family="Inter",
-    elevated_button_theme=ft.ElevatedButtonTheme(
-        foreground_color=ft.Colors.ON_PRIMARY,
-        bgcolor=teal_dark_colors["primary"]
-    )
+    elevated_button_theme=ft.ElevatedButtonTheme(style=teal_dark_elevated_button_style)
 )
 
 
@@ -97,41 +99,43 @@ purple_dark_colors = {
 purple_elevated_button_style = ft.ButtonStyle(
     color={
         ft.ControlState.DEFAULT: ft.Colors.ON_PRIMARY,
+        ft.ControlState.HOVERED: ft.Colors.ON_PRIMARY,
+        ft.ControlState.PRESSED: ft.Colors.ON_PRIMARY,
     },
     bgcolor={
         ft.ControlState.DEFAULT: purple_light_colors["primary"],
-        ft.ControlState.HOVERED: purple_light_colors["primary"],
-        ft.ControlState.PRESSED: purple_light_colors["primary"],
-    }
+        ft.ControlState.HOVERED: ft.Colors.with_opacity(0.8, purple_light_colors["primary"]),
+        ft.ControlState.PRESSED: ft.Colors.with_opacity(0.9, purple_light_colors["primary"]),
+    },
+    shape=ft.RoundedRectangleBorder(radius=4),
+    padding=ft.Padding(16, 8, 16, 8)
 )
 
 purple_dark_elevated_button_style = ft.ButtonStyle(
     color={
         ft.ControlState.DEFAULT: ft.Colors.ON_PRIMARY,
+        ft.ControlState.HOVERED: ft.Colors.ON_PRIMARY,
+        ft.ControlState.PRESSED: ft.Colors.ON_PRIMARY,
     },
     bgcolor={
         ft.ControlState.DEFAULT: purple_dark_colors["primary"],
-        ft.ControlState.HOVERED: purple_dark_colors["primary"],
-        ft.ControlState.PRESSED: purple_dark_colors["primary"],
-    }
+        ft.ControlState.HOVERED: ft.Colors.with_opacity(0.8, purple_dark_colors["primary"]),
+        ft.ControlState.PRESSED: ft.Colors.with_opacity(0.9, purple_dark_colors["primary"]),
+    },
+    shape=ft.RoundedRectangleBorder(radius=4),
+    padding=ft.Padding(16, 8, 16, 8)
 )
 
 PurpleTheme = ft.Theme(
     color_scheme=ft.ColorScheme(**purple_light_colors), 
     font_family="Inter",
-    elevated_button_theme=ft.ElevatedButtonTheme(
-        foreground_color=ft.Colors.ON_PRIMARY,
-        bgcolor=purple_light_colors["primary"]
-    )
+    elevated_button_theme=ft.ElevatedButtonTheme(style=purple_elevated_button_style)
 )
 
 PurpleDarkTheme = ft.Theme(
     color_scheme=ft.ColorScheme(**purple_dark_colors), 
     font_family="Inter",
-    elevated_button_theme=ft.ElevatedButtonTheme(
-        foreground_color=ft.Colors.ON_PRIMARY,
-        bgcolor=purple_dark_colors["primary"]
-    )
+    elevated_button_theme=ft.ElevatedButtonTheme(style=purple_dark_elevated_button_style)
 )
 
 
@@ -243,6 +247,32 @@ def setup_default_theme(page: ft.Page) -> None:
         page: The Flet page to set up
     """
     apply_theme_to_page(page, DEFAULT_THEME_NAME)
+    
+    # Apply text theme for consistent typography
+    page.theme.text_theme = ft.TextTheme(
+        headline_large=ft.TextStyle(size=24, weight=ft.FontWeight.BOLD),
+        headline_medium=ft.TextStyle(size=20, weight=ft.FontWeight.BOLD),
+        headline_small=ft.TextStyle(size=18, weight=ft.FontWeight.BOLD),
+        title_large=ft.TextStyle(size=16, weight=ft.FontWeight.BOLD),
+        title_medium=ft.TextStyle(size=14, weight=ft.FontWeight.BOLD),
+        title_small=ft.TextStyle(size=12, weight=ft.FontWeight.BOLD),
+        body_large=ft.TextStyle(size=16),
+        body_medium=ft.TextStyle(size=14),
+        body_small=ft.TextStyle(size=12)
+    )
+    
+    if page.dark_theme:
+        page.dark_theme.text_theme = ft.TextTheme(
+            headline_large=ft.TextStyle(size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+            headline_medium=ft.TextStyle(size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+            headline_small=ft.TextStyle(size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+            title_large=ft.TextStyle(size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+            title_medium=ft.TextStyle(size=14, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+            title_small=ft.TextStyle(size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+            body_large=ft.TextStyle(size=16, color=ft.Colors.ON_SURFACE),
+            body_medium=ft.TextStyle(size=14, color=ft.Colors.ON_SURFACE),
+            body_small=ft.TextStyle(size=12, color=ft.Colors.ON_SURFACE)
+        )
     
     # Set default theme mode if not already set
     if page.theme_mode is None:

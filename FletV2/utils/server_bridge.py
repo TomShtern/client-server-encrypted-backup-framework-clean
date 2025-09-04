@@ -11,6 +11,7 @@ import json
 import os
 import asyncio
 from utils.debug_setup import get_logger
+from config import show_mock_data
 
 logger = get_logger(__name__)
 
@@ -29,7 +30,7 @@ class ModularServerBridge:
         self.base_url = f"http://{host}:{port}"
         self.connected = False
         self.session = requests.Session()
-        self._test_connection()
+        # Note: Connection test is now done asynchronously in main.py
     
     def _test_connection(self):
         """Test connection to the server."""
@@ -79,37 +80,39 @@ class ModularServerBridge:
             return response.get("clients", [])
         except Exception as e:
             logger.warning(f"Failed to get clients from server: {e}")
-            # Fallback to mock data
-            return [
-                {
-                    "client_id": "client_001",
-                    "address": "192.168.1.101:54321",
-                    "status": "Connected",
-                    "connected_at": "2025-09-03 10:30:15",
-                    "last_activity": "2025-09-03 14:45:30"
-                },
-                {
-                    "client_id": "client_002",
-                    "address": "192.168.1.102:54322",
-                    "status": "Registered",
-                    "connected_at": "2025-09-02 09:15:22",
-                    "last_activity": "2025-09-03 12:20:45"
-                },
-                {
-                    "client_id": "client_003",
-                    "address": "192.168.1.103:54323",
-                    "status": "Offline",
-                    "connected_at": "2025-09-01 14:22:10",
-                    "last_activity": "2025-09-02 16:33:55"
-                },
-                {
-                    "client_id": "client_004",
-                    "address": "192.168.1.104:54324",
-                    "status": "Connected",
-                    "connected_at": "2025-09-03 11:45:05",
-                    "last_activity": "2025-09-03 15:12:33"
-                }
-            ]
+            # Fallback to mock data only in debug mode or when server is unavailable
+            if show_mock_data() or not self.connected:
+                return [
+                    {
+                        "client_id": "client_001",
+                        "address": "192.168.1.101:54321",
+                        "status": "Connected",
+                        "connected_at": "2025-09-03 10:30:15",
+                        "last_activity": "2025-09-03 14:45:30"
+                    },
+                    {
+                        "client_id": "client_002",
+                        "address": "192.168.1.102:54322",
+                        "status": "Registered",
+                        "connected_at": "2025-09-02 09:15:22",
+                        "last_activity": "2025-09-03 12:20:45"
+                    },
+                    {
+                        "client_id": "client_003",
+                        "address": "192.168.1.103:54323",
+                        "status": "Offline",
+                        "connected_at": "2025-09-01 14:22:10",
+                        "last_activity": "2025-09-02 16:33:55"
+                    },
+                    {
+                        "client_id": "client_004",
+                        "address": "192.168.1.104:54324",
+                        "status": "Connected",
+                        "connected_at": "2025-09-03 11:45:05",
+                        "last_activity": "2025-09-03 15:12:33"
+                    }
+                ]
+            return []
     
     def get_files(self) -> List[Dict[str, Any]]:
         """
@@ -123,23 +126,25 @@ class ModularServerBridge:
             return response.get("files", [])
         except Exception as e:
             logger.warning(f"Failed to get files from server: {e}")
-            # Fallback to mock data
-            return [
-                {
-                    "file_id": "file_001",
-                    "filename": "document1.pdf",
-                    "size": 1024000,
-                    "uploaded_at": "2025-09-03 10:30:15",
-                    "client_id": "client_001"
-                },
-                {
-                    "file_id": "file_002",
-                    "filename": "image1.jpg",
-                    "size": 2048000,
-                    "uploaded_at": "2025-09-03 11:45:30",
-                    "client_id": "client_002"
-                }
-            ]
+            # Fallback to mock data only in debug mode or when server is unavailable
+            if show_mock_data() or not self.connected:
+                return [
+                    {
+                        "file_id": "file_001",
+                        "filename": "document1.pdf",
+                        "size": 1024000,
+                        "uploaded_at": "2025-09-03 10:30:15",
+                        "client_id": "client_001"
+                    },
+                    {
+                        "file_id": "file_002",
+                        "filename": "image1.jpg",
+                        "size": 2048000,
+                        "uploaded_at": "2025-09-03 11:45:30",
+                        "client_id": "client_002"
+                    }
+                ]
+            return []
     
     def get_database_info(self) -> Dict[str, Any]:
         """
@@ -153,13 +158,15 @@ class ModularServerBridge:
             return response
         except Exception as e:
             logger.warning(f"Failed to get database info from server: {e}")
-            # Fallback to mock data
-            return {
-                "status": "Connected",
-                "tables": 5,
-                "records": 1250,
-                "size": "45.2 MB"
-            }
+            # Fallback to mock data only in debug mode or when server is unavailable
+            if show_mock_data() or not self.connected:
+                return {
+                    "status": "Connected",
+                    "tables": 5,
+                    "records": 1250,
+                    "size": "45.2 MB"
+                }
+            return {}
     
     def get_logs(self) -> List[Dict[str, Any]]:
         """
@@ -173,7 +180,9 @@ class ModularServerBridge:
             return response.get("logs", [])
         except Exception as e:
             logger.warning(f"Failed to get logs from server: {e}")
-            # Fallback to mock data
+            # Fallback to mock data only in debug mode or when server is unavailable
+            if show_mock_data() or not self.connected:
+                return []
             return []
     
     def get_server_status(self) -> Dict[str, Any]:
@@ -188,16 +197,18 @@ class ModularServerBridge:
             return response
         except Exception as e:
             logger.warning(f"Failed to get server status from server: {e}")
-            # Fallback to mock data
-            return {
-                "server_running": True,
-                "port": 1256,
-                "uptime": "2h 34m",
-                "total_transfers": 72,
-                "active_clients": 3,
-                "total_files": 45,
-                "storage_used": "2.4 GB"
-            }
+            # Fallback to mock data only in debug mode or when server is unavailable
+            if show_mock_data() or not self.connected:
+                return {
+                    "server_running": True,
+                    "port": 1256,
+                    "uptime": "2h 34m",
+                    "total_transfers": 72,
+                    "active_clients": 3,
+                    "total_files": 45,
+                    "storage_used": "2.4 GB"
+                }
+            return {}
     
     def get_recent_activity(self) -> List[Dict[str, Any]]:
         """
@@ -211,7 +222,9 @@ class ModularServerBridge:
             return response.get("activity", [])
         except Exception as e:
             logger.warning(f"Failed to get recent activity from server: {e}")
-            # Fallback to mock data
+            # Fallback to mock data only in debug mode or when server is unavailable
+            if show_mock_data() or not self.connected:
+                return []
             return []
     
     def disconnect_client(self, client_id: str) -> bool:

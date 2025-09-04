@@ -69,17 +69,9 @@ class FletV2App(ft.Row):
         # Configure desktop window
         self._configure_desktop_window()
         
-        # Initialize server bridge with fallback
-        try:
-            if ServerBridge:
-                self.server_bridge = ServerBridge()
-                logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
-            else:
-                self.server_bridge = None
-                logger.warning("No server bridge available")
-        except Exception as e:
-            logger.warning(f"Server bridge failed, using mock: {e}")
-            self.server_bridge = None
+        # Initialize server bridge with fallback asynchronously
+        self.server_bridge = None
+        page.run_task(self._initialize_server_bridge_async)
         
         # Create content area
         self.content_area = ft.Container(expand=True)
@@ -98,6 +90,35 @@ class FletV2App(ft.Row):
         # Set up page connection handler to load initial view
         page.on_connect = self._on_page_connect
     
+    async def _initialize_server_bridge_async(self):
+        """Asynchronously initialize server bridge to prevent UI blocking."""
+        try:
+            if ServerBridge:
+                # For ModularServerBridge, we still need to initialize it,
+                # but we can do the connection test asynchronously
+                if BRIDGE_TYPE == "Full ModularServerBridge":
+                    # Create bridge without testing connection immediately
+                    self.server_bridge = ServerBridge.__new__(ServerBridge)
+                    self.server_bridge.host = "127.0.0.1"
+                    self.server_bridge.port = 1256
+                    self.server_bridge.base_url = f"http://127.0.0.1:1256"
+                    self.server_bridge.connected = False
+                    self.server_bridge.session = ServerBridge.__dict__['requests'].Session()
+                    # Test connection asynchronously
+                    await self.page.run_thread(self.server_bridge._test_connection)
+                else:
+                    # For SimpleServerBridge, initialization is instant
+                    self.server_bridge = ServerBridge()
+                logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
+            else:
+                self.server_bridge = None
+                logger.warning("No server bridge available")
+        except Exception as e:
+            logger.warning(f"Server bridge failed, using mock: {e}")
+            self.server_bridge = None
+        # Update UI to reflect bridge status
+        await self.page.run_thread(lambda: None)  # Ensure we're back on UI thread
+    
     def _on_page_connect(self, e):
         """Called when page is connected - safe to load initial view."""
         self._load_view("dashboard")
@@ -114,32 +135,6 @@ class FletV2App(ft.Row):
         
         # Apply theme from theme.py (source of truth)
         setup_default_theme(self.page)
-        
-        # Apply text theme for consistent typography
-        self.page.theme.text_theme = ft.TextTheme(
-            headline_large=ft.TextStyle(size=24, weight=ft.FontWeight.BOLD),
-            headline_medium=ft.TextStyle(size=20, weight=ft.FontWeight.BOLD),
-            headline_small=ft.TextStyle(size=18, weight=ft.FontWeight.BOLD),
-            title_large=ft.TextStyle(size=16, weight=ft.FontWeight.BOLD),
-            title_medium=ft.TextStyle(size=14, weight=ft.FontWeight.BOLD),
-            title_small=ft.TextStyle(size=12, weight=ft.FontWeight.BOLD),
-            body_large=ft.TextStyle(size=16),
-            body_medium=ft.TextStyle(size=14),
-            body_small=ft.TextStyle(size=12)
-        )
-        
-        if self.page.dark_theme:
-            self.page.dark_theme.text_theme = ft.TextTheme(
-                headline_large=ft.TextStyle(size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                headline_medium=ft.TextStyle(size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                headline_small=ft.TextStyle(size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                title_large=ft.TextStyle(size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                title_medium=ft.TextStyle(size=14, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                title_small=ft.TextStyle(size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                body_large=ft.TextStyle(size=16, color=ft.Colors.ON_SURFACE),
-                body_medium=ft.TextStyle(size=14, color=ft.Colors.ON_SURFACE),
-                body_small=ft.TextStyle(size=12, color=ft.Colors.ON_SURFACE)
-            )
         
         # Set desktop-appropriate padding
         self.page.padding = ft.Padding(0, 0, 0, 0)
@@ -257,71 +252,6 @@ class FletV2App(ft.Row):
             # Only update if the control is attached to the page
             if self.page and hasattr(self.content_area, 'page') and self.content_area.page:
                 self.content_area.update()
-    
-    def _create_dashboard_view(self) -> ft.Control:
-        """Simple dashboard view - uses Flet built-ins only."""
-        # Get server status (with fallback)
-        server_status = "Running" if self.server_bridge else "Unavailable"
-        status_color = ft.Colors.GREEN if self.server_bridge else ft.Colors.ORANGE
-        
-        return ft.Column([
-            # Header
-            ft.Container(
-                content=ft.Row([
-                    ft.Text("Dashboard", size=24, weight=ft.FontWeight.BOLD),
-                    ft.Container(expand=True),  # Spacer
-                    ft.IconButton(
-                        icon=ft.Icons.DARK_MODE,
-                        tooltip="Toggle theme",
-                        on_click=lambda _: toggle_theme_mode(self.page)
-                    )
-                ]),
-                padding=ft.Padding(20, 20, 20, 10)
-            ),
-            
-            # Status cards using simple ResponsiveRow
-            ft.ResponsiveRow([
-                ft.Column([
-                    ft.Card(
-                        content=ft.Container(
-                            content=ft.Column([
-                                ft.Text("Server Status", weight=ft.FontWeight.BOLD),
-                                ft.Text(server_status, color=status_color, size=16)
-                            ], spacing=8),
-                            padding=20
-                        ),
-                        expand=True
-                    )
-                ], col={"sm": 12, "md": 4}, expand=True),
-                
-                ft.Column([
-                    ft.Card(
-                        content=ft.Container(
-                            content=ft.Column([
-                                ft.Text("Bridge Type", weight=ft.FontWeight.BOLD),
-                                ft.Text(BRIDGE_TYPE, size=12)
-                            ], spacing=8),
-                            padding=20
-                        ),
-                        expand=True
-                    )
-                ], col={"sm": 12, "md": 4}, expand=True),
-                
-                ft.Column([
-                    ft.Card(
-                        content=ft.Container(
-                            content=ft.Column([
-                                ft.Text("System", weight=ft.FontWeight.BOLD),
-                                ft.Text("Desktop App", size=16)
-                            ], spacing=8),
-                            padding=20
-                        ),
-                        expand=True
-                    )
-                ], col={"sm": 12, "md": 4}, expand=True)
-            ])
-        ], expand=True, scroll=ft.ScrollMode.AUTO)
-    
     
     def _create_error_view(self, error_message: str) -> ft.Control:
         """Simple error view for fallback."""
