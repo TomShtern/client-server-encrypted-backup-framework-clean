@@ -1,2 +1,2 @@
 # FletV2 Requirements
-flet>=0.28.0
+flet>=0.28.3

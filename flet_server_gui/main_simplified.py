@@ -252,7 +252,7 @@ class SimpleDesktopApp(ft.Row):
     def _create_files_view(self) -> ft.Control:
         """Creates the 'Files' view using the new simplified implementation."""
         try:
-            from flet_server_gui.views.new_files_view import create_files_view
+            from FletV2.views.files import create_files_view
             return create_files_view()
         except Exception as e:
             print(f"[ERROR] Failed to create files view: {e}")
