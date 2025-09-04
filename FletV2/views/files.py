@@ -1,25 +1,22 @@
-
 #!/usr/bin/env python3
 """
-Simple Files View - Hiroshima Protocol Compliant
-A clean, minimal implementation using pure Flet patterns.
-
-This demonstrates the Hiroshima ideal:
-- Uses Flet's built-in DataTable exclusively 
-- No custom state management or complex event handling
-- Simple function returning ft.Control (composition over inheritance)
-- Works WITH the framework, not against it
+Files View for FletV2
+A clean implementation using pure Flet patterns.
 """
 
 import flet as ft
+from typing import List, Dict, Any
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
+from utils.debug_setup import get_logger
+
+logger = get_logger(__name__)
 
 
 def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
     """
-    Create files view using simple Flet patterns (no class inheritance needed).
+    Create files view using simple Flet patterns.
     
     Args:
         server_bridge: Server bridge for data access
@@ -38,8 +35,8 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
             try:
                 # Try to get files from server bridge
                 files_data = server_bridge.get_files()
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to get files from server bridge: {e}")
         
         # Fallback: scan received_files directory
         if not files_data:
@@ -48,17 +45,21 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                 if received_files_dir.exists():
                     for file_path in received_files_dir.iterdir():
                         if file_path.is_file():
-                            stat = file_path.stat()
-                            files_data.append({
-                                "id": str(hash(file_path.name)) % 10000,
-                                "name": file_path.name,
-                                "size": stat.st_size,
-                                "type": file_path.suffix.lstrip('.') or 'unknown',
-                                "owner": "system",
-                                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                                "status": "Received",
-                                "path": str(file_path)
-                            })
+                            try:
+                                stat = file_path.stat()
+                                files_data.append({
+                                    "id": str(hash(file_path.name)) % 10000,
+                                    "name": file_path.name,
+                                    "size": stat.st_size,
+                                    "type": file_path.suffix.lstrip('.') or 'unknown',
+                                    "owner": "system",
+                                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                                    "status": "Received",
+                                    "path": str(file_path)
+                                })
+                            except Exception as e:
+                                logger.warning(f"Error reading file {str(file_path)}: {str(e)}")
+                                continue
                 else:
                     # Create mock data if no received_files directory
                     base_time = datetime.now()
@@ -71,7 +72,7 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                         {"id": "6", "name": "notes.txt", "size": 512, "type": "txt", "owner": "user1", "modified": (base_time - timedelta(hours=1)).isoformat(), "status": "Verified", "path": "mock"}
                     ]
             except Exception as e:
-                print(f"[ERROR] Failed to scan files: {e}")
+                logger.error(f"Failed to scan files: {e}")
                 files_data = []
         
         return files_data
@@ -88,41 +89,39 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
         else:
             return f"{size_bytes/1024**3:.1f} GB"
     
-    # Get initial files data
-    files_data = get_files_data()
-
-    # Create action handlers (simple functions)
+    # Create action handlers
     def on_download_click(file_data):
         def handler(e):
-            print(f"[INFO] Download file: {file_data['name']}")
-            if page.snack_bar:
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Downloading {file_data['name']}..."),
-                    bgcolor=ft.Colors.BLUE
-                )
-                page.snack_bar.open = True
-                page.update()
+            file_name = file_data.get('name', 'Unknown file')
+            logger.info(f"Download file: {file_name}")
+            page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Downloading {file_name}..."),
+                bgcolor=ft.Colors.BLUE
+            )
+            page.snack_bar.open = True
+            page.update()
         return handler
     
     def on_verify_click(file_data):
         def handler(e):
-            print(f"[INFO] Verify file: {file_data['name']}")
-            if page.snack_bar:
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Verified {file_data['name']}"),
-                    bgcolor=ft.Colors.GREEN
-                )
-                page.snack_bar.open = True
-                page.update()
+            file_name = file_data.get('name', 'Unknown file')
+            logger.info(f"Verify file: {file_name}")
+            page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Verified {file_name}"),
+                bgcolor=ft.Colors.GREEN
+            )
+            page.snack_bar.open = True
+            page.update()
         return handler
     
     def on_delete_click(file_data):
         def handler(e):
-            print(f"[INFO] Delete file: {file_data['name']}")
+            file_name = file_data.get('name', 'Unknown file')
+            logger.info(f"Delete file: {file_name}")
             # Simple confirmation dialog using Flet's built-in AlertDialog
             dialog = ft.AlertDialog(
                 title=ft.Text("Confirm Delete"),
-                content=ft.Text(f"Are you sure you want to delete '{file_data['name']}'?"),
+                content=ft.Text(f"Are you sure you want to delete '{file_name}'?"),
                 actions=[
                     ft.TextButton("Cancel", on_click=lambda e: close_dialog()),
                     ft.TextButton("Delete", on_click=lambda e: confirm_delete())
@@ -134,13 +133,12 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                 page.update()
             
             def confirm_delete():
-                print(f"[INFO] Confirmed delete: {file_data['name']}")
-                if page.snack_bar:
-                    page.snack_bar = ft.SnackBar(
-                        content=ft.Text(f"Deleted {file_data['name']}"),
-                        bgcolor=ft.Colors.RED
-                    )
-                    page.snack_bar.open = True
+                logger.info(f"Confirmed delete: {file_name}")
+                page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"Deleted {file_name}"),
+                    bgcolor=ft.Colors.RED
+                )
+                page.snack_bar.open = True
                 close_dialog()
             
             page.dialog = dialog
@@ -149,17 +147,19 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
         return handler
     
     def on_refresh_click(e):
-        print("[INFO] Refresh files list")
+        logger.info("Refresh files list")
         # In a real implementation, this would reload the file list
-        if page.snack_bar:
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Files refreshed"),
-                bgcolor=ft.Colors.GREEN
-            )
-            page.snack_bar.open = True
-            page.update()
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text("Files refreshed"),
+            bgcolor=ft.Colors.GREEN
+        )
+        page.snack_bar.open = True
+        page.update()
 
-    # Create DataTable using Flet's built-in component (this is the RIGHT way!)
+    # Get initial files data
+    files_data = get_files_data()
+
+    # Create DataTable using Flet's built-in component
     files_table = ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD)),
@@ -172,19 +172,20 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
         rows=[
             ft.DataRow(
                 cells=[
-                    ft.DataCell(ft.Text(file_data["name"])),
-                    ft.DataCell(ft.Text(format_size(file_data["size"]))),
-                    ft.DataCell(ft.Text(file_data["type"].upper())),
+                    ft.DataCell(ft.Text(str(file_data.get("name", "Unknown")))),
+                    ft.DataCell(ft.Text(format_size(file_data.get("size", 0)))),
+                    ft.DataCell(ft.Text(str(file_data.get("type", "unknown")).upper())),
                     ft.DataCell(ft.Text(
                         datetime.fromisoformat(file_data["modified"]).strftime("%Y-%m-%d %H:%M")
+                        if file_data.get("modified") else "Unknown"
                     )),
                     ft.DataCell(
                         ft.Container(
                             content=ft.Text(
-                                file_data["status"],
-                                color=ft.Colors.GREEN if file_data["status"] == "Verified" 
-                                      else ft.Colors.ORANGE if file_data["status"] == "Pending"
-                                      else ft.Colors.BLUE if file_data["status"] == "Received"
+                                str(file_data.get("status", "Unknown")),
+                                color=ft.Colors.GREEN if file_data.get("status") == "Verified" 
+                                      else ft.Colors.ORANGE if file_data.get("status") == "Pending"
+                                      else ft.Colors.BLUE if file_data.get("status") == "Received"
                                       else ft.Colors.RED
                             ),
                             padding=ft.Padding(8, 4, 8, 4),
@@ -221,7 +222,7 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
         border=ft.border.all(1, ft.Colors.OUTLINE)
     )
     
-    # Return the view using simple Flet layout (no complex state management)
+    # Return the view using simple Flet layout
     return ft.Column([
         # Header with title and refresh button
         ft.Container(
@@ -233,7 +234,7 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                         label="Search files...",
                         prefix_icon=ft.Icons.SEARCH,
                         width=300,
-                        on_change=lambda e: print(f"[INFO] Search: {e.control.value}")
+                        on_change=lambda e: logger.info(f"Search: {e.control.value}")
                     ),
                     ft.IconButton(
                         icon=ft.Icons.REFRESH,

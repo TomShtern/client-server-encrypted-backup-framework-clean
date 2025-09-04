@@ -17,6 +17,10 @@ import asyncio
 import sys
 import os
 
+# Set up terminal debugging FIRST (before any other imports)
+from utils.debug_setup import setup_terminal_debugging, get_logger
+logger = setup_terminal_debugging(logger_name="FletV2.main")
+
 # Auto-enable UTF-8 for all subprocess operations
 import sys
 import os
@@ -62,9 +66,9 @@ class FletV2App(ft.Row):
         # Initialize server bridge with fallback
         try:
             self.server_bridge = ServerBridge()
-            print(f"[SUCCESS] Server bridge initialized: {BRIDGE_TYPE}")
+            logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
         except Exception as e:
-            print(f"[WARNING] Server bridge failed, using mock: {e}")
+            logger.warning(f"Server bridge failed, using mock: {e}")
             self.server_bridge = None
         
         # Create content area
@@ -156,7 +160,7 @@ class FletV2App(ft.Row):
         view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
         selected_view = view_names[e.control.selected_index] if e.control.selected_index < len(view_names) else "dashboard"
         
-        print(f"[NAVIGATION] Switching to: {selected_view}")
+        logger.info(f"Navigation switching to: {selected_view}")
         self._load_view(selected_view)
     
     def _load_view(self, view_name: str):
@@ -164,13 +168,17 @@ class FletV2App(ft.Row):
         try:
             # Simple view switching with direct function calls
             if view_name == "dashboard":
-                content = self._create_dashboard_view()
+                # Import and create dashboard view
+                from views.dashboard import create_dashboard_view
+                content = create_dashboard_view(self.server_bridge, self.page)
             elif view_name == "clients":
                 # Import and create clients view
                 from views.clients import create_clients_view
                 content = create_clients_view(self.server_bridge, self.page)
             elif view_name == "files":
-                content = self._create_files_view()
+                # Import and create files view
+                from views.files import create_files_view
+                content = create_files_view(self.server_bridge, self.page)
             elif view_name == "database":
                 # Import and create database view
                 from views.database import create_database_view
@@ -180,22 +188,34 @@ class FletV2App(ft.Row):
                 from views.analytics import create_analytics_view
                 content = create_analytics_view(self.server_bridge, self.page)
             elif view_name == "logs":
-                content = self._create_logs_view()
+                # Import and create logs view
+                from views.logs import create_logs_view
+                content = create_logs_view(self.server_bridge, self.page)
             elif view_name == "settings":
                 # Import and create settings view
                 from views.settings import create_settings_view
                 content = create_settings_view(self.server_bridge, self.page)
             else:
-                content = self._create_dashboard_view()
+                # Import and create dashboard view as fallback
+                from views.dashboard import create_dashboard_view
+                content = create_dashboard_view(self.server_bridge, self.page)
             
             # Update content area (simple assignment, no complex managers)
             self.content_area.content = content
             # Only update if the control is attached to the page
             if self.page and hasattr(self.content_area, 'page') and self.content_area.page:
                 self.content_area.update()
+                
+                # CRITICAL: Trigger initial load for views that need it (after mounting)
+                if hasattr(content, 'trigger_initial_load'):
+                    try:
+                        content.trigger_initial_load()
+                        logger.info(f"Triggered initial load for {view_name} view")
+                    except Exception as init_ex:
+                        logger.warning(f"Initial load trigger failed for {view_name}: {init_ex}")
             
         except Exception as e:
-            print(f"[ERROR] Failed to load view {view_name}: {e}")
+            logger.error(f"Failed to load view {view_name}: {e}", exc_info=True)
             # Fallback to simple error view
             self.content_area.content = self._create_error_view(str(e))
             # Only update if the control is attached to the page
@@ -266,23 +286,6 @@ class FletV2App(ft.Row):
             ])
         ], expand=True, scroll=ft.ScrollMode.AUTO)
     
-    def _create_files_view(self) -> ft.Control:
-        """Simple files view."""
-        return ft.Container(
-            content=ft.Column([
-                ft.Text("File Management", size=24, weight=ft.FontWeight.BOLD),
-                ft.Text("Transferred files and file operations.", size=16),
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Text("File browser functionality will be integrated here."),
-                        padding=20
-                    ),
-                    expand=True
-                )
-            ], spacing=20),
-            padding=20,
-            expand=True
-        )
     
     def _create_database_view(self) -> ft.Control:
         """Simple database view."""
@@ -320,23 +323,6 @@ class FletV2App(ft.Row):
             expand=True
         )
     
-    def _create_logs_view(self) -> ft.Control:
-        """Simple logs view."""
-        return ft.Container(
-            content=ft.Column([
-                ft.Text("System Logs", size=24, weight=ft.FontWeight.BOLD),
-                ft.Text("Real-time system and transfer logs.", size=16),
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Text("Log monitoring will be integrated here."),
-                        padding=20
-                    ),
-                    expand=True
-                )
-            ], spacing=20),
-            padding=20,
-            expand=True
-        )
     
     def _create_settings_view(self) -> ft.Control:
         """Simple settings view."""
@@ -389,10 +375,10 @@ def main(page: ft.Page):
         app = FletV2App(page)
         page.add(app)
         
-        print(f"[SUCCESS] FletV2 App started - {BRIDGE_TYPE} active")
+        logger.info(f"FletV2 App started - {BRIDGE_TYPE} active")
         
     except Exception as e:
-        print(f"[ERROR] Failed to start application: {e}")
+        logger.critical(f"Failed to start application: {e}", exc_info=True)
         # Simple error fallback
         page.add(ft.Text(f"Failed to start: {e}", color=ft.Colors.ERROR))
 

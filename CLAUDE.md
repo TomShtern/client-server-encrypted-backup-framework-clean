@@ -172,9 +172,11 @@ By eliminating framework fighting, we achieved massive code reduction while enha
 - **Replace custom formatting** → **Use Python built-ins**
 
 ##### **File Size Standards (ENFORCE STRICTLY)**
-- **View files**: 150-400 lines maximum (FletV2 examples: analytics ~150, clients ~250, database ~260, settings ~375)
-- **If >400 lines**: Decompose into focused functions
+- **View files**: 150-300 lines maximum (FletV2 examples: analytics ~187, clients ~409, database ~260, settings ~375)
+- **If >300 lines**: Decompose into focused functions  
+- **If >500 lines**: MANDATORY refactoring required
 - **God components are forbidden**: Single responsibility only
+- **FletV2 SUCCESS**: analytics.py reduced from 554→187 lines (66% reduction) while enhancing functionality
 
 ##### **API Validation Protocol (CRITICAL)**
 Before using ANY Flet API, verify it exists:
@@ -659,6 +661,454 @@ from theme import load_flet_theme
 page.theme = load_flet_theme()  # NEVER create custom theme managers
 ```
 
+## **CRITICAL: Terminal Debugging Setup (PRODUCTION READY)**
+
+### **Complete Debugging Solution**
+Implemented in FletV2/utils/debug_setup.py - Use this exact pattern for all Flet applications:
+
+```python
+# STEP 1: Import at top of main.py (before any other imports)
+from utils.debug_setup import setup_terminal_debugging, get_logger
+logger = setup_terminal_debugging(logger_name="YourApp.main")
+
+# STEP 2: Use logger throughout your application
+def create_my_view(server_bridge, page: ft.Page) -> ft.Control:
+    logger.info("Creating my view")
+    
+    def on_button_click(e):
+        logger.debug("Button clicked")
+        try:
+            # Your code here
+            result = some_operation()
+            logger.info(f"Operation successful: {result}")
+        except Exception as ex:
+            logger.error(f"Operation failed: {ex}", exc_info=True)
+            
+# STEP 3: All uncaught exceptions automatically logged to terminal
+# No additional setup needed - sys.excepthook handles everything
+```
+
+### **Why This is Superior to Basic print() or page.debug()**
+- **Catches ALL exceptions**: Even those in Flet's internal event loop
+- **Structured output**: Timestamps, log levels, module names
+- **Centralized logging**: All debug info goes to terminal
+- **Production ready**: Easy to change log levels
+- **Thread safe**: Works with async operations
+
+### **Debugging Best Practices**
+```python
+# ✅ CORRECT: Use appropriate log levels
+logger.debug("Detailed debugging info")     # Development only
+logger.info("General information")          # Normal operation
+logger.warning("Something unexpected")      # Recoverable issues
+logger.error("Operation failed", exc_info=True)  # Errors with full traceback
+logger.critical("System failure")          # Fatal errors
+
+# ❌ AVOID: Using print() statements
+print("Debug info")  # Gets lost in GUI applications
+
+# ❌ AVOID: Silent exception handling
+try:
+    risky_operation()
+except:
+    pass  # Silent failures are debugging nightmares
+
+# ✅ CORRECT: Always log exceptions
+try:
+    risky_operation()
+except Exception as e:
+    logger.error(f"Risky operation failed: {e}", exc_info=True)
+    # Handle the error appropriately
+```
+
+## **COMPREHENSIVE: "Don't Do X, Do Y Instead" Guide**
+
+### **🎯 UI Updates & State Management**
+```python
+# ❌ DON'T: Manual re-rendering or complex state propagation
+class ComplexView:
+    def update_everything(self):
+        self._rebuild_ui()
+        self._propagate_state_changes()
+        self._manually_refresh_components()
+
+# ✅ DO: Direct property updates with control.update()
+def update_status(status_text_control, new_status):
+    status_text_control.value = new_status
+    status_text_control.update()  # Only updates this control
+
+# ❌ DON'T: Recreate entire control trees
+def refresh_data(container):
+    container.controls.clear()
+    container.controls = [create_entire_ui_again()]
+    container.update()
+
+# ✅ DO: Update specific properties and use ft.Ref for dynamic access
+status_ref = ft.Ref[ft.Text]()
+content = ft.Column([
+    ft.Text("Status:", ref=status_ref),
+    # other controls
+])
+
+def update_just_status(new_status):
+    status_ref.current.value = new_status
+    status_ref.current.update()  # Precise update
+```
+
+### **🎯 Layout & Responsiveness**
+```python
+# ❌ DON'T: Pixel-perfect positioning or manual calculations
+def create_layout():
+    return ft.Container(
+        content=ft.Text("Hello"),
+        left=calculate_x_position(),
+        top=calculate_y_position(),
+        width=compute_exact_width(),
+        height=compute_exact_height()
+    )
+
+# ✅ DO: Leverage Flet's flexible layout system
+def create_responsive_layout():
+    return ft.ResponsiveRow([
+        ft.Column([
+            ft.Text("Hello", expand=True)
+        ], col={"sm": 12, "md": 6, "lg": 4}, expand=True)
+    ])
+
+# ❌ DON'T: Fixed container sizes
+ft.Container(width=400, height=300, content=my_content)
+
+# ✅ DO: Flexible, responsive containers
+ft.Container(content=my_content, expand=True, padding=ft.Padding(20, 20, 20, 20))
+```
+
+### **🎯 Event Handling & Performance**
+```python
+# ❌ DON'T: Custom event loops or polling
+class CustomEventManager:
+    def start_polling(self):
+        while self.running:
+            time.sleep(0.1)
+            self.check_for_events()
+
+# ✅ DO: Use Flet's built-in event handlers
+button = ft.ElevatedButton(
+    "Click Me",
+    on_click=lambda e: handle_click_event(e)
+)
+
+# ❌ DON'T: Trigger expensive operations on every input change
+text_field = ft.TextField(
+    on_change=lambda e: expensive_database_query(e.control.value)
+)
+
+# ✅ DO: Implement debouncing for expensive operations
+from asyncio import create_task, sleep
+
+async def debounced_search(query, delay=500):
+    await sleep(delay / 1000)  # Convert to seconds
+    return await perform_search(query)
+
+last_search_task = None
+def on_search_change(e):
+    global last_search_task
+    if last_search_task:
+        last_search_task.cancel()
+    last_search_task = create_task(debounced_search(e.control.value))
+```
+
+### **🎯 File Operations & Storage**
+```python
+# ❌ DON'T: Custom file dialogs or platform-specific code
+import tkinter as tk
+from tkinter import filedialog
+
+def custom_file_picker():
+    root = tk.Tk()
+    root.withdraw()
+    return filedialog.askopenfilename()
+
+# ✅ DO: Use Flet's FilePicker for cross-platform compatibility
+file_picker = ft.FilePicker(
+    on_result=lambda e: handle_file_selection(e.files)
+)
+page.overlay.append(file_picker)
+
+ft.ElevatedButton(
+    "Pick Files",
+    on_click=lambda _: file_picker.pick_files()
+)
+
+# ❌ DON'T: Manual local storage with file operations
+import json
+def save_settings(settings):
+    with open("settings.json", "w") as f:
+        json.dump(settings, f)
+
+# ✅ DO: Use Flet's client storage
+page.client_storage.set("user.settings", settings_dict)
+settings = page.client_storage.get("user.settings")
+```
+
+### **🎯 Advanced UI Patterns**
+```python
+# ❌ DON'T: Manual navigation with conditional rendering
+class ComplexNavigator:
+    def show_view(self, view_name):
+        if view_name == "home":
+            self.container.content = self.create_home_view()
+        elif view_name == "settings":
+            self.container.content = self.create_settings_view()
+        # ... complex logic
+
+# ✅ DO: Use Flet's built-in routing
+def route_change(route):
+    page.views.clear()
+    page.views.append(
+        ft.View(
+            "/",
+            [ft.AppBar(title=ft.Text("My App"))]
+        )
+    )
+    
+    if page.route == "/settings":
+        page.views.append(
+            ft.View(
+                "/settings",
+                [ft.AppBar(title=ft.Text("Settings")), create_settings_view()]
+            )
+        )
+    page.update()
+
+page.on_route_change = route_change
+page.go("/")  # Navigate programmatically
+
+# ❌ DON'T: Manual animation loops
+def animate_fade_in(control):
+    for opacity in range(0, 101, 5):
+        control.opacity = opacity / 100
+        control.update()
+        time.sleep(0.05)
+
+# ✅ DO: Use Flet's built-in animations
+container = ft.Container(
+    content=ft.Text("Animated!"),
+    animate_opacity=300,  # 300ms animation
+    opacity=0
+)
+
+def show_content(e):
+    container.opacity = 1
+    container.update()  # Automatically animates
+```
+
+### **🎯 Cross-Platform Consistency**
+```python
+# ❌ DON'T: Platform-specific UI code
+import platform
+def create_ui():
+    if platform.system() == "Windows":
+        return create_windows_ui()
+    elif platform.system() == "Darwin":
+        return create_macos_ui()
+    else:
+        return create_linux_ui()
+
+# ✅ DO: Embrace Flet's consistent cross-platform rendering
+def create_universal_ui():
+    return ft.Column([
+        ft.AppBar(title=ft.Text("My App")),  # Looks consistent everywhere
+        ft.NavigationRail(destinations=[...]),  # Same behavior across platforms
+        ft.ResponsiveRow([...])  # Responsive on all platforms
+    ])
+
+# Flet handles platform differences automatically!
+```
+
+### **🎯 Error Handling & User Feedback**
+```python
+# ❌ DON'T: Scattered error messages or basic print statements
+def risky_operation():
+    try:
+        result = complex_operation()
+        print(f"Success: {result}")
+    except Exception as e:
+        print(f"Error: {e}")
+        show_generic_alert("Something went wrong")
+
+# ✅ DO: Centralized, consistent user feedback
+def show_user_message(message, is_error=False):
+    page.snack_bar = ft.SnackBar(
+        content=ft.Text(message),
+        bgcolor=ft.Colors.ERROR if is_error else ft.Colors.GREEN
+    )
+    page.snack_bar.open = True
+    page.update()
+
+def safe_operation():
+    try:
+        result = complex_operation()
+        logger.info(f"Operation completed: {result}")
+        show_user_message("Operation completed successfully!")
+    except Exception as e:
+        logger.error(f"Operation failed: {e}", exc_info=True)
+        show_user_message(f"Operation failed: {str(e)}", is_error=True)
+```
+
+### **🎯 Form Validation & User Input**
+```python
+# ❌ DON'T: Separate Text controls for validation errors
+username_field = ft.TextField(label="Username")
+username_error = ft.Text("", color=ft.Colors.ERROR)
+
+def validate_username(e):
+    if len(e.control.value) < 3:
+        username_error.value = "Username too short"
+    else:
+        username_error.value = ""
+    username_error.update()
+
+# ✅ DO: Use built-in error_text property
+username_field = ft.TextField(
+    label="Username",
+    on_change=validate_username
+)
+
+def validate_username(e):
+    if len(e.control.value) < 3:
+        e.control.error_text = "Username must be at least 3 characters"
+    else:
+        e.control.error_text = None
+    e.control.update()
+```
+
+### **🎯 Development Workflow & Hot Reload**
+```python
+# ❌ DON'T: Constantly restart your app for small changes
+# (No code example - this is about workflow)
+
+# ✅ DO: Use Flet's development mode for instant feedback
+if __name__ == "__main__":
+    # For development: hot reload in browser
+    ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8080)
+    
+    # For production: native desktop app
+    # ft.app(target=main, view=ft.AppView.FLET_APP)
+```
+
+### **🎯 Python Integration & Background Tasks**
+```python
+# ❌ DON'T: Force blocking Python operations into UI thread
+def on_process_data(e):
+    result = expensive_computation()  # Blocks UI for seconds
+    update_ui_with_result(result)
+
+# ✅ DO: Use async patterns for background work
+async def on_process_data_async(e):
+    # Update UI to show progress
+    progress_indicator.visible = True
+    progress_indicator.update()
+    
+    # Run expensive work in background
+    result = await asyncio.to_thread(expensive_computation)
+    
+    # Update UI with results
+    update_ui_with_result(result)
+    progress_indicator.visible = False
+    progress_indicator.update()
+
+# Use page.run_task for fire-and-forget background tasks
+page.run_task(background_monitoring_loop)
+```
+
+### **🎯 Accessibility & Inclusive Design**
+```python
+# ❌ DON'T: Ignore accessibility features
+button = ft.ElevatedButton("⚙️")
+image = ft.Image(src="chart.png")
+
+# ✅ DO: Use built-in accessibility properties
+button = ft.ElevatedButton(
+    "⚙️",
+    tooltip="Open Settings",  # Screen reader friendly
+)
+
+image = ft.Image(
+    src="chart.png",
+    semantics_label="CPU usage chart showing 45% utilization"  # Describes image content
+)
+
+# ✅ DO: Provide keyboard navigation support
+input_field = ft.TextField(
+    label="Search",
+    autofocus=True,  # Focus management
+    tab_index=1  # Keyboard navigation order
+)
+```
+
+## **🚀 Advanced Performance Optimization**
+
+### **Control Lifecycle Management**
+```python
+# ❌ DON'T: Ignore control lifecycle when dynamically adding/removing
+def add_items_badly(container, items):
+    for item in items:
+        container.controls.append(create_item_control(item))
+    container.update()  # May cause performance issues with many items
+
+# ✅ DO: Use optimized controls for dynamic content
+def add_items_efficiently(items):
+    return ft.ListView(
+        controls=[create_item_control(item) for item in items],
+        expand=True,
+        spacing=10
+    )  # ListView is optimized for large datasets
+```
+
+### **Memory Management Best Practices**
+```python
+# ✅ CORRECT: Proper cleanup of large data structures
+class DataView:
+    def __init__(self):
+        self.large_dataset = None
+        
+    def load_data(self, data):
+        # Clear previous data to free memory
+        if self.large_dataset:
+            self.large_dataset.clear()
+        self.large_dataset = data
+        
+    def cleanup(self):
+        if self.large_dataset:
+            self.large_dataset.clear()
+            self.large_dataset = None
+```
+
+### **Async Best Practices for UI Responsiveness**
+```python
+# ✅ CORRECT: Progressive loading with user feedback
+async def load_large_dataset(page, progress_bar, data_table):
+    total_items = 1000
+    batch_size = 50
+    
+    for i in range(0, total_items, batch_size):
+        # Load data in batches
+        batch_data = await load_data_batch(i, batch_size)
+        
+        # Update UI progressively
+        for item in batch_data:
+            data_table.rows.append(create_table_row(item))
+        
+        # Update progress
+        progress = (i + batch_size) / total_items
+        progress_bar.value = progress
+        
+        # Update UI and yield control
+        data_table.update()
+        progress_bar.update()
+        await asyncio.sleep(0.01)  # Allow UI to remain responsive
+```
+
 ## **CRITICAL: Framework Fighting Detection & Prevention**
 
 ### **Red Flag Patterns That Must Be Eliminated**
@@ -764,13 +1214,21 @@ def process_data(self):               # ❌ Blocks everything
 #### **Validation Checklist for New Code**
 - [ ] **Hiroshima compliance**: Checked against elimination plan
 - [ ] **Framework harmony**: Uses Flet built-ins, not custom replacements
-- [ ] **File <300 lines**: Single responsibility, focused purpose
+- [ ] **File <300 lines**: Single responsibility, focused purpose  
 - [ ] **No duplication**: Doesn't replicate existing functionality
 - [ ] **No hardcoded dimensions**: Uses expand=True, responsive patterns
 - [ ] **Minimal page.update()**: <10% of UI updates use full page refresh
 - [ ] **Async operations**: Anything >10ms uses async patterns
 - [ ] **Theme system**: Uses theme.py, no hardcoded colors/styles
 - [ ] **Error handling**: Proper user feedback for failures
+- [ ] **Terminal debugging**: Uses logger instead of print() statements
+- [ ] **Cross-platform**: No OS-specific code, relies on Flet's consistency
+- [ ] **Accessibility**: Includes tooltip, semantics_label, tab_index where appropriate
+- [ ] **Performance**: Uses ListView/optimized controls for large datasets
+- [ ] **User feedback**: Uses SnackBar/AlertDialog for consistent messaging
+- [ ] **Input validation**: Uses error_text property for form validation
+- [ ] **Resource management**: Uses FilePicker and client_storage APIs
+- [ ] **Navigation**: Uses Flet's routing instead of manual view switching
 
 ### **🎯 The Ultimate Code Quality Test**
 ```python

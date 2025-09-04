@@ -2,31 +2,29 @@
 """
 Simple Database View - Hiroshima Protocol Compliant
 A clean, minimal implementation using pure Flet patterns.
-
 This demonstrates the Hiroshima ideal:
 - Uses Flet's built-in DataTable for database content
 - No custom state management or complex event handling
 - Simple function returning ft.Control (composition over inheritance)
 - Works WITH the framework, not against it
 """
-
 import flet as ft
 import asyncio
+# Import debugging setup
+from utils.debug_setup import get_logger
+logger = get_logger(__name__)
+# Import debugging setup
+# Import debugging setup
 from datetime import datetime
-
-
 def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
     """
     Create database view using simple Flet patterns (no class inheritance needed).
-    
     Args:
         server_bridge: Server bridge for data access
         page: Flet page instance
-        
     Returns:
         ft.Control: The database view
     """
-    
     # Get database info from server
     if server_bridge:
         db_info = server_bridge.get_database_info()
@@ -38,7 +36,6 @@ def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
             "records": 1250,
             "size": "45.2 MB"
         }
-    
     # Mock table data for demonstration
     tables_data = {
         "clients": {
@@ -66,48 +63,39 @@ def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
             ]
         }
     }
-    
     # State for selected table (simple variable, no complex state management)
     selected_table_name = "clients"
     current_table_data = tables_data[selected_table_name]
-    
     # Create table selector change handler
     def on_table_select(e):
         nonlocal selected_table_name, current_table_data
         selected_table_name = e.control.value
         current_table_data = tables_data.get(selected_table_name, {"columns": [], "rows": []})
-        print(f"[INFO] Selected table: {selected_table_name}")
-        
+        logger.info(f"Selected table: {selected_table_name}")
         # Update table content - in a real app, you'd refresh the DataTable
-        if page.snack_bar:
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Switched to table: {selected_table_name}"),
-                bgcolor=ft.Colors.GREEN
-            )
-            page.snack_bar.open = True
-            page.update()
-    
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(f"Switched to table: {selected_table_name}"),
+            bgcolor=ft.Colors.GREEN
+        )
+        page.snack_bar.open = True
+        page.update()
     # Create database action handlers
     def on_refresh_table(e):
-        print(f"[INFO] Refreshing table: {selected_table_name}")
-        if page.snack_bar:
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Table {selected_table_name} refreshed"),
-                bgcolor=ft.Colors.GREEN
-            )
-            page.snack_bar.open = True
-            page.update()
-    
+        logger.info(f"Refreshing table: {selected_table_name}")
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(f"Table {selected_table_name} refreshed"),
+            bgcolor=ft.Colors.GREEN
+        )
+        page.snack_bar.open = True
+        page.update()
     def on_export_table(e):
-        print(f"[INFO] Exporting table: {selected_table_name}")
-        if page.snack_bar:
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Table {selected_table_name} exported to CSV"),
-                bgcolor=ft.Colors.GREEN
-            )
-            page.snack_bar.open = True
-            page.update()
-    
+        logger.info(f"Exporting table: {selected_table_name}")
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(f"Table {selected_table_name} exported to CSV"),
+            bgcolor=ft.Colors.GREEN
+        )
+        page.snack_bar.open = True
+        page.update()
     # Create DataTable using Flet's built-in component
     def create_data_table(table_data):
         if not table_data["rows"]:
@@ -116,7 +104,6 @@ def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
                 alignment=ft.alignment.center,
                 height=200
             )
-        
         return ft.DataTable(
             columns=[
                 ft.DataColumn(ft.Text(col.upper(), weight=ft.FontWeight.BOLD))
@@ -136,7 +123,6 @@ def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
             border_radius=8,
             data_row_min_height=45
         )
-    
     # Database statistics cards
     stats_cards = ft.ResponsiveRow([
         ft.Column([
@@ -188,7 +174,6 @@ def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
             )
         ], col={"sm": 6, "md": 3})
     ])
-    
     # Main layout using simple Column
     return ft.Column([
         # Header
@@ -203,12 +188,10 @@ def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
             )
         ]),
         ft.Divider(),
-        
         # Database statistics
         ft.Text("Database Statistics", size=18, weight=ft.FontWeight.BOLD),
         stats_cards,
         ft.Divider(),
-        
         # Table controls
         ft.Row([
             ft.Text("Select Table:", size=16, weight=ft.FontWeight.W_500),
@@ -232,10 +215,9 @@ def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
             ft.OutlinedButton(
                 "Backup",
                 icon=ft.Icons.BACKUP,
-                on_click=lambda e: print("[INFO] Database backup initiated")
+                on_click=lambda e: logger.info("Database backup initiated")
             )
         ], spacing=20),
-        
         # Table info
         ft.Row([
             ft.Text(f"Table: {selected_table_name}", size=14, color=ft.Colors.PRIMARY),
@@ -244,7 +226,6 @@ def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
             ft.Container(expand=True),
             ft.Text("Last updated: " + datetime.now().strftime("%H:%M:%S"), size=12, color=ft.Colors.ON_SURFACE)
         ]),
-        
         # Table content in scrollable container
         ft.Container(
             content=ft.Column([
@@ -255,5 +236,4 @@ def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
             border_radius=8,
             padding=10
         )
-        
     ], spacing=20, expand=True, scroll=ft.ScrollMode.AUTO)
