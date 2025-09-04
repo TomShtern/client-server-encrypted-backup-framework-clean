@@ -7,7 +7,8 @@ A clean implementation using pure Flet patterns.
 import flet as ft
 from typing import List, Dict, Any
 import os
-from datetime import datetime
+import asyncio
+from datetime import datetime, timedelta
 from pathlib import Path
 from utils.debug_setup import get_logger
 
@@ -114,6 +115,18 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
             page.update()
         return handler
     
+    async def delete_file_async(file_data):
+        """Async function to delete a file."""
+        try:
+            # Simulate async operation
+            await asyncio.sleep(0.5)
+            file_name = file_data.get('name', 'Unknown file')
+            logger.info(f"Deleted file: {file_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete file: {e}")
+            return False
+
     def on_delete_click(file_data):
         def handler(e):
             file_name = file_data.get('name', 'Unknown file')
@@ -133,13 +146,33 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                 page.update()
             
             def confirm_delete():
-                logger.info(f"Confirmed delete: {file_name}")
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Deleted {file_name}"),
-                    bgcolor=ft.Colors.RED
-                )
-                page.snack_bar.open = True
-                close_dialog()
+                async def async_delete():
+                    try:
+                        success = await delete_file_async(file_data)
+                        if success:
+                            logger.info(f"Confirmed delete: {file_name}")
+                            page.snack_bar = ft.SnackBar(
+                                content=ft.Text(f"Deleted {file_name}"),
+                                bgcolor=ft.Colors.RED
+                            )
+                        else:
+                            page.snack_bar = ft.SnackBar(
+                                content=ft.Text(f"Failed to delete {file_name}"),
+                                bgcolor=ft.Colors.RED
+                            )
+                        page.snack_bar.open = True
+                        close_dialog()
+                    except Exception as e:
+                        logger.error(f"Error in delete handler: {e}")
+                        page.snack_bar = ft.SnackBar(
+                            content=ft.Text(f"Error deleting {file_name}"),
+                            bgcolor=ft.Colors.RED
+                        )
+                        page.snack_bar.open = True
+                        close_dialog()
+                
+                # Run async operation
+                page.run_task(async_delete)
             
             page.dialog = dialog
             dialog.open = True

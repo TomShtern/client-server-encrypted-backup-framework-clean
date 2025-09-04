@@ -1,31 +1,31 @@
 #!/usr/bin/env python3
 """
-Simple Logs View - Hiroshima Protocol Compliant
-A clean, minimal implementation using pure Flet patterns.
-This demonstrates the Hiroshima ideal:
-- Uses Flet's built-in ListView exclusively 
-- No custom state management or complex event handling
-- Simple function returning ft.Control (composition over inheritance)
-- Works WITH the framework, not against it
+Logs View for FletV2
+A clean implementation using pure Flet patterns.
 """
+
 import flet as ft
+from typing import List, Dict, Any
 import asyncio
-# Import debugging setup
 from utils.debug_setup import get_logger
-logger = get_logger(__name__)
-# Import debugging setup
-# Import debugging setup
 from datetime import datetime, timedelta
 import random
+
+logger = get_logger(__name__)
+
+
 def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
     """
-    Create logs view using simple Flet patterns (no class inheritance needed).
+    Create logs view using simple Flet patterns.
+    
     Args:
         server_bridge: Server bridge for data access
         page: Flet page instance
+        
     Returns:
         ft.Control: The logs view
     """
+    
     # Get logs data from server or generate mock data
     def get_logs_data():
         """Get real logs from server bridge or generate mock data."""
@@ -34,8 +34,9 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
             try:
                 # Try to get logs from server bridge
                 logs_data = server_bridge.get_logs()
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to get logs from server bridge: {e}")
+        
         # Fallback: generate realistic mock log data
         if not logs_data:
             base_time = datetime.now()
@@ -87,10 +88,13 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
             # Sort by timestamp (most recent first)
             logs_data.sort(key=lambda x: x["timestamp"], reverse=True)
         return logs_data
+    
     # Get initial logs data
     logs_data = get_logs_data()
+    
     # Filter state (simple variables, no complex state management)
     current_filter = "ALL"
+    
     # Helper function to get color for log level
     def get_level_color(level):
         """Get color for log level using Flet's built-in colors."""
@@ -102,12 +106,14 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
             "DEBUG": ft.Colors.GREY
         }
         return color_map.get(level, ft.Colors.ON_SURFACE)
+    
     # Filter logs based on current filter
     def get_filtered_logs():
         """Filter logs based on current selection."""
         if current_filter == "ALL":
             return logs_data
         return [log for log in logs_data if log["level"] == current_filter]
+    
     # Create action handlers (simple functions)
     def on_filter_change(level):
         def handler(e):
@@ -117,6 +123,7 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
             # Refresh the logs list
             refresh_logs()
         return handler
+    
     def on_clear_logs(e):
         logger.info("Clear logs requested")
         # Simple confirmation dialog using Flet's built-in AlertDialog
@@ -142,6 +149,7 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
         page.dialog = dialog
         dialog.open = True
         page.update()
+    
     def on_refresh_logs(e):
         logger.info("Refresh logs")
         refresh_logs()
@@ -151,17 +159,52 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
         )
         page.snack_bar.open = True
         page.update()
+    
+    async def export_logs_async():
+        """Async function to export logs."""
+        try:
+            # Simulate async operation
+            await asyncio.sleep(1.0)
+            logger.info("Exported logs")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to export logs: {e}")
+            return False
+
     def on_export_logs(e):
         logger.info("Export logs requested")
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text("Logs exported to logs_export.txt"),
-            bgcolor=ft.Colors.BLUE
-        )
-        page.snack_bar.open = True
-        page.update()
+        
+        async def async_export():
+            try:
+                success = await export_logs_async()
+                if success:
+                    page.snack_bar = ft.SnackBar(
+                        content=ft.Text("Logs exported to logs_export.txt"),
+                        bgcolor=ft.Colors.BLUE
+                    )
+                else:
+                    page.snack_bar = ft.SnackBar(
+                        content=ft.Text("Failed to export logs"),
+                        bgcolor=ft.Colors.RED
+                    )
+                page.snack_bar.open = True
+                page.update()
+            except Exception as e:
+                logger.error(f"Error in export handler: {e}")
+                page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Error exporting logs"),
+                    bgcolor=ft.Colors.RED
+                )
+                page.snack_bar.open = True
+                page.update()
+        
+        # Run async operation
+        page.run_task(async_export)
+    
     # Create the logs list container (we'll update this reference)
     logs_container = ft.Ref[ft.Column]()
     status_text = ft.Ref[ft.Text]()
+    
     def refresh_logs():
         """Refresh the logs display with current filter."""
         filtered_logs = get_filtered_logs()
@@ -220,6 +263,7 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
             filtered_count = len(filtered_logs)
             status_text.current.value = f"Showing {min(100, filtered_count)} of {filtered_count} logs (Total: {total_logs})"
             status_text.current.update()
+    
     # Create safe event handlers FIRST
     def safe_refresh_logs():
         """Safe version of refresh_logs that handles initialization."""
@@ -276,6 +320,7 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
         ft.OutlinedButton("ERROR", on_click=on_filter_change_safe("ERROR")),
         ft.OutlinedButton("DEBUG", on_click=on_filter_change_safe("DEBUG"))
     ], spacing=10)
+    
     # Create the logs container with initial content
     logs_column = ft.Column(
         ref=logs_container,
@@ -284,6 +329,7 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
         expand=True,
         spacing=0
     )
+    
     # Create the main view structure FIRST (controls must be added to page before refs work)
     main_view = ft.Column([
         # Header with title and action buttons

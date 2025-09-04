@@ -1,84 +1,99 @@
 #!/usr/bin/env python3
 """
-Simple Database View - Hiroshima Protocol Compliant
-A clean, minimal implementation using pure Flet patterns.
-This demonstrates the Hiroshima ideal:
-- Uses Flet's built-in DataTable for database content
-- No custom state management or complex event handling
-- Simple function returning ft.Control (composition over inheritance)
-- Works WITH the framework, not against it
+Database View for FletV2
+A clean implementation using pure Flet patterns.
 """
+
 import flet as ft
+from typing import List, Dict, Any
 import asyncio
-# Import debugging setup
 from utils.debug_setup import get_logger
-logger = get_logger(__name__)
-# Import debugging setup
-# Import debugging setup
 from datetime import datetime
+
+logger = get_logger(__name__)
+
+
 def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
     """
-    Create database view using simple Flet patterns (no class inheritance needed).
+    Create database view using simple Flet patterns.
+    
     Args:
         server_bridge: Server bridge for data access
         page: Flet page instance
+        
     Returns:
         ft.Control: The database view
     """
+    
     # Get database info from server
-    if server_bridge:
-        db_info = server_bridge.get_database_info()
-    else:
+    def get_database_info():
+        """Get database information from server bridge or return mock data."""
+        if server_bridge:
+            try:
+                return server_bridge.get_database_info()
+            except Exception as e:
+                logger.warning(f"Failed to get database info: {e}")
+        
         # Fallback mock data
-        db_info = {
+        return {
             "status": "Connected",
             "tables": 5,
             "records": 1250,
             "size": "45.2 MB"
         }
+    
     # Mock table data for demonstration
-    tables_data = {
-        "clients": {
-            "columns": ["id", "client_id", "address", "status", "created_at"],
-            "rows": [
-                {"id": 1, "client_id": "client_001", "address": "192.168.1.101", "status": "active", "created_at": "2025-09-01 10:00:00"},
-                {"id": 2, "client_id": "client_002", "address": "192.168.1.102", "status": "inactive", "created_at": "2025-09-02 11:30:00"},
-                {"id": 3, "client_id": "client_003", "address": "192.168.1.103", "status": "active", "created_at": "2025-09-03 09:15:00"}
-            ]
-        },
-        "files": {
-            "columns": ["id", "filename", "size", "client_id", "uploaded_at"],
-            "rows": [
-                {"id": 1, "filename": "document.pdf", "size": "2.5MB", "client_id": "client_001", "uploaded_at": "2025-09-03 10:30:00"},
-                {"id": 2, "filename": "image.jpg", "size": "1.8MB", "client_id": "client_002", "uploaded_at": "2025-09-03 11:45:00"},
-                {"id": 3, "filename": "backup.zip", "size": "15.2MB", "client_id": "client_001", "uploaded_at": "2025-09-03 14:20:00"}
-            ]
-        },
-        "logs": {
-            "columns": ["id", "level", "message", "timestamp"],
-            "rows": [
-                {"id": 1, "level": "INFO", "message": "Server started", "timestamp": "2025-09-03 08:00:00"},
-                {"id": 2, "level": "WARNING", "message": "High memory usage", "timestamp": "2025-09-03 12:30:00"},
-                {"id": 3, "level": "ERROR", "message": "Connection failed", "timestamp": "2025-09-03 15:45:00"}
-            ]
+    def get_table_data(table_name: str):
+        """Get table data or return mock data."""
+        tables_data = {
+            "clients": {
+                "columns": ["id", "client_id", "address", "status", "created_at"],
+                "rows": [
+                    {"id": 1, "client_id": "client_001", "address": "192.168.1.101", "status": "active", "created_at": "2025-09-01 10:00:00"},
+                    {"id": 2, "client_id": "client_002", "address": "192.168.1.102", "status": "inactive", "created_at": "2025-09-02 11:30:00"},
+                    {"id": 3, "client_id": "client_003", "address": "192.168.1.103", "status": "active", "created_at": "2025-09-03 09:15:00"}
+                ]
+            },
+            "files": {
+                "columns": ["id", "filename", "size", "client_id", "uploaded_at"],
+                "rows": [
+                    {"id": 1, "filename": "document.pdf", "size": "2.5MB", "client_id": "client_001", "uploaded_at": "2025-09-03 10:30:00"},
+                    {"id": 2, "filename": "image.jpg", "size": "1.8MB", "client_id": "client_002", "uploaded_at": "2025-09-03 11:45:00"},
+                    {"id": 3, "filename": "backup.zip", "size": "15.2MB", "client_id": "client_001", "uploaded_at": "2025-09-03 14:20:00"}
+                ]
+            },
+            "logs": {
+                "columns": ["id", "level", "message", "timestamp"],
+                "rows": [
+                    {"id": 1, "level": "INFO", "message": "Server started", "timestamp": "2025-09-03 08:00:00"},
+                    {"id": 2, "level": "WARNING", "message": "High memory usage", "timestamp": "2025-09-03 12:30:00"},
+                    {"id": 3, "level": "ERROR", "message": "Connection failed", "timestamp": "2025-09-03 15:45:00"}
+                ]
+            }
         }
-    }
-    # State for selected table (simple variable, no complex state management)
+        
+        return tables_data.get(table_name, {"columns": [], "rows": []})
+    
+    # Get initial data
+    db_info = get_database_info()
     selected_table_name = "clients"
-    current_table_data = tables_data[selected_table_name]
+    current_table_data = get_table_data(selected_table_name)
+    
     # Create table selector change handler
     def on_table_select(e):
         nonlocal selected_table_name, current_table_data
         selected_table_name = e.control.value
-        current_table_data = tables_data.get(selected_table_name, {"columns": [], "rows": []})
+        current_table_data = get_table_data(selected_table_name)
         logger.info(f"Selected table: {selected_table_name}")
-        # Update table content - in a real app, you'd refresh the DataTable
+        # Update table content
+        update_table_content()
         page.snack_bar = ft.SnackBar(
             content=ft.Text(f"Switched to table: {selected_table_name}"),
             bgcolor=ft.Colors.GREEN
         )
         page.snack_bar.open = True
         page.update()
+    
     # Create database action handlers
     def on_refresh_table(e):
         logger.info(f"Refreshing table: {selected_table_name}")
@@ -88,14 +103,48 @@ def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
         )
         page.snack_bar.open = True
         page.update()
+    
+    async def export_table_async(table_name):
+        """Async function to export a table."""
+        try:
+            # Simulate async operation
+            await asyncio.sleep(1.0)
+            logger.info(f"Exported table: {table_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to export table {table_name}: {e}")
+            return False
+
     def on_export_table(e):
         logger.info(f"Exporting table: {selected_table_name}")
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text(f"Table {selected_table_name} exported to CSV"),
-            bgcolor=ft.Colors.GREEN
-        )
-        page.snack_bar.open = True
-        page.update()
+        
+        async def async_export():
+            try:
+                success = await export_table_async(selected_table_name)
+                if success:
+                    page.snack_bar = ft.SnackBar(
+                        content=ft.Text(f"Table {selected_table_name} exported to CSV"),
+                        bgcolor=ft.Colors.GREEN
+                    )
+                else:
+                    page.snack_bar = ft.SnackBar(
+                        content=ft.Text(f"Failed to export table {selected_table_name}"),
+                        bgcolor=ft.Colors.RED
+                    )
+                page.snack_bar.open = True
+                page.update()
+            except Exception as e:
+                logger.error(f"Error in export handler: {e}")
+                page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"Error exporting table {selected_table_name}"),
+                    bgcolor=ft.Colors.RED
+                )
+                page.snack_bar.open = True
+                page.update()
+        
+        # Run async operation
+        page.run_task(async_export)
+    
     # Create DataTable using Flet's built-in component
     def create_data_table(table_data):
         if not table_data["rows"]:
@@ -123,6 +172,21 @@ def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
             border_radius=8,
             data_row_min_height=45
         )
+    
+    # Function to update table content
+    def update_table_content():
+        table_container.content.controls = [create_data_table(current_table_data)]
+        table_container.update()
+    
+    # Create table container
+    table_container = ft.Container(
+        content=ft.Column([create_data_table(current_table_data)], scroll=ft.ScrollMode.AUTO),
+        expand=True,
+        border=ft.border.all(1, ft.Colors.OUTLINE),
+        border_radius=8,
+        padding=10
+    )
+    
     # Database statistics cards
     stats_cards = ft.ResponsiveRow([
         ft.Column([
@@ -174,6 +238,7 @@ def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
             )
         ], col={"sm": 6, "md": 3})
     ])
+    
     # Main layout using simple Column
     return ft.Column([
         # Header
@@ -227,13 +292,5 @@ def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
             ft.Text("Last updated: " + datetime.now().strftime("%H:%M:%S"), size=12, color=ft.Colors.ON_SURFACE)
         ]),
         # Table content in scrollable container
-        ft.Container(
-            content=ft.Column([
-                create_data_table(current_table_data)
-            ], scroll=ft.ScrollMode.AUTO),
-            expand=True,
-            border=ft.border.all(1, ft.Colors.OUTLINE),
-            border_radius=8,
-            padding=10
-        )
+        table_container
     ], spacing=20, expand=True, scroll=ft.ScrollMode.AUTO)

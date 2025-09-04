@@ -1,34 +1,34 @@
 #!/usr/bin/env python3
 """
-Simple Settings View - Hiroshima Protocol Compliant
-A clean, minimal implementation using pure Flet patterns.
-This demonstrates the Hiroshima ideal:
-- Uses Flet's built-in Tabs for categories
-- Uses Flet's TextField, Dropdown, Switch for form controls
-- Simple function returning ft.Control (composition over inheritance)
-- Works WITH the framework, not against it
+Settings View for FletV2
+A clean implementation using pure Flet patterns.
 """
+
 import flet as ft
 import json
-# Import debugging setup
+import asyncio
 from utils.debug_setup import get_logger
-logger = get_logger(__name__)
-# Import debugging setup
-# Import debugging setup
-import os
 from pathlib import Path
 from datetime import datetime
+
+logger = get_logger(__name__)
+
+
 def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
     """
-    Create settings view using simple Flet patterns (no class inheritance needed).
+    Create settings view using simple Flet patterns.
+    
     Args:
         server_bridge: Server bridge for data access
         page: Flet page instance
+        
     Returns:
         ft.Control: The settings view
     """
+    
     # Load settings from file (simple JSON handling)
     settings_file = Path("flet_server_gui_settings.json")
+    
     def load_settings():
         try:
             if settings_file.exists():
@@ -61,41 +61,65 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
                 'gui': {'theme_mode': 'dark'},
                 'monitoring': {'enabled': True}
             }
-    def save_settings(settings_data):
+    
+    # Load current settings
+    current_settings = load_settings()
+    
+    async def save_settings_async(settings_data):
+        """Async function to save settings."""
         try:
+            # Simulate async operation
+            await asyncio.sleep(0.5)
             with open(settings_file, 'w') as f:
                 json.dump(settings_data, f, indent=2)
             return True
         except Exception as e:
             logger.error(f"Failed to save settings: {e}")
             return False
-    # Load current settings
-    current_settings = load_settings()
+
     # Action handlers
     def on_save_settings(e):
-        if save_settings(current_settings):
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Settings saved successfully"),
-                bgcolor=ft.Colors.GREEN
-            )
-            page.snack_bar.open = True
-            page.update()
-        else:
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Failed to save settings"),
-                bgcolor=ft.Colors.RED
-            )
-            page.snack_bar.open = True
-            page.update()
+        async def async_save():
+            try:
+                success = await save_settings_async(current_settings)
+                if success:
+                    page.snack_bar = ft.SnackBar(
+                        content=ft.Text("Settings saved successfully"),
+                        bgcolor=ft.Colors.GREEN
+                    )
+                else:
+                    page.snack_bar = ft.SnackBar(
+                        content=ft.Text("Failed to save settings"),
+                        bgcolor=ft.Colors.RED
+                    )
+                page.snack_bar.open = True
+                page.update()
+            except Exception as e:
+                logger.error(f"Error in save handler: {e}")
+                page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Error saving settings"),
+                    bgcolor=ft.Colors.RED
+                )
+                page.snack_bar.open = True
+                page.update()
+        
+        # Run async operation
+        page.run_task(async_save)
+    
     def on_reset_settings(e):
         # Show confirmation dialog using Flet's built-in AlertDialog
         def confirm_reset(e):
-            nonlocal current_settings
-            current_settings = {
+            # Reset to default settings
+            default_settings = {
                 'server': {'port': 1256, 'host': '127.0.0.1', 'max_clients': 50, 'log_level': 'INFO'},
                 'gui': {'theme_mode': 'dark', 'auto_refresh': True, 'notifications': True},
                 'monitoring': {'enabled': True, 'interval': 2, 'alerts': True}
             }
+            
+            # Update current settings
+            current_settings.clear()
+            current_settings.update(default_settings)
+            
             page.dialog.open = False
             page.update()
             page.snack_bar = ft.SnackBar(
@@ -118,6 +142,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         page.dialog = dialog
         dialog.open = True
         page.update()
+    
     def on_theme_toggle(e):
         new_mode = "light" if current_settings['gui']['theme_mode'] == "dark" else "dark"
         current_settings['gui']['theme_mode'] = new_mode
@@ -130,19 +155,49 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         )
         page.snack_bar.open = True
         page.update()
+    
+    async def export_settings_async(settings_data, backup_file):
+        """Async function to export settings."""
+        try:
+            # Simulate async operation
+            await asyncio.sleep(0.5)
+            with open(backup_file, 'w') as f:
+                json.dump(settings_data, f, indent=2)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to export settings: {e}")
+            return False
+
     def on_export_settings(e):
         backup_file = f"settings_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        try:
-            with open(backup_file, 'w') as f:
-                json.dump(current_settings, f, indent=2)
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Settings exported to {backup_file}"),
-                bgcolor=ft.Colors.GREEN
-            )
-            page.snack_bar.open = True
-            page.update()
-        except Exception as ex:
-            logger.error(f"Export failed: {ex}")
+        
+        async def async_export():
+            try:
+                success = await export_settings_async(current_settings, backup_file)
+                if success:
+                    page.snack_bar = ft.SnackBar(
+                        content=ft.Text(f"Settings exported to {backup_file}"),
+                        bgcolor=ft.Colors.GREEN
+                    )
+                else:
+                    page.snack_bar = ft.SnackBar(
+                        content=ft.Text("Failed to export settings"),
+                        bgcolor=ft.Colors.RED
+                    )
+                page.snack_bar.open = True
+                page.update()
+            except Exception as e:
+                logger.error(f"Error in export handler: {e}")
+                page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Error exporting settings"),
+                    bgcolor=ft.Colors.RED
+                )
+                page.snack_bar.open = True
+                page.update()
+        
+        # Run async operation
+        page.run_task(async_export)
+    
     # Create settings forms using Flet's built-in components
     def create_server_settings():
         # Create event handlers for server settings
@@ -244,6 +299,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
                 padding=20
             )
         )
+    
     def create_gui_settings():
         # Create event handlers for GUI settings
         def on_auto_refresh_change(e):
@@ -314,6 +370,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
                 padding=20
             )
         )
+    
     def create_monitoring_settings():
         # Create event handlers for monitoring settings
         def on_monitoring_enabled_change(e):
@@ -424,6 +481,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
                 padding=20
             )
         )
+    
     # Create settings tabs using Flet's built-in Tabs component (this is the RIGHT way!)
     settings_tabs = ft.Tabs(
         selected_index=0,
@@ -447,6 +505,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         ],
         expand=True
     )
+    
     # Action buttons
     action_buttons = ft.ResponsiveRow([
         ft.Column([
@@ -482,6 +541,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
             )
         ], col={"sm": 12, "md": 3})
     ])
+    
     # Main layout using simple Column
     return ft.Column([
         # Header

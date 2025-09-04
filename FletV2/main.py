@@ -39,9 +39,15 @@ from theme import setup_default_theme, toggle_theme_mode
 try:
     from utils.server_bridge import ModularServerBridge as ServerBridge
     BRIDGE_TYPE = "Full ModularServerBridge"
-except Exception:
-    from utils.simple_server_bridge import SimpleServerBridge as ServerBridge
-    BRIDGE_TYPE = "SimpleServerBridge (Fallback)"
+except Exception as e:
+    logger.warning(f"Failed to import ModularServerBridge: {e}")
+    try:
+        from utils.simple_server_bridge import SimpleServerBridge as ServerBridge
+        BRIDGE_TYPE = "SimpleServerBridge (Fallback)"
+    except Exception as e2:
+        logger.error(f"Failed to import SimpleServerBridge: {e2}")
+        ServerBridge = None
+        BRIDGE_TYPE = "No Server Bridge"
 
 
 class FletV2App(ft.Row):
@@ -65,8 +71,12 @@ class FletV2App(ft.Row):
         
         # Initialize server bridge with fallback
         try:
-            self.server_bridge = ServerBridge()
-            logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
+            if ServerBridge:
+                self.server_bridge = ServerBridge()
+                logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
+            else:
+                self.server_bridge = None
+                logger.warning("No server bridge available")
         except Exception as e:
             logger.warning(f"Server bridge failed, using mock: {e}")
             self.server_bridge = None
@@ -104,6 +114,32 @@ class FletV2App(ft.Row):
         
         # Apply theme from theme.py (source of truth)
         setup_default_theme(self.page)
+        
+        # Apply text theme for consistent typography
+        self.page.theme.text_theme = ft.TextTheme(
+            headline_large=ft.TextStyle(size=24, weight=ft.FontWeight.BOLD),
+            headline_medium=ft.TextStyle(size=20, weight=ft.FontWeight.BOLD),
+            headline_small=ft.TextStyle(size=18, weight=ft.FontWeight.BOLD),
+            title_large=ft.TextStyle(size=16, weight=ft.FontWeight.BOLD),
+            title_medium=ft.TextStyle(size=14, weight=ft.FontWeight.BOLD),
+            title_small=ft.TextStyle(size=12, weight=ft.FontWeight.BOLD),
+            body_large=ft.TextStyle(size=16),
+            body_medium=ft.TextStyle(size=14),
+            body_small=ft.TextStyle(size=12)
+        )
+        
+        if self.page.dark_theme:
+            self.page.dark_theme.text_theme = ft.TextTheme(
+                headline_large=ft.TextStyle(size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                headline_medium=ft.TextStyle(size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                headline_small=ft.TextStyle(size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                title_large=ft.TextStyle(size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                title_medium=ft.TextStyle(size=14, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                title_small=ft.TextStyle(size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                body_large=ft.TextStyle(size=16, color=ft.Colors.ON_SURFACE),
+                body_medium=ft.TextStyle(size=14, color=ft.Colors.ON_SURFACE),
+                body_small=ft.TextStyle(size=12, color=ft.Colors.ON_SURFACE)
+            )
         
         # Set desktop-appropriate padding
         self.page.padding = ft.Padding(0, 0, 0, 0)
@@ -287,70 +323,6 @@ class FletV2App(ft.Row):
         ], expand=True, scroll=ft.ScrollMode.AUTO)
     
     
-    def _create_database_view(self) -> ft.Control:
-        """Simple database view."""
-        return ft.Container(
-            content=ft.Column([
-                ft.Text("Database Operations", size=24, weight=ft.FontWeight.BOLD),
-                ft.Text("Database queries and management.", size=16),
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Text("Database interface will be integrated here."),
-                        padding=20
-                    ),
-                    expand=True
-                )
-            ], spacing=20),
-            padding=20,
-            expand=True
-        )
-    
-    def _create_analytics_view(self) -> ft.Control:
-        """Simple analytics view."""
-        return ft.Container(
-            content=ft.Column([
-                ft.Text("Analytics & Performance", size=24, weight=ft.FontWeight.BOLD),
-                ft.Text("System performance metrics and charts.", size=16),
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Text("Performance charts will be integrated here."),
-                        padding=20
-                    ),
-                    expand=True
-                )
-            ], spacing=20),
-            padding=20,
-            expand=True
-        )
-    
-    
-    def _create_settings_view(self) -> ft.Control:
-        """Simple settings view."""
-        return ft.Container(
-            content=ft.Column([
-                ft.Text("Settings", size=24, weight=ft.FontWeight.BOLD),
-                ft.Text("Application configuration and preferences.", size=16),
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            ft.Text("Theme Settings", weight=ft.FontWeight.BOLD),
-                            ft.ElevatedButton(
-                                "Toggle Dark/Light Mode",
-                                on_click=lambda _: toggle_theme_mode(self.page)
-                            ),
-                            ft.Divider(),
-                            ft.Text("Server Settings", weight=ft.FontWeight.BOLD),
-                            ft.Text("Server configuration options will be available here.")
-                        ], spacing=12),
-                        padding=20
-                    ),
-                    expand=True
-                )
-            ], spacing=20),
-            padding=20,
-            expand=True
-        )
-    
     def _create_error_view(self, error_message: str) -> ft.Control:
         """Simple error view for fallback."""
         return ft.Container(
@@ -380,7 +352,16 @@ def main(page: ft.Page):
     except Exception as e:
         logger.critical(f"Failed to start application: {e}", exc_info=True)
         # Simple error fallback
-        page.add(ft.Text(f"Failed to start: {e}", color=ft.Colors.ERROR))
+        error_text = ft.Text(f"Failed to start: {e}", color=ft.Colors.ERROR)
+        page.add(error_text)
+        
+        # Show error in snackbar as well
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(f"Application failed to start: {str(e)}"),
+            bgcolor=ft.Colors.RED
+        )
+        page.snack_bar.open = True
+        page.update()
 
 
 if __name__ == "__main__":

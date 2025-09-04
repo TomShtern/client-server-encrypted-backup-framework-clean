@@ -110,6 +110,10 @@ class ServerGUIApp:
         # Setup native Flet theme (no custom manager needed)
         setup_default_theme(self.page)
         
+        # Initialize theme consistency manager
+        from flet_server_gui.ui.theme_consistency import ThemeConsistencyManager
+        self.theme_manager = ThemeConsistencyManager(self.page)
+        
         # Configure page and setup application
         self._setup_application()
         

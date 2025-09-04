@@ -1,17 +1,13 @@
 #!/usr/bin/env python3
 """
-Simple Analytics View - Framework Harmony Implementation
-A clean, minimal implementation using pure Flet patterns.
-
-This demonstrates perfect Framework Harmony:
-- Uses Flet's built-in LineChart and BarChart exclusively 
-- Simple function returning ft.Control (no class inheritance)
-- Real-time system metrics with psutil
-- Works WITH the framework, not against it
+Analytics View for FletV2
+A clean implementation using pure Flet patterns with real-time system metrics.
 """
+
 import flet as ft
 import psutil
 import random
+import asyncio
 from datetime import datetime
 from utils.debug_setup import get_logger
 
@@ -21,12 +17,6 @@ logger = get_logger(__name__)
 def create_analytics_view(server_bridge, page: ft.Page) -> ft.Control:
     """
     Create analytics view using pure Flet patterns.
-    
-    This demonstrates Framework Harmony:
-    - Simple function (no complex class inheritance)
-    - Uses Flet's built-in charts (LineChart, BarChart)
-    - Real system metrics with psutil fallback
-    - Responsive design with ResponsiveRow
     
     Args:
         server_bridge: Server bridge for data access
@@ -71,6 +61,7 @@ def create_analytics_view(server_bridge, page: ft.Page) -> ft.Control:
                 'active_connections': 12,
                 'cpu_cores': 8
             }
+    
     # Get current metrics
     metrics = get_system_metrics()
     
@@ -104,6 +95,7 @@ def create_analytics_view(server_bridge, page: ft.Page) -> ft.Control:
         ),
         expand=True
     )
+    
     # Create Memory chart using Flet's built-in BarChart
     def generate_memory_bars(current_usage, bars=6):
         """Generate memory usage bar chart data."""
@@ -138,6 +130,7 @@ def create_analytics_view(server_bridge, page: ft.Page) -> ft.Control:
         ),
         expand=True
     )
+    
     # Create metrics cards with proper color coding
     def create_metric_card(icon, title, value, subtitle, color, col_size):
         """Helper to create consistent metric cards."""
@@ -187,16 +180,49 @@ def create_analytics_view(server_bridge, page: ft.Page) -> ft.Control:
             ft.Colors.CYAN, {"sm": 6, "md": 4, "lg": 3}
         )
     ])
+    
+    async def refresh_analytics_async():
+        """Async function to refresh analytics data."""
+        try:
+            # Simulate async operation
+            await asyncio.sleep(1.0)
+            logger.info("Analytics data refreshed")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to refresh analytics: {e}")
+            return False
+
     # Event handlers
     def on_refresh(e):
         """Handle refresh button click."""
         logger.info("Analytics refresh requested")
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text("Analytics data refreshed"),
-            bgcolor=ft.Colors.GREEN
-        )
-        page.snack_bar.open = True
-        page.update()
+        
+        async def async_refresh():
+            try:
+                success = await refresh_analytics_async()
+                if success:
+                    page.snack_bar = ft.SnackBar(
+                        content=ft.Text("Analytics data refreshed"),
+                        bgcolor=ft.Colors.GREEN
+                    )
+                else:
+                    page.snack_bar = ft.SnackBar(
+                        content=ft.Text("Failed to refresh analytics data"),
+                        bgcolor=ft.Colors.RED
+                    )
+                page.snack_bar.open = True
+                page.update()
+            except Exception as e:
+                logger.error(f"Error in refresh handler: {e}")
+                page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Error refreshing analytics data"),
+                    bgcolor=ft.Colors.RED
+                )
+                page.snack_bar.open = True
+                page.update()
+        
+        # Run async operation
+        page.run_task(async_refresh)
     
     # Main layout using simple Column (pure Flet pattern)
     return ft.Column([

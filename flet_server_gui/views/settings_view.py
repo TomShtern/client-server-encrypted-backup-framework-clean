@@ -26,6 +26,7 @@ from flet_server_gui.ui.widgets import (
 # Layout fixes imports
 from flet_server_gui.utils.accessibility_helpers import ResponsiveLayoutFixes
 from flet_server_gui.theme import apply_theme_to_page, toggle_theme_mode
+from flet_server_gui.ui.theme_consistency import ThemeConsistencyManager
 
 # Import modular settings components
 sys_path_added = False

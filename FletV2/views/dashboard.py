@@ -154,14 +154,46 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
         page.snack_bar.open = True
         page.update()
     
+    async def refresh_dashboard_async():
+        """Async function to refresh dashboard data."""
+        try:
+            # Simulate async operation
+            await asyncio.sleep(1.0)
+            logger.info("Dashboard data refreshed")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to refresh dashboard: {e}")
+            return False
+    
     def on_refresh_dashboard(e):
         logger.info("Dashboard: Refresh clicked")
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text("Dashboard refreshed"),
-            bgcolor=ft.Colors.BLUE
-        )
-        page.snack_bar.open = True
-        page.update()
+        
+        async def async_refresh():
+            try:
+                success = await refresh_dashboard_async()
+                if success:
+                    page.snack_bar = ft.SnackBar(
+                        content=ft.Text("Dashboard refreshed"),
+                        bgcolor=ft.Colors.BLUE
+                    )
+                else:
+                    page.snack_bar = ft.SnackBar(
+                        content=ft.Text("Failed to refresh dashboard"),
+                        bgcolor=ft.Colors.RED
+                    )
+                page.snack_bar.open = True
+                page.update()
+            except Exception as e:
+                logger.error(f"Error in refresh handler: {e}")
+                page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Error refreshing dashboard"),
+                    bgcolor=ft.Colors.RED
+                )
+                page.snack_bar.open = True
+                page.update()
+        
+        # Run async operation
+        page.run_task(async_refresh)
     
     def on_backup_now(e):
         logger.info("Dashboard: Backup now clicked")

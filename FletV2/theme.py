@@ -27,8 +27,46 @@ teal_dark_colors = {
     "shadow": "#000000", "scrim": "#000000", "inverse_surface": "#E2E2E6", "on_inverse_surface": "#1A2228", "inverse_primary": "#38A298",
 }
 
-TealTheme = ft.Theme(color_scheme=ft.ColorScheme(**teal_light_colors), font_family="Inter")
-TealDarkTheme = ft.Theme(color_scheme=ft.ColorScheme(**teal_dark_colors), font_family="Inter")
+# Define component-specific styles
+teal_elevated_button_style = ft.ButtonStyle(
+    color={
+        ft.ControlState.DEFAULT: ft.Colors.ON_PRIMARY,
+    },
+    bgcolor={
+        ft.ControlState.DEFAULT: teal_light_colors["primary"],
+        ft.ControlState.HOVERED: teal_light_colors["primary"],
+        ft.ControlState.PRESSED: teal_light_colors["primary"],
+    }
+)
+
+teal_dark_elevated_button_style = ft.ButtonStyle(
+    color={
+        ft.ControlState.DEFAULT: ft.Colors.ON_PRIMARY,
+    },
+    bgcolor={
+        ft.ControlState.DEFAULT: teal_dark_colors["primary"],
+        ft.ControlState.HOVERED: teal_dark_colors["primary"],
+        ft.ControlState.PRESSED: teal_dark_colors["primary"],
+    }
+)
+
+TealTheme = ft.Theme(
+    color_scheme=ft.ColorScheme(**teal_light_colors), 
+    font_family="Inter",
+    elevated_button_theme=ft.ElevatedButtonTheme(
+        foreground_color=ft.Colors.ON_PRIMARY,
+        bgcolor=teal_light_colors["primary"]
+    )
+)
+
+TealDarkTheme = ft.Theme(
+    color_scheme=ft.ColorScheme(**teal_dark_colors), 
+    font_family="Inter",
+    elevated_button_theme=ft.ElevatedButtonTheme(
+        foreground_color=ft.Colors.ON_PRIMARY,
+        bgcolor=teal_dark_colors["primary"]
+    )
+)
 
 
 # ==============================================================================
@@ -55,8 +93,46 @@ purple_dark_colors = {
     "shadow": "#000000", "scrim": "#000000", "inverse_surface": "#E2E2E6", "on_inverse_surface": "#1A2228", "inverse_primary": "#7C5CD9",
 }
 
-PurpleTheme = ft.Theme(color_scheme=ft.ColorScheme(**purple_light_colors), font_family="Inter")
-PurpleDarkTheme = ft.Theme(color_scheme=ft.ColorScheme(**purple_dark_colors), font_family="Inter")
+# Define component-specific styles for purple theme
+purple_elevated_button_style = ft.ButtonStyle(
+    color={
+        ft.ControlState.DEFAULT: ft.Colors.ON_PRIMARY,
+    },
+    bgcolor={
+        ft.ControlState.DEFAULT: purple_light_colors["primary"],
+        ft.ControlState.HOVERED: purple_light_colors["primary"],
+        ft.ControlState.PRESSED: purple_light_colors["primary"],
+    }
+)
+
+purple_dark_elevated_button_style = ft.ButtonStyle(
+    color={
+        ft.ControlState.DEFAULT: ft.Colors.ON_PRIMARY,
+    },
+    bgcolor={
+        ft.ControlState.DEFAULT: purple_dark_colors["primary"],
+        ft.ControlState.HOVERED: purple_dark_colors["primary"],
+        ft.ControlState.PRESSED: purple_dark_colors["primary"],
+    }
+)
+
+PurpleTheme = ft.Theme(
+    color_scheme=ft.ColorScheme(**purple_light_colors), 
+    font_family="Inter",
+    elevated_button_theme=ft.ElevatedButtonTheme(
+        foreground_color=ft.Colors.ON_PRIMARY,
+        bgcolor=purple_light_colors["primary"]
+    )
+)
+
+PurpleDarkTheme = ft.Theme(
+    color_scheme=ft.ColorScheme(**purple_dark_colors), 
+    font_family="Inter",
+    elevated_button_theme=ft.ElevatedButtonTheme(
+        foreground_color=ft.Colors.ON_PRIMARY,
+        bgcolor=purple_dark_colors["primary"]
+    )
+)
 
 
 # ==============================================================================
