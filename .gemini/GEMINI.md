@@ -1,772 +1,557 @@
-# Project Instructions for Gemini
+# CLAUDE.md - FletV2 Development Guide
 
-This file contains project-specific instructions and context for the Gemini assistant.
+This file provides comprehensive guidance for working with FletV2 - a clean, framework-harmonious Flet desktop application that demonstrates proper Flet patterns and best practices.
 
-## Executive Summary
+**CRITICAL**: We work exclusively with `FletV2/` directory. The `flet_server_gui/` is obsolete, over-engineered, and kept only as reference of what NOT to do.
+ you should reference the `important_docs/` folder for component usage examples and documentation.
+---
 
-The system is a functionally complete 4-layer backup solution (Web UI → Flask API → C++ Client → Python Server) with proven real-world file transfers. It demonstrates solid architecture but faces critical security risks, scalability bottlenecks, technical debt, and incomplete features.
+## 🎯 CORE PRINCIPLES: Framework Harmony
 
-## Project Overview
+### **The FletV2 Way - Work WITH Flet, Not Against It**
 
-A **4-layer Client-Server Encrypted Backup Framework** implementing secure file transfer with RSA-1024 + AES-256-CBC encryption. The system is fully functional with evidence of successful file transfers in `src/server/received_files/`.
+**Primary Directive**: Favor Flet's built-in features over custom, over-engineered solutions. Do not reinvent the wheel.
 
-### Architecture Layers
+#### **Scale Test**: 
+Be highly suspicious of any custom solution that exceeds 1000 lines. A 3000+ line custom system is an anti-pattern when a 50-250 line native Flet solution exists with full feature parity(or almost full parity).
 
-1.  **Web UI** (`src/client/NewGUIforClient.html`) - Browser-based file selection interface
-2.  **Flask API Bridge** (`cyberbackup_api_server.py`) - **CRITICAL INTEGRATION LAYER** - HTTP API server (port 9090) that coordinates between UI and native client, manages subprocess lifecycles
-3.  **C++ Client** (`src/client/client.cpp`) - Native encryption engine with binary protocol (runs as subprocess)
-4.  **Python Server** (`src/server/server.py`) - Multi-threaded backup storage server (port 1256)
+#### **Framework Fight Test**: 
+Work WITH the framework, not AGAINST it. If your solution feels complex, verbose, or like a struggle, you are fighting the framework. Stop and find the simpler, intended Flet way.
 
-### Data Flow
+#### **Built-in Checklist**:
+- Can `ft.NavigationRail` handle navigation?
+- Can `expand=True` and `ResponsiveRow` solve layout?
+- Can `control.update()` replace `page.update()`?
+- Does a standard Flet control already do 90% of what you need?
 
-```
-Web UI → Flask API (9090) → C++ Client (subprocess) → Python Server (1256) → File Storage
-```
+---
 
-## Final Repository Structure
+## ⚡ POWER DIRECTIVES: Maximum Impact Code Generation
 
-```
-📁 Client-Server-Encrypted-Backup-Framework/
-├── 📄 README.md                    # Project overview
-├── 📄 CMakeLists.txt               # Build configuration
-├── 📄 requirements.txt             # Python dependencies
-├── 📄 vcpkg.json                   # C++ dependencies
-├── 📄 .gitignore                   # Git ignore rules
-│
-├── 📁 Client/                      # 🎯 C++ CLIENT CODE
-│   ├── 📁 cpp/                     # All C++ source + headers (15 files)
-│   │   ├── client.cpp, main.cpp, WebServerBackend.cpp
-│   │   ├── client.h, WebServerBackend.h, crypto_compliance.h
-│   │   ├── 📁 crypto_support/      # Crypto implementations (6 files)
-│   │   └── 📁 tests/               # C++ unit tests (7 files)
-│   ├── 📁 deps/                    # C++ dependencies (10 files)
-│   │   ├── AESWrapper.cpp/.h, RSAWrapper.cpp/.h
-│   │   ├── Base64Wrapper.cpp/.h, CompressionWrapper.cpp/.h
-│   │   └── 📁 shared/              # 🆕 CANONICAL C++ UTILITIES
-│   │       ├── crc.h/.cpp          # Cross-language CRC implementation
-│   │       └── config.h            # Configuration constants
-│   ├── 📁 Client-gui/              # HTML/JS client interface (1 file)
-│   └── 📁 other/                   # Keys, configs, assets
-│
-├── 📁 api-server/                  # 🎯 API SERVER
-│   ├── cyberbackup_api_server.py   # Main API server
-│   ├── real_backup_executor.py     # Backup execution logic
-│   └── __init__.py                 # Package initialization
-│
-├── 📁 python_server/               # 🎯 PYTHON SERVER ECOSYSTEM
-│   ├── 📁 server/                  # Core server logic (15 files)
-│   │   ├── server.py, file_transfer.py, request_handlers.py
-│   │   ├── protocol.py, network_server.py, database.py
-│   │   └── client_manager.py, crypto_compat.py, etc.
-│   ├── 📁 server-gui/              # Server GUI (2 files)
-│   │   ├── ServerGUI.py            # Tkinter GUI
-│   │   └── server_gui_settings.json
-│   ├── 📁 shared/                  # 🆕 CANONICAL PYTHON MODULES
-│   │   ├── crc.py                  # 🆕 Canonical CRC implementation
-│   │   ├── filename_validator.py   # 🆕 Centralized validation
-│   │   ├── config.py               # 🆕 Unified configuration
-│   │   ├── canonicalize.py         # 🆕 Protocol canonicalization
-│   │   ├── config_manager.py, logging_utils.py
-│   │   ├── observability.py, observability_middleware.py
-│   │   └── 📁 utils/               # Utility modules (6 files)
-│   ├── 📁 legacy/                  # Legacy/deprecated code (2 files)
-│   └── 📄 *.json                   # Configuration files
-│
-├── 📁 Database/                    # 🎯 DATABASE LAYER
-│   ├── database_manager.py         # Database management
-│   └── database_monitor.py         # Database monitoring
-│
-├── 📁 tests/                       # 🎯 ALL TESTS UNIFIED
-│   ├── 📄 test_*.py                # Python tests (25+ files)
-│   ├── 📄 debug_*.py               # Debug scripts (8 files)
-│   ├── 📄 test_*.txt               # Test data files (15+ files)
-│   ├── 📁 fixtures/                # Test fixtures
-│   └── 📁 integration/             # Integration tests
-│
-├── 📁 Shared/                      # 🎯 CROSS-LANGUAGE SPECS
-│   ├── 📁 specs/                   # Protocol specifications
-│   │   └── protocol.md             # 🆕 Canonicalization spec
-│   └── 📁 test_vectors/            # Test vectors for validation
-│       └── headers.json            # 🆕 Canonicalization test data
-│
-├── 📁 docs/                        # 🎯 ALL DOCUMENTATION
-│   ├── 📄 *.md                     # Project documentation (20+ files)
-│   ├── 📄 *.txt                    # Session logs and notes (5+ files)
-│   ├── 📁 archive/                 # Archived documentation
-│   ├── 📁 daily-notes/             # Development notes
-│   ├── 📁 development/             # Development plans
-│   ├── 📁 guides/                  # User guides
-│   ├── 📁 reports/                 # Status reports
-│   ├── 📁 setup-deployment/        # Setup guides
-│   ├── 📁 specifications/          # Technical specifications
-│   └── 📁 troubleshooting/         # Troubleshooting guides
-│
-├── 📁 scripts/                     # 🎯 UTILITY SCRIPTS
-│   ├── 📄 *.py                     # Python utilities (8 files)
-│   ├── 📄 *.bat                    # Batch scripts (1 file)
-│   ├── 📄 *.ps1                    # PowerShell scripts (3 files)
-│   ├── 📁 debugging/               # Debug utilities
-│   ├── 📁 security/                # Security tools
-│   └── 📁 utilities/               # General utilities
-│
-├── 📁 logs/                        # 🎯 LOG FILES
-│   ├── 📄 api-server-*.log         # API server logs (100+ files)
-│   ├── 📄 *.txt                    # Output logs (8 files)
-│   └── 📄 *.log                    # System logs
-│
-├── 📁 archived/                    # 🎯 DEPRECATED/DUPLICATE FILES
-│   ├── 📁 api_servers/             # Old API server versions
-│   ├── 📁 duplicates-20250809_*/  # Timestamped duplicates
-│   └── 📁 tmp/                     # Temporary files
-│
-├── 📁 build/                       # Build artifacts (preserved)
-├── 📁 vcpkg/                       # C++ package manager (preserved)
-├── 📁 config/                      # Configuration files (preserved)
-└── 📁 received_files/              # User backup files (not tracked)
-```
+### **Critical Framework Compliance (Flet 0.28.3 + Python 3.13.5)**
 
-## Essential Commands
+1. **Always use `control.update()` instead of `page.update()` to achieve 10x performance and eliminate UI flicker.**
 
-### Building the C++ Client
+2. **Leverage `ft.ResponsiveRow` and `expand=True` as your primary layout mechanism, eliminating the need for complex custom responsive systems.**
 
-```bash
-# Configure with vcpkg
-cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
+3. **Use `ft.NavigationRail.on_change` for navigation, completely removing the need for custom routing managers.**
 
-# Build
-cmake --build build --config Release
+4. **Prefer `ft.Theme` and `ft.ColorScheme` for styling, avoiding any custom theming logic over 50 lines.**
 
-# Output: build/Release/EncryptedBackupClient.exe
-```
+5. **Implement async event handlers using `async def` and `await ft.update_async()` to prevent UI blocking.**
 
-### Running the System
+6. **Use `page.run_task()` for background operations instead of creating custom threading or async management.**
 
-```bash
-# RECOMMENDED: One-click startup (builds C++ client, starts all services, opens browser)
-python one_click_build_and_run.py
+7. **Always provide a fallback in server bridge initialization to ensure graceful degradation.**
 
-# Manual startup (if needed):
-# 1. Install Python dependencies
-pip install -r requirements.txt
+8. **Utilize Flet's built-in `ThemeMode` for theme switching instead of creating custom theme toggle mechanisms.**
 
-# 2. Start Python server (MUST start first) - port 1256
-python -m src.server.server
+9. **Replace custom icon management with Flet's native `ft.Icons` enum, which provides comprehensive icon support.**
 
-# 3. Start Flask API Bridge - port 9090
-python cyberbackup_api_server.py
+10. **Design views as pure function-based components that return `ft.Control`, avoiding complex class-based view systems.**
 
-# 4. Access Web UI at http://127.0.0.1:9090/
-```
+### **Performance & Anti-Pattern Guards**
 
-### System Health Verification
+11. **If your custom solution exceeds 1000 lines, you are fighting the framework - stop and find the Flet-native approach.**
 
-```bash
-# Check all services are running
-netstat -an | findstr ":9090\|:1256"  # Both ports should show LISTENING
-tasklist | findstr "python"           # Should show multiple Python processes
+12. **Prefer semantic color tokens like `ft.Colors.PRIMARY` over hardcoded hex values to ensure theme compatibility.**
 
-# Verify file transfers
-dir "src\server\received_files"       # Check for actual transferred files
-```
+13. **Use `ft.DataTable` for tabular data instead of building custom table components from scratch.**
 
-### Testing
+14. **Implement error handling using `page.snack_bar` with built-in Flet colors for consistent user feedback.**
 
-```bash
-# Integration tests (test complete web→API→C++→server chain)
-python tests/test_gui_upload.py      # Full integration test via GUI API
-python tests/test_upload.py          # Direct server test
-python tests/test_client.py          # C++ client validation
+15. **Leverage `ft.TextTheme` for consistent typography across your entire application.**
 
-# Comprehensive test suite
-python scripts/testing/master_test_suite.py
+### **Architectural Enforcement**
 
-# Quick validation
-python scripts/testing/quick_validation.py
+16. **Structure your desktop app as a single `ft.Row` with a `NavigationRail` and dynamic content area.**
 
-# Validate specific fixes
-python scripts/testing/validate_null_check_fixes.py
-python scripts/testing/validate_server_gui.py
+17. **Create a modular `theme.py` as the single source of truth for all styling and theming logic.**
 
-# Verify real file transfers (CRITICAL verification pattern)
-# Check: received_files/ for actual transferred files
-# Pattern: {username}_{timestamp}_{filename}
-```
+18. **Use `page.run_thread()` for operations that might block, ensuring responsive UI.**
 
-## Critical Operating Knowledge
+19. **Design components with a maximum of ~400 lines(you dont have to, but its recommended estimates), forcing modularity and readability.**
 
-### Configuration Requirements
+20. **Always provide a simple, function-based fallback for every dynamic loading mechanism.**
 
-*   **transfer.info**: Must contain exactly 3 lines: `server:port`, `username`, `filepath`
-*   **Working Directory**: C++ client MUST run from directory containing `transfer.info`
-*   **Batch Mode**: Use `--batch` flag to prevent C++ client hanging in subprocess
-*   **Progress Configuration**: `progress_config.json` defines phase timing, weights, and calibration data
+### **Python 3.13.5 & Flet 0.28.3 Optimizations**
 
-### Essential Integration Patterns
+21. **Use `page.theme = ft.Theme(color_scheme_seed=ft.Colors.GREEN)` for instant Material 3 theming without custom color management.**
 
-#### Subprocess Management (CRITICAL PATTERN)
+22. **Leverage `page.adaptive = True` for platform-specific UI rendering when targeting multiple platforms.**
+
+23. **Use `ft.run(main, view=ft.AppView.WEB_BROWSER)` for development hot reload - identical runtime to desktop with instant updates.**
+
+24. **Implement `page.theme_mode = ft.ThemeMode.SYSTEM` to automatically respect user system preferences.**
+
+25. **Use `ft.SafeArea` to handle platform-specific UI constraints automatically.**
+
+**Core Philosophy**: "Let Flet do the heavy lifting. Your job is to compose, not reinvent."
+
+---
+
+## 🏗️ FletV2 ARCHITECTURE PATTERNS
+
+### **Main Application Structure (CANONICAL)**
 
 ```python
-# RealBackupExecutor launches C++ client with --batch mode
-self.backup_process = subprocess.Popen(
-    [self.client_exe, "--batch"],  # --batch prevents hanging in subprocess
-    stdin=subprocess.PIPE,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE,
-    text=True,
-    cwd=os.path.dirname(os.path.abspath(self.client_exe))  # CRITICAL: Working directory
+# FletV2/main.py - The correct desktop app pattern
+class FletV2App(ft.Row):
+    """Clean desktop app using pure Flet patterns."""
+    
+    def __init__(self, page: ft.Page):
+        super().__init__()
+        self.page = page
+        self.expand = True
+        
+        # ✅ Simple window configuration
+        page.window_min_width = 1024
+        page.window_min_height = 768
+        page.window_resizable = True
+        page.title = "Backup Server Management"
+        
+        # ✅ Use theme.py (source of truth)
+        from theme import setup_default_theme
+        setup_default_theme(page)
+        
+        # ✅ Simple NavigationRail (no custom managers)
+        self.nav_rail = ft.NavigationRail(
+            destinations=[...],
+            on_change=self._on_navigation_change  # Simple callback
+        )
+        
+        # ✅ Auto-resizing content area
+        self.content_area = ft.Container(expand=True)
+        
+        # ✅ Pure Flet layout
+        self.controls = [
+            self.nav_rail,
+            ft.VerticalDivider(width=1),
+            self.content_area
+        ]
+    
+    def _on_navigation_change(self, e):
+        """Simple navigation - no complex routing."""
+        view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
+        selected_view = view_names[e.control.selected_index]
+        self._load_view(selected_view)
+    
+    def _load_view(self, view_name: str):
+        """Load view using simple function calls."""
+        if view_name == "dashboard":
+            from views.dashboard import create_dashboard_view
+            content = create_dashboard_view(self.server_bridge, self.page)
+        # ... other views
+        
+        self.content_area.content = content
+        self.content_area.update()  # Precise update, not page.update()
+```
+
+### **View Creation Pattern (MANDATORY)**
+
+```python
+# views/dashboard.py - Correct view pattern
+def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
+    """Create dashboard view using pure Flet patterns."""
+    
+    # ✅ Simple data loading with fallback
+    def get_server_status():
+        if server_bridge:
+            try:
+                return server_bridge.get_server_status()
+            except Exception as e:
+                logger.warning(f"Server bridge failed: {e}")
+        return {"server_running": True, "clients": 3, "files": 72}  # Mock fallback
+    
+    # ✅ Event handlers using closures
+    def on_start_server(e):
+        logger.info("Start server clicked")
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text("Server start command sent"),
+            bgcolor=ft.Colors.GREEN
+        )
+        page.snack_bar.open = True
+        page.update()  # Only for snack_bar
+    
+    # ✅ Return pure Flet components
+    return ft.Column([
+        ft.Text("Server Dashboard", size=24, weight=ft.FontWeight.BOLD),
+        ft.ResponsiveRow([
+            ft.Column([
+                ft.Card(content=ft.Text(f"Active Clients: {status['clients']}"))
+            ], col={"sm": 6, "md": 3})
+            # ... more cards
+        ]),
+        ft.FilledButton("Start Server", on_click=on_start_server, icon=ft.Icons.PLAY_ARROW)
+    ], expand=True, scroll=ft.ScrollMode.AUTO)
+```
+
+### **Theme System (SOURCE OF TRUTH)**
+
+```python
+# theme.py - Proper Flet theming
+def setup_default_theme(page: ft.Page) -> None:
+    """Set up theme using Flet's native system."""
+    # ✅ Use Flet's built-in theme system
+    page.theme = ft.Theme(
+        color_scheme=ft.ColorScheme(
+            primary="#38A298",
+            secondary="#7C5CD9",
+            surface="#F0F4F8",
+            background="#F8F9FA"
+        ),
+        font_family="Inter"
+    )
+    
+    # ✅ Dark theme support
+    page.dark_theme = ft.Theme(
+        color_scheme=ft.ColorScheme(
+            primary="#82D9CF",
+            secondary="#D0BCFF",
+            surface="#1A2228",
+            background="#12181C"
+        ),
+        font_family="Inter"
+    )
+    
+    page.theme_mode = ft.ThemeMode.SYSTEM
+
+def toggle_theme_mode(page: ft.Page) -> None:
+    """Toggle theme mode using Flet built-ins."""
+    page.theme_mode = ft.ThemeMode.DARK if page.theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
+    page.update()
+```
+
+---
+
+## ❌ FRAMEWORK-FIGHTING ANTI-PATTERNS (NEVER DO THESE)
+
+### **🚨 IMMEDIATE RED FLAGS**
+1. **Custom NavigationManager classes** → Use `ft.NavigationRail.on_change`
+2. **Custom responsive systems** → Use `expand=True` + `ResponsiveRow`
+3. **Custom theme managers** → Use `page.theme` and `theme.py`
+4. **Complex routing systems** → Use simple view switching
+5. **`page.update()` abuse** → Use `control.update()` for precision
+6. **God components >500 lines** → Decompose into focused functions
+
+### **🚨 INVALID FLET APIS (RUNTIME ERRORS)**
+```python
+# ❌ WRONG - These don't exist in Flet 0.28.3:
+ft.MaterialState.DEFAULT    # ❌ MaterialState doesn't exist
+ft.Expanded()              # ❌ Use expand=True instead
+ft.Colors.SURFACE_VARIANT  # ❌ Use ft.Colors.SURFACE instead
+ft.UserControl             # ❌ Inherit from ft.Control instead
+
+# ✅ CORRECT - Verified working APIs:
+ft.Colors.PRIMARY, ft.Colors.SURFACE, ft.Colors.ERROR
+ft.Icons.DASHBOARD, ft.Icons.SETTINGS, ft.Icons.PLAY_ARROW
+ft.ResponsiveRow, ft.NavigationRail, ft.Card
+```
+
+---
+
+## ✅ CORRECT FLET PATTERNS (ALWAYS USE THESE)
+
+### **Data Display Patterns**
+
+```python
+# ✅ For tabular data: ft.DataTable
+clients_table = ft.DataTable(
+    columns=[ft.DataColumn(ft.Text("ID")), ft.DataColumn(ft.Text("Status"))],
+    rows=[
+        ft.DataRow(cells=[
+            ft.DataCell(ft.Text(client["id"])),
+            ft.DataCell(ft.Text(client["status"], color=ft.Colors.GREEN))
+        ]) for client in clients_data
+    ],
+    border=ft.border.all(1, ft.Colors.OUTLINE)
 )
+
+# ✅ For metrics: ft.LineChart
+cpu_chart = ft.LineChart(
+    data_series=[
+        ft.LineChartData(
+            data_points=[ft.LineChartDataPoint(x, cpu_values[x]) for x in range(len(cpu_values))],
+            color=ft.Colors.BLUE,
+            curved=True
+        )
+    ],
+    expand=True
+)
+
+# ✅ For responsive layouts: ft.ResponsiveRow
+metrics_cards = ft.ResponsiveRow([
+    ft.Column([
+        ft.Card(content=ft.Text(f"CPU: {cpu}%"))
+    ], col={"sm": 12, "md": 6, "lg": 3})
+    for cpu in cpu_values
+])
 ```
 
-#### Configuration Generation Pattern
+### **Form/Settings Patterns**
 
 ```python
-# transfer.info must be generated per operation (3-line format)
-def _generate_transfer_info(self, server_ip, server_port, username, file_path):
-    with open("transfer.info", 'w') as f:
-        f.write(f"{server_ip}:{server_port}\n")  # Line 1: server endpoint
-        f.write(f"{username}\n")                 # Line 2: username
-        f.write(f"{file_path}\n")                # Line 3: absolute file path
+# ✅ Use ft.Tabs for categories
+settings_tabs = ft.Tabs([
+    ft.Tab(text="Server", icon=ft.Icons.SETTINGS, content=server_form),
+    ft.Tab(text="Theme", icon=ft.Icons.PALETTE, content=theme_form)
+], expand=True)
+
+# ✅ Built-in form controls with validation
+username_field = ft.TextField(
+    label="Username",
+    on_change=lambda e: validate_field(e)
+)
+
+def validate_field(e):
+    if len(e.control.value) < 3:
+        e.control.error_text = "Too short"
+    else:
+        e.control.error_text = None
+    e.control.update()  # Precise update
 ```
 
-#### File Verification Pattern (CRITICAL)
+### **Async Patterns (CRITICAL)**
 
 ```python
-def _verify_file_transfer(self, original_file, username):
-    # 1. Check received_files/ for actual file
-    # 2. Compare file sizes
-    # 3. Compare SHA256 hashes
-    # 4. Verify network activity on port 1256
-    verification = {
-        'transferred': file_exists_in_server_dir,
-        'size_match': original_size == received_size,
-        'hash_match': original_hash == received_hash,
-        'network_activity': check_port_1256_connections()
-    }
+# ✅ CORRECT: Async event handlers
+async def on_fetch_data(e):
+    # Show progress immediately
+    progress_ring.visible = True
+    await progress_ring.update_async()
+    
+    # Background operation
+    data = await fetch_data_async()
+    
+    # Update UI
+    results_text.value = data
+    progress_ring.visible = False
+    await ft.update_async(results_text, progress_ring)  # Batch update
+
+# ✅ Background tasks
+page.run_task(monitor_server_async)
+
+# ❌ WRONG: Blocking operations
+def on_fetch_data_blocking(e):
+    data = requests.get(url)  # ❌ Blocks UI
+    self.page.update()       # ❌ Full page refresh
 ```
 
-### Verification Points
+---
 
-*   **Success Verification**: Check `src/server/received_files/` for actual file transfers (exit codes are unreliable)
-*   **Port Availability**: Ensure ports 9090 and 1256 are free
-*   **Dependencies**: Flask-cors is commonly missing from fresh installs
-*   **Hash Verification**: Always compare SHA256 hashes of original vs transferred files
-*   **Network Activity**: Verify TCP connections to port 1256 during transfers
+## 🚀 PERFORMANCE & BEST PRACTICES
 
-### Known Issues
+### **File Size Standards (ENFORCE STRICTLY)**
+- **View files**: 200-500 lines maximum
+- **Component files**: 100-400 lines maximum  
+- **If >600 lines**: MANDATORY refactoring required(probably, not always)
+- **Single responsibility**: Each file has ONE clear purpose
 
-*   C++ client hangs without `--batch` flag when run as subprocess
-*   Windows console encoding issues with some validation scripts (use one-click Python script instead)
-*   **False Success**: Zero exit code doesn't guarantee successful transfer
-*   **Missing Files**: Always verify actual files appear in `received_files/`
+### **UI Update Performance**
 
-## Architecture Details
+```python
+# ✅ CORRECT: Precise updates (10x performance improvement)
+def update_status(status_control, new_status):
+    status_control.value = new_status
+    status_control.update()  # Only this control
 
-### Core Components
+# ✅ For multiple controls: Batch updates
+await ft.update_async(control1, control2, control3)
 
-*   **Real Backup Executor** (`src/api/real_backup_executor.py`): Manages C++ client subprocess execution with sophisticated multi-layer progress monitoring
-*   **Network Server** (`src/server/network_server.py`): Multi-threaded TCP server handling encrypted file transfers
-*   **Crypto Wrappers** (`src/wrappers/`): RSA/AES encryption abstractions for C++ client
-*   **Protocol Implementation**: 23-byte binary headers + encrypted payload with CRC32 verification
-*   **Shared Utils** (`src/shared/utils/`): Common utilities including file lifecycle management, error handling, and process monitoring
-*   **Progress Monitoring System**: Multi-layer progress tracking with StatisticalProgressTracker, TimeBasedEstimator, BasicProcessingIndicator, and DirectFilePoller
-*   **WebSocket Broadcasting**: Real-time progress updates via SocketIO (currently experiencing connectivity issues)
+# ❌ WRONG: Full page updates (performance killer)
+def update_status_wrong(self):
+    self.status.value = "New status"
+    self.page.update()  # Updates entire page!
+```
 
-### Key Integration Points
+### **Layout Best Practices**
 
-*   **Subprocess Communication**: Flask API → RealBackupExecutor → C++ client (with `--batch` flag)
-*   **File Lifecycle**: SynchronizedFileManager prevents race conditions in file creation/cleanup
-*   **Progress Flow**: RealBackupExecutor.status_callback → API server status_handler → WebSocket socketio.emit → Web GUI
-*   **Error Propagation**: C++ client logs → subprocess stdout → RealBackupExecutor → Flask API → Web UI
-*   **Configuration**: Centralized through `transfer.info` and `progress_config.json`
-*   **WebSocket Broadcasting**: Real-time progress updates via SocketIO with CallbackMultiplexer for concurrent request routing
-*   **File Receipt Override**: FileReceiptProgressTracker provides ground truth completion by monitoring actual file arrival
+```python
+# ✅ CORRECT: Responsive, flexible layouts
+ft.ResponsiveRow([
+    ft.Column([
+        ft.Card(content=dashboard_content, expand=True)
+    ], col={"sm": 12, "md": 8}, expand=True),
+    
+    ft.Column([
+        ft.Card(content=sidebar_content)
+    ], col={"sm": 12, "md": 4})
+])
 
-### Security Considerations
+# ❌ WRONG: Fixed dimensions (breaks on resize)
+ft.Container(width=800, height=600, content=dashboard_content)
 
-*   **Current Encryption**: RSA-1024 + AES-256-CBC (functional but has known vulnerabilities)
-*   **Vulnerabilities**:
-    *   ⚠️ **Fixed IV Issue**: Static zero IV allows pattern analysis (HIGH PRIORITY FIX)
-    *   ⚠️ **CRC32 vs HMAC**: No tampering protection (MEDIUM PRIORITY FIX)
-    *   **Deterministic encryption**: Same plaintext produces same ciphertext
-*   **Access Control**: Basic username-based identification (not true authentication)
-*   **Protocol Implementation**: Custom TCP protocol with 23-byte headers + encrypted payload
-*   **Key Management**: RSA-1024 for key exchange (Crypto++ with OAEP padding), AES-256-CBC for file encryption
+# ✅ CORRECT: Auto-scaling
+ft.Container(content=dashboard_content, expand=True, padding=20)
+```
 
-### Development Workflow
+---
 
-1.  Always verify file transfers by checking `received_files/` directory
-2.  Use `--batch` flag for all C++ client subprocess calls
-3.  Test complete integration chain through all 4 layers
-4.  Monitor ports 9090 and 1256 for conflicts
-5.  Check both `build/Release/` and `client/` directories for executables
+## 🛠️ DEVELOPMENT WORKFLOW
 
-## Current System Status (2025-08-08)
+### **Terminal Debugging Setup (PRODUCTION READY)**
 
-**✅ FULLY OPERATIONAL & DEPLOYED** - File transfer, registration, and progress reporting working
-**🚀 DATABASE ENHANCED** - Advanced database system with connection pooling, migrations, and analytics ready
-**🚀 REPOSITORY STATUS**: All 45 commits successfully pushed to GitHub (client-server-encrypted-backup-framework-clean)
-**🔧 LATEST UPDATE**: **CRITICAL FIXES APPLIED** - Connection drops and database verification issues resolved
-**🆕 PROVEN FUNCTIONALITY**: Files now visible in server GUI with proper username registration, 66KB file transfers confirmed working
-**✅ RECENT FIXES (2025-08-08)**:
+```python
+# STEP 1: Import at top of main.py (before other imports)
+from utils.debug_setup import setup_terminal_debugging, get_logger
+logger = setup_terminal_debugging(logger_name="FletV2.main")
 
-*   **Fixed "connection broken by peer" errors**: Removed buggy `transferFileEnhanced` implementations causing client crashes
-*   **Fixed database verification**: Updated existing files to `verified=1` status so they appear in server GUI
-*   **Fixed compilation errors**: Removed undefined classes (`CRC32Stream`, `ProperDynamicBufferManager`) causing build failures
-*   **Implemented enhanced dynamic per-file buffer sizing**: 7-tier buffer system (1KB→2KB→4KB→8KB→16KB→32KB→64KB)
-*   **Optimized for realistic file sizes**: From tiny 1KB configs to 1000MB+ media files, each gets optimal buffer allocation
+# STEP 2: Use throughout your application
+def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
+    logger.info("Creating dashboard view")
+    
+    def on_button_click(e):
+        logger.debug("Button clicked")
+        try:
+            result = some_operation()
+            logger.info(f"Operation successful: {result}")
+        except Exception as ex:
+            logger.error(f"Operation failed: {ex}", exc_info=True)
+```
 
-### Enhanced Dynamic Buffer System
+### **Error Handling & User Feedback**
 
-**Realistic File Size Optimization**: Each file gets its optimal buffer size calculated once at transfer start, then uses that buffer consistently throughout the entire transfer. Supports files from tiny configs to 1GB+ media files.
+```python
+# ✅ CORRECT: Centralized user feedback
+def show_user_message(page, message, is_error=False):
+    page.snack_bar = ft.SnackBar(
+        content=ft.Text(message),
+        bgcolor=ft.Colors.ERROR if is_error else ft.Colors.GREEN
+    )
+    page.snack_bar.open = True
+    page.update()
 
-| File Size Range | Buffer Size | Use Case Examples |
-| --- | --- | --- |
-| ≤1KB | 1KB | Config files, .env files, small scripts, JSON configs |
-| 1KB-4KB | 2KB | Small configs, text files, small scripts, command files |
-| 4KB-16KB | 4KB | Source code files, small documents, XML/HTML files |
-| 16KB-64KB | 8KB | Large code files, formatted docs, small images, logs |
-| 64KB-512KB | 16KB | PDFs, medium images, compiled binaries, data files |
-| 512KB-10MB | 32KB | Large images, small videos, archives, databases (L1 cache optimized) |
-| >10MB | 64KB | **Large videos, big archives, datasets up to 1GB+** |
+def safe_operation(page):
+    try:
+        result = complex_operation()
+        logger.info(f"Operation completed: {result}")
+        show_user_message(page, "Operation completed successfully!")
+    except Exception as e:
+        logger.error(f"Operation failed: {e}", exc_info=True)
+        show_user_message(page, f"Failed: {str(e)}", is_error=True)
+```
 
-**Benefits**:
+### **Server Bridge Pattern (Robust Fallback)**
 
-*   **Tiny file efficiency**: Minimal waste for small configs and scripts
-*   **Gigabyte scale support**: 64KB buffer efficiently handles files up to 1000MB+
-*   **Power-of-2 alignment**: Optimal for memory management and CPU cache performance
-*   **Network optimization**: Larger buffers reduce protocol overhead for big files
+```python
+# ✅ CORRECT: Automatic fallback system
+try:
+    from utils.server_bridge import ModularServerBridge as ServerBridge
+    BRIDGE_TYPE = "Full Server Bridge"
+except Exception as e:
+    logger.warning(f"Full bridge failed: {e}")
+    from utils.simple_server_bridge import SimpleServerBridge as ServerBridge
+    BRIDGE_TYPE = "Simple Bridge (Fallback)"
 
-### Key Achievements
+# This ensures GUI always works even if full server unavailable
+```
 
-*   **Complete Integration**: Web UI → Flask API → C++ Client → Python Server chain working
-*   **Socket Communication**: 25-second timeout fixes prevent subprocess termination
-*   **Protocol Compliance**: RSA-1024 X.509 format (160-byte) + AES-256-CBC encryption
-*   **Windows Compatibility**: Socket TIME_WAIT and Unicode encoding issues resolved
-*   **Advanced Progress Architecture**: Multi-layer progress monitoring with statistical tracking and WebSocket broadcasting
-*   **CallbackMultiplexer**: Solves race condition where concurrent requests overwrite each other's progress callbacks
-*   **File Receipt Override**: Ground truth system that immediately signals 100% completion when file appears on server
-*   **Enhanced Database System**: Connection pooling, migrations, analytics, and monitoring (93 clients, 41 files, 16 indexes)
-*   **Database Management Tools**: CLI utilities for migration, optimization, search, and monitoring
-*   **Performance Optimizations**: 5-10x faster queries, connection pooling, optimized SQLite settings
+---
 
-### System Capabilities
+## 📋 CODE QUALITY CHECKLIST
 
-1.  **Web Interface Upload**: Users can browse to http://127.0.0.1:9090/, select files, register usernames, and upload files
-2.  **Real-Time Server Monitoring**: Server GUI shows live user registrations and file transfers as they happen
-3.  **Secure Encryption**: RSA-1024 key exchange followed by AES-256-CBC file encryption
-4.  **Multi-User Support**: Multiple users can register and upload files concurrently
-5.  **File Integrity Verification**: CRC32 checksums ensure uploaded files match originals
-6.  **Cross-Layer Integration**: All 4 architectural layers working seamlessly
-7.  **Windows Console Compatibility**: All Unicode encoding issues resolved for stable operation
-8.  **Process Management**: Robust subprocess handling with timeout protection and proper cleanup
-9.  **Advanced Progress System**: Multi-layer progress monitoring (FileReceiptProgressTracker, OutputProgressTracker, StatisticalProgressTracker, TimeBasedEstimator, DirectFilePoller) with WebSocket real-time updates
-10. **Ground Truth Progress**: FileReceiptProgressTracker immediately signals 100% completion when file is detected on server, overriding all other progress estimates
+### **Before Writing ANY Code**
+- [ ] Does Flet provide this functionality built-in?
+- [ ] Am I duplicating existing functionality?
+- [ ] Will this file exceed 600 lines? (If yes, decompose first)
+- [ ] Am I using hardcoded dimensions instead of `expand=True`?
+- [ ] Am I using `page.update()` when `control.update()` would work?
 
-## Quick Troubleshooting Guide
+### **Validation Checklist for New Code**
+- [ ] **Framework harmony**: Uses Flet built-ins, not custom replacements
+- [ ] **Single responsibility**: File has ONE clear purpose
+- [ ] **No hardcoded dimensions**: Uses `expand=True`, responsive patterns
+- [ ] **Async operations**: Long operations use async patterns
+- [ ] **Error handling**: Proper user feedback for failures
+- [ ] **Terminal debugging**: Uses logger instead of print()
+- [ ] **Accessibility**: Includes tooltip, semantics_label where appropriate
 
-### Common Issues & Solutions
+### **The Ultimate Quality Test**
+Before committing ANY code, ask:
+1. "Does Flet already provide this functionality?"
+2. "Can a new developer understand this file's purpose in <2 minutes?"
+3. "Am I working WITH Flet patterns or fighting them?"
 
-#### System Won't Start
+If any answer is unclear, STOP and refactor.
 
-usually its a problem with the code.
+---
 
-#### "Connection Refused" in Browser
+## 🎯 PROJECT CONTEXT
 
-*   **Issue**: Flask API server (port 9090) not running
-*   **Solution**: Check both servers are running: NOTE that when you are changing code, the api server will close it self. `tasklist | findstr "python"`
-*   **Windows TIME_WAIT**: Wait 30-60 seconds if recently restarted, or use cleanup commands above
+### **Current Architecture Status**
+- **✅ FletV2/**: Clean, framework-harmonious implementation (USE THIS)
+- **❌ flet_server_gui/**: Obsolete, over-engineered (REFERENCE ONLY)
+- **System**: 5-layer encrypted backup framework with GUI management:
+    - Client: cpp
+    - API Server: python api server for the client web-gui
+    - Client gui: javascript, tailwindcss web-gui
+    - Server: python
+    - server GUI: FletV2 desktop/laptop(NOT mobile/tablet/web) app for management
+    - database: SQLite3
+    - Bridge: ServerBridge for communication
+    - Utils: Shared utilities
 
-#### One-Click Script API Server Won't Start (RESOLVED 2025-08-01)
+### **Key FletV2 Files**
+```
+FletV2/
+├── main.py                    # Clean desktop app (~300 lines)
+├── theme.py                   # Source of truth for theming
+├── views/                     # Simple view functions (<400 lines each)
+│   ├── dashboard.py          # Server dashboard
+│   ├── clients.py            # Client management
+│   ├── files.py              # File browser
+│   ├── database.py           # Database viewer
+│   ├── analytics.py          # Analytics charts
+│   ├── logs.py               # Log viewer
+│   └── settings.py           # Configuration
+└── utils/                     # Helper utilities
+    ├── debug_setup.py        # Terminal debugging
+    ├── server_bridge.py      # Full server integration
+    └── simple_server_bridge.py # Fallback bridge
+```
 
-*   **Issue**: `one_click_build_and_run.py` runs but API server fails to start
-*   **Root Cause**: Subprocess output capture caused pipe blocking + syntax error in API server
-*   **Fix Applied**: Removed subprocess pipe capture, added process health monitoring, fixed syntax error
-*   **Status**: ✅ **RESOLVED** - Enhanced error diagnostics now provide specific troubleshooting guidance
-
-#### File Transfers Fail
-
-*   **Verify endpoint**: Check `received_files/` for actual files (exit codes are unreliable)
-*   **Protocol issues**: Ensure using latest `build/Release/EncryptedBackupClient.exe`
-*   **Configuration**: Verify `transfer.info` has exactly 3 lines: `server:port`, `username`, `filepath`
-
-#### Progress Updates Not Working (RESOLVED 2025-08-03)
-
-*   **Issue**: Web GUI progress ring stays at 0%, no real-time updates (known issue since commit 262d224)
-*   **Root Cause**: **CRITICAL DIRECTORY MISMATCH** - FileReceiptProgressTracker monitoring `src\server\received_files` while server saves files to project root `received_files`
-*   **Fix Applied**: Changed monitoring directory from `src\server\received_files` to `received_files` to match actual server file storage location
-*   **Additional Features**: CallbackMultiplexer routes progress callbacks correctly, FileReceiptProgressTracker provides ground truth completion signal
-*   **Status**: ✅ **RESOLVED** - Progress monitoring now correctly shows 100% when file arrives on server
-
-#### Build Failures
-
-*   **vcpkg required**: Must use `cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"`
-*   **Missing dependencies**: Run `pip install -r requirements.txt` (flask-cors commonly missing)
-
-### Emergency Recovery
-
+### **Launch Commands**
 ```bash
-# Complete system reset
-taskkill /f /im python.exe
-taskkill /f /im EncryptedBackupClient.exe
-del transfer.info
-python one_click_build_and_run.py
+# FletV2 Desktop (Production/Testing)
+cd FletV2 && python main.py
+
+# FletV2 Development with Hot Reload (RECOMMENDED for development)
+# Uses browser for instant hot reload - identical runtime to desktop
+cd FletV2 && python -c "import flet as ft; import main; ft.app(target=main.main, view=ft.AppView.WEB_BROWSER)"
+
+# Alternative: Command-line hot reload
+cd FletV2 && flet run --web main.py
+
+# System integration testing (only after FletV2 is complete, and the user approved)
+python scripts/one_click_build_and_run.py
 ```
 
-## Critical Race Condition Analysis
+### **Development Workflow (Desktop Apps)**
+  ★ Insight ─────────────────────────────────────
+  Hot Reload Validation: The WEB_BROWSER view for desktop development is a Flet best practice - it provides identical runtime behavior to native desktop while enabling instant hot reload. The workflow is: develop in browser → test in native desktop → deploy as desktop app.
+  ─────────────────────────────────────────────────
+**Recommended Pattern**: Develop in browser → Test in native desktop → Deploy as desktop app
+- **Browser development**: Instant hot reload, identical Flet runtime, browser dev tools available
+- **Native testing**: Final validation of desktop-specific features, window management, OS integration
+- **Both modes**: Run the exact same Flet application code - no differences in functionality
 
-### **RESOLVED: Global Singleton Race Condition (Root Cause of Progress Issues)**
+---
 
-**Problem**: The API server uses a global singleton `backup_executor` shared across all concurrent requests, causing progress updates to be routed to the wrong clients.
+## 🔧 SEARCH & DEVELOPMENT TOOLS
 
-**Code Location**: `cyberbackup_api_server.py:40`
+You have access to ast-grep for syntax-aware searching:
+- **Structural matching**: `ast-grep --lang python -p 'class $NAME($BASE)'`
+- **Fallback to ripgrep**: Only when ast-grep isn't applicable
+- **Never use basic grep**: ripgrep is always better for codebase searches (basic grep when other tools fail)
 
-```python
-# Global singleton shared across ALL requests - DANGEROUS!
-backup_executor = RealBackupExecutor()
-```
+---
 
-**Race Scenario**:
+## 💡 KEY INSIGHTS
 
-1.  **Request A** starts backup, sets `backup_executor.set_status_callback(status_handler_A)`
-2.  **Request B** starts simultaneously, overwrites with `backup_executor.set_status_callback(status_handler_B)`
-3.  **Request A's progress updates** now go to Request B's WebSocket/job_id
-4.  **Result**: Progress confusion, lost updates, wrong client notifications
+**★ Framework Enlightenment**: Desktop resizable apps with navigation are trivial in Flet. The entire application can be ~700 lines instead of 10,000+ lines of framework-fighting code(not really, but to illustrate the point).
 
-**Impact**:
+**★ The Semi-Nuclear Protocol**: When refactoring complex code, analyze first to understand TRUE intentions, then rebuild with simple Flet patterns while preserving valuable business logic, achieving feature parity.
 
-*   Progress updates go to wrong clients
-*   Lost progress updates when callbacks get overwritten
-*   WebSocket broadcasting confusion
-*   Multi-user backup interference
+**★ Performance Secret**: Replacing `page.update()` with `control.update()` can improve performance by 10x+ and eliminate UI flicker.
 
-**✅ SOLUTION IMPLEMENTED**: CallbackMultiplexer system routes progress callbacks to correct job handlers:
-
-*   Maintains per-job handlers in thread-safe dictionary
-*   Routes progress updates to all active job handlers
-*   Eliminates race condition by multiplexing instead of overwriting callbacks
-*   Preserves global singleton while fixing concurrency issues
-
-### **MEDIUM: Thread Proliferation in File Monitor**
-
-**Problem**: File receipt monitor creates unlimited monitoring threads (one per received file) without resource limits.
-
-**Code Location**: `src/server/file_receipt_monitor.py:52-58`
-
-```python
-# One thread per file - no limits!
-stability_thread = threading.Thread(target=self._monitor_file_stability, ...)
-stability_thread.start()
-```
-
-**Solution Required**: Implement thread pool or concurrent file monitoring limits
-
-### **FIXED: File Monitor Thread Safety**
-
-**Status**: ✅ **RESOLVED** - Current implementation has proper locking
-
-*   Uses `threading.Lock()` with consistent `with self.monitoring_lock:` patterns
-*   File was completely rewritten in commit `d2dd37b` with thread safety from the start
-*   Previous analyses claiming locking issues are outdated
-
-## Repository Management
-
-### Current Repository Setup
-
-*   **Primary Repository**: `client-server-encrypted-backup-framework-clean` - All active development (45 commits pushed)
-*   **Original Repository**: `client-server-encrypted-backup-framework` - Minimal original version
-*   **Current Branch**: `clean-main` (tracking clean-origin/clean-main)
-
-### Handling Workplace-Specific Files
-
-**Important**: Workplace-specific configuration files (`.mcp.json`, `.gemini/settings.json`) are:
-
-*   **Kept locally** for functionality (important for workplace tools)
-*   **Excluded from git** via `.gitignore` to prevent accidental commits
-*   **Removed from git history** using `git filter-branch` for clean repository
-
-### Secret Management Protocol
-
-If GitHub secret scanning blocks pushes:
-
-1.  **Files are already excluded** via `.gitignore`
-2.  **Use git filter-branch** to remove from history:
-    ```bash
-    git filter-branch --force --index-filter "git rm --cached --ignore-unmatch .mcp.json .gemini/settings.json || true" --prune-empty HEAD~45..HEAD
-    ```
-3.  **Reference**: `working with protection.md` contains GitHub's official documentation
-4.  **Alternative**: Use GitHub's bypass URL if secrets are safe to include
-
-## Binary Protocol & Security Implementation
-
-### Custom TCP Protocol (Port 1256)
-
-*   **Protocol Version**: 3 (both client and server)
-*   **Request Codes**: `REQ_REGISTER(1025)`, `REQ_SEND_PUBLIC_KEY(1026)`, `REQ_SEND_FILE(1028)`
-*   **Response Codes**: `RESP_REG_OK(1600)`, `RESP_PUBKEY_AES_SENT(1602)`, `RESP_FILE_CRC(1603)`
-*   **Header Format**: 23-byte requests, 7-byte responses (little-endian)
-*   **CRC Verification**: Linux `cksum` compatible CRC32 algorithm
-
-### Protocol Canonicalization Specification
-
-#### Header Canonicalization Rules
-
-*   **Text Encoding**: UTF-8, NFC normalization, `\n` line endings.
-*   **Name Normalization**: `original_name.strip().lower()`
-*   **Value Normalization**: NFC normalization, strip whitespace, collapse internal whitespace, remove control characters.
-*   **Header Ordering**: Sort alphabetically by canonical name.
-*   **Duplicate Headers**: Reject as a protocol violation.
-
-#### Canonical Format
-
-```
-<bhi>
-name1:value1
-name2:value2
-... 
-nameN:valueN
-</bhi>
-```
-
-#### CRC32 Calculation
-
-*   **Algorithm**: POSIX cksum compatible (polynomial 0x04C11DB7)
-*   **Initial Value**: 0x00000000
-*   **Reflect Input**: No
-*   **Reflect Output**: No
-*   **Final XOR**: 0xFFFFFFFF (one's complement)
-
-#### Test Vectors
-
-Test vectors for the protocol are available in `Shared/test_vectors/headers.json`.
-
-### Web Client Architecture (8000+ Line Single-File SPA)
-
-```javascript
-// Class hierarchy for modular JavaScript application
-class App {
-    constructor() {
-        this.apiClient = new ApiClient();           // Flask API communication
-        this.system = new SystemManager();          // Core system management
-        this.buttonStateManager = new ButtonStateManager();  // UI state
-        this.particleSystem = new ParticleSystem(); // Visual effects
-        this.errorBoundary = new ErrorBoundary(this); // Error handling
-        // + 10 more manager classes
-    }
-}
-```
-
-### Integration Testing Pattern (CRITICAL)
-
-```python
-# Always test the complete web→API→C++→server chain
-def test_full_backup_chain():
-    1. Start backup server (python src/server/server.py)
-    2. Start API server (python cyberbackup_api_server.py)
-    3. Create test file with unique content
-    4. Upload via /api/start_backup
-    5. Monitor process execution and logs
-    6. Verify file appears in received_files/
-    7. Compare file hashes for integrity
-    8. Check network activity and exit codes
-```
-
-**Essential Truth**: Component isolation testing misses critical integration issues. Real verification happens through actual file transfers and hash comparison, not just API responses or exit codes.
-
-## Quick Reference Commands
-
-```bash
-# Check system health
-netstat -an | findstr ":9090\|:1256"    # Port availability
-tasklist | findstr "python\|Encrypted"   # Process status
-
-# Emergency cleanup
-taskkill /f /im python.exe               # Kill Python processes
-taskkill /f /im EncryptedBackupClient.exe # Kill C++ client
-
-# Verify file transfers
-dir "received_files"              # Check received files
-python -c "import hashlib; print(hashlib.sha256(open('file.txt','rb').read()).hexdigest())"
-
-# Build troubleshooting
-cmake --version                          # Check CMake version
-vcpkg list                              # Check installed packages
-```
-
-## Additional Resources
-
-### Technical Implementation Details
-
-*   **`.github/copilot-instructions.md`**: In-depth subprocess management patterns, binary protocol specifications, and security implementation details
-*   **Evidence of Success**: Check `received_files/` directory for actual file transfers (multiple test files demonstrate working system)
-*   **`working with protection.md`**: GitHub's official guide for handling secret scanning push protection
-
-## File Receipt Override System (NEW 2025-08-03)
-
-The **FileReceiptProgressTracker** provides ground truth progress completion by monitoring the server's file storage directory in real-time.
-
-### Key Features
-
-1.  **Real-Time File Monitoring**: Uses watchdog library with polling fallback for Windows compatibility
-2.  **File Stability Detection**: Ensures files are completely written before signaling completion
-3.  **Progress Override**: Immediately signals 100% completion when file appears on server
-4.  **Ground Truth Verification**: Overrides all other progress estimates with actual file presence
-
-### How It Works
-
-```
-File Transfer → File Appears in received_files/ → FileReceiptProgressTracker detects file →
-Verifies file stability → Triggers override signal → RobustProgressMonitor forces 100% completion →
-Web GUI immediately shows "✅ File received on server - Backup complete!"
-```
-
-### Critical Fix (2025-08-03)
-
-**Issue**: FileReceiptProgressTracker was monitoring wrong directory (`src\server\received_files`) while server saves files to project root (`received_files`), causing progress to never reach 100%.
-
-**Solution**: Updated monitoring path to match server's actual file storage location:
-
-```python
-self.server_received_files = "received_files"  # Server saves files to project root/received_files
-```
-
-### Technical Implementation
-
-*   **Location**: `src/api/real_backup_executor.py` (FileReceiptProgressTracker class, lines 473-663)
-*   **Priority**: Highest priority tracker (layer 0) in RobustProgressMonitor
-*   **Override Mechanism**: Returns `{"progress": 100, "override": True}` when file detected
-*   **Integration**: Connected through CallbackMultiplexer for proper routing to all job handlers
-*   **Failsafe Design**: Provides completion signal even if other progress trackers fail
-
-### Benefits
-
-*   **Eliminates False Negatives**: File on server = 100% complete, regardless of progress estimation errors
-*   **User Confidence**: Immediate visual confirmation when backup actually succeeds
-*   **Debugging Aid**: Clearly distinguishes between transfer completion and progress tracking issues
-*   **Robust Fallback**: Works even when C++ client output parsing fails
-
-## Future Development
-
-The project has a detailed roadmap for future development, which includes plans for adding new features, such as incremental backups, smart compression, and a web interface. It also includes a list of advanced ideas for making the project more impressive to potential employers.
-
-## Critical Dependencies & Requirements
-
-### Build Dependencies
-
-*   **CMake**: 4.0.3+ (minimum 3.15 required)
-*   **vcpkg**: Package manager with boost-asio, boost-beast, cryptopp, zlib
-*   **MSVC**: Visual Studio 2022 Build Tools
-*   **Python**: 3.8+ with Flask, psutil, cryptography
-
-### Port Usage
-
-*   **9090**: Flask API server (web GUI communication)
-*   **1256**: Python backup server (C++ client connections)
-
-### Key File Locations
-
-```
-build/Release/EncryptedBackupClient.exe    # Main C++ executable
-server/received_files/                     # Backup storage location
-transfer.info                              # Generated per operation
-client_debug.log                           # C++ client activity log
-server.log                                 # Python server activity log
-```
-
-## Common Issues & Critical Gotchas
-
-### Build System Issues
-
-*   **vcpkg Toolchain**: Builds fail without `-DCMAKE_TOOLCHAIN_FILE="vcpkg\scripts\buildsystems\vcpkg.cmake"`
-*   **Windows Defines**: Must include `WIN32_LEAN_AND_MEAN`, `NOMINMAX` for Boost compatibility
-*   **Path Spaces**: Use existing `build/` directory; new directories may fail due to path issues
-
-### Process Integration Failures
-
-*   **Missing --batch**: C++ client hangs waiting for user input in subprocess
-*   **Wrong Working Directory**: Client must run from directory containing `transfer.info`
-*   **Executable Path**: `RealBackupExecutor` searches multiple paths: `build/Release/`, `client/`, etc.
-
-### Configuration Issues
-
-*   **transfer.info Format**: Must be exactly 3 lines: server:port, username, filepath
-*   **Port Conflicts**: Check port availability before starting (1256, 9090)
-*   **Absolute Paths**: Use absolute file paths to avoid working directory confusion
-
-### Testing & Verification Failures
-
-*   **False Success**: Zero exit code doesn't guarantee successful transfer
-*   **Missing Files**: Always verify actual files appear in `server/received_files/`
-*   **Hash Verification**: Compare SHA256 hashes of original vs transferred files
-*   **Network Activity**: Verify TCP connections to port 1256 during transfers
-
-### Unicode & Console Issues
-
-*   **Windows Console**: Some validation scripts fail with `UnicodeEncodeError`
-*   **Workaround**: Run individual tests instead of master test suite
-*   **Log Encoding**: Monitor logs through file reads, not console output
-
-## Project-Specific Conventions
-
-*   **File Structure**: C++ client expects `transfer.info` in working directory, not executable directory
-*   **Batch Mode**: Always use `--batch` flag for C++ client in subprocess to prevent hanging
-*   **Port Usage**: Server (1256), API (9090) - check both for conflicts
-*   **File Verification**: Success = actual file appears in `received_files/` with correct content
-*   **Build Dependencies**: vcpkg toolchain required for C++ build, Flask + flask-cors for API
-*   **Process Management**: Use SynchronizedFileManager for `transfer.info` to prevent race conditions
-*   **API Communication**: REST endpoints for operations, WebSocket (`/ws`) for real-time progress updates
-*   **Error Propagation**: C++ client logs → subprocess stdout → RealBackupExecutor → Flask API → Web UI
-
-## Architectural Assessment
-
-The system employs a robust 4-layer design optimizing technologies: C++ for crypto/performance-critical client tasks, Python for server logic, Flask for API/WebSocket GUI, and SQLite for persistence.
-
-**Strengths**:
-
-*   **Separation of Concerns**: Distinct layers for UI, API orchestration, client encryption/transfer, and server storage/validation.
-*   **Integration Success**: Full data path operational (Web UI → API → C++ subprocess → Server → Storage/DB), with WebSocket for real-time updates.
-*   **Protocol Design**: Custom binary (23-byte request/7-byte response headers: client_id[16] + version[1] + code[2,<H>] + payload_size[4,<I>]), supporting multi-packet transfers.
-*   **Evidence of Functionality**: `received_files/` artifacts, DB records (93 clients, 41 files), progress tracking to 50%.
-
-**Weaknesses**:
-
-*   **Inconsistencies**: Protocol header divergence (2-byte vs 4-byte code), duplicated response construction across layers (`network_server.py`, `request_handlers.py`, `file_transfer.py`).
-*   **Dependencies**: sys.path hacks for shared modules; runtime artifacts (DB/logs/build) tracked in Git, risking corruption/exposure.
-*   **Lifecycle Issues**: No guaranteed cleanup (threads/monitors, signals only from main thread); maintenance jobs defined but unscheduled (stale sessions/partials).
-
-## Critical Issues
-
-These production-blocking vulnerabilities and bugs pose high risks of breaches, crashes, or data corruption. Prioritize based on impact (HIGH/CRITICAL), effort (EASY-HARD), and invasiveness (LOW-HIGH).
-
-| # | Issue | What/Why | Impact/Risk | Effort/Invasiveness | Files/Locations | How to Fix |
-|---|---|---|---|---|---|---|
-| 1 | Security Vulnerabilities in Protocol | Fixed/static zero IV in AES-CBC; CRC32 instead of cryptographic authentication; RSA-1024 weakness; no transport security (TLS). Enables replay/pattern attacks, tampering, factorization. | CRITICAL - Data breach, pattern leakage, impersonation. | HARD/Invasive | `src/wrappers/AESWrapper.cpp:27-29`, `src/client/client.cpp`, `src/server/server.py`, `include/client/client.h:58`. | Generate random IV per message/file (prefix in payload); add HMAC-SHA256; upgrade to RSA-2048/ECC; add TLS wrapper; version-gate for compatibility. |
-| 2 | Authentication Bypass | Username-only identification; no passwords/tokens/sessions; registration lacks rate-limiting. Allows impersonation. | HIGH - Unauthorized access. | HIGH/Medium | `src/server/server.py`, cryptographic modules. | Implement password hashing (bcrypt/Argon2), session management/timeout, RBAC; rate-limit registration; pre-provision clients optionally. |
-| 3 | Thread Safety & Concurrency Issues | Race conditions in client registration/state management; Flask globals without locks; private Semaphore internals (`_value`) used; multiple threads (WS, executor) per backup. | HIGH - Crashes, corruption, inconsistent UI. | MEDIUM/Low-Medium | `cyberbackup_api_server.py`, `real_backup_executor.py`, `src/server/network_server.py`. | Add RLock/thread-safe wrappers for shared state; maintain atomic counters; consolidate to thread pool (max_workers=20). |
-| 4 | Process Cleanup & Resource Leaks | C++ subprocesses not terminated gracefully; no shutdown mechanism; memory-mapped I/O holds files in RAM. | HIGH - Exhaustion, OOM for large files. | MEDIUM/Medium | `cyberbackup_api_server.py`, `real_backup_executor.py`, `src/client/client.cpp:1269-1286`. | Add signal handling/cleanup; implement streaming buffers (1MB fixed); use event-driven updates. |
-| 5 | Protocol Inconsistencies & Duplications | Header divergence (2- vs 4-byte code); duplicated CRC/filename validation/response construction/config/constants. Leads to parsing bugs, mismatches, drift. | HIGH - Interop failures, security gaps. | EASY/Non-invasive | `src/server/protocol.py`, `src/server/network_server.py`, `src/server/config.py`, `src/server/file_transfer.py`, `request_handlers.py`. | Centralize in shared utils (`crc.py`, `filename_validator.py`, `config.py`); single send/parse paths; add roundtrip tests. |
-| 6 | Maintenance & Cleanup Unwired | Jobs defined but never scheduled; no automatic partials cleanup. Causes stale data, drifting stats. | MEDIUM - Reliability erosion. | EASY/Non-invasive | `src/server/server.py`. | Hook scheduler/thread on `start()`/`stop()`; time-simulated tests. |
-| 7 | Runtime Artifacts in Git & Path Hacks | Tracked DB/logs/build outputs; sys.path injections. Risks exposure, noisy diffs, fragile imports. | MEDIUM - Security/productivity. | EASY/Non-invasive | Repo root, `src/server/server.py`. | Add `.gitignore` (data/**, *.db, logs/**, etc.); standardize under `data/`; proper package layout. |
-
-## Recommended Priority Order & Phased Implementation Plan
-
-Order balances impact, effort, and dependencies: Security/stability first, then quick wins, foundational improvements, testing, optimizations, quality.
-
-1.  **Security Protocol Fixes** (Items 1-2, RSA exchange) - Prevent breaches.
-2.  **Thread Safety & Concurrency** (Item 3) - Stability.
-3.  **Process Cleanup & Resources** (Item 4) - Avoid exhaustion.
-4.  **Progress Reporting & UX** (Item 10) - Quick UX win.
-5.  **Error Handling & Recovery** (Item 9) - Reliability.
-6.  **Configuration Management** (Item 8) - Foundation.
-7.  **Outstanding Tasks** (Registration, reconnection) - Architecture completion.
-8.  **Testing Framework** (Medium priority) - Safe refactoring.
-9.  **Performance Improvements** (Items 11-12, 14) - Scalability.
-10. **Code Quality & Ops** (Refactoring, observability, build hygiene) - Maintainability.
-
-## Real-Time Progress Tracking System
-
-- **WebSocket Communication**: Instant progress updates (no 2-3 second polling delays)
-- **Rich Phase Context**: "Encrypting file with AES-256..." vs raw "ENCRYPTING"
-- **Accurate ETA**: Based on actual C++ client phase measurements
-- **Smooth UI**: 50ms debounced updates for professional feel
-
-```
+**The FletV2 directory is the CANONICAL REFERENCE** for proper Flet desktop development. When in doubt, follow its examples exactly.

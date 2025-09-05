@@ -1,5 +1,8 @@
 # MockaBase Database Implementation
 
+THIS SOLUTION WAS CREATED IN THE NOW OBSOLETE `flet_server_gui` SYSTEM, WHICH IS BAD, OVER-ENGINEERED, FIGHTING THE FRAMEWORK, OUTDATED AND NOT USED ANYMORE CODE, BECAUSE WE MOVED TO A MORE CORRECT FLET WAY IN `FletV2`. 
+BUT THIS MOCKABASE SOLUTION IS STILL RELEVANT AS IT PROVIDES A MOCK DATABASE FOR DEVELOPMENT AND TESTING PURPOSES.
+
 ## Overview
 
 MockaBase is a SQLite3 database with an identical schema to the real backup server database. It serves as a drop-in replacement for development and testing purposes, allowing the Flet GUI to function without requiring a live server connection.

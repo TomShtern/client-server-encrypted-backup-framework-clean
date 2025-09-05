@@ -1,5 +1,8 @@
 # AI Agent Guide: Building Material Design 3 GUIs with Flet (Enhanced)
 
+THIS FILE IS SLIGHTLY OUTDATED, BUT STILL HAS SOME VLAUBLE CONTEXT. REFER TO `important_docs/` FOR MORE RELEVANT DATA.
+also, we use a custom color scheme, not the default M3 one, so some of the color references are not relevant, because i dont want the seed etc, i want custome colors that i have created. 
+
 This guide provides AI coding agents with essential context and best practices for creating modern, correct, and visually appealing desktop GUIs using Flet and Material Design 3 (M3).
 
 **Core Principle:** Flet uses Material Design 3 by default. Do not search for or try to install separate "Material Design" libraries. All necessary components and theming are built-in.

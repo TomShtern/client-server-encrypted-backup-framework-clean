@@ -1,10 +1,18 @@
 # CLAUDE.md - FletV2 Development Guide
-
-This file provides comprehensive guidance for working with FletV2 - a clean, framework-harmonious Flet desktop application that demonstrates proper Flet patterns and best practices.
+This file provides Claude and Claude Code comprehensive guidance for working with FletV2 - a clean, framework-harmonious Flet desktop application that demonstrates proper Flet patterns and best practices.
+Claude and Claude Code will adhere and reference this file for all FletV2-related development tasks.
 
 **CRITICAL**: We work exclusively with `FletV2/` directory. The `flet_server_gui/` is obsolete, over-engineered, and kept only as reference of what NOT to do.
  you should reference the `important_docs/` folder for component usage examples and documentation.
 ---
+
+## ⚙️ Essential Configuration
+
+### UTF-8 Support
+```python
+# ALWAYS import this in any Python file that deals with subprocess or console I/O
+import Shared.utils.utf8_solution
+```
 
 ## 🎯 CORE PRINCIPLES: Framework Harmony
 
