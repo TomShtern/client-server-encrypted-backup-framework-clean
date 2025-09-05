@@ -60,14 +60,12 @@ teal_dark_elevated_button_style = ft.ButtonStyle(
 
 TealTheme = ft.Theme(
     color_scheme=ft.ColorScheme(**teal_light_colors), 
-    font_family="Inter",
-    elevated_button_theme=ft.ElevatedButtonTheme(style=teal_elevated_button_style)
+    font_family="Inter"
 )
 
 TealDarkTheme = ft.Theme(
     color_scheme=ft.ColorScheme(**teal_dark_colors), 
-    font_family="Inter",
-    elevated_button_theme=ft.ElevatedButtonTheme(style=teal_dark_elevated_button_style)
+    font_family="Inter"
 )
 
 
@@ -128,14 +126,12 @@ purple_dark_elevated_button_style = ft.ButtonStyle(
 
 PurpleTheme = ft.Theme(
     color_scheme=ft.ColorScheme(**purple_light_colors), 
-    font_family="Inter",
-    elevated_button_theme=ft.ElevatedButtonTheme(style=purple_elevated_button_style)
+    font_family="Inter"
 )
 
 PurpleDarkTheme = ft.Theme(
     color_scheme=ft.ColorScheme(**purple_dark_colors), 
-    font_family="Inter",
-    elevated_button_theme=ft.ElevatedButtonTheme(style=purple_dark_elevated_button_style)
+    font_family="Inter"
 )
 
 

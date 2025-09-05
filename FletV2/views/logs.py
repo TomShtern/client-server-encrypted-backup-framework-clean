@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Logs View for FletV2
-An improved implementation using ft.UserControl for better state management.
+Clean function-based implementation using Flet's built-in components.
 """
 
 import flet as ft
@@ -15,176 +15,25 @@ from config import ASYNC_DELAY
 logger = get_logger(__name__)
 
 
-class LogsView(ft.UserControl):
+def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
     """
-    Logs view using ft.UserControl for better state management.
+    Create logs view using simple functions and closures.
+    
+    Args:
+        server_bridge: Server bridge for data access
+        page: Flet page instance
+        
+    Returns:
+        ft.Control: The logs view
     """
+    # State variables
+    logs_data: List[Dict[str, Any]] = []
+    filtered_logs_data: List[Dict[str, Any]] = []
+    current_filter = "ALL"
+    is_loading = False
+    last_updated = None
     
-    def __init__(self, server_bridge, page: ft.Page):
-        super().__init__()
-        self.server_bridge = server_bridge
-        self.page = page
-        self.logs_data: List[Dict[str, Any]] = []
-        self.filtered_logs_data: List[Dict[str, Any]] = []
-        self.current_filter = "ALL"
-        self.is_loading = False
-        self.last_updated = None
-        
-        # UI References
-        self.logs_container = None
-        self.status_text = None
-        self.last_updated_text = None
-        self.filter_buttons = []
-        
-    def build(self):
-        """Build the logs view UI."""
-        self.status_text = ft.Text(
-            value="Loading logs...",
-            color=ft.Colors.ON_SURFACE_VARIANT,
-            ref=ft.Ref[ft.Text]()
-        )
-        
-        self.last_updated_text = ft.Text(
-            value="Last updated: Never",
-            color=ft.Colors.ON_SURFACE,
-            size=12
-        )
-        
-        # Create filter buttons
-        self.filter_buttons = [
-            ft.ElevatedButton(
-                "ALL",
-                icon=ft.Icons.FILTER_LIST,
-                on_click=self._create_filter_handler("ALL"),
-                style=ft.ButtonStyle(bgcolor=ft.Colors.PRIMARY if self.current_filter == "ALL" else None)
-            ),
-            ft.OutlinedButton("INFO", on_click=self._create_filter_handler("INFO")),
-            ft.OutlinedButton("SUCCESS", on_click=self._create_filter_handler("SUCCESS")),
-            ft.OutlinedButton("WARNING", on_click=self._create_filter_handler("WARNING")),
-            ft.OutlinedButton("ERROR", on_click=self._create_filter_handler("ERROR")),
-            ft.OutlinedButton("DEBUG", on_click=self._create_filter_handler("DEBUG"))
-        ]
-        
-        self.logs_container = ft.Column(
-            controls=[],
-            scroll=ft.ScrollMode.AUTO,
-            expand=True,
-            spacing=0
-        )
-        
-        # Build the main view
-        return ft.Column([
-            # Header with title and action buttons
-            ft.Container(
-                content=ft.Row([
-                    ft.Text("System Logs", size=24, weight=ft.FontWeight.BOLD),
-                    ft.Container(expand=True),  # Spacer
-                    ft.Row([
-                        ft.IconButton(
-                            icon=ft.Icons.REFRESH,
-                            tooltip="Refresh Logs",
-                            on_click=self._on_refresh_logs
-                        ),
-                        ft.IconButton(
-                            icon=ft.Icons.DOWNLOAD,
-                            tooltip="Export Logs",
-                            on_click=self._on_export_logs
-                        ),
-                        ft.IconButton(
-                            icon=ft.Icons.CLEAR_ALL,
-                            tooltip="Clear Logs",
-                            icon_color=ft.Colors.RED,
-                            on_click=self._on_clear_logs
-                        )
-                    ], spacing=5)
-                ]),
-                padding=ft.Padding(20, 20, 20, 10)
-            ),
-            # Filter buttons
-            ft.Container(
-                content=ft.Row(self.filter_buttons, spacing=10),
-                padding=ft.Padding(20, 0, 20, 10)
-            ),
-            # Status info
-            ft.Container(
-                content=ft.Row([
-                    self.status_text,
-                    ft.Container(expand=True),
-                    self.last_updated_text
-                ]),
-                padding=ft.Padding(20, 0, 20, 10)
-            ),
-            # Logs header
-            ft.Container(
-                content=ft.Row([
-                    ft.Container(
-                        content=ft.Text("Time", weight=ft.FontWeight.BOLD, size=12),
-                        width=80
-                    ),
-                    ft.Container(
-                        content=ft.Text("Level", weight=ft.FontWeight.BOLD, size=12),
-                        width=70
-                    ),
-                    ft.Container(
-                        content=ft.Text("Component", weight=ft.FontWeight.BOLD, size=12),
-                        width=100
-                    ),
-                    ft.Container(
-                        content=ft.Text("Message", weight=ft.FontWeight.BOLD, size=12),
-                        expand=True
-                    )
-                ], spacing=10),
-                padding=ft.Padding(10, 8, 10, 8),
-                bgcolor=ft.Colors.SURFACE,
-                border=ft.border.all(1, ft.Colors.OUTLINE)
-            ),
-            # Logs list in a scrollable container
-            ft.Container(
-                content=self.logs_container,
-                expand=True,
-                padding=ft.Padding(20, 0, 20, 20),
-                border=ft.border.all(1, ft.Colors.OUTLINE),
-                bgcolor=ft.Colors.SURFACE_TINT
-            )
-        ], expand=True)
-    
-    async def _load_logs_data_async(self):
-        """Asynchronously load logs data."""
-        if self.is_loading:
-            return
-            
-        self.is_loading = True
-        try:
-            # Show loading state
-            self.status_text.value = "Loading logs..."
-            self.status_text.update()
-            
-            # Load data asynchronously
-            if self.server_bridge:
-                self.logs_data = await self.page.run_thread(self.server_bridge.get_logs)
-            else:
-                # Generate mock log data
-                self.logs_data = await self.page.run_thread(self._generate_mock_logs)
-            
-            # Update last updated timestamp
-            self.last_updated = datetime.now()
-            self.last_updated_text.value = f"Last updated: {self.last_updated.strftime('%H:%M:%S')}"
-            
-            # Apply current filter
-            self._filter_logs()
-            
-            # Update UI
-            self._update_logs_display()
-            self._update_status_text()
-            
-        except Exception as e:
-            logger.error(f"Error loading logs data: {e}")
-            self.status_text.value = "Error loading logs data"
-        finally:
-            self.is_loading = False
-            self.update()
-    
-    def _generate_mock_logs(self):
+    def generate_mock_logs():
         """Generate mock log data."""
         base_time = datetime.now()
         log_types = ["INFO", "WARNING", "ERROR", "SUCCESS", "DEBUG"]
@@ -237,20 +86,32 @@ class LogsView(ft.UserControl):
         logs_data.sort(key=lambda x: x["timestamp"], reverse=True)
         return logs_data
     
-    def _filter_logs(self):
-        """Filter logs based on current selection."""
-        if self.current_filter == "ALL":
-            self.filtered_logs_data = self.logs_data
-        else:
-            self.filtered_logs_data = [log for log in self.logs_data if log["level"] == self.current_filter]
+    def get_level_color(level):
+        """Get color for log level."""
+        color_map = {
+            "INFO": ft.Colors.BLUE,
+            "SUCCESS": ft.Colors.GREEN,
+            "WARNING": ft.Colors.ORANGE,
+            "ERROR": ft.Colors.RED,
+            "DEBUG": ft.Colors.GREY
+        }
+        return color_map.get(level, ft.Colors.ON_SURFACE)
     
-    def _update_logs_display(self):
+    def filter_logs():
+        """Filter logs based on current selection."""
+        nonlocal filtered_logs_data
+        if current_filter == "ALL":
+            filtered_logs_data = logs_data
+        else:
+            filtered_logs_data = [log for log in logs_data if log["level"] == current_filter]
+    
+    def update_logs_display():
         """Update the logs display with current filter."""
         # Create log entries using Flet's built-in components
         log_entries = []
-        for log in self.filtered_logs_data[:100]:  # Limit to 100 entries for performance
+        for log in filtered_logs_data[:100]:  # Limit to 100 entries for performance
             timestamp_str = datetime.fromisoformat(log["timestamp"]).strftime("%H:%M:%S")
-            level_color = self._get_level_color(log["level"])
+            level_color = get_level_color(log["level"])
             
             log_entry = ft.Container(
                 content=ft.Row([
@@ -295,85 +156,115 @@ class LogsView(ft.UserControl):
             log_entries.append(log_entry)
         
         # Update the logs container
-        self.logs_container.controls = log_entries
+        logs_container.controls = log_entries
+        logs_container.update()
     
-    def _update_status_text(self):
+    def update_status_text():
         """Update status text."""
-        total_logs = len(self.logs_data)
-        filtered_count = len(self.filtered_logs_data)
-        self.status_text.value = f"Showing {min(100, filtered_count)} of {filtered_count} logs (Total: {total_logs})"
+        total_logs = len(logs_data)
+        filtered_count = len(filtered_logs_data)
+        status_text.value = f"Showing {min(100, filtered_count)} of {filtered_count} logs (Total: {total_logs})"
+        status_text.update()
     
-    def _get_level_color(self, level):
-        """Get color for log level."""
-        color_map = {
-            "INFO": ft.Colors.BLUE,
-            "SUCCESS": ft.Colors.GREEN,
-            "WARNING": ft.Colors.ORANGE,
-            "ERROR": ft.Colors.RED,
-            "DEBUG": ft.Colors.GREY
-        }
-        return color_map.get(level, ft.Colors.ON_SURFACE)
+    async def load_logs_data_async():
+        """Asynchronously load logs data."""
+        nonlocal logs_data, is_loading, last_updated
+        if is_loading:
+            return
+            
+        is_loading = True
+        try:
+            # Show loading state
+            status_text.value = "Loading logs..."
+            status_text.update()
+            
+            # Load data asynchronously
+            if server_bridge:
+                logs_data = await page.run_thread(server_bridge.get_logs)
+            else:
+                # Generate mock log data
+                logs_data = await page.run_thread(generate_mock_logs)
+            
+            # Update last updated timestamp
+            last_updated = datetime.now()
+            last_updated_text.value = f"Last updated: {last_updated.strftime('%H:%M:%S')}"
+            last_updated_text.update()
+            
+            # Apply current filter
+            filter_logs()
+            
+            # Update UI
+            update_logs_display()
+            update_status_text()
+            
+        except Exception as e:
+            logger.error(f"Error loading logs data: {e}")
+            status_text.value = "Error loading logs data"
+            status_text.update()
+        finally:
+            is_loading = False
     
-    def _create_filter_handler(self, level):
+    def create_filter_handler(level):
         def handler(e):
-            self.current_filter = level
+            nonlocal current_filter
+            current_filter = level
             logger.info(f"Filter changed to: {level}")
             # Update button styles
-            for i, button in enumerate(self.filter_buttons):
+            for i, button in enumerate(filter_buttons):
                 if i == 0:  # ALL button
                     button.style = ft.ButtonStyle(bgcolor=ft.Colors.PRIMARY if level == "ALL" else None)
                 button.update()
             
             # Apply filter and update display
-            self._filter_logs()
-            self._update_logs_display()
-            self._update_status_text()
-            self.update()
+            filter_logs()
+            update_logs_display()
+            update_status_text()
         return handler
     
-    def _on_clear_logs(self, e):
+    def close_dialog(e):
+        page.dialog.open = False
+        page.update()
+    
+    def confirm_clear(e):
+        nonlocal logs_data, filtered_logs_data
+        logger.info("Logs cleared")
+        logs_data = []
+        filtered_logs_data = []
+        update_logs_display()
+        update_status_text()
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text("Logs cleared successfully"),
+            bgcolor=ft.Colors.GREEN
+        )
+        page.snack_bar.open = True
+        close_dialog(None)
+    
+    def on_clear_logs(e):
         logger.info("Clear logs requested")
         # Simple confirmation dialog using Flet's built-in AlertDialog
         dialog = ft.AlertDialog(
             title=ft.Text("Clear Logs"),
             content=ft.Text("Are you sure you want to clear all logs?"),
             actions=[
-                ft.TextButton("Cancel", on_click=self._close_dialog),
-                ft.TextButton("Clear", on_click=self._confirm_clear)
+                ft.TextButton("Cancel", on_click=close_dialog),
+                ft.TextButton("Clear", on_click=confirm_clear)
             ]
         )
-        self.page.dialog = dialog
+        page.dialog = dialog
         dialog.open = True
-        self.page.update()
+        page.update()
     
-    def _confirm_clear(self, e):
-        logger.info("Logs cleared")
-        self.logs_data = []
-        self.filtered_logs_data = []
-        self._update_logs_display()
-        self._update_status_text()
-        self.page.snack_bar = ft.SnackBar(
-            content=ft.Text("Logs cleared successfully"),
-            bgcolor=ft.Colors.GREEN
-        )
-        self.page.snack_bar.open = True
-        self._close_dialog(None)
-    
-    def _close_dialog(self, e):
-        self.page.dialog.open = False
-        self.page.update()
-    
-    def _on_refresh_logs(self, e):
+    def on_refresh_logs(e):
         logger.info("Refresh logs")
-        self.page.run_task(self._load_logs_data_async)
-        self.page.snack_bar = ft.SnackBar(
+        page.run_task(load_logs_data_async)
+        page.snack_bar = ft.SnackBar(
             content=ft.Text("Refreshing logs..."),
             bgcolor=ft.Colors.BLUE
         )
-        self.page.snack_bar.open = True
-        self.page.update()
+        page.snack_bar.open = True
+        page.update()
     
-    async def _export_logs_async(self):
+    async def export_logs_async():
         """Async function to export logs."""
         try:
             # Simulate async operation
@@ -384,50 +275,145 @@ class LogsView(ft.UserControl):
             logger.error(f"Failed to export logs: {e}")
             return False
 
-    def _on_export_logs(self, e):
+    def on_export_logs(e):
         logger.info("Export logs requested")
         
         async def async_export():
             try:
-                success = await self._export_logs_async()
+                success = await export_logs_async()
                 if success:
-                    self.page.snack_bar = ft.SnackBar(
+                    page.snack_bar = ft.SnackBar(
                         content=ft.Text("Logs exported to logs_export.txt"),
                         bgcolor=ft.Colors.BLUE
                     )
                 else:
-                    self.page.snack_bar = ft.SnackBar(
+                    page.snack_bar = ft.SnackBar(
                         content=ft.Text("Failed to export logs"),
                         bgcolor=ft.Colors.RED
                     )
-                self.page.snack_bar.open = True
-                self.page.update()
+                page.snack_bar.open = True
+                page.update()
             except Exception as e:
                 logger.error(f"Error in export handler: {e}")
-                self.page.snack_bar = ft.SnackBar(
+                page.snack_bar = ft.SnackBar(
                     content=ft.Text("Error exporting logs"),
                     bgcolor=ft.Colors.RED
                 )
-                self.page.snack_bar.open = True
-                self.page.update()
+                page.snack_bar.open = True
+                page.update()
         
         # Run async operation
-        self.page.run_task(async_export)
+        page.run_task(async_export)
     
-    def did_mount(self):
-        """Called when the control is added to the page."""
-        self.page.run_task(self._load_logs_data_async)
-
-
-def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
-    """
-    Create logs view using ft.UserControl.
+    # Create UI controls
+    status_text = ft.Text(
+        value="Loading logs...",
+        color=ft.Colors.ON_SURFACE_VARIANT
+    )
     
-    Args:
-        server_bridge: Server bridge for data access
-        page: Flet page instance
-        
-    Returns:
-        ft.Control: The logs view
-    """
-    return LogsView(server_bridge, page)
+    last_updated_text = ft.Text(
+        value="Last updated: Never",
+        color=ft.Colors.ON_SURFACE,
+        size=12
+    )
+    
+    # Create filter buttons
+    filter_buttons = [
+        ft.ElevatedButton(
+            "ALL",
+            icon=ft.Icons.FILTER_LIST,
+            on_click=create_filter_handler("ALL"),
+            style=ft.ButtonStyle(bgcolor=ft.Colors.PRIMARY if current_filter == "ALL" else None)
+        ),
+        ft.OutlinedButton("INFO", on_click=create_filter_handler("INFO")),
+        ft.OutlinedButton("SUCCESS", on_click=create_filter_handler("SUCCESS")),
+        ft.OutlinedButton("WARNING", on_click=create_filter_handler("WARNING")),
+        ft.OutlinedButton("ERROR", on_click=create_filter_handler("ERROR")),
+        ft.OutlinedButton("DEBUG", on_click=create_filter_handler("DEBUG"))
+    ]
+    
+    logs_container = ft.Column(
+        controls=[],
+        scroll=ft.ScrollMode.AUTO,
+        expand=True,
+        spacing=0
+    )
+    
+    # Load initial data
+    page.run_task(load_logs_data_async)
+    
+    # Build the main view
+    return ft.Column([
+        # Header with title and action buttons
+        ft.Container(
+            content=ft.Row([
+                ft.Text("System Logs", size=24, weight=ft.FontWeight.BOLD),
+                ft.Container(expand=True),  # Spacer
+                ft.Row([
+                    ft.IconButton(
+                        icon=ft.Icons.REFRESH,
+                        tooltip="Refresh Logs",
+                        on_click=on_refresh_logs
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.DOWNLOAD,
+                        tooltip="Export Logs",
+                        on_click=on_export_logs
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.CLEAR_ALL,
+                        tooltip="Clear Logs",
+                        icon_color=ft.Colors.RED,
+                        on_click=on_clear_logs
+                    )
+                ], spacing=5)
+            ]),
+            padding=ft.Padding(20, 20, 20, 10)
+        ),
+        # Filter buttons
+        ft.Container(
+            content=ft.Row(filter_buttons, spacing=10),
+            padding=ft.Padding(20, 0, 20, 10)
+        ),
+        # Status info
+        ft.Container(
+            content=ft.Row([
+                status_text,
+                ft.Container(expand=True),
+                last_updated_text
+            ]),
+            padding=ft.Padding(20, 0, 20, 10)
+        ),
+        # Logs header
+        ft.Container(
+            content=ft.Row([
+                ft.Container(
+                    content=ft.Text("Time", weight=ft.FontWeight.BOLD, size=12),
+                    width=80
+                ),
+                ft.Container(
+                    content=ft.Text("Level", weight=ft.FontWeight.BOLD, size=12),
+                    width=70
+                ),
+                ft.Container(
+                    content=ft.Text("Component", weight=ft.FontWeight.BOLD, size=12),
+                    width=100
+                ),
+                ft.Container(
+                    content=ft.Text("Message", weight=ft.FontWeight.BOLD, size=12),
+                    expand=True
+                )
+            ], spacing=10),
+            padding=ft.Padding(10, 8, 10, 8),
+            bgcolor=ft.Colors.SURFACE,
+            border=ft.border.all(1, ft.Colors.OUTLINE)
+        ),
+        # Logs list in a scrollable container
+        ft.Container(
+            content=logs_container,
+            expand=True,
+            padding=ft.Padding(20, 0, 20, 20),
+            border=ft.border.all(1, ft.Colors.OUTLINE),
+            bgcolor=ft.Colors.SURFACE_TINT
+        )
+    ], expand=True)

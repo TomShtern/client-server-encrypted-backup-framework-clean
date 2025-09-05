@@ -26,19 +26,21 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
         ft.Control: The dashboard view
     """
     
-    # UI References using ft.Ref for robust access
-    last_updated_text_ref = ft.Ref[ft.Text]()
+    # Essential ft.Ref for controls requiring dynamic styling (KEEP - 5 refs)
+    cpu_progress_bar_ref = ft.Ref[ft.ProgressBar]()
+    memory_progress_bar_ref = ft.Ref[ft.ProgressBar]()
+    disk_progress_bar_ref = ft.Ref[ft.ProgressBar]()
     server_status_text_ref = ft.Ref[ft.Text]()
     server_status_icon_ref = ft.Ref[ft.Icon]()
-    uptime_text_ref = ft.Ref[ft.Text]()
-    active_clients_text_ref = ft.Ref[ft.Text]()
-    total_transfers_text_ref = ft.Ref[ft.Text]()
-    cpu_usage_text_ref = ft.Ref[ft.Text]()
-    cpu_progress_bar_ref = ft.Ref[ft.ProgressBar]()
-    memory_usage_text_ref = ft.Ref[ft.Text]()
-    memory_progress_bar_ref = ft.Ref[ft.ProgressBar]()
-    disk_usage_text_ref = ft.Ref[ft.Text]()
-    disk_progress_bar_ref = ft.Ref[ft.ProgressBar]()
+    
+    # Direct control references for simple text updates (OPTIMIZED)
+    last_updated_text = ft.Text(f"Last updated: {datetime.now().strftime('%H:%M:%S')}", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+    uptime_text = ft.Text("2h 34m", size=18, weight=ft.FontWeight.BOLD)
+    active_clients_text = ft.Text("3", size=18, weight=ft.FontWeight.BOLD)
+    total_transfers_text = ft.Text("72", size=18, weight=ft.FontWeight.BOLD)
+    cpu_usage_text = ft.Text("45.2%", size=18, weight=ft.FontWeight.BOLD)
+    memory_usage_text = ft.Text("67.8%", size=18, weight=ft.FontWeight.BOLD)
+    disk_usage_text = ft.Text("34.1%", size=18, weight=ft.FontWeight.BOLD)
     
     def get_server_status():
         """Get server status from bridge or return mock data."""
@@ -135,7 +137,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
             system_metrics = get_system_metrics()
             recent_activity = get_recent_activity()
             
-            # Update server status
+            # Update server status (KEEP - requires dynamic styling)
             if server_status.get("server_running", False):
                 server_status_text_ref.current.value = "Running"
                 server_status_text_ref.current.color = ft.Colors.GREEN
@@ -145,14 +147,14 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                 server_status_text_ref.current.color = ft.Colors.RED
                 server_status_icon_ref.current.color = ft.Colors.RED
             
-            # Update other status fields
-            uptime_text_ref.current.value = server_status.get("uptime", "0h 0m")
-            active_clients_text_ref.current.value = str(server_status.get("active_clients", 0))
-            total_transfers_text_ref.current.value = str(server_status.get("total_transfers", 0))
+            # Update simple text fields (OPTIMIZED - direct access)
+            uptime_text.value = server_status.get("uptime", "0h 0m")
+            active_clients_text.value = str(server_status.get("active_clients", 0))
+            total_transfers_text.value = str(server_status.get("total_transfers", 0))
             
-            # Update system metrics
+            # Update system metrics with progress bars (KEEP - requires dynamic styling)
             cpu_value = system_metrics.get('cpu_usage', 0.0)
-            cpu_usage_text_ref.current.value = f"{cpu_value:.1f}%"
+            cpu_usage_text.value = f"{cpu_value:.1f}%"
             cpu_progress_bar_ref.current.value = cpu_value / 100
             if cpu_value > 80:
                 cpu_progress_bar_ref.current.color = ft.Colors.RED
@@ -162,7 +164,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                 cpu_progress_bar_ref.current.color = ft.Colors.GREEN
             
             memory_value = system_metrics.get('memory_usage', 0.0)
-            memory_usage_text_ref.current.value = f"{memory_value:.1f}%"
+            memory_usage_text.value = f"{memory_value:.1f}%"
             memory_progress_bar_ref.current.value = memory_value / 100
             if memory_value > 80:
                 memory_progress_bar_ref.current.color = ft.Colors.RED
@@ -172,7 +174,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                 memory_progress_bar_ref.current.color = ft.Colors.GREEN
             
             disk_value = system_metrics.get('disk_usage', 0.0)
-            disk_usage_text_ref.current.value = f"{disk_value:.1f}%"
+            disk_usage_text.value = f"{disk_value:.1f}%"
             disk_progress_bar_ref.current.value = disk_value / 100
             if disk_value > 80:
                 disk_progress_bar_ref.current.color = ft.Colors.RED
@@ -182,21 +184,23 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                 disk_progress_bar_ref.current.color = ft.Colors.GREEN
             
             # Update last updated timestamp
-            last_updated_text_ref.current.value = f"Last updated: {datetime.now().strftime('%H:%M:%S')}"
+            last_updated_text.value = f"Last updated: {datetime.now().strftime('%H:%M:%S')}"
             
-            # Update all refs
+            # Update only essential refs (5 instead of 12)
             server_status_text_ref.current.update()
             server_status_icon_ref.current.update()
-            uptime_text_ref.current.update()
-            active_clients_text_ref.current.update()
-            total_transfers_text_ref.current.update()
-            cpu_usage_text_ref.current.update()
             cpu_progress_bar_ref.current.update()
-            memory_usage_text_ref.current.update()
             memory_progress_bar_ref.current.update()
-            disk_usage_text_ref.current.update()
             disk_progress_bar_ref.current.update()
-            last_updated_text_ref.current.update()
+            
+            # Update direct controls (7 controls)
+            uptime_text.update()
+            active_clients_text.update()
+            total_transfers_text.update()
+            cpu_usage_text.update()
+            memory_usage_text.update()
+            disk_usage_text.update()
+            last_updated_text.update()
             
         except Exception as e:
             logger.error(f"Failed to update dashboard UI: {e}")
@@ -307,7 +311,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                             ft.Icon(ft.Icons.ACCESS_TIME, color=ft.Colors.BLUE, size=16),
                             ft.Text("Uptime", size=12, weight=ft.FontWeight.W_500)
                         ], spacing=8),
-                        ft.Text("2h 34m", size=18, weight=ft.FontWeight.BOLD, ref=uptime_text_ref)
+                        uptime_text
                     ], spacing=5),
                     padding=15
                 )
@@ -322,7 +326,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                             ft.Icon(ft.Icons.PEOPLE, color=ft.Colors.PURPLE, size=16),
                             ft.Text("Active Clients", size=12, weight=ft.FontWeight.W_500)
                         ], spacing=8),
-                        ft.Text("3", size=18, weight=ft.FontWeight.BOLD, ref=active_clients_text_ref)
+                        active_clients_text
                     ], spacing=5),
                     padding=15
                 )
@@ -337,7 +341,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                             ft.Icon(ft.Icons.CLOUD_UPLOAD, color=ft.Colors.ORANGE, size=16),
                             ft.Text("Total Transfers", size=12, weight=ft.FontWeight.W_500)
                         ], spacing=8),
-                        ft.Text("72", size=18, weight=ft.FontWeight.BOLD, ref=total_transfers_text_ref)
+                        total_transfers_text
                     ], spacing=5),
                     padding=15
                 )
@@ -355,7 +359,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                             ft.Icon(ft.Icons.COMPUTER, color=ft.Colors.BLUE, size=16),
                             ft.Text("CPU Usage", size=12, weight=ft.FontWeight.W_500)
                         ], spacing=8),
-                        ft.Text("45.2%", size=18, weight=ft.FontWeight.BOLD, ref=cpu_usage_text_ref),
+                        cpu_usage_text,
                         ft.ProgressBar(
                             value=0.452,
                             color=ft.Colors.GREEN,
@@ -376,7 +380,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                             ft.Icon(ft.Icons.MEMORY, color=ft.Colors.GREEN, size=16),
                             ft.Text("Memory", size=12, weight=ft.FontWeight.W_500)
                         ], spacing=8),
-                        ft.Text("67.8%", size=18, weight=ft.FontWeight.BOLD, ref=memory_usage_text_ref),
+                        memory_usage_text,
                         ft.ProgressBar(
                             value=0.678,
                             color=ft.Colors.GREEN,
@@ -397,7 +401,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                             ft.Icon(ft.Icons.STORAGE, color=ft.Colors.PURPLE, size=16),
                             ft.Text("Disk Space", size=12, weight=ft.FontWeight.W_500)
                         ], spacing=8),
-                        ft.Text("34.1%", size=18, weight=ft.FontWeight.BOLD, ref=disk_usage_text_ref),
+                        disk_usage_text,
                         ft.ProgressBar(
                             value=0.341,
                             color=ft.Colors.GREEN,
@@ -486,12 +490,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
             ft.Icon(ft.Icons.DASHBOARD, size=24),
             ft.Text("Server Dashboard", size=24, weight=ft.FontWeight.BOLD),
             ft.Container(expand=True),
-            ft.Text(
-                ref=last_updated_text_ref,
-                value=f"Last updated: {datetime.now().strftime('%H:%M:%S')}", 
-                size=12, 
-                color=ft.Colors.ON_SURFACE_VARIANT
-            )
+            last_updated_text
         ]),
         ft.Divider(),
         
