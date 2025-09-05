@@ -32,13 +32,13 @@ Adopting `httpx` will bring significant improvements to our application:
 
 ## Comparison to the Old Solution (`requests`)
 
-| Feature             | `requests` (Synchronous)                               | `httpx` (Asynchronous)                                   |
-| :------------------ | :----------------------------------------------------- | :------------------------------------------------------- |
-| **Blocking Nature** | **Blocking:** Pauses execution until I/O completes.    | **Non-Blocking:** Allows other tasks to run during I/O.  |
-| **Concurrency**     | Achieved via threading (more complex, resource-heavy). | Achieved via `asyncio` (event-loop based, efficient).    |
-| **Ease of Use**     | Very simple for basic synchronous tasks.               | Simple for `asyncio` users; slightly more setup for async. |
-| **Primary Use Case**| Scripts, simple web scraping, synchronous APIs.        | High-performance web servers, GUIs, concurrent I/O apps. |
-| **Flet Compatibility**| Requires `page.run_in_executor` to avoid UI freezes.   | Native `asyncio` integration, ideal for Flet.            |
+| Feature                | `requests` (Synchronous)                               | `httpx` (Asynchronous)                                     |
+|:-----------------------|:-------------------------------------------------------|:-----------------------------------------------------------|
+| **Blocking Nature**    | **Blocking:** Pauses execution until I/O completes.    | **Non-Blocking:** Allows other tasks to run during I/O.    |
+| **Concurrency**        | Achieved via threading (more complex, resource-heavy). | Achieved via `asyncio` (event-loop based, efficient).      |
+| **Ease of Use**        | Very simple for basic synchronous tasks.               | Simple for `asyncio` users; slightly more setup for async. |
+| **Primary Use Case**   | Scripts, simple web scraping, synchronous APIs.        | High-performance web servers, GUIs, concurrent I/O apps.   |
+| **Flet Compatibility** | Requires `page.run_in_executor` to avoid UI freezes.   | Native `asyncio` integration, ideal for Flet.              |
 
 ## How to Set Up and Use `httpx`
 

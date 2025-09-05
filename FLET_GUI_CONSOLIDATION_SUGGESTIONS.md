@@ -1,4 +1,5 @@
 # Flet GUI Structure Consolidation Suggestions
+ this is about the `flet_server_gui` System, which is bad, over-engineered, fighting the framework, outdated and not used anymore code, because we moved to a more correct flet way in `fletV2`.
 
 ## Executive Summary
 

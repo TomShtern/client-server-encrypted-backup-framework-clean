@@ -1,4 +1,5 @@
 # Flet GUI Components Comprehensive Documentation
+for the old bad `flet_server_gui`
 
 ## Table of Contents
 1. [Executive Summary](#executive-summary)
@@ -71,72 +72,72 @@ The **Flet Material Design 3 Server GUI** is a comprehensive enterprise-grade de
 
 ### All Buttons Across GUI System
 
-| Button Name | Type | Icon | Function | Location |
-|-------------|------|------|----------|----------|
-| Start Server | FilledButton | PLAY_ARROW | Starts backup server | Dashboard |
-| Stop Server | FilledButton | STOP | Stops backup server | Dashboard |
-| Restart Server | FilledButton | REFRESH | Restarts backup server | Dashboard |
-| View Server Logs | OutlinedButton | ARTICLE | Opens logs view | Dashboard |
-| Open File Explorer | TextButton | FOLDER_OPEN | Opens received files | Dashboard |
-| Quick Backup | ElevatedButton | BACKUP | Initiates backup | Dashboard |
-| System Monitor | IconButton | MONITOR | Opens system monitoring | Dashboard |
-| Refresh | IconButton | REFRESH | Refreshes data | All Views |
-| Clear Log | IconButton | CLEAR_ALL | Clears activity log | Dashboard |
-| Add Client | FilledButton | PERSON_ADD | Add new client | Clients |
-| Edit Client | IconButton | EDIT | Edit client details | Clients |
-| Delete Client | IconButton | DELETE | Delete client | Clients |
-| View Details | OutlinedButton | VISIBILITY | View detailed info | Clients |
-| Bulk Delete | ElevatedButton | DELETE_SWEEP | Delete multiple clients | Clients |
-| Import Clients | TextButton | UPLOAD | Import client list | Clients |
-| Export Clients | TextButton | DOWNLOAD | Export client list | Clients |
-| Refresh Files | ElevatedButton | REFRESH | Refresh file list | Files |
-| Select All Files | Checkbox | - | Select all files | Files |
-| Bulk Download | ElevatedButton | DOWNLOAD | Download selected files | Files |
-| Bulk Verify | ElevatedButton | VERIFIED | Verify selected files | Files |
-| Bulk Delete Files | ElevatedButton | DELETE_FOREVER | Delete selected files | Files |
-| File Search | TextField | SEARCH | Search files | Files |
-| File Filter | IconButton | FILTER_LIST | Filter files | Files |
-| File Preview | IconButton | PREVIEW | Preview file content | Files |
-| Download File | IconButton | DOWNLOAD | Download individual file | Files |
-| Delete File | IconButton | DELETE | Delete individual file | Files |
-| Verify File | IconButton | VERIFIED | Verify file integrity | Files |
-| Backup Database | FilledButton | BACKUP | Create database backup | Database |
-| Optimize Database | OutlinedButton | AUTO_FIX_HIGH | Optimize database | Database |
-| Analyze Database | OutlinedButton | TROUBLESHOOT | Analyze database health | Database |
-| Refresh Database | IconButton | REFRESH | Refresh database view | Database |
-| Table Selector | Dropdown | - | Select database table | Database |
-| Start Monitoring | ElevatedButton | PLAY_ARROW | Start performance monitoring | Analytics |
-| Stop Monitoring | ElevatedButton | STOP | Stop performance monitoring | Analytics |
-| Time Range Selector | Dropdown | SCHEDULE | Select chart time range | Analytics |
-| Chart Type | Dropdown | BAR_CHART | Select chart type | Analytics |
-| Update Interval | Slider | - | Set monitoring interval | Analytics |
-| Reset Charts | ElevatedButton | REFRESH | Reset chart data | Analytics |
-| Show Thresholds | Switch | - | Toggle threshold display | Analytics |
-| Fullscreen Chart | IconButton | FULLSCREEN | View chart fullscreen | Analytics |
-| Clear Alerts | TextButton | CLEAR | Clear performance alerts | Analytics |
-| Start Log Monitoring | ElevatedButton | PLAY_ARROW | Start log monitoring | Logs |
-| Stop Log Monitoring | ElevatedButton | STOP | Stop log monitoring | Logs |
-| Log Level Filter | Dropdown | FILTER_LIST | Filter by log level | Logs |
-| Component Filter | Dropdown | FILTER_LIST | Filter by component | Logs |
-| Search Logs | TextField | SEARCH | Search log content | Logs |
-| Auto Scroll | Switch | ARROW_DOWNWARD | Toggle auto-scroll | Logs |
-| Clear Log Display | IconButton | CLEAR | Clear log display | Logs |
-| Export Logs | IconButton | DOWNLOAD | Export logs to file | Logs |
-| Max Entries | TextField | - | Set max log entries | Logs |
-| Refresh Logs | IconButton | REFRESH | Refresh log display | Logs |
-| Save Settings | FilledButton | SAVE | Save configuration | Settings |
-| Reset Settings | OutlinedButton | RESTORE | Reset to defaults | Settings |
-| Import Settings | TextButton | UPLOAD | Import config | Settings |
-| Export Settings | TextButton | DOWNLOAD | Export config | Settings |
-| Create Backup | OutlinedButton | BACKUP | Create config backup | Settings |
-| Reset Category | OutlinedButton | REFRESH | Reset settings category | Settings |
-| Server Config Tab | Tab | SETTINGS | Server configuration | Settings |
-| GUI Config Tab | Tab | PALETTE | GUI configuration | Settings |
-| Monitoring Tab | Tab | MONITOR_HEART | Monitoring settings | Settings |
-| Advanced Tab | Tab | TUNE | Advanced settings | Settings |
-| Theme Toggle | IconButton | BRIGHTNESS_6 | Toggle light/dark | Navigation |
-| Help | IconButton | HELP_OUTLINE | Show help dialog | Navigation |
-| About | IconButton | INFO_OUTLINE | Show about dialog | Navigation |
+| Button Name          | Type           | Icon           | Function                     | Location   |
+|----------------------|----------------|----------------|------------------------------|------------|
+| Start Server         | FilledButton   | PLAY_ARROW     | Starts backup server         | Dashboard  |
+| Stop Server          | FilledButton   | STOP           | Stops backup server          | Dashboard  |
+| Restart Server       | FilledButton   | REFRESH        | Restarts backup server       | Dashboard  |
+| View Server Logs     | OutlinedButton | ARTICLE        | Opens logs view              | Dashboard  |
+| Open File Explorer   | TextButton     | FOLDER_OPEN    | Opens received files         | Dashboard  |
+| Quick Backup         | ElevatedButton | BACKUP         | Initiates backup             | Dashboard  |
+| System Monitor       | IconButton     | MONITOR        | Opens system monitoring      | Dashboard  |
+| Refresh              | IconButton     | REFRESH        | Refreshes data               | All Views  |
+| Clear Log            | IconButton     | CLEAR_ALL      | Clears activity log          | Dashboard  |
+| Add Client           | FilledButton   | PERSON_ADD     | Add new client               | Clients    |
+| Edit Client          | IconButton     | EDIT           | Edit client details          | Clients    |
+| Delete Client        | IconButton     | DELETE         | Delete client                | Clients    |
+| View Details         | OutlinedButton | VISIBILITY     | View detailed info           | Clients    |
+| Bulk Delete          | ElevatedButton | DELETE_SWEEP   | Delete multiple clients      | Clients    |
+| Import Clients       | TextButton     | UPLOAD         | Import client list           | Clients    |
+| Export Clients       | TextButton     | DOWNLOAD       | Export client list           | Clients    |
+| Refresh Files        | ElevatedButton | REFRESH        | Refresh file list            | Files      |
+| Select All Files     | Checkbox       | -              | Select all files             | Files      |
+| Bulk Download        | ElevatedButton | DOWNLOAD       | Download selected files      | Files      |
+| Bulk Verify          | ElevatedButton | VERIFIED       | Verify selected files        | Files      |
+| Bulk Delete Files    | ElevatedButton | DELETE_FOREVER | Delete selected files        | Files      |
+| File Search          | TextField      | SEARCH         | Search files                 | Files      |
+| File Filter          | IconButton     | FILTER_LIST    | Filter files                 | Files      |
+| File Preview         | IconButton     | PREVIEW        | Preview file content         | Files      |
+| Download File        | IconButton     | DOWNLOAD       | Download individual file     | Files      |
+| Delete File          | IconButton     | DELETE         | Delete individual file       | Files      |
+| Verify File          | IconButton     | VERIFIED       | Verify file integrity        | Files      |
+| Backup Database      | FilledButton   | BACKUP         | Create database backup       | Database   |
+| Optimize Database    | OutlinedButton | AUTO_FIX_HIGH  | Optimize database            | Database   |
+| Analyze Database     | OutlinedButton | TROUBLESHOOT   | Analyze database health      | Database   |
+| Refresh Database     | IconButton     | REFRESH        | Refresh database view        | Database   |
+| Table Selector       | Dropdown       | -              | Select database table        | Database   |
+| Start Monitoring     | ElevatedButton | PLAY_ARROW     | Start performance monitoring | Analytics  |
+| Stop Monitoring      | ElevatedButton | STOP           | Stop performance monitoring  | Analytics  |
+| Time Range Selector  | Dropdown       | SCHEDULE       | Select chart time range      | Analytics  |
+| Chart Type           | Dropdown       | BAR_CHART      | Select chart type            | Analytics  |
+| Update Interval      | Slider         | -              | Set monitoring interval      | Analytics  |
+| Reset Charts         | ElevatedButton | REFRESH        | Reset chart data             | Analytics  |
+| Show Thresholds      | Switch         | -              | Toggle threshold display     | Analytics  |
+| Fullscreen Chart     | IconButton     | FULLSCREEN     | View chart fullscreen        | Analytics  |
+| Clear Alerts         | TextButton     | CLEAR          | Clear performance alerts     | Analytics  |
+| Start Log Monitoring | ElevatedButton | PLAY_ARROW     | Start log monitoring         | Logs       |
+| Stop Log Monitoring  | ElevatedButton | STOP           | Stop log monitoring          | Logs       |
+| Log Level Filter     | Dropdown       | FILTER_LIST    | Filter by log level          | Logs       |
+| Component Filter     | Dropdown       | FILTER_LIST    | Filter by component          | Logs       |
+| Search Logs          | TextField      | SEARCH         | Search log content           | Logs       |
+| Auto Scroll          | Switch         | ARROW_DOWNWARD | Toggle auto-scroll           | Logs       |
+| Clear Log Display    | IconButton     | CLEAR          | Clear log display            | Logs       |
+| Export Logs          | IconButton     | DOWNLOAD       | Export logs to file          | Logs       |
+| Max Entries          | TextField      | -              | Set max log entries          | Logs       |
+| Refresh Logs         | IconButton     | REFRESH        | Refresh log display          | Logs       |
+| Save Settings        | FilledButton   | SAVE           | Save configuration           | Settings   |
+| Reset Settings       | OutlinedButton | RESTORE        | Reset to defaults            | Settings   |
+| Import Settings      | TextButton     | UPLOAD         | Import config                | Settings   |
+| Export Settings      | TextButton     | DOWNLOAD       | Export config                | Settings   |
+| Create Backup        | OutlinedButton | BACKUP         | Create config backup         | Settings   |
+| Reset Category       | OutlinedButton | REFRESH        | Reset settings category      | Settings   |
+| Server Config Tab    | Tab            | SETTINGS       | Server configuration         | Settings   |
+| GUI Config Tab       | Tab            | PALETTE        | GUI configuration            | Settings   |
+| Monitoring Tab       | Tab            | MONITOR_HEART  | Monitoring settings          | Settings   |
+| Advanced Tab         | Tab            | TUNE           | Advanced settings            | Settings   |
+| Theme Toggle         | IconButton     | BRIGHTNESS_6   | Toggle light/dark            | Navigation |
+| Help                 | IconButton     | HELP_OUTLINE   | Show help dialog             | Navigation |
+| About                | IconButton     | INFO_OUTLINE   | Show about dialog            | Navigation |
 
 ### Buttons by View
 
@@ -306,44 +307,44 @@ Global Navigation
 ### All Widgets/Controls by Category
 
 #### Data Display Widgets
-| Widget | Type | Purpose | Features |
-|--------|------|---------|----------|
-| ServerStatusCard | Card | Server status display | Real-time updates, animations |
-| ClientStatsCard | Card | Client metrics display | Connection counts, transfers |
-| ActivityLogCard | Card | Real-time activity log | Scrollable, animated entries |
-| DatabaseStatsCard | Card | Database metrics | File counts, sizes |
-| EnhancedStatsCard | Card | System performance | CPU, memory, network |
+| Widget            | Type      | Purpose                  | Features                       |
+|-------------------|-----------|--------------------------|--------------------------------|
+| ServerStatusCard  | Card      | Server status display    | Real-time updates, animations  |
+| ClientStatsCard   | Card      | Client metrics display   | Connection counts, transfers   |
+| ActivityLogCard   | Card      | Real-time activity log   | Scrollable, animated entries   |
+| DatabaseStatsCard | Card      | Database metrics         | File counts, sizes             |
+| EnhancedStatsCard | Card      | System performance       | CPU, memory, network           |
 | EnhancedDataTable | DataTable | Professional data tables | Sorting, filtering, pagination |
-| PerformanceChart | Chart | Real-time metrics | Line/bar charts, live updates |
+| PerformanceChart  | Chart     | Real-time metrics        | Line/bar charts, live updates  |
 
 #### Input Controls
-| Widget | Type | Purpose | Features |
-|--------|------|---------|----------|
-| TextField | Input | Text entry | Validation, prefixes, suffixes |
-| Dropdown | Selection | Option selection | Custom options, search |
-| Switch | Toggle | Boolean settings | Material Design 3 styling |
-| Slider | Range | Numeric ranges | Min/max, steps, labels |
-| Checkbox | Selection | Multiple selection | Tristate support |
-| RadioGroup | Selection | Single selection | Custom styling |
-| DatePicker | Selection | Date selection | Range support, formatting |
-| FilePicker | Selection | File selection | Multiple files, filters |
+| Widget     | Type      | Purpose            | Features                       |
+|------------|-----------|--------------------|--------------------------------|
+| TextField  | Input     | Text entry         | Validation, prefixes, suffixes |
+| Dropdown   | Selection | Option selection   | Custom options, search         |
+| Switch     | Toggle    | Boolean settings   | Material Design 3 styling      |
+| Slider     | Range     | Numeric ranges     | Min/max, steps, labels         |
+| Checkbox   | Selection | Multiple selection | Tristate support               |
+| RadioGroup | Selection | Single selection   | Custom styling                 |
+| DatePicker | Selection | Date selection     | Range support, formatting      |
+| FilePicker | Selection | File selection     | Multiple files, filters        |
 
 #### Navigation Controls
-| Widget | Type | Purpose | Features |
-|--------|------|---------|----------|
-| NavigationRail | Navigation | Primary navigation | Extended mode, badges |
-| TabView | Navigation | Section switching | Animated transitions |
-| Breadcrumb | Navigation | Location tracking | Clickable path elements |
-| AppBar | Navigation | Top-level actions | Responsive, contextual |
+| Widget         | Type       | Purpose            | Features                |
+|----------------|------------|--------------------|-------------------------|
+| NavigationRail | Navigation | Primary navigation | Extended mode, badges   |
+| TabView        | Navigation | Section switching  | Animated transitions    |
+| Breadcrumb     | Navigation | Location tracking  | Clickable path elements |
+| AppBar         | Navigation | Top-level actions  | Responsive, contextual  |
 
 #### Feedback Widgets
-| Widget | Type | Purpose | Features |
-|--------|------|---------|----------|
-| SnackBar | Toast | Quick feedback | Auto-dismiss, actions |
-| AlertDialog | Modal | Important messages | Multiple types, animations |
-| ProgressBar | Indicator | Loading states | Determinate/indeterminate |
-| LinearProgressIndicator | Indicator | Linear progress | Color themes, animations |
-| Tooltip | Info | Contextual help | Hover/tap activation |
+| Widget                  | Type      | Purpose            | Features                   |
+|-------------------------|-----------|--------------------|----------------------------|
+| SnackBar                | Toast     | Quick feedback     | Auto-dismiss, actions      |
+| AlertDialog             | Modal     | Important messages | Multiple types, animations |
+| ProgressBar             | Indicator | Loading states     | Determinate/indeterminate  |
+| LinearProgressIndicator | Indicator | Linear progress    | Color themes, animations   |
+| Tooltip                 | Info      | Contextual help    | Hover/tap activation       |
 
 ### Widgets by View
 
@@ -518,111 +519,111 @@ Log Monitoring Interface
 ## Event Handlers
 
 ### Global Event Handlers
-| Handler Name | Trigger | Function | Scope |
-|--------------|---------|----------|-------|
-| on_page_resize | Window resize | Responsive layout updates | Global |
-| on_theme_changed | Theme toggle | Update component styling | Global |
-| on_route_change | Navigation | View switching logic | Global |
-| on_error | Exception | Error dialog display | Global |
-| on_server_status_change | Server state | UI state updates | Global |
+| Handler Name            | Trigger       | Function                  | Scope  |
+|-------------------------|---------------|---------------------------|--------|
+| on_page_resize          | Window resize | Responsive layout updates | Global |
+| on_theme_changed        | Theme toggle  | Update component styling  | Global |
+| on_route_change         | Navigation    | View switching logic      | Global |
+| on_error                | Exception     | Error dialog display      | Global |
+| on_server_status_change | Server state  | UI state updates          | Global |
 
 ### Dashboard Event Handlers
-| Handler Name | Control | Function |
-|--------------|---------|----------|
-| _on_start_server | Start Button | Start backup server process |
-| _on_stop_server | Stop Button | Stop backup server process |
-| _on_restart_server | Restart Button | Restart backup server |
-| _on_view_logs | Logs Button | Navigate to logs view |
-| _on_open_explorer | Explorer Button | Open file explorer |
-| _on_quick_backup | Backup Button | Initiate backup process |
-| _on_refresh_status | Refresh Button | Update server status |
-| _clear_activity_log | Clear Button | Clear activity log |
-| _on_system_monitor | Monitor Button | Open system monitoring |
+| Handler Name        | Control         | Function                    |
+|---------------------|-----------------|-----------------------------|
+| _on_start_server    | Start Button    | Start backup server process |
+| _on_stop_server     | Stop Button     | Stop backup server process  |
+| _on_restart_server  | Restart Button  | Restart backup server       |
+| _on_view_logs       | Logs Button     | Navigate to logs view       |
+| _on_open_explorer   | Explorer Button | Open file explorer          |
+| _on_quick_backup    | Backup Button   | Initiate backup process     |
+| _on_refresh_status  | Refresh Button  | Update server status        |
+| _clear_activity_log | Clear Button    | Clear activity log          |
+| _on_system_monitor  | Monitor Button  | Open system monitoring      |
 
 ### Clients Event Handlers  
-| Handler Name | Control | Function |
-|--------------|---------|----------|
-| _on_add_client | Add Button | Show add client dialog |
-| _on_edit_client | Edit Button | Show edit client dialog |
-| _on_delete_client | Delete Button | Confirm and delete client |
-| _on_view_details | Details Button | Show client details dialog |
-| _on_bulk_delete | Bulk Delete | Delete multiple clients |
-| _on_import_clients | Import Button | File picker for client import |
-| _on_export_clients | Export Button | Export client list |
-| _on_search_changed | Search Field | Filter client list |
-| _on_filter_toggle | Filter Button | Toggle filter panel |
-| _on_sort_column | Column Header | Sort by column |
-| _on_row_selected | Row Checkbox | Update selection state |
-| _on_refresh_clients | Refresh Button | Reload client data |
+| Handler Name        | Control        | Function                      |
+|---------------------|----------------|-------------------------------|
+| _on_add_client      | Add Button     | Show add client dialog        |
+| _on_edit_client     | Edit Button    | Show edit client dialog       |
+| _on_delete_client   | Delete Button  | Confirm and delete client     |
+| _on_view_details    | Details Button | Show client details dialog    |
+| _on_bulk_delete     | Bulk Delete    | Delete multiple clients       |
+| _on_import_clients  | Import Button  | File picker for client import |
+| _on_export_clients  | Export Button  | Export client list            |
+| _on_search_changed  | Search Field   | Filter client list            |
+| _on_filter_toggle   | Filter Button  | Toggle filter panel           |
+| _on_sort_column     | Column Header  | Sort by column                |
+| _on_row_selected    | Row Checkbox   | Update selection state        |
+| _on_refresh_clients | Refresh Button | Reload client data            |
 
 ### Files Event Handlers
-| Handler Name | Control | Function |
-|--------------|---------|----------|
-| _on_file_preview | Preview Button | Show file preview dialog |
-| _on_download_file | Download Button | Download file to local |
-| _on_delete_file | Delete Button | Confirm and delete file |
-| _on_verify_file | Verify Button | Run integrity verification |
-| _on_file_search | Search Field | Filter file list |
-| _on_size_filter | Size Slider | Filter by file size |
-| _on_date_filter | Date Picker | Filter by upload date |
-| _on_type_filter | Type Dropdown | Filter by file type |
-| _on_bulk_export | Export Button | Export selected files |
-| _on_directory_expand | Tree Node | Expand directory |
+| Handler Name         | Control         | Function                   |
+|----------------------|-----------------|----------------------------|
+| _on_file_preview     | Preview Button  | Show file preview dialog   |
+| _on_download_file    | Download Button | Download file to local     |
+| _on_delete_file      | Delete Button   | Confirm and delete file    |
+| _on_verify_file      | Verify Button   | Run integrity verification |
+| _on_file_search      | Search Field    | Filter file list           |
+| _on_size_filter      | Size Slider     | Filter by file size        |
+| _on_date_filter      | Date Picker     | Filter by upload date      |
+| _on_type_filter      | Type Dropdown   | Filter by file type        |
+| _on_bulk_export      | Export Button   | Export selected files      |
+| _on_directory_expand | Tree Node       | Expand directory           |
 
 ### Database Event Handlers
-| Handler Name | Control | Function |
-|--------------|---------|----------|
-| _on_execute_query | Execute Button | Run SQL query |
-| _on_clear_query | Clear Button | Clear SQL editor |
-| _on_export_results | Export Button | Export query results |
-| _on_table_select | Table Tree | Load table data |
-| _on_refresh_schema | Refresh Button | Reload database schema |
-| _on_query_history | History Dropdown | Load previous query |
-| _on_save_query | Save Button | Save query to history |
+| Handler Name       | Control          | Function               |
+|--------------------|------------------|------------------------|
+| _on_execute_query  | Execute Button   | Run SQL query          |
+| _on_clear_query    | Clear Button     | Clear SQL editor       |
+| _on_export_results | Export Button    | Export query results   |
+| _on_table_select   | Table Tree       | Load table data        |
+| _on_refresh_schema | Refresh Button   | Reload database schema |
+| _on_query_history  | History Dropdown | Load previous query    |
+| _on_save_query     | Save Button      | Save query to history  |
 
 ### Analytics Event Handlers
-| Handler Name | Control | Function |
-|--------------|---------|----------|
-| _on_refresh_charts | Refresh Button | Update chart data |
-| _on_export_chart | Export Button | Export chart as image |
-| _on_time_range_change | Time Picker | Update chart time range |
-| _on_chart_type_toggle | Toggle Button | Switch chart type |
-| _on_metric_filter | Filter Dropdown | Filter displayed metrics |
-| _on_client_filter | Client Dropdown | Filter by client |
+| Handler Name          | Control         | Function                 |
+|-----------------------|-----------------|--------------------------|
+| _on_refresh_charts    | Refresh Button  | Update chart data        |
+| _on_export_chart      | Export Button   | Export chart as image    |
+| _on_time_range_change | Time Picker     | Update chart time range  |
+| _on_chart_type_toggle | Toggle Button   | Switch chart type        |
+| _on_metric_filter     | Filter Dropdown | Filter displayed metrics |
+| _on_client_filter     | Client Dropdown | Filter by client         |
 
 ### Settings Event Handlers
-| Handler Name | Control | Function |
-|--------------|---------|----------|
-| _on_setting_changed | Form Controls | Track setting changes |
-| _handle_save_settings | Save Button | Validate and save settings |
-| _handle_cancel_changes | Cancel Button | Revert unsaved changes |
-| _handle_reset_category | Reset Button | Reset category to defaults |
-| _handle_reset_all | Reset All Button | Reset all settings |
-| _handle_export_settings | Export Button | Export settings to file |
-| _handle_import_settings | Import Button | Import settings from file |
-| _handle_create_backup | Backup Button | Create settings backup |
-| _on_tab_changed | Tab Selection | Switch settings category |
+| Handler Name            | Control          | Function                   |
+|-------------------------|------------------|----------------------------|
+| _on_setting_changed     | Form Controls    | Track setting changes      |
+| _handle_save_settings   | Save Button      | Validate and save settings |
+| _handle_cancel_changes  | Cancel Button    | Revert unsaved changes     |
+| _handle_reset_category  | Reset Button     | Reset category to defaults |
+| _handle_reset_all       | Reset All Button | Reset all settings         |
+| _handle_export_settings | Export Button    | Export settings to file    |
+| _handle_import_settings | Import Button    | Import settings from file  |
+| _handle_create_backup   | Backup Button    | Create settings backup     |
+| _on_tab_changed         | Tab Selection    | Switch settings category   |
 
 ### Logs Event Handlers
-| Handler Name | Control | Function |
-|--------------|---------|----------|
-| _on_clear_logs | Clear Button | Clear log display |
-| _on_download_logs | Download Button | Export logs to file |
-| _on_filter_logs | Filter Button | Toggle log filters |
-| _on_log_level_change | Level Dropdown | Filter by log level |
-| _on_search_logs | Search Field | Search log content |
+| Handler Name           | Control            | Function              |
+|------------------------|--------------------|-----------------------|
+| _on_clear_logs         | Clear Button       | Clear log display     |
+| _on_download_logs      | Download Button    | Export logs to file   |
+| _on_filter_logs        | Filter Button      | Toggle log filters    |
+| _on_log_level_change   | Level Dropdown     | Filter by log level   |
+| _on_search_logs        | Search Field       | Search log content    |
 | _on_auto_scroll_toggle | Auto-scroll Switch | Toggle auto-scrolling |
-| _on_word_wrap_toggle | Word Wrap Switch | Toggle line wrapping |
+| _on_word_wrap_toggle   | Word Wrap Switch   | Toggle line wrapping  |
 
 ### Navigation Event Handlers
-| Handler Name | Control | Function |
-|--------------|---------|----------|
-| on_navigation_change | Rail Selection | Handle view switching |
-| _on_theme_toggle | Theme Button | Toggle light/dark theme |
-| _show_help_dialog | Help Button | Display help information |
-| _show_about_dialog | About Button | Display about information |
-| go_back | Back Navigation | Navigate to previous view |
-| go_forward | Forward Navigation | Navigate to next view |
+| Handler Name         | Control            | Function                  |
+|----------------------|--------------------|---------------------------|
+| on_navigation_change | Rail Selection     | Handle view switching     |
+| _on_theme_toggle     | Theme Button       | Toggle light/dark theme   |
+| _show_help_dialog    | Help Button        | Display help information  |
+| _show_about_dialog   | About Button       | Display about information |
+| go_back              | Back Navigation    | Navigate to previous view |
+| go_forward           | Forward Navigation | Navigate to next view     |
 
 ---
 
@@ -903,16 +904,16 @@ Navigation Event Flow
 ```
 
 ### Navigation Features
-| Feature | Description | Implementation |
-|---------|-------------|----------------|
-| History Tracking | Track navigation history | 20-entry circular buffer |
-| Forward/Back | Browser-like navigation | History stack management |
-| Breadcrumbs | Current location display | Last 3 views in history |
-| Badges | Notification indicators | Per-view badge counts |
-| Permissions | Access control | Permission-based routing |
-| Animations | Smooth transitions | Scale/opacity/offset effects |
-| Keyboard | Keyboard shortcuts | Ctrl+1-7 for view switching |
-| Persistence | State preservation | View state caching |
+| Feature          | Description              | Implementation               |
+|------------------|--------------------------|------------------------------|
+| History Tracking | Track navigation history | 20-entry circular buffer     |
+| Forward/Back     | Browser-like navigation  | History stack management     |
+| Breadcrumbs      | Current location display | Last 3 views in history      |
+| Badges           | Notification indicators  | Per-view badge counts        |
+| Permissions      | Access control           | Permission-based routing     |
+| Animations       | Smooth transitions       | Scale/opacity/offset effects |
+| Keyboard         | Keyboard shortcuts       | Ctrl+1-7 for view switching  |
+| Persistence      | State preservation       | View state caching           |
 
 ---
 
@@ -1030,23 +1031,23 @@ StylePresets Class
 ```
 
 ### Typography Scale
-| Style | Size | Weight | Usage |
-|-------|------|--------|-------|
-| Display Large | 57px | Regular | Hero text |
-| Display Medium | 45px | Regular | Large headers |
-| Display Small | 36px | Regular | Section headers |
-| Headline Large | 32px | Regular | Page titles |
-| Headline Medium | 28px | Regular | Card titles |
-| Headline Small | 24px | Regular | Dialog titles |
-| Title Large | 22px | Medium | List headers |
-| Title Medium | 16px | Medium | Card subtitles |
-| Title Small | 14px | Medium | Section labels |
-| Label Large | 14px | Medium | Button text |
-| Label Medium | 12px | Medium | Form labels |
-| Label Small | 11px | Medium | Captions |
-| Body Large | 16px | Regular | Main content |
-| Body Medium | 14px | Regular | Body text |
-| Body Small | 12px | Regular | Supporting text |
+| Style           | Size | Weight  | Usage           |
+|-----------------|------|---------|-----------------|
+| Display Large   | 57px | Regular | Hero text       |
+| Display Medium  | 45px | Regular | Large headers   |
+| Display Small   | 36px | Regular | Section headers |
+| Headline Large  | 32px | Regular | Page titles     |
+| Headline Medium | 28px | Regular | Card titles     |
+| Headline Small  | 24px | Regular | Dialog titles   |
+| Title Large     | 22px | Medium  | List headers    |
+| Title Medium    | 16px | Medium  | Card subtitles  |
+| Title Small     | 14px | Medium  | Section labels  |
+| Label Large     | 14px | Medium  | Button text     |
+| Label Medium    | 12px | Medium  | Form labels     |
+| Label Small     | 11px | Medium  | Captions        |
+| Body Large      | 16px | Regular | Main content    |
+| Body Medium     | 14px | Regular | Body text       |
+| Body Small      | 12px | Regular | Supporting text |
 
 ### Responsive Design System
 ```

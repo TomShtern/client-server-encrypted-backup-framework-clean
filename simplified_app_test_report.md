@@ -39,9 +39,8 @@
   - Files View ✓
   - Database View ✓
   - Analytics View ✓
-  - Logs View ✓
+  - Logs View + Error View ✓
   - Settings View ✓
-  - Error View ✓
 - **View Loading**: All views load without errors, including invalid view fallback
 
 ### ✅ Server Bridge Integration (100% Pass)
@@ -96,15 +95,15 @@
 
 ## Comparison: Simplified vs Original Architecture
 
-| Aspect | Original (Complex) | Simplified | Status |
-|--------|-------------------|------------|---------|
-| File Count | 50+ files | ~10 core files | ✅ Reduced |  
-| Lines of Code | 10,000+ | ~400 lines | ✅ 96% reduction |
-| Import Dependencies | Complex web | Clean hierarchy | ✅ Simplified |
-| Navigation | Custom managers | Flet NavigationRail | ✅ Framework native |
-| Theme System | Custom system | Flet themes | ✅ Framework native |
-| Error Handling | Scattered | Centralized fallbacks | ✅ Improved |
-| Functionality | All features | Core features | ✅ Essential preserved |
+| Aspect              | Original (Complex) | Simplified            | Status                |
+|---------------------|--------------------|-----------------------|-----------------------|
+| File Count          | 50+ files          | ~10 core files        | ✅ Reduced             |
+| Lines of Code       | 10,000+            | ~400 lines            | ✅ 96% reduction       |
+| Import Dependencies | Complex web        | Clean hierarchy       | ✅ Simplified          |
+| Navigation          | Custom managers    | Flet NavigationRail   | ✅ Framework native    |
+| Theme System        | Custom system      | Flet themes           | ✅ Framework native    |
+| Error Handling      | Scattered          | Centralized fallbacks | ✅ Improved            |
+| Functionality       | All features       | Core features         | ✅ Essential preserved |
 
 ## Recommendations
 

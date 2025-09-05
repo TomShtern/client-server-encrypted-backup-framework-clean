@@ -41,7 +41,7 @@ Features:
 - `FletStyleDataCard` - Specialized card for data tables
 
 Features:
-- Size options (small, medium, large, xlarge)
+- Size options (small, medium, large, xlarge. these are probably not relevant for desktop/laptop exclusive which we use Flet for, so probably dont use that.).
 - Header, body, and footer sections
 - Dynamic content updating
 - Support for actions/buttons in footer
@@ -139,24 +139,24 @@ Components behave consistently with other Flet controls.
 ## Migration from Original Enhanced Components
 
 ### Buttons
-| Original Enhanced Component | Flet-Style Component |
-|----------------------------|----------------------|
-| EnhancedButton             | EnhancedFilledButton, EnhancedOutlinedButton, etc. |
-| create_primary_button      | create_flet_style_primary_button |
-| create_secondary_button    | create_flet_style_secondary_button |
+| Original Enhanced Component | Flet-Style Component                               |
+|-----------------------------|----------------------------------------------------|
+| EnhancedButton              | EnhancedFilledButton, EnhancedOutlinedButton, etc. |
+| create_primary_button       | create_flet_style_primary_button                   |
+| create_secondary_button     | create_flet_style_secondary_button                 |
 
 ### Cards
-| Original Enhanced Component | Flet-Style Component |
-|----------------------------|----------------------|
-| EnhancedCard               | FletStyleEnhancedCard |
-| StatCard                   | FletStyleStatCard |
-| DataCard                   | FletStyleDataCard |
+| Original Enhanced Component | Flet-Style Component  |
+|-----------------------------|-----------------------|
+| EnhancedCard                | FletStyleEnhancedCard |
+| StatCard                    | FletStyleStatCard     |
+| DataCard                    | FletStyleDataCard     |
 
 ### Dialogs
-| Original Enhanced Component | Flet-Style Component |
-|----------------------------|----------------------|
-| EnhancedDialog             | FletStyleEnhancedDialog |
-| EnhancedAlertDialog        | FletStyleEnhancedAlertDialog |
+| Original Enhanced Component | Flet-Style Component         |
+|-----------------------------|------------------------------|
+| EnhancedDialog              | FletStyleEnhancedDialog      |
+| EnhancedAlertDialog         | FletStyleEnhancedAlertDialog |
 
 ## Testing
 All Flet-style components include test functions that can be run to verify functionality:

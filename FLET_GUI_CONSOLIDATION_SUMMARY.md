@@ -1,4 +1,5 @@
 # Flet GUI Consolidation - Summary
+ this is about the `flet_server_gui` System, which is bad, over-engineered, fighting the framework, outdated and not used anymore code, because we moved to a more correct flet way in `fletV2`.
 
 ## Overview
 We have successfully completed the consolidation of the Flet Server GUI folder structure and files according to the consolidation plan. The goal was to reduce the number of files from over 60 scattered files to a more organized structure while preserving all functionality.

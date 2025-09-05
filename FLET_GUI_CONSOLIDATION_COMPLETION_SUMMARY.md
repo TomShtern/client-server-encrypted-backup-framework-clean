@@ -1,4 +1,5 @@
 # Flet Server GUI Consolidation - Completion Summary
+ this is about the `flet_server_gui` System, which is outdated and not used anymore, because we moved to a more correct flet way in `fletV2`.
 
 ## Overview
 The Flet Server GUI consolidation effort has been successfully completed, transforming a fragmented codebase of 60+ scattered files into a clean, organized, and maintainable architecture.

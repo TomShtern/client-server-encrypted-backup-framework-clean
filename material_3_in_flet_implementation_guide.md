@@ -8,7 +8,7 @@
 ---
 
 ## Quick TL;DR
-- **Yes:** you can implement high-fidelity M3 in Flet: theming, seeded color schemes, typography, shape systems, elevation, responsive layout.
+- **Yes:** you can implement high-fidelity M3 in Flet: theming, seeded color schemes (we use custom theme), typography, shape systems, elevation, responsive layout.
 - **Partially:** M3 Expressive features (advanced motion physics, dynamic runtime material tokens, shape morphing) are not native — but **you can approximate them** with Flet's animation primitives, AnimatedSwitcher, Lottie/Rive, custom components and theme updates.
 - **Practical rule:** keep the visual system tokenized: seed color → derived palette → component tokens. Use implicit animations for transitions and explicit animations or Rive/Lottie for complex expressive motion.
 

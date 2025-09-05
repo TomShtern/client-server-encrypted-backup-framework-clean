@@ -1,4 +1,5 @@
 # Flet GUI Development Progress Documentation
+ this is about the `flet_server_gui` System, which is bad, over-engineered, fighting the framework, outdated and not used anymore code, because we moved to a more correct flet way in `fletV2`.
 
 ## Project Overview
 This document tracks the development progress of the Flet GUI for the Client-Server Encrypted Backup Framework. The GUI implements Material Design 3 principles with real-time server integration and comprehensive management capabilities.

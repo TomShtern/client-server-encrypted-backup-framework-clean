@@ -1,4 +1,8 @@
 # Flet Clients View - Proper Implementation Summary
+this document details the creation of a properly implemented Flet clients view that replicates all functionality of the overengineered original but using proper Flet patterns and best practices. 
+this plan is claimed as fully done, but in reality it does not look like it. 
+i am keeping this document because it has some useful information about what the original was supposed to be doing, and what the new one is supposed to be doing. so we can use this as a reference/checklist to verify the new one is actually doing everything it should be doing, and showing everything it should be showing. OF COURSE BY USING FLET BEST PRACTICES, IDIOMS, FEATURES, BUILT IN METHODS, ETC. 
+NOT BY COPYING THE OVERENGINEERED COMPLEX ORIGINAL.
 
 ## Project Goal
 Create a properly implemented Flet clients view that replicates all functionality of the overengineered original but using proper Flet patterns and best practices.

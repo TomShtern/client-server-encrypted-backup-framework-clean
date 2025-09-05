@@ -1,4 +1,6 @@
 Here is a comprehensive guide designed to be fed directly to an AI coding agent. It covers the major anti-patterns we've discussed(some of them already fixed) and many others that are common in large Flet applications.
+this file was created based on the analysis of the `flet_server_gui` System, which is bad, over-engineered, fighting the framework, obsolete, outdated and not used anymore code. because we moved to a more correct flet way in `fletV2`.
+in `FletV2`, we have a completely new flet gui system(inspired only visually in part by the obsolete flet_server_gui), which is much better and follows the correct flet patterns. The `FletV2` flet folder is letting the flet framework do the hard work and do what it does best, instead of fighting it with custom bespoke complex systems.
 
 ---
 
@@ -6,7 +8,7 @@ Here is a comprehensive guide designed to be fed directly to an AI coding agent.
 
 ## 1. Objective
 
-Your primary function is to analyze the Flet codebase of the `flet_server_gui` application and identify common anti-patterns. For each identified anti-pattern, you are to report the issue, explain why it's problematic, and propose a refactoring solution based on the idiomatic Flet patterns described in this guide.
+Your primary function is to analyze the Flet codebase of the `FletV2` application and identify common anti-patterns. For each identified anti-pattern, you are to report the issue, explain why it's problematic, and propose a refactoring solution based on the idiomatic Flet patterns described in this guide.
 
 Your goal is to help refactor the codebase to be more performant, maintainable, readable, and aligned with the Flet framework's design principles. **Do not apply changes automatically.** Your role is to identify, report, and suggest the correct implementation.
 
@@ -194,14 +196,7 @@ async def on_fetch_data(e):
 
 
 
-
-
-
-
-
 ### **Part 2:  Anti-Patterns in Flet Applications** ###
-
-
 
 
 
