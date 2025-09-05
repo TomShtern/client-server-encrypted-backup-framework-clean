@@ -32,7 +32,7 @@ import Shared.utils.utf8_solution
 project_root = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, project_root)
 
-# Use our clean utilities
+# Use our custom theme system  
 from theme import setup_default_theme, toggle_theme_mode
 
 # Server bridge with fallback
@@ -94,18 +94,12 @@ class FletV2App(ft.Row):
         """Asynchronously initialize server bridge to prevent UI blocking."""
         try:
             if ServerBridge:
-                # For ModularServerBridge, we still need to initialize it,
-                # but we can do the connection test asynchronously
+                # SAFE: Use proper constructor pattern instead of dangerous reflection
                 if BRIDGE_TYPE == "Full ModularServerBridge":
-                    # Create bridge without testing connection immediately
-                    self.server_bridge = ServerBridge.__new__(ServerBridge)
-                    self.server_bridge.host = "127.0.0.1"
-                    self.server_bridge.port = 1256
-                    self.server_bridge.base_url = f"http://127.0.0.1:1256"
-                    self.server_bridge.connected = False
-                    self.server_bridge.session = ServerBridge.__dict__['requests'].Session()
+                    # Create bridge using proper constructor
+                    self.server_bridge = ServerBridge(host="127.0.0.1", port=1256)
                     # Test connection asynchronously
-                    await self.page.run_thread(self.server_bridge._test_connection)
+                    self.page.run_thread(self.server_bridge._test_connection)
                 else:
                     # For SimpleServerBridge, initialization is instant
                     self.server_bridge = ServerBridge()
@@ -116,8 +110,7 @@ class FletV2App(ft.Row):
         except Exception as e:
             logger.warning(f"Server bridge failed, using mock: {e}")
             self.server_bridge = None
-        # Update UI to reflect bridge status
-        await self.page.run_thread(lambda: None)  # Ensure we're back on UI thread
+        # Bridge initialization complete
     
     def _on_page_connect(self, e):
         """Called when page is connected - safe to load initial view."""

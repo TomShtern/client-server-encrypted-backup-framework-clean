@@ -8,6 +8,7 @@ import flet as ft
 import json
 import asyncio
 from utils.debug_setup import get_logger
+from utils.user_feedback import show_success_message, show_error_message, show_info_message
 from pathlib import Path
 from datetime import datetime
 from config import SETTINGS_FILE, ASYNC_DELAY, MIN_PORT, MAX_PORT, MIN_MAX_CLIENTS
@@ -169,7 +170,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
                 logger.info(f"Server port changed to: {port}")
                 e.control.error_text = None
                 e.control.update()
-                page.snack_bar = ft.SnackBar(content=ft.Text(f"Port updated to {port}"), bgcolor=ft.Colors.GREEN)
+                show_success_message(page, f"Port updated to {port}")
             else:
                 e.control.error_text = f"Port must be between {MIN_PORT}-{MAX_PORT}"
                 e.control.update()
@@ -180,8 +181,6 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
             return
         e.control.error_text = None
         e.control.update()
-        page.snack_bar.open = True
-        page.update()
     
     def on_host_change(e):
         nonlocal current_settings
@@ -189,9 +188,84 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         if host:
             current_settings['server']['host'] = host
             logger.info(f"Server host changed to: {host}")
-            page.snack_bar = ft.SnackBar(content=ft.Text(f"Host updated to {host}"), bgcolor=ft.Colors.GREEN)
-            page.snack_bar.open = True
-            page.update()
+            show_success_message(page, f"Host updated to {host}")
+    
+    def on_max_clients_change(e):
+        nonlocal current_settings
+        try:
+            max_clients = int(e.control.value)
+            if max_clients >= MIN_MAX_CLIENTS:
+                current_settings['server']['max_clients'] = max_clients
+                logger.info(f"Max clients changed to: {max_clients}")
+                e.control.error_text = None
+                e.control.update()
+                show_success_message(page, f"Max clients updated to {max_clients}")
+            else:
+                e.control.error_text = f"Must be at least {MIN_MAX_CLIENTS}"
+                e.control.update()
+                return
+        except ValueError:
+            e.control.error_text = "Invalid number"
+            e.control.update()
+            return
+        e.control.error_text = None
+        e.control.update()
+    
+    def on_log_level_change(e):
+        nonlocal current_settings
+        log_level = e.control.value
+        current_settings['server']['log_level'] = log_level
+        logger.info(f"Log level changed to: {log_level}")
+        show_success_message(page, f"Log level updated to {log_level}")
+    
+    def on_auto_refresh_toggle(e):
+        nonlocal current_settings
+        new_value = e.control.value
+        current_settings['gui']['auto_refresh'] = new_value
+        logger.info(f"Auto refresh changed to: {new_value}")
+        show_success_message(page, f"Auto refresh {'enabled' if new_value else 'disabled'}")
+    
+    def on_notifications_toggle(e):
+        nonlocal current_settings
+        new_value = e.control.value
+        current_settings['gui']['notifications'] = new_value
+        logger.info(f"Notifications changed to: {new_value}")
+        show_success_message(page, f"Notifications {'enabled' if new_value else 'disabled'}")
+    
+    def on_monitoring_enabled_toggle(e):
+        nonlocal current_settings
+        new_value = e.control.value
+        current_settings['monitoring']['enabled'] = new_value
+        logger.info(f"Monitoring enabled changed to: {new_value}")
+        show_success_message(page, f"System monitoring {'enabled' if new_value else 'disabled'}")
+    
+    def on_monitoring_interval_change(e):
+        nonlocal current_settings
+        try:
+            interval = int(e.control.value)
+            if interval > 0:
+                current_settings['monitoring']['interval'] = interval
+                logger.info(f"Monitoring interval changed to: {interval}")
+                e.control.error_text = None
+                e.control.update()
+                show_success_message(page, f"Monitoring interval updated to {interval} seconds")
+            else:
+                e.control.error_text = "Must be greater than 0"
+                e.control.update()
+                return
+        except ValueError:
+            e.control.error_text = "Invalid number"
+            e.control.update()
+            return
+        e.control.error_text = None
+        e.control.update()
+    
+    def on_alerts_toggle(e):
+        nonlocal current_settings
+        new_value = e.control.value
+        current_settings['monitoring']['alerts'] = new_value
+        logger.info(f"Performance alerts changed to: {new_value}")
+        show_success_message(page, f"Performance alerts {'enabled' if new_value else 'disabled'}")
     
     def on_theme_toggle(e):
         nonlocal current_settings
@@ -199,10 +273,8 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         current_settings['gui']['theme_mode'] = new_mode
         # Apply theme change immediately using Flet's built-in theme system
         page.theme_mode = ft.ThemeMode.LIGHT if new_mode == "light" else ft.ThemeMode.DARK
-        page.update()
-        page.snack_bar = ft.SnackBar(content=ft.Text(f"Theme switched to {new_mode} mode"), bgcolor=ft.Colors.BLUE)
-        page.snack_bar.open = True
-        page.update()
+        page.update()  # ONLY acceptable page.update() for theme changes
+        show_info_message(page, f"Theme switched to {new_mode} mode")
     
     async def save_settings_handler():
         """Async function to save settings."""
@@ -216,25 +288,12 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
             if success:
                 last_saved = datetime.now()
                 last_saved_text.value = f"Last saved: {last_saved.strftime('%H:%M:%S')}"
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Settings saved successfully"),
-                    bgcolor=ft.Colors.GREEN
-                )
+                show_success_message(page, "Settings saved successfully")
             else:
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Failed to save settings"),
-                    bgcolor=ft.Colors.RED
-                )
-            page.snack_bar.open = True
-            page.update()
+                show_error_message(page, "Failed to save settings")
         except Exception as e:
             logger.error(f"Error saving settings: {e}")
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Error saving settings"),
-                bgcolor=ft.Colors.RED
-            )
-            page.snack_bar.open = True
-            page.update()
+            show_error_message(page, "Error saving settings")
         finally:
             is_saving = False
     
@@ -259,17 +318,12 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
             update_ui_fields()
             
             page.dialog.open = False
-            page.update()
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Settings reset to defaults"),
-                bgcolor=ft.Colors.ORANGE
-            )
-            page.snack_bar.open = True
-            page.update()
+            page.update()  # ONLY acceptable page.update() for dialogs
+            show_info_message(page, "Settings reset to defaults")
         
         def cancel_reset(e):
             page.dialog.open = False
-            page.update()
+            page.update()  # ONLY acceptable page.update() for dialogs
         
         dialog = ft.AlertDialog(
             title=ft.Text("Reset Settings"),
@@ -281,7 +335,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         )
         page.dialog = dialog
         dialog.open = True
-        page.update()
+        page.update()  # ONLY acceptable page.update() for dialogs
     
     def update_ui_fields():
         """Update UI fields with current settings."""
@@ -309,25 +363,12 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
             backup_file = f"settings_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             success = await export_settings_async(current_settings, backup_file)
             if success:
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Settings exported to {backup_file}"),
-                    bgcolor=ft.Colors.GREEN
-                )
+                show_success_message(page, f"Settings exported to {backup_file}")
             else:
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Failed to export settings"),
-                    bgcolor=ft.Colors.RED
-                )
-            page.snack_bar.open = True
-            page.update()
+                show_error_message(page, "Failed to export settings")
         except Exception as e:
             logger.error(f"Error exporting settings: {e}")
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Error exporting settings"),
-                bgcolor=ft.Colors.RED
-            )
-            page.snack_bar.open = True
-            page.update()
+            show_error_message(page, "Error exporting settings")
     
     def on_export_settings(e):
         logger.info("Exporting settings...")
@@ -335,17 +376,19 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
     
     def on_import_settings(e):
         logger.info("Import settings clicked")
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text("Import settings feature coming soon"),
-            bgcolor=ft.Colors.BLUE
-        )
-        page.snack_bar.open = True
-        page.update()
+        show_info_message(page, "Import settings feature coming soon")
     
-    # Assign event handlers to controls
+    # Assign event handlers to controls - CONNECT ALL HANDLERS
     server_port_field.on_change = on_port_change
     server_host_field.on_change = on_host_change
+    max_clients_field.on_change = on_max_clients_change
+    log_level_dropdown.on_change = on_log_level_change
     theme_mode_switch.on_change = on_theme_toggle
+    auto_refresh_switch.on_change = on_auto_refresh_toggle
+    notifications_switch.on_change = on_notifications_toggle
+    monitoring_enabled_switch.on_change = on_monitoring_enabled_toggle
+    monitoring_interval_field.on_change = on_monitoring_interval_change
+    alerts_switch.on_change = on_alerts_toggle
     
     def create_server_settings():
         """Create server settings form."""

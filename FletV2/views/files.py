@@ -11,6 +11,9 @@ import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
 from utils.debug_setup import get_logger
+from utils.loading_states import LoadingState, create_loading_indicator, create_status_text
+from utils.responsive_layouts import create_data_table_container, create_action_bar, SPACING
+from utils.user_feedback import show_success_message, show_error_message, show_info_message
 from config import RECEIVED_FILES_DIR, ASYNC_DELAY, show_mock_data
 
 logger = get_logger(__name__)
@@ -149,52 +152,70 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
         files_table_ref.current.rows = new_rows
         files_table_ref.current.update()
     
+    # Simple loading state without complex state management during initialization
+    # We'll handle loading updates manually to avoid control attachment issues
+    
     async def load_files_data_async():
-        """Load files data asynchronously."""
-        nonlocal files_data, is_loading, last_updated
+        """Load files data with simple, safe control updates."""
+        nonlocal files_data, last_updated
         
-        if is_loading:
+        # Check if controls are properly attached before proceeding
+        if not (status_text_ref.current and 
+                hasattr(status_text_ref.current, 'page') and 
+                status_text_ref.current.page is not None):
+            logger.debug("Controls not yet attached to page, deferring data load")
             return
             
-        is_loading = True
         try:
-            # Show loading state
-            status_text_ref.current.value = "Loading files..."
-            status_text_ref.current.update()
+            # Update status text safely
+            if (status_text_ref.current and 
+                hasattr(status_text_ref.current, 'page') and 
+                status_text_ref.current.page is not None):
+                status_text_ref.current.value = "Loading files..."
+                status_text_ref.current.color = ft.Colors.PRIMARY
+                status_text_ref.current.update()
             
-            # Load data asynchronously
+            # Load data asynchronously  
             if server_bridge:
                 files_data = await page.run_task(server_bridge.get_files)
             else:
                 # Fallback: scan received_files directory
                 files_data = await page.run_task(scan_files_directory)
             
-            # Update last updated timestamp
-            last_updated = datetime.now()
-            last_updated_text_ref.current.value = f"Last updated: {last_updated.strftime('%H:%M:%S')}"
+            # Update last updated timestamp - with safe control check
+            if (last_updated_text_ref.current and 
+                hasattr(last_updated_text_ref.current, 'page') and 
+                last_updated_text_ref.current.page is not None):
+                last_updated = datetime.now()
+                last_updated_text_ref.current.value = f"Last updated: {last_updated.strftime('%H:%M:%S')}"
+                last_updated_text_ref.current.update()
             
             # Update UI
             update_table()
-            status_text_ref.current.value = f"Showing {len(files_data)} files"
             
+            # Update status text with success
+            if (status_text_ref.current and 
+                hasattr(status_text_ref.current, 'page') and 
+                status_text_ref.current.page is not None):
+                status_text_ref.current.value = f"Showing {len(files_data)} files"
+                status_text_ref.current.color = ft.Colors.PRIMARY
+                status_text_ref.current.update()
+                
         except Exception as e:
             logger.error(f"Error loading files data: {e}")
-            status_text_ref.current.value = "Error loading files data"
-        finally:
-            is_loading = False
-            status_text_ref.current.update()
-            last_updated_text_ref.current.update()
+            # Update status text with error
+            if (status_text_ref.current and 
+                hasattr(status_text_ref.current, 'page') and 
+                status_text_ref.current.page is not None):
+                status_text_ref.current.value = f"Failed to load files: {str(e)}"
+                status_text_ref.current.color = ft.Colors.ERROR
+                status_text_ref.current.update()
     
     def on_download(file_data):
-        """Handle file download."""
+        """Handle file download with improved feedback."""
         file_name = file_data.get('name', 'Unknown file')
         logger.info(f"Download file: {file_name}")
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text(f"Downloading {file_name}..."),
-            bgcolor=ft.Colors.BLUE
-        )
-        page.snack_bar.open = True
-        page.update()
+        show_info_message(page, f"Downloading {file_name}...")
     
     def on_verify(file_data):
         """Handle file verification."""
@@ -366,7 +387,32 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
         )
     ], expand=True)
     
-    # Load data on creation
-    page.run_task(load_files_data_async)
+    # Schedule data loading after the view is attached
+    def schedule_data_load():
+        """Schedule data loading with retry mechanism to ensure controls are attached."""
+        async def delayed_load_with_retry():
+            max_retries = 5
+            retry_delay = 0.1
+            
+            for attempt in range(max_retries):
+                # Check if controls are attached
+                if (status_text_ref.current and 
+                    hasattr(status_text_ref.current, 'page') and 
+                    status_text_ref.current.page is not None):
+                    logger.info(f"Controls attached on attempt {attempt + 1}, loading data")
+                    await load_files_data_async()
+                    return
+                
+                logger.debug(f"Attempt {attempt + 1}: Controls not attached, waiting {retry_delay}s")
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 1.5  # Exponential backoff
+            
+            logger.warning("Failed to load files data: controls never attached after 5 attempts")
+        
+        page.run_task(delayed_load_with_retry)
+    
+    # Use page.update after view is attached
+    page.on_view_pop = lambda e: None  # Placeholder to ensure page events work
+    schedule_data_load()
     
     return main_view

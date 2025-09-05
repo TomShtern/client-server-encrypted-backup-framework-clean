@@ -9,6 +9,9 @@ import psutil
 import asyncio
 from datetime import datetime
 from utils.debug_setup import get_logger
+from utils.user_feedback import show_success_message, show_error_message, show_info_message
+from utils.loading_states import LoadingState, create_loading_indicator, create_status_text, SmartRefresh
+from utils.responsive_layouts import create_metrics_row, create_action_bar, SPACING
 from config import ASYNC_DELAY
 
 logger = get_logger(__name__)
@@ -208,21 +211,11 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
     # Quick action handlers
     def on_start_server(e):
         logger.info("Dashboard: Start server clicked")
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text("Server start command sent"),
-            bgcolor=ft.Colors.GREEN
-        )
-        page.snack_bar.open = True
-        page.update()
+        show_success_message(page, "Server start command sent")
     
     def on_stop_server(e):
         logger.info("Dashboard: Stop server clicked")
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text("Server stop command sent"),
-            bgcolor=ft.Colors.ORANGE
-        )
-        page.snack_bar.open = True
-        page.update()
+        show_info_message(page, "Server stop command sent")
     
     async def refresh_dashboard_async():
         """Async function to refresh dashboard data."""
@@ -243,37 +236,19 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                 success = await refresh_dashboard_async()
                 if success:
                     update_dashboard_ui()
-                    page.snack_bar = ft.SnackBar(
-                        content=ft.Text("Dashboard refreshed"),
-                        bgcolor=ft.Colors.BLUE
-                    )
+                    show_info_message(page, "Dashboard refreshed")
                 else:
-                    page.snack_bar = ft.SnackBar(
-                        content=ft.Text("Failed to refresh dashboard"),
-                        bgcolor=ft.Colors.RED
-                    )
-                page.snack_bar.open = True
-                page.update()
+                    show_error_message(page, "Failed to refresh dashboard")
             except Exception as e:
                 logger.error(f"Error in refresh handler: {e}")
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Error refreshing dashboard"),
-                    bgcolor=ft.Colors.RED
-                )
-                page.snack_bar.open = True
-                page.update()
+                show_error_message(page, "Error refreshing dashboard")
         
         # Run async operation
         page.run_task(async_refresh)
     
     def on_backup_now(e):
         logger.info("Dashboard: Backup now clicked")
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text("Backup job queued"),
-            bgcolor=ft.Colors.PURPLE
-        )
-        page.snack_bar.open = True
-        page.update()
+        show_info_message(page, "Backup job queued")
     
     # Create server status cards
     server_status_cards = ft.ResponsiveRow([
@@ -433,10 +408,15 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
         activity_items.append(
             ft.Container(
                 content=ft.Row([
-                    ft.Text(activity_time.strftime("%H:%M"), size=12, color=ft.Colors.ON_SURFACE_VARIANT, width=50),
+                    ft.Container(
+                        content=ft.Text(activity_time.strftime("%H:%M"), size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+                        width=60,
+                        alignment=ft.alignment.center_right
+                    ),
                     ft.Container(
                         content=ft.Icon(ft.Icons.CIRCLE, size=8, color=activity_color),
-                        width=20
+                        width=24,
+                        alignment=ft.alignment.center
                     ),
                     ft.Text(f"Activity {i+1}", size=13, expand=True)
                 ], spacing=10),
@@ -519,11 +499,12 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                             ft.Text("Recent Activity", size=16, weight=ft.FontWeight.BOLD),
                             ft.Divider(),
                             ft.Container(
-                                content=ft.Column(activity_items, spacing=0),
-                                height=200,
+                                content=ft.Column(activity_items, spacing=0, scroll=ft.ScrollMode.AUTO),
+                                expand=True,
                                 border=ft.border.all(1, ft.Colors.OUTLINE),
                                 border_radius=8,
-                                bgcolor=ft.Colors.SURFACE
+                                bgcolor=ft.Colors.SURFACE,
+                                padding=5
                             )
                         ], spacing=10),
                         padding=15

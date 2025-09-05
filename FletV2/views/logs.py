@@ -178,12 +178,16 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
             status_text.value = "Loading logs..."
             status_text.update()
             
-            # Load data asynchronously
+            # Load data directly (no blocking await)
             if server_bridge:
-                logs_data = await page.run_thread(server_bridge.get_logs)
+                try:
+                    logs_data = server_bridge.get_logs()
+                except Exception as e:
+                    logger.warning(f"Server bridge failed: {e}")
+                    logs_data = generate_mock_logs()
             else:
                 # Generate mock log data
-                logs_data = await page.run_thread(generate_mock_logs)
+                logs_data = generate_mock_logs()
             
             # Update last updated timestamp
             last_updated = datetime.now()

@@ -11,6 +11,7 @@ This demonstrates proper Flet patterns with ACTUAL FUNCTIONALITY:
 
 import flet as ft
 from utils.debug_setup import get_logger
+from utils.user_feedback import show_success_message, show_error_message, show_info_message
 logger = get_logger(__name__)
 
 
@@ -138,11 +139,11 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
                 
                 def close_dialog():
                     page.dialog.open = False
-                    page.update()
+                    page.update()  # ONLY acceptable page.update() for dialogs
                 
                 page.dialog = dialog
                 dialog.open = True
-                page.update()
+                page.update()  # ONLY acceptable page.update() for dialogs
         return handler
     
     def create_disconnect_handler(client_id):
@@ -158,12 +159,7 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
             update_table()
             
             # Show confirmation
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Client {client_id} disconnected"),
-                bgcolor=ft.Colors.ORANGE
-            )
-            page.snack_bar.open = True
-            page.update()
+            show_info_message(page, f"Client {client_id} disconnected")
         return handler
     
     def on_search_change(e):
@@ -182,12 +178,7 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
         logger.info("Refreshing clients list...")
         # In a real app, this would reload data from server
         update_table()
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text("Clients list refreshed"),
-            bgcolor=ft.Colors.GREEN
-        )
-        page.snack_bar.open = True
-        page.update()
+        show_success_message(page, "Clients list refreshed")
     
     # Calculate status counts
     connected_count = len([c for c in all_clients_data if c["status"] == "Connected"])
@@ -294,7 +285,7 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
                             ft.dropdown.Option("registered", "Registered"), 
                             ft.dropdown.Option("offline", "Offline")
                         ],
-                        width=200,
+                        expand=False,
                         on_change=on_filter_change
                     )
                 ], spacing=20),

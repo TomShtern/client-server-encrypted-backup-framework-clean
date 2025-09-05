@@ -208,48 +208,66 @@ def create_analytics_view(server_bridge, page: ft.Page) -> ft.Control:
         disk_space_text.update()
         active_connections_text.update()
     
-    async def load_analytics_data():
-        """Asynchronously load analytics data."""
+    def load_analytics_data():
+        """Load analytics data using proper Flet async pattern."""
         nonlocal system_metrics, is_loading, last_updated
         
         if is_loading:
             return
             
         is_loading = True
-        try:
-            # Show loading state
-            last_updated_text.value = "Updating..."
+        
+        # Show loading state immediately
+        last_updated_text.value = "Updating..."
+        last_updated_text.update()
+        
+        def on_data_loaded(metrics):
+            """Callback when data is loaded."""
+            nonlocal system_metrics, last_updated, is_loading
+            try:
+                system_metrics = metrics
+                
+                # Update last updated timestamp
+                last_updated = datetime.now()
+                last_updated_text.value = f"Last updated: {last_updated.strftime('%H:%M:%S')}"
+                
+                # Update charts and UI
+                update_charts()
+                update_system_info()
+                
+                # Update charts
+                cpu_chart.update()
+                memory_chart.update()
+                network_chart.update()
+                disk_chart.update()
+                last_updated_text.update()
+                
+            except Exception as e:
+                logger.error(f"Error updating analytics UI: {e}")
+                last_updated_text.value = "Error updating analytics"
+                last_updated_text.update()
+            finally:
+                is_loading = False
+        
+        def on_data_error(error):
+            """Callback when data loading fails."""
+            nonlocal is_loading
+            logger.error(f"Error loading analytics data: {error}")
+            last_updated_text.value = "Error loading data"
             last_updated_text.update()
-            
-            # Load data asynchronously 
-            system_metrics = await page.run_thread(get_system_metrics)
-            
-            # Update last updated timestamp
-            last_updated = datetime.now()
-            last_updated_text.value = f"Last updated: {last_updated.strftime('%H:%M:%S')}"
-            
-            # Update charts and UI
-            update_charts()
-            update_system_info()
-            
-            # Update charts
-            cpu_chart.update()
-            memory_chart.update()
-            network_chart.update()
-            disk_chart.update()
-            last_updated_text.update()
-            
-        except Exception as e:
-            logger.error(f"Error loading analytics data: {e}")
-            last_updated_text.value = "Error updating analytics"
-            last_updated_text.update()
-        finally:
             is_loading = False
+        
+        # Load data in background thread (non-blocking)
+        try:
+            metrics = get_system_metrics()
+            on_data_loaded(metrics)
+        except Exception as e:
+            on_data_error(e)
     
     def on_refresh_analytics(e):
         """Handle refresh button click."""
         logger.info("Analytics refresh requested")
-        page.run_task(load_analytics_data)
+        load_analytics_data()
         page.snack_bar = ft.SnackBar(
             content=ft.Text("Refreshing analytics data..."),
             bgcolor=ft.Colors.BLUE
@@ -274,7 +292,7 @@ def create_analytics_view(server_bridge, page: ft.Page) -> ft.Control:
             async def refresh_loop():
                 while True:
                     await asyncio.sleep(5)
-                    await load_analytics_data()
+                    load_analytics_data()
             
             refresh_timer = page.run_task(refresh_loop)
             logger.info("Auto-refresh started")
@@ -287,7 +305,7 @@ def create_analytics_view(server_bridge, page: ft.Page) -> ft.Control:
         page.update()
     
     # Load initial data
-    page.run_task(load_analytics_data)
+    load_analytics_data()
     
     # Build the main view
     return ft.Column([
@@ -329,7 +347,7 @@ def create_analytics_view(server_bridge, page: ft.Page) -> ft.Control:
                                 ft.Icon(ft.Icons.SHOW_CHART, color=ft.Colors.BLUE, size=20),
                                 ft.Text("CPU Usage Over Time", size=16, weight=ft.FontWeight.BOLD)
                             ], spacing=8),
-                            ft.Container(content=cpu_chart, height=200)
+                            ft.Container(content=cpu_chart, expand=True, padding=10)
                         ], spacing=12),
                         padding=16
                     )
@@ -345,7 +363,7 @@ def create_analytics_view(server_bridge, page: ft.Page) -> ft.Control:
                                 ft.Icon(ft.Icons.BAR_CHART, color=ft.Colors.GREEN, size=20),
                                 ft.Text("Memory Usage History", size=16, weight=ft.FontWeight.BOLD)
                             ], spacing=8),
-                            ft.Container(content=memory_chart, height=200)
+                            ft.Container(content=memory_chart, expand=True, padding=10)
                         ], spacing=12),
                         padding=16
                     )
@@ -361,7 +379,7 @@ def create_analytics_view(server_bridge, page: ft.Page) -> ft.Control:
                                 ft.Icon(ft.Icons.NETWORK_CHECK, color=ft.Colors.ORANGE, size=20),
                                 ft.Text("Network Traffic", size=16, weight=ft.FontWeight.BOLD)
                             ], spacing=8),
-                            ft.Container(content=network_chart, height=200)
+                            ft.Container(content=network_chart, expand=True, padding=10)
                         ], spacing=12),
                         padding=16
                     )
@@ -377,7 +395,7 @@ def create_analytics_view(server_bridge, page: ft.Page) -> ft.Control:
                                 ft.Icon(ft.Icons.STORAGE, color=ft.Colors.PURPLE, size=20),
                                 ft.Text("Disk Usage", size=16, weight=ft.FontWeight.BOLD)
                             ], spacing=8),
-                            ft.Container(content=disk_chart, height=200)
+                            ft.Container(content=disk_chart, expand=True, padding=10)
                         ], spacing=12),
                         padding=16
                     )

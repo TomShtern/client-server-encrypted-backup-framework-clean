@@ -3,7 +3,7 @@
 This file provides comprehensive guidance for working with FletV2 - a clean, framework-harmonious Flet desktop application that demonstrates proper Flet patterns and best practices.
 
 **CRITICAL**: We work exclusively with `FletV2/` directory. The `flet_server_gui/` is obsolete, over-engineered, and kept only as reference of what NOT to do.
-
+ you should reference the `important_docs/` folder for component usage examples and documentation.
 ---
 
 ## 🎯 CORE PRINCIPLES: Framework Harmony
