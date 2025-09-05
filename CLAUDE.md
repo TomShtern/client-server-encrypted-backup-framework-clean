@@ -524,8 +524,9 @@ FletV2/
 cd FletV2 && python main.py
 
 # FletV2 Development with Hot Reload (RECOMMENDED for development)
-# Uses browser for instant hot reload - identical runtime to desktop
-cd FletV2 && python -c "import flet as ft; import main; ft.app(target=main.main, view=ft.AppView.WEB_BROWSER)"
+# Uses desktop for instant hot reload - identical runtime to desktop
+cd FletV2
+flet run -r main.py
 
 # Alternative: Command-line hot reload
 cd FletV2 && flet run --web main.py

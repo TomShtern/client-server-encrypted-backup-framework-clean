@@ -13,6 +13,14 @@ import asyncio
 from utils.debug_setup import get_logger
 from config import show_mock_data
 
+# Import database manager for MockaBase integration
+try:
+    from utils.database_manager import FletDatabaseManager, create_database_manager
+    DATABASE_MANAGER_AVAILABLE = True
+except ImportError:
+    DATABASE_MANAGER_AVAILABLE = False
+    logger.warning("Database manager not available for MockaBase integration")
+
 logger = get_logger(__name__)
 
 
@@ -30,6 +38,28 @@ class ModularServerBridge:
         self.base_url = f"http://{host}:{port}"
         self.connected = False
         self.session = requests.Session()
+        
+        # Initialize database manager for MockaBase integration
+        self.db_manager = None
+        if DATABASE_MANAGER_AVAILABLE:
+            # Check if MockaBase exists
+            mockabase_path = "MockaBase.db"
+            if os.path.exists(mockabase_path):
+                try:
+                    self.db_manager = create_database_manager(mockabase_path)
+                    if self.db_manager and self.db_manager.connect():
+                        logger.info("Connected to MockaBase database")
+                    else:
+                        logger.warning("Failed to connect to MockaBase database")
+                        self.db_manager = None
+                except Exception as e:
+                    logger.error(f"Error initializing database manager: {e}")
+                    self.db_manager = None
+            else:
+                logger.info("MockaBase.db not found, using server-only mode")
+        else:
+            logger.warning("Database manager not available, using server-only mode")
+        
         # Note: Connection test is now done asynchronously in main.py
     
     def _test_connection(self):
@@ -68,13 +98,70 @@ class ModularServerBridge:
             logger.error(f"Request to {url} failed: {e}")
             raise
     
+    def get_table_data(self, table_name: str) -> Dict[str, Any]:
+        """
+        Get table data from the database.
+        
+        Args:
+            table_name (str): Name of the table to retrieve
+            
+        Returns:
+            Dict[str, Any]: Dictionary with columns and rows
+        """
+        # Try to get data from database manager (MockaBase)
+        if self.db_manager:
+            try:
+                return self.db_manager.get_table_data(table_name)
+            except Exception as e:
+                logger.error(f"Failed to get table data from database: {e}")
+        
+        # Fallback to mock data
+        logger.warning(f"Using mock data for table: {table_name}")
+        tables_data = {
+            "clients": {
+                "columns": ["id", "name", "last_seen", "has_public_key", "has_aes_key"],
+                "rows": [
+                    {"id": "client_001", "name": "Alpha Workstation", "last_seen": "2025-09-03 10:30:15", "has_public_key": True, "has_aes_key": True},
+                    {"id": "client_002", "name": "Beta Server", "last_seen": "2025-09-02 09:15:22", "has_public_key": True, "has_aes_key": True},
+                    {"id": "client_003", "name": "Gamma Laptop", "last_seen": "2025-09-01 14:22:10", "has_public_key": True, "has_aes_key": False}
+                ]
+            },
+            "files": {
+                "columns": ["id", "filename", "pathname", "verified", "filesize", "modification_date", "crc", "client_id", "client_name"],
+                "rows": [
+                    {"id": "file_001", "filename": "document1.pdf", "pathname": "/home/user/documents/document1.pdf", "verified": True, "filesize": 1024000, "modification_date": "2025-09-03 10:30:15", "crc": 123456789, "client_id": "client_001", "client_name": "Alpha Workstation"},
+                    {"id": "file_002", "filename": "image1.jpg", "pathname": "/home/user/pictures/image1.jpg", "verified": False, "filesize": 2048000, "modification_date": "2025-09-03 11:45:30", "crc": 987654321, "client_id": "client_002", "client_name": "Beta Server"}
+                ]
+            },
+            "logs": {
+                "columns": ["id", "timestamp", "level", "component", "message"],
+                "rows": [
+                    {"id": 1, "timestamp": "2025-09-03 10:30:15", "level": "INFO", "component": "Server", "message": "Server started on port 1256"},
+                    {"id": 2, "timestamp": "2025-09-03 10:31:22", "level": "INFO", "component": "Client", "message": "Client client_001 connected"},
+                    {"id": 3, "timestamp": "2025-09-03 10:35:45", "level": "WARNING", "component": "File Transfer", "message": "File transfer completed with warnings"}
+                ]
+            }
+        }
+        
+        return tables_data.get(table_name, {"columns": [], "rows": []})
+    
     def get_clients(self) -> List[Dict[str, Any]]:
         """
-        Get client data from the server.
+        Get client data from the server or database.
         
         Returns:
             List[Dict[str, Any]]: List of client dictionaries
         """
+        # Try to get data from database manager (MockaBase)
+        if self.db_manager:
+            try:
+                clients = self.db_manager.get_clients()
+                if clients:
+                    return clients
+            except Exception as e:
+                logger.error(f"Failed to get clients from database: {e}")
+        
+        # Try to get data from server
         try:
             response = self._make_request("GET", "/clients")
             return response.get("clients", [])
@@ -116,11 +203,21 @@ class ModularServerBridge:
     
     def get_files(self) -> List[Dict[str, Any]]:
         """
-        Get file data from the server.
+        Get file data from the server or database.
         
         Returns:
             List[Dict[str, Any]]: List of file dictionaries
         """
+        # Try to get data from database manager (MockaBase)
+        if self.db_manager:
+            try:
+                files = self.db_manager.get_files()
+                if files:
+                    return files
+            except Exception as e:
+                logger.error(f"Failed to get files from database: {e}")
+        
+        # Try to get data from server
         try:
             response = self._make_request("GET", "/files")
             return response.get("files", [])
@@ -148,11 +245,21 @@ class ModularServerBridge:
     
     def get_database_info(self) -> Dict[str, Any]:
         """
-        Get database information from the server.
+        Get database information from the server or database.
         
         Returns:
             Dict[str, Any]: Database information
         """
+        # Try to get data from database manager (MockaBase)
+        if self.db_manager:
+            try:
+                stats = self.db_manager.get_database_stats()
+                if stats:
+                    return stats
+            except Exception as e:
+                logger.error(f"Failed to get database stats from database: {e}")
+        
+        # Try to get data from server
         try:
             response = self._make_request("GET", "/database/info")
             return response
@@ -226,6 +333,66 @@ class ModularServerBridge:
             if show_mock_data() or not self.connected:
                 return []
             return []
+    
+    def get_system_status(self) -> Dict[str, Any]:
+        """
+        Get system status including CPU, memory, and disk usage.
+        
+        Returns:
+            Dict[str, Any]: System status information
+        """
+        try:
+            # Try to get system metrics from database manager first
+            if self.db_manager:
+                try:
+                    # Get database stats as a proxy for system activity
+                    db_stats = self.db_manager.get_database_stats()
+                    if db_stats:
+                        # Calculate some mock metrics based on database stats
+                        total_records = db_stats.get("records", 0)
+                        cpu_usage = min(100, max(5, (total_records / 1000) * 10))  # Mock CPU usage
+                        memory_usage = min(100, max(10, (total_records / 500) * 5))  # Mock memory usage
+                        disk_usage = float(db_stats.get("size", "0").split()[0]) if "size" in db_stats else 0
+                        disk_usage_percent = min(100, max(5, disk_usage))  # Mock disk usage
+                        
+                        return {
+                            'cpu_usage': cpu_usage,
+                            'memory_usage': memory_usage,
+                            'disk_usage': disk_usage_percent,
+                            'memory_total_gb': 16,  # Placeholder
+                            'memory_used_gb': (memory_usage / 100) * 16,  # Placeholder
+                            'disk_total_gb': 500,  # Placeholder
+                            'disk_used_gb': (disk_usage_percent / 100) * 500,  # Placeholder
+                            'network_sent_mb': 2048,  # Placeholder
+                            'network_recv_mb': 4096,  # Placeholder
+                            'active_connections': db_stats.get("tables", 0),
+                            'cpu_cores': 8  # Placeholder
+                        }
+                except Exception as e:
+                    logger.warning(f"Failed to get system status from database: {e}")
+            
+            # Try to get system metrics from server
+            response = self._make_request("GET", "/system/status")
+            return response
+        except Exception as e:
+            logger.warning(f"Failed to get system status from server: {e}")
+            # Fallback to mock data only in debug mode or when server is unavailable
+            if show_mock_data() or not self.connected:
+                import random
+                return {
+                    'cpu_usage': random.uniform(10, 40),
+                    'memory_usage': random.uniform(30, 60),
+                    'disk_usage': 75.2,
+                    'memory_total_gb': 16,
+                    'memory_used_gb': random.uniform(5, 10),
+                    'disk_total_gb': 500,
+                    'disk_used_gb': 376.0,
+                    'network_sent_mb': random.uniform(1000, 3000),
+                    'network_recv_mb': random.uniform(2000, 5000),
+                    'active_connections': random.randint(1, 10),
+                    'cpu_cores': 8
+                }
+            return {}
     
     def disconnect_client(self, client_id: str) -> bool:
         """

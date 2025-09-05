@@ -343,11 +343,25 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
         spacing=0
     )
     
-    # Load initial data
-    page.run_task(load_logs_data_async)
+    # Schedule initial data load after controls are added to page
+    def schedule_initial_load():
+        """Schedule initial data load with retry mechanism."""
+        async def delayed_load():
+            # Wait a bit for controls to be attached
+            await asyncio.sleep(0.1)
+            # Check if controls are attached before proceeding
+            if (status_text and 
+                hasattr(status_text, 'page') and 
+                status_text.page is not None):
+                await load_logs_data_async()
+            else:
+                logger.warning("Controls not attached, skipping initial load")
+        page.run_task(delayed_load)
+    
+    schedule_initial_load()
     
     # Build the main view
-    return ft.Column([
+    view = ft.Column([
         # Header with title and action buttons
         ft.Container(
             content=ft.Row([
@@ -421,3 +435,13 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
             bgcolor=ft.Colors.SURFACE_TINT
         )
     ], expand=True)
+    
+    # Also provide a trigger for manual loading if needed
+    def trigger_initial_load():
+        """Trigger initial data load manually."""
+        page.run_task(load_logs_data_async)
+    
+    # Export the trigger function so it can be called externally
+    view.trigger_initial_load = trigger_initial_load
+    
+    return view

@@ -54,6 +54,25 @@ def show_info_message(page: ft.Page, message: str, action_label: str = None) -> 
     show_user_feedback(page, message, is_error=False, action_label=action_label)
 
 
+def show_warning_message(page: ft.Page, message: str, action_label: str = None) -> None:
+    """Show warning message to user."""
+    # For warnings, we'll use a yellow color
+    try:
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(message),
+            bgcolor=ft.Colors.YELLOW,
+            action=action_label if action_label else "DISMISS",
+            duration=4000  # 4 seconds
+        )
+        page.snack_bar.open = True
+        page.update()  # ONLY acceptable page.update() use case
+        
+        logger.info(f"User feedback shown: WARNING - {message}")
+        
+    except Exception as e:
+        logger.error(f"Failed to show user feedback: {e}")
+
+
 async def show_loading_dialog(page: ft.Page, title: str, message: str) -> ft.AlertDialog:
     """
     Show loading dialog for long operations.

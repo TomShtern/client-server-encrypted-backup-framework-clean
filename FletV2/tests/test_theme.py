@@ -11,7 +11,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import flet as ft
-from theme import THEMES, DEFAULT_THEME_NAME, apply_theme_to_page, toggle_theme_mode, get_current_theme_colors
+from theme import THEMES, DEFAULT_THEME_NAME, setup_default_theme, toggle_theme_mode, get_current_theme_colors
 
 
 class TestThemeModule(unittest.TestCase):
@@ -42,14 +42,10 @@ class TestThemeModule(unittest.TestCase):
         page = ft.Page()
         
         # Test applying a valid theme
-        result = apply_theme_to_page(page, DEFAULT_THEME_NAME)
-        self.assertTrue(result)
+        result = setup_default_theme(page)
+        self.assertIsNone(result)  # setup_default_theme returns None
         self.assertIsNotNone(page.theme)
         self.assertIsNotNone(page.dark_theme)
-        
-        # Test applying an invalid theme
-        result = apply_theme_to_page(page, "NonExistentTheme")
-        self.assertFalse(result)
 
     def test_get_current_theme_colors(self):
         """Test getting current theme colors."""

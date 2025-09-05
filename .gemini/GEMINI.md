@@ -1,34 +1,462 @@
-# CLAUDE.md - FletV2 Development Guide
+# GEMINI Code Context for Client-Server Encrypted Backup Framework
 
-This file provides comprehensive guidance for working with FletV2 - a clean, framework-harmonious Flet desktop application that demonstrates proper Flet patterns and best practices.
+
+**CRITICAL**: We work exclusively with `FletV2/` directory. The `flet_server_gui/` is obsolete, over-engineered, and kept only as reference of what NOT to do. You should reference the `important_docs/` folder for component usage examples and documentation and other relevant context.
+
+
+## 🎯 Project Overview
+
+A **secure encrypted backup system** with the following architecture:
+
+1. **C++ Client** - Native encryption engine with custom binary protocol
+2. **Flask API Server** - HTTP API bridge (port 9090) coordinating between web UI and native client
+3. **Web UI** - Browser-based file selection interface
+4. **Python Server** - Multi-threaded backup server (port 1256)
+5. **Flet Desktop GUI** - Cross-platform desktop interface for the Python server
+6. **SQLite3 Database** - Client and file tracking storage
+
+## 🏗️ Current Development Focus
+
+We are currently focused entirely on the **Flet Desktop GUI** - `FletV2/` enhancement and stabilization project. The goal is to achieve Material Design 3 compliance with stable functionality.
+
+
+## 🚀 Quick Start - Flet GUI
+```powershell
+.\flet_venv\Scripts\Activate.ps1
+```
+```bash
+
+# Full system startup (when needed)
+python scripts/one_click_build_and_run.py
+```
+
+## 🔧 Core Technologies
+
+- **Languages**: Python 3.13.5, C++20, JavaScript
+- **GUI Framework**: Flet 0.28.3 (Material Design 3)
+- **Build System**: CMake with vcpkg for C++
+- **Crypto Libraries**: Crypto++ (C++), PyCryptodome (Python)
+- **Database**: SQLite3 
+
+## 📁 Key Directories
+
+```
+├── FletV2/             # Flet folder for desktop GUI (current focus)
+├── Client/             # C++ client and web UI
+├── api_server/         # Flask API bridge (port 9090)
+├── python_server/      # Python backup server (port 1256)
+├── Shared/             # Shared utilities
+└── scripts/            # Automation scripts
+```
+
+## ⚙️ Essential Configuration
+
+### UTF-8 Support
+```python
+# ALWAYS import this in any Python file that deals with subprocess or console I/O
+import Shared.utils.utf8_solution
+```
+
+### Configuration Management
+```python
+# Unified configuration system
+from Shared.utils.unified_config import get_config
+config = get_config()
+server_host = config.get('server.host', '127.0.0.1')
+```
+
+## 🎨 Material Design 3 Implementation
+
+### Theme Structure
+The theme system has been completely restructured to use Flet's native theming capabilities with a clean compatibility layer:
+
+```python
+# Multiple theme options with light/dark variants
+THEMES = {
+    "Teal": (TealTheme, TealDarkTheme),
+    "Purple": (PurpleTheme, PurpleDarkTheme),
+}
+```
+
+```python
+
+# TOKENS now uses Flet's native color constants
+TOKENS = {
+    'primary': ft.Colors.PRIMARY,
+    'on_primary': ft.Colors.ON_PRIMARY,
+    'secondary': ft.Colors.SECONDARY,
+    'on_secondary': ft.Colors.ON_SECONDARY,
+    # ... etc
+}
+```
+
+### Simplified Theme System Architecture `theme.py`
+The theme system has been completely restructured with a clean separation of concerns:
+Benefits of the new approach:
+- ✅ Simplified: Reduced from 2800 LOC to ~150 LOC
+- ✅ Native: Uses Flet's built-in theming capabilities
+- ✅ Compatible: Backward compatibility maintained
+- ✅ Maintainable: Clean, focused implementation
+- ✅ Performant: No complex caching or validation overhead
+- ✅ Flexible: Easy to add new themes
+
+
+## 🛠 Key Integration Patterns
+
+### Subprocess Management (CRITICAL)
+```python
+# Flask API → RealBackupExecutor → C++ client (with --batch flag)
+# File Lifecycle: SynchronizedFileManager prevents race conditions
+self.backup_process = subprocess.Popen(
+    [self.client_exe, "--batch"],  # --batch prevents hanging in subprocess
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True,
+    cwd=os.path.dirname(os.path.abspath(self.client_exe)),  # CRITICAL: Working directory
+    env=Shared.utils.utf8_solution.get_env()  # UTF-8 environment
+)
+```
+
+### File Transfer Verification (CRITICAL)
+Always verify file transfers by checking actual files in `received_files/` directory:
+- Compare file sizes
+- Compare SHA256 hashes
+- Verify network activity on port 1256
+
+### Configuration Generation Pattern
+```python
+# transfer.info must be generated per operation (3-line format)
+def _generate_transfer_info(self, server_ip, server_port, username, file_path):
+    with open("transfer.info", 'w') as f:
+        f.write(f"{server_ip}:{server_port}\n")  # Line 1: server endpoint
+        f.write(f"{username}\n")                 # Line 2: username  
+        f.write(f"{file_path}\n")                # Line 3: absolute file path
+```
+
+### Flet Async Task Management Patterns
+```python
+# Pattern 1: Simple async method calls
+# ❌ INCORRECT - Calling the coroutine instead of passing it
+self.page.run_task(self.action_handlers.clear_logs())
+
+# ✅ CORRECT - Pass the coroutine function itself
+self.page.run_task(self.action_handlers.clear_logs)
+
+# Pattern 2: Parameterized async method calls
+# ❌ INCORRECT - Calling the coroutine with parameters
+self.page.run_task(self.action_handlers.export_logs(filter_level, filter_component, search_query))
+
+# ✅ CORRECT - Create a wrapper function to capture parameters
+async def export_logs_wrapper():
+    await self.action_handlers.export_logs(filter_level, filter_component, search_query)
+self.page.run_task(export_logs_wrapper)
+```
+
+## 🎨 Flet Component Development Best Practices
+
+### Creating Flet-Style Components
+
+When creating UI components for Flet, follow these best practices:
+
+#### 1. Single Inheritance Pattern
+Always inherit from a single Flet control class:
+```python
+# ✅ CORRECT - Single inheritance
+class EnhancedButton(ft.FilledButton):
+    def __init__(self, text="", **kwargs):
+        super().__init__(text=text, **kwargs)
+        # Add custom functionality
+
+# ❌ INCORRECT - Multiple inheritance
+class BadButton(ft.FilledButton, ft.TextButton):
+    def __init__(self, text="", **kwargs):
+        super().__init__(text=text, **kwargs)
+```
+
+#### 2. Proper Initialization
+Always call `super().__init__()` properly:
+```python
+class MyComponent(ft.Container):
+    def __init__(self, content=None, **kwargs):
+        # Pass Flet-native parameters to parent class
+        super().__init__(content=content, **kwargs)
+        
+        # Set custom properties AFTER parent initialization
+        self.custom_property = "value"
+```
+
+#### 3. Component Composition Over Complex Inheritance
+Use composition when a single component isn't sufficient:
+```python
+class StatCard(ft.Card):
+    def __init__(self, title, value, **kwargs):
+        # Create content using Flet controls
+        content = ft.Column([
+            ft.Text(title, size=16, weight=ft.FontWeight.W_500),
+            ft.Text(str(value), size=24, weight=ft.FontWeight.W_300)
+        ])
+        
+        # Initialize parent with composed content
+        super().__init__(content=content, **kwargs)
+```
+
+#### 4. Flet-Native Properties
+Leverage Flet's built-in properties instead of custom implementations where possible:
+```python
+# ✅ CORRECT - Use Flet's built-in properties
+class MyButton(ft.FilledButton):
+    def __init__(self, text="", **kwargs):
+        super().__init__(text=text, **kwargs)
+        self.bgcolor = ft.Colors.PRIMARY  # Use Flet's color constants
+        self.height = 40  # Direct property assignment
+
+# ❌ INCORRECT - Custom property management
+class MyButton:
+    def __init__(self, text="", **kwargs):
+        self._bgcolor = None
+        self._height = None
+        # Custom property management is unnecessary
+```
+
+#### 5. Event Handling Patterns
+Use Flet's event system properly:
+```python
+class ClickableCard(ft.Card):
+    def __init__(self, on_click=None, **kwargs):
+        super().__init__(**kwargs)
+        self.on_click = on_click  # Set event handler directly
+        
+    def handle_click(self, e):
+        if self.on_click:
+            self.on_click(e)
+```
+
+#### 6. State Management
+Manage component state using Flet's update mechanism:
+```python
+class StatefulButton(ft.FilledButton):
+    def __init__(self, text="", **kwargs):
+        super().__init__(text=text, **kwargs)
+        self._state = "enabled"
+    
+    def set_state(self, state):
+        self._state = state
+        if state == "loading":
+            self.disabled = True
+            self.text = "Loading..."
+        elif state == "disabled":
+            self.disabled = True
+        else:
+            self.disabled = False
+            self.text = "Click me"
+        self.update()  # Trigger UI update
+```
+
+### Component Design Patterns
+
+#### 1. Factory Functions
+Provide convenience functions for common component creation:
+```python
+def create_primary_button(text, on_click, **kwargs):
+    """Create a primary (filled) button"""
+    return EnhancedFilledButton(
+        text=text,
+        on_click=on_click,
+        variant="filled",
+        **kwargs
+    )
+
+def create_secondary_button(text, on_click, **kwargs):
+    """Create a secondary (outlined) button"""
+    return EnhancedOutlinedButton(
+        text=text,
+        on_click=on_click,
+        variant="outlined",
+        **kwargs
+    )
+```
+
+#### 2. Configuration Classes
+Use dataclasses for complex component configuration:
+```python
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class ButtonConfig:
+    text: str = ""
+    icon: Optional[str] = None
+    variant: str = "filled"
+    size: str = "medium"
+    disabled: bool = False
+
+class ConfigurableButton(ft.FilledButton):
+    def __init__(self, config: ButtonConfig, **kwargs):
+        super().__init__(text=config.text, **kwargs)
+        # Apply configuration
+        if config.icon:
+            self.icon = config.icon
+        if config.disabled:
+            self.disabled = True
+```
+
+#### 3. Specialized Components
+Create specialized components for common use cases:
+```python
+class StatisticCard(ft.Card):
+    """Specialized card for displaying statistics"""
+    
+    def __init__(self, title: str, value: Union[str, int, float], **kwargs):
+        # Format value appropriately
+        if isinstance(value, (int, float)):
+            formatted_value = f"{value:,}"
+        else:
+            formatted_value = str(value)
+            
+        # Create specialized content
+        content = ft.Column([
+            ft.Text(title, size=16, weight=ft.FontWeight.W_500),
+            ft.Text(formatted_value, size=24, weight=ft.FontWeight.W_300)
+        ])
+        
+        super().__init__(content=content, **kwargs)
+```
+
+### Flet Component API Design Principles
+
+#### 1. Consistency
+Follow Flet's naming and parameter conventions:
+```python
+class MyComponent(ft.Container):
+    def __init__(self, content=None, width=None, height=None, bgcolor=None, on_click=None, **kwargs):
+        super().__init__(
+            content=content,
+            width=width,
+            height=height,
+            bgcolor=bgcolor,
+            on_click=on_click,
+            **kwargs
+        )
+```
+
+#### 2. Extensibility
+Design components to be easily extended:
+```python
+class BaseCard(ft.Card):
+    """Base card class that can be extended"""
+    
+    def __init__(self, title=None, content=None, **kwargs):
+        super().__init__(**kwargs)
+        self.title = title
+        self._content = content
+        self.content = self._create_card_content()
+    
+    def _create_card_content(self):
+        """Override this method in subclasses to customize content"""
+        if self.title:
+            return ft.Column([
+                ft.Text(self.title, size=16, weight=ft.FontWeight.W_500),
+                self._content
+            ])
+        return self._content
+
+class StatisticCard(BaseCard):
+    """Extended card with statistic-specific features"""
+    
+    def __init__(self, title, value, unit=None, **kwargs):
+        self.value = value
+        self.unit = unit
+        super().__init__(title=title, **kwargs)
+    
+    def _create_card_content(self):
+        # Customize content for statistics
+        value_text = ft.Text(str(self.value), size=24, weight=ft.FontWeight.W_300)
+        if self.unit:
+            content = ft.Row([value_text, ft.Text(self.unit)])
+        else:
+            content = value_text
+            
+        if self.title:
+            return ft.Column([
+                ft.Text(self.title, size=16, weight=ft.FontWeight.W_500),
+                content
+            ])
+        return content
+```
+
+#### 3. Documentation
+Provide clear docstrings and type hints:
+```python
+class DocumentedButton(ft.FilledButton):
+    """
+    A documented button component with enhanced features.
+    
+    Args:
+        text: The button text
+        icon: Optional icon to display
+        variant: Button style variant ('filled', 'outlined', 'text')
+        size: Button size ('small', 'medium', 'large')
+        on_click: Click event handler
+        **kwargs: Additional Flet button properties
+        
+    Example:
+        button = DocumentedButton(
+            text="Click me",
+            icon=ft.Icons.ADD,
+            on_click=lambda e: print("Clicked!")
+        )
+    """
+    
+    def __init__(
+        self,
+        text: str = "",
+        icon: Optional[str] = None,
+        variant: str = "filled",
+        size: str = "medium",
+        on_click: Optional[Callable] = None,
+        **kwargs
+    ):
+        # Implementation
+        pass
+```
+
+```
+
+
+## 🗄️ MockaBase Database Implementation read the important_docs/MockaBase_Documentation.md
+
+### Testing Results
+Comprehensive import testing confirmed all modules are working correctly with the new theme structure.
+
+
+## 🆕 FletV2 Development Guide (NEW CLEAN IMPLEMENTATION)
+
+This section provides guidance for working with the new `FletV2/` directory, which represents a clean, framework-harmonious implementation of the Flet desktop application.
 
 **CRITICAL**: We work exclusively with `FletV2/` directory. The `flet_server_gui/` is obsolete, over-engineered, and kept only as reference of what NOT to do.
- you should reference the `important_docs/` folder for component usage examples and documentation.
----
 
-## 🎯 CORE PRINCIPLES: Framework Harmony
+### 🎯 CORE PRINCIPLES: Framework Harmony
 
-### **The FletV2 Way - Work WITH Flet, Not Against It**
+#### **The FletV2 Way - Work WITH Flet, Not Against It**
 
 **Primary Directive**: Favor Flet's built-in features over custom, over-engineered solutions. Do not reinvent the wheel.
 
-#### **Scale Test**: 
+##### **Scale Test**: 
 Be highly suspicious of any custom solution that exceeds 1000 lines. A 3000+ line custom system is an anti-pattern when a 50-250 line native Flet solution exists with full feature parity(or almost full parity).
 
-#### **Framework Fight Test**: 
+##### **Framework Fight Test**: 
 Work WITH the framework, not AGAINST it. If your solution feels complex, verbose, or like a struggle, you are fighting the framework. Stop and find the simpler, intended Flet way.
 
-#### **Built-in Checklist**:
+##### **Built-in Checklist**:
 - Can `ft.NavigationRail` handle navigation?
 - Can `expand=True` and `ResponsiveRow` solve layout?
 - Can `control.update()` replace `page.update()`?
 - Does a standard Flet control already do 90% of what you need?
 
----
+### ⚡ POWER DIRECTIVES: Maximum Impact Code Generation
 
-## ⚡ POWER DIRECTIVES: Maximum Impact Code Generation
-
-### **Critical Framework Compliance (Flet 0.28.3 + Python 3.13.5)**
+#### **Critical Framework Compliance (Flet 0.28.3 + Python 3.13.5)**
 
 1. **Always use `control.update()` instead of `page.update()` to achieve 10x performance and eliminate UI flicker.**
 
@@ -50,7 +478,7 @@ Work WITH the framework, not AGAINST it. If your solution feels complex, verbose
 
 10. **Design views as pure function-based components that return `ft.Control`, avoiding complex class-based view systems.**
 
-### **Performance & Anti-Pattern Guards**
+#### **Performance & Anti-Pattern Guards**
 
 11. **If your custom solution exceeds 1000 lines, you are fighting the framework - stop and find the Flet-native approach.**
 
@@ -62,7 +490,7 @@ Work WITH the framework, not AGAINST it. If your solution feels complex, verbose
 
 15. **Leverage `ft.TextTheme` for consistent typography across your entire application.**
 
-### **Architectural Enforcement**
+#### **Architectural Enforcement
 
 16. **Structure your desktop app as a single `ft.Row` with a `NavigationRail` and dynamic content area.**
 
@@ -74,7 +502,7 @@ Work WITH the framework, not AGAINST it. If your solution feels complex, verbose
 
 20. **Always provide a simple, function-based fallback for every dynamic loading mechanism.**
 
-### **Python 3.13.5 & Flet 0.28.3 Optimizations**
+#### **Python 3.13.5 & Flet 0.28.3 Optimizations**
 
 21. **Use `page.theme = ft.Theme(color_scheme_seed=ft.Colors.GREEN)` for instant Material 3 theming without custom color management.**
 
@@ -88,11 +516,9 @@ Work WITH the framework, not AGAINST it. If your solution feels complex, verbose
 
 **Core Philosophy**: "Let Flet do the heavy lifting. Your job is to compose, not reinvent."
 
----
+### 🏗️ FletV2 ARCHITECTURE PATTERNS
 
-## 🏗️ FletV2 ARCHITECTURE PATTERNS
-
-### **Main Application Structure (CANONICAL)**
+#### **Main Application Structure (CANONICAL)**
 
 ```python
 # FletV2/main.py - The correct desktop app pattern
@@ -104,7 +530,7 @@ class FletV2App(ft.Row):
         self.page = page
         self.expand = True
         
-        # ✅ Simple window configuration
+        # ✅ Simple window configuration that respects user resizing
         page.window_min_width = 1024
         page.window_min_height = 768
         page.window_resizable = True
@@ -116,7 +542,15 @@ class FletV2App(ft.Row):
         
         # ✅ Simple NavigationRail (no custom managers)
         self.nav_rail = ft.NavigationRail(
-            destinations=[...],
+            destinations=[
+                ft.NavigationRailDestination(icon=ft.Icons.DASHBOARD, label="Dashboard"),
+                ft.NavigationRailDestination(icon=ft.Icons.PEOPLE, label="Clients"),
+                ft.NavigationRailDestination(icon=ft.Icons.FOLDER, label="Files"),
+                ft.NavigationRailDestination(icon=ft.Icons.STORAGE, label="Database"),
+                ft.NavigationRailDestination(icon=ft.Icons.AUTO_GRAPH, label="Analytics"),
+                ft.NavigationRailDestination(icon=ft.Icons.ARTICLE, label="Logs"),
+                ft.NavigationRailDestination(icon=ft.Icons.SETTINGS, label="Settings"),
+            ],
             on_change=self._on_navigation_change  # Simple callback
         )
         
@@ -147,7 +581,7 @@ class FletV2App(ft.Row):
         self.content_area.update()  # Precise update, not page.update()
 ```
 
-### **View Creation Pattern (MANDATORY)**
+#### **View Creation Pattern (MANDATORY)**
 
 ```python
 # views/dashboard.py - Correct view pattern
@@ -186,7 +620,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
     ], expand=True, scroll=ft.ScrollMode.AUTO)
 ```
 
-### **Theme System (SOURCE OF TRUTH)**
+#### **Theme System (SOURCE OF TRUTH)**
 
 ```python
 # theme.py - Proper Flet theming
@@ -222,19 +656,17 @@ def toggle_theme_mode(page: ft.Page) -> None:
     page.update()
 ```
 
----
+### ❌ FRAMEWORK-FIGHTING ANTI-PATTERNS (NEVER DO THESE)
 
-## ❌ FRAMEWORK-FIGHTING ANTI-PATTERNS (NEVER DO THESE)
-
-### **🚨 IMMEDIATE RED FLAGS**
+#### **🚨 IMMEDIATE RED FLAGS**
 1. **Custom NavigationManager classes** → Use `ft.NavigationRail.on_change`
 2. **Custom responsive systems** → Use `expand=True` + `ResponsiveRow`
 3. **Custom theme managers** → Use `page.theme` and `theme.py`
 4. **Complex routing systems** → Use simple view switching
 5. **`page.update()` abuse** → Use `control.update()` for precision
-6. **God components >500 lines** → Decompose into focused functions
+6. **God components >1000 lines** → Decompose into focused functions
 
-### **🚨 INVALID FLET APIS (RUNTIME ERRORS)**
+#### **🚨 INVALID FLET APIS (RUNTIME ERRORS)**
 ```python
 # ❌ WRONG - These don't exist in Flet 0.28.3:
 ft.MaterialState.DEFAULT    # ❌ MaterialState doesn't exist
@@ -248,11 +680,9 @@ ft.Icons.DASHBOARD, ft.Icons.SETTINGS, ft.Icons.PLAY_ARROW
 ft.ResponsiveRow, ft.NavigationRail, ft.Card
 ```
 
----
+### ✅ CORRECT FLET PATTERNS (ALWAYS USE THESE)
 
-## ✅ CORRECT FLET PATTERNS (ALWAYS USE THESE)
-
-### **Data Display Patterns**
+#### **Data Display Patterns**
 
 ```python
 # ✅ For tabular data: ft.DataTable
@@ -288,7 +718,7 @@ metrics_cards = ft.ResponsiveRow([
 ])
 ```
 
-### **Form/Settings Patterns**
+#### **Form/Settings Patterns**
 
 ```python
 # ✅ Use ft.Tabs for categories
@@ -311,7 +741,7 @@ def validate_field(e):
     e.control.update()  # Precise update
 ```
 
-### **Async Patterns (CRITICAL)**
+#### **Async Patterns (CRITICAL)**
 
 ```python
 # ✅ CORRECT: Async event handlers
@@ -337,17 +767,15 @@ def on_fetch_data_blocking(e):
     self.page.update()       # ❌ Full page refresh
 ```
 
----
+### 🚀 PERFORMANCE & BEST PRACTICES
 
-## 🚀 PERFORMANCE & BEST PRACTICES
-
-### **File Size Standards (ENFORCE STRICTLY)**
+#### **File Size Standards (ENFORCE STRICTLY)**
 - **View files**: 200-500 lines maximum
 - **Component files**: 100-400 lines maximum  
 - **If >600 lines**: MANDATORY refactoring required(probably, not always)
 - **Single responsibility**: Each file has ONE clear purpose
 
-### **UI Update Performance**
+#### **UI Update Performance**
 
 ```python
 # ✅ CORRECT: Precise updates (10x performance improvement)
@@ -364,7 +792,7 @@ def update_status_wrong(self):
     self.page.update()  # Updates entire page!
 ```
 
-### **Layout Best Practices**
+#### **Layout Best Practices**
 
 ```python
 # ✅ CORRECT: Responsive, flexible layouts
@@ -385,11 +813,9 @@ ft.Container(width=800, height=600, content=dashboard_content)
 ft.Container(content=dashboard_content, expand=True, padding=20)
 ```
 
----
+### 🛠️ DEVELOPMENT WORKFLOW
 
-## 🛠️ DEVELOPMENT WORKFLOW
-
-### **Terminal Debugging Setup (PRODUCTION READY)**
+#### **Terminal Debugging Setup (PRODUCTION READY)**
 
 ```python
 # STEP 1: Import at top of main.py (before other imports)
@@ -409,7 +835,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
             logger.error(f"Operation failed: {ex}", exc_info=True)
 ```
 
-### **Error Handling & User Feedback**
+#### **Error Handling & User Feedback**
 
 ```python
 # ✅ CORRECT: Centralized user feedback
@@ -431,7 +857,7 @@ def safe_operation(page):
         show_user_message(page, f"Failed: {str(e)}", is_error=True)
 ```
 
-### **Server Bridge Pattern (Robust Fallback)**
+#### **Server Bridge Pattern (Robust Fallback)**
 
 ```python
 # ✅ CORRECT: Automatic fallback system
@@ -446,18 +872,16 @@ except Exception as e:
 # This ensures GUI always works even if full server unavailable
 ```
 
----
+### 📋 CODE QUALITY CHECKLIST
 
-## 📋 CODE QUALITY CHECKLIST
-
-### **Before Writing ANY Code**
+#### **Before Writing ANY Code**
 - [ ] Does Flet provide this functionality built-in?
 - [ ] Am I duplicating existing functionality?
 - [ ] Will this file exceed 600 lines? (If yes, decompose first)
 - [ ] Am I using hardcoded dimensions instead of `expand=True`?
 - [ ] Am I using `page.update()` when `control.update()` would work?
 
-### **Validation Checklist for New Code**
+#### **Validation Checklist for New Code**
 - [ ] **Framework harmony**: Uses Flet built-ins, not custom replacements
 - [ ] **Single responsibility**: File has ONE clear purpose
 - [ ] **No hardcoded dimensions**: Uses `expand=True`, responsive patterns
@@ -466,7 +890,7 @@ except Exception as e:
 - [ ] **Terminal debugging**: Uses logger instead of print()
 - [ ] **Accessibility**: Includes tooltip, semantics_label where appropriate
 
-### **The Ultimate Quality Test**
+#### **The Ultimate Quality Test**
 Before committing ANY code, ask:
 1. "Does Flet already provide this functionality?"
 2. "Can a new developer understand this file's purpose in <2 minutes?"
@@ -474,11 +898,9 @@ Before committing ANY code, ask:
 
 If any answer is unclear, STOP and refactor.
 
----
+### 🎯 PROJECT CONTEXT
 
-## 🎯 PROJECT CONTEXT
-
-### **Current Architecture Status**
+#### **Current Architecture Status**
 - **✅ FletV2/**: Clean, framework-harmonious implementation (USE THIS)
 - **❌ flet_server_gui/**: Obsolete, over-engineered (REFERENCE ONLY)
 - **System**: 5-layer encrypted backup framework with GUI management:
@@ -491,7 +913,7 @@ If any answer is unclear, STOP and refactor.
     - Bridge: ServerBridge for communication
     - Utils: Shared utilities
 
-### **Key FletV2 Files**
+#### **Key FletV2 Files**
 ```
 FletV2/
 ├── main.py                    # Clean desktop app (~300 lines)
@@ -506,18 +928,19 @@ FletV2/
 │   └── settings.py           # Configuration
 └── utils/                     # Helper utilities
     ├── debug_setup.py        # Terminal debugging
-    ├── server_bridge.py      # Full server integration
-    └── simple_server_bridge.py # Fallback bridge
+    ├── server_bridge.py      # Full server integration(currently not completed because the gui is not mature enough)
+    └── simple_server_bridge.py # Fallback bridge - for mock data for development
 ```
 
-### **Launch Commands**
+#### **Launch Commands**
 ```bash
 # FletV2 Desktop (Production/Testing)
 cd FletV2 && python main.py
 
 # FletV2 Development with Hot Reload (RECOMMENDED for development)
-# Uses browser for instant hot reload - identical runtime to desktop
-cd FletV2 && python -c "import flet as ft; import main; ft.app(target=main.main, view=ft.AppView.WEB_BROWSER)"
+# Uses desktop for instant hot reload - identical runtime to desktop
+cd FletV2
+flet run -r main.py
 
 # Alternative: Command-line hot reload
 cd FletV2 && flet run --web main.py
@@ -526,7 +949,7 @@ cd FletV2 && flet run --web main.py
 python scripts/one_click_build_and_run.py
 ```
 
-### **Development Workflow (Desktop Apps)**
+#### **Development Workflow (Desktop Apps)**
   ★ Insight ─────────────────────────────────────
   Hot Reload Validation: The WEB_BROWSER view for desktop development is a Flet best practice - it provides identical runtime behavior to native desktop while enabling instant hot reload. The workflow is: develop in browser → test in native desktop → deploy as desktop app.
   ─────────────────────────────────────────────────
@@ -535,23 +958,102 @@ python scripts/one_click_build_and_run.py
 - **Native testing**: Final validation of desktop-specific features, window management, OS integration
 - **Both modes**: Run the exact same Flet application code - no differences in functionality
 
----
+### 🧠 FLET FRAMEWORK BEST PRACTICES SUMMARY
 
-## 🔧 SEARCH & DEVELOPMENT TOOLS
+#### **Core Principles of Flet Development**
 
-You have access to ast-grep for syntax-aware searching:
-- **Structural matching**: `ast-grep --lang python -p 'class $NAME($BASE)'`
-- **Fallback to ripgrep**: Only when ast-grep isn't applicable
-- **Never use basic grep**: ripgrep is always better for codebase searches (basic grep when other tools fail)
+1. **Work WITH the Framework**: Flet provides comprehensive built-in solutions for most UI needs. Focus on composition rather than reimplementation.
 
----
+2. **Leverage Native Components**: Use Flet's built-in controls (`ft.NavigationRail`, `ft.DataTable`, `ft.Tabs`, etc.) instead of building custom equivalents.
 
-## 💡 KEY INSIGHTS
+3. **Embrace Reactive Programming**: Use Flet's reactive update system (`control.update()`) rather than imperative DOM manipulation.
 
-**★ Framework Enlightenment**: Desktop resizable apps with navigation are trivial in Flet. The entire application can be ~700 lines instead of 10,000+ lines of framework-fighting code(not really, but to illustrate the point).
+4. **Follow Material Design**: Utilize Flet's Material Design 3 implementation for consistent, professional UIs.
 
-**★ The Semi-Nuclear Protocol**: When refactoring complex code, analyze first to understand TRUE intentions, then rebuild with simple Flet patterns while preserving valuable business logic, achieving feature parity.
+#### **Essential Flet Patterns**
 
-**★ Performance Secret**: Replacing `page.update()` with `control.update()` can improve performance by 10x+ and eliminate UI flicker.
+1. **Navigation**: Use `ft.NavigationRail.on_change` for simple, reliable navigation instead of complex routing systems.
 
-**The FletV2 directory is the CANONICAL REFERENCE** for proper Flet desktop development. When in doubt, follow its examples exactly.
+2. **Layout**: Use `ft.ResponsiveRow` with `col` properties and `expand=True` for responsive layouts instead of custom responsive logic.
+
+3. **Theming**: Use `page.theme` and `page.dark_theme` with `ft.Theme` and `ft.ColorScheme` for consistent styling.
+
+4. **State Management**: Use direct control property updates (`control.value = new_value`) followed by `control.update()` for precise UI updates.
+
+5. **Async Operations**: Use `async def` event handlers with `await` for non-blocking operations to maintain UI responsiveness.
+
+6. **Background Tasks**: Use `page.run_task()` for async operations and `page.run_thread()` for CPU-intensive tasks.
+
+#### **Performance Optimization Techniques**
+
+1. **Precise Updates**: Always use `control.update()` instead of `page.update()` to update only changed controls.
+
+2. **Batch Updates**: Use `ft.update_async(*controls)` to update multiple controls in a single render cycle.
+
+3. **Lazy Loading**: Load data and components only when needed to improve initial load times.
+
+4. **Memory Management**: Remove event listeners and references to controls that are no longer needed to prevent memory leaks.
+
+5. **Efficient Data Structures**: Use appropriate data structures (lists for ordered data, dicts for keyed access) to optimize data operations.
+
+#### **UI/UX Best Practices**
+
+1. **Consistent Design Language**: Use Flet's built-in typography (`ft.TextTheme`) and color system for visual consistency.
+
+2. **Accessibility**: Provide meaningful labels, tooltips, and semantic information for screen readers.
+
+3. **Responsive Interactions**: Implement appropriate hover, focus, and active states for interactive controls.
+
+4. **Feedback Mechanisms**: Use `page.snack_bar` for transient notifications and `ft.AlertDialog` for important prompts.
+
+5. **Loading States**: Show progress indicators (`ft.ProgressRing`, `ft.ProgressBar`) during async operations.
+
+#### **Error Handling and Debugging**
+
+1. **Centralized Logging**: Use `logging` module with custom formatters for consistent debugging output.
+
+2. **User-Friendly Errors**: Present technical errors in user-understandable terms with actionable guidance.
+
+3. **Graceful Degradation**: Provide fallback functionality when optional features are unavailable.
+
+4. **Global Exception Handling**: Implement `sys.excepthook` for catching unhandled exceptions in the main thread.
+
+5. **Async Error Handling**: Use try/except blocks in async functions to handle operation-specific errors.
+
+#### **Code Organization and Architecture**
+
+1. **Single Responsibility Principle**: Each file/module should have one clear purpose (views, components, utilities, etc.).
+
+2. **Function-Based Views**: Create views as pure functions returning `ft.Control` rather than complex class hierarchies.
+
+3. **Component Reusability**: Build generic, configurable components that can be used in multiple contexts.
+
+4. **Separation of Concerns**: Keep UI logic separate from business logic and data access.
+
+5. **Dependency Injection**: Pass dependencies (server_bridge, page) as parameters rather than global imports.
+
+#### **Testing and Quality Assurance**
+
+1. **Unit Testing**: Write tests for business logic and utility functions using Python's `unittest` framework.
+
+2. **UI Testing**: Use Flet's built-in testing utilities to simulate user interactions.
+
+3. **Integration Testing**: Test the interaction between different components and layers of the application.
+
+4. **Cross-Platform Testing**: Verify application behavior on different operating systems and screen sizes.
+
+5. **Performance Testing**: Measure and optimize critical paths, especially for data-intensive operations.
+
+#### **Deployment and Distribution**
+
+1. **Packaging**: Use `flet build` for creating distributable packages for different platforms.
+
+2. **Configuration Management**: Externalize configuration to files or environment variables for different deployment environments.
+
+3. **Asset Management**: Use Flet's asset system (`assets_dir` parameter) for managing static resources.
+
+4. **Version Management**: Use semantic versioning and maintain changelogs for tracking changes.
+
+5. **Documentation**: Provide clear documentation for users and future developers.
+
+By following these best practices, you'll create Flet applications that are maintainable, performant, and provide an excellent user experience while leveraging the full power of the Flet framework.

@@ -10,8 +10,6 @@ import asyncio
 from datetime import datetime
 from utils.debug_setup import get_logger
 from utils.user_feedback import show_success_message, show_error_message, show_info_message
-from utils.loading_states import LoadingState, create_loading_indicator, create_status_text, SmartRefresh
-from utils.responsive_layouts import create_metrics_row, create_action_bar, SPACING
 from config import ASYNC_DELAY
 
 logger = get_logger(__name__)
@@ -217,28 +215,17 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
         logger.info("Dashboard: Stop server clicked")
         show_info_message(page, "Server stop command sent")
     
-    async def refresh_dashboard_async():
-        """Async function to refresh dashboard data."""
-        try:
-            # Simulate async operation
-            await asyncio.sleep(1.0)
-            logger.info("Dashboard data refreshed")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to refresh dashboard: {e}")
-            return False
-    
     def on_refresh_dashboard(e):
         logger.info("Dashboard: Refresh clicked")
         
         async def async_refresh():
             try:
-                success = await refresh_dashboard_async()
-                if success:
-                    update_dashboard_ui()
-                    show_info_message(page, "Dashboard refreshed")
-                else:
-                    show_error_message(page, "Failed to refresh dashboard")
+                # Simulate async operation
+                await asyncio.sleep(ASYNC_DELAY)
+                # Update UI with current data
+                update_dashboard_ui()
+                show_info_message(page, "Dashboard refreshed")
+                logger.info("Dashboard data refreshed")
             except Exception as e:
                 logger.error(f"Error in refresh handler: {e}")
                 show_error_message(page, "Error refreshing dashboard")
@@ -464,7 +451,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
     ])
     
     # Main dashboard layout
-    return ft.Column([
+    main_view = ft.Column([
         # Header with title and last updated
         ft.Row([
             ft.Icon(ft.Icons.DASHBOARD, size=24),
@@ -549,3 +536,44 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
         ])
         
     ], spacing=20, expand=True, scroll=ft.ScrollMode.AUTO)
+    
+    # Schedule initial data load after controls are added to page
+    def schedule_initial_load():
+        """Schedule initial data load with retry mechanism."""
+        async def delayed_load():
+            # Wait a bit for controls to be attached
+            await asyncio.sleep(0.1)
+            # Check if controls are attached before proceeding
+            if (cpu_progress_bar_ref.current and 
+                hasattr(cpu_progress_bar_ref.current, 'page') and 
+                cpu_progress_bar_ref.current.page is not None):
+                update_dashboard_ui()
+            else:
+                # Retry once more after a longer delay
+                await asyncio.sleep(0.2)
+                if (cpu_progress_bar_ref.current and 
+                    hasattr(cpu_progress_bar_ref.current, 'page') and 
+                    cpu_progress_bar_ref.current.page is not None):
+                    update_dashboard_ui()
+                else:
+                    logger.warning("Controls still not attached, skipping initial load")
+        page.run_task(delayed_load)
+    
+    # Also provide a trigger for manual loading if needed
+    def trigger_initial_load():
+        """Trigger initial data load manually."""
+        update_dashboard_ui()
+    
+    # Schedule the initial load
+    schedule_initial_load()
+    
+    # Wrap the dashboard view in a container to properly attach the trigger function
+    dashboard_container = ft.Container(
+        content=main_view,
+        expand=True
+    )
+    
+    # Export the trigger function so it can be called externally
+    dashboard_container.trigger_initial_load = trigger_initial_load
+    
+    return dashboard_container

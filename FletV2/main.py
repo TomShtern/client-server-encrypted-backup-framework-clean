@@ -35,19 +35,30 @@ sys.path.insert(0, project_root)
 # Use our custom theme system  
 from theme import setup_default_theme, toggle_theme_mode
 
-# Server bridge with fallback
+# Server bridge with fallback - MOCK BRIDGE PRIORITY FOR DEVELOPMENT
+# To use the real bridge, comment out the MockServerBridge import.
+USE_MOCK_BRIDGE = True
+
 try:
-    from utils.server_bridge import ModularServerBridge as ServerBridge
-    BRIDGE_TYPE = "Full ModularServerBridge"
-except Exception as e:
-    logger.warning(f"Failed to import ModularServerBridge: {e}")
+    if USE_MOCK_BRIDGE:
+        from utils.mock_server_bridge import MockServerBridge as ServerBridge
+        BRIDGE_TYPE = "MockServerBridge (Development)"
+        logger.info("Using MockServerBridge for standalone development.")
+    else:
+        raise ImportError("Skipping mock bridge to try real implementations.")
+except (ImportError, ModuleNotFoundError):
     try:
-        from utils.simple_server_bridge import SimpleServerBridge as ServerBridge
-        BRIDGE_TYPE = "SimpleServerBridge (Fallback)"
-    except Exception as e2:
-        logger.error(f"Failed to import SimpleServerBridge: {e2}")
-        ServerBridge = None
-        BRIDGE_TYPE = "No Server Bridge"
+        from utils.server_bridge import ModularServerBridge as ServerBridge
+        BRIDGE_TYPE = "Full ModularServerBridge"
+    except Exception as e:
+        logger.warning(f"Failed to import ModularServerBridge: {e}")
+        try:
+            from utils.simple_server_bridge import SimpleServerBridge as ServerBridge
+            BRIDGE_TYPE = "SimpleServerBridge (Fallback)"
+        except Exception as e2:
+            logger.error(f"Failed to import any server bridge: {e2}")
+            ServerBridge = None
+            BRIDGE_TYPE = "No Server Bridge"
 
 
 class FletV2App(ft.Row):
@@ -88,33 +99,40 @@ class FletV2App(ft.Row):
         
         # Initial view will be loaded after the control is added to the page
         # Set up page connection handler to load initial view
+        logger.info("Setting up page connection handler")
         page.on_connect = self._on_page_connect
+        logger.info("Page connection handler set")
     
     async def _initialize_server_bridge_async(self):
         """Asynchronously initialize server bridge to prevent UI blocking."""
         try:
             if ServerBridge:
-                # SAFE: Use proper constructor pattern instead of dangerous reflection
-                if BRIDGE_TYPE == "Full ModularServerBridge":
-                    # Create bridge using proper constructor
+                # Use MockBridge directly if it's the selected type
+                if BRIDGE_TYPE == "MockServerBridge (Development)":
+                    self.server_bridge = ServerBridge()
+                # For other bridges, attempt connection
+                elif BRIDGE_TYPE == "Full ModularServerBridge":
                     self.server_bridge = ServerBridge(host="127.0.0.1", port=1256)
-                    # Test connection asynchronously
+                    # Test connection asynchronously ONLY for real bridge
                     self.page.run_thread(self.server_bridge._test_connection)
                 else:
-                    # For SimpleServerBridge, initialization is instant
+                    # For SimpleServerBridge or others, init directly
                     self.server_bridge = ServerBridge()
                 logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
             else:
                 self.server_bridge = None
                 logger.warning("No server bridge available")
         except Exception as e:
-            logger.warning(f"Server bridge failed, using mock: {e}")
-            self.server_bridge = None
+            logger.warning(f"Server bridge failed, falling back to mock: {e}")
+            from utils.mock_server_bridge import MockServerBridge
+            self.server_bridge = MockServerBridge()
         # Bridge initialization complete
     
     def _on_page_connect(self, e):
         """Called when page is connected - safe to load initial view."""
+        logger.info("Page connected - loading initial dashboard view")
         self._load_view("dashboard")
+        logger.info("Initial dashboard view loaded")
     
     def _configure_desktop_window(self):
         """Configure window for desktop application."""
@@ -231,10 +249,18 @@ class FletV2App(ft.Row):
                 self.content_area.update()
                 
                 # CRITICAL: Trigger initial load for views that need it (after mounting)
-                if hasattr(content, 'trigger_initial_load'):
+                # First check if content has trigger_initial_load method
+                if hasattr(content, 'trigger_initial_load') and callable(content.trigger_initial_load):
                     try:
                         content.trigger_initial_load()
                         logger.info(f"Triggered initial load for {view_name} view")
+                    except Exception as init_ex:
+                        logger.warning(f"Initial load trigger failed for {view_name}: {init_ex}")
+                # Also check if there's a specific trigger method for dashboard
+                elif view_name == "dashboard" and hasattr(content, 'trigger_initial_load'):
+                    try:
+                        content.trigger_initial_load()
+                        logger.info(f"Triggered initial load for {view_name} view (fallback)")
                     except Exception as init_ex:
                         logger.warning(f"Initial load trigger failed for {view_name}: {init_ex}")
             

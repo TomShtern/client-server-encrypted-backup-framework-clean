@@ -21,21 +21,17 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
     """
     
     # Get initial client data
-    if server_bridge:
-        all_clients_data = server_bridge.get_clients()
-    else:
-        # Mock data for testing
-        all_clients_data = [
-            {"client_id": "client_001", "address": "192.168.1.101:54321", "status": "Connected", "connected_at": "2025-09-03 10:30:15", "last_activity": "2025-09-03 14:45:30"},
-            {"client_id": "client_002", "address": "192.168.1.102:54322", "status": "Registered", "connected_at": "2025-09-02 09:15:22", "last_activity": "2025-09-03 12:20:45"},
-            {"client_id": "client_003", "address": "192.168.1.103:54323", "status": "Offline", "connected_at": "2025-09-01 14:22:10", "last_activity": "2025-09-02 16:33:55"},
-            {"client_id": "client_004", "address": "192.168.1.104:54324", "status": "Connected", "connected_at": "2025-09-03 11:45:05", "last_activity": "2025-09-03 15:12:33"},
-            {"client_id": "client_005", "address": "10.0.0.50:12345", "status": "Registered", "connected_at": "2025-09-01 08:22:33", "last_activity": "2025-09-03 09:11:22"}
-        ]
+    # This view should be dumb - it relies on the bridge for data.
+    # The bridge (real or mock) is responsible for providing the data.
+    all_clients_data = server_bridge.get_clients() if server_bridge else []
+    if not all_clients_data:
+        logger.warning("Clients view received no data from the bridge.")
     
     # State variables
     search_query = ""
     status_filter = "all"
+    date_filter = "all"
+    connection_type_filter = "all"
     
     # Component references for dynamic updates - optimized refs
     clients_table_ref = ft.Ref[ft.DataTable]()  # KEEP: Dynamic table rows
@@ -50,12 +46,60 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
         if search_query.strip():
             query = search_query.lower().strip()
             filtered = [c for c in filtered if 
-                       query in c["client_id"].lower() or 
-                       query in c["address"].lower()]
+                       query in str(c.get("client_id", "")).lower() or 
+                       query in str(c.get("address", "")).lower()]
         
         # Apply status filter
         if status_filter != "all":
-            filtered = [c for c in filtered if c["status"].lower() == status_filter.lower()]
+            filtered = [c for c in filtered if str(c.get("status", "")).lower() == status_filter.lower()]
+        
+        # Apply date filter
+        if date_filter != "all":
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            
+            def is_within_date_range(client):
+                last_activity = client.get("last_activity", "")
+                if not last_activity:
+                    return False
+                
+                try:
+                    # Parse the date string
+                    if " " in last_activity:
+                        activity_date = datetime.strptime(last_activity, "%Y-%m-%d %H:%M:%S")
+                    else:
+                        activity_date = datetime.strptime(last_activity, "%Y-%m-%d")
+                    
+                    if date_filter == "today":
+                        return activity_date.date() == now.date()
+                    elif date_filter == "yesterday":
+                        return activity_date.date() == (now - timedelta(days=1)).date()
+                    elif date_filter == "last_7_days":
+                        return activity_date >= (now - timedelta(days=7))
+                    elif date_filter == "last_30_days":
+                        return activity_date >= (now - timedelta(days=30))
+                except ValueError:
+                    return False
+                
+                return True
+            
+            filtered = [c for c in filtered if is_within_date_range(c)]
+        
+        # Apply connection type filter
+        if connection_type_filter != "all":
+            def is_matching_connection_type(client):
+                address = client.get("address", "")
+                if not address:
+                    return False
+                
+                if connection_type_filter == "local":
+                    return address.startswith("127.") or address.startswith("192.168.") or address.startswith("10.")
+                elif connection_type_filter == "remote":
+                    return not (address.startswith("127.") or address.startswith("192.168.") or address.startswith("10."))
+                
+                return True
+            
+            filtered = [c for c in filtered if is_matching_connection_type(c)]
         
         return filtered
     
@@ -67,38 +111,42 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
         new_rows = []
         for client in filtered_clients:
             # Status color based on client status
-            status_color = (ft.Colors.GREEN if client["status"] == "Connected" 
-                          else ft.Colors.ORANGE if client["status"] == "Registered"
+            status_color = (ft.Colors.GREEN if str(client.get("status", "")).lower() == "connected" 
+                          else ft.Colors.ORANGE if str(client.get("status", "")).lower() == "registered"
                           else ft.Colors.RED)
             
             row = ft.DataRow(
                 cells=[
-                    ft.DataCell(ft.Text(client["client_id"])),
-                    ft.DataCell(ft.Text(client["address"])),
+                    ft.DataCell(ft.Text(str(client.get("client_id", "Unknown")))),
+                    ft.DataCell(ft.Text(str(client.get("address", "Unknown")))),
                     ft.DataCell(
                         ft.Container(
-                            content=ft.Text(client["status"], color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD),
+                            content=ft.Text(
+                                str(client.get("status", "Unknown")), 
+                                color=ft.Colors.WHITE, 
+                                weight=ft.FontWeight.BOLD
+                            ),
                             bgcolor=status_color,
                             border_radius=4,
                             padding=ft.Padding(8, 4, 8, 4)
                         )
                     ),
-                    ft.DataCell(ft.Text(client["connected_at"])),
-                    ft.DataCell(ft.Text(client["last_activity"])),
+                    ft.DataCell(ft.Text(str(client.get("connected_at", "Never")))),
+                    ft.DataCell(ft.Text(str(client.get("last_activity", "Never")))),
                     ft.DataCell(
                         ft.Row([
                             ft.IconButton(
                                 icon=ft.Icons.INFO,
                                 tooltip="View Details",
                                 icon_size=16,
-                                on_click=create_view_details_handler(client["client_id"])
+                                on_click=create_view_details_handler(str(client.get("client_id", "")))
                             ),
                             ft.IconButton(
                                 icon=ft.Icons.POWER_OFF,
                                 tooltip="Disconnect",
                                 icon_size=16,
                                 icon_color=ft.Colors.RED,
-                                on_click=create_disconnect_handler(client["client_id"])
+                                on_click=create_disconnect_handler(str(client.get("client_id", "")))
                             )
                         ], spacing=5)
                     )
@@ -122,15 +170,15 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
         def handler(e):
             logger.info(f"Viewing details for client: {client_id}")
             # Create a dialog with client details
-            client = next((c for c in all_clients_data if c["client_id"] == client_id), None)
+            client = next((c for c in all_clients_data if str(c.get("client_id", "")) == client_id), None)
             if client:
                 dialog = ft.AlertDialog(
                     title=ft.Text(f"Client Details: {client_id}"),
                     content=ft.Column([
-                        ft.Text(f"Address: {client['address']}"),
-                        ft.Text(f"Status: {client['status']}"),
-                        ft.Text(f"Connected At: {client['connected_at']}"),
-                        ft.Text(f"Last Activity: {client['last_activity']}")
+                        ft.Text(f"Address: {client.get('address', 'Unknown')}"),
+                        ft.Text(f"Status: {client.get('status', 'Unknown')}"),
+                        ft.Text(f"Connected At: {client.get('connected_at', 'Never')}"),
+                        ft.Text(f"Last Activity: {client.get('last_activity', 'Never')}")
                     ], spacing=10, tight=True),
                     actions=[
                         ft.TextButton("Close", on_click=lambda e: close_dialog())
@@ -151,7 +199,7 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
             logger.info(f"Disconnecting client: {client_id}")
             # Find and update the client status
             for client in all_clients_data:
-                if client["client_id"] == client_id:
+                if str(client.get("client_id", "")) == client_id:
                     client["status"] = "Offline"
                     break
             
@@ -174,6 +222,18 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
         logger.info(f"Status filter changed to: {status_filter}")
         update_table()
     
+    def on_date_filter_change(e):
+        nonlocal date_filter
+        date_filter = e.control.value
+        logger.info(f"Date filter changed to: {date_filter}")
+        update_table()
+    
+    def on_connection_type_filter_change(e):
+        nonlocal connection_type_filter
+        connection_type_filter = e.control.value
+        logger.info(f"Connection type filter changed to: {connection_type_filter}")
+        update_table()
+    
     def on_refresh_click(e):
         logger.info("Refreshing clients list...")
         # In a real app, this would reload data from server
@@ -181,9 +241,9 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
         show_success_message(page, "Clients list refreshed")
     
     # Calculate status counts
-    connected_count = len([c for c in all_clients_data if c["status"] == "Connected"])
-    registered_count = len([c for c in all_clients_data if c["status"] == "Registered"])  
-    offline_count = len([c for c in all_clients_data if c["status"] == "Offline"])
+    connected_count = len([c for c in all_clients_data if str(c.get("status", "")).lower() == "connected"])
+    registered_count = len([c for c in all_clients_data if str(c.get("status", "")).lower() == "registered"])  
+    offline_count = len([c for c in all_clients_data if str(c.get("status", "")).lower() == "offline"])
     
     # Create the data table
     clients_table = ft.DataTable(
@@ -202,6 +262,52 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
         border=ft.border.all(1, ft.Colors.OUTLINE),
         border_radius=8
     )
+    
+    # Populate initial table rows
+    for client in filter_clients():
+        # Status color based on client status
+        status_color = (ft.Colors.GREEN if str(client.get("status", "")).lower() == "connected" 
+                      else ft.Colors.ORANGE if str(client.get("status", "")).lower() == "registered"
+                      else ft.Colors.RED)
+        
+        row = ft.DataRow(
+            cells=[
+                ft.DataCell(ft.Text(str(client.get("client_id", "Unknown")))),
+                ft.DataCell(ft.Text(str(client.get("address", "Unknown")))),
+                ft.DataCell(
+                    ft.Container(
+                        content=ft.Text(
+                            str(client.get("status", "Unknown")), 
+                            color=ft.Colors.WHITE, 
+                            weight=ft.FontWeight.BOLD
+                        ),
+                        bgcolor=status_color,
+                        border_radius=4,
+                        padding=ft.Padding(8, 4, 8, 4)
+                    )
+                ),
+                ft.DataCell(ft.Text(str(client.get("connected_at", "Never")))),
+                ft.DataCell(ft.Text(str(client.get("last_activity", "Never")))),
+                ft.DataCell(
+                    ft.Row([
+                        ft.IconButton(
+                            icon=ft.Icons.INFO,
+                            tooltip="View Details",
+                            icon_size=16,
+                            on_click=create_view_details_handler(str(client.get("client_id", "")))
+                        ),
+                        ft.IconButton(
+                            icon=ft.Icons.POWER_OFF,
+                            tooltip="Disconnect",
+                            icon_size=16,
+                            icon_color=ft.Colors.RED,
+                            on_click=create_disconnect_handler(str(client.get("client_id", "")))
+                        )
+                    ], spacing=5)
+                )
+            ]
+        )
+        clients_table.rows.append(row)
     
     # Create the main view - wrap Column in Container for padding
     view = ft.Container(
@@ -287,8 +393,32 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
                         ],
                         expand=False,
                         on_change=on_filter_change
+                    ),
+                    ft.Dropdown(
+                        label="Filter by Date",
+                        value="all",
+                        options=[
+                            ft.dropdown.Option("all", "All Dates"),
+                            ft.dropdown.Option("today", "Today"),
+                            ft.dropdown.Option("yesterday", "Yesterday"),
+                            ft.dropdown.Option("last_7_days", "Last 7 Days"),
+                            ft.dropdown.Option("last_30_days", "Last 30 Days")
+                        ],
+                        expand=False,
+                        on_change=on_date_filter_change
+                    ),
+                    ft.Dropdown(
+                        label="Filter by Connection",
+                        value="all",
+                        options=[
+                            ft.dropdown.Option("all", "All Connections"),
+                            ft.dropdown.Option("local", "Local Network"),
+                            ft.dropdown.Option("remote", "Remote")
+                        ],
+                        expand=False,
+                        on_change=on_connection_type_filter_change
                     )
-                ], spacing=20),
+                ], spacing=20, wrap=True),
                 padding=ft.Padding(20, 0, 20, 10)
             ),
             
@@ -297,7 +427,7 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
                 content=ft.Row([
                     ft.Text(
                         ref=status_text_ref,
-                        value=f"Showing {len(all_clients_data)} clients",
+                        value=f"Showing {len(filter_clients())} of {len(all_clients_data)} clients",
                         color=ft.Colors.PRIMARY,
                         size=14
                     ),
@@ -325,48 +455,12 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
         expand=True
     )
     
-    # Initial table population will happen after the view is added to page
-    # We can set initial rows directly when creating the table
-    clients_table.rows = []
-    for client in filter_clients():
-        # Status color based on client status
-        status_color = (ft.Colors.GREEN if client["status"] == "Connected" 
-                      else ft.Colors.ORANGE if client["status"] == "Registered"
-                      else ft.Colors.RED)
-        
-        row = ft.DataRow(
-            cells=[
-                ft.DataCell(ft.Text(client["client_id"])),
-                ft.DataCell(ft.Text(client["address"])),
-                ft.DataCell(
-                    ft.Container(
-                        content=ft.Text(client["status"], color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD),
-                        bgcolor=status_color,
-                        border_radius=4,
-                        padding=ft.Padding(8, 4, 8, 4)
-                    )
-                ),
-                ft.DataCell(ft.Text(client["connected_at"])),
-                ft.DataCell(ft.Text(client["last_activity"])),
-                ft.DataCell(
-                    ft.Row([
-                        ft.IconButton(
-                            icon=ft.Icons.INFO,
-                            tooltip="View Details",
-                            icon_size=16,
-                            on_click=create_view_details_handler(client["client_id"])
-                        ),
-                        ft.IconButton(
-                            icon=ft.Icons.POWER_OFF,
-                            tooltip="Disconnect",
-                            icon_size=16,
-                            icon_color=ft.Colors.RED,
-                            on_click=create_disconnect_handler(client["client_id"])
-                        )
-                    ], spacing=5)
-                )
-            ]
-        )
-        clients_table.rows.append(row)
+    # Also provide a trigger for manual loading if needed
+    def trigger_initial_load():
+        """Trigger initial data load manually."""
+        update_table()
+    
+    # Export the trigger function so it can be called externally
+    view.trigger_initial_load = trigger_initial_load
     
     return view
