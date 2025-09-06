@@ -32,32 +32,35 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
     status_filter = "all"
     type_filter = "all"
     size_filter = "all"
-    
+    case_sensitive_search = False  # New state for case sensitivity
+
     # Direct control references
     files_table_ref = ft.Ref[ft.DataTable]()
     status_text_ref = ft.Ref[ft.Text]()
     search_field_ref = ft.Ref[ft.TextField]()
     last_updated_text_ref = ft.Ref[ft.Text]()
-    
+
     def filter_files():
         """Filter files based on search query and filters."""
         filtered = files_data
-        
+
         # Apply search filter
         if search_query.strip():
-            query = search_query.lower().strip()
-            filtered = [f for f in filtered if 
-                       query in str(f.get("name", "")).lower() or 
-                       query in str(f.get("owner", "")).lower()]
-        
+            query = search_query.strip()
+            if not case_sensitive_search:
+                query = query.lower()
+            filtered = [f for f in filtered if
+                       query in (str(f.get("name", "")) if case_sensitive_search else str(f.get("name", "")).lower()) or
+                       query in (str(f.get("owner", "")) if case_sensitive_search else str(f.get("owner", "")).lower())]
+
         # Apply status filter
         if status_filter != "all":
             filtered = [f for f in filtered if str(f.get("status", "")).lower() == status_filter.lower()]
-        
+
         # Apply type filter
         if type_filter != "all":
             filtered = [f for f in filtered if str(f.get("type", "")).lower() == type_filter.lower()]
-        
+
         # Apply size filter
         if size_filter != "all":
             def is_matching_size(file_data):
@@ -69,11 +72,11 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                 elif size_filter == "large":
                     return size >= 100 * 1024 * 1024  # 100 MB or more
                 return True
-            
+
             filtered = [f for f in filtered if is_matching_size(f)]
-        
+
         return filtered
-    
+
     def format_size(size_bytes):
         """Format size in bytes to human-readable string."""
         if size_bytes < 1024:
@@ -84,30 +87,30 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
             return f"{size_bytes/1024**2:.1f} MB"
         else:
             return f"{size_bytes/1024**3:.1f} GB"
-    
+
     def scan_files_directory():
         """Scan received_files directory for files."""
         files_list = []
-        
+
         try:
             if RECEIVED_FILES_DIR.exists():
                 for file_path in RECEIVED_FILES_DIR.iterdir():
                     if file_path.is_file():
                         try:
                             stat = file_path.stat()
-                            
+
                             # Get file owner (platform-specific)
                             try:
                                 import pwd
                                 owner = pwd.getpwuid(stat.st_uid).pw_name if hasattr(stat, 'st_uid') else "system"
                             except (ImportError, KeyError):
                                 owner = "system"
-                            
+
                             # Determine file status based on modification time
                             mod_time = datetime.fromtimestamp(stat.st_mtime)
                             now = datetime.now()
                             age = now - mod_time
-                            
+
                             # Set status based on file age and size
                             if age.days > 30:
                                 status = "Archived"
@@ -117,7 +120,7 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                                 status = "Stored"
                             else:
                                 status = "Received"
-                            
+
                             files_list.append({
                                 "id": str(hash(file_path.name)) % 10000,
                                 "name": file_path.name,
@@ -147,9 +150,9 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
         except Exception as e:
             logger.error(f"Failed to scan files: {e}")
             files_list = []
-        
+
         return files_list
-    
+
     def get_files_data():
         """Get files data from server or local scan (non-blocking)."""
         try:
@@ -161,14 +164,14 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                         return files_data
                 except Exception as e:
                     logger.warning(f"Failed to get files from server bridge: {e}")
-            
+
             # Fallback to scanning local directory
             files_data = scan_files_directory()
             return files_data
         except Exception as e:
             logger.error(f"Error getting files data: {e}")
             return []
-    
+
     def update_table():
         """Update the files table with current data."""
         filtered_files = filter_files()
@@ -177,7 +180,7 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
             # Status color based on file status
             status_color_name = {
                 "Verified": "GREEN",
-                "Pending": "ORANGE", 
+                "Pending": "ORANGE",
                 "Received": "BLUE",
                 "Unverified": "RED",
                 "Stored": "PURPLE",
@@ -185,9 +188,9 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                 "Empty": "GREY",
                 "Unknown": "ON_SURFACE"
             }.get(file_data.get("status", "Unknown"), "ON_SURFACE")
-            
+
             status_color = getattr(ft.Colors, status_color_name, ft.Colors.ON_SURFACE)
-            
+
             row = ft.DataRow(
                 cells=[
                     ft.DataCell(ft.Text(str(file_data.get("name", "Unknown")))),
@@ -235,73 +238,89 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                 ]
             )
             new_rows.append(row)
-        
-        # Update table
-        files_table_ref.current.rows = new_rows
-        files_table_ref.current.update()
-    
+
+        # Update table if it exists
+        if files_table_ref.current:
+            files_table_ref.current.rows = new_rows
+            files_table_ref.current.update()
+
+        # Update status text with search result count
+        if (status_text_ref.current and
+            hasattr(status_text_ref.current, 'page') and
+            status_text_ref.current.page is not None):
+            total = len(files_data)
+            filtered_count = len(filtered_files)
+            search_active = bool(search_query.strip())
+
+            if search_active:
+                status_text_ref.current.value = f"Search results: {filtered_count} of {total} files"
+            else:
+                status_text_ref.current.value = f"Showing {filtered_count} of {total} files"
+            status_text_ref.current.color = ft.Colors.PRIMARY
+            status_text_ref.current.update()
+
     # Simple loading state without complex state management during initialization
     # We'll handle loading updates manually to avoid control attachment issues
-    
+
     async def load_files_data_async():
         """Load files data with simple, safe control updates."""
         nonlocal files_data, last_updated
-        
+
         # Check if controls are properly attached before proceeding
-        if not (status_text_ref.current and 
-                hasattr(status_text_ref.current, 'page') and 
+        if not (status_text_ref.current and
+                hasattr(status_text_ref.current, 'page') and
                 status_text_ref.current.page is not None):
             logger.debug("Controls not yet attached to page, deferring data load")
             return
-            
+
         try:
             # Update status text safely
-            if (status_text_ref.current and 
-                hasattr(status_text_ref.current, 'page') and 
+            if (status_text_ref.current and
+                hasattr(status_text_ref.current, 'page') and
                 status_text_ref.current.page is not None):
                 status_text_ref.current.value = "Loading files..."
                 status_text_ref.current.color = ft.Colors.PRIMARY
                 status_text_ref.current.update()
-            
+
             # Load data directly (non-blocking)
             files_data = get_files_data()
-            
+
             # Update last updated timestamp - with safe control check
-            if (last_updated_text_ref.current and 
-                hasattr(last_updated_text_ref.current, 'page') and 
+            if (last_updated_text_ref.current and
+                hasattr(last_updated_text_ref.current, 'page') and
                 last_updated_text_ref.current.page is not None):
                 last_updated = datetime.now()
                 last_updated_text_ref.current.value = f"Last updated: {last_updated.strftime('%H:%M:%S')}"
                 last_updated_text_ref.current.update()
-            
+
             # Update UI
             update_table()
-            
+
             # Update status text with success
-            if (status_text_ref.current and 
-                hasattr(status_text_ref.current, 'page') and 
+            if (status_text_ref.current and
+                hasattr(status_text_ref.current, 'page') and
                 status_text_ref.current.page is not None):
                 status_text_ref.current.value = f"Showing {len(files_data)} files"
                 status_text_ref.current.color = ft.Colors.PRIMARY
                 status_text_ref.current.update()
-                
+
         except Exception as e:
             logger.error(f"Error loading files data: {e}")
             # Update status text with error
-            if (status_text_ref.current and 
-                hasattr(status_text_ref.current, 'page') and 
+            if (status_text_ref.current and
+                hasattr(status_text_ref.current, 'page') and
                 status_text_ref.current.page is not None):
                 status_text_ref.current.value = f"Failed to load files: {str(e)}"
                 status_text_ref.current.color = ft.Colors.ERROR
                 status_text_ref.current.update()
-    
+
     def on_download(file_data):
         """Handle file download with real file operations."""
         file_name = file_data.get('name', 'Unknown file')
         file_path = file_data.get('path', '')
-        
+
         logger.info(f"Download file: {file_name}")
-        
+
         # Check if this is a real file path or mock data
         if file_path and file_path != "mock":
             try:
@@ -311,14 +330,14 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                     downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
                     if not os.path.exists(downloads_dir):
                         os.makedirs(downloads_dir)
-                    
+
                     # Create destination path
                     dest_path = os.path.join(downloads_dir, file_name)
-                    
+
                     # Copy file to downloads directory
                     import shutil
                     shutil.copy2(file_path, dest_path)
-                    
+
                     show_success_message(page, f"File downloaded to {dest_path}")
                     logger.info(f"File downloaded successfully: {dest_path}")
                 else:
@@ -330,14 +349,14 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
         else:
             # For mock data, just show a message
             show_info_message(page, f"Downloading {file_name}... (mock data)")
-    
+
     def on_verify(file_data):
         """Handle file verification with real file operations."""
         file_name = file_data.get('name', 'Unknown file')
         file_path = file_data.get('path', '')
-        
+
         logger.info(f"Verify file: {file_name}")
-        
+
         # Check if this is a real file path or mock data
         if file_path and file_path != "mock":
             try:
@@ -347,7 +366,7 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                     stat = os.stat(file_path)
                     file_size = stat.st_size
                     modified_time = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-                    
+
                     # Calculate file hash for verification (simple checksum)
                     import hashlib
                     hash_md5 = hashlib.md5()
@@ -355,14 +374,9 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                         for chunk in iter(lambda: f.read(4096), b""):
                             hash_md5.update(chunk)
                     file_hash = hash_md5.hexdigest()
-                    
+
                     # Show verification results
-                    page.snack_bar = ft.SnackBar(
-                        content=ft.Text(f"Verified {file_name}: {format_size(file_size)}, Modified: {modified_time}, Hash: {file_hash[:8]}..."),
-                        bgcolor=ft.Colors.GREEN
-                    )
-                    page.snack_bar.open = True
-                    page.update()
+                    show_success_message(page, f"Verified {file_name}: {format_size(file_size)}, Modified: {modified_time}, Hash: {file_hash[:8]}...")
                     logger.info(f"File verified successfully: {file_name}")
                 else:
                     show_error_message(page, f"File not found: {file_name}")
@@ -372,19 +386,14 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                 show_error_message(page, f"Failed to verify file: {str(e)}")
         else:
             # For mock data, just show a message
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Verified {file_name}"),
-                bgcolor=ft.Colors.GREEN
-            )
-            page.snack_bar.open = True
-            page.update()
-    
+            show_success_message(page, f"Verified {file_name}")
+
     async def delete_file_async(file_data):
         """Async function to delete a file."""
         try:
             file_name = file_data.get('name', 'Unknown file')
             file_path = file_data.get('path', '')
-            
+
             # Check if this is a real file path or mock data
             if file_path and file_path != "mock":
                 # Check if file exists and delete it
@@ -403,17 +412,17 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
         except Exception as e:
             logger.error(f"Failed to delete file: {e}")
             return False
-    
+
     def on_delete(file_data):
         """Handle file deletion with confirmation."""
         file_name = file_data.get('name', 'Unknown file')
         logger.info(f"Delete file: {file_name}")
-        
+
         def close_dialog(e):
             if hasattr(page, 'dialog') and page.dialog:
                 page.dialog.open = False
             page.update()
-        
+
         def confirm_delete(e):
             async def async_delete():
                 try:
@@ -427,81 +436,93 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                         if status_text_ref.current:
                             status_text_ref.current.value = f"Showing {len(files_data)} files"
                             status_text_ref.current.update()
-                        page.snack_bar = ft.SnackBar(
-                            content=ft.Text(f"Deleted {file_name}"),
-                            bgcolor=ft.Colors.RED
-                        )
+                        show_success_message(page, f"Deleted {file_name}")
                     else:
-                        page.snack_bar = ft.SnackBar(
-                            content=ft.Text(f"Failed to delete {file_name}"),
-                            bgcolor=ft.Colors.RED
-                        )
-                    page.snack_bar.open = True
+                        show_error_message(page, f"Failed to delete {file_name}")
                     close_dialog(None)
                 except Exception as ex:
                     logger.error(f"Error in delete handler: {ex}")
-                    page.snack_bar = ft.SnackBar(
-                        content=ft.Text(f"Error deleting {file_name}"),
-                        bgcolor=ft.Colors.RED
-                    )
-                    page.snack_bar.open = True
+                    show_error_message(page, f"Error deleting {file_name}")
                     close_dialog(None)
-            
+
             # Run async operation
             page.run_task(async_delete)
-        
+
         dialog = ft.AlertDialog(
-            title=ft.Text("Confirm Delete"),
+            title=ft.Text("Confirm Deletion"),
             content=ft.Text(f"Are you sure you want to delete '{file_name}'?"),
             actions=[
-                ft.TextButton("Cancel", on_click=close_dialog),
-                ft.TextButton("Delete", on_click=confirm_delete)
+                ft.TextButton("Cancel", icon=ft.Icons.CANCEL, on_click=close_dialog, tooltip="Cancel deletion"),
+                ft.TextButton("Delete", icon=ft.Icons.DELETE, on_click=confirm_delete, tooltip="Confirm file deletion")
             ]
         )
-        
+
         page.dialog = dialog
         dialog.open = True
         page.update()
-    
+
     def on_search_change(e):
         """Handle search input changes."""
         nonlocal search_query
         search_query = e.control.value
         logger.info(f"Search query changed to: '{search_query}'")
         update_table()
-    
+
+    def on_clear_search():
+        """Clear the search field."""
+        nonlocal search_query
+        search_query = ""
+        if search_field_ref.current:
+            search_field_ref.current.value = ""
+        logger.info("Search cleared")
+        update_table()
+
+    def on_case_sensitive_toggle(e):
+        """Handle case sensitivity toggle."""
+        nonlocal case_sensitive_search
+        case_sensitive_search = e.control.value
+        logger.info(f"Case sensitive search: {case_sensitive_search}")
+        update_table()
+
+    def on_reset_filters(e):
+        """Reset all search and filter fields."""
+        nonlocal search_query, status_filter, type_filter, size_filter
+        search_query = ""
+        status_filter = "all"
+        type_filter = "all"
+        size_filter = "all"
+        if search_field_ref.current:
+            search_field_ref.current.value = ""
+        logger.info("Filters reset")
+        update_table()
+
     def on_status_filter_change(e):
         """Handle status filter changes."""
         nonlocal status_filter
         status_filter = e.control.value
         logger.info(f"Status filter changed to: '{status_filter}'")
         update_table()
-    
+
     def on_type_filter_change(e):
         """Handle type filter changes."""
         nonlocal type_filter
         type_filter = e.control.value
         logger.info(f"Type filter changed to: '{type_filter}'")
         update_table()
-    
+
     def on_size_filter_change(e):
         """Handle size filter changes."""
         nonlocal size_filter
         size_filter = e.control.value
         logger.info(f"Size filter changed to: '{size_filter}'")
         update_table()
-    
+
     def on_refresh_click(e):
         """Handle refresh button click."""
         logger.info("Refresh files list")
         page.run_task(load_files_data_async)
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text("Refreshing files list..."),
-            bgcolor=ft.Colors.BLUE
-        )
-        page.snack_bar.open = True
-        page.update()
-    
+        show_info_message(page, "Refreshing files list...")
+
     # Build the main UI
     main_view = ft.Column([
         # Header with title and refresh button
@@ -512,10 +533,30 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                 ft.Row([
                     ft.TextField(
                         label="Search files...",
+                        hint_text="Search by filename, owner, or type...",
                         prefix_icon=ft.Icons.SEARCH,
+                        suffix=ft.IconButton(
+                            icon=ft.Icons.CLEAR,
+                            tooltip="Clear search",
+                            icon_size=16,
+                            on_click=lambda e: on_clear_search()
+                        ),
                         width=300,
                         on_change=on_search_change,
                         ref=search_field_ref
+                    ),
+                    ft.Container(
+                        content=ft.Switch(
+                            label="Case sensitive",
+                            value=False,
+                            on_change=on_case_sensitive_toggle
+                        ),
+                        padding=ft.Padding(10, 0, 10, 0)
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.CLEAR,
+                        tooltip="Reset all filters",
+                        on_click=on_reset_filters
                     ),
                     ft.IconButton(
                         icon=ft.Icons.REFRESH,
@@ -526,7 +567,7 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
             ]),
             padding=ft.Padding(20, 20, 20, 10)
         ),
-        
+
         # Filter controls
         ft.Container(
             content=ft.Row([
@@ -578,7 +619,7 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
             ], spacing=20, wrap=True),
             padding=ft.Padding(20, 0, 20, 10)
         ),
-        
+
         # Status info
         ft.Container(
             content=ft.Row([
@@ -596,16 +637,56 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                 )
             ]),
             padding=ft.Padding(20, 0, 20, 10)
-        ),
-        
-        # Files table in a scrollable container
-        ft.Container(
-            content=ft.Column([
+        )
+    ])
+
+    # Files table container with empty state
+    table_container = ft.Container(
+        expand=True,
+        padding=ft.Padding(20, 0, 20, 20)
+    )
+
+    def update_table_display():
+        """Update table display with empty state handling."""
+        filtered_files = filter_files()
+        if not filtered_files:
+            # Show empty state
+            table_container.content = ft.Column([
+                ft.Container(
+                    content=ft.Column([
+                        ft.Icon(
+                            ft.Icons.FOLDER_OPEN,
+                            size=64,
+                            color=ft.Colors.ON_SURFACE_VARIANT
+                        ),
+                        ft.Text(
+                            "No files found",
+                            size=18,
+                            weight=ft.FontWeight.BOLD,
+                            color=ft.Colors.ON_SURFACE
+                        ),
+                        ft.Text(
+                            "No files have been uploaded or stored yet.",
+                            size=14,
+                            color=ft.Colors.ON_SURFACE_VARIANT
+                        )
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=16
+                    ),
+                    height=300,
+                    alignment=ft.alignment.center
+                )
+            ], scroll=ft.ScrollMode.AUTO)
+        else:
+            # Show table
+            table_container.content = ft.Column([
                 ft.DataTable(
                     columns=[
                         ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD)),
                         ft.DataColumn(ft.Text("Size", weight=ft.FontWeight.BOLD)),
-                        ft.DataColumn(ft.Text("Type", weight=ft.FontWeight.BOLD)), 
+                        ft.DataColumn(ft.Text("Type", weight=ft.FontWeight.BOLD)),
                         ft.DataColumn(ft.Text("Modified", weight=ft.FontWeight.BOLD)),
                         ft.DataColumn(ft.Text("Owner", weight=ft.FontWeight.BOLD)),
                         ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD)),
@@ -616,48 +697,57 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                     border=ft.border.all(1, ft.Colors.OUTLINE),
                     border_radius=8,
                     data_row_min_height=45,
+                    column_spacing=20,
                     ref=files_table_ref
                 )
-            ], scroll=ft.ScrollMode.AUTO),
-            expand=True,
-            padding=ft.Padding(20, 0, 20, 20)
-        )
-    ], expand=True)
-    
+            ], scroll=ft.ScrollMode.AUTO)
+        table_container.update()
+
+    # Initial display update
+        update_table_display()
+        # Update table with actual data
+        update_table()
+
+    # Also provide a trigger for manual loading if needed
+    def trigger_initial_load():
+        """Trigger initial data load manually."""
+        schedule_data_load()
+
+    # Export the trigger function so it can be called externally
+    main_view.trigger_initial_load = trigger_initial_load
+
     # Schedule data loading after the view is attached
     def schedule_data_load():
         """Schedule data loading with retry mechanism to ensure controls are attached."""
         async def delayed_load_with_retry():
             max_retries = 5
             retry_delay = 0.1
-            
+
             for attempt in range(max_retries):
                 # Check if controls are attached
-                if (status_text_ref.current and 
-                    hasattr(status_text_ref.current, 'page') and 
+                if (status_text_ref.current and
+                    hasattr(status_text_ref.current, 'page') and
                     status_text_ref.current.page is not None):
                     logger.info(f"Controls attached on attempt {attempt + 1}, loading data")
                     await load_files_data_async()
                     return
-                
+
                 logger.debug(f"Attempt {attempt + 1}: Controls not attached, waiting {retry_delay}s")
                 await asyncio.sleep(retry_delay)
                 retry_delay *= 1.5  # Exponential backoff
-            
+
             logger.warning("Failed to load files data: controls never attached after 5 attempts")
-        
+
         page.run_task(delayed_load_with_retry)
-    
+
     # Use page.update after view is attached
     page.on_view_pop = lambda e: None  # Placeholder to ensure page events work
-    schedule_data_load()
     
-    # Also provide a trigger for manual loading if needed
-    def trigger_initial_load():
-        """Trigger initial data load manually."""
+    # Schedule initial data load
+    def initial_schedule():
         schedule_data_load()
     
-    # Export the trigger function so it can be called externally
-    main_view.trigger_initial_load = trigger_initial_load
-    
+    # Set up the initial load to happen after the view is attached
+    page.on_connect = lambda e: initial_schedule()
+
     return main_view

@@ -8,6 +8,7 @@ import flet as ft
 from typing import List, Dict, Any
 import asyncio
 from utils.debug_setup import get_logger
+from utils.user_feedback import show_success_message, show_error_message, show_info_message
 from datetime import datetime, timedelta
 import random
 from config import ASYNC_DELAY
@@ -18,11 +19,11 @@ logger = get_logger(__name__)
 def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
     """
     Create logs view using simple functions and closures.
-    
+
     Args:
         server_bridge: Server bridge for data access
         page: Flet page instance
-        
+
     Returns:
         ft.Control: The logs view
     """
@@ -32,7 +33,7 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
     current_filter = "ALL"
     is_loading = False
     last_updated = None
-    
+
     def generate_mock_logs():
         """Generate mock log data."""
         base_time = datetime.now()
@@ -85,7 +86,7 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
         # Sort by timestamp (most recent first)
         logs_data.sort(key=lambda x: x["timestamp"], reverse=True)
         return logs_data
-    
+
     def get_level_color(level):
         """Get color for log level."""
         color_map = {
@@ -96,7 +97,7 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
             "DEBUG": ft.Colors.GREY
         }
         return color_map.get(level, ft.Colors.ON_SURFACE)
-    
+
     def filter_logs():
         """Filter logs based on current selection."""
         nonlocal filtered_logs_data
@@ -104,80 +105,118 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
             filtered_logs_data = logs_data
         else:
             filtered_logs_data = [log for log in logs_data if log["level"] == current_filter]
-    
+
     def update_logs_display():
-        """Update the logs display with current filter."""
-        # Create log entries using Flet's built-in components
-        log_entries = []
-        for log in filtered_logs_data[:100]:  # Limit to 100 entries for performance
-            timestamp_str = datetime.fromisoformat(log["timestamp"]).strftime("%H:%M:%S")
-            level_color = get_level_color(log["level"])
-            
-            log_entry = ft.Container(
-                content=ft.Row([
-                    ft.Container(
-                        content=ft.Text(
-                            timestamp_str,
-                            size=12,
-                            color=ft.Colors.ON_SURFACE_VARIANT
-                        ),
-                        width=80
+        """Update the logs display with current filter and empty state handling."""
+        if not filtered_logs_data:
+            # Show empty state
+            empty_state = ft.Container(
+                content=ft.Column([
+                    ft.Icon(
+                        ft.Icons.LOGS,
+                        size=64,
+                        color=ft.Colors.ON_SURFACE_VARIANT
                     ),
-                    ft.Container(
-                        content=ft.Text(
-                            log["level"],
-                            size=12,
-                            weight=ft.FontWeight.BOLD,
-                            color=level_color
-                        ),
-                        width=70
+                    ft.Text(
+                        "No logs found",
+                        size=18,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ON_SURFACE
                     ),
-                    ft.Container(
-                        content=ft.Text(
-                            log["component"],
-                            size=12,
-                            color=ft.Colors.ON_SURFACE_VARIANT
-                        ),
-                        width=100
+                    ft.Text(
+                        "No log entries match the current filter criteria.",
+                        size=14,
+                        color=ft.Colors.ON_SURFACE_VARIANT
                     ),
-                    ft.Container(
-                        content=ft.Text(
-                            log["message"],
-                            size=12,
-                            overflow=ft.TextOverflow.ELLIPSIS
-                        ),
-                        expand=True
+                    ft.Container(height=10),
+                    ft.OutlinedButton(
+                        "Show All Logs",
+                        icon=ft.Icons.FILTER_LIST,
+                        on_click=create_filter_handler("ALL"),
+                        tooltip="Clear filters to show all logs"
                     )
-                ], spacing=10),
-                padding=ft.Padding(10, 8, 10, 8),
-                border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
-                bgcolor=ft.Colors.SURFACE if log["level"] != "ERROR" else ft.Colors.ERROR_CONTAINER
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=16
+                ),
+                height=300,
+                alignment=ft.alignment.center
             )
-            log_entries.append(log_entry)
-        
-        # Update the logs container
-        logs_container.controls = log_entries
+            logs_container.controls = [empty_state]
+        else:
+            # Create log entries using Flet's built-in components
+            log_entries = []
+            for log in filtered_logs_data[:100]:  # Limit to 100 entries for performance
+                timestamp_str = datetime.fromisoformat(log["timestamp"]).strftime("%H:%M:%S")
+                level_color = get_level_color(log["level"])
+
+                log_entry = ft.Container(
+                    content=ft.Row([
+                        ft.Container(
+                            content=ft.Text(
+                                timestamp_str,
+                                size=12,
+                                color=ft.Colors.ON_SURFACE_VARIANT
+                            ),
+                            width=80
+                        ),
+                        ft.Container(
+                            content=ft.Text(
+                                log["level"],
+                                size=12,
+                                weight=ft.FontWeight.BOLD,
+                                color=level_color
+                            ),
+                            width=70
+                        ),
+                        ft.Container(
+                            content=ft.Text(
+                                log["component"],
+                                size=12,
+                                color=ft.Colors.ON_SURFACE_VARIANT
+                            ),
+                            width=100
+                        ),
+                        ft.Container(
+                            content=ft.Text(
+                                log["message"],
+                                size=12,
+                                overflow=ft.TextOverflow.ELLIPSIS
+                            ),
+                            expand=True
+                        )
+                    ], spacing=10),
+                    padding=ft.Padding(10, 8, 10, 8),
+                    border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
+                    bgcolor=ft.Colors.SURFACE if log["level"] != "ERROR" else ft.Colors.ERROR_CONTAINER
+                )
+                log_entries.append(log_entry)
+
+            # Update the logs container
+            logs_container.controls = log_entries
+
         logs_container.update()
-    
+
     def update_status_text():
         """Update status text."""
         total_logs = len(logs_data)
         filtered_count = len(filtered_logs_data)
         status_text.value = f"Showing {min(100, filtered_count)} of {filtered_count} logs (Total: {total_logs})"
         status_text.update()
-    
+
     async def load_logs_data_async():
         """Asynchronously load logs data."""
         nonlocal logs_data, is_loading, last_updated
         if is_loading:
             return
-            
+
         is_loading = True
         try:
             # Show loading state
             status_text.value = "Loading logs..."
             status_text.update()
-            
+
             # Load data directly (no blocking await)
             if server_bridge:
                 try:
@@ -188,26 +227,26 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
             else:
                 # Generate mock log data
                 logs_data = generate_mock_logs()
-            
+
             # Update last updated timestamp
             last_updated = datetime.now()
             last_updated_text.value = f"Last updated: {last_updated.strftime('%H:%M:%S')}"
             last_updated_text.update()
-            
+
             # Apply current filter
             filter_logs()
-            
+
             # Update UI
             update_logs_display()
             update_status_text()
-            
+
         except Exception as e:
             logger.error(f"Error loading logs data: {e}")
             status_text.value = "Error loading logs data"
             status_text.update()
         finally:
             is_loading = False
-    
+
     def create_filter_handler(level):
         def handler(e):
             nonlocal current_filter
@@ -218,17 +257,17 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
                 if i == 0:  # ALL button
                     button.style = ft.ButtonStyle(bgcolor=ft.Colors.PRIMARY if level == "ALL" else None)
                 button.update()
-            
+
             # Apply filter and update display
             filter_logs()
             update_logs_display()
             update_status_text()
         return handler
-    
+
     def close_dialog(e):
         page.dialog.open = False
         page.update()
-    
+
     def confirm_clear(e):
         nonlocal logs_data, filtered_logs_data
         logger.info("Logs cleared")
@@ -236,13 +275,9 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
         filtered_logs_data = []
         update_logs_display()
         update_status_text()
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text("Logs cleared successfully"),
-            bgcolor=ft.Colors.GREEN
-        )
-        page.snack_bar.open = True
+        show_success_message(page, "Logs cleared successfully")
         close_dialog(None)
-    
+
     def on_clear_logs(e):
         logger.info("Clear logs requested")
         # Simple confirmation dialog using Flet's built-in AlertDialog
@@ -250,14 +285,14 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
             title=ft.Text("Clear Logs"),
             content=ft.Text("Are you sure you want to clear all logs?"),
             actions=[
-                ft.TextButton("Cancel", on_click=close_dialog),
-                ft.TextButton("Clear", on_click=confirm_clear)
+                ft.TextButton("Cancel", icon=ft.Icons.CANCEL, on_click=close_dialog, tooltip="Cancel log clearing"),
+                ft.TextButton("Clear", icon=ft.Icons.CLEAR, on_click=confirm_clear, tooltip="Clear all logs")
             ]
         )
         page.dialog = dialog
         dialog.open = True
         page.update()
-    
+
     def on_refresh_logs(e):
         logger.info("Refresh logs")
         page.run_task(load_logs_data_async)
@@ -267,33 +302,80 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
         )
         page.snack_bar.open = True
         page.update()
-    
+
     async def export_logs_async():
-        """Async function to export logs."""
+        """Async function to export logs with progress indication."""
         try:
-            # Simulate async operation
-            await asyncio.sleep(ASYNC_DELAY)
+            # Show progress dialog
+            progress_ring = ft.ProgressRing(width=40, height=40)
+            progress_dialog = ft.AlertDialog(
+                modal=True,
+                title=ft.Text("Exporting Logs"),
+                content=ft.Container(
+                    content=ft.Column([
+                        ft.Text("Exporting log data..."),
+                        ft.Container(height=20),
+                        ft.Row([
+                            progress_ring,
+                            ft.Container(width=20),
+                            ft.Text("Processing logs...", size=14)
+                        ], alignment=ft.MainAxisAlignment.CENTER)
+                    ], spacing=10, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    width=300,
+                    height=150
+                ),
+                actions_alignment=ft.MainAxisAlignment.CENTER
+            )
+
+            page.dialog = progress_dialog
+            progress_dialog.open = True
+            page.update()
+
+            # Get logs data (simulate getting log entries)
+            progress_text = ft.Text("Collecting log data...", size=14)
+            progress_dialog.content.content.controls[2].controls[2] = progress_text
+            page.update()
+            await asyncio.sleep(ASYNC_DELAY * 0.5)
+
+            # Simulate processing logs
+            progress_text.value = "Writing log file..."
+            page.update()
+            await asyncio.sleep(ASYNC_DELAY * 0.5)
+
+            # Simulate file operations
+            progress_text.value = "Finalizing export..."
+            page.update()
+            await asyncio.sleep(ASYNC_DELAY * 0.5)
+
+            # Close progress dialog
+            progress_dialog.open = False
+            page.update()
+
             logger.info("Exported logs")
             return True
         except Exception as e:
+            # Close progress dialog on error
+            if 'progress_dialog' in locals() and progress_dialog.open:
+                progress_dialog.open = False
+                page.update()
             logger.error(f"Failed to export logs: {e}")
             return False
 
     def on_export_logs(e):
         logger.info("Export logs requested")
-        
+
         async def async_export():
             try:
                 success = await export_logs_async()
                 if success:
                     page.snack_bar = ft.SnackBar(
                         content=ft.Text("Logs exported to logs_export.txt"),
-                        bgcolor=ft.Colors.BLUE
+                        bgcolor=ft.Colors.GREEN
                     )
                 else:
                     page.snack_bar = ft.SnackBar(
                         content=ft.Text("Failed to export logs"),
-                        bgcolor=ft.Colors.RED
+                        bgcolor=ft.Colors.ERROR
                     )
                 page.snack_bar.open = True
                 page.update()
@@ -301,48 +383,49 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
                 logger.error(f"Error in export handler: {e}")
                 page.snack_bar = ft.SnackBar(
                     content=ft.Text("Error exporting logs"),
-                    bgcolor=ft.Colors.RED
+                    bgcolor=ft.Colors.ERROR
                 )
                 page.snack_bar.open = True
                 page.update()
-        
+
         # Run async operation
         page.run_task(async_export)
-    
+
     # Create UI controls
     status_text = ft.Text(
         value="Loading logs...",
         color=ft.Colors.ON_SURFACE_VARIANT
     )
-    
+
     last_updated_text = ft.Text(
         value="Last updated: Never",
         color=ft.Colors.ON_SURFACE,
         size=12
     )
-    
+
     # Create filter buttons
     filter_buttons = [
-        ft.ElevatedButton(
+        ft.FilledButton(
             "ALL",
             icon=ft.Icons.FILTER_LIST,
             on_click=create_filter_handler("ALL"),
-            style=ft.ButtonStyle(bgcolor=ft.Colors.PRIMARY if current_filter == "ALL" else None)
+            style=ft.ButtonStyle(bgcolor=ft.Colors.PRIMARY if current_filter == "ALL" else None),
+            tooltip="Show all log entries"
         ),
-        ft.OutlinedButton("INFO", on_click=create_filter_handler("INFO")),
-        ft.OutlinedButton("SUCCESS", on_click=create_filter_handler("SUCCESS")),
-        ft.OutlinedButton("WARNING", on_click=create_filter_handler("WARNING")),
-        ft.OutlinedButton("ERROR", on_click=create_filter_handler("ERROR")),
-        ft.OutlinedButton("DEBUG", on_click=create_filter_handler("DEBUG"))
+        ft.OutlinedButton("INFO", icon=ft.Icons.INFO, on_click=create_filter_handler("INFO"), tooltip="Show info logs"),
+        ft.OutlinedButton("SUCCESS", icon=ft.Icons.CHECK_CIRCLE, on_click=create_filter_handler("SUCCESS"), tooltip="Show success logs"),
+        ft.OutlinedButton("WARNING", icon=ft.Icons.WARNING, on_click=create_filter_handler("WARNING"), tooltip="Show warning logs"),
+        ft.OutlinedButton("ERROR", icon=ft.Icons.ERROR, on_click=create_filter_handler("ERROR"), tooltip="Show error logs"),
+        ft.OutlinedButton("DEBUG", icon=ft.Icons.BUG_REPORT, on_click=create_filter_handler("DEBUG"), tooltip="Show debug logs")
     ]
-    
+
     logs_container = ft.Column(
         controls=[],
         scroll=ft.ScrollMode.AUTO,
         expand=True,
         spacing=0
     )
-    
+
     # Schedule initial data load after controls are added to page
     def schedule_initial_load():
         """Schedule initial data load with retry mechanism."""
@@ -350,16 +433,16 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
             # Wait a bit for controls to be attached
             await asyncio.sleep(0.1)
             # Check if controls are attached before proceeding
-            if (status_text and 
-                hasattr(status_text, 'page') and 
+            if (status_text and
+                hasattr(status_text, 'page') and
                 status_text.page is not None):
                 await load_logs_data_async()
             else:
                 logger.warning("Controls not attached, skipping initial load")
         page.run_task(delayed_load)
-    
+
     schedule_initial_load()
-    
+
     # Build the main view
     view = ft.Column([
         # Header with title and action buttons
@@ -435,13 +518,13 @@ def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
             bgcolor=ft.Colors.SURFACE_TINT
         )
     ], expand=True)
-    
+
     # Also provide a trigger for manual loading if needed
     def trigger_initial_load():
         """Trigger initial data load manually."""
         page.run_task(load_logs_data_async)
-    
+
     # Export the trigger function so it can be called externally
     view.trigger_initial_load = trigger_initial_load
-    
+
     return view

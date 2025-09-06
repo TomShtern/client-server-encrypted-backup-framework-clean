@@ -26,7 +26,7 @@ def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, acti
     try:
         page.snack_bar = ft.SnackBar(
             content=ft.Text(message),
-            bgcolor=ft.Colors.ERROR if is_error else ft.Colors.PRIMARY,
+            bgcolor=ft.Colors.ERROR if is_error else ft.Colors.BLUE,
             action=action_label if action_label else "DISMISS",
             duration=4000  # 4 seconds
         )
@@ -41,7 +41,20 @@ def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, acti
 
 def show_success_message(page: ft.Page, message: str, action_label: str = None) -> None:
     """Show success message to user."""
-    show_user_feedback(page, message, is_error=False, action_label=action_label)
+    try:
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(message),
+            bgcolor=ft.Colors.GREEN,
+            action=action_label if action_label else "DISMISS",
+            duration=4000  # 4 seconds
+        )
+        page.snack_bar.open = True
+        page.update()  # ONLY acceptable page.update() use case
+        
+        logger.info(f"User feedback shown: SUCCESS - {message}")
+        
+    except Exception as e:
+        logger.error(f"Failed to show user feedback: {e}")
 
 
 def show_error_message(page: ft.Page, message: str, action_label: str = None) -> None:
@@ -56,11 +69,10 @@ def show_info_message(page: ft.Page, message: str, action_label: str = None) -> 
 
 def show_warning_message(page: ft.Page, message: str, action_label: str = None) -> None:
     """Show warning message to user."""
-    # For warnings, we'll use a yellow color
     try:
         page.snack_bar = ft.SnackBar(
             content=ft.Text(message),
-            bgcolor=ft.Colors.YELLOW,
+            bgcolor=ft.Colors.BLUE,
             action=action_label if action_label else "DISMISS",
             duration=4000  # 4 seconds
         )

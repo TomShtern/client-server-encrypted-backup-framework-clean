@@ -89,7 +89,7 @@ def save_settings_sync(settings_data, settings_file: str = SETTINGS_FILE):
         # Ensure directory exists
         settings_path = Path(settings_file)
         settings_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Use UTF-8 encoding for file operations
         with open(settings_file, 'w', encoding='utf-8') as f:
             json.dump(settings_data, f, indent=2, ensure_ascii=False)
@@ -106,7 +106,7 @@ def export_settings_sync(settings_data, backup_file):
         # Ensure directory exists
         backup_path = Path(backup_file)
         backup_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Use UTF-8 encoding for file operations
         with open(backup_file, 'w', encoding='utf-8') as f:
             json.dump(settings_data, f, indent=2, ensure_ascii=False)
@@ -123,11 +123,11 @@ def import_settings_sync(file_path):
         # Use UTF-8 encoding for file operations
         with open(file_path, 'r', encoding='utf-8') as f:
             imported_settings = json.load(f)
-        
+
         # Validate imported settings structure
         if not isinstance(imported_settings, dict):
             raise ValueError("Invalid settings format")
-            
+
         # Ensure required sections exist
         if 'server' not in imported_settings:
             imported_settings['server'] = {
@@ -148,7 +148,7 @@ def import_settings_sync(file_path):
                 'interval': 2,
                 'alerts': True
             }
-            
+
         logger.info(f"Settings imported successfully from {file_path}")
         return imported_settings
     except Exception as e:
@@ -170,14 +170,14 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
     }
     is_saving = False
     last_saved = None
-    
+
     # Direct control references
     last_saved_text = ft.Text(
         value="Last saved: Never",
         size=12,
         color=ft.Colors.ON_SURFACE
     )
-    
+
     # Event handlers with closures - DEFINE FIRST, BEFORE CONTROLS
     async def on_port_change(e):
         nonlocal current_settings
@@ -207,7 +207,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         e.control.error_text = None
         if e.control.page:  # Check if control is attached to page
             await e.control.update_async()
-    
+
     async def on_host_change(e):
         nonlocal current_settings
         host = e.control.value.strip()
@@ -310,7 +310,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         logger.info(f"Performance alerts changed to: {new_value}")
         if page:  # Check if page is still available
             show_success_message(page, f"Performance alerts {'enabled' if new_value else 'disabled'}")
-    
+
     async def on_theme_toggle(e):
         nonlocal current_settings
         new_mode = "light" if current_settings['gui']['theme_mode'] == "dark" else "dark"
@@ -319,7 +319,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
             page.theme_mode = ft.ThemeMode.LIGHT if new_mode == "light" else ft.ThemeMode.DARK
             await page.update_async()
             show_info_message(page, f"Theme switched to {new_mode} mode")
-    
+
     # Server Settings Fields
     server_port_field = ft.TextField(
         label="Server Port",
@@ -328,14 +328,29 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         width=200,
         on_change=on_port_change
     )
-    
+
+    def reset_port_field(e):
+        server_port_field.value = "1256"
+        server_port_field.error_text = None
+        current_settings['server']['port'] = 1256
+        server_port_field.update()
+        if page:
+            show_info_message(page, "Port reset to default")
+
     server_host_field = ft.TextField(
         label="Server Host",
         value=current_settings['server'].get('host', '127.0.0.1'),
         expand=True,
         on_change=on_host_change
     )
-    
+
+    def reset_host_field(e):
+        server_host_field.value = "127.0.0.1"
+        current_settings['server']['host'] = "127.0.0.1"
+        server_host_field.update()
+        if page:
+            show_info_message(page, "Host reset to default")
+
     max_clients_field = ft.TextField(
         label="Max Clients",
         value=str(current_settings['server'].get('max_clients', 50)),
@@ -343,7 +358,15 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         width=200,
         on_change=on_max_clients_change
     )
-    
+
+    def reset_max_clients_field(e):
+        max_clients_field.value = "50"
+        max_clients_field.error_text = None
+        current_settings['server']['max_clients'] = 50
+        max_clients_field.update()
+        if page:
+            show_info_message(page, "Max clients reset to default")
+
     log_level_dropdown = ft.Dropdown(
         label="Log Level",
         value=current_settings['server'].get('log_level', 'INFO'),
@@ -356,32 +379,32 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         width=200,
         on_change=on_log_level_change
     )
-    
+
     # GUI Settings Fields
     theme_mode_switch = ft.Switch(
         label="Dark Mode",
         value=current_settings['gui'].get('theme_mode', 'dark') == 'dark',
         on_change=on_theme_toggle
     )
-    
+
     auto_refresh_switch = ft.Switch(
         label="Auto Refresh",
         value=current_settings['gui'].get('auto_refresh', True),
         on_change=on_auto_refresh_toggle
     )
-    
+
     notifications_switch = ft.Switch(
         label="Show Notifications",
         value=current_settings['gui'].get('notifications', True),
         on_change=on_notifications_toggle
     )
-    
+
     monitoring_enabled_switch = ft.Switch(
         label="Enable System Monitoring",
         value=current_settings['monitoring'].get('enabled', True),
         on_change=on_monitoring_enabled_toggle
     )
-    
+
     monitoring_interval_field = ft.TextField(
         label="Monitoring Interval (seconds)",
         value=str(current_settings['monitoring'].get('interval', 2)),
@@ -389,7 +412,15 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         width=200,
         on_change=on_monitoring_interval_change
     )
-    
+
+    def reset_monitoring_interval_field(e):
+        monitoring_interval_field.value = "2"
+        monitoring_interval_field.error_text = None
+        current_settings['monitoring']['interval'] = 2
+        monitoring_interval_field.update()
+        if page:
+            show_info_message(page, "Monitoring interval reset to default")
+
     alerts_switch = ft.Switch(
         label="Performance Alerts",
         value=current_settings['monitoring'].get('alerts', True),
@@ -400,9 +431,9 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         nonlocal is_saving, last_saved
         if is_saving:
             return
-            
+
         is_saving = True
-        
+
         try:
             # Perform actual save operation
             success = save_settings_sync(current_settings)
@@ -419,11 +450,11 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
             show_error_message(page, f"Error saving settings: {str(e)}")
         finally:
             is_saving = False
-    
+
     async def on_save_settings(e):
         logger.info("Saving settings...")
         await save_settings_handler()
-    
+
     async def on_reset_settings(e):
         def confirm_reset(e):
             nonlocal current_settings
@@ -432,31 +463,31 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
                 'gui': {'theme_mode': 'dark', 'auto_refresh': True, 'notifications': True},
                 'monitoring': {'enabled': True, 'interval': 2, 'alerts': True}
             }
-            
+
             current_settings.clear()
             current_settings.update(default_settings)
             update_ui_fields()
-            
+
             page.dialog.open = False
             page.update()
             show_info_message(page, "Settings reset to defaults")
-        
+
         def cancel_reset(e):
             page.dialog.open = False
             page.update()
-        
+
         dialog = ft.AlertDialog(
             title=ft.Text("Reset Settings"),
             content=ft.Text("Are you sure you want to reset all settings to their default values? This cannot be undone."),
             actions=[
-                ft.TextButton("Cancel", on_click=cancel_reset),
-                ft.TextButton("Reset", on_click=confirm_reset)
+                ft.TextButton("Cancel", icon=ft.Icons.CANCEL, on_click=cancel_reset, tooltip="Cancel settings reset"),
+                ft.TextButton("Reset", icon=ft.Icons.RESET_TV, on_click=confirm_reset, tooltip="Reset all settings to defaults")
             ]
         )
         page.dialog = dialog
         dialog.open = True
         page.update()
-    
+
     def update_ui_fields():
         """Update UI fields with current settings."""
         server_port_field.value = str(current_settings['server'].get('port', 1256))
@@ -469,18 +500,18 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         monitoring_enabled_switch.value = current_settings['monitoring'].get('enabled', True)
         monitoring_interval_field.value = str(current_settings['monitoring'].get('interval', 2))
         alerts_switch.value = current_settings['monitoring'].get('alerts', True)
-        
+
         # Update all fields efficiently
         for field in [server_port_field, server_host_field, max_clients_field,
                       log_level_dropdown, theme_mode_switch, auto_refresh_switch,
                       notifications_switch, monitoring_enabled_switch,
                       monitoring_interval_field, alerts_switch]:
             field.update()
-    
+
     async def export_settings_handler():
         """Export settings using proper async pattern."""
         backup_file = f"settings_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        
+
         try:
             success = export_settings_sync(current_settings, backup_file)
             if success:
@@ -490,14 +521,14 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         except Exception as e:
             logger.error(f"Error exporting settings: {e}")
             show_error_message(page, "Error exporting settings")
-    
+
     async def on_export_settings(e):
         logger.info("Exporting settings...")
         await export_settings_handler()
-    
+
     # File picker for import functionality
     file_picker = None  # Initialize as None and set later
-    
+
     def initialize_file_picker():
         """Initialize file picker when view is attached to page."""
         nonlocal file_picker
@@ -512,16 +543,16 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
                                 nonlocal current_settings
                                 current_settings.clear()
                                 current_settings.update(imported_settings)
-                                
+
                                 update_ui_fields()
-                                
+
                                 show_success_message(page, f"Settings imported from {e.files[0].name}")
                             else:
                                 show_error_message(page, "Failed to import settings")
                         except Exception as ex:
                             logger.error(f"Error importing settings: {ex}")
                             show_error_message(page, "Error importing settings")
-                    
+
                     # Use page.run_task for async operations
                     page.run_task(async_import)
                 else:
@@ -537,7 +568,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
                         page.update()
                     except Exception as e:
                         logger.warning(f"Could not update page during file picker initialization: {e}")
-    
+
     async def on_import_settings(e):
         logger.info("Import settings clicked")
         # Initialize file picker if not already done
@@ -554,7 +585,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
                 show_error_message(page, "Error opening file picker")
         else:
             show_error_message(page, "File picker not available")
-    
+
     def create_server_settings():
         """Create server settings form."""
         return ft.Card(
@@ -565,15 +596,39 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
                     # Use simple column layout for form fields
                     ft.Column([
                         ft.Text("Port Configuration", size=14, weight=ft.FontWeight.W_500),
-                        server_port_field
+                        ft.Row([
+                            server_port_field,
+                            ft.IconButton(
+                                icon=ft.Icons.CLEAR,
+                                tooltip="Reset to default (1256)",
+                                on_click=reset_port_field,
+                                icon_size=16
+                            )
+                        ], spacing=5)
                     ], spacing=5),
                     ft.Column([
                         ft.Text("Host Configuration", size=14, weight=ft.FontWeight.W_500),
-                        server_host_field
+                        ft.Row([
+                            server_host_field,
+                            ft.IconButton(
+                                icon=ft.Icons.CLEAR,
+                                tooltip="Reset to default (127.0.0.1)",
+                                on_click=reset_host_field,
+                                icon_size=16
+                            )
+                        ], spacing=5)
                     ], spacing=5),
                     ft.Column([
                         ft.Text("Client Limits", size=14, weight=ft.FontWeight.W_500),
-                        max_clients_field
+                        ft.Row([
+                            max_clients_field,
+                            ft.IconButton(
+                                icon=ft.Icons.CLEAR,
+                                tooltip="Reset to default (50)",
+                                on_click=reset_max_clients_field,
+                                icon_size=16
+                            )
+                        ], spacing=5)
                     ], spacing=5),
                     ft.Column([
                         ft.Text("Logging", size=14, weight=ft.FontWeight.W_500),
@@ -583,7 +638,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
                 padding=20
             )
         )
-    
+
     def create_gui_settings():
         """Create GUI settings form."""
         return ft.Card(
@@ -603,7 +658,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
                 padding=20
             )
         )
-    
+
     def create_monitoring_settings():
         """Create monitoring settings form."""
         return ft.Card(
@@ -618,7 +673,15 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
                     ], spacing=5),
                     ft.Column([
                         ft.Text("Monitoring Interval", size=16, weight=ft.FontWeight.W_500),
-                        monitoring_interval_field
+                        ft.Row([
+                            monitoring_interval_field,
+                            ft.IconButton(
+                                icon=ft.Icons.CLEAR,
+                                tooltip="Reset to default (2 seconds)",
+                                on_click=reset_monitoring_interval_field,
+                                icon_size=16
+                            )
+                        ], spacing=5)
                     ], spacing=5),
                     ft.Column([
                         ft.Text("Performance Alerts", size=16, weight=ft.FontWeight.W_500),
@@ -628,7 +691,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
                 padding=20
             )
         )
-    
+
     # Build the main view using Flet's built-in components
     main_view = ft.Column([
         # Header
@@ -641,29 +704,29 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
         ft.Divider(),
         # Action buttons using simple Row instead of ResponsiveRow to avoid parent data conflicts
         ft.Row([
-            ft.ElevatedButton(
+            ft.FilledButton(
                 "Save Settings",
                 icon=ft.Icons.SAVE,
                 on_click=on_save_settings,
-                style=ft.ButtonStyle(
-                    bgcolor=ft.Colors.PRIMARY,
-                    color=ft.Colors.ON_PRIMARY
-                )
+                tooltip="Save current settings"
             ),
             ft.OutlinedButton(
                 "Reset All",
                 icon=ft.Icons.RESTORE,
-                on_click=on_reset_settings
+                on_click=on_reset_settings,
+                tooltip="Reset all settings to defaults"
             ),
             ft.OutlinedButton(
                 "Export Backup",
                 icon=ft.Icons.DOWNLOAD,
-                on_click=on_export_settings
+                on_click=on_export_settings,
+                tooltip="Export settings to backup file"
             ),
             ft.TextButton(
                 "Import Settings",
                 icon=ft.Icons.UPLOAD,
-                on_click=on_import_settings
+                on_click=on_import_settings,
+                tooltip="Import settings from file"
             )
         ], spacing=10, wrap=True),  # Enable wrapping for smaller screens
         ft.Divider(),
@@ -691,7 +754,7 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
             expand=True
         )
     ], spacing=20, expand=True, scroll=ft.ScrollMode.AUTO)
-    
+
     def schedule_initial_load():
         """Schedule initial data load with proper error handling."""
         async def delayed_load():
@@ -715,8 +778,8 @@ def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
                 page.run_task(delayed_load)
             except Exception as e:
                 logger.error(f"Failed to schedule initial load: {e}")
-    
+
     # Schedule the initial load
     schedule_initial_load()
-    
+
     return main_view

@@ -149,6 +149,69 @@ class FletV2App(ft.Row):
         
         # Set desktop-appropriate padding
         self.page.padding = ft.Padding(0, 0, 0, 0)
+        
+        # Set up keyboard shortcuts
+        self.page.on_keyboard_event = self._on_keyboard_event
+    
+    def _on_keyboard_event(self, e: ft.KeyboardEvent):
+        """Handle keyboard shortcuts for navigation and actions."""
+        # Only handle key down events
+        if e.key not in ["R", "D", "C", "F", "B", "A", "L", "S"]:
+            return
+            
+        # Check for Ctrl modifier
+        if not e.ctrl:
+            return
+            
+        # Handle shortcuts
+        if e.key == "R":
+            # Ctrl+R: Refresh current view
+            logger.info("Keyboard shortcut: Refresh current view")
+            self._refresh_current_view()
+        elif e.key == "D":
+            # Ctrl+D: Switch to dashboard
+            logger.info("Keyboard shortcut: Switch to dashboard")
+            self._switch_to_view(0)
+        elif e.key == "C":
+            # Ctrl+C: Switch to clients
+            logger.info("Keyboard shortcut: Switch to clients")
+            self._switch_to_view(1)
+        elif e.key == "F":
+            # Ctrl+F: Switch to files
+            logger.info("Keyboard shortcut: Switch to files")
+            self._switch_to_view(2)
+        elif e.key == "B":
+            # Ctrl+B: Switch to database
+            logger.info("Keyboard shortcut: Switch to database")
+            self._switch_to_view(3)
+        elif e.key == "A":
+            # Ctrl+A: Switch to analytics
+            logger.info("Keyboard shortcut: Switch to analytics")
+            self._switch_to_view(4)
+        elif e.key == "L":
+            # Ctrl+L: Switch to logs
+            logger.info("Keyboard shortcut: Switch to logs")
+            self._switch_to_view(5)
+        elif e.key == "S":
+            # Ctrl+S: Switch to settings
+            logger.info("Keyboard shortcut: Switch to settings")
+            self._switch_to_view(6)
+    
+    def _refresh_current_view(self):
+        """Refresh the currently active view."""
+        # Fixed: self.navigation_rail -> self.nav_rail (attribute name consistency)
+        current_index = self.nav_rail.selected_index
+        view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
+        if current_index < len(view_names):
+            current_view = view_names[current_index]
+            logger.info(f"Refreshing view: {current_view}")
+            self._load_view(current_view)
+    
+    def _switch_to_view(self, index: int):
+        """Switch to a specific view by index."""
+        # Fixed: self.navigation_rail -> self.nav_rail (attribute name consistency) 
+        self.nav_rail.selected_index = index
+        self._on_navigation_change(type('Event', (), {'control': self.nav_rail})())
     
     def _create_navigation_rail(self):
         """Create simple navigation rail."""
@@ -194,6 +257,11 @@ class FletV2App(ft.Row):
                 ),
             ],
             on_change=self._on_navigation_change,
+            trailing=ft.IconButton(
+                icon=ft.Icons.BRIGHTNESS_6,
+                tooltip="Toggle Theme",
+                on_click=self._on_theme_toggle,
+            ),
         )
     
     def _on_navigation_change(self, e):
@@ -204,6 +272,12 @@ class FletV2App(ft.Row):
         
         logger.info(f"Navigation switching to: {selected_view}")
         self._load_view(selected_view)
+    
+    def _on_theme_toggle(self, e):
+        """Handle theme toggle button click."""
+        from theme import toggle_theme_mode
+        toggle_theme_mode(self.page)
+        logger.info("Theme toggled")
     
     def _load_view(self, view_name: str):
         """Load view using simple function calls - no complex view managers."""
@@ -307,7 +381,8 @@ def main(page: ft.Page):
         # Show error in snackbar as well
         page.snack_bar = ft.SnackBar(
             content=ft.Text(f"Application failed to start: {str(e)}"),
-            bgcolor=ft.Colors.RED
+            bgcolor=ft.Colors.RED,
+            duration=3000
         )
         page.snack_bar.open = True
         page.update()

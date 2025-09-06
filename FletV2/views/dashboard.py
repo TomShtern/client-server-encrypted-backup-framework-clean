@@ -18,22 +18,31 @@ logger = get_logger(__name__)
 def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
     """
     Create dashboard view using simple Flet patterns.
-    
+
     Args:
         server_bridge: Server bridge for data access
         page: Flet page instance
-        
+
     Returns:
         ft.Control: The dashboard view
     """
-    
+
     # Essential ft.Ref for controls requiring dynamic styling (KEEP - 5 refs)
     cpu_progress_bar_ref = ft.Ref[ft.ProgressBar]()
     memory_progress_bar_ref = ft.Ref[ft.ProgressBar]()
     disk_progress_bar_ref = ft.Ref[ft.ProgressBar]()
     server_status_text_ref = ft.Ref[ft.Text]()
     server_status_icon_ref = ft.Ref[ft.Icon]()
-    
+    refresh_progress_ref = ft.Ref[ft.ProgressRing]()
+    start_server_progress_ref = ft.Ref[ft.ProgressRing]()
+    stop_server_progress_ref = ft.Ref[ft.ProgressRing]()
+
+    # Button refs for visual feedback
+    start_server_button_ref = ft.Ref[ft.FilledButton]()
+    stop_server_button_ref = ft.Ref[ft.OutlinedButton]()
+    backup_now_button_ref = ft.Ref[ft.FilledButton]()
+    refresh_button_ref = ft.Ref[ft.IconButton]()
+
     # Direct control references for simple text updates (OPTIMIZED)
     last_updated_text = ft.Text(f"Last updated: {datetime.now().strftime('%H:%M:%S')}", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
     uptime_text = ft.Text("2h 34m", size=18, weight=ft.FontWeight.BOLD)
@@ -42,7 +51,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
     cpu_usage_text = ft.Text("45.2%", size=18, weight=ft.FontWeight.BOLD)
     memory_usage_text = ft.Text("67.8%", size=18, weight=ft.FontWeight.BOLD)
     disk_usage_text = ft.Text("34.1%", size=18, weight=ft.FontWeight.BOLD)
-    
+
     def get_server_status():
         """Get server status from bridge or return mock data."""
         if server_bridge:
@@ -50,7 +59,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                 return server_bridge.get_server_status()
             except Exception as e:
                 logger.warning(f"Failed to get server status from server bridge: {e}")
-        
+
         # Fallback to mock data
         return {
             "server_running": True,
@@ -61,7 +70,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
             "total_files": 45,
             "storage_used": "2.4 GB"
         }
-    
+
     def get_system_metrics():
         """Get real system metrics using psutil."""
         try:
@@ -87,7 +96,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                 'disk_total_gb': 500,
                 'disk_used_gb': 170,
             }
-    
+
     def get_recent_activity():
         """Get recent activity or generate mock data."""
         if server_bridge:
@@ -95,7 +104,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                 return server_bridge.get_recent_activity()
             except Exception as e:
                 logger.warning(f"Failed to get recent activity from server bridge: {e}")
-        
+
         # Generate mock recent activity
         activities = []
         base_time = datetime.now()
@@ -109,27 +118,27 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
             "Server started on port 1256",
             "SSL certificate renewed"
         ]
-        
+
         for i in range(8):
             from datetime import timedelta
             import random
             time_offset = timedelta(minutes=random.randint(1, 120))
             activity_time = base_time - time_offset
-            
+
             template = random.choice(activity_types)
             if "{}" in template:
                 activity_text = template.format(random.randint(100, 999))
             else:
                 activity_text = template
-            
+
             activities.append({
                 "time": activity_time.strftime("%H:%M"),
                 "text": activity_text,
                 "type": random.choice(["success", "info", "warning"])
             })
-        
+
         return activities[:5]  # Return 5 most recent
-    
+
     def update_dashboard_ui():
         """Update dashboard UI with current data."""
         try:
@@ -137,63 +146,63 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
             server_status = get_server_status()
             system_metrics = get_system_metrics()
             recent_activity = get_recent_activity()
-            
-            # Update server status (KEEP - requires dynamic styling)
+
+            # Update server status (KEEP - requires dynamic styling) - using semantic colors
             if server_status.get("server_running", False):
                 server_status_text_ref.current.value = "Running"
-                server_status_text_ref.current.color = ft.Colors.GREEN
-                server_status_icon_ref.current.color = ft.Colors.GREEN
+                server_status_text_ref.current.color = ft.Colors.GREEN_600  # Success - running
+                server_status_icon_ref.current.color = ft.Colors.GREEN_600
             else:
                 server_status_text_ref.current.value = "Stopped"
-                server_status_text_ref.current.color = ft.Colors.RED
-                server_status_icon_ref.current.color = ft.Colors.RED
-            
+                server_status_text_ref.current.color = ft.Colors.RED_600  # Error - stopped
+                server_status_icon_ref.current.color = ft.Colors.RED_600
+
             # Update simple text fields (OPTIMIZED - direct access)
             uptime_text.value = server_status.get("uptime", "0h 0m")
             active_clients_text.value = str(server_status.get("active_clients", 0))
             total_transfers_text.value = str(server_status.get("total_transfers", 0))
-            
-            # Update system metrics with progress bars (KEEP - requires dynamic styling)
+
+            # Update system metrics with progress bars (KEEP - requires dynamic styling) - using semantic colors
             cpu_value = system_metrics.get('cpu_usage', 0.0)
             cpu_usage_text.value = f"{cpu_value:.1f}%"
             cpu_progress_bar_ref.current.value = cpu_value / 100
             if cpu_value > 80:
-                cpu_progress_bar_ref.current.color = ft.Colors.RED
+                cpu_progress_bar_ref.current.color = ft.Colors.RED_600  # Critical
             elif cpu_value > 60:
-                cpu_progress_bar_ref.current.color = ft.Colors.ORANGE
+                cpu_progress_bar_ref.current.color = ft.Colors.ORANGE_600  # Warning
             else:
-                cpu_progress_bar_ref.current.color = ft.Colors.GREEN
-            
+                cpu_progress_bar_ref.current.color = ft.Colors.GREEN_600  # Normal
+
             memory_value = system_metrics.get('memory_usage', 0.0)
             memory_usage_text.value = f"{memory_value:.1f}%"
             memory_progress_bar_ref.current.value = memory_value / 100
             if memory_value > 80:
-                memory_progress_bar_ref.current.color = ft.Colors.RED
+                memory_progress_bar_ref.current.color = ft.Colors.RED_600  # Critical
             elif memory_value > 60:
-                memory_progress_bar_ref.current.color = ft.Colors.ORANGE
+                memory_progress_bar_ref.current.color = ft.Colors.ORANGE_600  # Warning
             else:
-                memory_progress_bar_ref.current.color = ft.Colors.GREEN
-            
+                memory_progress_bar_ref.current.color = ft.Colors.GREEN_600  # Normal
+
             disk_value = system_metrics.get('disk_usage', 0.0)
             disk_usage_text.value = f"{disk_value:.1f}%"
             disk_progress_bar_ref.current.value = disk_value / 100
             if disk_value > 80:
-                disk_progress_bar_ref.current.color = ft.Colors.RED
+                disk_progress_bar_ref.current.color = ft.Colors.RED_600  # Critical
             elif disk_value > 60:
-                disk_progress_bar_ref.current.color = ft.Colors.ORANGE
+                disk_progress_bar_ref.current.color = ft.Colors.ORANGE_600  # Warning
             else:
-                disk_progress_bar_ref.current.color = ft.Colors.GREEN
-            
+                disk_progress_bar_ref.current.color = ft.Colors.GREEN_600  # Normal
+
             # Update last updated timestamp
             last_updated_text.value = f"Last updated: {datetime.now().strftime('%H:%M:%S')}"
-            
+
             # Update only essential refs (5 instead of 12)
             server_status_text_ref.current.update()
             server_status_icon_ref.current.update()
             cpu_progress_bar_ref.current.update()
             memory_progress_bar_ref.current.update()
             disk_progress_bar_ref.current.update()
-            
+
             # Update direct controls (7 controls)
             uptime_text.update()
             active_clients_text.update()
@@ -202,41 +211,130 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
             memory_usage_text.update()
             disk_usage_text.update()
             last_updated_text.update()
-            
+
         except Exception as e:
             logger.error(f"Failed to update dashboard UI: {e}")
-    
+
     # Quick action handlers
     def on_start_server(e):
         logger.info("Dashboard: Start server clicked")
-        show_success_message(page, "Server start command sent")
-    
+
+        async def async_start():
+            try:
+                # Show loading indicator
+                if start_server_progress_ref.current:
+                    start_server_progress_ref.current.visible = True
+                    await start_server_progress_ref.current.update_async()
+
+                # Simulate server start operation
+                await asyncio.sleep(ASYNC_DELAY)
+                show_success_message(page, "Server start command sent")
+
+                # Visual feedback: briefly change button color to indicate success
+                if start_server_button_ref.current:
+                    original_bgcolor = start_server_button_ref.current.style.bgcolor
+                    start_server_button_ref.current.style.bgcolor = ft.Colors.GREEN_700
+                    await start_server_button_ref.current.update_async()
+                    await asyncio.sleep(0.5)  # Brief visual feedback
+                    start_server_button_ref.current.style.bgcolor = original_bgcolor
+                    await start_server_button_ref.current.update_async()
+
+            finally:
+                # Hide loading indicator
+                if start_server_progress_ref.current:
+                    start_server_progress_ref.current.visible = False
+                    await start_server_progress_ref.current.update_async()
+
+        # Run async operation
+        page.run_task(async_start)
+
     def on_stop_server(e):
         logger.info("Dashboard: Stop server clicked")
-        show_info_message(page, "Server stop command sent")
-    
+
+        async def async_stop():
+            try:
+                # Show loading indicator
+                if stop_server_progress_ref.current:
+                    stop_server_progress_ref.current.visible = True
+                    await stop_server_progress_ref.current.update_async()
+
+                # Simulate server stop operation
+                await asyncio.sleep(ASYNC_DELAY)
+                show_info_message(page, "Server stop command sent")
+
+                # Visual feedback: briefly change button color to indicate success
+                if stop_server_button_ref.current:
+                    original_color = stop_server_button_ref.current.style.color
+                    stop_server_button_ref.current.style.color = ft.Colors.ORANGE_700
+                    await stop_server_button_ref.current.update_async()
+                    await asyncio.sleep(0.5)  # Brief visual feedback
+                    stop_server_button_ref.current.style.color = original_color
+                    await stop_server_button_ref.current.update_async()
+
+            finally:
+                # Hide loading indicator
+                if stop_server_progress_ref.current:
+                    stop_server_progress_ref.current.visible = False
+                    await stop_server_progress_ref.current.update_async()
+
+        # Run async operation
+        page.run_task(async_stop)
+
     def on_refresh_dashboard(e):
         logger.info("Dashboard: Refresh clicked")
-        
+
         async def async_refresh():
             try:
+                # Show loading indicator
+                if refresh_progress_ref.current:
+                    refresh_progress_ref.current.visible = True
+                    await refresh_progress_ref.current.update_async()
+
                 # Simulate async operation
                 await asyncio.sleep(ASYNC_DELAY)
                 # Update UI with current data
                 update_dashboard_ui()
                 show_info_message(page, "Dashboard refreshed")
                 logger.info("Dashboard data refreshed")
+
+                # Visual feedback: briefly change button color to indicate success
+                if refresh_button_ref.current:
+                    original_color = refresh_button_ref.current.icon_color
+                    refresh_button_ref.current.icon_color = ft.Colors.BLUE_700
+                    await refresh_button_ref.current.update_async()
+                    await asyncio.sleep(0.5)  # Brief visual feedback
+                    refresh_button_ref.current.icon_color = original_color
+                    await refresh_button_ref.current.update_async()
+
             except Exception as e:
                 logger.error(f"Error in refresh handler: {e}")
                 show_error_message(page, "Error refreshing dashboard")
-        
+            finally:
+                # Hide loading indicator
+                if refresh_progress_ref.current:
+                    refresh_progress_ref.current.visible = False
+                    await refresh_progress_ref.current.update_async()
+
         # Run async operation
         page.run_task(async_refresh)
-    
+
     def on_backup_now(e):
         logger.info("Dashboard: Backup now clicked")
         show_info_message(page, "Backup job queued")
-    
+
+        async def async_feedback():
+            # Visual feedback: briefly change button color to indicate success
+            if backup_now_button_ref.current:
+                original_bgcolor = backup_now_button_ref.current.style.bgcolor
+                backup_now_button_ref.current.style.bgcolor = ft.Colors.PURPLE_700
+                await backup_now_button_ref.current.update_async()
+                await asyncio.sleep(0.5)  # Brief visual feedback
+                backup_now_button_ref.current.style.bgcolor = original_bgcolor
+                await backup_now_button_ref.current.update_async()
+
+        # Run async operation
+        page.run_task(async_feedback)
+
     # Create server status cards
     server_status_cards = ft.ResponsiveRow([
         ft.Column([
@@ -246,17 +344,17 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                         ft.Row([
                             ft.Icon(
                                 ft.Icons.CIRCLE if True else ft.Icons.CIRCLE_OUTLINED,
-                                color=ft.Colors.GREEN if True else ft.Colors.RED,
+                                color=ft.Colors.GREEN_600 if True else ft.Colors.RED_600,  # Semantic colors
                                 size=16,
                                 ref=server_status_icon_ref
                             ),
                             ft.Text("Server Status", size=12, weight=ft.FontWeight.W_500)
                         ], spacing=8),
                         ft.Text(
-                            "Running" if True else "Stopped", 
-                            size=18, 
+                            "Running" if True else "Stopped",
+                            size=18,
                             weight=ft.FontWeight.BOLD,
-                            color=ft.Colors.GREEN if True else ft.Colors.RED,
+                            color=ft.Colors.GREEN_600 if True else ft.Colors.RED_600,  # Semantic colors
                             ref=server_status_text_ref
                         )
                     ], spacing=5),
@@ -264,7 +362,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                 )
             )
         ], col={"sm": 6, "md": 3}),
-        
+
         ft.Column([
             ft.Card(
                 content=ft.Container(
@@ -279,7 +377,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                 )
             )
         ], col={"sm": 6, "md": 3}),
-        
+
         ft.Column([
             ft.Card(
                 content=ft.Container(
@@ -294,7 +392,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                 )
             )
         ], col={"sm": 6, "md": 3}),
-        
+
         ft.Column([
             ft.Card(
                 content=ft.Container(
@@ -310,7 +408,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
             )
         ], col={"sm": 6, "md": 3})
     ])
-    
+
     # Create system metrics cards
     system_metrics_cards = ft.ResponsiveRow([
         ft.Column([
@@ -333,7 +431,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                 )
             )
         ], col={"sm": 6, "md": 4}),
-        
+
         ft.Column([
             ft.Card(
                 content=ft.Container(
@@ -354,7 +452,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                 )
             )
         ], col={"sm": 6, "md": 4}),
-        
+
         ft.Column([
             ft.Card(
                 content=ft.Container(
@@ -376,7 +474,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
             )
         ], col={"sm": 6, "md": 4})
     ])
-    
+
     # Create recent activity list
     activity_items = []
     for i in range(5):
@@ -385,13 +483,13 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
         base_time = datetime.now()
         time_offset = timedelta(minutes=random.randint(1, 120))
         activity_time = base_time - time_offset
-        
+
         activity_color = {
             "success": ft.Colors.GREEN,
-            "info": ft.Colors.BLUE, 
+            "info": ft.Colors.BLUE,
             "warning": ft.Colors.ORANGE
         }.get(random.choice(["success", "info", "warning"]), ft.Colors.ON_SURFACE)
-        
+
         activity_items.append(
             ft.Container(
                 content=ft.Row([
@@ -410,46 +508,80 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                 padding=ft.Padding(10, 5, 10, 5)
             )
         )
-    
+
     # Quick actions
     quick_actions = ft.ResponsiveRow([
         ft.Column([
-            ft.FilledButton(
-                "Start Server",
-                icon=ft.Icons.PLAY_ARROW,
-                on_click=on_start_server,
-                style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN)
-            )
+            ft.Stack([
+                ft.FilledButton(
+                    "Start Server",
+                    icon=ft.Icons.PLAY_ARROW,
+                    on_click=on_start_server,
+                    style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN),
+                    tooltip="Start the backup server",
+                    ref=start_server_button_ref
+                ),
+                ft.ProgressRing(
+                    ref=start_server_progress_ref,
+                    visible=False,
+                    width=24,
+                    height=24,
+                    stroke_width=2
+                )
+            ], alignment=ft.alignment.center)
         ], col={"sm": 6, "md": 3}),
-        
+
         ft.Column([
-            ft.OutlinedButton(
-                "Stop Server",
-                icon=ft.Icons.STOP,
-                on_click=on_stop_server,
-                style=ft.ButtonStyle(color=ft.Colors.ORANGE)
-            )
+            ft.Stack([
+                ft.OutlinedButton(
+                    "Stop Server",
+                    icon=ft.Icons.STOP,
+                    on_click=on_stop_server,
+                    style=ft.ButtonStyle(color=ft.Colors.ORANGE),
+                    tooltip="Stop the backup server",
+                    ref=stop_server_button_ref
+                ),
+                ft.ProgressRing(
+                    ref=stop_server_progress_ref,
+                    visible=False,
+                    width=24,
+                    height=24,
+                    stroke_width=2
+                )
+            ], alignment=ft.alignment.center)
         ], col={"sm": 6, "md": 3}),
-        
+
         ft.Column([
             ft.FilledButton(
                 "Backup Now",
                 icon=ft.Icons.BACKUP,
                 on_click=on_backup_now,
-                style=ft.ButtonStyle(bgcolor=ft.Colors.PURPLE)
+                style=ft.ButtonStyle(bgcolor=ft.Colors.PURPLE),
+                tooltip="Start an immediate backup",
+                ref=backup_now_button_ref
             )
         ], col={"sm": 6, "md": 3}),
-        
+
         ft.Column([
-            ft.IconButton(
-                icon=ft.Icons.REFRESH,
-                tooltip="Refresh Dashboard",
-                on_click=on_refresh_dashboard,
-                icon_size=24
-            )
+            ft.Stack([
+                ft.IconButton(
+                    icon=ft.Icons.REFRESH,
+                    tooltip="Refresh Dashboard",
+                    on_click=on_refresh_dashboard,
+                    icon_size=24,
+                    ref=refresh_button_ref
+                ),
+                ft.ProgressRing(
+                    ref=refresh_progress_ref,
+                    visible=False,
+                    width=24,
+                    height=24,
+                    stroke_width=2
+                )
+            ], alignment=ft.alignment.center)
         ], col={"sm": 6, "md": 3})
     ])
-    
+
     # Main dashboard layout
     main_view = ft.Column([
         # Header with title and last updated
@@ -460,22 +592,22 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
             last_updated_text
         ]),
         ft.Divider(),
-        
+
         # Quick Actions
         ft.Text("Quick Actions", size=18, weight=ft.FontWeight.BOLD),
         quick_actions,
         ft.Divider(),
-        
+
         # Server Status Overview
         ft.Text("Server Status", size=18, weight=ft.FontWeight.BOLD),
         server_status_cards,
         ft.Divider(),
-        
+
         # System Metrics
         ft.Text("System Performance", size=18, weight=ft.FontWeight.BOLD),
         system_metrics_cards,
         ft.Divider(),
-        
+
         # Recent Activity and Storage Info
         ft.ResponsiveRow([
             # Recent Activity
@@ -498,31 +630,31 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                     )
                 )
             ], col={"sm": 12, "md": 8}),
-            
-            # Storage Summary  
+
+            # Storage Summary
             ft.Column([
                 ft.Card(
                     content=ft.Container(
                         content=ft.Column([
                             ft.Text("Storage Summary", size=16, weight=ft.FontWeight.BOLD),
                             ft.Divider(),
-                            
+
                             ft.Row([
                                 ft.Icon(ft.Icons.FOLDER, size=16, color=ft.Colors.BLUE),
                                 ft.Text("Total Files", size=12, weight=ft.FontWeight.W_500)
                             ], spacing=5),
                             ft.Text("45", size=16, weight=ft.FontWeight.BOLD),
-                            
+
                             ft.Divider(),
-                            
+
                             ft.Row([
                                 ft.Icon(ft.Icons.CLOUD, size=16, color=ft.Colors.GREEN),
                                 ft.Text("Storage Used", size=12, weight=ft.FontWeight.W_500)
                             ], spacing=5),
                             ft.Text("2.4 GB", size=16, weight=ft.FontWeight.BOLD),
-                            
+
                             ft.Divider(),
-                            
+
                             ft.Row([
                                 ft.Icon(ft.Icons.STORAGE, size=16, color=ft.Colors.PURPLE),
                                 ft.Text("Available", size=12, weight=ft.FontWeight.W_500)
@@ -534,9 +666,9 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
                 )
             ], col={"sm": 12, "md": 4})
         ])
-        
+
     ], spacing=20, expand=True, scroll=ft.ScrollMode.AUTO)
-    
+
     # Schedule initial data load after controls are added to page
     def schedule_initial_load():
         """Schedule initial data load with retry mechanism."""
@@ -544,36 +676,36 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
             # Wait a bit for controls to be attached
             await asyncio.sleep(0.1)
             # Check if controls are attached before proceeding
-            if (cpu_progress_bar_ref.current and 
-                hasattr(cpu_progress_bar_ref.current, 'page') and 
+            if (cpu_progress_bar_ref.current and
+                hasattr(cpu_progress_bar_ref.current, 'page') and
                 cpu_progress_bar_ref.current.page is not None):
                 update_dashboard_ui()
             else:
                 # Retry once more after a longer delay
                 await asyncio.sleep(0.2)
-                if (cpu_progress_bar_ref.current and 
-                    hasattr(cpu_progress_bar_ref.current, 'page') and 
+                if (cpu_progress_bar_ref.current and
+                    hasattr(cpu_progress_bar_ref.current, 'page') and
                     cpu_progress_bar_ref.current.page is not None):
                     update_dashboard_ui()
                 else:
                     logger.warning("Controls still not attached, skipping initial load")
         page.run_task(delayed_load)
-    
+
     # Also provide a trigger for manual loading if needed
     def trigger_initial_load():
         """Trigger initial data load manually."""
         update_dashboard_ui()
-    
+
     # Schedule the initial load
     schedule_initial_load()
-    
+
     # Wrap the dashboard view in a container to properly attach the trigger function
     dashboard_container = ft.Container(
         content=main_view,
         expand=True
     )
-    
+
     # Export the trigger function so it can be called externally
     dashboard_container.trigger_initial_load = trigger_initial_load
-    
+
     return dashboard_container
