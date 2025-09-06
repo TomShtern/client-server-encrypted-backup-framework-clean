@@ -16,6 +16,7 @@
         "prisma.prisma",
         "bierner.markdown-mermaid",
         "github.copilot-workspace",
-        "nvidia.nsight-copilot"
+        "nvidia.nsight-copilot",
+        "anthropic.claude-code"
     ]
 }
