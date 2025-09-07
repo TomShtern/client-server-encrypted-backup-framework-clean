@@ -193,43 +193,46 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         logger.info(f"Creating data table with {len(filtered_data['rows'])} rows and {len(filtered_data['columns'])} columns")
         data_table = ft.DataTable(
             columns=[
-                ft.DataColumn(ft.Text(col.replace("_", " ").title(), weight=ft.FontWeight.BOLD))
+                ft.DataColumn(ft.Text(col.replace("_", " ").title(), weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PURPLE_800))
                 for col in filtered_data["columns"]
             ] + [
-                ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD))
+                ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PURPLE_800))
             ],
             rows=[
                 ft.DataRow(
                     cells=[
-                        ft.DataCell(ft.Text(str(row.get(col, ""))))
+                        ft.DataCell(ft.Text(str(row.get(col, "")), size=13))
                         for col in filtered_data["columns"]
                     ] + [
                         ft.DataCell(
-                            ft.Row([
-                                ft.IconButton(
-                                    icon=ft.Icons.EDIT,
-                                    tooltip="Edit",
-                                    icon_size=16,
-                                    on_click=lambda e, r=row: [logger.info(f"Edit row: {r.get('id', 'unknown')}"), on_edit_row(e, r)]
-                                ),
-                                ft.IconButton(
-                                    icon=ft.Icons.DELETE,
-                                    tooltip="Delete",
-                                    icon_size=16,
-                                    icon_color=ft.Colors.RED,
-                                    on_click=lambda e, r=row: [logger.info(f"Delete row: {r.get('id', 'unknown')}"), on_delete_row(e, r)]
-                                )
-                            ], spacing=5)
+                            ft.PopupMenuButton(
+                                icon=ft.Icons.MORE_VERT,
+                                tooltip="Row Actions",
+                                icon_color=ft.Colors.PURPLE_600,
+                                items=[
+                                    ft.PopupMenuItem(
+                                        text="Edit Row",
+                                        icon=ft.Icons.EDIT,
+                                        on_click=lambda e, r=row: [logger.info(f"Edit row: {r.get('id', 'unknown')}"), on_edit_row(e, r)]
+                                    ),
+                                    ft.PopupMenuItem(
+                                        text="Delete Row",
+                                        icon=ft.Icons.DELETE,
+                                        on_click=lambda e, r=row: [logger.info(f"Delete row: {r.get('id', 'unknown')}"), on_delete_row(e, r)]
+                                    )
+                                ]
+                            )
                         )
                     ]
                 )
                 for row in filtered_data["rows"]
             ],
-            heading_row_color=ft.Colors.SURFACE,
-            border=ft.border.all(1, ft.Colors.OUTLINE),
-            border_radius=8,
-            data_row_min_height=45,
-            column_spacing=20
+            heading_row_color=ft.Colors.PURPLE_50,
+            border=ft.border.all(2, ft.Colors.PURPLE_300),
+            border_radius=15,
+            data_row_min_height=60,
+            column_spacing=32,
+            show_checkbox_column=False
         )
 
         if table_container_ref.current:

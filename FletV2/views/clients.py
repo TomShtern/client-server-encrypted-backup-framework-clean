@@ -31,19 +31,20 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
     clients_table = ft.DataTable(
         ref=clients_table_ref,
         columns=[
-            ft.DataColumn(ft.Text("ID", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Last Seen", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Files", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD))
+            ft.DataColumn(ft.Text("ID", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.BLUE_800)),
+            ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.BLUE_800)),
+            ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.BLUE_800)),
+            ft.DataColumn(ft.Text("Last Seen", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.BLUE_800)),
+            ft.DataColumn(ft.Text("Files", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.BLUE_800)),
+            ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.BLUE_800))
         ],
         rows=[],
-        heading_row_color=ft.Colors.SURFACE,
-        border=ft.border.all(1, ft.Colors.OUTLINE),
-        border_radius=8,
-        data_row_min_height=45,
-        column_spacing=20
+        heading_row_color=ft.Colors.BLUE_50,
+        border=ft.border.all(3, ft.Colors.BLUE_300),
+        border_radius=16,
+        data_row_min_height=62,
+        column_spacing=28,
+        show_checkbox_column=False
     )
     
     # Feedback text control

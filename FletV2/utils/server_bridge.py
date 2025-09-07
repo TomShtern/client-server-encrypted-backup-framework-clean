@@ -396,6 +396,50 @@ class ServerBridge:
         logger.debug(f"[ServerBridge] FALLBACK: Returning mock table data for: {table_name}")
         return self.mock_generator.get_table_data(table_name)
     
+    def update_row(self, table_name: str, row_id: str, updated_data: Dict[str, Any]) -> bool:
+        """Update a row in the database."""
+        if self.real_server and hasattr(self.real_server, 'update_row'):
+            try:
+                return self.real_server.update_row(table_name, row_id, updated_data)
+            except Exception as e:
+                logger.error(f"Real server update_row failed: {e}")
+                return False
+        
+        # Mock fallback - simulate successful update
+        logger.debug(f"[ServerBridge] FALLBACK: Simulating row update in {table_name} for ID: {row_id}")
+        return True
+    
+    def delete_row(self, table_name: str, row_id: str) -> bool:
+        """Delete a row from the database."""
+        if self.real_server and hasattr(self.real_server, 'delete_row'):
+            try:
+                return self.real_server.delete_row(table_name, row_id)
+            except Exception as e:
+                logger.error(f"Real server delete_row failed: {e}")
+                return False
+        
+        # Mock fallback - simulate successful deletion
+        logger.debug(f"[ServerBridge] FALLBACK: Simulating row deletion in {table_name} for ID: {row_id}")
+        return True
+    
+    # Database Manager Interface - for compatibility with existing code
+    class DatabaseManager:
+        def __init__(self, server_bridge):
+            self.bridge = server_bridge
+        
+        def update_row(self, table_name: str, row_id: str, updated_data: Dict[str, Any]) -> bool:
+            return self.bridge.update_row(table_name, row_id, updated_data)
+        
+        def delete_row(self, table_name: str, row_id: str) -> bool:
+            return self.bridge.delete_row(table_name, row_id)
+    
+    @property
+    def db_manager(self):
+        """Get database manager for compatibility with existing code."""
+        if not hasattr(self, '_db_manager'):
+            self._db_manager = self.DatabaseManager(self)
+        return self._db_manager
+    
     # --- Logging ---
     
     def get_logs(self) -> List[Dict[str, Any]]:

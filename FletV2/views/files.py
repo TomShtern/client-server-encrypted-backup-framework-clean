@@ -522,20 +522,21 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
     files_table = ft.DataTable(
         ref=files_table_ref,
         columns=[
-            ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Size", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Type", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Modified", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Owner", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD))
+            ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
+            ft.DataColumn(ft.Text("Size", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
+            ft.DataColumn(ft.Text("Type", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
+            ft.DataColumn(ft.Text("Modified", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
+            ft.DataColumn(ft.Text("Owner", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
+            ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
+            ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800))
         ],
         rows=[],  # Will be populated by update_table()
-        heading_row_color=ft.Colors.SURFACE,
-        border=ft.border.all(1, ft.Colors.OUTLINE),
-        border_radius=8,
-        data_row_min_height=45,
-        column_spacing=20
+        heading_row_color=ft.Colors.GREEN_50,
+        border=ft.border.all(2, ft.Colors.GREEN_300),
+        border_radius=15,
+        data_row_min_height=58,
+        column_spacing=30,
+        show_checkbox_column=False
     )
     status_text_ref = ft.Ref[ft.Text]()
     search_field_ref = ft.Ref[ft.TextField]()
@@ -707,17 +708,17 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         for file_data in filtered_files:
             # Status color based on file status
             status_color_name = {
-                "Verified": "GREEN",
-                "Pending": "ORANGE",
-                "Received": "BLUE",
-                "Unverified": "RED",
-                "Stored": "PURPLE",
-                "Archived": "BROWN",
-                "Empty": "GREY",
-                "Unknown": "ON_SURFACE"
-            }.get(file_data.get("status", "Unknown"), "ON_SURFACE")
+                "Verified": "GREEN_600",
+                "Pending": "ORANGE_600", 
+                "Received": "BLUE_600",
+                "Unverified": "RED_600",
+                "Stored": "PURPLE_600",       # Fixed: Use proper Flet color
+                "Archived": "BROWN_600",      # Fixed: Use proper Flet color
+                "Empty": "GREY_500",          # Fixed: Use proper Flet color
+                "Unknown": "GREY_400"         # Fixed: Use proper Flet color
+            }.get(file_data.get("status", "Unknown"), "GREY_400")
 
-            status_color = getattr(ft.Colors, status_color_name, ft.Colors.ON_SURFACE)
+            status_color = getattr(ft.Colors, status_color_name, ft.Colors.GREY_400)
 
             row = ft.DataRow(
                 cells=[
@@ -1266,17 +1267,21 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
             # Recreate the table with fresh data to ensure proper refresh
             fresh_table = ft.DataTable(
                 columns=[
-                    ft.DataColumn(ft.Text("Name")),
-                    ft.DataColumn(ft.Text("Size")),
-                    ft.DataColumn(ft.Text("Type")),
-                    ft.DataColumn(ft.Text("Modified")),
-                    ft.DataColumn(ft.Text("Owner")),
-                    ft.DataColumn(ft.Text("Status")),
-                    ft.DataColumn(ft.Text("Actions"))
+                    ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
+                    ft.DataColumn(ft.Text("Size", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
+                    ft.DataColumn(ft.Text("Type", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
+                    ft.DataColumn(ft.Text("Modified", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
+                    ft.DataColumn(ft.Text("Owner", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
+                    ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
+                    ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800))
                 ],
                 rows=files_table.rows,  # Use the updated rows
-                border=ft.border.all(1, ft.Colors.OUTLINE),
-                border_radius=8,
+                heading_row_color=ft.Colors.GREEN_50,
+                border=ft.border.all(2, ft.Colors.GREEN_300),
+                border_radius=15,
+                data_row_min_height=58,
+                column_spacing=30,
+                show_checkbox_column=False,
                 ref=files_table_ref
             )
             

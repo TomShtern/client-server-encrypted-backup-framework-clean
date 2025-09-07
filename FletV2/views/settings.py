@@ -254,28 +254,31 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         if page:  # Check if page is still available
             show_success_message(page, f"Log level updated to {log_level}")
 
-    async def on_auto_refresh_toggle(e):
+    def on_auto_refresh_toggle_sync(e):
+        """Fixed: Synchronous auto refresh toggle handler."""
         nonlocal current_settings
         new_value = e.control.value
         current_settings['gui']['auto_refresh'] = new_value
         logger.info(f"Auto refresh changed to: {new_value}")
-        if page:  # Check if page is still available
+        if page:
             show_success_message(page, f"Auto refresh {'enabled' if new_value else 'disabled'}")
 
-    async def on_notifications_toggle(e):
+    def on_notifications_toggle_sync(e):
+        """Fixed: Synchronous notifications toggle handler."""
         nonlocal current_settings
         new_value = e.control.value
         current_settings['gui']['notifications'] = new_value
         logger.info(f"Notifications changed to: {new_value}")
-        if page:  # Check if page is still available
+        if page:
             show_success_message(page, f"Notifications {'enabled' if new_value else 'disabled'}")
 
-    async def on_monitoring_enabled_toggle(e):
+    def on_monitoring_enabled_toggle_sync(e):
+        """Fixed: Synchronous monitoring enabled toggle handler."""
         nonlocal current_settings
         new_value = e.control.value
         current_settings['monitoring']['enabled'] = new_value
         logger.info(f"Monitoring enabled changed to: {new_value}")
-        if page:  # Check if page is still available
+        if page:
             show_success_message(page, f"System monitoring {'enabled' if new_value else 'disabled'}")
 
     async def on_monitoring_interval_change(e):
@@ -304,12 +307,13 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         if e.control.page:  # Check if control is attached to page
             await e.control.update_async()
 
-    async def on_alerts_toggle(e):
+    def on_alerts_toggle_sync(e):
+        """Fixed: Synchronous alerts toggle handler."""
         nonlocal current_settings
         new_value = e.control.value
         current_settings['monitoring']['alerts'] = new_value
         logger.info(f"Performance alerts changed to: {new_value}")
-        if page:  # Check if page is still available
+        if page:
             show_success_message(page, f"Performance alerts {'enabled' if new_value else 'disabled'}")
 
     def on_theme_toggle(e):
@@ -322,12 +326,30 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             show_info_message(page, f"Theme switched to {new_mode} mode")
 
     # Server Settings Fields
+    # Fixed: Define working synchronous event handlers
+    def on_port_change_sync(e):
+        """Synchronous port change handler."""
+        try:
+            port = int(e.control.value)
+            if 1024 <= port <= 65535:
+                current_settings['server']['port'] = port
+                logger.info(f"Server port changed to: {port}")
+                e.control.error_text = None
+            else:
+                e.control.error_text = "Port must be between 1024-65535"
+            e.control.update()
+        except ValueError:
+            e.control.error_text = "Please enter a valid number"
+            e.control.update()
+        except Exception as ex:
+            logger.error(f"Error changing port: {ex}")
+
     server_port_field = ft.TextField(
         label="Server Port",
         value=str(current_settings['server'].get('port', 1256)),
         keyboard_type=ft.KeyboardType.NUMBER,
         width=200,
-        on_change=on_port_change
+        on_change=on_port_change_sync  # Fixed: Use working sync handler
     )
 
     def reset_port_field(e):
@@ -338,11 +360,16 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         if page:
             show_info_message(page, "Port reset to default")
 
+    def on_host_change_sync(e):
+        """Synchronous host change handler."""
+        current_settings['server']['host'] = e.control.value
+        logger.info(f"Server host changed to: {e.control.value}")
+
     server_host_field = ft.TextField(
         label="Server Host",
         value=current_settings['server'].get('host', '127.0.0.1'),
         expand=True,
-        on_change=on_host_change
+        on_change=on_host_change_sync  # Fixed: Use working sync handler
     )
 
     def reset_host_field(e):
@@ -352,12 +379,29 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         if page:
             show_info_message(page, "Host reset to default")
 
+    def on_max_clients_change_sync(e):
+        """Synchronous max clients change handler."""
+        try:
+            max_clients = int(e.control.value)
+            if 1 <= max_clients <= 1000:
+                current_settings['server']['max_clients'] = max_clients
+                logger.info(f"Max clients changed to: {max_clients}")
+                e.control.error_text = None
+            else:
+                e.control.error_text = "Max clients must be between 1-1000"
+            e.control.update()
+        except ValueError:
+            e.control.error_text = "Please enter a valid number"
+            e.control.update()
+        except Exception as ex:
+            logger.error(f"Error changing max clients: {ex}")
+
     max_clients_field = ft.TextField(
         label="Max Clients",
         value=str(current_settings['server'].get('max_clients', 50)),
         keyboard_type=ft.KeyboardType.NUMBER,
         width=200,
-        on_change=on_max_clients_change
+        on_change=on_max_clients_change_sync  # Fixed: Use working sync handler
     )
 
     def reset_max_clients_field(e):
@@ -391,19 +435,19 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
     auto_refresh_switch = ft.Switch(
         label="Auto Refresh",
         value=current_settings['gui'].get('auto_refresh', True),
-        on_change=on_auto_refresh_toggle
+        on_change=on_auto_refresh_toggle_sync  # Fixed: Use sync handler
     )
 
     notifications_switch = ft.Switch(
         label="Show Notifications",
         value=current_settings['gui'].get('notifications', True),
-        on_change=on_notifications_toggle
+        on_change=on_notifications_toggle_sync  # Fixed: Use sync handler
     )
 
     monitoring_enabled_switch = ft.Switch(
         label="Enable System Monitoring",
         value=current_settings['monitoring'].get('enabled', True),
-        on_change=on_monitoring_enabled_toggle
+        on_change=on_monitoring_enabled_toggle_sync  # Fixed: Use sync handler
     )
 
     monitoring_interval_field = ft.TextField(
@@ -425,7 +469,7 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
     alerts_switch = ft.Switch(
         label="Performance Alerts",
         value=current_settings['monitoring'].get('alerts', True),
-        on_change=on_alerts_toggle
+        on_change=on_alerts_toggle_sync  # Fixed: Use sync handler
     )
     # Additional async handlers for buttons and file operations
     async def save_settings_handler():

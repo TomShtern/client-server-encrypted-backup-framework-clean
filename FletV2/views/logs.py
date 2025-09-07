@@ -165,42 +165,61 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
 
                 log_entry = ft.Container(
                     content=ft.Row([
+                        # Enhanced timestamp styling
                         ft.Container(
                             content=ft.Text(
                                 timestamp_str,
-                                size=12,
-                                color=ft.Colors.OUTLINE
+                                size=13,
+                                weight=ft.FontWeight.BOLD,
+                                color=ft.Colors.BLUE_GREY_700
                             ),
-                            width=80
+                            width=85,
+                            padding=ft.Padding(8, 4, 8, 4),
+                            bgcolor=ft.Colors.BLUE_GREY_50,
+                            border_radius=8
                         ),
+                        # Enhanced log level badge
                         ft.Container(
                             content=ft.Text(
                                 log["level"],
-                                size=12,
+                                size=11,
                                 weight=ft.FontWeight.BOLD,
-                                color=level_color
+                                color=ft.Colors.WHITE
                             ),
-                            width=70
+                            width=75,
+                            height=28,
+                            bgcolor=level_color,
+                            alignment=ft.alignment.center,
+                            border_radius=14,
+                            border=ft.border.all(1, ft.Colors.WHITE)
                         ),
+                        # Enhanced component styling
                         ft.Container(
                             content=ft.Text(
                                 log["component"],
                                 size=12,
-                                color=ft.Colors.OUTLINE
+                                weight=ft.FontWeight.W_600,
+                                color=ft.Colors.INDIGO_700
                             ),
-                            width=100
+                            width=110,
+                            padding=ft.Padding(6, 0, 6, 0)
                         ),
+                        # Enhanced message styling
                         ft.Container(
                             content=ft.Text(
                                 log["message"],
                                 size=12,
+                                color=ft.Colors.GREY_800,
+                                weight=ft.FontWeight.W_400,
                                 overflow=ft.TextOverflow.ELLIPSIS
                             ),
                             expand=True
                         )
-                    ], spacing=10),
-                    padding=ft.Padding(10, 8, 10, 8),
-                    border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
+                    ], spacing=12),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    margin=ft.Margin(0, 2, 0, 2),
+                    border=ft.border.all(1, ft.Colors.GREY_200),
+                    border_radius=10,
                     bgcolor=get_level_bgcolor(log["level"])
                 )
                 log_entries.append(log_entry)
@@ -526,8 +545,9 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
             content=logs_container,
             expand=True,
             padding=ft.Padding(20, 0, 20, 20),
-            border=ft.border.all(1, ft.Colors.OUTLINE),
-            bgcolor=ft.Colors.SURFACE_TINT
+            border=ft.border.all(2, ft.Colors.GREY_300),
+            border_radius=12,
+            bgcolor=ft.Colors.WHITE  # Fixed: Remove sky-blue background
         )
     ], expand=True)
 

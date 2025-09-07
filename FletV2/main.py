@@ -115,6 +115,10 @@ class FletV2App(ft.Row):
         # Set up page connection handler to load initial view
         logger.info("Setting up page connection handler")
         page.on_connect = self._on_page_connect
+        
+        # Also ensure initial view loads after control is fully initialized
+        # Use a small delay to ensure all controls are ready
+        page.run_task(self._delayed_initial_load)
         logger.info("Page connection handler set")
     
     def _initialize_state_manager(self):
@@ -172,13 +176,28 @@ class FletV2App(ft.Row):
         self._load_view("dashboard")
         logger.info("Initial dashboard view loaded")
     
+    async def _delayed_initial_load(self):
+        """Delayed initial load to ensure all controls are ready."""
+        # Small delay to ensure UI is fully initialized
+        await asyncio.sleep(0.1)
+        
+        # Ensure dashboard is selected and loaded
+        if self.nav_rail.selected_index == 0 and self.content_area.content is None:
+            logger.info("Delayed initial load - ensuring dashboard is loaded")
+            self._load_view("dashboard")
+            # Force update of content area
+            if self.content_area.page:
+                self.content_area.update()
+        
+        logger.info("Delayed initial load completed")
+    
     def _configure_desktop_window(self):
         """Configure window for desktop application."""
-        # Window settings
-        self.page.window_min_width = 1024
-        self.page.window_min_height = 768
-        self.page.window_width = 1200
-        self.page.window_height = 800
+        # Window settings - Updated to requested size 1730x1425
+        self.page.window_min_width = 1200  # Slightly larger minimum for better UX
+        self.page.window_min_height = 900
+        self.page.window_width = 1730      # User requested size
+        self.page.window_height = 1425     # User requested size
         self.page.window_resizable = True
         self.page.title = "Backup Server Management"
         
