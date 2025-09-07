@@ -21,9 +21,10 @@ logger = get_logger(__name__)
 
 def create_files_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
     """
-    Create files view using simple function-based pattern.
+    Create files view with enhanced infrastructure and state management.
     Follows Framework Harmony principles - no custom classes, use Flet's built-ins.
     """
+    logger.info("Creating files view with enhanced infrastructure")
     # Simple data state
     files_data: List[Dict[str, Any]] = []
     is_loading = False

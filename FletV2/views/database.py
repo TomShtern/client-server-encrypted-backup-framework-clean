@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Database View for FletV2
-Clean function-based implementation following Framework Harmony principles.
+Enhanced with reactive state management and optimized data loading.
 """
 
 import flet as ft
@@ -10,34 +10,33 @@ import asyncio
 import csv
 import os
 from utils.debug_setup import get_logger
+from utils.user_feedback import show_success_message, show_error_message, show_info_message
 from datetime import datetime
-from config import ASYNC_DELAY
 
 logger = get_logger(__name__)
 
 
 def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
     """
-    Create database view using clean function-based patterns.
+    Create database view with enhanced infrastructure and reactive state management.
 
     Args:
-        server_bridge: Server bridge for data access
+        server_bridge: Enhanced server bridge for data access
         page: Flet page instance
+        state_manager: Reactive state manager for cross-view data sharing
 
     Returns:
         ft.Control: The database view
     """
+    logger.info("Creating database view with enhanced infrastructure")
 
-    # State variables
-    db_info = {}
+    # State variables for local UI management
     selected_table_name = "clients"
-    current_table_data = {}
-    is_loading = False
-    last_updated = None
     search_query = ""
-    column_filters = {}  # Filter values for each column
+    column_filters = {}
+    is_loading = False
 
-    # Direct control references for text updates
+    # Control references for direct updates
     status_text_ref = ft.Ref[ft.Text]()
     tables_text_ref = ft.Ref[ft.Text]()
     records_text_ref = ft.Ref[ft.Text]()
@@ -45,12 +44,78 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
     table_info_text_ref = ft.Ref[ft.Text]()
     rows_count_text_ref = ft.Ref[ft.Text]()
     last_updated_text_ref = ft.Ref[ft.Text]()
-
-    # Table container reference - needed for dynamic content
     table_container_ref = ft.Ref[ft.Container]()
+
+    def get_current_table_data():
+        """Get current table data from state manager or server bridge."""
+        # Try to get from state manager first
+        if state_manager:
+            cached_data = state_manager.get_cached(f"table_data_{selected_table_name}", max_age_seconds=60)
+            if cached_data:
+                logger.debug(f"Using cached table data for {selected_table_name}")
+                return cached_data
+        
+        # Fallback to direct server bridge call
+        return get_table_data_from_bridge(selected_table_name)
+
+    async def get_table_data_from_bridge(table_name: str) -> Dict[str, Any]:
+        """Get table data from enhanced server bridge."""
+        if not server_bridge:
+            logger.warning("No server bridge available - using fallback mock data")
+            return get_mock_table_data(table_name)
+        
+        try:
+            # Enhanced server bridge supports async methods
+            if hasattr(server_bridge, 'get_table_data') and asyncio.iscoroutinefunction(getattr(server_bridge, 'get_table_data', None)):
+                data = await server_bridge.get_table_data(table_name)
+            elif hasattr(server_bridge, 'get_table_data'):
+                data = server_bridge.get_table_data(table_name)
+            else:
+                logger.warning(f"Server bridge does not support get_table_data - using mock data")
+                data = get_mock_table_data(table_name)
+            
+            # Update state manager cache
+            if state_manager and data:
+                await state_manager.update_state(f"table_data_{table_name}", data)
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"Error getting table data from server bridge: {e}")
+            return get_mock_table_data(table_name)
+
+    def get_mock_table_data(table_name: str) -> Dict[str, Any]:
+        """Fallback mock data for development/testing."""
+        mock_data = {
+            "clients": {
+                "columns": ["id", "name", "address", "status", "last_seen", "files_count"],
+                "rows": [
+                    {"id": "client_001", "name": "Alpha Workstation", "address": "192.168.1.100", "status": "Connected", "last_seen": "2025-09-07 10:30:15", "files_count": 42},
+                    {"id": "client_002", "name": "Beta Server", "address": "192.168.1.101", "status": "Connected", "last_seen": "2025-09-07 10:25:22", "files_count": 128},
+                    {"id": "client_003", "name": "Gamma Laptop", "address": "192.168.1.102", "status": "Offline", "last_seen": "2025-09-06 14:22:10", "files_count": 23}
+                ]
+            },
+            "files": {
+                "columns": ["id", "filename", "path", "size", "modified", "client_id", "verified"],
+                "rows": [
+                    {"id": "file_001", "filename": "document.pdf", "path": "/docs/document.pdf", "size": "2.4 MB", "modified": "2025-09-07 09:15:30", "client_id": "client_001", "verified": True},
+                    {"id": "file_002", "filename": "image.jpg", "path": "/media/image.jpg", "size": "5.1 MB", "modified": "2025-09-07 08:45:20", "client_id": "client_002", "verified": True}
+                ]
+            },
+            "logs": {
+                "columns": ["id", "timestamp", "level", "component", "message"],
+                "rows": [
+                    {"id": 1, "timestamp": "2025-09-07 10:30:15", "level": "INFO", "component": "Server", "message": "Database connection established"},
+                    {"id": 2, "timestamp": "2025-09-07 10:29:22", "level": "INFO", "component": "Client", "message": "Client client_001 connected successfully"}
+                ]
+            }
+        }
+        return mock_data.get(table_name, {"columns": [], "rows": []})
 
     def filter_table_data():
         """Filter table data based on search query and column filters."""
+        current_table_data = get_current_table_data()
+        
         if not current_table_data or not current_table_data.get("rows"):
             return current_table_data
 
@@ -85,42 +150,6 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             "rows": filtered_rows
         }
 
-    def get_table_data(table_name: str) -> Dict[str, Any]:
-        """Get table data from server or database."""
-        if server_bridge:
-            try:
-                return server_bridge.get_table_data(table_name)
-            except Exception as e:
-                logger.error(f"Error getting table data: {e}")
-
-        # Mock data for testing
-        tables_data = {
-            "clients": {
-                "columns": ["id", "name", "last_seen", "has_public_key", "has_aes_key"],
-                "rows": [
-                    {"id": "client_001", "name": "Alpha Workstation", "last_seen": "2025-09-03 10:30:15", "has_public_key": True, "has_aes_key": True},
-                    {"id": "client_002", "name": "Beta Server", "last_seen": "2025-09-02 09:15:22", "has_public_key": True, "has_aes_key": True},
-                    {"id": "client_003", "name": "Gamma Laptop", "last_seen": "2025-09-01 14:22:10", "has_public_key": True, "has_aes_key": False}
-                ]
-            },
-            "files": {
-                "columns": ["id", "filename", "pathname", "verified", "filesize", "modification_date", "crc", "client_id", "client_name"],
-                "rows": [
-                    {"id": "file_001", "filename": "document1.pdf", "pathname": "/home/user/documents/document1.pdf", "verified": True, "filesize": 1024000, "modification_date": "2025-09-03 10:30:15", "crc": 123456789, "client_id": "client_001", "client_name": "Alpha Workstation"},
-                    {"id": "file_002", "filename": "image1.jpg", "pathname": "/home/user/pictures/image1.jpg", "verified": False, "filesize": 2048000, "modification_date": "2025-09-03 11:45:30", "crc": 987654321, "client_id": "client_002", "client_name": "Beta Server"}
-                ]
-            },
-            "logs": {
-                "columns": ["id", "timestamp", "level", "component", "message"],
-                "rows": [
-                    {"id": 1, "timestamp": "2025-09-03 10:30:15", "level": "INFO", "component": "Server", "message": "Server started on port 1256"},
-                    {"id": 2, "timestamp": "2025-09-03 10:31:22", "level": "INFO", "component": "Client", "message": "Client client_001 connected"},
-                    {"id": 3, "timestamp": "2025-09-03 10:35:45", "level": "WARNING", "component": "File Transfer", "message": "File transfer completed with warnings"}
-                ]
-            }
-        }
-
-        return tables_data.get(table_name, {"columns": [], "rows": []})
 
     def update_table_content():
         """Update table content display with current data."""
@@ -179,13 +208,15 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                                 ft.IconButton(
                                     icon=ft.Icons.EDIT,
                                     tooltip="Edit",
-                                    on_click=lambda e, r=row: on_edit_row(e, r)
+                                    icon_size=16,
+                                    on_click=lambda e, r=row: [logger.info(f"Edit row: {r.get('id', 'unknown')}"), on_edit_row(e, r)]
                                 ),
                                 ft.IconButton(
                                     icon=ft.Icons.DELETE,
                                     tooltip="Delete",
-                                    on_click=lambda e, r=row: on_delete_row(e, r),
-                                    icon_color=ft.Colors.RED
+                                    icon_size=16,
+                                    icon_color=ft.Colors.RED,
+                                    on_click=lambda e, r=row: [logger.info(f"Delete row: {r.get('id', 'unknown')}"), on_delete_row(e, r)]
                                 )
                             ], spacing=5)
                         )
@@ -205,43 +236,60 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             table_container_ref.current.update()
 
     async def load_database_info_async():
-        """Load database info and update UI."""
-        nonlocal db_info, current_table_data, is_loading, last_updated
+        """Load database info and update UI with enhanced infrastructure."""
+        nonlocal is_loading
 
         if is_loading:
+            logger.debug("Database info loading already in progress")
             return
 
         is_loading = True
+        logger.info("Loading database info with enhanced infrastructure")
+        
         try:
-            # Load database info
-            if server_bridge:
+            # Load database info from server bridge or state manager
+            db_info = None
+            
+            # Check state manager cache first
+            if state_manager:
+                db_info = state_manager.get_cached("database_info", max_age_seconds=30)
+                if db_info:
+                    logger.debug("Using cached database info from state manager")
+
+            # If no cached data, fetch from server bridge
+            if not db_info and server_bridge:
                 try:
-                    db_info = server_bridge.get_database_info()
+                    if hasattr(server_bridge, 'get_database_info') and asyncio.iscoroutinefunction(getattr(server_bridge, 'get_database_info', None)):
+                        db_info = await server_bridge.get_database_info()
+                    elif hasattr(server_bridge, 'get_database_info'):
+                        db_info = server_bridge.get_database_info()
+                    
+                    # Cache the result in state manager
+                    if state_manager and db_info:
+                        await state_manager.update_state("database_info", db_info)
+                        
                 except Exception as e:
-                    logger.warning(f"Server bridge failed: {e}")
-                    # Mock data
-                    db_info = {
-                        "status": "Connected",
-                        "tables": 5,
-                        "records": 1250,
-                        "size": "45.2 MB"
-                    }
-            else:
-                # Mock data with delay
-                await asyncio.sleep(ASYNC_DELAY)
+                    logger.warning(f"Server bridge database info failed: {e}")
+
+            # Fallback to mock data if no server bridge data
+            if not db_info:
+                logger.warning("Using fallback database info")
                 db_info = {
-                    "status": "Connected",
-                    "tables": 5,
-                    "records": 1250,
-                    "size": "45.2 MB"
+                    "status": "Mock Mode",
+                    "tables": 3,
+                    "records": 173,
+                    "size": "12.4 MB"
                 }
+                # Cache fallback data too
+                if state_manager:
+                    await state_manager.update_state("database_info", db_info)
 
             # Load initial table data
             try:
-                current_table_data = get_table_data(selected_table_name)
+                current_table_data = await get_table_data_from_bridge(selected_table_name)
             except Exception as e:
                 logger.warning(f"Failed to get table data: {e}")
-                current_table_data = {"columns": [], "rows": []}
+                current_table_data = get_mock_table_data(selected_table_name)
 
             # Update timestamp
             last_updated = datetime.now()
@@ -249,10 +297,11 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                 last_updated_text_ref.current.value = f"Last updated: {last_updated.strftime('%H:%M:%S')}"
                 last_updated_text_ref.current.update()
 
-            # Update UI components
+            # Update UI components with precise control updates
             if status_text_ref.current:
-                status_text_ref.current.value = db_info.get("status", "Unknown")
-                status_text_ref.current.color = ft.Colors.GREEN if db_info.get("status") == "Connected" else ft.Colors.RED
+                status = db_info.get("status", "Unknown")
+                status_text_ref.current.value = status
+                status_text_ref.current.color = ft.Colors.GREEN if status == "Connected" else (ft.Colors.BLUE if "Mock" in status else ft.Colors.RED)
                 status_text_ref.current.update()
 
             if tables_text_ref.current:
@@ -268,7 +317,8 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                 size_text_ref.current.update()
 
             if rows_count_text_ref.current:
-                rows_count_text_ref.current.value = f"{len(current_table_data.get('rows', []))} rows"
+                row_count = len(current_table_data.get("rows", []))
+                rows_count_text_ref.current.value = f"{row_count} rows"
                 rows_count_text_ref.current.update()
 
             if table_info_text_ref.current:
@@ -278,40 +328,61 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             # Update table content
             update_table_content()
 
-            logger.info("Database info loaded successfully")
+            logger.info(f"Database info loaded successfully - {db_info.get('status')} with {row_count} rows in {selected_table_name}")
 
         except Exception as e:
             logger.error(f"Error loading database info: {e}")
+            show_error_message(page, f"Failed to load database info: {str(e)}")
         finally:
             is_loading = False
 
+    # Setup state subscriptions for real-time updates if state manager available
+    if state_manager:
+        def on_database_state_change(new_data, old_data):
+            """React to database state changes from other views."""
+            logger.debug("Database state changed - refreshing view")
+            page.run_task(load_database_info_async)
+        
+        # Subscribe to database-related state changes
+        state_manager.subscribe("database_info", on_database_state_change)
+        logger.info("Database view subscribed to state manager updates")
+
     def on_table_select(e):
-        """Handle table selection change."""
-        nonlocal selected_table_name, current_table_data, column_filters
+        """Handle table selection change with enhanced infrastructure."""
+        nonlocal selected_table_name, column_filters
         selected_table_name = e.control.value
         logger.info(f"Selected table: {selected_table_name}")
 
-        try:
-            current_table_data = get_table_data(selected_table_name)
+        async def load_table_async():
+            try:
+                # Clear column filters for new table
+                column_filters = {}
 
-            # Clear column filters for new table
-            column_filters = {}
+                # Load new table data
+                current_table_data = await get_table_data_from_bridge(selected_table_name)
 
-            # Update table info and content
-            if table_info_text_ref.current:
-                table_info_text_ref.current.value = f"Table: {selected_table_name}"
-                table_info_text_ref.current.update()
+                # Update table info and content with precise control updates
+                if table_info_text_ref.current:
+                    table_info_text_ref.current.value = f"Table: {selected_table_name}"
+                    table_info_text_ref.current.update()
 
-            if rows_count_text_ref.current:
-                rows_count_text_ref.current.value = f"{len(current_table_data.get('rows', []))} rows"
-                rows_count_text_ref.current.update()
+                if rows_count_text_ref.current:
+                    row_count = len(current_table_data.get('rows', []))
+                    rows_count_text_ref.current.value = f"{row_count} rows"
+                    rows_count_text_ref.current.update()
 
-            update_table_content()
+                # Update table content display
+                update_table_content()
 
-            show_info_message(page, f"Switched to table: {selected_table_name}")
+                show_info_message(page, f"Switched to table: {selected_table_name}")
+                logger.info(f"Table switched successfully to {selected_table_name} with {row_count} rows")
 
-        except Exception as e:
-            logger.error(f"Error loading table data: {e}")
+            except Exception as e:
+                logger.error(f"Error loading table data: {e}")
+                show_error_message(page, f"Failed to load table {selected_table_name}: {str(e)}")
+
+        # Run async table loading
+        page.run_task(load_table_async)
 
     def on_search_change(e):
         """Handle search input changes."""

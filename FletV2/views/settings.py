@@ -156,11 +156,12 @@ def import_settings_sync(file_path):
         return None
 
 
-def create_settings_view(server_bridge, page: ft.Page) -> ft.Control:
+def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
     """
-    Create settings view using simple function-based pattern.
+    Create settings view with enhanced infrastructure and state management.
     Follows Framework Harmony principles - no custom classes, use Flet's built-ins.
     """
+    logger.info("Creating settings view with enhanced infrastructure")
     # Simple state management
     # Initialize with default values, load actual settings asynchronously
     current_settings = {

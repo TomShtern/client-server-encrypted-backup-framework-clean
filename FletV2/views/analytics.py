@@ -11,22 +11,24 @@ import asyncio
 from datetime import datetime
 from utils.debug_setup import get_logger
 from utils.user_feedback import show_success_message, show_error_message, show_info_message
-from config import ASYNC_DELAY
+# Removed config import - using enhanced infrastructure
 
 logger = get_logger(__name__)
 
 
-def create_analytics_view(server_bridge, page: ft.Page) -> ft.Control:
+def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
     """
-    Create analytics view using simple Flet patterns.
+    Create analytics view with enhanced infrastructure and state management.
 
     Args:
-        server_bridge: Server bridge for data access
+        server_bridge: Enhanced server bridge for data access
         page: Flet page instance
+        state_manager: Reactive state manager for cross-view data sharing
 
     Returns:
         ft.Control: The analytics view
     """
+    logger.info("Creating analytics view with enhanced infrastructure")
 
     # State variables
     system_metrics = {}

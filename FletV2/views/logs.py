@@ -16,17 +16,19 @@ from config import ASYNC_DELAY
 logger = get_logger(__name__)
 
 
-def create_logs_view(server_bridge, page: ft.Page) -> ft.Control:
+def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
     """
-    Create logs view using simple functions and closures.
+    Create logs view with enhanced infrastructure and state management.
 
     Args:
-        server_bridge: Server bridge for data access
+        server_bridge: Enhanced server bridge for data access
         page: Flet page instance
+        state_manager: Reactive state manager for cross-view data sharing
 
     Returns:
         ft.Control: The logs view
     """
+    logger.info("Creating logs view with enhanced infrastructure")
     # State variables
     logs_data: List[Dict[str, Any]] = []
     filtered_logs_data: List[Dict[str, Any]] = []

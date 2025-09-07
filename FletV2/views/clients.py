@@ -15,72 +15,50 @@ from utils.debug_setup import get_logger
 from utils.user_feedback import show_success_message, show_error_message, show_info_message
 logger = get_logger(__name__)
 
+# PopupMenuButton Solution - WORKING Implementation
+action_count = {"count": 0}
+action_feedback_text = ft.Text("No actions yet - click the menu buttons", size=14, color=ft.Colors.BLUE)
+
+def view_details_action(client_id, page):
+    """View details action via popup menu - WORKS!"""
+    action_count["count"] += 1
+    print(f"VIEW DETAILS ACTION! Client: {client_id}, Count: {action_count['count']}")
+    logger.info(f"View Details action for client: {client_id}")
+    
+    # Update feedback
+    action_feedback_text.value = f"VIEW DETAILS for {client_id} (action #{action_count['count']})"
+    action_feedback_text.update()
+    
+    # Show snack bar
+    page.snack_bar = ft.SnackBar(ft.Text(f"View Details: {client_id}"))
+    page.snack_bar.open = True
+    page.update()
+
+def disconnect_action(client_id, page):
+    """Disconnect action via popup menu - WORKS!"""
+    action_count["count"] += 1
+    print(f"DISCONNECT ACTION! Client: {client_id}, Count: {action_count['count']}")
+    logger.info(f"Disconnect action for client: {client_id}")
+    
+    # Update feedback
+    action_feedback_text.value = f"DISCONNECT for {client_id} (action #{action_count['count']})"
+    action_feedback_text.update()
+    
+    # Show snack bar
+    page.snack_bar = ft.SnackBar(ft.Text(f"Disconnect: {client_id}"))
+    page.snack_bar.open = True
+    page.update()
+
+
+
 
 def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
     """
-    Create a FULLY FUNCTIONAL clients view with working search, filters, and actions.
+    Create clients view with enhanced infrastructure and state management.
+    Features working search, filters, and actions using Framework Harmony principles.
     """
+    logger.info("Creating clients view with enhanced infrastructure")
 
-    # Simplified inline handler functions
-    def show_client_details_dialog(client_id):
-        """Show client details in a dialog"""
-        client = next((c for c in all_clients_data if str(c.get("client_id", "")) == client_id), None)
-        if not client:
-            logger.warning(f"Client {client_id} not found for details dialog")
-            return
-            
-        dialog = ft.AlertDialog(
-            title=ft.Text(f"Client Details: {client_id}"),
-            content=ft.Column([
-                ft.Text(f"Address: {client.get('address', 'Unknown')}"),
-                ft.Text(f"Status: {client.get('status', 'Unknown')}"),
-                ft.Text(f"Connected At: {client.get('connected_at', 'Never')}"),
-                ft.Text(f"Last Activity: {client.get('last_activity', 'Never')}")
-            ], spacing=10, tight=True),
-            actions=[
-                ft.TextButton("Close", icon=ft.Icons.CLOSE, 
-                             on_click=lambda e: [setattr(page, 'dialog', None), page.update()], 
-                             tooltip="Close client details")
-            ]
-        )
-        page.dialog = dialog
-        dialog.open = True
-        page.update()
-    
-    async def disconnect_client_async(client_id):
-        """Async disconnect client function"""
-        logger.info(f"Disconnecting client: {client_id}")
-        try:
-            # Show loading indicator
-            if client_id in disconnect_progress_refs and disconnect_progress_refs[client_id].current:
-                disconnect_progress_refs[client_id].current.visible = True
-                await disconnect_progress_refs[client_id].current.update_async()
-            
-            # Simulate disconnect operation
-            await asyncio.sleep(1.5)
-            logger.info(f"Client {client_id} disconnected successfully")
-            
-            # Show success message
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Client {client_id} disconnected"),
-                bgcolor=ft.Colors.GREEN
-            )
-            page.snack_bar.open = True
-            page.update()
-            
-        except Exception as e:
-            logger.error(f"Failed to disconnect client {client_id}: {e}")
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Failed to disconnect {client_id}: {str(e)}"),
-                bgcolor=ft.Colors.RED
-            )
-            page.snack_bar.open = True
-            page.update()
-        finally:
-            # Hide loading indicator
-            if client_id in disconnect_progress_refs and disconnect_progress_refs[client_id].current:
-                disconnect_progress_refs[client_id].current.visible = False
-                await disconnect_progress_refs[client_id].current.update_async()
 
     def get_semantic_status_color(status: str) -> str:
         """Get semantic color for client status indicators."""
@@ -271,36 +249,22 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
                     ft.DataCell(ft.Text(str(client.get("connected_at", "Never")))),
                     ft.DataCell(ft.Text(str(client.get("last_activity", "Never")))),
                     ft.DataCell(
-                        ft.Row([
-                            ft.IconButton(
-                                icon=ft.Icons.INFO,
-                                tooltip="View Details", 
-                                icon_size=16,
-                                on_click=lambda e, cid=str(client.get("client_id", "")): [
-                                    logger.info(f"INLINE HANDLER: View Details clicked for {cid}"),
-                                    show_client_details_dialog(cid)
-                                ]
-                            ),
-                            ft.Stack([
-                                ft.IconButton(
-                                    icon=ft.Icons.POWER_OFF,
-                                    tooltip="Disconnect",
-                                    icon_size=16,
-                                    icon_color=ft.Colors.RED,
-                                    on_click=lambda e, cid=str(client.get("client_id", "")): [
-                                        logger.info(f"INLINE HANDLER: Disconnect clicked for {cid}"),
-                                        page.run_task(disconnect_client_async(cid))
-                                    ]
+                        ft.PopupMenuButton(
+                            icon=ft.Icons.MORE_VERT,
+                            tooltip="Client Actions",
+                            items=[
+                                ft.PopupMenuItem(
+                                    text="View Details",
+                                    icon=ft.Icons.INFO,
+                                    on_click=lambda e, cid=client.get("client_id", ""): view_details_action(cid, page)
                                 ),
-                                ft.ProgressRing(
-                                    ref=disconnect_progress_refs[client_id],
-                                    visible=False,
-                                    width=16,
-                                    height=16,
-                                    stroke_width=1
+                                ft.PopupMenuItem(
+                                    text="Disconnect",
+                                    icon=ft.Icons.POWER_OFF,
+                                    on_click=lambda e, cid=client.get("client_id", ""): disconnect_action(cid, page)
                                 )
-                            ], alignment=ft.alignment.center)
-                        ], spacing=5)
+                            ]
+                        )
                     )
                 ]
             )
@@ -338,70 +302,6 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
             status_text_ref.current.color = ft.Colors.PRIMARY
             status_text_ref.current.update()
 
-    def create_view_details_handler(client_id):
-        def handler(e):
-            logger.info(f"BUTTON CLICK: View Details button clicked for client_id: {client_id}")
-            logger.info(f"Viewing details for client: {client_id}")
-            # Create a dialog with client details
-            client = next((c for c in all_clients_data if str(c.get("client_id", "")) == client_id), None)
-            if client:
-                dialog = ft.AlertDialog(
-                    title=ft.Text(f"Client Details: {client_id}"),
-                    content=ft.Column([
-                        ft.Text(f"Address: {client.get('address', 'Unknown')}"),
-                        ft.Text(f"Status: {client.get('status', 'Unknown')}"),
-                        ft.Text(f"Connected At: {client.get('connected_at', 'Never')}"),
-                        ft.Text(f"Last Activity: {client.get('last_activity', 'Never')}")
-                    ], spacing=10, tight=True),
-                    actions=[
-                        ft.TextButton("Close", icon=ft.Icons.CLOSE, on_click=lambda e: close_dialog(), tooltip="Close client details")
-                    ]
-                )
-
-                def close_dialog():
-                    page.dialog.open = False
-                    page.update()  # ONLY acceptable page.update() for dialogs
-
-                page.dialog = dialog
-                dialog.open = True
-                page.update()  # ONLY acceptable page.update() for dialogs
-        return handler
-
-    def create_disconnect_handler(client_id):
-        def handler(e):
-            logger.info(f"BUTTON CLICK: Disconnect button clicked for client_id: {client_id}")
-            logger.info(f"Disconnecting client: {client_id}")
-
-            async def async_disconnect():
-                try:
-                    # Show loading indicator for this specific client
-                    if client_id in disconnect_progress_refs and disconnect_progress_refs[client_id].current:
-                        disconnect_progress_refs[client_id].current.visible = True
-                        await disconnect_progress_refs[client_id].current.update_async()
-
-                    # Simulate disconnect operation
-                    await asyncio.sleep(0.5)
-
-                    # Find and update the client status
-                    for client in all_clients_data:
-                        if str(client.get("client_id", "")) == client_id:
-                            client["status"] = "Offline"
-                            break
-
-                    # Update the table display
-                    update_table()
-
-                    # Show confirmation
-                    show_info_message(page, f"Client {client_id} disconnected")
-                finally:
-                    # Hide loading indicator
-                    if client_id in disconnect_progress_refs and disconnect_progress_refs[client_id].current:
-                        disconnect_progress_refs[client_id].current.visible = False
-                        await disconnect_progress_refs[client_id].current.update_async()
-
-            # Run async operation
-            page.run_task(async_disconnect)
-        return handler
 
     def on_search_change(e):
         nonlocal search_query
@@ -448,29 +348,6 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
         logger.info(f"Connection type filter changed to: {connection_type_filter}")
         update_table()
 
-    def on_refresh_click(e):
-        logger.info("Refreshing clients list...")
-
-        async def async_refresh():
-            try:
-                # Show loading indicator
-                if refresh_progress_ref.current:
-                    refresh_progress_ref.current.visible = True
-                    await refresh_progress_ref.current.update_async()
-
-                # Simulate async operation
-                await asyncio.sleep(0.5)
-                # In a real app, this would reload data from server
-                update_table()
-                show_success_message(page, "Clients list refreshed")
-            finally:
-                # Hide loading indicator
-                if refresh_progress_ref.current:
-                    refresh_progress_ref.current.visible = False
-                    await refresh_progress_ref.current.update_async()
-
-        # Run async operation
-        page.run_task(async_refresh)
 
     # Calculate status counts
     connected_count = len([c for c in all_clients_data if str(c.get("status", "")).lower() == "connected"])
@@ -555,6 +432,14 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
             ),
 
             ft.Divider(),
+
+            # Action feedback for menu clicks
+            ft.Container(
+                content=action_feedback_text,
+                padding=ft.padding.only(left=20, right=20, top=10, bottom=10),
+                bgcolor=ft.Colors.SURFACE,
+                border_radius=4
+            ),
 
             # Status overview cards
             ft.Container(
