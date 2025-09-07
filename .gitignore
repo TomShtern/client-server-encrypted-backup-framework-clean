@@ -247,11 +247,7 @@ docs/archive/*_SUMMARY.md
 nul
 defensive.db.backup_20250810_230758
 defensive.db-shm
-.vscode/settings.json
-.vscode/settings.json
-.vscode/settings.json
 QWEN.md
-.vscode/settings.json
 pyrightconfig.json
 pyright_output.json
 SYSTEM_REMEDIATION_REPORT.md
@@ -263,6 +259,10 @@ type_errors.txt
 temp_errors.txt
 mypy_errors.txt
 gui_errors.txt
+CLAUDE.md
+.github/copilot-instructions.md
+qwen.md
+.qwen/settings.json
 CLAUDE.md
 .github/copilot-instructions.md
 CLAUDE.md
