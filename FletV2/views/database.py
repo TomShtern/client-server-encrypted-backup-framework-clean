@@ -47,7 +47,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
     table_container_ref = ft.Ref[ft.Container]()
 
     def get_current_table_data():
-        """Get current table data from state manager or server bridge."""
+        """Get current table data from state manager or fallback to mock data."""
         # Try to get from state manager first
         if state_manager:
             cached_data = state_manager.get_cached(f"table_data_{selected_table_name}", max_age_seconds=60)
@@ -55,34 +55,9 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                 logger.debug(f"Using cached table data for {selected_table_name}")
                 return cached_data
         
-        # Fallback to direct server bridge call
-        return get_table_data_from_bridge(selected_table_name)
-
-    async def get_table_data_from_bridge(table_name: str) -> Dict[str, Any]:
-        """Get table data from enhanced server bridge."""
-        if not server_bridge:
-            logger.warning("No server bridge available - using fallback mock data")
-            return get_mock_table_data(table_name)
-        
-        try:
-            # Enhanced server bridge supports async methods
-            if hasattr(server_bridge, 'get_table_data') and asyncio.iscoroutinefunction(getattr(server_bridge, 'get_table_data', None)):
-                data = await server_bridge.get_table_data(table_name)
-            elif hasattr(server_bridge, 'get_table_data'):
-                data = server_bridge.get_table_data(table_name)
-            else:
-                logger.warning(f"Server bridge does not support get_table_data - using mock data")
-                data = get_mock_table_data(table_name)
-            
-            # Update state manager cache
-            if state_manager and data:
-                await state_manager.update_state(f"table_data_{table_name}", data)
-            
-            return data
-            
-        except Exception as e:
-            logger.error(f"Error getting table data from server bridge: {e}")
-            return get_mock_table_data(table_name)
+        # Fallback to mock data since we can't await here
+        logger.debug(f"Using mock data for table {selected_table_name}")
+        return get_mock_table_data(selected_table_name)
 
     def get_mock_table_data(table_name: str) -> Dict[str, Any]:
         """Fallback mock data for development/testing."""
@@ -112,12 +87,44 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         }
         return mock_data.get(table_name, {"columns": [], "rows": []})
 
+    async def get_table_data_from_bridge(table_name: str) -> Dict[str, Any]:
+        """Get table data from enhanced server bridge."""
+        if not server_bridge:
+            logger.warning("No server bridge available - using fallback mock data")
+            return get_mock_table_data(table_name)
+        
+        try:
+            # Enhanced server bridge supports async methods
+            if hasattr(server_bridge, 'get_table_data') and asyncio.iscoroutinefunction(getattr(server_bridge, 'get_table_data', None)):
+                data = await server_bridge.get_table_data(table_name)
+            elif hasattr(server_bridge, 'get_table_data'):
+                data = server_bridge.get_table_data(table_name)
+            else:
+                logger.warning(f"Server bridge does not support get_table_data - using mock data")
+                data = get_mock_table_data(table_name)
+            
+            # Update state manager cache
+            if state_manager and data:
+                await state_manager.update_state(f"table_data_{table_name}", data)
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"Error getting table data from server bridge: {e}")
+            return get_mock_table_data(table_name)
+
     def filter_table_data():
         """Filter table data based on search query and column filters."""
         current_table_data = get_current_table_data()
         
-        if not current_table_data or not current_table_data.get("rows"):
-            return current_table_data
+        # Ensure we have valid data structure
+        if not current_table_data or not isinstance(current_table_data, dict):
+            logger.warning("No valid table data available for filtering")
+            return {"columns": [], "rows": []}
+            
+        if not current_table_data.get("rows") or not current_table_data.get("columns"):
+            logger.warning("Table data missing rows or columns")
+            return {"columns": current_table_data.get("columns", []), "rows": []}
 
         filtered_rows = current_table_data["rows"]
 
@@ -152,25 +159,15 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
 
 
     def update_table_content():
-        """Update table content display with current data."""
-        # Filter the data
+        """Update the table content with filtered data."""
         filtered_data = filter_table_data()
-
-        # Create table content
-        if not filtered_data.get("rows"):
+        logger.info(f"Updating table content for {selected_table_name} - rows: {len(filtered_data.get('rows', []))}")
+        
+        if not filtered_data or not filtered_data.get("columns") or not filtered_data.get("rows"):
+            logger.warning(f"No data available for table {selected_table_name}")
             empty_content = ft.Container(
                 content=ft.Column([
-                    ft.Icon(
-                        ft.Icons.TABLE_CHART,
-                        size=64,
-                        color=ft.Colors.ON_SURFACE_VARIANT
-                    ),
-                    ft.Text(
-                        "No data found",
-                        size=18,
-                        weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.ON_SURFACE
-                    ),
+                    ft.Icon(ft.Icons.TABLE_VIEW, size=64, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Text(
                         "No records found in the selected table.",
                         size=14,
@@ -185,11 +182,15 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                 height=300
             )
             if table_container_ref.current:
+                logger.info("Setting empty content in table container")
                 table_container_ref.current.content = empty_content
                 table_container_ref.current.update()
+            else:
+                logger.error("table_container_ref.current is None - cannot show empty state")
             return
-
+        
         # Create data table with current data
+        logger.info(f"Creating data table with {len(filtered_data['rows'])} rows and {len(filtered_data['columns'])} columns")
         data_table = ft.DataTable(
             columns=[
                 ft.DataColumn(ft.Text(col.replace("_", " ").title(), weight=ft.FontWeight.BOLD))
@@ -232,8 +233,11 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         )
 
         if table_container_ref.current:
-            table_container_ref.current.content = ft.Column([data_table], scroll=ft.ScrollMode.AUTO)
+            logger.info("Successfully setting data table in container")
+            table_container_ref.current.content = data_table
             table_container_ref.current.update()
+        else:
+            logger.error("table_container_ref.current is None - cannot update table display")
 
     async def load_database_info_async():
         """Load database info and update UI with enhanced infrastructure."""
@@ -316,8 +320,10 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                 size_text_ref.current.value = db_info.get("size", "0 MB")
                 size_text_ref.current.update()
 
+            # Calculate row count once for reuse
+            row_count = len(current_table_data.get("rows", []))
+            
             if rows_count_text_ref.current:
-                row_count = len(current_table_data.get("rows", []))
                 rows_count_text_ref.current.value = f"{row_count} rows"
                 rows_count_text_ref.current.update()
 
@@ -408,7 +414,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         """Export table data to CSV with progress indication."""
         try:
             # Get table data
-            table_data = get_table_data(table_name)
+            table_data = filter_table_data()
 
             if not table_data or not table_data.get("columns") or not table_data.get("rows"):
                 logger.warning(f"No data to export for table: {table_name}")
@@ -458,7 +464,6 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             page.update()
 
             # Write CSV file with progress simulation
-            import csv
             with open(export_path, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
 
@@ -549,33 +554,37 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             try:
                 # Collect updated data
                 updated_data = {}
+                
+                # Safely access the original data for ID
+                row_id = original_data.get('id', None)
+                if not row_id:
+                    show_error_message(page, "Cannot save: Row ID not found")
+                    return
+                
                 for i, (key, original_value) in enumerate(original_data.items()):
                     if key.lower() == 'id':
                         continue  # Skip ID field
 
-                    control = form_fields[i]
-                    new_value = control.value
+                    # Ensure we have a valid form field
+                    if i < len(form_fields):
+                        control = form_fields[i]
+                        new_value = getattr(control, 'value', '')
 
-                    # Convert value to appropriate type
-                    if isinstance(original_value, int):
-                        try:
-                            updated_data[key] = int(new_value)
-                        except ValueError:
-                            updated_data[key] = 0
-                    elif isinstance(original_value, float):
-                        try:
-                            updated_data[key] = float(new_value)
-                        except ValueError:
-                            updated_data[key] = 0.0
-                    elif isinstance(original_value, bool):
-                        updated_data[key] = new_value.lower() in ('true', '1', 'yes', 'on')
-                    else:
-                        updated_data[key] = new_value
-
-                # Get row ID
-                row_id = original_data.get('id', '')
-                if not row_id:
-                    raise ValueError("Row ID not found")
+                        # Convert value to appropriate type
+                        if isinstance(original_value, int):
+                            try:
+                                updated_data[key] = int(new_value)
+                            except (ValueError, TypeError):
+                                updated_data[key] = 0
+                        elif isinstance(original_value, float):
+                            try:
+                                updated_data[key] = float(new_value)
+                            except (ValueError, TypeError):
+                                updated_data[key] = 0.0
+                        elif isinstance(original_value, bool):
+                            updated_data[key] = str(new_value).lower() in ('true', '1', 'yes', 'on')
+                        else:
+                            updated_data[key] = str(new_value) if new_value is not None else ""
 
                 # Update row in database
                 if server_bridge and hasattr(server_bridge, 'db_manager') and server_bridge.db_manager:
@@ -602,8 +611,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             content=ft.Container(
                 content=form_container,
                 width=400,
-                height=400,
-                scroll=ft.ScrollMode.AUTO
+                height=400
             ),
             actions=[
                 ft.TextButton("Cancel", icon=ft.Icons.CANCEL, on_click=close_dialog, tooltip="Cancel changes"),
@@ -677,10 +685,8 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                     export_path = os.path.join(os.path.expanduser("~"), "Downloads", export_filename)
 
                     message = f"Table {selected_table_name} exported to {export_path}"
-                    color = ft.Colors.GREEN
                 else:
                     message = f"Failed to export table {selected_table_name}"
-                    color = ft.Colors.ERROR
 
                 if success:
                     show_success_message(page, message)
@@ -818,30 +824,39 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         # Table controls
         ft.Container(
             content=ft.Column([
-                ft.Row([
-                    ft.Text("Select Table:", size=16, weight=ft.FontWeight.W_500),
-                    table_dropdown,
-                    ft.Container(expand=True),
-                    ft.TextField(
-                        label="Search...",
-                        hint_text="Search in all columns",
-                        prefix_icon=ft.Icons.SEARCH,
-                        width=200,
-                        on_change=on_search_change
-                    ),
-                    ft.FilledButton(
-                        "Export CSV",
-                        icon=ft.Icons.DOWNLOAD,
-                        on_click=on_export_table,
-                        tooltip="Export table to CSV file"
-                    ),
-                    ft.OutlinedButton(
-                        "Backup",
-                        icon=ft.Icons.BACKUP,
-                        on_click=on_backup_database,
-                        tooltip="Create database backup"
-                    )
-                ], spacing=20, wrap=True),
+                ft.ResponsiveRow([
+                    ft.Column([
+                        ft.Text("Select Table:", size=16, weight=ft.FontWeight.W_500),
+                    ], col={"sm": 12, "md": 2}),
+                    ft.Column([
+                        table_dropdown,
+                    ], col={"sm": 12, "md": 2}),
+                    ft.Column([
+                        ft.TextField(
+                            label="Search...",
+                            hint_text="Search in all columns",
+                            prefix_icon=ft.Icons.SEARCH,
+                            on_change=on_search_change,
+                            expand=True
+                        ),
+                    ], col={"sm": 12, "md": 4}),
+                    ft.Column([
+                        ft.FilledButton(
+                            "Export CSV",
+                            icon=ft.Icons.DOWNLOAD,
+                            on_click=on_export_table,
+                            tooltip="Export table to CSV file"
+                        ),
+                    ], col={"sm": 6, "md": 2}),
+                    ft.Column([
+                        ft.OutlinedButton(
+                            "Backup",
+                            icon=ft.Icons.BACKUP,
+                            on_click=on_backup_database,
+                            tooltip="Create database backup"
+                        )
+                    ], col={"sm": 6, "md": 2})
+                ], spacing=20),
                 # Column filters will be added dynamically based on selected table
             ], spacing=10),
             padding=ft.Padding(20, 0, 20, 10)
@@ -877,7 +892,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         # Table content in scrollable container
         ft.Container(
             ref=table_container_ref,
-            content=ft.Column([], scroll=ft.ScrollMode.AUTO),
+            content=ft.Text("Loading...", color=ft.Colors.ON_SURFACE_VARIANT),
             expand=True,
             border=ft.border.all(1, ft.Colors.OUTLINE),
             border_radius=8,
@@ -885,7 +900,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             margin=ft.Margin(20, 0, 20, 20)
         )
 
-    ], spacing=20, expand=True, scroll=ft.ScrollMode.AUTO)
+    ], spacing=20, expand=True)
 
     # Also provide a trigger for manual loading if needed
     def trigger_initial_load():
@@ -894,5 +909,35 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
 
     # Export the trigger function so it can be called externally
     main_view.trigger_initial_load = trigger_initial_load
+
+    # CRITICAL: Load initial table data when view is created
+    def load_initial_table():
+        """Load the initial table (clients) when view is first shown."""
+        logger.info(f"Loading initial table: {selected_table_name}")
+        # Trigger table load for the default selected table
+        page.run_task(load_database_info_async)
+        # Use a small delay to ensure the UI is ready, then load the table
+        async def delayed_table_load():
+            await asyncio.sleep(0.1)  # Small delay to ensure UI is ready
+            try:
+                # Simulate dropdown selection to load the table
+                class MockEvent:
+                    def __init__(self, value):
+                        self.control = MockControl(value)
+                
+                class MockControl:
+                    def __init__(self, value):
+                        self.value = value
+                
+                mock_event = MockEvent(selected_table_name)
+                on_table_select(mock_event)
+                logger.info(f"Initial table load triggered for: {selected_table_name}")
+            except Exception as e:
+                logger.error(f"Error in initial table load: {e}")
+        
+        page.run_task(delayed_table_load)
+    
+    # Schedule initial load
+    load_initial_table()
 
     return main_view

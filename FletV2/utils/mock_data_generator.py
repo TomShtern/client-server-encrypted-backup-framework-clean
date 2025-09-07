@@ -9,9 +9,13 @@ This file is ONLY for development purposes and should not exist in production.
 
 import random
 import time
+import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 import uuid
+
+# Set up logger for this module
+logger = logging.getLogger(__name__)
 
 
 class MockDataGenerator:
@@ -121,8 +125,6 @@ class MockDataGenerator:
             num_files = random.choices([0, 1, 2, 3], weights=[10, 70, 15, 5])[0]
             
             for j in range(num_files):
-                file_id = f"file_{len(self.files)+1:03d}"
-                
                 # Generate realistic filename
                 base_names = [
                     "document", "report", "image", "photo", "data", "backup",
@@ -134,6 +136,9 @@ class MockDataGenerator:
                     weights=list(file_types.values())
                 )[0]
                 filename = f"{base_name}_{j+1}{file_extension}"
+                
+                # Generate consistent file_id that matches files view format  
+                file_id = f"file_{hash(filename) % 10000}"
                 
                 # Generate realistic file sizes
                 if file_extension in [".jpg", ".png"]:
@@ -154,6 +159,7 @@ class MockDataGenerator:
                 )
                 
                 file_data = {
+                    "id": file_id,  # Primary ID for UI consistency  
                     "file_id": file_id,
                     "name": filename,  # Changed from "filename" to match files view expectation
                     "filename": filename,  # Keep both for compatibility
@@ -409,6 +415,38 @@ class MockDataGenerator:
             }
         else:
             return {"columns": [], "rows": []}
+
+    def delete_file(self, file_id: str) -> bool:
+        """Delete a file from mock data by file_id."""
+        try:
+            original_count = len(self.files)
+            # Remove file with matching id (could be file_id or id field)
+            self.files = [f for f in self.files if f.get('file_id') != file_id and f.get('id') != file_id]
+            deleted = len(self.files) < original_count
+            if deleted:
+                logger.info(f"MockDataGenerator: Deleted file {file_id}")
+            else:
+                logger.warning(f"MockDataGenerator: File {file_id} not found for deletion")
+            return deleted
+        except Exception as e:
+            logger.error(f"MockDataGenerator delete_file error: {e}")
+            return False
+
+    def delete_client(self, client_id: str) -> bool:
+        """Delete a client from mock data by client_id."""
+        try:
+            original_count = len(self.clients)
+            # Remove client with matching id (could be client_id or id field)
+            self.clients = [c for c in self.clients if c.get('client_id') != client_id and c.get('id') != client_id]
+            deleted = len(self.clients) < original_count
+            if deleted:
+                logger.info(f"MockDataGenerator: Deleted client {client_id}")
+            else:
+                logger.warning(f"MockDataGenerator: Client {client_id} not found for deletion")
+            return deleted
+        except Exception as e:
+            logger.error(f"MockDataGenerator delete_client error: {e}")
+            return False
 
 
 # Singleton instance for consistent data across the application

@@ -1,9 +1,9 @@
 {
-    "python.defaultInterpreterPath": "./kivy_venv_new/Scripts/python.exe",
+    "python.defaultInterpreterPath": "./flet_venv/Scripts/python.exe",
     "python.terminal.activateEnvironment": true,
     "python.analysis.extraPaths": [
         "./",
-        "./kivymd_gui",
+        "./FletV2",
         "./Shared",
         "./python_server",
         "./api_server"
@@ -23,8 +23,8 @@
     "python.analysis.stubPath": "./stubs",
     "python.analysis.typeshedPaths": ["./stubs"],
     "python.linting.enabled": true,
-    "python.linting.pylintEnabled": false,
-    "python.linting.flake8Enabled": false,
+    "python.linting.pylintEnabled": true,
+    "python.linting.flake8Enabled": true,
     "python.analysis.ignore": [
         "**/node_modules/**",
         "**/build/**",
@@ -32,7 +32,7 @@
         "**/.git/**"
     ],
     "python.analysis.include": [
-        "./kivymd_gui/**/*.py",
+        "./FletV2/**/*.py",
         "./Shared/**/*.py",
         "./python_server/**/*.py",
         "./api_server/**/*.py"
@@ -46,5 +46,17 @@
         "**/.hg": true,
         "**/CVS": true,
         "**/.DS_Store": true
-    }
+    },
+    "github.copilot.chat.editor.temporalContext.enabled": true,
+    "github.copilot.chat.agent.thinkingTool": true,
+    "github.copilot.chat.codesearch.enabled": true,
+    "github.copilot.nextEditSuggestions.enabled": true,
+    "github.copilot.chat.newWorkspace.useContext7": true,
+    "github.copilot.chat.generateTests.codeLens": true,
+    "github.copilot.chat.edits.temporalContext.enabled": true,
+    "github.copilot.advanced": {
+        "useLanguageServer": true,
+        "maxCompletions": 5
+    },
+    "python-envs.pythonProjects": []
 }

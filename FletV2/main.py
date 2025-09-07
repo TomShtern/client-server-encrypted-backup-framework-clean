@@ -35,32 +35,40 @@ sys.path.insert(0, project_root)
 # Use our custom theme system  
 from theme import setup_default_theme, toggle_theme_mode
 
-# Enhanced Server Bridge with state management integration
-# Prioritize enhanced bridge with graceful fallback chain
+# Unified Server Bridge with direct function calls and mock fallback
 try:
-    from utils.enhanced_server_bridge import EnhancedServerBridge as ServerBridge
-    BRIDGE_TYPE = "Enhanced Server Bridge (Production Ready)"
-    logger.info("Using Enhanced Server Bridge with state management integration.")
+    from utils.server_bridge import ServerBridge, create_server_bridge
+    BRIDGE_TYPE = "Unified Server Bridge (Direct Function Calls)"
+    logger.info("Using Unified Server Bridge with direct function calls and mock fallback.")
 except Exception as e:
-    logger.warning(f"Enhanced bridge failed: {e}, trying fallbacks...")
+    logger.error(f"Failed to import unified server bridge: {e}")
+    # Fallback to simple bridge if available
     try:
-        from utils.server_bridge import ModularServerBridge as ServerBridge
-        BRIDGE_TYPE = "Full ModularServerBridge (Fallback)"
+        from utils.simple_server_bridge import SimpleServerBridge as ServerBridge
+        BRIDGE_TYPE = "Simple Server Bridge (Emergency Fallback)"
+        logger.warning("Using emergency fallback: Simple Server Bridge")
     except Exception as e2:
-        logger.warning(f"Modular bridge failed: {e2}")
+        logger.error(f"Simple server bridge also failed: {e2}")
+        # Import mock bridge as absolute last resort
         try:
-            from utils.simple_server_bridge import SimpleServerBridge as ServerBridge
-            BRIDGE_TYPE = "SimpleServerBridge (Final Fallback)"
+            from utils.mock_server_bridge import MockServerBridge as ServerBridge
+            BRIDGE_TYPE = "MockServerBridge (Emergency Fallback)"
+            logger.warning("Using mock server bridge as final fallback")
         except Exception as e3:
-            logger.error(f"All server bridges failed: {e3}")
-            # Import mock bridge as absolute last resort
-            try:
-                from utils.mock_server_bridge import MockServerBridge as ServerBridge
-                BRIDGE_TYPE = "MockServerBridge (Emergency Fallback)"
-            except Exception as e4:
-                logger.critical(f"Even mock bridge failed: {e4}")
-                ServerBridge = None
-                BRIDGE_TYPE = "No Server Bridge"
+            logger.critical(f"Even mock bridge failed: {e3}")
+            logger.critical("Creating minimal fallback bridge")
+            
+            # Create minimal working bridge class
+            class MinimalServerBridge:
+                def __init__(self): pass
+                def get_clients(self): return []
+                def get_files(self): return []
+                def get_server_status(self): return {"server_running": False, "error": "No bridge available"}
+                def delete_client(self, client_id): return False
+                def delete_file(self, file_id): return False
+                
+            ServerBridge = MinimalServerBridge
+            BRIDGE_TYPE = "Minimal Fallback Bridge"
 
 
 class FletV2App(ft.Row):
@@ -123,45 +131,33 @@ class FletV2App(ft.Row):
             self.state_manager = None
     
     async def _initialize_server_bridge_async(self):
-        """Asynchronously initialize server bridge with state integration."""
+        """Asynchronously initialize unified server bridge."""
         try:
             if ServerBridge:
-                # Initialize bridge based on type
-                if BRIDGE_TYPE == "Enhanced Server Bridge (Production Ready)":
-                    # Enhanced bridge with automatic state integration
-                    self.server_bridge = ServerBridge(host="127.0.0.1", port=1256)
-                    
-                    # Connect state manager if available
-                    if self.state_manager:
-                        self.server_bridge.set_state_manager(self.state_manager)
-                        logger.info("Enhanced bridge connected to state manager")
-                    
-                    # Attempt async connection
-                    try:
-                        await self.server_bridge.connect()
-                        logger.info("Enhanced bridge connected successfully")
-                    except Exception as conn_e:
-                        logger.warning(f"Enhanced bridge connection failed, using mock mode: {conn_e}")
+                # For development: Initialize with no real server (fallback mode)
+                # For production: Pass real server instance
+                # Example production usage:
+                # from python_server.server import BackupServer
+                # real_server = BackupServer()
+                # self.server_bridge = ServerBridge(real_server)
                 
-                elif "ModularServerBridge" in BRIDGE_TYPE:
-                    # Legacy modular bridge
-                    self.server_bridge = ServerBridge(host="127.0.0.1", port=1256)
-                    # Test connection in background thread for legacy bridge
-                    if hasattr(self.server_bridge, '_test_connection'):
-                        self.page.run_thread(self.server_bridge._test_connection)
+                # Development mode: No real server, uses mock data
+                self.server_bridge = ServerBridge()  # Fallback mode
                 
-                else:
-                    # SimpleServerBridge, MockServerBridge, or others
-                    self.server_bridge = ServerBridge()
+                # Connect state manager if available
+                if self.state_manager:
+                    # State manager integration will be handled by the bridge
+                    logger.info("State manager available for bridge integration")
                 
-                logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
+                logger.info(f"Unified server bridge initialized: {BRIDGE_TYPE}")
+                logger.info("Bridge running in FALLBACK mode - using mock data for development")
             else:
                 self.server_bridge = None
                 logger.warning("No server bridge available")
                 
         except Exception as e:
             logger.error(f"Server bridge initialization failed: {e}")
-            # Emergency fallback to mock bridge
+            # Emergency fallback to mock bridge if available
             try:
                 from utils.mock_server_bridge import MockServerBridge
                 self.server_bridge = MockServerBridge()

@@ -1,3 +1,8 @@
+---
+description: AI rules derived by SpecStory from the project AI interaction history
+globs: *
+---
+
 # CLAUDE.md - FletV2 Development Guide
 This file provides Claude and Claude Code comprehensive guidance for working with FletV2 - a clean, framework-harmonious Flet desktop application that demonstrates proper Flet patterns and best practices.
 Claude and Claude Code will adhere and reference this file for all FletV2-related development tasks.
@@ -138,7 +143,7 @@ class FletV2App(ft.Row):
             self.content_area
         ]
     
-    def _on_navigation_change(self, e):
+    def _on_navigation_change(self, self, e):
         """Simple navigation - no complex routing."""
         view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
         selected_view = view_names[e.control.selected_index]
@@ -397,6 +402,26 @@ ft.Container(content=dashboard_content, expand=True, padding=20)
 
 ## 🛠️ DEVELOPMENT WORKFLOW
 
+### **Combining Python virtual environments (venvs)**
+
+Consider combining venvs if they share dependencies and are for related projects.
+
+1. **Project Isolation**: If the venvs are for unrelated projects with conflicting dependencies (e.g., different versions of the same package), keep them separate to avoid conflicts.
+2. **Dependency Overlap**: If both venvs have many shared packages, combining them can save disk space and reduce maintenance.
+3. **Environment Consistency**: Ensure no version conflicts arise. Check for incompatible package versions using `pip list` in each venv.
+4. **Future Scalability**: If you might add more projects with different needs, separate venvs could be better for flexibility.
+
+**Steps to Combine (If Deciding to Proceed)**
+1. **Activate one venv** (e.g., the primary one).
+2. **Export dependencies from the second venv**:
+   - Activate the second venv.
+   - Run: `pip freeze > requirements.txt`
+3. **Install into the primary venv**:
+   - Switch back to the primary venv.
+   - Run: `pip install -r requirements.txt`
+4. **Test for conflicts**: Run your projects to ensure everything works.
+5. **Clean up**: Delete the second venv folder if no longer needed.
+
 ### **Terminal Debugging Setup (PRODUCTION READY)**
 
 ```python
@@ -453,6 +478,27 @@ except Exception as e:
 
 # This ensures GUI always works even if full server unavailable
 ```
+
+### **GitHub Copilot Integration**
+
+When using GitHub Copilot in VS Code, consider these guidelines for optimal performance and code quality:
+
+- **`"useLanguageServer"` Setting**: This VS Code setting (under `"github.copilot.advanced"`) controls Copilot's integration with VS Code's language server.
+    - Set to `true` (or leave as default) to leverage language server features for more accurate, context-aware code completions, especially in Python-heavy projects.
+    - Set to `false` to bypass the language server, which might improve completion speed on lower-end machines or when troubleshooting conflicts with other extensions.
+    - Test both settings in your project to determine the best balance of performance and accuracy.
+
+- **Experiment with Advanced Settings**: Explore other undocumented options within `"github.copilot.advanced"`:
+    - `"enableAutoCompletions": true/false` – Controls automatic inline suggestions.
+    - `"debounceDelay": 300` – Adjusts the delay (in ms) before suggestions appear.
+    - `"maxCompletions": 5` – Limits the number of suggestions shown.
+    - Be aware that these options are experimental and may change.
+
+- **Troubleshooting**: If experiencing slow completions, incorrect suggestions, or conflicts with other extensions, toggling `"useLanguageServer"` can help isolate Copilot's behavior.
+
+- **Reporting**: Report any bugs or improvements on the [GitHub Copilot Feedback repository](https://github.com/github/feedback/discussions/categories/copilot) or VS Code's GitHub issues.
+
+- **Best Practices**: Keep the Copilot extension up-to-date and monitor VS Code's Developer Console for any Copilot-related errors.
 
 ---
 
@@ -564,3 +610,26 @@ You have access to ast-grep for syntax-aware searching:
 **★ Performance Secret**: Replacing `page.update()` with `control.update()` can improve performance by 10x+ and eliminate UI flicker.
 
 **The FletV2 directory is the CANONICAL REFERENCE** for proper Flet desktop development. When in doubt, follow its examples exactly.
+
+---
+
+## 📝 .gitignore Management
+When modifying the `.gitignore` file, adhere to the following guidelines:
+- **Avoid Duplication**: Ensure each ignore rule is unique and doesn't overlap with existing rules.
+- **Consolidation**: Group related rules together (e.g., all `.vscode` related ignores should be under the `.vscode/*` section).
+- **Clarity**: Use comments to explain complex or project-specific ignore rules.
+
+---
+
+## 💻 VS Code Configuration
+
+### **Python Interpreter Path**
+To ensure VS Code uses the correct Python interpreter for the FletV2 project, set the `python.defaultInterpreterPath` in `.vscode/settings.json` to the Flet virtual environment:
+
+```jsonc
+{
+    // ...existing code...
+    "python.defaultInterpreterPath": "./flet_venv/Scripts/python.exe",
+    // ...existing code...
+}
+```

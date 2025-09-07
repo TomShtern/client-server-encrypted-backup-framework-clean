@@ -21,7 +21,7 @@ from typing import Optional
 from utils.debug_setup import get_logger
 from utils.user_feedback import show_success_message, show_error_message, show_info_message
 from utils.state_manager import StateManager
-from utils.enhanced_server_bridge import EnhancedServerBridge
+from utils.server_bridge import ServerBridge
 try:
     from config import ASYNC_DELAY
 except ImportError:
@@ -61,7 +61,7 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
     refresh_button_ref = ft.Ref[ft.IconButton]()
 
     # Direct control references for simple text updates (OPTIMIZED)
-    last_updated_text = ft.Text(f"Last updated: {datetime.now().strftime('%H:%M:%S')}", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+    last_updated_text = ft.Text(f"Last updated: {datetime.now().strftime('%H:%M:%S')}", size=12, color=ft.Colors.OUTLINE)
     uptime_text = ft.Text("2h 34m", size=18, weight=ft.FontWeight.BOLD)
     active_clients_text = ft.Text("3", size=18, weight=ft.FontWeight.BOLD)
     total_transfers_text = ft.Text("72", size=18, weight=ft.FontWeight.BOLD)
@@ -617,7 +617,7 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
             ft.Container(
                 content=ft.Row([
                     ft.Container(
-                        content=ft.Text(activity_time.strftime("%H:%M"), size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+                        content=ft.Text(activity_time.strftime("%H:%M"), size=12, color=ft.Colors.OUTLINE),
                         width=60,
                         alignment=ft.alignment.center_right
                     ),

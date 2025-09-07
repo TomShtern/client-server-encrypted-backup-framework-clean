@@ -8,6 +8,7 @@ import flet as ft
 import psutil
 import random
 import asyncio
+import os
 from datetime import datetime
 from utils.debug_setup import get_logger
 from utils.user_feedback import show_success_message, show_error_message, show_info_message
@@ -35,6 +36,21 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
     is_loading = False
     last_updated = None
     refresh_timer = None
+    timer_cancelled = False  # Flag to prevent timer races and leaks
+    
+    # Chart state management with historical data tracking
+    chart_state = {
+        'last_cpu_data': None,
+        'last_memory_data': None,
+        'last_network_sent_data': None,
+        'last_network_recv_data': None,
+        'last_disk_used': None,
+        'last_disk_free': None,
+        'cpu_history': [],  # Store last 20 CPU readings
+        'memory_history': [],  # Store last 20 memory readings
+        'network_sent_history': [],  # Store network sent history
+        'network_recv_history': []  # Store network received history
+    }
 
     # Direct control references for text updates (optimized)
     last_updated_text = ft.Text("Last updated: Never", size=12, color=ft.Colors.ON_SURFACE)
@@ -94,9 +110,20 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
             # Always try to get local system metrics first (most accurate)
             try:
                 memory = psutil.virtual_memory()
-                disk = psutil.disk_usage('/')
+                # Cross-platform disk usage - Windows/Linux compatible
+                if os.name == 'nt':  # Windows
+                    disk = psutil.disk_usage('C:\\')
+                else:  # Unix/Linux/macOS
+                    disk = psutil.disk_usage('/')
                 network = psutil.net_io_counters()
 
+                # Safe network connections count with timeout
+                try:
+                    active_connections = len(psutil.net_connections())
+                except (psutil.AccessDenied, psutil.TimeoutExpired):
+                    logger.warning("Cannot access network connections, using fallback")
+                    active_connections = 0
+                
                 return {
                     'cpu_usage': psutil.cpu_percent(interval=0.1),
                     'memory_usage': memory.percent,
@@ -107,7 +134,7 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
                     'disk_used_gb': disk.used // (1024**3),
                     'network_sent_mb': network.bytes_sent // (1024**2),
                     'network_recv_mb': network.bytes_recv // (1024**2),
-                    'active_connections': len(psutil.net_connections()),
+                    'active_connections': active_connections,
                     'cpu_cores': psutil.cpu_count()
                 }
             except Exception as local_e:
@@ -124,15 +151,23 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
                     # Fallback to server status if system status not available
                     server_status = server_bridge.get_server_status()
                     if server_status:
+                        # Safely extract storage info
+                        storage_used_str = server_status.get('storage_used', '0 GB')
+                        try:
+                            # Extract numeric value from storage string
+                            storage_used_gb = float(storage_used_str.replace(' GB', '').replace('GB', ''))
+                        except (ValueError, AttributeError):
+                            storage_used_gb = 170.0  # Default fallback
+                        
                         # Convert server metrics to system metrics format
                         return {
                             'cpu_usage': 45.2,  # Placeholder, would need server-side CPU metrics
                             'memory_usage': 67.8,  # Placeholder, would need server-side memory metrics
-                            'disk_usage': float(server_status.get('storage_used', '0').replace(' GB', '')) / 100 * 100 if 'storage_used' in server_status else 34.1,
+                            'disk_usage': min(storage_used_gb / 500 * 100, 100.0),  # Safe percentage calculation
                             'memory_total_gb': 16,  # Placeholder
                             'memory_used_gb': 11,  # Placeholder
                             'disk_total_gb': 500,  # Placeholder
-                            'disk_used_gb': float(server_status.get('storage_used', '0').replace(' GB', '')) if 'storage_used' in server_status else 170,
+                            'disk_used_gb': storage_used_gb,
                             'network_sent_mb': 2048,  # Placeholder
                             'network_recv_mb': 4096,  # Placeholder
                             'active_connections': server_status.get('active_clients', 12),
@@ -173,22 +208,37 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
                 'cpu_cores': 8
             }
 
+    def safe_float_conversion(value, default=0.0):
+        """Safely convert value to float with proper error handling."""
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            try:
+                # Remove common suffixes and convert
+                cleaned_value = value.rstrip('%').strip()
+                return float(cleaned_value)
+            except (ValueError, AttributeError):
+                logger.warning(f"Failed to convert '{value}' to float, using default {default}")
+                return default
+        return default
+
     def update_charts():
-        """Update charts with current data."""
-        # Update CPU chart with real data points
-        cpu_value = system_metrics.get('cpu_usage', 0.0)
-        # Convert to float if it's a string
-        if isinstance(cpu_value, str):
-            cpu_value = float(cpu_value.rstrip('%'))
+        """Update charts with current data and historical tracking."""
+        # Update CPU chart with historical data
+        cpu_value = safe_float_conversion(system_metrics.get('cpu_usage', 0.0))
+        
+        # Add current value to history and maintain max 20 points
+        chart_state['cpu_history'].append(cpu_value)
+        if len(chart_state['cpu_history']) > 20:
+            chart_state['cpu_history'].pop(0)
 
-        # Create CPU usage data points (last 8 measurements)
+        # Create CPU usage data points from history
         cpu_data_points = []
-        for i in range(8):
-            # Use the same value for all points to show current state
-            cpu_data_points.append(ft.LineChartDataPoint(i + 1, cpu_value))
+        for i, value in enumerate(chart_state['cpu_history']):
+            cpu_data_points.append(ft.LineChartDataPoint(i + 1, value))
 
-        # Only update if data has changed significantly
-        if not hasattr(update_charts, '_last_cpu_data') or update_charts._last_cpu_data != cpu_data_points:
+        # Only update if data has changed significantly or we have new data
+        if chart_state['last_cpu_data'] != cpu_data_points:
             cpu_chart.data_series = [
                 ft.LineChartData(
                     data_points=cpu_data_points,
@@ -198,18 +248,20 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
                 )
             ]
             cpu_chart.update()
-            update_charts._last_cpu_data = cpu_data_points.copy()
+            chart_state['last_cpu_data'] = cpu_data_points.copy()
 
-        # Update Memory chart with real data
-        memory_value = system_metrics.get('memory_usage', 0.0)
-        # Convert to float if it's a string
-        if isinstance(memory_value, str):
-            memory_value = float(memory_value.rstrip('%'))
+        # Update Memory chart with historical data
+        memory_value = safe_float_conversion(system_metrics.get('memory_usage', 0.0))
+        
+        # Add current value to history and maintain max 6 points for bar chart
+        chart_state['memory_history'].append(memory_value)
+        if len(chart_state['memory_history']) > 6:
+            chart_state['memory_history'].pop(0)
 
         memory_bar_groups = []
-        for i in range(6):
-            # Use the same value for all bars to show current state
-            value = memory_value
+        history_to_use = chart_state['memory_history'] if chart_state['memory_history'] else [memory_value]
+        
+        for i, value in enumerate(history_to_use):
             color = (ft.Colors.GREEN_600 if value < 60  # Normal
                     else ft.Colors.ORANGE_600 if value < 80  # Warning
                     else ft.Colors.RED_600)  # Critical
@@ -229,35 +281,41 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
             )
 
         # Only update if data has changed significantly
-        if not hasattr(update_charts, '_last_memory_data') or update_charts._last_memory_data != memory_bar_groups:
+        if chart_state['last_memory_data'] != memory_bar_groups:
             memory_chart.bar_groups = memory_bar_groups
             memory_chart.update()
-            update_charts._last_memory_data = memory_bar_groups.copy()
+            chart_state['last_memory_data'] = memory_bar_groups.copy()
 
-        # Update Network chart with real data
-        network_sent = system_metrics.get('network_sent_mb', 0)
-        network_recv = system_metrics.get('network_recv_mb', 0)
+        # Update Network chart with historical data tracking
+        network_sent = safe_float_conversion(system_metrics.get('network_sent_mb', 0))
+        network_recv = safe_float_conversion(system_metrics.get('network_recv_mb', 0))
 
-        # Ensure we have numeric values
-        if isinstance(network_sent, str):
-            network_sent = float(network_sent)
-        if isinstance(network_recv, str):
-            network_recv = float(network_recv)
+        # Add current values to history and maintain max 15 points
+        chart_state['network_sent_history'].append(network_sent)
+        chart_state['network_recv_history'].append(network_recv)
+        
+        if len(chart_state['network_sent_history']) > 15:
+            chart_state['network_sent_history'].pop(0)
+        if len(chart_state['network_recv_history']) > 15:
+            chart_state['network_recv_history'].pop(0)
 
-        # Create network traffic data points
+        # Create network traffic data points from history
         sent_data_points = []
         recv_data_points = []
-        for i in range(8):
-            # Use the same values for all points to show current state
-            sent_data_points.append(ft.LineChartDataPoint(i + 1, network_sent))
-            recv_data_points.append(ft.LineChartDataPoint(i + 1, network_recv))
+        
+        sent_history = chart_state['network_sent_history'] if chart_state['network_sent_history'] else [network_sent]
+        recv_history = chart_state['network_recv_history'] if chart_state['network_recv_history'] else [network_recv]
+        
+        for i, sent_val in enumerate(sent_history):
+            sent_data_points.append(ft.LineChartDataPoint(i + 1, sent_val))
+        
+        for i, recv_val in enumerate(recv_history):
+            recv_data_points.append(ft.LineChartDataPoint(i + 1, recv_val))
 
         # Only update if data has changed significantly
         network_data_changed = (
-            not hasattr(update_charts, '_last_network_sent_data') or
-            not hasattr(update_charts, '_last_network_recv_data') or
-            update_charts._last_network_sent_data != sent_data_points or
-            update_charts._last_network_recv_data != recv_data_points
+            chart_state['last_network_sent_data'] != sent_data_points or
+            chart_state['last_network_recv_data'] != recv_data_points
         )
 
         if network_data_changed:
@@ -276,23 +334,20 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
                 )
             ]
             network_chart.update()
-            update_charts._last_network_sent_data = sent_data_points.copy()
-            update_charts._last_network_recv_data = recv_data_points.copy()
+            chart_state['last_network_sent_data'] = sent_data_points.copy()
+            chart_state['last_network_recv_data'] = recv_data_points.copy()
 
         # Update Disk chart with real data
-        disk_used = system_metrics.get('disk_usage', 0.0)
-        # Convert to float if it's a string
-        if isinstance(disk_used, str):
-            disk_used = float(disk_used.rstrip('%'))
+        disk_used = safe_float_conversion(system_metrics.get('disk_usage', 0.0))
 
         disk_free = 100 - disk_used
 
         # Only update if data has changed significantly
         disk_data_changed = (
-            not hasattr(update_charts, '_last_disk_used') or
-            not hasattr(update_charts, '_last_disk_free') or
-            abs(update_charts._last_disk_used - disk_used) > 0.1 or
-            abs(update_charts._last_disk_free - disk_free) > 0.1
+            chart_state['last_disk_used'] is None or
+            chart_state['last_disk_free'] is None or
+            abs(chart_state['last_disk_used'] - disk_used) > 0.1 or
+            abs(chart_state['last_disk_free'] - disk_free) > 0.1
         )
 
         if disk_data_changed:
@@ -312,8 +367,8 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
                 )
             ]
             disk_chart.update()
-            update_charts._last_disk_used = disk_used
-            update_charts._last_disk_free = disk_free
+            chart_state['last_disk_used'] = disk_used
+            chart_state['last_disk_free'] = disk_free
 
     def update_system_info():
         """Update system information cards using direct control references."""
@@ -395,26 +450,47 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
         show_info_message(page, "Refreshing analytics data...")
 
     def on_toggle_auto_refresh(e):
-        """Toggle auto-refresh timer."""
-        nonlocal refresh_timer
+        """Toggle auto-refresh timer with proper cancellation."""
+        nonlocal refresh_timer, timer_cancelled
 
         if refresh_timer:
+            # Stop existing timer
+            timer_cancelled = True  # Signal current loop to stop
             refresh_timer.cancel()
             refresh_timer = None
             logger.info("Auto-refresh stopped")
             show_info_message(page, "Auto-refresh stopped")
         else:
+            # Reset cancellation flag and start new timer
+            timer_cancelled = False
+            
             # Start auto-refresh timer (every 5 seconds)
             async def refresh_loop():
-                while True:
-                    await asyncio.sleep(5)
-                    # Check if the control is still attached to the page before updating
-                    if hasattr(last_updated_text, 'page') and last_updated_text.page is not None:
-                        load_analytics_data()
-                    else:
-                        # If control is not attached, cancel the timer
-                        logger.warning("Analytics control detached, stopping auto-refresh")
-                        break
+                try:
+                    while not timer_cancelled:  # Use explicit cancellation flag
+                        await asyncio.sleep(5)
+                        
+                        # Double-check cancellation after sleep
+                        if timer_cancelled:
+                            break
+                            
+                        # Check if controls are still valid before updating
+                        if (hasattr(last_updated_text, 'page') and 
+                            last_updated_text.page is not None and 
+                            not timer_cancelled):
+                            load_analytics_data()
+                        else:
+                            # Controls are detached, stop automatically
+                            logger.warning("Analytics controls detached, stopping auto-refresh")
+                            break
+                            
+                except asyncio.CancelledError:
+                    logger.info("Analytics refresh timer cancelled")
+                except Exception as e:
+                    logger.error(f"Analytics refresh timer error: {e}")
+                finally:
+                    # Cleanup when loop exits
+                    timer_cancelled = True
 
             refresh_timer = page.run_task(refresh_loop)
             logger.info("Auto-refresh started")

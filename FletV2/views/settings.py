@@ -312,13 +312,13 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         if page:  # Check if page is still available
             show_success_message(page, f"Performance alerts {'enabled' if new_value else 'disabled'}")
 
-    async def on_theme_toggle(e):
+    def on_theme_toggle(e):
         nonlocal current_settings
         new_mode = "light" if current_settings['gui']['theme_mode'] == "dark" else "dark"
         current_settings['gui']['theme_mode'] = new_mode
         if page:  # Check if page is still available
             page.theme_mode = ft.ThemeMode.LIGHT if new_mode == "light" else ft.ThemeMode.DARK
-            await page.update_async()
+            page.update()
             show_info_message(page, f"Theme switched to {new_mode} mode")
 
     # Server Settings Fields
@@ -452,11 +452,32 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         finally:
             is_saving = False
 
-    async def on_save_settings(e):
+    def on_save_settings(e):
         logger.info("Saving settings...")
-        await save_settings_handler()
+        nonlocal is_saving, last_saved
+        if is_saving:
+            return
 
-    async def on_reset_settings(e):
+        is_saving = True
+
+        try:
+            # Perform actual save operation
+            success = save_settings_sync(current_settings)
+            if success:
+                # Update UI on success
+                last_saved = datetime.now()
+                last_saved_text.value = f"Last saved: {last_saved.strftime('%H:%M:%S')}"
+                last_saved_text.update()
+                show_success_message(page, "Settings saved successfully")
+            else:
+                show_error_message(page, "Failed to save settings")
+        except Exception as e:
+            logger.error(f"Error saving settings: {e}")
+            show_error_message(page, f"Error saving settings: {str(e)}")
+        finally:
+            is_saving = False
+
+    def on_reset_settings(e):
         def confirm_reset(e):
             nonlocal current_settings
             default_settings = {
@@ -523,9 +544,19 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             logger.error(f"Error exporting settings: {e}")
             show_error_message(page, "Error exporting settings")
 
-    async def on_export_settings(e):
+    def on_export_settings(e):
         logger.info("Exporting settings...")
-        await export_settings_handler()
+        backup_file = f"settings_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
+        try:
+            success = export_settings_sync(current_settings, backup_file)
+            if success:
+                show_success_message(page, f"Settings exported to {backup_file}")
+            else:
+                show_error_message(page, "Failed to export settings")
+        except Exception as e:
+            logger.error(f"Error exporting settings: {e}")
+            show_error_message(page, "Error exporting settings")
 
     # File picker for import functionality
     file_picker = None  # Initialize as None and set later

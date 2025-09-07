@@ -17,8 +17,7 @@ logger = get_logger(__name__)
 
 
 def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
-    """
-    Create logs view with enhanced infrastructure and state management.
+    """Create logs view with enhanced infrastructure and state management.
 
     Args:
         server_bridge: Enhanced server bridge for data access
@@ -90,7 +89,7 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
         return logs_data
 
     def get_level_color(level):
-        """Get color for log level."""
+        """Get text color for log level."""
         color_map = {
             "INFO": ft.Colors.BLUE,
             "SUCCESS": ft.Colors.GREEN,
@@ -99,6 +98,17 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
             "DEBUG": ft.Colors.GREY
         }
         return color_map.get(level, ft.Colors.ON_SURFACE)
+
+    def get_level_bgcolor(level):
+        """Get background color for log level."""
+        bgcolor_map = {
+            "INFO": ft.Colors.BLUE_50,
+            "SUCCESS": ft.Colors.GREEN_50,
+            "WARNING": ft.Colors.ORANGE_50,
+            "ERROR": ft.Colors.RED_50,
+            "DEBUG": ft.Colors.GREY_50
+        }
+        return bgcolor_map.get(level, ft.Colors.SURFACE)
 
     def filter_logs():
         """Filter logs based on current selection."""
@@ -128,7 +138,7 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
                     ft.Text(
                         "No log entries match the current filter criteria.",
                         size=14,
-                        color=ft.Colors.ON_SURFACE_VARIANT
+                        color=ft.Colors.OUTLINE
                     ),
                     ft.Container(height=10),
                     ft.OutlinedButton(
@@ -159,7 +169,7 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
                             content=ft.Text(
                                 timestamp_str,
                                 size=12,
-                                color=ft.Colors.ON_SURFACE_VARIANT
+                                color=ft.Colors.OUTLINE
                             ),
                             width=80
                         ),
@@ -176,7 +186,7 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
                             content=ft.Text(
                                 log["component"],
                                 size=12,
-                                color=ft.Colors.ON_SURFACE_VARIANT
+                                color=ft.Colors.OUTLINE
                             ),
                             width=100
                         ),
@@ -191,7 +201,7 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
                     ], spacing=10),
                     padding=ft.Padding(10, 8, 10, 8),
                     border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
-                    bgcolor=ft.Colors.SURFACE if log["level"] != "ERROR" else ft.Colors.ERROR_CONTAINER
+                    bgcolor=get_level_bgcolor(log["level"])
                 )
                 log_entries.append(log_entry)
 
@@ -268,7 +278,7 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
 
     def close_dialog(e):
         page.dialog.open = False
-        page.update()
+        page.dialog.update()  # Update only the dialog instead of entire page
 
     def confirm_clear(e):
         nonlocal logs_data, filtered_logs_data
@@ -396,7 +406,7 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
     # Create UI controls
     status_text = ft.Text(
         value="Loading logs...",
-        color=ft.Colors.ON_SURFACE_VARIANT
+        color=ft.Colors.OUTLINE
     )
 
     last_updated_text = ft.Text(

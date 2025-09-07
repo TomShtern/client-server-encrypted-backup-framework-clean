@@ -1,4 +1,6 @@
 # FletV2 Infrastructure Enhancement Summary
+ ####MAYBE A BIT OUTDATED FROM YESTERDAY, THE GOAL REMAINS THE SAME.
+
 
 ## Overview
 This document summarizes the comprehensive infrastructure overhaul for the FletV2 desktop backup management application, including discovered issues, implemented fixes, current status, and next steps.
@@ -86,8 +88,8 @@ on_click=lambda e, cid=str(client.get("client_id", "")): [
 - **User feedback**: Snackbar notifications for button actions need validation
 
 ### 🔄 Views Using Enhanced Infrastructure
-- ✅ Clients view: Fully updated with state management integration
-- ✅ Files view: Updated with enhanced data loading and async patterns
+- ✅ Clients view: Fully updated with state management integration (⚠️ NEED TO FIX THE BUTTONS PROBLEMS)
+- ✅ Files view: Updated with enhanced data loading and async patterns(⚠️ NEED TO FIX THE BUTTONS PROBLEMS)
 - ❌ Database view: Still needs migration to enhanced infrastructure  
 - ❌ Analytics view: Still needs migration to enhanced infrastructure
 - ❌ Logs view: Still needs migration to enhanced infrastructure

@@ -1,459 +1,465 @@
 #!/usr/bin/env python3
 """
-Modular Server Bridge for FletV2
-A full implementation of the server bridge for production use.
+Unified Server Bridge for FletV2
+Simple bridge that makes direct function calls to the real server when available,
+or falls back to mock data for development.
+
+Design Principles:
+- Simple and fast - no over-engineering
+- Direct data access - no caching that causes stale data
+- Immediate UI updates after modifications
+- Clean fallback to mock data
 """
 
-import flet as ft
-from typing import List, Dict, Any, Optional
-import requests
-import json
-import os
 import asyncio
+from typing import Dict, List, Tuple, Optional, Any
 from utils.debug_setup import get_logger
-from config import show_mock_data
-
-# Import database manager for MockaBase integration
-try:
-    from utils.database_manager import FletDatabaseManager, create_database_manager
-    DATABASE_MANAGER_AVAILABLE = True
-except ImportError:
-    DATABASE_MANAGER_AVAILABLE = False
-    logger.warning("Database manager not available for MockaBase integration")
+from utils.mock_data_generator import MockDataGenerator
 
 logger = get_logger(__name__)
 
+# This is a placeholder for the real BackupServer class.
+# In the final project, you would import the actual class:
+# from python_server.server import BackupServer
+class BackupServer:
+    """Placeholder for the real BackupServer class"""
+    pass
 
-class ModularServerBridge:
+class ServerBridge:
     """
-    Modular server bridge implementation for production scenarios.
+    A unified bridge to the backend server.
+    Simple design: if a real server instance is provided, it proxies calls to it.
+    Otherwise, it falls back to returning mock data for UI development.
     
-    This provides full functionality for communicating with the backup server.
+    Key principles:
+    - No caching (prevents stale data issues)
+    - Direct data access for immediate UI updates
+    - Simple and reliable
     """
     
-    def __init__(self, host: str = "127.0.0.1", port: int = 1256):
-        """Initialize modular server bridge."""
-        self.host = host
-        self.port = port
-        self.base_url = f"http://{host}:{port}"
-        self.connected = False
-        self.session = requests.Session()
+    def __init__(self, real_server_instance: Optional[BackupServer] = None):
+        """Initialize the unified server bridge."""
+        self.real_server = real_server_instance
         
-        # Initialize database manager for MockaBase integration
-        self.db_manager = None
-        if DATABASE_MANAGER_AVAILABLE:
-            # Check if MockaBase exists
-            mockabase_path = "MockaBase.db"
-            if os.path.exists(mockabase_path):
-                try:
-                    self.db_manager = create_database_manager(mockabase_path)
-                    if self.db_manager and self.db_manager.connect():
-                        logger.info("Connected to MockaBase database")
-                    else:
-                        logger.warning("Failed to connect to MockaBase database")
-                        self.db_manager = None
-                except Exception as e:
-                    logger.error(f"Error initializing database manager: {e}")
-                    self.db_manager = None
-            else:
-                logger.info("MockaBase.db not found, using server-only mode")
+        if self.real_server:
+            print("[ServerBridge] Initialized in LIVE mode, connected to the real server.")
+            logger.info("ServerBridge initialized in LIVE mode with real server")
         else:
-            logger.warning("Database manager not available, using server-only mode")
+            print("[ServerBridge] Initialized in FALLBACK mode. Will return mock data.")
+            logger.info("ServerBridge initialized in FALLBACK mode")
         
-        # Note: Connection test is now done asynchronously in main.py
-    
-    def _test_connection(self):
-        """Test connection to the server."""
-        try:
-            response = self.session.get(f"{self.base_url}/health", timeout=5)
-            if response.status_code == 200:
-                self.connected = True
-                logger.info("ModularServerBridge connected successfully")
-            else:
-                self.connected = False
-                logger.warning(f"Server health check failed with status {response.status_code}")
-        except Exception as e:
-            self.connected = False
-            logger.error(f"Failed to connect to server: {e}")
-    
-    def _make_request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Dict:
-        """Make a request to the server."""
-        if not self.connected:
-            raise ConnectionError("Not connected to server")
+        # Initialize mock data generator for fallback mode
+        self.mock_generator = MockDataGenerator(num_clients=45)
         
-        url = f"{self.base_url}{endpoint}"
-        try:
-            if method == "GET":
-                response = self.session.get(url, timeout=10)
-            elif method == "POST":
-                response = self.session.post(url, json=data, timeout=10)
-            elif method == "DELETE":
-                response = self.session.delete(url, timeout=10)
-            else:
-                raise ValueError(f"Unsupported method: {method}")
+        # Track connection status (legacy compatibility)
+        self.connected = self.real_server is not None
+
+    def _normalize_client_data(self, raw_clients: List[Dict]) -> List[Dict]:
+        """Normalize client data format for consistent UI expectations."""
+        normalized = []
+        for client in raw_clients:
+            # Handle both "client_id" and "id" fields for compatibility
+            client_id = client.get("client_id") or client.get("id", "unknown")
             
-            response.raise_for_status()
-            return response.json() if response.content else {}
-        except Exception as e:
-            logger.error(f"Request to {url} failed: {e}")
-            raise
-    
-    def get_table_data(self, table_name: str) -> Dict[str, Any]:
-        """
-        Get table data from the database.
-        
-        Args:
-            table_name (str): Name of the table to retrieve
-            
-        Returns:
-            Dict[str, Any]: Dictionary with columns and rows
-        """
-        # Try to get data from database manager (MockaBase)
-        if self.db_manager:
-            try:
-                return self.db_manager.get_table_data(table_name)
-            except Exception as e:
-                logger.error(f"Failed to get table data from database: {e}")
-        
-        # Fallback to mock data
-        logger.warning(f"Using mock data for table: {table_name}")
-        tables_data = {
-            "clients": {
-                "columns": ["id", "name", "last_seen", "has_public_key", "has_aes_key"],
-                "rows": [
-                    {"id": "client_001", "name": "Alpha Workstation", "last_seen": "2025-09-03 10:30:15", "has_public_key": True, "has_aes_key": True},
-                    {"id": "client_002", "name": "Beta Server", "last_seen": "2025-09-02 09:15:22", "has_public_key": True, "has_aes_key": True},
-                    {"id": "client_003", "name": "Gamma Laptop", "last_seen": "2025-09-01 14:22:10", "has_public_key": True, "has_aes_key": False}
-                ]
-            },
-            "files": {
-                "columns": ["id", "filename", "pathname", "verified", "filesize", "modification_date", "crc", "client_id", "client_name"],
-                "rows": [
-                    {"id": "file_001", "filename": "document1.pdf", "pathname": "/home/user/documents/document1.pdf", "verified": True, "filesize": 1024000, "modification_date": "2025-09-03 10:30:15", "crc": 123456789, "client_id": "client_001", "client_name": "Alpha Workstation"},
-                    {"id": "file_002", "filename": "image1.jpg", "pathname": "/home/user/pictures/image1.jpg", "verified": False, "filesize": 2048000, "modification_date": "2025-09-03 11:45:30", "crc": 987654321, "client_id": "client_002", "client_name": "Beta Server"}
-                ]
-            },
-            "logs": {
-                "columns": ["id", "timestamp", "level", "component", "message"],
-                "rows": [
-                    {"id": 1, "timestamp": "2025-09-03 10:30:15", "level": "INFO", "component": "Server", "message": "Server started on port 1256"},
-                    {"id": 2, "timestamp": "2025-09-03 10:31:22", "level": "INFO", "component": "Client", "message": "Client client_001 connected"},
-                    {"id": 3, "timestamp": "2025-09-03 10:35:45", "level": "WARNING", "component": "File Transfer", "message": "File transfer completed with warnings"}
-                ]
+            normalized_client = {
+                "id": client_id,  # Always provide "id" field for UI
+                "client_id": client_id,  # Keep original field for backend compatibility
+                "name": client.get("name", "Unknown Client"),
+                "status": client.get("status", "Unknown"),
+                "last_seen": client.get("last_activity") or client.get("last_seen", "Never"),
+                "files_count": str(client.get("files_count", 0)),
+                "total_size": self._format_file_size(client.get("total_size", 0))
             }
-        }
+            normalized.append(normalized_client)
+        return normalized
+
+    def _format_file_size(self, size_bytes: int) -> str:
+        """Format file size in human-readable format."""
+        if size_bytes == 0:
+            return "0 B"
+        elif size_bytes < 1024:
+            return f"{size_bytes} B"
+        elif size_bytes < 1024 * 1024:
+            return f"{size_bytes / 1024:.1f} KB"
+        elif size_bytes < 1024 * 1024 * 1024:
+            return f"{size_bytes / (1024 * 1024):.1f} MB"
+        else:
+            return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
+    
+    # --- Client Management ---
+    
+    def get_all_clients_from_db(self) -> List[Dict]:
+        """Get all clients from database."""
+        if self.real_server:
+            try:
+                return self.real_server.get_all_clients_from_db()
+            except Exception as e:
+                logger.error(f"Real server get_all_clients_from_db failed: {e}")
+                # Fall through to mock fallback
         
-        return tables_data.get(table_name, {"columns": [], "rows": []})
+        logger.debug("[ServerBridge] FALLBACK: Returning mock client data.")
+        raw_data = self.mock_generator.get_clients()
+        # Normalize data format for consistent UI expectations
+        return self._normalize_client_data(raw_data)
     
     def get_clients(self) -> List[Dict[str, Any]]:
-        """
-        Get client data from the server or database.
-        
-        Returns:
-            List[Dict[str, Any]]: List of client dictionaries
-        """
-        # Try to get data from database manager (MockaBase)
-        if self.db_manager:
+        """Get client data (alias for get_all_clients_from_db)."""
+        return self.get_all_clients_from_db()
+    
+    async def get_clients_async(self) -> List[Dict[str, Any]]:
+        """Async version of get_clients."""
+        if self.real_server and hasattr(self.real_server, 'get_all_clients_from_db_async'):
             try:
-                clients = self.db_manager.get_clients()
-                if clients:
-                    return clients
+                raw_data = await self.real_server.get_all_clients_from_db_async()
+                return self._normalize_client_data(raw_data)
             except Exception as e:
-                logger.error(f"Failed to get clients from database: {e}")
+                logger.error(f"Real server async get_clients failed: {e}")
+                # Fall through to mock fallback
         
-        # Try to get data from server
-        try:
-            response = self._make_request("GET", "/clients")
-            return response.get("clients", [])
-        except Exception as e:
-            logger.warning(f"Failed to get clients from server: {e}")
-            # Fallback to mock data only in debug mode or when server is unavailable
-            if show_mock_data() or not self.connected:
-                return [
-                    {
-                        "client_id": "client_001",
-                        "address": "192.168.1.101:54321",
-                        "status": "Connected",
-                        "connected_at": "2025-09-03 10:30:15",
-                        "last_activity": "2025-09-03 14:45:30"
-                    },
-                    {
-                        "client_id": "client_002",
-                        "address": "192.168.1.102:54322",
-                        "status": "Registered",
-                        "connected_at": "2025-09-02 09:15:22",
-                        "last_activity": "2025-09-03 12:20:45"
-                    },
-                    {
-                        "client_id": "client_003",
-                        "address": "192.168.1.103:54323",
-                        "status": "Offline",
-                        "connected_at": "2025-09-01 14:22:10",
-                        "last_activity": "2025-09-02 16:33:55"
-                    },
-                    {
-                        "client_id": "client_004",
-                        "address": "192.168.1.104:54324",
-                        "status": "Connected",
-                        "connected_at": "2025-09-03 11:45:05",
-                        "last_activity": "2025-09-03 15:12:33"
-                    }
-                ]
-            return []
-    
-    def get_files(self) -> List[Dict[str, Any]]:
-        """
-        Get file data from the server or database.
-        
-        Returns:
-            List[Dict[str, Any]]: List of file dictionaries
-        """
-        # Try to get data from database manager (MockaBase)
-        if self.db_manager:
-            try:
-                files = self.db_manager.get_files()
-                if files:
-                    return files
-            except Exception as e:
-                logger.error(f"Failed to get files from database: {e}")
-        
-        # Try to get data from server
-        try:
-            response = self._make_request("GET", "/files")
-            return response.get("files", [])
-        except Exception as e:
-            logger.warning(f"Failed to get files from server: {e}")
-            # Fallback to mock data only in debug mode or when server is unavailable
-            if show_mock_data() or not self.connected:
-                return [
-                    {
-                        "file_id": "file_001",
-                        "filename": "document1.pdf",
-                        "size": 1024000,
-                        "uploaded_at": "2025-09-03 10:30:15",
-                        "client_id": "client_001"
-                    },
-                    {
-                        "file_id": "file_002",
-                        "filename": "image1.jpg",
-                        "size": 2048000,
-                        "uploaded_at": "2025-09-03 11:45:30",
-                        "client_id": "client_002"
-                    }
-                ]
-            return []
-    
-    def get_database_info(self) -> Dict[str, Any]:
-        """
-        Get database information from the server or database.
-        
-        Returns:
-            Dict[str, Any]: Database information
-        """
-        # Try to get data from database manager (MockaBase)
-        if self.db_manager:
-            try:
-                stats = self.db_manager.get_database_stats()
-                if stats:
-                    return stats
-            except Exception as e:
-                logger.error(f"Failed to get database stats from database: {e}")
-        
-        # Try to get data from server
-        try:
-            response = self._make_request("GET", "/database/info")
-            return response
-        except Exception as e:
-            logger.warning(f"Failed to get database info from server: {e}")
-            # Fallback to mock data only in debug mode or when server is unavailable
-            if show_mock_data() or not self.connected:
-                return {
-                    "status": "Connected",
-                    "tables": 5,
-                    "records": 1250,
-                    "size": "45.2 MB"
-                }
-            return {}
-    
-    def get_logs(self) -> List[Dict[str, Any]]:
-        """
-        Get logs from the server.
-        
-        Returns:
-            List[Dict[str, Any]]: List of log entries
-        """
-        try:
-            response = self._make_request("GET", "/logs")
-            return response.get("logs", [])
-        except Exception as e:
-            logger.warning(f"Failed to get logs from server: {e}")
-            # Fallback to mock data only in debug mode or when server is unavailable
-            if show_mock_data() or not self.connected:
-                return []
-            return []
-    
-    def get_server_status(self) -> Dict[str, Any]:
-        """
-        Get server status from the server.
-        
-        Returns:
-            Dict[str, Any]: Server status information
-        """
-        try:
-            response = self._make_request("GET", "/status")
-            return response
-        except Exception as e:
-            logger.warning(f"Failed to get server status from server: {e}")
-            # Fallback to mock data only in debug mode or when server is unavailable
-            if show_mock_data() or not self.connected:
-                return {
-                    "server_running": True,
-                    "port": 1256,
-                    "uptime": "2h 34m",
-                    "total_transfers": 72,
-                    "active_clients": 3,
-                    "total_files": 45,
-                    "storage_used": "2.4 GB"
-                }
-            return {}
-    
-    def get_recent_activity(self) -> List[Dict[str, Any]]:
-        """
-        Get recent activity from the server.
-        
-        Returns:
-            List[Dict[str, Any]]: List of recent activity entries
-        """
-        try:
-            response = self._make_request("GET", "/activity/recent")
-            return response.get("activity", [])
-        except Exception as e:
-            logger.warning(f"Failed to get recent activity from server: {e}")
-            # Fallback to mock data only in debug mode or when server is unavailable
-            if show_mock_data() or not self.connected:
-                return []
-            return []
-    
-    def get_system_status(self) -> Dict[str, Any]:
-        """
-        Get system status including CPU, memory, and disk usage.
-        
-        Returns:
-            Dict[str, Any]: System status information
-        """
-        try:
-            # Try to get system metrics from database manager first
-            if self.db_manager:
-                try:
-                    # Get database stats as a proxy for system activity
-                    db_stats = self.db_manager.get_database_stats()
-                    if db_stats:
-                        # Calculate some mock metrics based on database stats
-                        total_records = db_stats.get("records", 0)
-                        cpu_usage = min(100, max(5, (total_records / 1000) * 10))  # Mock CPU usage
-                        memory_usage = min(100, max(10, (total_records / 500) * 5))  # Mock memory usage
-                        disk_usage = float(db_stats.get("size", "0").split()[0]) if "size" in db_stats else 0
-                        disk_usage_percent = min(100, max(5, disk_usage))  # Mock disk usage
-                        
-                        return {
-                            'cpu_usage': cpu_usage,
-                            'memory_usage': memory_usage,
-                            'disk_usage': disk_usage_percent,
-                            'memory_total_gb': 16,  # Placeholder
-                            'memory_used_gb': (memory_usage / 100) * 16,  # Placeholder
-                            'disk_total_gb': 500,  # Placeholder
-                            'disk_used_gb': (disk_usage_percent / 100) * 500,  # Placeholder
-                            'network_sent_mb': 2048,  # Placeholder
-                            'network_recv_mb': 4096,  # Placeholder
-                            'active_connections': db_stats.get("tables", 0),
-                            'cpu_cores': 8  # Placeholder
-                        }
-                except Exception as e:
-                    logger.warning(f"Failed to get system status from database: {e}")
-            
-            # Try to get system metrics from server
-            response = self._make_request("GET", "/system/status")
-            return response
-        except Exception as e:
-            logger.warning(f"Failed to get system status from server: {e}")
-            # Fallback to mock data only in debug mode or when server is unavailable
-            if show_mock_data() or not self.connected:
-                import random
-                return {
-                    'cpu_usage': random.uniform(10, 40),
-                    'memory_usage': random.uniform(30, 60),
-                    'disk_usage': 75.2,
-                    'memory_total_gb': 16,
-                    'memory_used_gb': random.uniform(5, 10),
-                    'disk_total_gb': 500,
-                    'disk_used_gb': 376.0,
-                    'network_sent_mb': random.uniform(1000, 3000),
-                    'network_recv_mb': random.uniform(2000, 5000),
-                    'active_connections': random.randint(1, 10),
-                    'cpu_cores': 8
-                }
-            return {}
+        # Mock fallback with brief async simulation
+        await asyncio.sleep(0.01)
+        raw_data = self.mock_generator.get_clients()
+        return self._normalize_client_data(raw_data)
     
     def disconnect_client(self, client_id: str) -> bool:
-        """
-        Disconnect a client from the server.
+        """Disconnect a client."""
+        if self.real_server and hasattr(self.real_server, 'disconnect_client'):
+            try:
+                return self.real_server.disconnect_client(client_id)
+            except Exception as e:
+                logger.error(f"Real server disconnect_client failed: {e}")
         
-        Args:
-            client_id (str): ID of client to disconnect
-            
-        Returns:
-            bool: True if successful
-        """
-        try:
-            self._make_request("POST", f"/clients/{client_id}/disconnect")
-            logger.info(f"Disconnected client {client_id}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to disconnect client {client_id}: {e}")
-            return False
+        # Mock fallback - actually remove client from mock data
+        logger.info(f"[ServerBridge] FALLBACK: Disconnecting client from mock data: {client_id}")
+        return self.mock_generator.delete_client(client_id)
+    
+    async def disconnect_client_async(self, client_id: str) -> bool:
+        """Async version of disconnect_client."""
+        if self.real_server and hasattr(self.real_server, 'disconnect_client_async'):
+            try:
+                return await self.real_server.disconnect_client_async(client_id)
+            except Exception as e:
+                logger.error(f"Real server async disconnect_client failed: {e}")
+        
+        # Mock fallback - actually remove client from mock data
+        logger.info(f"[ServerBridge] FALLBACK: Async disconnecting client from mock data: {client_id}")
+        await asyncio.sleep(0.01)
+        return self.mock_generator.delete_client(client_id)
+    
+    def resolve_client(self, client_id: str) -> Optional[Dict]:
+        """Resolve client information by ID."""
+        if self.real_server and hasattr(self.real_server, 'resolve_client'):
+            try:
+                return self.real_server.resolve_client(client_id)
+            except Exception as e:
+                logger.error(f"Real server resolve_client failed: {e}")
+        
+        # Mock fallback
+        logger.debug(f"[ServerBridge] FALLBACK: Resolving client for ID: {client_id}")
+        clients = self.mock_generator.get_clients()
+        return next((c for c in clients if c.get('id') == client_id), None)
+    
+    def get_client_details(self, client_id: str) -> Dict[str, Any]:
+        """Get detailed client information."""
+        if self.real_server and hasattr(self.real_server, 'get_client_details'):
+            try:
+                return self.real_server.get_client_details(client_id)
+            except Exception as e:
+                logger.error(f"Real server get_client_details failed: {e}")
+        
+        # Mock fallback
+        logger.debug(f"[ServerBridge] FALLBACK: Getting mock client details for ID: {client_id}")
+        client = self.resolve_client(client_id)
+        if client:
+            # Add extra details for detailed view
+            client['connection_time'] = '2025-09-07T10:00:00Z'
+            client['total_files'] = 42
+            client['total_size'] = '1.2 GB'
+            client['last_backup'] = '2025-09-07T09:30:00Z'
+            return client
+        return {}
     
     def delete_client(self, client_id: str) -> bool:
-        """
-        Delete a client from the server.
+        """Delete a client."""
+        if self.real_server and hasattr(self.real_server, 'delete_client'):
+            try:
+                return self.real_server.delete_client(client_id)
+            except Exception as e:
+                logger.error(f"Real server delete_client failed: {e}")
         
-        Args:
-            client_id (str): ID of client to delete
-            
-        Returns:
-            bool: True if successful
-        """
+        # Mock fallback
+        logger.info(f"[ServerBridge] FALLBACK: Deleting client from mock data: {client_id}")
+        return self.mock_generator.delete_client(client_id)
+    
+    # --- File Management ---
+    
+    def get_client_files(self, client_id: str) -> List[Tuple]:
+        """Get files for a specific client."""
+        if self.real_server and hasattr(self.real_server, 'get_client_files'):
+            try:
+                return self.real_server.get_client_files(client_id)
+            except Exception as e:
+                logger.error(f"Real server get_client_files failed: {e}")
+        
+        # Mock fallback
+        logger.debug(f"[ServerBridge] FALLBACK: Getting mock files for client ID: {client_id}")
+        all_files = self.mock_generator.get_files()
+        client_files = [f for f in all_files if f.get('client_id') == client_id]
+        # Convert to tuple format if needed
+        return [(f['id'], f['name'], f['path'], f['size']) for f in client_files]
+    
+    def get_files(self) -> List[Dict[str, Any]]:
+        """Get all files."""
+        if self.real_server and hasattr(self.real_server, 'get_files'):
+            try:
+                return self.real_server.get_files()
+            except Exception as e:
+                logger.error(f"Real server get_files failed: {e}")
+        
+        # Mock fallback
+        logger.debug("[ServerBridge] FALLBACK: Returning mock file data.")
+        return self.mock_generator.get_files()
+    
+    async def get_files_async(self) -> List[Dict[str, Any]]:
+        """Async version of get_files."""
+        if self.real_server and hasattr(self.real_server, 'get_files_async'):
+            try:
+                return await self.real_server.get_files_async()
+            except Exception as e:
+                logger.error(f"Real server async get_files failed: {e}")
+        
+        # Mock fallback with brief async simulation
+        await asyncio.sleep(0.01)
+        return self.mock_generator.get_files()
+    
+    def delete_file(self, file_id: str) -> bool:
+        """Delete a file."""
+        if self.real_server and hasattr(self.real_server, 'delete_file'):
+            try:
+                return self.real_server.delete_file(file_id)
+            except Exception as e:
+                logger.error(f"Real server delete_file failed: {e}")
+        
+        # Mock fallback - actually delete from mock data
+        logger.info(f"[ServerBridge] FALLBACK: Deleting file from mock data: {file_id}")
+        return self.mock_generator.delete_file(file_id)
+    
+    async def delete_file_async(self, file_id: str) -> bool:
+        """Async version of delete_file."""
+        if self.real_server and hasattr(self.real_server, 'delete_file_async'):
+            try:
+                return await self.real_server.delete_file_async(file_id)
+            except Exception as e:
+                logger.error(f"Real server async delete_file failed: {e}")
+        
+        # Mock fallback - actually delete from mock data
+        logger.info(f"[ServerBridge] FALLBACK: Async deleting file from mock data: {file_id}")
+        await asyncio.sleep(0.01)
+        return self.mock_generator.delete_file(file_id)
+    
+    def download_file(self, file_id: str, destination_path: str) -> bool:
+        """Download a file."""
+        if self.real_server and hasattr(self.real_server, 'download_file'):
+            try:
+                return self.real_server.download_file(file_id, destination_path)
+            except Exception as e:
+                logger.error(f"Real server download_file failed: {e}")
+        
+        # Mock fallback
+        logger.debug(f"[ServerBridge] FALLBACK: Simulating download for file ID: {file_id} to {destination_path}")
+        # For mock mode, create a placeholder file
         try:
-            self._make_request("DELETE", f"/clients/{client_id}")
-            logger.info(f"Deleted client {client_id}")
+            with open(destination_path, 'w') as f:
+                f.write(f"Mock file content for file ID: {file_id}")
             return True
         except Exception as e:
-            logger.error(f"Failed to delete client {client_id}: {e}")
+            logger.error(f"Mock download failed: {e}")
             return False
     
-    def is_connected(self) -> bool:
-        """
-        Check if server is connected.
+    async def download_file_async(self, file_id: str, destination_path: str) -> bool:
+        """Async version of download_file."""
+        if self.real_server and hasattr(self.real_server, 'download_file_async'):
+            try:
+                return await self.real_server.download_file_async(file_id, destination_path)
+            except Exception as e:
+                logger.error(f"Real server async download_file failed: {e}")
         
-        Returns:
-            bool: True if connected
-        """
-        return self.connected
+        # Mock fallback
+        logger.debug(f"[ServerBridge] FALLBACK: Simulating async download for file ID: {file_id}")
+        await asyncio.sleep(1)  # Simulate download time
+        return self.download_file(file_id, destination_path)
+    
+    def verify_file(self, file_id: str) -> bool:
+        """Verify file integrity."""
+        if self.real_server and hasattr(self.real_server, 'verify_file'):
+            try:
+                return self.real_server.verify_file(file_id)
+            except Exception as e:
+                logger.error(f"Real server verify_file failed: {e}")
+        
+        # Mock fallback
+        logger.debug(f"[ServerBridge] FALLBACK: Simulating verify for file ID: {file_id}")
+        return True  # Mock verification always passes
+    
+    async def verify_file_async(self, file_id: str) -> bool:
+        """Async version of verify_file."""
+        if self.real_server and hasattr(self.real_server, 'verify_file_async'):
+            try:
+                return await self.real_server.verify_file_async(file_id)
+            except Exception as e:
+                logger.error(f"Real server async verify_file failed: {e}")
+        
+        # Mock fallback
+        logger.debug(f"[ServerBridge] FALLBACK: Simulating async verify for file ID: {file_id}")
+        await asyncio.sleep(0.5)  # Simulate verification time
+        return True
+    
+    # --- Server Status and Monitoring ---
+    
+    def get_server_stats(self) -> Dict[str, Any]:
+        """Get server statistics."""
+        if self.real_server and hasattr(self.real_server, 'get_server_stats'):
+            try:
+                return self.real_server.get_server_stats()
+            except Exception as e:
+                logger.error(f"Real server get_server_stats failed: {e}")
+        
+        # Mock fallback
+        logger.debug("[ServerBridge] FALLBACK: Returning mock server stats.")
+        return self.mock_generator.get_server_status()
+    
+    async def get_server_stats_async(self) -> Dict[str, Any]:
+        """Async version of get_server_stats."""
+        if self.real_server and hasattr(self.real_server, 'get_server_stats_async'):
+            try:
+                return await self.real_server.get_server_stats_async()
+            except Exception as e:
+                logger.error(f"Real server async get_server_stats failed: {e}")
+        
+        # Mock fallback with brief async simulation
+        await asyncio.sleep(0.01)
+        return self.mock_generator.get_server_status()
+    
+    def get_server_status(self) -> Dict[str, Any]:
+        """Get server status (alias for get_server_stats)."""
+        return self.get_server_stats()
+    
+    def get_system_status(self) -> Dict[str, Any]:
+        """Get system status including CPU, memory, disk usage."""
+        if self.real_server and hasattr(self.real_server, 'get_system_status'):
+            try:
+                return self.real_server.get_system_status()
+            except Exception as e:
+                logger.error(f"Real server get_system_status failed: {e}")
+        
+        # Mock fallback
+        logger.debug("[ServerBridge] FALLBACK: Returning mock system status.")
+        return self.mock_generator.get_system_status()
+    
+    def get_recent_activity(self) -> List[Dict[str, Any]]:
+        """Get recent server activity."""
+        if self.real_server and hasattr(self.real_server, 'get_recent_activity'):
+            try:
+                return self.real_server.get_recent_activity()
+            except Exception as e:
+                logger.error(f"Real server get_recent_activity failed: {e}")
+        
+        # Mock fallback
+        logger.debug("[ServerBridge] FALLBACK: Returning mock recent activity.")
+        # Generate some recent activity from logs
+        logs = self.mock_generator.get_logs()
+        return logs[:10]  # Return last 10 activities
+    
+    # --- Database Operations ---
+    
+    def get_database_info(self) -> Dict[str, Any]:
+        """Get database information."""
+        if self.real_server and hasattr(self.real_server, 'get_database_info'):
+            try:
+                return self.real_server.get_database_info()
+            except Exception as e:
+                logger.error(f"Real server get_database_info failed: {e}")
+        
+        # Mock fallback
+        logger.debug("[ServerBridge] FALLBACK: Returning mock database info.")
+        return self.mock_generator.get_database_info()
+    
+    def get_table_data(self, table_name: str) -> Dict[str, Any]:
+        """Get table data from database."""
+        if self.real_server and hasattr(self.real_server, 'get_table_data'):
+            try:
+                return self.real_server.get_table_data(table_name)
+            except Exception as e:
+                logger.error(f"Real server get_table_data failed: {e}")
+        
+        # Mock fallback
+        logger.debug(f"[ServerBridge] FALLBACK: Returning mock table data for: {table_name}")
+        return self.mock_generator.get_table_data(table_name)
+    
+    # --- Logging ---
+    
+    def get_logs(self) -> List[Dict[str, Any]]:
+        """Get server logs."""
+        if self.real_server and hasattr(self.real_server, 'get_logs'):
+            try:
+                return self.real_server.get_logs()
+            except Exception as e:
+                logger.error(f"Real server get_logs failed: {e}")
+        
+        # Mock fallback
+        logger.debug("[ServerBridge] FALLBACK: Returning mock log data.")
+        return self.mock_generator.get_logs()
+    
+    # --- Connection Status ---
+    
+    def is_connected(self) -> bool:
+        """Check if server bridge is connected to real server."""
+        return self.real_server is not None
+    
+    def test_connection(self) -> bool:
+        """Test connection to real server."""
+        if self.real_server and hasattr(self.real_server, 'test_connection'):
+            try:
+                return self.real_server.test_connection()
+            except Exception as e:
+                logger.error(f"Connection test failed: {e}")
+                return False
+        
+        # Mock fallback
+        logger.debug("[ServerBridge] FALLBACK: Mock connection test passed.")
+        return True
 
 
 # Factory function for easy instantiation
-def create_modular_server_bridge(host: str = "127.0.0.1", port: int = 1256) -> ModularServerBridge:
+def create_server_bridge(real_server_instance: Optional[BackupServer] = None) -> ServerBridge:
     """
-    Factory function to create a modular server bridge.
+    Factory function to create a unified server bridge.
     
     Args:
-        host (str): Server host
-        port (int): Server port
+        real_server_instance: Optional real server instance for live mode
         
     Returns:
-        ModularServerBridge: Instance of modular server bridge
+        ServerBridge: Instance of unified server bridge
     """
-    try:
-        return ModularServerBridge(host, port)
-    except Exception as e:
-        logger.error(f"Error creating ModularServerBridge: {e}")
-        return None
+    return ServerBridge(real_server_instance)
+
+
+# Legacy support - alias for backward compatibility
+def create_modular_server_bridge(host: str = "127.0.0.1", port: int = 1256) -> ServerBridge:
+    """
+    Legacy factory function for backward compatibility.
+    Now creates a unified ServerBridge in fallback mode.
+    
+    Args:
+        host: Ignored (kept for compatibility)
+        port: Ignored (kept for compatibility)
+        
+    Returns:
+        ServerBridge: Instance in fallback mode
+    """
+    logger.warning("create_modular_server_bridge is deprecated. Use create_server_bridge instead.")
+    return ServerBridge()  # Always return fallback mode for legacy calls
+
+
+# Alias for the main class
+ModularServerBridge = ServerBridge  # For backward compatibility
