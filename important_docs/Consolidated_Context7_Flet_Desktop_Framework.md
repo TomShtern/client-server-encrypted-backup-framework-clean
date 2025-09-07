@@ -1,5 +1,9 @@
 # Consolidated Context7 Flet Desktop Framework
 
+###### DO NOT READ THIS UNLESS YOU ARE LOOKING FOR SOMETHING VERY SPECIFIC AND YOU FOUND THAT SOMETHING HERE. THIS IS TOO LARGE TO INJEST AS A CODING AGENT FOR NO GOOD REASON. ######
+
+
+
 ## Overview
 
 This document serves as the definitive guide for creating professional desktop GUI applications using the Flet framework. It focuses exclusively on desktop application development, eliminating all mobile/tablet/web responsive design complexities while providing comprehensive guidance for building maintainable, performant desktop applications.

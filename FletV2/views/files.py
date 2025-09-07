@@ -19,7 +19,7 @@ from config import RECEIVED_FILES_DIR, ASYNC_DELAY, show_mock_data
 logger = get_logger(__name__)
 
 
-def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
+def create_files_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
     """
     Create files view using simple function-based pattern.
     Follows Framework Harmony principles - no custom classes, use Flet's built-ins.
@@ -36,6 +36,26 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
 
     # Direct control references
     files_table_ref = ft.Ref[ft.DataTable]()
+    
+    # Pre-create the DataTable to avoid lifecycle issues
+    files_table = ft.DataTable(
+        ref=files_table_ref,
+        columns=[
+            ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Size", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Type", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Modified", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Owner", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD))
+        ],
+        rows=[],  # Will be populated by update_table()
+        heading_row_color=ft.Colors.SURFACE,
+        border=ft.border.all(1, ft.Colors.OUTLINE),
+        border_radius=8,
+        data_row_min_height=45,
+        column_spacing=20
+    )
     status_text_ref = ft.Ref[ft.Text]()
     search_field_ref = ft.Ref[ft.TextField]()
     last_updated_text_ref = ft.Ref[ft.Text]()
@@ -153,20 +173,33 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
 
         return files_list
 
-    def get_files_data():
-        """Get files data from server or local scan (non-blocking)."""
+    async def get_files_data():
+        """Get files data from enhanced server bridge with smart caching."""
         try:
-            # Try to get files from server bridge first
+            # Check state manager cache first if available
+            if state_manager:
+                cached_files = state_manager.get_cached("files", max_age_seconds=30)
+                if cached_files:
+                    logger.debug("Using cached files data")
+                    return cached_files
+            
+            # Try to get files from enhanced server bridge first
             if server_bridge:
                 try:
-                    files_data = server_bridge.get_files()
+                    files_data = await server_bridge.get_files()
                     if files_data:
+                        # Update state manager cache if available
+                        if state_manager:
+                            await state_manager.update_state("files", files_data)
                         return files_data
                 except Exception as e:
                     logger.warning(f"Failed to get files from server bridge: {e}")
 
             # Fallback to scanning local directory
             files_data = scan_files_directory()
+            # Update cache with fallback data if available
+            if state_manager and files_data:
+                await state_manager.update_state("files", files_data)
             return files_data
         except Exception as e:
             logger.error(f"Error getting files data: {e}")
@@ -239,10 +272,23 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
             )
             new_rows.append(row)
 
-        # Update table if it exists
-        if files_table_ref.current:
+        # Always update the pre-created table object first
+        files_table.rows = new_rows
+        
+        # Update table ref if it exists and is properly attached
+        if (files_table_ref.current and 
+            hasattr(files_table_ref.current, 'page') and 
+            files_table_ref.current.page is not None):
             files_table_ref.current.rows = new_rows
-            files_table_ref.current.update()
+            try:
+                files_table_ref.current.update()
+            except Exception as update_error:
+                logger.debug(f"Files DataTable update failed, will retry on next update: {update_error}")
+        else:
+            logger.debug("Files DataTable ref not ready yet, table will be updated when displayed")
+            
+        # Always update the display
+        update_table_display()
 
         # Update status text with search result count
         if (status_text_ref.current and
@@ -282,8 +328,28 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                 status_text_ref.current.color = ft.Colors.PRIMARY
                 status_text_ref.current.update()
 
-            # Load data directly (non-blocking)
-            files_data = get_files_data()
+            # Load data - start with scan_files_directory (sync) for immediate data
+            # The async loading will happen separately via page.run_task
+            initial_files_data = scan_files_directory()
+            files_data.clear()
+            files_data.extend(initial_files_data)
+            
+            # Now schedule async loading via page.run_task for enhanced data
+            async def load_enhanced_data():
+                try:
+                    enhanced_data = await get_files_data()
+                    files_data.clear()
+                    files_data.extend(enhanced_data)
+                    # Update UI after loading
+                    update_table()
+                    if status_text_ref.current:
+                        status_text_ref.current.value = f"Showing {len(files_data)} files"
+                        status_text_ref.current.update()
+                except Exception as e:
+                    logger.error(f"Failed to load enhanced files data: {e}")
+            
+            # Schedule the async task
+            page.run_task(load_enhanced_data)
 
             # Update last updated timestamp - with safe control check
             if (last_updated_text_ref.current and
@@ -316,6 +382,7 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
 
     def on_download(file_data):
         """Handle file download with real file operations."""
+        logger.info(f"BUTTON CLICK: Download button clicked for file data: {file_data}")
         file_name = file_data.get('name', 'Unknown file')
         file_path = file_data.get('path', '')
 
@@ -352,6 +419,7 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
 
     def on_verify(file_data):
         """Handle file verification with real file operations."""
+        logger.info(f"BUTTON CLICK: Verify button clicked for file data: {file_data}")
         file_name = file_data.get('name', 'Unknown file')
         file_path = file_data.get('path', '')
 
@@ -415,6 +483,7 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
 
     def on_delete(file_data):
         """Handle file deletion with confirmation."""
+        logger.info(f"BUTTON CLICK: Delete button clicked for file data: {file_data}")
         file_name = file_data.get('name', 'Unknown file')
         logger.info(f"Delete file: {file_name}")
 
@@ -680,65 +749,54 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
                 )
             ], scroll=ft.ScrollMode.AUTO)
         else:
-            # Show table
+            # Show table - use the pre-created table
             table_container.content = ft.Column([
-                ft.DataTable(
-                    columns=[
-                        ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD)),
-                        ft.DataColumn(ft.Text("Size", weight=ft.FontWeight.BOLD)),
-                        ft.DataColumn(ft.Text("Type", weight=ft.FontWeight.BOLD)),
-                        ft.DataColumn(ft.Text("Modified", weight=ft.FontWeight.BOLD)),
-                        ft.DataColumn(ft.Text("Owner", weight=ft.FontWeight.BOLD)),
-                        ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD)),
-                        ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD))
-                    ],
-                    rows=[],
-                    heading_row_color=ft.Colors.SURFACE,
-                    border=ft.border.all(1, ft.Colors.OUTLINE),
-                    border_radius=8,
-                    data_row_min_height=45,
-                    column_spacing=20,
-                    ref=files_table_ref
-                )
+                files_table
             ], scroll=ft.ScrollMode.AUTO)
-        table_container.update()
+        
+        # Defensive update - only update if table_container is attached
+        try:
+            if (hasattr(table_container, 'page') and table_container.page is not None):
+                table_container.update()
+        except Exception as e:
+            logger.debug(f"Table container update failed, will retry: {e}")
+
+    # Add the table container to the main view
+    main_view.controls.append(table_container)
 
     # Initial display update
-        update_table_display()
-        # Update table with actual data
-        update_table()
+    update_table_display()
+    # Update table with actual data
+    update_table()
 
     # Also provide a trigger for manual loading if needed
     def trigger_initial_load():
         """Trigger initial data load manually."""
-        schedule_data_load()
+        page.run_task(schedule_data_load)
 
     # Export the trigger function so it can be called externally
     main_view.trigger_initial_load = trigger_initial_load
 
     # Schedule data loading after the view is attached
-    def schedule_data_load():
+    async def schedule_data_load():
         """Schedule data loading with retry mechanism to ensure controls are attached."""
-        async def delayed_load_with_retry():
-            max_retries = 5
-            retry_delay = 0.1
+        max_retries = 5
+        retry_delay = 0.1
 
-            for attempt in range(max_retries):
-                # Check if controls are attached
-                if (status_text_ref.current and
-                    hasattr(status_text_ref.current, 'page') and
-                    status_text_ref.current.page is not None):
-                    logger.info(f"Controls attached on attempt {attempt + 1}, loading data")
-                    await load_files_data_async()
-                    return
+        for attempt in range(max_retries):
+            # Check if controls are attached
+            if (status_text_ref.current and
+                hasattr(status_text_ref.current, 'page') and
+                status_text_ref.current.page is not None):
+                logger.info(f"Controls attached on attempt {attempt + 1}, loading data")
+                await load_files_data_async()
+                return
 
-                logger.debug(f"Attempt {attempt + 1}: Controls not attached, waiting {retry_delay}s")
-                await asyncio.sleep(retry_delay)
-                retry_delay *= 1.5  # Exponential backoff
+            logger.debug(f"Attempt {attempt + 1}: Controls not attached, waiting {retry_delay}s")
+            await asyncio.sleep(retry_delay)
+            retry_delay *= 1.5  # Exponential backoff
 
-            logger.warning("Failed to load files data: controls never attached after 5 attempts")
-
-        page.run_task(delayed_load_with_retry)
+        logger.warning("Failed to load files data: controls never attached after 5 attempts")
 
     # Use page.update after view is attached
     page.on_view_pop = lambda e: None  # Placeholder to ensure page events work
@@ -749,5 +807,8 @@ def create_files_view(server_bridge, page: ft.Page) -> ft.Control:
     
     # Set up the initial load to happen after the view is attached
     page.on_connect = lambda e: initial_schedule()
+
+    # Also trigger initial load when view is added to page
+    page.run_task(schedule_data_load)
 
     return main_view

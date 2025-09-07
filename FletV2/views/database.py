@@ -16,7 +16,7 @@ from config import ASYNC_DELAY
 logger = get_logger(__name__)
 
 
-def create_database_view(server_bridge, page: ft.Page) -> ft.Control:
+def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
     """
     Create database view using clean function-based patterns.
 

@@ -1,0 +1,62 @@
+  THIS FILE IS A COLLECTION OF INSIGHTS FROM THE RECENTLY EDITED FILES.
+   EACH INSIGHT HIGHLIGHTS A KEY LEARNING OR BEST PRACTICE.
+   THESE INSIGHTS CAN GUIDE FUTURE DEVELOPMENT AND IMPROVEMENTS.
+
+  ★ Insight ─────────────────────────────────────
+  The classic async/sync mixing error: using await inside a synchronous
+  function causes immediate Python runtime errors. In Flet, view creation
+   functions are synchronous by design, so we need to use page.run_task()
+   for async operations instead of direct await calls.
+  ─────────────────────────────────────────────────
+
+
+    ★ Insight ─────────────────────────────────────
+  Root Cause Identified: The error is AssertionError at line 812 in
+  files.py: page.run_task(schedule_data_load). The problem is that
+  schedule_data_load is not an async function, but page.run_task()
+  requires a coroutine function. The Flet framework enforces this with an
+   assertion: assert asyncio.iscoroutinefunction(handler).
+  ─────────────────────────────────────────────────
+  ★ Insight ─────────────────────────────────────
+  Field Mapping Mismatch: The mock data generator creates files with
+  filename field, but the files view expects name field. Similarly, mock
+  data has pathname but the view expects path, status vs status (this one
+   matches), and modified field is missing in mock data (expects ISO
+  format).
+
+  Button Handler Issue: The buttons are using .get() with proper
+  fallbacks, so the issue must be in the button event binding or the
+  click handlers not being properly attached to the DataTable rows.
+  ─────────────────────────────────────────────────
+
+    ★ Insight ─────────────────────────────────────
+  Data Display Success: The mock data field mapping fix resolved the
+  "unknown" values issue. The files view now properly displays file
+  names, sizes, types, and other data because I added the missing field
+  mappings (name, type, modified, owner, path) to match what the view
+  expects.
+
+  Button Investigation Strategy: I've added debug logging to all button
+  click handlers in both clients and files views. This will help
+  determine if:
+  1. Button clicks are not being registered at all (DOM/event binding
+  issue)
+  2. Button clicks are registered but handlers fail (logic/exception
+  issue)
+  3. Button clicks work but don't provide user feedback (UI update issue)
+  ─────────────────────────────────────────────────
+
+    ★ Insight ─────────────────────────────────────
+  The root cause is clear now: the event handlers exist in the Python
+  code but are not being serialized to the Flet client. This suggests
+  either a scoping issue with the handler functions, or a problem with
+  when the handlers are created versus when the table is rendered.
+  ─────────────────────────────────────────────────
+
+    ★ Insight ─────────────────────────────────────
+  The button handler issue was a fascinating technical discovery - it        
+  revealed that Flet's event handler serialization has specific
+  requirements. Function-based handlers created through factory functions    
+   don't serialize properly, while inline lambda expressions work
+  correctly. This is a key insight for future Flet development.
+  ─────────────────────────────────────────────────

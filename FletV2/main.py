@@ -35,30 +35,32 @@ sys.path.insert(0, project_root)
 # Use our custom theme system  
 from theme import setup_default_theme, toggle_theme_mode
 
-# Server bridge with fallback - MOCK BRIDGE PRIORITY FOR DEVELOPMENT
-# To use the real bridge, comment out the MockServerBridge import.
-USE_MOCK_BRIDGE = True
-
+# Enhanced Server Bridge with state management integration
+# Prioritize enhanced bridge with graceful fallback chain
 try:
-    if USE_MOCK_BRIDGE:
-        from utils.mock_server_bridge import MockServerBridge as ServerBridge
-        BRIDGE_TYPE = "MockServerBridge (Development)"
-        logger.info("Using MockServerBridge for standalone development.")
-    else:
-        raise ImportError("Skipping mock bridge to try real implementations.")
-except (ImportError, ModuleNotFoundError):
+    from utils.enhanced_server_bridge import EnhancedServerBridge as ServerBridge
+    BRIDGE_TYPE = "Enhanced Server Bridge (Production Ready)"
+    logger.info("Using Enhanced Server Bridge with state management integration.")
+except Exception as e:
+    logger.warning(f"Enhanced bridge failed: {e}, trying fallbacks...")
     try:
         from utils.server_bridge import ModularServerBridge as ServerBridge
-        BRIDGE_TYPE = "Full ModularServerBridge"
-    except Exception as e:
-        logger.warning(f"Failed to import ModularServerBridge: {e}")
+        BRIDGE_TYPE = "Full ModularServerBridge (Fallback)"
+    except Exception as e2:
+        logger.warning(f"Modular bridge failed: {e2}")
         try:
             from utils.simple_server_bridge import SimpleServerBridge as ServerBridge
-            BRIDGE_TYPE = "SimpleServerBridge (Fallback)"
-        except Exception as e2:
-            logger.error(f"Failed to import any server bridge: {e2}")
-            ServerBridge = None
-            BRIDGE_TYPE = "No Server Bridge"
+            BRIDGE_TYPE = "SimpleServerBridge (Final Fallback)"
+        except Exception as e3:
+            logger.error(f"All server bridges failed: {e3}")
+            # Import mock bridge as absolute last resort
+            try:
+                from utils.mock_server_bridge import MockServerBridge as ServerBridge
+                BRIDGE_TYPE = "MockServerBridge (Emergency Fallback)"
+            except Exception as e4:
+                logger.critical(f"Even mock bridge failed: {e4}")
+                ServerBridge = None
+                BRIDGE_TYPE = "No Server Bridge"
 
 
 class FletV2App(ft.Row):
@@ -80,7 +82,11 @@ class FletV2App(ft.Row):
         # Configure desktop window
         self._configure_desktop_window()
         
-        # Initialize server bridge with fallback asynchronously
+        # Initialize state manager for reactive UI updates
+        self.state_manager = None
+        self._initialize_state_manager()
+        
+        # Initialize server bridge with state integration asynchronously
         self.server_bridge = None
         page.run_task(self._initialize_server_bridge_async)
         
@@ -103,30 +109,66 @@ class FletV2App(ft.Row):
         page.on_connect = self._on_page_connect
         logger.info("Page connection handler set")
     
+    def _initialize_state_manager(self):
+        """Initialize state manager for reactive UI updates"""
+        try:
+            from utils.state_manager import create_state_manager
+            self.state_manager = create_state_manager(self.page)
+            logger.info("State manager initialized successfully")
+        except ImportError:
+            logger.warning("State manager not available, UI updates will be manual")
+            self.state_manager = None
+        except Exception as e:
+            logger.error(f"Failed to initialize state manager: {e}")
+            self.state_manager = None
+    
     async def _initialize_server_bridge_async(self):
-        """Asynchronously initialize server bridge to prevent UI blocking."""
+        """Asynchronously initialize server bridge with state integration."""
         try:
             if ServerBridge:
-                # Use MockBridge directly if it's the selected type
-                if BRIDGE_TYPE == "MockServerBridge (Development)":
-                    self.server_bridge = ServerBridge()
-                # For other bridges, attempt connection
-                elif BRIDGE_TYPE == "Full ModularServerBridge":
+                # Initialize bridge based on type
+                if BRIDGE_TYPE == "Enhanced Server Bridge (Production Ready)":
+                    # Enhanced bridge with automatic state integration
                     self.server_bridge = ServerBridge(host="127.0.0.1", port=1256)
-                    # Test connection asynchronously ONLY for real bridge
-                    self.page.run_thread(self.server_bridge._test_connection)
+                    
+                    # Connect state manager if available
+                    if self.state_manager:
+                        self.server_bridge.set_state_manager(self.state_manager)
+                        logger.info("Enhanced bridge connected to state manager")
+                    
+                    # Attempt async connection
+                    try:
+                        await self.server_bridge.connect()
+                        logger.info("Enhanced bridge connected successfully")
+                    except Exception as conn_e:
+                        logger.warning(f"Enhanced bridge connection failed, using mock mode: {conn_e}")
+                
+                elif "ModularServerBridge" in BRIDGE_TYPE:
+                    # Legacy modular bridge
+                    self.server_bridge = ServerBridge(host="127.0.0.1", port=1256)
+                    # Test connection in background thread for legacy bridge
+                    if hasattr(self.server_bridge, '_test_connection'):
+                        self.page.run_thread(self.server_bridge._test_connection)
+                
                 else:
-                    # For SimpleServerBridge or others, init directly
+                    # SimpleServerBridge, MockServerBridge, or others
                     self.server_bridge = ServerBridge()
+                
                 logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
             else:
                 self.server_bridge = None
                 logger.warning("No server bridge available")
+                
         except Exception as e:
-            logger.warning(f"Server bridge failed, falling back to mock: {e}")
-            from utils.mock_server_bridge import MockServerBridge
-            self.server_bridge = MockServerBridge()
-        # Bridge initialization complete
+            logger.error(f"Server bridge initialization failed: {e}")
+            # Emergency fallback to mock bridge
+            try:
+                from utils.mock_server_bridge import MockServerBridge
+                self.server_bridge = MockServerBridge()
+                logger.info("Using emergency mock bridge fallback")
+            except Exception as fallback_e:
+                logger.critical(f"Even mock bridge fallback failed: {fallback_e}")
+                self.server_bridge = None
     
     def _on_page_connect(self, e):
         """Called when page is connected - safe to load initial view."""
@@ -280,41 +322,41 @@ class FletV2App(ft.Row):
         logger.info("Theme toggled")
     
     def _load_view(self, view_name: str):
-        """Load view using simple function calls - no complex view managers."""
+        """Load view with enhanced infrastructure support and backward compatibility."""
         try:
-            # Simple view switching with direct function calls
+            # Enhanced view loading with state manager integration
             if view_name == "dashboard":
-                # Import and create dashboard view
+                # Import and create dashboard view with enhanced infrastructure
                 from views.dashboard import create_dashboard_view
-                content = create_dashboard_view(self.server_bridge, self.page)
+                content = self._create_enhanced_view(create_dashboard_view, view_name)
             elif view_name == "clients":
                 # Import and create clients view
                 from views.clients import create_clients_view
-                content = create_clients_view(self.server_bridge, self.page)
+                content = self._create_enhanced_view(create_clients_view, view_name)
             elif view_name == "files":
                 # Import and create files view
                 from views.files import create_files_view
-                content = create_files_view(self.server_bridge, self.page)
+                content = self._create_enhanced_view(create_files_view, view_name)
             elif view_name == "database":
                 # Import and create database view
                 from views.database import create_database_view
-                content = create_database_view(self.server_bridge, self.page)
+                content = self._create_enhanced_view(create_database_view, view_name)
             elif view_name == "analytics":
                 # Import and create analytics view
                 from views.analytics import create_analytics_view
-                content = create_analytics_view(self.server_bridge, self.page)
+                content = self._create_enhanced_view(create_analytics_view, view_name)
             elif view_name == "logs":
                 # Import and create logs view
                 from views.logs import create_logs_view
-                content = create_logs_view(self.server_bridge, self.page)
+                content = self._create_enhanced_view(create_logs_view, view_name)
             elif view_name == "settings":
                 # Import and create settings view
                 from views.settings import create_settings_view
-                content = create_settings_view(self.server_bridge, self.page)
+                content = self._create_enhanced_view(create_settings_view, view_name)
             else:
                 # Import and create dashboard view as fallback
                 from views.dashboard import create_dashboard_view
-                content = create_dashboard_view(self.server_bridge, self.page)
+                content = self._create_enhanced_view(create_dashboard_view, "dashboard")
             
             # Update content area (simple assignment, no complex managers)
             self.content_area.content = content
@@ -345,6 +387,41 @@ class FletV2App(ft.Row):
             # Only update if the control is attached to the page
             if self.page and hasattr(self.content_area, 'page') and self.content_area.page:
                 self.content_area.update()
+    
+    def _create_enhanced_view(self, view_function, view_name: str):
+        """Create view with enhanced infrastructure support and backward compatibility."""
+        import inspect
+        
+        try:
+            # Get function signature to determine parameter support
+            signature = inspect.signature(view_function)
+            param_names = list(signature.parameters.keys())
+            
+            # Update current view in state manager
+            if self.state_manager:
+                # Use run_task for async state update
+                async def update_current_view():
+                    await self.state_manager.update_state("current_view", view_name)
+                self.page.run_task(update_current_view)
+            
+            # Enhanced view creation: Try passing state_manager if function supports it
+            if len(param_names) >= 3 and 'state_manager' in param_names:
+                # Enhanced view with state manager support
+                logger.debug(f"Creating enhanced {view_name} view with state manager")
+                return view_function(self.server_bridge, self.page, state_manager=self.state_manager)
+            else:
+                # Legacy view - backward compatibility
+                logger.debug(f"Creating legacy {view_name} view without state manager")
+                return view_function(self.server_bridge, self.page)
+                
+        except Exception as e:
+            logger.error(f"Enhanced view creation failed for {view_name}: {e}", exc_info=True)
+            # Fallback to basic view creation
+            try:
+                return view_function(self.server_bridge, self.page)
+            except Exception as fallback_e:
+                logger.error(f"Even basic view creation failed for {view_name}: {fallback_e}", exc_info=True)
+                return self._create_error_view(f"Failed to create {view_name} view: {fallback_e}")
     
     def _create_error_view(self, error_message: str) -> ft.Control:
         """Simple error view for fallback."""

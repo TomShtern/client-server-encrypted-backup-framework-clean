@@ -10,15 +10,77 @@ This demonstrates proper Flet patterns with ACTUAL FUNCTIONALITY:
 """
 
 import flet as ft
+import asyncio
 from utils.debug_setup import get_logger
 from utils.user_feedback import show_success_message, show_error_message, show_info_message
 logger = get_logger(__name__)
 
 
-def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
+def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
     """
     Create a FULLY FUNCTIONAL clients view with working search, filters, and actions.
     """
+
+    # Simplified inline handler functions
+    def show_client_details_dialog(client_id):
+        """Show client details in a dialog"""
+        client = next((c for c in all_clients_data if str(c.get("client_id", "")) == client_id), None)
+        if not client:
+            logger.warning(f"Client {client_id} not found for details dialog")
+            return
+            
+        dialog = ft.AlertDialog(
+            title=ft.Text(f"Client Details: {client_id}"),
+            content=ft.Column([
+                ft.Text(f"Address: {client.get('address', 'Unknown')}"),
+                ft.Text(f"Status: {client.get('status', 'Unknown')}"),
+                ft.Text(f"Connected At: {client.get('connected_at', 'Never')}"),
+                ft.Text(f"Last Activity: {client.get('last_activity', 'Never')}")
+            ], spacing=10, tight=True),
+            actions=[
+                ft.TextButton("Close", icon=ft.Icons.CLOSE, 
+                             on_click=lambda e: [setattr(page, 'dialog', None), page.update()], 
+                             tooltip="Close client details")
+            ]
+        )
+        page.dialog = dialog
+        dialog.open = True
+        page.update()
+    
+    async def disconnect_client_async(client_id):
+        """Async disconnect client function"""
+        logger.info(f"Disconnecting client: {client_id}")
+        try:
+            # Show loading indicator
+            if client_id in disconnect_progress_refs and disconnect_progress_refs[client_id].current:
+                disconnect_progress_refs[client_id].current.visible = True
+                await disconnect_progress_refs[client_id].current.update_async()
+            
+            # Simulate disconnect operation
+            await asyncio.sleep(1.5)
+            logger.info(f"Client {client_id} disconnected successfully")
+            
+            # Show success message
+            page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Client {client_id} disconnected"),
+                bgcolor=ft.Colors.GREEN
+            )
+            page.snack_bar.open = True
+            page.update()
+            
+        except Exception as e:
+            logger.error(f"Failed to disconnect client {client_id}: {e}")
+            page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Failed to disconnect {client_id}: {str(e)}"),
+                bgcolor=ft.Colors.RED
+            )
+            page.snack_bar.open = True
+            page.update()
+        finally:
+            # Hide loading indicator
+            if client_id in disconnect_progress_refs and disconnect_progress_refs[client_id].current:
+                disconnect_progress_refs[client_id].current.visible = False
+                await disconnect_progress_refs[client_id].current.update_async()
 
     def get_semantic_status_color(status: str) -> str:
         """Get semantic color for client status indicators."""
@@ -32,12 +94,66 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
         else:
             return ft.Colors.GREY_600  # Unknown/default
 
-    # Get initial client data
-    # This view should be dumb - it relies on the bridge for data.
-    # The bridge (real or mock) is responsible for providing the data.
-    all_clients_data = server_bridge.get_clients() if server_bridge else []
-    if not all_clients_data:
-        logger.warning("Clients view received no data from the bridge.")
+    # Enhanced data loading with async support and state management
+    all_clients_data = []  # Will be loaded asynchronously
+    loading_state = {"is_loading": False}
+    
+    async def get_clients_data():
+        """Get clients data with proper async handling and caching"""
+        if state_manager:
+            # Try to get cached data first
+            cached_clients = state_manager.get_cached("clients", max_age_seconds=30)
+            if cached_clients:
+                logger.debug("Using cached clients data")
+                return cached_clients
+        
+        if server_bridge:
+            try:
+                logger.info("Loading clients data from server bridge...")
+                # Use async method for enhanced bridges
+                if hasattr(server_bridge, 'get_clients') and hasattr(server_bridge.get_clients, '__call__'):
+                    clients_data = await server_bridge.get_clients()
+                else:
+                    logger.warning("Server bridge doesn't have get_clients method")
+                    clients_data = []
+                
+                # Cache the data if state manager is available
+                if state_manager and clients_data:
+                    await state_manager.update_state("clients", clients_data)
+                    
+                logger.info(f"Loaded {len(clients_data)} clients")
+                return clients_data
+            except Exception as e:
+                logger.error(f"Failed to get clients data: {e}")
+                return []
+        else:
+            logger.warning("No server bridge available")
+            return []
+    
+    async def load_initial_data():
+        """Load initial data and update the view"""
+        nonlocal all_clients_data, loading_state
+        
+        if loading_state["is_loading"]:
+            return  # Already loading
+            
+        loading_state["is_loading"] = True
+        
+        try:
+            # Load data first
+            all_clients_data = await get_clients_data()
+            
+            # Update the table only if it's ready - don't force update if not mounted yet
+            try:
+                update_table()
+            except Exception as table_e:
+                logger.debug(f"Table not ready yet, will be updated when mounted: {table_e}")
+            
+        except Exception as e:
+            logger.error(f"Failed to load initial data: {e}")
+            show_error_message(page, f"Failed to load clients: {str(e)}")
+        finally:
+            loading_state["is_loading"] = False
 
         # State variables
     current_filter = "all"
@@ -158,9 +274,12 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
                         ft.Row([
                             ft.IconButton(
                                 icon=ft.Icons.INFO,
-                                tooltip="View Details",
+                                tooltip="View Details", 
                                 icon_size=16,
-                                on_click=create_view_details_handler(str(client.get("client_id", "")))
+                                on_click=lambda e, cid=str(client.get("client_id", "")): [
+                                    logger.info(f"INLINE HANDLER: View Details clicked for {cid}"),
+                                    show_client_details_dialog(cid)
+                                ]
                             ),
                             ft.Stack([
                                 ft.IconButton(
@@ -168,7 +287,10 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
                                     tooltip="Disconnect",
                                     icon_size=16,
                                     icon_color=ft.Colors.RED,
-                                    on_click=create_disconnect_handler(str(client.get("client_id", "")))
+                                    on_click=lambda e, cid=str(client.get("client_id", "")): [
+                                        logger.info(f"INLINE HANDLER: Disconnect clicked for {cid}"),
+                                        page.run_task(disconnect_client_async(cid))
+                                    ]
                                 ),
                                 ft.ProgressRing(
                                     ref=disconnect_progress_refs[client_id],
@@ -184,15 +306,21 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
             )
             new_rows.append(row)
 
-        # Update table - Check if the DataTable is attached to the page before updating
-        if clients_table_ref.current:
+        # Always update the table object first
+        clients_table.rows = new_rows
+        
+        # Update table ref if it exists - Check if the DataTable is attached to the page before updating
+        if (clients_table_ref.current and 
+            hasattr(clients_table_ref.current, 'page') and 
+            clients_table_ref.current.page is not None):
             # DataTable is attached to the page, safe to update
             clients_table_ref.current.rows = new_rows
-            clients_table_ref.current.update()
+            try:
+                clients_table_ref.current.update()
+            except Exception as update_error:
+                logger.debug(f"DataTable update failed, will retry on next update: {update_error}")
         else:
-            # DataTable is not yet attached to the page, just update the rows
-            # They will be displayed when the table is attached
-            clients_table.rows = new_rows
+            logger.debug("DataTable ref not ready yet, table will be updated when displayed")
 
         # Update display with empty state handling
         update_table_display()
@@ -212,6 +340,7 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
 
     def create_view_details_handler(client_id):
         def handler(e):
+            logger.info(f"BUTTON CLICK: View Details button clicked for client_id: {client_id}")
             logger.info(f"Viewing details for client: {client_id}")
             # Create a dialog with client details
             client = next((c for c in all_clients_data if str(c.get("client_id", "")) == client_id), None)
@@ -240,6 +369,7 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
 
     def create_disconnect_handler(client_id):
         def handler(e):
+            logger.info(f"BUTTON CLICK: Disconnect button clicked for client_id: {client_id}")
             logger.info(f"Disconnecting client: {client_id}")
 
             async def async_disconnect():
@@ -366,49 +496,36 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
         column_spacing=20
     )
 
-    # Populate initial table rows
-    for client in filter_clients():
-        # Status color based on client status - using semantic colors
-        status_color = get_semantic_status_color(str(client.get("status", "")))
-
-        row = ft.DataRow(
-            cells=[
-                ft.DataCell(ft.Text(str(client.get("client_id", "Unknown")))),
-                ft.DataCell(ft.Text(str(client.get("address", "Unknown")))),
-                ft.DataCell(
-                    ft.Container(
-                        content=ft.Text(
-                            str(client.get("status", "Unknown")),
-                            color=ft.Colors.WHITE,
-                            weight=ft.FontWeight.BOLD
-                        ),
-                        bgcolor=status_color,
-                        border_radius=4,
-                        padding=ft.Padding(8, 4, 8, 4)
-                    )
-                ),
-                ft.DataCell(ft.Text(str(client.get("connected_at", "Never")))),
-                ft.DataCell(ft.Text(str(client.get("last_activity", "Never")))),
-                ft.DataCell(
-                    ft.Row([
-                        ft.IconButton(
-                            icon=ft.Icons.INFO,
-                            tooltip="View Details",
-                            icon_size=16,
-                            on_click=create_view_details_handler(str(client.get("client_id", "")))
-                        ),
-                        ft.IconButton(
-                            icon=ft.Icons.POWER_OFF,
-                            tooltip="Disconnect",
-                            icon_size=16,
-                            icon_color=ft.Colors.RED,
-                            on_click=create_disconnect_handler(str(client.get("client_id", "")))
-                        )
-                    ], spacing=5)
-                )
-            ]
-        )
-        clients_table.rows.append(row)
+    # Initial table will be populated by load_initial_data()
+    # Add loading indicator
+    loading_indicator = ft.ProgressRing(visible=False)
+    
+    # Update refresh functionality to work with async loading
+    async def on_refresh_async():
+        """Async refresh handler"""
+        try:
+            loading_indicator.visible = True
+            loading_indicator.update()
+            
+            # Force reload data
+            nonlocal all_clients_data
+            all_clients_data = await get_clients_data()
+            update_table()
+            show_success_message(page, "Clients refreshed successfully!")
+            
+        except Exception as e:
+            logger.error(f"Failed to refresh clients: {e}")
+            show_error_message(page, f"Failed to refresh: {str(e)}")
+        finally:
+            loading_indicator.visible = False
+            loading_indicator.update()
+    
+    def on_refresh_click(e):
+        """Handle refresh button click"""
+        page.run_task(on_refresh_async)
+    
+    # Table will start empty and be populated by load_initial_data()
+    # This prevents the synchronous data loading issue
 
     # Create the main view - wrap Column in Container for padding
     view = ft.Container(
@@ -484,70 +601,81 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
 
             # Search and filter controls
             ft.Container(
-                content=ft.Row([
-                    ft.TextField(
-                        label="Search Clients",
-                        hint_text="Search by client ID or address...",
-                        prefix_icon=ft.Icons.SEARCH,
-                        suffix=ft.IconButton(
-                            icon=ft.Icons.CLEAR,
-                            tooltip="Clear search",
-                            icon_size=16,
-                            on_click=lambda e: on_clear_search()
-                        ),
-                        expand=True,
-                        on_change=on_search_change
-                    ),
-                    ft.Container(
-                        content=ft.Switch(
-                            label="Case sensitive",
-                            value=False,
-                            on_change=on_case_sensitive_toggle
-                        ),
-                        padding=ft.Padding(10, 0, 10, 0)
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.CLEAR,
-                        tooltip="Reset all filters",
-                        on_click=on_reset_filters
-                    ),
-                    ft.Dropdown(
-                        label="Filter by Status",
-                        value="all",
-                        options=[
-                            ft.dropdown.Option("all", "All Clients"),
-                            ft.dropdown.Option("connected", "Connected"),
-                            ft.dropdown.Option("registered", "Registered"),
-                            ft.dropdown.Option("offline", "Offline")
-                        ],
-                        expand=False,
-                        on_change=on_filter_change
-                    ),
-                    ft.Dropdown(
-                        label="Filter by Date",
-                        value="all",
-                        options=[
-                            ft.dropdown.Option("all", "All Dates"),
-                            ft.dropdown.Option("today", "Today"),
-                            ft.dropdown.Option("yesterday", "Yesterday"),
-                            ft.dropdown.Option("last_7_days", "Last 7 Days"),
-                            ft.dropdown.Option("last_30_days", "Last 30 Days")
-                        ],
-                        expand=False,
-                        on_change=on_date_filter_change
-                    ),
-                    ft.Dropdown(
-                        label="Filter by Connection",
-                        value="all",
-                        options=[
-                            ft.dropdown.Option("all", "All Connections"),
-                            ft.dropdown.Option("local", "Local Network"),
-                            ft.dropdown.Option("remote", "Remote")
-                        ],
-                        expand=False,
-                        on_change=on_connection_type_filter_change
-                    )
-                ], spacing=20, wrap=True),
+                content=ft.ResponsiveRow([
+                    ft.Column([
+                        ft.TextField(
+                            label="Search Clients",
+                            hint_text="Search by client ID or address...",
+                            prefix_icon=ft.Icons.SEARCH,
+                            suffix=ft.IconButton(
+                                icon=ft.Icons.CLEAR,
+                                tooltip="Clear search",
+                                icon_size=16,
+                                on_click=lambda e: on_clear_search()
+                            ),
+                            on_change=on_search_change
+                        )
+                    ], col={"sm": 12, "md": 6}),
+                    ft.Column([
+                        ft.Row([
+                            ft.Container(
+                                content=ft.Switch(
+                                    label="Case sensitive",
+                                    value=False,
+                                    on_change=on_case_sensitive_toggle
+                                ),
+                                padding=ft.Padding(10, 0, 10, 0)
+                            ),
+                            ft.IconButton(
+                                icon=ft.Icons.CLEAR,
+                                tooltip="Reset all filters",
+                                on_click=on_reset_filters
+                            )
+                        ])
+                    ], col={"sm": 12, "md": 6}),
+                    ft.Column([
+                        ft.Dropdown(
+                            label="Filter by Status",
+                            value="all",
+                            options=[
+                                ft.dropdown.Option("all", "All Clients"),
+                                ft.dropdown.Option("connected", "Connected"),
+                                ft.dropdown.Option("registered", "Registered"),
+                                ft.dropdown.Option("offline", "Offline")
+                            ],
+                            expand=True,
+                            on_change=on_filter_change
+                        )
+                    ], col={"sm": 12, "md": 4}),
+                    ft.Column([
+                        ft.Dropdown(
+                            label="Filter by Date",
+                            value="all",
+                            options=[
+                                ft.dropdown.Option("all", "All Dates"),
+                                ft.dropdown.Option("today", "Today"),
+                                ft.dropdown.Option("yesterday", "Yesterday"),
+                                ft.dropdown.Option("last_7_days", "Last 7 Days"),
+                                ft.dropdown.Option("last_30_days", "Last 30 Days")
+                            ],
+                            expand=True,
+                            on_change=on_date_filter_change
+                        )
+                    ], col={"sm": 12, "md": 4}),
+                    ft.Column([
+                        ft.Dropdown(
+                            label="Filter by Connection",
+                            value="all",
+                            options=[
+                                ft.dropdown.Option("all", "All Connections"),
+                                ft.dropdown.Option("local", "Local Network"),
+                                ft.dropdown.Option("remote", "Remote")
+                            ],
+                            expand=True,
+                            on_change=on_connection_type_filter_change
+                        )
+                    ], col={"sm": 12, "md": 4})
+                ]),
                 padding=ft.Padding(20, 0, 20, 10)
             ),
 
@@ -619,14 +747,24 @@ def create_clients_view(server_bridge, page: ft.Page) -> ft.Control:
                 )
             ], scroll=ft.ScrollMode.AUTO)
         else:
-            # Show table
-            table_container.content = ft.Column([clients_table_ref_local], scroll=ft.ScrollMode.AUTO)
-        table_container.update()
+            # Show table - use the actual table with current data
+            table_container.content = ft.Column([clients_table], scroll=ft.ScrollMode.AUTO)
+        
+        # Defensive update - only update if table_container is attached
+        try:
+            if (hasattr(table_container, 'page') and table_container.page is not None):
+                table_container.update()
+        except Exception as e:
+            logger.debug(f"Table container update failed, will retry: {e}")
+
+    # Add the table container to the view content
+    view.content.controls.append(table_container)
 
     # Also provide a trigger for manual loading if needed
     def trigger_initial_load():
         """Trigger initial data load manually."""
-        update_table()
+        logger.info("Triggering initial clients data load...")
+        page.run_task(load_initial_data)
 
     # Export the trigger function so it can be called externally
     view.trigger_initial_load = trigger_initial_load
