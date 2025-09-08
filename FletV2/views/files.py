@@ -695,7 +695,11 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     if files_data:
                         # Update state manager cache if available (for other purposes)
                         if state_manager:
-                            state_manager.update_state("files", files_data)
+                            try:
+                                # Use asyncio.create_task to avoid blocking and prevent async warning
+                                asyncio.create_task(state_manager.update_state("files", files_data))
+                            except Exception as state_error:
+                                logger.debug(f"State manager update failed (non-critical): {state_error}")
                         logger.debug(f"Retrieved {len(files_data)} files from server bridge")
                         return files_data
                 except Exception as e:
@@ -1320,9 +1324,15 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         
         # Force update the container - CRITICAL FIX for empty files display
         try:
-            # First try to update the container directly
-            table_container.update()
-            logger.debug("Table container updated successfully")
+            # Check if container is attached to page before updating
+            if hasattr(table_container, 'page') and table_container.page is not None:
+                table_container.update()
+                logger.debug("Table container updated successfully")
+            else:
+                # Container not yet attached to page, use page update as fallback
+                logger.debug("Table container not yet attached to page, using page update")
+                page.update()
+                logger.debug("Page update fallback successful")
         except Exception as e:
             logger.debug(f"Table container update failed: {e}")
             # Fallback to page update if container update fails

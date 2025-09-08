@@ -313,12 +313,18 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
         # FIXED: Use simple, reliable table update pattern
         clients_table.rows = new_rows
         
-        # Only update the reference if it exists and is ready
+        # Only update the reference if it exists and is properly attached to page
         if clients_table_ref.current is not None:
             try:
-                clients_table_ref.current.rows = new_rows
-                clients_table_ref.current.update()
-                logger.debug(f"Table updated successfully with {len(new_rows)} rows")
+                # Check if control is attached to page before updating
+                if hasattr(clients_table_ref.current, 'page') and clients_table_ref.current.page is not None:
+                    clients_table_ref.current.rows = new_rows
+                    clients_table_ref.current.update()
+                    logger.debug(f"Table updated successfully with {len(new_rows)} rows")
+                else:
+                    # Control not yet attached to page, just update the data
+                    clients_table_ref.current.rows = new_rows
+                    logger.debug(f"Table data updated (not yet attached to page), {len(new_rows)} rows")
             except Exception as update_error:
                 logger.warning(f"Table reference update failed: {update_error}")
                 # Table will still work, just update on next display

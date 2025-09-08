@@ -608,14 +608,22 @@ class FletV2App(ft.Row):
             animated_switcher = self.content_area.content
             animated_switcher.content = content
 
-            # Simple update - no complex error handling
+            # Smart update - check if control is attached to page before updating
             try:
-                animated_switcher.update()
-                logger.info(f"Successfully loaded {view_name} view")
+                # Verify AnimatedSwitcher is properly attached to page
+                if hasattr(animated_switcher, 'page') and animated_switcher.page is not None:
+                    animated_switcher.update()
+                    logger.info(f"Successfully loaded {view_name} view")
+                else:
+                    # Control not yet attached, use page update as fallback
+                    logger.debug("AnimatedSwitcher not yet attached to page, using page update")
+                    self.page.update()
+                    logger.info(f"Successfully loaded {view_name} view (page update fallback)")
             except Exception as update_error:
                 logger.warning(f"AnimatedSwitcher update failed, using page update: {update_error}")
                 try:
                     self.page.update()
+                    logger.info(f"Successfully loaded {view_name} view (page update fallback)")
                 except Exception as fallback_error:
                     logger.error(f"Page update also failed: {fallback_error}")
             

@@ -58,5 +58,6 @@
         "useLanguageServer": true,
         "maxCompletions": 5
     },
-    "python-envs.pythonProjects": []
+    "python-envs.pythonProjects": [],
+    "coderabbit.autoReviewMode": "auto"
 }

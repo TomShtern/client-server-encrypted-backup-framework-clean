@@ -1,6 +1,6 @@
 ---
 description: Essential AI development guidance for the encrypted backup framework
-globs: *
+applyTo: '**'
 ---
 
 # Copilot Instructions - Encrypted Backup Framework
