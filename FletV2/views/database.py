@@ -9,6 +9,7 @@ from typing import Dict, Any
 import asyncio
 import csv
 import os
+import aiofiles
 from utils.debug_setup import get_logger
 from utils.user_feedback import show_success_message, show_error_message, show_info_message
 from datetime import datetime
@@ -466,19 +467,19 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             progress_dialog.content.content.controls[2].controls[2] = progress_text
             page.update()
 
-            # Write CSV file with progress simulation
-            with open(export_path, 'w', newline='', encoding='utf-8') as csvfile:
-                writer = csv.writer(csvfile)
-
+            # Write CSV file with progress simulation using aiofiles
+            async with aiofiles.open(export_path, 'w', newline='', encoding='utf-8') as csvfile:
                 # Write header
-                writer.writerow(table_data["columns"])
+                header_line = ','.join(f'"{col}"' for col in table_data["columns"]) + '\n'
+                await csvfile.write(header_line)
                 progress_text.value = "Writing header..."
                 page.update()
 
                 # Write rows with progress updates
                 for i, row in enumerate(table_data["rows"]):
                     row_data = [str(row.get(col, "")) for col in table_data["columns"]]
-                    writer.writerow(row_data)
+                    row_line = ','.join(f'"{cell}"' for cell in row_data) + '\n'
+                    await csvfile.write(row_line)
 
                     # Update progress every 10% or so
                     if (i + 1) % max(1, total_rows // 10) == 0:

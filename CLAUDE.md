@@ -21,7 +21,7 @@ import Shared.utils.utf8_solution
 **Primary Directive**: Favor Flet's built-in features over custom, over-engineered solutions. Do not reinvent the wheel.
 
 #### **Scale Test**: 
-Be highly suspicious of any custom solution that exceeds 1000 lines. A 3000+ line custom system is an anti-pattern when a 50-250 line native Flet solution exists with full feature parity(or almost full parity).
+Be highly suspicious of any custom solution that exceeds 1000 lines. A 3000+ line custom system is an anti-pattern when a 50-450 line native Flet solution exists with full feature parity(or almost full parity).
 
 #### **Framework Fight Test**: 
 Work WITH the framework, not AGAINST it. If your solution feels complex, verbose, or like a struggle, you are fighting the framework. Stop and find the simpler, intended Flet way.
@@ -32,6 +32,44 @@ Work WITH the framework, not AGAINST it. If your solution feels complex, verbose
 - Can `control.update()` replace `page.update()`?
 - Does a standard Flet control already do 90% of what you need?
 
+
+### When going through massive logs:
+On-Disk + Grep/Awk Tools
+
+If you don’t want the overhead:
+ripgrep (rg) or ag (silversearcher) – insanely fast search in files.
+ast-grep – structured searching if logs have consistent format (JSON logs).
+fzf – fuzzy finder, useful when you know part of the error.
+Pipe logs through grep | tail -n 50 style workflows.
+
+🔹 Using ripgrep (rg)
+
+Fastest way to pull out the “couple of bad lines.”
+Find all ERROR lines:
+rg "ERROR" app.log
+Show 5 lines of context around each match:
+rg -C 5 "Exception" app.log
+Search across multiple logs at once:
+rg "timeout" /var/logs/
+Stream logs + highlight in real time:
+tail -f app.log | rg "ERROR"
+
+🔹 Using ast-grep
+
+Best if your logs are structured (e.g., JSON). Lets you query fields instead of regex spaghetti.
+Example log (JSON):
+{"level": "ERROR", "msg": "Database connection failed", "code": 500}
+Find all ERROR-level logs:
+sg -p ' { "level": "ERROR", ... } ' logs.json
+Find logs with specific error codes:
+sg -p ' { "code": 500, ... } ' logs.json
+Match only the message field:
+sg -p ' { "msg": $MSG } ' logs.json
+
+🚀 Pro tip
+Use ripgrep when you’re just scanning for keywords.
+Use ast-grep when your logs are JSON or structured, so you can surgically extract only what matters.
+Combine them with fzf (if you install it) for interactive filtering.
 ---
 
 ## ⚡ POWER DIRECTIVES: Maximum Impact Code Generation

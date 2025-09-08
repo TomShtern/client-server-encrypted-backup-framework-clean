@@ -165,7 +165,7 @@ class StateManager:
         if key in self.state and self.state[key] is not None:
             try:
                 if asyncio.iscoroutinefunction(callback_to_use):
-                    asyncio.create_task(callback_to_use(self.state[key], None))
+                    asyncio.get_event_loop().create_task(callback_to_use(self.state[key], None))
                 else:
                     callback_to_use(self.state[key], None)
             except Exception as e:

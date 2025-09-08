@@ -35,40 +35,10 @@ sys.path.insert(0, project_root)
 # Use our modern 2025 theme system with enhanced visuals
 from theme import setup_modern_theme, toggle_theme_mode
 
-# Unified Server Bridge with direct function calls and mock fallback
-try:
-    from utils.server_bridge import ServerBridge, create_server_bridge
-    BRIDGE_TYPE = "Unified Server Bridge (Direct Function Calls)"
-    logger.info("Using Unified Server Bridge with direct function calls and mock fallback.")
-except Exception as e:
-    logger.error(f"Failed to import unified server bridge: {e}")
-    # Fallback to simple bridge if available
-    try:
-        from utils.simple_server_bridge import SimpleServerBridge as ServerBridge
-        BRIDGE_TYPE = "Simple Server Bridge (Emergency Fallback)"
-        logger.warning("Using emergency fallback: Simple Server Bridge")
-    except Exception as e2:
-        logger.error(f"Simple server bridge also failed: {e2}")
-        # Import mock bridge as absolute last resort
-        try:
-            from utils.mock_server_bridge import MockServerBridge as ServerBridge
-            BRIDGE_TYPE = "MockServerBridge (Emergency Fallback)"
-            logger.warning("Using mock server bridge as final fallback")
-        except Exception as e3:
-            logger.critical(f"Even mock bridge failed: {e3}")
-            logger.critical("Creating minimal fallback bridge")
-            
-            # Create minimal working bridge class
-            class MinimalServerBridge:
-                def __init__(self): pass
-                def get_clients(self): return []
-                def get_files(self): return []
-                def get_server_status(self): return {"server_running": False, "error": "No bridge available"}
-                def delete_client(self, client_id): return False
-                def delete_file(self, file_id): return False
-                
-            ServerBridge = MinimalServerBridge
-            BRIDGE_TYPE = "Minimal Fallback Bridge"
+# Import the unified server bridge with built-in mock fallback
+from utils.server_bridge import ServerBridge, create_server_bridge
+BRIDGE_TYPE = "Unified Server Bridge (with built-in mock fallback)"
+logger.info("Using Unified Server Bridge with built-in mock fallback.")
 
 
 class FletV2App(ft.Row):
@@ -94,11 +64,11 @@ class FletV2App(ft.Row):
         self.state_manager = None
         self._initialize_state_manager()
         
-        # Initialize server bridge with state integration asynchronously
-        self.server_bridge = None
-        page.run_task(self._initialize_server_bridge_async)
+        # Initialize server bridge synchronously for immediate availability
+        self.server_bridge = create_server_bridge()  # Direct synchronous initialization
+        logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
         
-        # Create enhanced content area with smooth transitions using AnimatedSwitcher
+        # Create enhanced content area with sophisticated animated transitions
         self.content_area = ft.Container(
             expand=True,
             padding=ft.Padding(20, 16, 20, 16),  # Reduced padding for more content space
@@ -114,12 +84,16 @@ class FletV2App(ft.Row):
             animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),  # Faster, more efficient
             animate_opacity=ft.Animation(250, ft.AnimationCurve.EASE_OUT),
             content=ft.AnimatedSwitcher(
-                content=None,  # Start with None - will load dashboard immediately
-                transition=ft.AnimatedSwitcherTransition.FADE,  # Smooth fade transition
-                duration=300,  # Optimized duration
-                reverse_duration=200,
-                switch_in_curve=ft.AnimationCurve.EASE_OUT,
-                switch_out_curve=ft.AnimationCurve.EASE_IN,
+                content=ft.Container(  # Start with empty container instead of None
+                    content=ft.Text("Loading...", size=16),
+                    padding=20,
+                    expand=True
+                ),
+                transition=ft.AnimatedSwitcherTransition.SCALE,  # Enhanced scale transition
+                duration=400,  # Slightly longer for more noticeable effect
+                reverse_duration=300,
+                switch_in_curve=ft.AnimationCurve.EASE_OUT_BACK,  # Bouncy entrance
+                switch_out_curve=ft.AnimationCurve.EASE_IN,  # Smooth exit
                 expand=True
             )
         )
@@ -135,15 +109,27 @@ class FletV2App(ft.Row):
             self.content_area
         ]
         
-        # Initial view will be loaded after the control is added to the page
         # Set up page connection handler to load initial view
         logger.info("Setting up page connection handler")
         page.on_connect = self._on_page_connect
         
-        # Also ensure initial view loads after control is fully initialized
-        # Load dashboard immediately to prevent blank screen
-        self._load_view("dashboard")
-        logger.info("Initial dashboard loaded to prevent blank screen")
+        # Load dashboard immediately instead of waiting for page connection
+        logger.info("Loading initial dashboard view immediately")
+        try:
+            self._load_view("dashboard")
+            logger.info("Initial dashboard view loaded successfully")
+        except Exception as ex:
+            logger.error(f"Failed to load initial dashboard view: {ex}", exc_info=True)
+            # Fallback: show error in content area
+            try:
+                self.content_area.content.content = ft.Container(
+                    content=ft.Text(f"Failed to load dashboard: {ex}", color=ft.Colors.ERROR),
+                    padding=20,
+                    expand=True
+                )
+                self.content_area.content.update()
+            except Exception as fallback_ex:
+                logger.error(f"Even fallback failed: {fallback_ex}")
     
     def _initialize_state_manager(self):
         """Initialize state manager for reactive UI updates"""
@@ -158,65 +144,20 @@ class FletV2App(ft.Row):
             logger.error(f"Failed to initialize state manager: {e}")
             self.state_manager = None
     
-    async def _initialize_server_bridge_async(self):
-        """Asynchronously initialize unified server bridge."""
-        try:
-            if ServerBridge:
-                # For development: Initialize with no real server (fallback mode)
-                # For production: Pass real server instance
-                # Example production usage:
-                # from python_server.server import BackupServer
-                # real_server = BackupServer()
-                # self.server_bridge = ServerBridge(real_server)
-                
-                # Development mode: No real server, uses mock data
-                self.server_bridge = ServerBridge()  # Fallback mode
-                
-                # Connect state manager if available
-                if self.state_manager:
-                    # State manager integration will be handled by the bridge
-                    logger.info("State manager available for bridge integration")
-                
-                logger.info(f"Unified server bridge initialized: {BRIDGE_TYPE}")
-                logger.info("Bridge running in FALLBACK mode - using mock data for development")
-            else:
-                self.server_bridge = None
-                logger.warning("No server bridge available")
-                
-        except Exception as e:
-            logger.error(f"Server bridge initialization failed: {e}")
-            # Emergency fallback to mock bridge if available
-            try:
-                from utils.mock_server_bridge import MockServerBridge
-                self.server_bridge = MockServerBridge()
-                logger.info("Using emergency mock bridge fallback")
-            except Exception as fallback_e:
-                logger.critical(f"Even mock bridge fallback failed: {fallback_e}")
-                self.server_bridge = None
-    
     def _on_page_connect(self, e):
-        """Called when page is connected - safe to load initial view."""
-        logger.info("Page connected - loading initial dashboard view")
-        self._load_view("dashboard")
-        logger.info("Initial dashboard view loaded")
-    
-    async def _delayed_initial_load(self):
-        """Delayed initial load to ensure all controls are ready."""
-        # Small delay to ensure UI is fully initialized
-        await asyncio.sleep(0.1)
-        
-        # Access the actual NavigationRail from container
-        nav_rail_control = self.nav_rail.content
-        
-        # Ensure dashboard is selected and loaded
-        if nav_rail_control.selected_index == 0 and self.content_area.content is None:
-            logger.info("Delayed initial load - ensuring dashboard is loaded")
-            self._load_view("dashboard")
-            # Force update of content area
-            if self.content_area.page:
-                self.content_area.update()
-        
-        logger.info("Delayed initial load completed")
+        """Called when page is connected - handle reconnection scenarios."""
+        logger.info("Page connected event received")
+        # Dashboard is already loaded in constructor, but we can refresh if needed
+        try:
+            # Check if we need to refresh the current view
+            animated_switcher = self.content_area.content
+            if hasattr(animated_switcher, 'content') and animated_switcher.content:
+                current_content = animated_switcher.content
+                if hasattr(current_content, '_on_page_connect'):
+                    current_content._on_page_connect()
+                    logger.info("Current view page connect callback executed")
+        except Exception as callback_error:
+            logger.debug(f"Could not call view page connect callback: {callback_error}")
     
     def _configure_desktop_window(self):
         """Configure window for desktop application."""
@@ -433,141 +374,283 @@ class FletV2App(ft.Row):
         )
 
     def _toggle_navigation_rail(self, e=None):
-        """Toggle navigation rail between extended and collapsed states with smooth animation."""
+        """Toggle navigation rail between extended and collapsed states with enhanced smooth animation."""
         self.nav_rail_extended = not self.nav_rail_extended
         
         # Update the navigation rail extended state
         nav_rail_control = self.nav_rail.content
         nav_rail_control.extended = self.nav_rail_extended
         
-        # Update the toggle icon with animation
+        # Update the toggle icon with smooth rotation animation
         toggle_btn = nav_rail_control.leading.content
         toggle_btn.icon = ft.Icons.MENU_ROUNDED if self.nav_rail_extended else ft.Icons.MENU_OPEN_ROUNDED
         
-        # Smooth animation for the navigation rail
+        # Add subtle rotation animation to the toggle button
+        toggle_btn.rotate = ft.Rotate(0.5 if self.nav_rail_extended else 0)
+        toggle_btn.animate_rotation = ft.Animation(200, ft.AnimationCurve.EASE_OUT)
+        
+        # Smooth animation for the navigation rail with enhanced curves
+        self.nav_rail.animate = ft.Animation(250, ft.AnimationCurve.EASE_OUT_CUBIC)
         self.nav_rail.update()
         
-        logger.info(f"Navigation rail {'extended' if self.nav_rail_extended else 'collapsed'}")
+        logger.info(f"Navigation rail {'extended' if self.nav_rail_extended else 'collapsed'} with enhanced animation")
 
     def _on_navigation_change(self, e):
-        """Simple navigation callback - no complex routing."""
+        """Enhanced navigation callback with loading indicator and smooth transitions."""
         # Map index to view names
         view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
         selected_view = view_names[e.control.selected_index] if e.control.selected_index < len(view_names) else "dashboard"
         
-        logger.info(f"Navigation switching to: {selected_view}")
+        logger.info(f"Navigation switching to: {selected_view} with enhanced animation")
+        
+        # Show subtle loading indicator during transition
+        self._show_loading_indicator()
+        
+        # Load view with enhanced animation
         self._load_view(selected_view)
     
-    def _on_theme_toggle(self, e):
-        """Handle theme toggle button click."""
-        from theme import toggle_theme_mode
-        toggle_theme_mode(self.page)
-        logger.info("Theme toggled")
+    async def _on_theme_toggle(self, e):
+        """Handle theme toggle button click with smooth animation."""
+        try:
+            from theme import toggle_theme_mode
+            toggle_theme_mode(self.page)
+            
+            # Add subtle animation feedback to the toggle button
+            toggle_btn = e.control
+            original_icon = toggle_btn.icon
+            
+            # Quick scale animation for visual feedback
+            toggle_btn.scale = 0.9
+            toggle_btn.animate_scale = ft.Animation(100, ft.AnimationCurve.EASE_OUT)
+            toggle_btn.update()
+            
+            # Reset scale after animation using asyncio.sleep for proper timing
+            import asyncio
+            await asyncio.sleep(0.1)  # 100ms delay
+            
+            def reset_scale():
+                toggle_btn.scale = 1.0
+                toggle_btn.animate_scale = ft.Animation(100, ft.AnimationCurve.EASE_OUT)
+                toggle_btn.update()
+            
+            reset_scale()
+            
+            logger.info("Theme toggled successfully with animation feedback")
+            
+        except Exception as ex:
+            logger.error(f"Failed to toggle theme: {ex}", exc_info=True)
+            # Show error feedback
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Failed to toggle theme: {ex}"),
+                bgcolor=ft.Colors.ERROR,
+                duration=3000
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+    
+    def _show_loading_indicator(self):
+        """Show subtle loading indicator during view transitions."""
+        try:
+            # Create a subtle loading overlay
+            loading_content = ft.Container(
+                content=ft.Column([
+                    ft.Container(height=40),  # Spacer
+                    ft.ProgressRing(
+                        width=32,
+                        height=32,
+                        stroke_width=3,
+                        color=ft.Colors.PRIMARY,
+                        bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY)
+                    ),
+                    ft.Container(height=16),  # Spacer
+                    ft.Text(
+                        "Loading...",
+                        size=14,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        text_align=ft.TextAlign.CENTER
+                    )
+                ], 
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=0
+                ),
+                padding=20,
+                expand=True
+            )
+            
+            # Temporarily show loading indicator
+            animated_switcher = self.content_area.content
+            animated_switcher.content = loading_content
+            
+            # Defensive update for loading indicator
+            try:
+                if hasattr(self.page, 'controls') and self.page.controls:
+                    animated_switcher.update()
+                else:
+                    logger.debug("Page not ready for loading indicator update")
+            except Exception as update_error:
+                logger.debug(f"Loading indicator update failed: {update_error}")
+                # Don't fail the entire operation for loading indicator
+            
+        except Exception as e:
+            logger.debug(f"Could not show loading indicator: {e}")
+            # Continue without loading indicator if it fails
+    
+    def _set_animation_for_view(self, view_name: str):
+        """Dynamically set animation type and parameters based on view for enhanced UX."""
+        animated_switcher = self.content_area.content
+        
+        # Different animation styles for different views
+        if view_name == "dashboard":
+            # Dashboard: Scale with bounce for welcoming feel
+            animated_switcher.transition = ft.AnimatedSwitcherTransition.SCALE
+            animated_switcher.duration = 450
+            animated_switcher.reverse_duration = 350
+            animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT_BACK
+            animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN_OUT
+            
+        elif view_name == "clients":
+            # Clients: Slide from right for data flow feel
+            animated_switcher.transition = ft.AnimatedSwitcherTransition.SCALE
+            animated_switcher.duration = 400
+            animated_switcher.reverse_duration = 300
+            animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT_CUBIC
+            animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN_CUBIC
+            
+        elif view_name == "files":
+            # Files: Fade with elastic for file browsing feel
+            animated_switcher.transition = ft.AnimatedSwitcherTransition.FADE
+            animated_switcher.duration = 350
+            animated_switcher.reverse_duration = 250
+            animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT
+            animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN
+            
+        elif view_name == "database":
+            # Database: Scale with smooth curves for data stability
+            animated_switcher.transition = ft.AnimatedSwitcherTransition.SCALE
+            animated_switcher.duration = 500
+            animated_switcher.reverse_duration = 400
+            animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT_QUART
+            animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN_QUART
+            
+        elif view_name == "analytics":
+            # Analytics: Scale with bounce for dynamic data visualization
+            animated_switcher.transition = ft.AnimatedSwitcherTransition.SCALE
+            animated_switcher.duration = 420
+            animated_switcher.reverse_duration = 320
+            animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT_BACK
+            animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN_BACK
+            
+        elif view_name == "logs":
+            # Logs: Fade for quick transitions in log viewing
+            animated_switcher.transition = ft.AnimatedSwitcherTransition.FADE
+            animated_switcher.duration = 300
+            animated_switcher.reverse_duration = 200
+            animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT
+            animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN
+            
+        elif view_name == "settings":
+            # Settings: Scale with smooth transition for configuration feel
+            animated_switcher.transition = ft.AnimatedSwitcherTransition.SCALE
+            animated_switcher.duration = 380
+            animated_switcher.reverse_duration = 280
+            animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT_CUBIC
+            animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN_CUBIC
+        
+        logger.debug(f"Set animation for {view_name}: {animated_switcher.transition}, duration={animated_switcher.duration}ms")
     
     def _load_view(self, view_name: str):
-        """Load view with enhanced infrastructure support and backward compatibility."""
+        """Load view with enhanced infrastructure support and dynamic animated transitions."""
         try:
             # Enhanced view loading with state manager integration
             if view_name == "dashboard":
                 # Import and create dashboard view with enhanced infrastructure
                 from views.dashboard import create_dashboard_view
                 content = self._create_enhanced_view(create_dashboard_view, view_name)
+                self._set_animation_for_view("dashboard")
             elif view_name == "clients":
                 # Import and create clients view
                 from views.clients import create_clients_view
                 content = self._create_enhanced_view(create_clients_view, view_name)
+                self._set_animation_for_view("clients")
             elif view_name == "files":
                 # Import and create files view
                 from views.files import create_files_view
                 content = self._create_enhanced_view(create_files_view, view_name)
+                self._set_animation_for_view("files")
             elif view_name == "database":
                 # Import and create database view
                 from views.database import create_database_view
                 content = self._create_enhanced_view(create_database_view, view_name)
+                self._set_animation_for_view("database")
             elif view_name == "analytics":
                 # Import and create analytics view
                 from views.analytics import create_analytics_view
                 content = self._create_enhanced_view(create_analytics_view, view_name)
+                self._set_animation_for_view("analytics")
             elif view_name == "logs":
                 # Import and create logs view
                 from views.logs import create_logs_view
                 content = self._create_enhanced_view(create_logs_view, view_name)
+                self._set_animation_for_view("logs")
             elif view_name == "settings":
                 # Import and create settings view
                 from views.settings import create_settings_view
                 content = self._create_enhanced_view(create_settings_view, view_name)
+                self._set_animation_for_view("settings")
             else:
                 # Import and create dashboard view as fallback
                 from views.dashboard import create_dashboard_view
                 content = self._create_enhanced_view(create_dashboard_view, "dashboard")
+                self._set_animation_for_view("dashboard")
             
             # Update content area using AnimatedSwitcher for smooth transitions
             animated_switcher = self.content_area.content
             animated_switcher.content = content
-            
-            # Only update if the control is attached to the page
-            if self.page and hasattr(animated_switcher, 'page') and animated_switcher.page:
+
+            # Simple update - no complex error handling
+            try:
                 animated_switcher.update()
-                
-                # CRITICAL: Trigger initial load for views that need it (after mounting)
-                # First check if content has trigger_initial_load method
-                if hasattr(content, 'trigger_initial_load') and callable(content.trigger_initial_load):
-                    try:
-                        content.trigger_initial_load()
-                        logger.info(f"Triggered initial load for {view_name} view")
-                    except Exception as init_ex:
-                        logger.warning(f"Initial load trigger failed for {view_name}: {init_ex}")
-                # Also check if there's a specific trigger method for dashboard
-                elif view_name == "dashboard" and hasattr(content, 'trigger_initial_load'):
-                    try:
-                        content.trigger_initial_load()
-                        logger.info(f"Triggered initial load for {view_name} view (fallback)")
-                    except Exception as init_ex:
-                        logger.warning(f"Initial load trigger failed for {view_name}: {init_ex}")
+                logger.info(f"Successfully loaded {view_name} view")
+            except Exception as update_error:
+                logger.warning(f"AnimatedSwitcher update failed, using page update: {update_error}")
+                try:
+                    self.page.update()
+                except Exception as fallback_error:
+                    logger.error(f"Page update also failed: {fallback_error}")
             
         except Exception as e:
-            logger.error(f"Failed to load view {view_name}: {e}", exc_info=True)
-            # Fallback to simple error view
-            animated_switcher = self.content_area.content
-            animated_switcher.content = self._create_error_view(str(e))
-            # Only update if the control is attached to the page
-            if self.page and hasattr(animated_switcher, 'page') and animated_switcher.page:
+            logger.error(f"Failed to load view {view_name}: {e}")
+            # Simple error fallback
+            try:
+                animated_switcher = self.content_area.content
+                animated_switcher.content = self._create_error_view(str(e))
                 animated_switcher.update()
+            except Exception as fallback_error:
+                logger.error(f"Error view display failed: {fallback_error}")
+                # Last resort
+                try:
+                    self.page.update()
+                except Exception:
+                    pass
     
     def _create_enhanced_view(self, view_function, view_name: str):
-        """Create view with enhanced infrastructure support and backward compatibility."""
-        import inspect
-        
+        """Create view with simplified synchronous approach for better performance."""
         try:
-            # Get function signature to determine parameter support
-            signature = inspect.signature(view_function)
-            param_names = list(signature.parameters.keys())
-            
-            # Update current view in state manager
-            if self.state_manager:
-                # Use run_task for async state update
-                async def update_current_view():
-                    await self.state_manager.update_state("current_view", view_name)
-                self.page.run_task(update_current_view)
-            
-            # Enhanced view creation: Try passing state_manager if function supports it
-            if len(param_names) >= 3 and 'state_manager' in param_names:
-                # Enhanced view with state manager support
-                logger.debug(f"Creating enhanced {view_name} view with state manager")
-                return view_function(self.server_bridge, self.page, state_manager=self.state_manager)
-            else:
-                # Legacy view - backward compatibility
-                logger.debug(f"Creating legacy {view_name} view without state manager")
-                return view_function(self.server_bridge, self.page)
-                
-        except Exception as e:
-            logger.error(f"Enhanced view creation failed for {view_name}: {e}", exc_info=True)
-            # Fallback to basic view creation
+            # Simple synchronous view creation - no complex async handling
             try:
-                return view_function(self.server_bridge, self.page)
-            except Exception as fallback_e:
-                logger.error(f"Even basic view creation failed for {view_name}: {fallback_e}", exc_info=True)
-                return self._create_error_view(f"Failed to create {view_name} view: {fallback_e}")
+                # Try with state_manager first
+                result = view_function(self.server_bridge, self.page, state_manager=self.state_manager)
+            except TypeError:
+                # Fallback without state_manager
+                result = view_function(self.server_bridge, self.page)
+
+            # Return the result directly - no async detection or placeholder logic
+            return result
+
+        except Exception as e:
+            logger.error(f"View creation failed for {view_name}: {e}")
+            return self._create_error_view(f"Failed to create {view_name} view: {e}")
     
     def _create_error_view(self, error_message: str) -> ft.Control:
         """Simple error view for fallback."""
@@ -586,7 +669,7 @@ class FletV2App(ft.Row):
 
 
 # Simple application entry point
-def main(page: ft.Page):
+async def main(page: ft.Page):
     """Simple main function - no complex initialization."""
     try:
         # Create and add the simple desktop app
@@ -613,4 +696,4 @@ def main(page: ft.Page):
 
 if __name__ == "__main__":
     # Simple launch - let Flet handle the complexity
-    ft.app(target=main, view=ft.AppView.FLET_APP)
+    asyncio.run(ft.app_async(target=main, view=ft.AppView.FLET_APP))

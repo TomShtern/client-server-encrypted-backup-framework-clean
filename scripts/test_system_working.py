@@ -5,6 +5,8 @@ Test System Working - ASCII-only validation script
 """
 
 import socket
+import httpx
+import asyncio
 from pathlib import Path
 
 def test_port(port: int, name: str):
@@ -23,16 +25,16 @@ def test_port(port: int, name: str):
         print(f"[ERROR] {name} (port {port}): EXCEPTION - {str(e)}")
         return False
 
-def test_web_interface():
+async def test_web_interface():
     """Test if web interface is accessible"""
-    try:
-        import urllib.request
-        response = urllib.request.urlopen('http://127.0.0.1:9090/', timeout=5)
-        if response.getcode() == 200:
-            print("[OK] Web interface: ACCESSIBLE")
-            return True
-        else:
-            print(f"[ERROR] Web interface: HTTP {response.getcode()}")
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        try:
+            response = await client.get('http://127.0.0.1:9090/')
+            if response.status_code == 200:
+                print("[OK] Web interface: ACCESSIBLE")
+                return True
+            else:
+                print(f"[ERROR] Web interface: HTTP {response.status_code}")
             return False
     except Exception as e:
         print(f"[ERROR] Web interface: {str(e)}")
@@ -84,7 +86,7 @@ def create_test_file():
         print(f"[ERROR] Failed to create test file: {e}")
         return None
 
-def main():
+async def main():
     print("System Status Check - CyberBackup 3.0")
     print("=" * 50)
     
@@ -93,7 +95,7 @@ def main():
     api_running = test_port(9090, "API Server")
     
     # Test web interface
-    web_working = test_web_interface()
+    web_working = await test_web_interface()
     
     # Test file transfer setup
     client_ready = test_file_transfer_setup()
@@ -146,4 +148,4 @@ def main():
 
 if __name__ == "__main__":
     from datetime import datetime
-    main()
+    asyncio.run(main())

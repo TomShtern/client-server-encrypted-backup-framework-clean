@@ -2,13 +2,14 @@
 """
 Debug file transfer process step by step
 """
-import requests
+import httpx
 import os
 import tempfile
 import time
+import asyncio
 
 
-def debug_file_transfer():
+async def debug_file_transfer():
     print("=== FILE TRANSFER DEBUGGING ===")
     
     # Step 1: Create a small test file
@@ -22,12 +23,13 @@ def debug_file_transfer():
     print(f"   Size: {os.path.getsize(temp_file.name)} bytes")
     
     # Step 2: Check API server status
-    try:
-        response = requests.get("http://127.0.0.1:9090/api/status", timeout=5)
-        print(f"2. API Server status: {response.status_code}")
-        if response.status_code == 200:
-            status_data = response.json()
-            print(f"   Connected: {status_data.get('connected', 'unknown')}")
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        try:
+            response = await client.get("http://127.0.0.1:9090/api/status")
+            print(f"2. API Server status: {response.status_code}")
+            if response.status_code == 200:
+                status_data = response.json()
+                print(f"   Connected: {status_data.get('connected', 'unknown')}")
             print(f"   Status: {status_data.get('status', 'unknown')}")
         else:
             print(f"   Error: {response.text}")
@@ -61,8 +63,8 @@ def debug_file_transfer():
             print(f"   Username: {data['username']}")
             print(f"   Server: {data['server']}:{data['port']}")
             
-            response = requests.post("http://127.0.0.1:9090/api/start_backup", 
-                                   files=files, data=data, timeout=30)
+            response = await client.post("http://127.0.0.1:9090/api/start_backup", 
+                                       files=files, data=data, timeout=30)
             print(f"   Response: {response.status_code}")
             
             if response.status_code == 200:
@@ -75,7 +77,7 @@ def debug_file_transfer():
                     print("5. Monitoring progress...")
                     for _ in range(10):  # Check for 10 seconds
                         try:
-                            progress_response = requests.get(f"http://127.0.0.1:9090/api/status?job_id={result['job_id']}", timeout=5)
+                            progress_response = await client.get(f"http://127.0.0.1:9090/api/status?job_id={result['job_id']}", timeout=5)
                             if progress_response.status_code == 200:
                                 progress_data = progress_response.json()
                                 print(f"   Progress: {progress_data.get('progress', {}).get('percentage', 0)}% - {progress_data.get('message', 'No message')}")
@@ -131,4 +133,4 @@ def debug_file_transfer():
 
 if __name__ == "__main__":
     import time
-    debug_file_transfer()
+    asyncio.run(debug_file_transfer())

@@ -13,6 +13,7 @@ Design Principles:
 
 import asyncio
 from typing import Dict, List, Tuple, Optional, Any
+import aiofiles
 from utils.debug_setup import get_logger
 from utils.mock_data_generator import MockDataGenerator
 
@@ -264,13 +265,21 @@ class ServerBridge:
                 return self.real_server.download_file(file_id, destination_path)
             except Exception as e:
                 logger.error(f"Real server download_file failed: {e}")
-        
-        # Mock fallback
+
+        # Mock fallback - simulate download without blocking
         logger.debug(f"[ServerBridge] FALLBACK: Simulating download for file ID: {file_id} to {destination_path}")
-        # For mock mode, create a placeholder file
         try:
-            with open(destination_path, 'w') as f:
-                f.write(f"Mock file content for file ID: {file_id}")
+            # Use asyncio.create_task only if event loop exists, otherwise use synchronous approach
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self._write_mock_file_async(file_id, destination_path))
+            except RuntimeError:
+                # No running event loop, use synchronous approach
+                import threading
+                threading.Thread(
+                    target=lambda: asyncio.run(self._write_mock_file_async(file_id, destination_path)),
+                    daemon=True
+                ).start()
             return True
         except Exception as e:
             logger.error(f"Mock download failed: {e}")
@@ -286,8 +295,18 @@ class ServerBridge:
         
         # Mock fallback
         logger.debug(f"[ServerBridge] FALLBACK: Simulating async download for file ID: {file_id}")
-        await asyncio.sleep(1)  # Simulate download time
-        return self.download_file(file_id, destination_path)
+        await asyncio.sleep(0.001)  # Minimal delay for UI responsiveness
+        await self._write_mock_file_async(file_id, destination_path)
+        return True
+    
+    async def _write_mock_file_async(self, file_id: str, destination_path: str) -> None:
+        """Async helper to write mock file content without blocking."""
+        try:
+            async with aiofiles.open(destination_path, 'w') as f:
+                await f.write(f"Mock file content for file ID: {file_id}")
+            logger.debug(f"Mock file written successfully to {destination_path}")
+        except Exception as e:
+            logger.error(f"Async mock file write failed: {e}")
     
     def verify_file(self, file_id: str) -> bool:
         """Verify file integrity."""
@@ -311,7 +330,7 @@ class ServerBridge:
         
         # Mock fallback
         logger.debug(f"[ServerBridge] FALLBACK: Simulating async verify for file ID: {file_id}")
-        await asyncio.sleep(0.5)  # Simulate verification time
+        await asyncio.sleep(0.001)  # Minimal delay for UI responsiveness
         return True
     
     # --- Server Status and Monitoring ---

@@ -24,9 +24,61 @@ This is a **5-component encrypted backup framework**:
 └─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
 
+### When going through massive logs:
+🔹 On-Disk + Grep/Awk Tools
+If you don’t want the overhead:
+ripgrep (rg) or ag (silversearcher) – insanely fast search in files.
+ast-grep – structured searching if logs have consistent format (JSON logs).
+fzf – fuzzy finder, useful when you know part of the error.
+Pipe logs through grep | tail -n 50 style workflows.
+
+🔹 Using ripgrep (rg)
+Fastest way to pull out the “couple of bad lines.”
+Find all ERROR lines:
+rg "ERROR" app.log
+Show 5 lines of context around each match:
+rg -C 5 "Exception" app.log
+Search across multiple logs at once:
+rg "timeout" /var/logs/
+Stream logs + highlight in real time:
+tail -f app.log | rg "ERROR"
+
+🔹 Using ast-grep
+Best if your logs are structured (e.g., JSON). Lets you query fields instead of regex spaghetti.
+Example log (JSON):
+{"level": "ERROR", "msg": "Database connection failed", "code": 500}
+Find all ERROR-level logs:
+sg -p ' { "level": "ERROR", ... } ' logs.json
+Find logs with specific error codes:
+sg -p ' { "code": 500, ... } ' logs.json
+Match only the message field:
+sg -p ' { "msg": $MSG } ' logs.json
+
+🚀 Pro tip
+Use ripgrep when you’re just scanning for keywords.
+Use ast-grep when your logs are JSON or structured, so you can surgically extract only what matters.
+Combine them with fzf (if you install it) for interactive filtering.
+
+
+
 **Encryption**: RSA-1024 key exchange + AES-256-CBC file encryption
 **Database**: SQLite3 with clients, files, logs tables
 **Communication**: Socket-based with JSON protocol
+
+## 🚨 CRITICAL STARTUP ISSUE ALERT
+
+**⚠️ STARTUP PROBLEM NOT FIXED**: The FletV2 application currently hangs on a "Loading..." screen at startup. The dashboard only appears after manual navigation. This is the PRIMARY issue that needs to be resolved.
+
+**Previous Attempts**: 
+- ✅ Made main function async (Flet 0.21.0+ requirement)
+- ✅ Simplified `_create_enhanced_view` method
+- ❌ **ISSUE PERSISTS** - Loading screen still appears
+
+**Root Cause**: Complex async detection in `_create_enhanced_view` method incorrectly treats synchronous view functions as async, causing placeholder display.
+
+**Reference**: See `important_docs/new_agent_onboarding.md` for comprehensive context and mission objectives.
+
+---
 
 ## 🎯 Primary Development Directory
 
@@ -40,12 +92,14 @@ This is a **5-component encrypted backup framework**:
 # FletV2 Development (Hot Reload)
 cd FletV2 && flet run -r main.py
 
-# FletV2 Production
+# FletV2 Production (ASYNC REQUIRED - Flet 0.21.0+)
 cd FletV2 && python main.py
 
 # System Integration Testing
 python scripts/one_click_build_and_run.py
 ```
+
+**CRITICAL**: Main function must be `async def main(page: ft.Page)` and use `asyncio.run(ft.app_async(target=main, view=ft.AppView.FLET_APP))`
 
 ## 📁 Key Directories & Files
 
@@ -60,6 +114,7 @@ FletV2/                           # Desktop GUI (PRIMARY)
 │   └── database.py               # Database viewer
 └── utils/                        # Helper utilities
     ├── server_bridge.py          # Server communication
+    ├── debug_setup.py            # Enhanced terminal debugging
     └── utf8_solution.py          # UTF-8 handling
 
 python_server/                    # Backend server
@@ -82,11 +137,28 @@ scripts/                          # Automation tools
 import Shared.utils.utf8_solution
 ```
 
+### **Enhanced Debugging Setup**
+```python
+# ALWAYS use at the top of main.py and other entry points
+from utils.debug_setup import setup_terminal_debugging, get_logger
+logger = setup_terminal_debugging(logger_name="YourModuleName")
+```
+
 ### **Server Bridge Pattern**
 ```python
 # Enhanced bridge with fallback
-from utils.server_bridge import ServerBridge
-bridge = ServerBridge(real_server_instance=None)  # Auto-fallback to mock
+from utils.server_bridge import ServerBridge, create_server_bridge
+BRIDGE_TYPE = "Unified Server Bridge (with built-in mock fallback)"
+```
+
+### **State Management System**
+```python
+# Reactive UI updates with real-time subscriptions
+from utils.state_manager import StateManager, create_state_manager
+state_manager = create_state_manager(page)
+
+# Subscribe to real-time updates
+state_manager.subscribe("server_status", callback_function)
 ```
 
 ### **File Size Guidelines**
@@ -119,6 +191,14 @@ bridge = ServerBridge(real_server_instance=None)  # Auto-fallback to mock
 2. Test with mock data (automatic fallback)
 3. Integration test with full system
 4. Reference `CLAUDE.md` for detailed Flet guidance
+5. **CRITICAL**: Read `important_docs/new_agent_onboarding.md` for comprehensive project context and startup problem analysis
+
+### **Documentation Resources**
+- `important_docs/new_agent_onboarding.md` - **CRITICAL**: Complete context for new agents, startup problem analysis
+- `important_docs/FletV2_Architecture_Blueprint.md` - System design and architecture
+- `important_docs/FletV2_Infrastructure_Enhancement_Summary.md` - Recent improvements
+- `important_docs/FletV2_Issues.md` - Known problems and solutions
+- `important_docs/Consolidated_Context7_Flet_Desktop_Framework.md` - Framework guide
 
 ## 💡 Quick Reference
 
@@ -128,6 +208,8 @@ bridge = ServerBridge(real_server_instance=None)  # Auto-fallback to mock
 - **Navigation**: `ft.NavigationRail` with 7 destinations
 - **Data**: Server bridge with automatic mock fallback
 - **Encryption**: RSA + AES for secure file transfer
+- **Documentation**: See `important_docs/new_agent_onboarding.md` for comprehensive context
+- **Startup Issue**: App hangs on loading screen - PRIMARY issue to resolve
 
 Follow these patterns for consistent, maintainable code that works with the framework rather than against it.
 
@@ -179,6 +261,16 @@ You have access to ast-grep for syntax-aware searching:
 - **Fallback to ripgrep**: Only when ast-grep isn't applicable
 - **Never use basic grep**: ripgrep is always better for codebase searches (basic grep when other tools fail)
 
+### **Sequential Thinking Tool**
+For complex problem analysis and systematic debugging:
+```python
+# Use sequential thinking for:
+# - Startup problem diagnosis
+# - Complex refactoring analysis
+# - Multi-step problem solving
+# - Architectural decision making
+```
+
 ---
 
 ## 💡 KEY INSIGHTS
@@ -188,6 +280,8 @@ You have access to ast-grep for syntax-aware searching:
 **★ The Semi-Nuclear Protocol**: When refactoring complex code, analyze first to understand TRUE intentions, then rebuild with simple Flet patterns while preserving valuable business logic, achieving feature parity.
 
 **★ Performance Secret**: Replacing `page.update()` with `control.update()` can improve performance by 10x+ and eliminate UI flicker.
+
+**★ Flet Version Requirements**: Flet 0.21.0+ is required for async-first architecture. Main function must be async and use `asyncio.run(ft.app_async())`.
 
 **The FletV2 directory is the CANONICAL REFERENCE** for proper Flet desktop development. When in doubt, follow its examples exactly.
 
@@ -213,3 +307,9 @@ To ensure VS Code uses the correct Python interpreter for the FletV2 project, se
     // ...existing code...
 }
 ```
+
+---
+
+**Last Updated**: September 8, 2025  
+**Project Status**: FletV2 startup issue persists - loading screen problem not resolved  
+**Priority**: Fix startup loading screen as primary objective

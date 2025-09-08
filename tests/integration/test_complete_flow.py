@@ -25,7 +25,7 @@ import time
 import tempfile
 import subprocess
 import threading
-import requests
+import httpx
 import json
 import hashlib
 import shutil
@@ -233,19 +233,20 @@ class IntegrationTestFramework:
             time.sleep(0.5)
         return False
     
-    def _verify_server_health(self) -> bool:
+    async def _verify_server_health(self) -> bool:
         """Verify both servers are healthy"""
         try:
             # Check API server health
-            response = requests.get(f"{self.api_base_url}/health", timeout=5)
-            if response.status_code != 200:
-                return False
-            
-            health_data = response.json()
-            if health_data.get('status') != 'healthy':
-                self.logger.warning(f"API server health check: {health_data}")
-                return False
-            
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{self.api_base_url}/health")
+                if response.status_code != 200:
+                    return False
+
+                health_data = response.json()
+                if health_data.get('status') != 'healthy':
+                    self.logger.warning(f"API server health check: {health_data}")
+                    return False
+
             return True
             
         except Exception as e:

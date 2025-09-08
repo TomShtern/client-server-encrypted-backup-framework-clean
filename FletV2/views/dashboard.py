@@ -283,33 +283,15 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
     async def update_dashboard_ui():
         """Update dashboard UI with current data using enhanced infrastructure."""
         try:
-            # Get current data (now async)
-            server_status_task = get_server_status()
-            system_metrics_task = get_system_metrics()
-            recent_activity_task = asyncio.create_task(
-                asyncio.coroutine(get_recent_activity)() if asyncio.iscoroutinefunction(get_recent_activity) 
-                else asyncio.to_thread(get_recent_activity)
-            )
+            # Get current data with simplified async pattern (reduce blocking)
+            server_status = await get_server_status()
+            system_metrics = await get_system_metrics()
             
-            # Wait for all data concurrently for better performance
-            server_status, system_metrics, recent_activity = await asyncio.gather(
-                server_status_task,
-                system_metrics_task, 
-                recent_activity_task,
-                return_exceptions=True
-            )
-            
-            # Handle exceptions gracefully
-            if isinstance(server_status, Exception):
-                logger.error(f"Failed to get server status: {server_status}")
-                server_status = {"server_running": False, "uptime": "Unknown", "active_clients": 0, "total_transfers": 0}
-            
-            if isinstance(system_metrics, Exception):
-                logger.error(f"Failed to get system metrics: {system_metrics}")
-                system_metrics = {'cpu_usage': 0.0, 'memory_usage': 0.0, 'disk_usage': 0.0}
-                
-            if isinstance(recent_activity, Exception):
-                logger.error(f"Failed to get recent activity: {recent_activity}")
+            # Get recent activity synchronously to avoid complex async coordination
+            try:
+                recent_activity = get_recent_activity()
+            except Exception as e:
+                logger.error(f"Failed to get recent activity: {e}")
                 recent_activity = []
 
             # Update server status (KEEP - requires dynamic styling) - using semantic colors
@@ -417,7 +399,7 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
                 e.control.disabled = False
                 e.control.update()
 
-        page.run_task(async_start)
+        e.page.run_task(async_start)
 
     def on_stop_server(e):
         """Handle stop server button click with enhanced infrastructure"""
@@ -455,7 +437,7 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
                 e.control.disabled = False
                 e.control.update()
 
-        page.run_task(async_stop)
+        e.page.run_task(async_stop)
 
     def on_refresh_dashboard(e):
         """Handle refresh dashboard button click with enhanced infrastructure"""
@@ -481,7 +463,7 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
                 e.control.disabled = False
                 e.control.update()
 
-        page.run_task(async_refresh)
+        e.page.run_task(async_refresh)
 
     def on_backup_now(e):
         """Handle backup now button click with enhanced infrastructure"""
@@ -519,7 +501,7 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
                 e.control.disabled = False
                 e.control.update()
 
-        page.run_task(async_backup)
+        e.page.run_task(async_backup)
 
 
     # Create server status cards with sophisticated animations
@@ -1324,7 +1306,26 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
 
     # Initialize dashboard and set up subscriptions
     setup_realtime_subscriptions()
-    page.run_task(initialize_dashboard)
+    
+    # Defer async initialization until page is connected
+    # Set up a callback to be called when page connects
+    def on_page_connect():
+        """Called when page is connected - safe to start async operations."""
+        try:
+            if hasattr(page, 'run_task') and callable(page.run_task):
+                page.run_task(initialize_dashboard)
+            else:
+                # Fallback: try to get running loop and create task
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(initialize_dashboard())
+                except RuntimeError:
+                    logger.warning("No running event loop available for dashboard initialization")
+        except Exception as schedule_err:
+            logger.error(f"Failed to schedule dashboard initialization: {schedule_err}")
+    
+    # Store the callback for later use
+    main_view._on_page_connect = on_page_connect
 
     # Return the main view with enhanced infrastructure
     return main_view

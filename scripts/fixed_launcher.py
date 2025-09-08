@@ -25,6 +25,7 @@ import time
 import socket
 import logging
 import subprocess
+import asyncio
 from pathlib import Path
 
 # Enable global UTF-8 support automatically (replaces all manual UTF-8 setup)

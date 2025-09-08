@@ -8,6 +8,7 @@ import flet as ft
 from typing import List, Dict, Any
 import os
 import asyncio
+import aiofiles
 from datetime import datetime, timedelta
 from pathlib import Path
 from utils.debug_setup import get_logger
@@ -29,6 +30,15 @@ def download_file_action(file_data, page):
     file_size = file_data.get('size', 0)
     logger.info(f"Download file action for: {file_name}")
     
+    # Create async task to avoid blocking the UI
+    page.run_task(_download_file_async(file_data, page))
+
+async def _download_file_async(file_data, page):
+    """Async helper for file download to avoid blocking UI."""
+    file_name = file_data.get('name', 'Unknown file')
+    file_path = file_data.get('path', '')
+    file_size = file_data.get('size', 0)
+    
     try:
         downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
         if not os.path.exists(downloads_dir):
@@ -39,9 +49,9 @@ def download_file_action(file_data, page):
         
         # Check if file exists and is readable
         if file_path and file_path != "mock" and os.path.exists(file_path):
-            # Real file copy operation
+            # Real file copy operation - use async
             import shutil
-            shutil.copy2(file_path, destination_path)
+            await asyncio.get_event_loop().run_in_executor(None, shutil.copy2, file_path, destination_path)
             
             show_success_message(page, f"File {file_name} downloaded to Downloads folder")
             file_action_feedback_text.value = f"Downloaded {file_name} ({file_size} bytes)"
@@ -49,14 +59,14 @@ def download_file_action(file_data, page):
             logger.info(f"File copied from {file_path} to {destination_path}")
             
         else:
-            # For mock data - create a simple text file as placeholder
+            # For mock data - create a simple text file as placeholder using aiofiles
             mock_content = f"""Mock file: {file_name}
 Original path: {file_path}
 Size: {file_size} bytes
 Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
             
-            with open(destination_path, 'w', encoding='utf-8') as f:
-                f.write(mock_content)
+            async with aiofiles.open(destination_path, 'w', encoding='utf-8') as f:
+                await f.write(mock_content)
             
             show_success_message(page, f"Mock download: {file_name} created in Downloads")
             file_action_feedback_text.value = f"Mock download: {file_name}"
@@ -85,13 +95,22 @@ def verify_file_action(file_data, page):
     file_path = file_data.get('path', '')
     file_size_reported = file_data.get('size', 0)
     logger.info(f"Verify file action for: {file_name}")
+    
+    # Create async task to avoid blocking the UI
+    page.run_task(_verify_file_async(file_data, page))
 
+async def _verify_file_async(file_data, page):
+    """Async helper for file verification to avoid blocking UI."""
+    file_name = file_data.get('name', 'Unknown file')
+    file_path = file_data.get('path', '')
+    file_size_reported = file_data.get('size', 0)
+    
     try:
         # Check if this is a real file path or mock data
         if file_path and file_path != "mock" and os.path.exists(file_path):
-            # Get file stats with enhanced error handling
+            # Get file stats with enhanced error handling - use async executor
             try:
-                stat = os.stat(file_path)
+                stat = await asyncio.get_event_loop().run_in_executor(None, os.stat, file_path)
                 actual_file_size = stat.st_size
                 modified_time = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
                 
@@ -104,16 +123,19 @@ def verify_file_action(file_data, page):
                 show_error_message(page, f"Cannot access file {file_name}: {stat_error}")
                 return
 
-            # Calculate file hash for verification with progress indication
+            # Calculate file hash for verification with progress indication - use async
             try:
                 import hashlib
                 hash_md5 = hashlib.md5()
                 hash_sha256 = hashlib.sha256()
                 
-                with open(file_path, "rb") as f:
-                    for chunk in iter(lambda: f.read(4096), b""):
+                # Use aiofiles for async file reading
+                async with aiofiles.open(file_path, "rb") as f:
+                    chunk = await f.read(4096)
+                    while chunk:
                         hash_md5.update(chunk)
                         hash_sha256.update(chunk)
+                        chunk = await f.read(4096)
                 
                 md5_hash = hash_md5.hexdigest()
                 sha256_hash = hash_sha256.hexdigest()
