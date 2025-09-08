@@ -32,8 +32,8 @@ import Shared.utils.utf8_solution
 project_root = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, project_root)
 
-# Use our custom theme system  
-from theme import setup_default_theme, toggle_theme_mode
+# Use our modern 2025 theme system with enhanced visuals
+from theme import setup_modern_theme, toggle_theme_mode
 
 # Unified Server Bridge with direct function calls and mock fallback
 try:
@@ -98,16 +98,40 @@ class FletV2App(ft.Row):
         self.server_bridge = None
         page.run_task(self._initialize_server_bridge_async)
         
-        # Create content area
-        self.content_area = ft.Container(expand=True)
+        # Create enhanced content area with smooth transitions using AnimatedSwitcher
+        self.content_area = ft.Container(
+            expand=True,
+            padding=ft.Padding(20, 16, 20, 16),  # Reduced padding for more content space
+            border_radius=ft.BorderRadius(12, 0, 0, 12),  # Slightly smaller radius
+            bgcolor=ft.Colors.with_opacity(0.015, ft.Colors.PRIMARY),  # More subtle background
+            # Add modern visual depth with subtle shadow
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=8,
+                color=ft.Colors.with_opacity(0.06, ft.Colors.BLACK),
+                offset=ft.Offset(0, 2),
+            ),
+            animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),  # Faster, more efficient
+            animate_opacity=ft.Animation(250, ft.AnimationCurve.EASE_OUT),
+            content=ft.AnimatedSwitcher(
+                content=None,  # Start with None - will load dashboard immediately
+                transition=ft.AnimatedSwitcherTransition.FADE,  # Smooth fade transition
+                duration=300,  # Optimized duration
+                reverse_duration=200,
+                switch_in_curve=ft.AnimationCurve.EASE_OUT,
+                switch_out_curve=ft.AnimationCurve.EASE_IN,
+                expand=True
+            )
+        )
         
-        # Create navigation rail (using simple approach)
+        # Create navigation rail (using simple approach with collapsible functionality)
+        self.nav_rail_extended = True  # Track extended state
         self.nav_rail = self._create_navigation_rail()
         
         # Build layout: NavigationRail + content area (pure Flet pattern)
         self.controls = [
             self.nav_rail,
-            ft.VerticalDivider(width=1),
+            ft.VerticalDivider(width=1, color=ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)),
             self.content_area
         ]
         
@@ -117,9 +141,9 @@ class FletV2App(ft.Row):
         page.on_connect = self._on_page_connect
         
         # Also ensure initial view loads after control is fully initialized
-        # Use a small delay to ensure all controls are ready
-        page.run_task(self._delayed_initial_load)
-        logger.info("Page connection handler set")
+        # Load dashboard immediately to prevent blank screen
+        self._load_view("dashboard")
+        logger.info("Initial dashboard loaded to prevent blank screen")
     
     def _initialize_state_manager(self):
         """Initialize state manager for reactive UI updates"""
@@ -181,8 +205,11 @@ class FletV2App(ft.Row):
         # Small delay to ensure UI is fully initialized
         await asyncio.sleep(0.1)
         
+        # Access the actual NavigationRail from container
+        nav_rail_control = self.nav_rail.content
+        
         # Ensure dashboard is selected and loaded
-        if self.nav_rail.selected_index == 0 and self.content_area.content is None:
+        if nav_rail_control.selected_index == 0 and self.content_area.content is None:
             logger.info("Delayed initial load - ensuring dashboard is loaded")
             self._load_view("dashboard")
             # Force update of content area
@@ -201,10 +228,13 @@ class FletV2App(ft.Row):
         self.page.window_resizable = True
         self.page.title = "Backup Server Management"
         
-        # Apply theme from theme.py (source of truth)
-        setup_default_theme(self.page)
+        # Apply 2025 modern theme with vibrant colors and enhanced effects
+        setup_modern_theme(self.page)
         
-        # Set desktop-appropriate padding
+        # Add performance optimizations - Visual Density for reduced spacing
+        self.page.theme.visual_density = ft.VisualDensity.COMPACT
+        
+        # Set desktop-appropriate padding (reduced for more content space)
         self.page.padding = ft.Padding(0, 0, 0, 0)
         
         # Set up keyboard shortcuts
@@ -256,8 +286,9 @@ class FletV2App(ft.Row):
     
     def _refresh_current_view(self):
         """Refresh the currently active view."""
-        # Fixed: self.navigation_rail -> self.nav_rail (attribute name consistency)
-        current_index = self.nav_rail.selected_index
+        # Access NavigationRail through container content
+        nav_rail_control = self.nav_rail.content
+        current_index = nav_rail_control.selected_index
         view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
         if current_index < len(view_names):
             current_view = view_names[current_index]
@@ -266,61 +297,158 @@ class FletV2App(ft.Row):
     
     def _switch_to_view(self, index: int):
         """Switch to a specific view by index."""
-        # Fixed: self.navigation_rail -> self.nav_rail (attribute name consistency) 
-        self.nav_rail.selected_index = index
-        self._on_navigation_change(type('Event', (), {'control': self.nav_rail})())
+        # Access NavigationRail through container content
+        nav_rail_control = self.nav_rail.content
+        nav_rail_control.selected_index = index
+        self._on_navigation_change(type('Event', (), {'control': nav_rail_control})())
     
     def _create_navigation_rail(self):
-        """Create simple navigation rail."""
-        return ft.NavigationRail(
-            selected_index=0,
-            label_type=ft.NavigationRailLabelType.ALL,
-            group_alignment=-0.9,
-            destinations=[
+        """Create enhanced collapsible navigation rail with modern 2025 UI styling."""
+        return ft.Container(
+            content=ft.NavigationRail(
+                selected_index=0,
+                label_type=ft.NavigationRailLabelType.ALL,
+                group_alignment=-0.8,
+                min_width=68,  # Collapsed width (icons only)
+                min_extended_width=240,  # Extended width (2025 standard)
+                extended=self.nav_rail_extended,  # Collapsible functionality
+                bgcolor=ft.Colors.with_opacity(0.98, ft.Colors.SURFACE),  # Enhanced transparency
+                indicator_color=ft.Colors.with_opacity(0.15, ft.Colors.PRIMARY),  # More vibrant indicator
+                indicator_shape=ft.RoundedRectangleBorder(radius=20),  # More modern rounding
+                elevation=4,  # Enhanced depth for 2025 layering
+                destinations=[
                 ft.NavigationRailDestination(
                     icon=ft.Icons.DASHBOARD_OUTLINED,
-                    selected_icon=ft.Icons.DASHBOARD,
-                    label="Dashboard",
+                    selected_icon=ft.Icon(
+                        ft.Icons.DASHBOARD,
+                        color=ft.Colors.PRIMARY,
+                        size=24
+                    ),
+                    label="Dashboard"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.PEOPLE_OUTLINE,
-                    selected_icon=ft.Icons.PEOPLE,
-                    label="Clients",
+                    selected_icon=ft.Icon(
+                        ft.Icons.PEOPLE,
+                        color=ft.Colors.PRIMARY,
+                        size=24
+                    ),
+                    label="Clients"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.FOLDER_OUTLINED,
-                    selected_icon=ft.Icons.FOLDER,
-                    label="Files",
+                    selected_icon=ft.Icon(
+                        ft.Icons.FOLDER,
+                        color=ft.Colors.PRIMARY,
+                        size=24
+                    ),
+                    label="Files"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.STORAGE_OUTLINED,
-                    selected_icon=ft.Icons.STORAGE,
-                    label="Database",
+                    selected_icon=ft.Icon(
+                        ft.Icons.STORAGE,
+                        color=ft.Colors.PRIMARY,
+                        size=24
+                    ),
+                    label="Database"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.AUTO_GRAPH_OUTLINED,
-                    selected_icon=ft.Icons.AUTO_GRAPH,
-                    label="Analytics",
+                    selected_icon=ft.Icon(
+                        ft.Icons.AUTO_GRAPH,
+                        color=ft.Colors.PRIMARY,
+                        size=24
+                    ),
+                    label="Analytics"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.ARTICLE_OUTLINED,
-                    selected_icon=ft.Icons.ARTICLE,
-                    label="Logs",
+                    selected_icon=ft.Icon(
+                        ft.Icons.ARTICLE,
+                        color=ft.Colors.PRIMARY,
+                        size=24
+                    ),
+                    label="Logs"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.SETTINGS_OUTLINED,
-                    selected_icon=ft.Icons.SETTINGS,
-                    label="Settings",
+                    selected_icon=ft.Icon(
+                        ft.Icons.SETTINGS,
+                        color=ft.Colors.PRIMARY,
+                        size=24
+                    ),
+                    label="Settings"
                 ),
-            ],
-            on_change=self._on_navigation_change,
-            trailing=ft.IconButton(
-                icon=ft.Icons.BRIGHTNESS_6,
-                tooltip="Toggle Theme",
-                on_click=self._on_theme_toggle,
+                ],
+                on_change=self._on_navigation_change,
+                leading=ft.Container(
+                    content=ft.IconButton(
+                        icon=ft.Icons.MENU_ROUNDED if self.nav_rail_extended else ft.Icons.MENU_OPEN_ROUNDED,
+                        icon_size=24,
+                        tooltip="Toggle Navigation Menu",
+                        on_click=self._toggle_navigation_rail,
+                        style=ft.ButtonStyle(
+                            color=ft.Colors.PRIMARY,
+                            shape=ft.RoundedRectangleBorder(radius=14),
+                            overlay_color={
+                                ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+                                ft.ControlState.PRESSED: ft.Colors.with_opacity(0.15, ft.Colors.PRIMARY)
+                            },
+                            padding=ft.Padding(8, 8, 8, 8)
+                        )
+                    ),
+                    padding=ft.Padding(8, 16, 8, 8),
+                    animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT)  # Shorter animation
+                ),
+                trailing=ft.Container(
+                    content=ft.IconButton(
+                        icon=ft.Icons.BRIGHTNESS_6_ROUNDED,
+                        icon_size=22,
+                        tooltip="Toggle Dark/Light Theme",
+                        on_click=self._on_theme_toggle,
+                        style=ft.ButtonStyle(
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            shape=ft.RoundedRectangleBorder(radius=14),
+                            overlay_color={
+                                ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, ft.Colors.PRIMARY),
+                                ft.ControlState.PRESSED: ft.Colors.with_opacity(0.12, ft.Colors.PRIMARY)
+                            },
+                            padding=ft.Padding(8, 8, 8, 8)
+                        )
+                    ),
+                    padding=ft.Padding(8, 8, 8, 16),
+                    animate=ft.Animation(100, ft.AnimationCurve.EASE_OUT)  # Shorter animation
+                )
             ),
+            # Enhanced modern depth with 2025 design standards - layering effect
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=24,  # Enhanced blur for modern depth
+                color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),  # Stronger shadow
+                offset=ft.Offset(4, 0),  # Slightly more offset for depth
+            ),
+            animate=ft.Animation(180, ft.AnimationCurve.EASE_OUT),  # Shorter but smooth collapse animation
+            border_radius=ft.BorderRadius(0, 16, 16, 0),  # Modern rounded corners
         )
-    
+
+    def _toggle_navigation_rail(self, e=None):
+        """Toggle navigation rail between extended and collapsed states with smooth animation."""
+        self.nav_rail_extended = not self.nav_rail_extended
+        
+        # Update the navigation rail extended state
+        nav_rail_control = self.nav_rail.content
+        nav_rail_control.extended = self.nav_rail_extended
+        
+        # Update the toggle icon with animation
+        toggle_btn = nav_rail_control.leading.content
+        toggle_btn.icon = ft.Icons.MENU_ROUNDED if self.nav_rail_extended else ft.Icons.MENU_OPEN_ROUNDED
+        
+        # Smooth animation for the navigation rail
+        self.nav_rail.update()
+        
+        logger.info(f"Navigation rail {'extended' if self.nav_rail_extended else 'collapsed'}")
+
     def _on_navigation_change(self, e):
         """Simple navigation callback - no complex routing."""
         # Map index to view names
@@ -373,11 +501,13 @@ class FletV2App(ft.Row):
                 from views.dashboard import create_dashboard_view
                 content = self._create_enhanced_view(create_dashboard_view, "dashboard")
             
-            # Update content area (simple assignment, no complex managers)
-            self.content_area.content = content
+            # Update content area using AnimatedSwitcher for smooth transitions
+            animated_switcher = self.content_area.content
+            animated_switcher.content = content
+            
             # Only update if the control is attached to the page
-            if self.page and hasattr(self.content_area, 'page') and self.content_area.page:
-                self.content_area.update()
+            if self.page and hasattr(animated_switcher, 'page') and animated_switcher.page:
+                animated_switcher.update()
                 
                 # CRITICAL: Trigger initial load for views that need it (after mounting)
                 # First check if content has trigger_initial_load method
@@ -398,10 +528,11 @@ class FletV2App(ft.Row):
         except Exception as e:
             logger.error(f"Failed to load view {view_name}: {e}", exc_info=True)
             # Fallback to simple error view
-            self.content_area.content = self._create_error_view(str(e))
+            animated_switcher = self.content_area.content
+            animated_switcher.content = self._create_error_view(str(e))
             # Only update if the control is attached to the page
-            if self.page and hasattr(self.content_area, 'page') and self.content_area.page:
-                self.content_area.update()
+            if self.page and hasattr(animated_switcher, 'page') and animated_switcher.page:
+                animated_switcher.update()
     
     def _create_enhanced_view(self, view_function, view_name: str):
         """Create view with enhanced infrastructure support and backward compatibility."""

@@ -1,11 +1,151 @@
 #!/usr/bin/env python3
 """
-Streamlined Theme System for FletV2
-Custom theme colors with simplified framework-harmonious implementation.
-
-Preserves your custom color schemes while following Flet best practices.
-Reduced from 297 lines to ~100 lines by eliminating over-engineering.
+2025 Modern Theme System with Vibrant Colors, Layering, and Advanced Effects
+Following 2025 design trends: vibrant color palettes, layering/dimensionality, morphism effects
 """
+
+import flet as ft
+
+# 2025 Vibrant Color Palette - Enhanced brand colors with modern saturation
+BRAND_COLORS = {
+    # Primary vibrant colors
+    "primary": "#3B82F6",  # Vibrant blue
+    "primary_variant": "#1E40AF",  # Deeper blue
+    "secondary": "#8B5CF6",  # Vibrant purple
+    "secondary_variant": "#7C3AED",  # Deeper purple
+    
+    # Accent colors for 2025 layering
+    "accent_cyan": "#06B6D4",  # Modern cyan
+    "accent_emerald": "#10B981",  # Fresh emerald
+    "accent_amber": "#F59E0B",  # Warm amber
+    "accent_rose": "#F43F5E",  # Vibrant rose
+    
+    # Surface colors with depth
+    "surface_elevated": "#F8FAFC",  # Elevated surface
+    "surface_container": "#F1F5F9",  # Container surface
+    "surface_variant": "#E2E8F0",  # Variant surface
+    
+    # Status colors - vibrant but accessible
+    "success": "#22C55E",
+    "warning": "#EAB308", 
+    "error": "#EF4444",
+    "info": "#3B82F6",
+}
+
+# Dark theme vibrant colors
+DARK_BRAND_COLORS = {
+    "primary": "#60A5FA",  # Bright blue for dark
+    "primary_variant": "#3B82F6",
+    "secondary": "#A78BFA",  # Bright purple for dark
+    "secondary_variant": "#8B5CF6",
+    
+    "accent_cyan": "#22D3EE",
+    "accent_emerald": "#34D399", 
+    "accent_amber": "#FBBF24",
+    "accent_rose": "#FB7185",
+    
+    "surface_elevated": "#1E293B",
+    "surface_container": "#334155",
+    "surface_variant": "#475569",
+    
+    "success": "#4ADE80",
+    "warning": "#FCD34D",
+    "error": "#F87171", 
+    "info": "#60A5FA",
+}
+
+# 2025 Shadow System - Enhanced depth and layering
+SHADOW_STYLES = {
+    "subtle": ft.BoxShadow(
+        spread_radius=0,
+        blur_radius=4,
+        offset=ft.Offset(0, 1),
+        color=ft.Colors.with_opacity(0.05, ft.Colors.BLACK),
+    ),
+    "soft": ft.BoxShadow(
+        spread_radius=0,
+        blur_radius=8,
+        offset=ft.Offset(0, 2),
+        color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK),
+    ),
+    "medium": ft.BoxShadow(
+        spread_radius=0,
+        blur_radius=16,
+        offset=ft.Offset(0, 4),
+        color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
+    ),
+    "elevated": ft.BoxShadow(
+        spread_radius=0,
+        blur_radius=24,
+        offset=ft.Offset(0, 8),
+        color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK),
+    ),
+    "floating": ft.BoxShadow(
+        spread_radius=0,
+        blur_radius=32,
+        offset=ft.Offset(0, 12),
+        color=ft.Colors.with_opacity(0.25, ft.Colors.BLACK),
+    ),
+    # Colored shadows for vibrant effects
+    "primary_glow": ft.BoxShadow(
+        spread_radius=0,
+        blur_radius=20,
+        offset=ft.Offset(0, 4),
+        color=ft.Colors.with_opacity(0.3, BRAND_COLORS["primary"]),
+    ),
+    "secondary_glow": ft.BoxShadow(
+        spread_radius=0,
+        blur_radius=20,
+        offset=ft.Offset(0, 4),
+        color=ft.Colors.with_opacity(0.3, BRAND_COLORS["secondary"]),
+    )
+}
+
+# Dark theme shadows
+DARK_SHADOW_STYLES = {
+    "subtle": ft.BoxShadow(
+        spread_radius=0,
+        blur_radius=4,
+        offset=ft.Offset(0, 1),
+        color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK),
+    ),
+    "soft": ft.BoxShadow(
+        spread_radius=0,
+        blur_radius=8,
+        offset=ft.Offset(0, 2),
+        color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK),
+    ),
+    "medium": ft.BoxShadow(
+        spread_radius=0,
+        blur_radius=16,
+        offset=ft.Offset(0, 4),
+        color=ft.Colors.with_opacity(0.3, ft.Colors.BLACK),
+    ),
+    "elevated": ft.BoxShadow(
+        spread_radius=0,
+        blur_radius=24,
+        offset=ft.Offset(0, 8),
+        color=ft.Colors.with_opacity(0.4, ft.Colors.BLACK),
+    ),
+    "floating": ft.BoxShadow(
+        spread_radius=0,
+        blur_radius=32,
+        offset=ft.Offset(0, 12),
+        color=ft.Colors.with_opacity(0.5, ft.Colors.BLACK),
+    ),
+    "primary_glow": ft.BoxShadow(
+        spread_radius=0,
+        blur_radius=20,
+        offset=ft.Offset(0, 4),
+        color=ft.Colors.with_opacity(0.4, DARK_BRAND_COLORS["primary"]),
+    ),
+    "secondary_glow": ft.BoxShadow(
+        spread_radius=0,
+        blur_radius=20,
+        offset=ft.Offset(0, 4),
+        color=ft.Colors.with_opacity(0.4, DARK_BRAND_COLORS["secondary"]),
+    )
+}
 
 import flet as ft
 
@@ -79,13 +219,27 @@ DEFAULT_THEME_NAME = "Teal"
 
 def setup_default_theme(page: ft.Page) -> None:
     """
-    Set up the default theme using Flet's native theming system.
+    Set up the default theme using Flet's native theming system with working 2025 design elements.
     
-    Applies your custom colors while following Flet best practices.
+    Uses only verified working Flet 0.28.3 APIs for reliability.
     """
-    theme_data = THEMES[DEFAULT_THEME_NAME]
-    page.theme = theme_data["light"]
-    page.dark_theme = theme_data["dark"]
+    
+    # Enhanced light theme with working APIs
+    page.theme = ft.Theme(
+        color_scheme=ft.ColorScheme(**TEAL_LIGHT_COLORS),
+        font_family="Inter",
+        visual_density=ft.VisualDensity.COMPACT,
+        use_material3=True
+    )
+    
+    # Enhanced dark theme with working APIs
+    page.dark_theme = ft.Theme(
+        color_scheme=ft.ColorScheme(**TEAL_DARK_COLORS),
+        font_family="Inter",
+        visual_density=ft.VisualDensity.COMPACT,
+        use_material3=True
+    )
+    
     page.theme_mode = ft.ThemeMode.SYSTEM
 
 
@@ -150,3 +304,203 @@ def get_current_theme_colors(page: ft.Page) -> dict:
         'on_surface': ft.Colors.ON_SURFACE,
         'outline': ft.Colors.OUTLINE,
     }
+
+# ==============================================================================
+# 2025 MODERN UI ENHANCEMENTS - VIBRANT EFFECTS & LAYERING
+# ==============================================================================
+
+def setup_modern_theme(page: ft.Page) -> None:
+    """
+    Set up 2025 modern theme with vibrant colors, enhanced depth, and layering effects.
+    Enhanced version of setup_default_theme with 2025 design trends.
+    """
+    # Enhanced light theme with vibrant color system  
+    page.theme = ft.Theme(
+        color_scheme=ft.ColorScheme(
+            primary=BRAND_COLORS["primary"],
+            primary_container=BRAND_COLORS["surface_container"],
+            secondary=BRAND_COLORS["secondary"],
+            secondary_container=BRAND_COLORS["surface_elevated"],
+            tertiary=BRAND_COLORS["accent_emerald"],
+            surface=BRAND_COLORS["surface_elevated"],
+            surface_variant=BRAND_COLORS["surface_variant"],
+            background=BRAND_COLORS["surface_elevated"],
+            error=BRAND_COLORS["error"],
+            on_primary=ft.Colors.WHITE,
+            on_secondary=ft.Colors.WHITE,
+            on_surface=ft.Colors.GREY_900,
+            on_background=ft.Colors.GREY_900,
+        ),
+        font_family="Inter",
+        visual_density=ft.VisualDensity.COMPACT,
+        use_material3=True
+    )
+    
+    # Enhanced dark theme with vibrant colors
+    page.dark_theme = ft.Theme(
+        color_scheme=ft.ColorScheme(
+            primary=DARK_BRAND_COLORS["primary"],
+            primary_container=DARK_BRAND_COLORS["surface_container"],
+            secondary=DARK_BRAND_COLORS["secondary"],
+            secondary_container=DARK_BRAND_COLORS["surface_elevated"],
+            tertiary=DARK_BRAND_COLORS["accent_emerald"],
+            surface=DARK_BRAND_COLORS["surface_elevated"],
+            surface_variant=DARK_BRAND_COLORS["surface_variant"],
+            background=DARK_BRAND_COLORS["surface_elevated"],
+            error=DARK_BRAND_COLORS["error"],
+            on_primary=ft.Colors.GREY_900,
+            on_secondary=ft.Colors.GREY_900,
+            on_surface=ft.Colors.GREY_100,
+            on_background=ft.Colors.GREY_100,
+        ),
+        font_family="Inter",
+        visual_density=ft.VisualDensity.COMPACT,
+        use_material3=True
+    )
+    
+    page.theme_mode = ft.ThemeMode.SYSTEM
+
+def get_shadow_style(style_name: str, is_dark: bool = False) -> ft.BoxShadow:
+    """Get shadow style based on current theme mode for 2025 layering effects."""
+    shadows = DARK_SHADOW_STYLES if is_dark else SHADOW_STYLES
+    return shadows.get(style_name, shadows["soft"])
+
+def get_brand_color(color_name: str, is_dark: bool = False) -> str:
+    """Get brand color based on current theme mode."""
+    colors = DARK_BRAND_COLORS if is_dark else BRAND_COLORS
+    return colors.get(color_name, colors["primary"])
+
+def create_modern_card(
+    content: ft.Control,
+    elevation: str = "soft",
+    is_dark: bool = False,
+    hover_effect: bool = True,
+    color_accent: str = None,
+    padding: int = 20
+) -> ft.Container:
+    """Create a modern card with 2025 styling: enhanced shadows, hover effects, vibrant accents."""
+    shadow = get_shadow_style(elevation, is_dark)
+    bg_color = get_brand_color("surface_elevated", is_dark)
+    
+    # Add subtle color accent if specified
+    if color_accent:
+        accent_color = get_brand_color(color_accent, is_dark)
+        border_color = ft.Colors.with_opacity(0.1, accent_color)
+    else:
+        border_color = ft.Colors.with_opacity(0.05, ft.Colors.GREY)
+    
+    card = ft.Container(
+        content=content,
+        bgcolor=bg_color,
+        shadow=shadow,
+        border_radius=16,  # Modern rounded corners
+        border=ft.border.all(1, border_color),
+        padding=padding,
+        animate=ft.animation.Animation(150, ft.AnimationCurve.EASE_OUT) if hover_effect else None,
+    )
+    
+    return card
+
+def create_modern_button_style(
+    color_type: str = "primary",
+    is_dark: bool = False,
+    variant: str = "filled"  # filled, outlined, text
+) -> ft.ButtonStyle:
+    """Create modern button style with enhanced states and 2025 color vibrancy."""
+    base_color = get_brand_color(color_type, is_dark)
+    
+    if variant == "filled":
+        return ft.ButtonStyle(
+            bgcolor={
+                ft.ControlState.DEFAULT: base_color,
+                ft.ControlState.HOVERED: ft.Colors.with_opacity(0.9, base_color),
+                ft.ControlState.PRESSED: ft.Colors.with_opacity(0.8, base_color),
+            },
+            color={
+                ft.ControlState.DEFAULT: ft.Colors.WHITE,
+                ft.ControlState.HOVERED: ft.Colors.WHITE,
+                ft.ControlState.PRESSED: ft.Colors.WHITE,
+            },
+            elevation={
+                ft.ControlState.DEFAULT: 2,
+                ft.ControlState.HOVERED: 6,
+                ft.ControlState.PRESSED: 0,
+            },
+            shape=ft.RoundedRectangleBorder(radius=12),
+            animation_duration=120,  # Shorter animation as requested
+        )
+    elif variant == "outlined":
+        return ft.ButtonStyle(
+            bgcolor={
+                ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT,
+                ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, base_color),
+                ft.ControlState.PRESSED: ft.Colors.with_opacity(0.2, base_color),
+            },
+            color={
+                ft.ControlState.DEFAULT: base_color,
+                ft.ControlState.HOVERED: base_color,
+                ft.ControlState.PRESSED: base_color,
+            },
+            side={
+                ft.ControlState.DEFAULT: ft.BorderSide(2, base_color),
+                ft.ControlState.HOVERED: ft.BorderSide(2, base_color),
+                ft.ControlState.PRESSED: ft.BorderSide(2, base_color),
+            },
+            shape=ft.RoundedRectangleBorder(radius=12),
+            animation_duration=120,
+        )
+    else:  # text variant
+        return ft.ButtonStyle(
+            bgcolor={
+                ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT,
+                ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, base_color),
+                ft.ControlState.PRESSED: ft.Colors.with_opacity(0.2, base_color),
+            },
+            color={
+                ft.ControlState.DEFAULT: base_color,
+                ft.ControlState.HOVERED: base_color,
+                ft.ControlState.PRESSED: base_color,
+            },
+            shape=ft.RoundedRectangleBorder(radius=12),
+            animation_duration=120,
+        )
+
+def create_gradient_container(
+    content: ft.Control,
+    colors: list,
+    begin: ft.Alignment = ft.alignment.top_left,
+    end: ft.Alignment = ft.alignment.bottom_right,
+    **kwargs
+) -> ft.Container:
+    """Create container with modern gradient background for 2025 vibrant effects."""
+    return ft.Container(
+        content=content,
+        gradient=ft.LinearGradient(
+            colors=colors,
+            begin=begin,
+            end=end,
+        ),
+        **kwargs
+    )
+
+def create_floating_action_button(
+    icon: str,
+    on_click,
+    color_type: str = "primary",
+    is_dark: bool = False,
+    mini: bool = False
+) -> ft.FloatingActionButton:
+    """Create modern floating action button with enhanced shadow and vibrant colors."""
+    base_color = get_brand_color(color_type, is_dark)
+    
+    return ft.FloatingActionButton(
+        icon=icon,
+        on_click=on_click,
+        bgcolor=base_color,
+        foreground_color=ft.Colors.WHITE,
+        elevation=8,
+        shape=ft.CircleBorder(),
+        mini=mini,
+        tooltip="Quick Action",
+        animate=ft.animation.Animation(150, ft.AnimationCurve.EASE_OUT_BACK)
+    )

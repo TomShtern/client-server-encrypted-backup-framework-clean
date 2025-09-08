@@ -11,8 +11,7 @@ import asyncio
 import os
 from datetime import datetime
 from utils.debug_setup import get_logger
-from utils.user_feedback import show_success_message, show_error_message, show_info_message
-# Removed config import - using enhanced infrastructure
+from utils.user_feedback import show_success_message, show_error_message, show_user_feedback
 
 logger = get_logger(__name__)
 
@@ -75,7 +74,7 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
             color=ft.Colors.with_opacity(0.2, ft.Colors.BLUE_200), width=0.5
         ),
         expand=True,
-        animate=ft.AnimationCurve.EASE_IN_OUT,
+        animate=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT),
         tooltip_bgcolor=ft.Colors.BLUE_50,
         interactive=True,
         min_y=0,
@@ -94,7 +93,7 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
             color=ft.Colors.with_opacity(0.3, ft.Colors.GREEN_200), width=1
         ),
         expand=True,
-        animate=ft.AnimationCurve.BOUNCE_IN,
+        animate=ft.Animation(600, ft.AnimationCurve.BOUNCE_IN),
         tooltip_bgcolor=ft.Colors.GREEN_50,
         interactive=True
     )
@@ -114,7 +113,7 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
             color=ft.Colors.with_opacity(0.2, ft.Colors.PURPLE_200), width=0.5
         ),
         expand=True,
-        animate=ft.AnimationCurve.ELASTIC_OUT,
+        animate=ft.Animation(700, ft.AnimationCurve.ELASTIC_OUT),
         tooltip_bgcolor=ft.Colors.PURPLE_50,
         interactive=True
     )
@@ -124,7 +123,7 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
         sections_space=3,
         center_space_radius=50,
         expand=True,
-        animate=ft.AnimationCurve.EASE_IN_OUT_CUBIC,
+        animate=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT_CUBIC),
         on_chart_event=lambda e: logger.info(f"Disk chart clicked: {e}")
     )
 
@@ -271,17 +270,10 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
                     data_points=cpu_data_points,
                     stroke_width=4,
                     color=ft.Colors.BLUE_600,
-                    gradient=ft.LinearGradient(
-                        colors=[ft.Colors.BLUE_200, ft.Colors.BLUE_600],
-                        begin=ft.Alignment(-1, -1),
-                        end=ft.Alignment(1, 1)
-                    ),
                     curved=True,
                     stroke_cap_round=True,
-                    below_line=ft.ChartAreaData(
-                        show=True,
-                        color=ft.Colors.with_opacity(0.1, ft.Colors.BLUE_400)
-                    )
+                    # below_line with area filling not available in Flet 0.28.3
+                    # Using gradient stroke for visual appeal instead
                 )
             ]
             cpu_chart.update()
@@ -299,28 +291,16 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
         history_to_use = chart_state['memory_history'] if chart_state['memory_history'] else [memory_value]
         
         for i, value in enumerate(history_to_use):
-            # Enhanced color scheme with gradients
-            if value < 60:  # Normal - Green gradient
+            # Enhanced color scheme - Fixed without gradients
+            if value < 60:  # Normal - Green
                 color = ft.Colors.GREEN_600
-                gradient = ft.LinearGradient(
-                    colors=[ft.Colors.GREEN_200, ft.Colors.GREEN_600],
-                    begin=ft.Alignment(0, 1),
-                    end=ft.Alignment(0, -1)
-                )
-            elif value < 80:  # Warning - Orange gradient
+                border_color = ft.Colors.GREEN_300
+            elif value < 80:  # Warning - Orange  
                 color = ft.Colors.ORANGE_600
-                gradient = ft.LinearGradient(
-                    colors=[ft.Colors.ORANGE_200, ft.Colors.ORANGE_600],
-                    begin=ft.Alignment(0, 1),
-                    end=ft.Alignment(0, -1)
-                )
-            else:  # Critical - Red gradient
+                border_color = ft.Colors.ORANGE_300
+            else:  # Critical - Red
                 color = ft.Colors.RED_600
-                gradient = ft.LinearGradient(
-                    colors=[ft.Colors.RED_200, ft.Colors.RED_600],
-                    begin=ft.Alignment(0, 1),
-                    end=ft.Alignment(0, -1)
-                )
+                border_color = ft.Colors.RED_300
 
             memory_bar_groups.append(
                 ft.BarChartGroup(
@@ -329,10 +309,9 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
                         ft.BarChartRod(
                             from_y=0,
                             to_y=value,
-                            width=22,  # Slightly wider bars
+                            width=24,  # Wider bars for better visibility
                             color=color,
-                            gradient=gradient,
-                            border_radius=ft.BorderRadius(4, 4, 0, 0),  # Rounded tops
+                            border_radius=ft.BorderRadius(6, 6, 0, 0),  # More rounded tops
                             tooltip=f"Memory: {value:.1f}%"
                         )
                     ]
@@ -383,32 +362,22 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
                     data_points=sent_data_points,
                     stroke_width=3,
                     color=ft.Colors.ORANGE_600,
-                    gradient=ft.LinearGradient(
-                        colors=[ft.Colors.ORANGE_200, ft.Colors.ORANGE_600],
-                        begin=ft.Alignment(-1, -1),
-                        end=ft.Alignment(1, 1)
-                    ),
                     curved=True,
                     stroke_cap_round=True,
                     below_line=ft.ChartAreaData(
                         show=True,
-                        color=ft.Colors.with_opacity(0.1, ft.Colors.ORANGE_400)
+                        color=ft.Colors.with_opacity(0.12, ft.Colors.ORANGE_400)
                     )
                 ),
                 ft.LineChartData(
                     data_points=recv_data_points,
                     stroke_width=3,
                     color=ft.Colors.GREEN_600,
-                    gradient=ft.LinearGradient(
-                        colors=[ft.Colors.GREEN_200, ft.Colors.GREEN_600],
-                        begin=ft.Alignment(-1, -1),
-                        end=ft.Alignment(1, 1)
-                    ),
                     curved=True,
                     stroke_cap_round=True,
                     below_line=ft.ChartAreaData(
                         show=True,
-                        color=ft.Colors.with_opacity(0.1, ft.Colors.GREEN_400)
+                        color=ft.Colors.with_opacity(0.12, ft.Colors.GREEN_400)
                     )
                 )
             ]
@@ -430,35 +399,25 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
         )
 
         if disk_data_changed:
-            # Enhanced pie chart with gradients and better colors
+            # Enhanced pie chart with dynamic colors - Fixed without gradients
             used_color = ft.Colors.RED_600 if disk_used > 80 else ft.Colors.ORANGE_600 if disk_used > 60 else ft.Colors.BLUE_600
             
             disk_chart.sections = [
                 ft.PieChartSection(
                     value=disk_used,
                     color=used_color,
-                    gradient=ft.RadialGradient(
-                        colors=[ft.Colors.with_opacity(0.7, used_color), used_color],
-                        center=ft.Alignment(0, 0),
-                        radius=0.8
-                    ),
                     radius=85,
                     title=f"{disk_used:.1f}%\nUsed",
                     title_style=ft.TextStyle(color=ft.Colors.WHITE, size=14, weight=ft.FontWeight.BOLD),
-                    border_side=ft.BorderSide(2, ft.Colors.WHITE)
+                    border_side=ft.BorderSide(3, ft.Colors.WHITE)
                 ),
                 ft.PieChartSection(
                     value=disk_free,
-                    color=ft.Colors.GREEN_400,
-                    gradient=ft.RadialGradient(
-                        colors=[ft.Colors.GREEN_100, ft.Colors.GREEN_400],
-                        center=ft.Alignment(0, 0),
-                        radius=0.8
-                    ),
+                    color=ft.Colors.GREEN_500,
                     radius=75,
                     title=f"{disk_free:.1f}%\nFree",
                     title_style=ft.TextStyle(color=ft.Colors.WHITE, size=12, weight=ft.FontWeight.BOLD),
-                    border_side=ft.BorderSide(1, ft.Colors.WHITE)
+                    border_side=ft.BorderSide(2, ft.Colors.WHITE)
                 )
             ]
             disk_chart.update()
@@ -542,7 +501,7 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
         """Handle refresh button click."""
         logger.info("Analytics refresh requested")
         load_analytics_data()
-        show_info_message(page, "Refreshing analytics data...")
+        show_user_feedback(page, "Refreshing analytics data...")
 
     def on_toggle_auto_refresh(e):
         """Toggle auto-refresh timer with proper cancellation."""
@@ -554,7 +513,7 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
             refresh_timer.cancel()
             refresh_timer = None
             logger.info("Auto-refresh stopped")
-            show_info_message(page, "Auto-refresh stopped")
+            show_user_feedback(page, "Auto-refresh stopped")
         else:
             # Reset cancellation flag and start new timer
             timer_cancelled = False
@@ -589,7 +548,7 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
 
             refresh_timer = page.run_task(refresh_loop)
             logger.info("Auto-refresh started")
-            show_info_message(page, "Auto-refresh started (every 5 seconds)")
+            show_user_feedback(page, "Auto-refresh started (every 5 seconds)")
 
     # Build the main view
     view = ft.Column([

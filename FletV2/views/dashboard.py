@@ -22,6 +22,8 @@ from utils.debug_setup import get_logger
 from utils.user_feedback import show_success_message, show_error_message, show_info_message
 from utils.state_manager import StateManager
 from utils.server_bridge import ServerBridge
+# Import modern styling functions for 2025 visual enhancements
+from theme import create_modern_card, create_modern_button_style, get_brand_color, create_gradient_container
 try:
     from config import ASYNC_DELAY
 except ImportError:
@@ -58,6 +60,68 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
     start_server_button_ref = ft.Ref[ft.FilledButton]()
     stop_server_button_ref = ft.Ref[ft.OutlinedButton]()
     backup_now_button_ref = ft.Ref[ft.FilledButton]()
+
+    # Sophisticated hover handler with micro-animations and icon rotation
+    def handle_sophisticated_hover(e, color, button_ref):
+        """Enhanced hover interaction with icon rotation and advanced curves."""
+        try:
+            is_hover = e.data == "true"
+            
+            # Scale animation with sophisticated curve
+            e.control.scale = 1.05 if is_hover else 1.0
+            e.control.animate_scale = ft.Animation(
+                duration=200, 
+                curve=ft.AnimationCurve.ELASTIC_OUT if is_hover else ft.AnimationCurve.EASE_IN_CUBIC
+            )
+            
+            # Shadow depth enhancement
+            if hasattr(e.control, 'shadow'):
+                e.control.shadow.blur_radius = 12 if is_hover else 4
+                e.control.shadow.spread_radius = 2 if is_hover else 0
+            
+            # Icon rotation micro-animation for extra polish
+            if button_ref and button_ref.current and hasattr(button_ref.current, 'icon'):
+                # Add subtle icon rotation (10 degrees)
+                button_ref.current.rotate = 0.175 if is_hover else 0  # 10 degrees in radians
+                button_ref.current.animate_rotation = ft.Animation(
+                    duration=300,
+                    curve=ft.AnimationCurve.BOUNCE_OUT if is_hover else ft.AnimationCurve.EASE_IN
+                )
+                button_ref.current.update()
+            
+            e.control.update()
+            
+        except Exception as ex:
+            logger.warning(f"Hover effect failed: {ex}")
+
+    # Enhanced Card Hover Effects with Subtle Depth Animations
+    def handle_card_hover(e, accent_color):
+        """Enhanced card hover with depth and shadow animations."""
+        try:
+            is_hover = e.data == "true"
+            
+            # Subtle scale for cards (smaller than buttons)
+            e.control.scale = 1.02 if is_hover else 1.0
+            e.control.animate_scale = ft.Animation(
+                duration=120,  # Shorter animation as requested
+                curve=ft.AnimationCurve.EASE_OUT_CUBIC
+            )
+            
+            # Enhanced shadow system for depth perception
+            if hasattr(e.control, 'shadow'):
+                if is_hover:
+                    e.control.shadow.blur_radius = 15
+                    e.control.shadow.spread_radius = 3
+                    e.control.shadow.offset = ft.Offset(0, 6)
+                else:
+                    e.control.shadow.blur_radius = 8
+                    e.control.shadow.spread_radius = 1
+                    e.control.shadow.offset = ft.Offset(0, 2)
+            
+            e.control.update()
+            
+        except Exception as ex:
+            logger.warning(f"Card hover effect failed: {ex}")
     refresh_button_ref = ft.Ref[ft.IconButton]()
 
     # Direct control references for simple text updates (OPTIMIZED)
@@ -458,31 +522,134 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
         page.run_task(async_backup)
 
 
-    # Create server status cards
+    # Create server status cards with sophisticated animations
     server_status_cards = ft.ResponsiveRow([
         ft.Column([
+            ft.Container(
+                content=ft.Card(
+                    content=ft.Container(
+                        content=ft.Column([
+                            ft.Row([
+                                ft.Container(
+                                    content=ft.Icon(
+                                        ft.Icons.CIRCLE if True else ft.Icons.CIRCLE_OUTLINED,
+                                        color=ft.Colors.GREEN_600 if True else ft.Colors.RED_600,
+                                        size=16,
+                                        ref=server_status_icon_ref
+                                    ),
+                                    animate_scale=ft.Animation(600, ft.AnimationCurve.BOUNCE_OUT),
+                                    animate_opacity=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
+                                ),
+                                ft.Text("Server Status", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT)
+                            ], spacing=8),
+                            ft.Container(
+                                content=ft.Text(
+                                    "Running" if True else "Stopped",
+                                    size=18,
+                                    weight=ft.FontWeight.BOLD,
+                                    color=ft.Colors.GREEN_600 if True else ft.Colors.RED_600,
+                                    ref=server_status_text_ref
+                                ),
+                                animate_scale=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
+                                animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT)
+                            )
+                        ], spacing=3),  # Reduced spacing for density
+                        padding=ft.Padding(12, 8, 12, 8),  # Reduced padding for density
+                        bgcolor=ft.Colors.with_opacity(0.025, ft.Colors.PRIMARY),  # More subtle
+                        border_radius=14,  # Slightly smaller for modern look
+                        animate=ft.Animation(250, ft.AnimationCurve.EASE_OUT),  # Faster
+                        animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT)
+                    ),
+                    elevation=3,  # Slightly higher for better depth
+                    surface_tint_color=ft.Colors.PRIMARY,
+                    shadow_color=ft.Colors.with_opacity(0.08, ft.Colors.PRIMARY)  # Subtle color-matched shadow
+                    # animate_elevation not supported in Flet 0.28.3, using content animations instead
+                ),
+                animate_scale=ft.Animation(120, ft.AnimationCurve.EASE_OUT),  # Faster for responsiveness
+                animate_opacity=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
+                scale=1.0,
+                shadow=ft.BoxShadow(  # Add container shadow for extra depth
+                    spread_radius=0,
+                    blur_radius=8,
+                    color=ft.Colors.with_opacity(0.12, ft.Colors.PRIMARY),
+                    offset=ft.Offset(0, 2),
+                ),
+                # Enhanced hover effect with sophisticated micro-interactions
+                on_hover=lambda e: handle_card_hover(e, ft.Colors.PRIMARY)
+            )
+        ], col={"sm": 6, "md": 3}),
+
+        ft.Column([
+            ft.Container(
+                content=ft.Card(
+                    content=ft.Container(
+                        content=ft.Column([
+                            ft.Row([
+                                ft.Container(
+                                    content=ft.Icon(ft.Icons.ACCESS_TIME, color=ft.Colors.BLUE_600, size=16),
+                                    animate_rotation=ft.Animation(2000, ft.AnimationCurve.LINEAR),
+                                    animate_opacity=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
+                                ),
+                                ft.Text("Uptime", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT)
+                            ], spacing=8),
+                            ft.Container(
+                                content=uptime_text,
+                                animate_scale=ft.Animation(400, ft.AnimationCurve.EASE_OUT_BACK),
+                                animate_opacity=ft.Animation(350, ft.AnimationCurve.EASE_IN_OUT)
+                            )
+                        ], spacing=5),
+                        padding=ft.Padding(12, 8, 12, 8),  # Compact for better density
+                        bgcolor=ft.Colors.with_opacity(0.025, ft.Colors.BLUE_400),
+                        border_radius=14,
+                        animate=ft.Animation(250, ft.AnimationCurve.EASE_OUT),
+                        animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT)
+                    ),
+                    elevation=3,
+                    surface_tint_color=ft.Colors.BLUE_400,
+                    shadow_color=ft.Colors.with_opacity(0.08, ft.Colors.BLUE_400)
+                    # animate_elevation not supported in Flet 0.28.3
+                ),
+                animate_scale=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
+                animate_opacity=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
+                scale=1.0,
+                shadow=ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=6,
+                    color=ft.Colors.with_opacity(0.06, ft.Colors.BLACK),
+                    offset=ft.Offset(0, 3),
+                ),
+                # Enhanced hover with sophisticated micro-interactions
+                on_hover=lambda e: handle_card_hover(e, ft.Colors.BLUE_400)
+            )
+        ], col={"sm": 6, "md": 3}),
+
+        ft.Column([
             ft.Card(
                 content=ft.Container(
                     content=ft.Column([
                         ft.Row([
-                            ft.Icon(
-                                ft.Icons.CIRCLE if True else ft.Icons.CIRCLE_OUTLINED,
-                                color=ft.Colors.GREEN_600 if True else ft.Colors.RED_600,  # Semantic colors
-                                size=16,
-                                ref=server_status_icon_ref
+                            ft.Container(
+                                content=ft.Icon(ft.Icons.PEOPLE, color=ft.Colors.PURPLE_600, size=16),
+                                animate_scale=ft.Animation(800, ft.AnimationCurve.ELASTIC_OUT),
+                                animate_opacity=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
                             ),
-                            ft.Text("Server Status", size=12, weight=ft.FontWeight.W_500)
+                            ft.Text("Active Clients", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT)
                         ], spacing=8),
-                        ft.Text(
-                            "Running" if True else "Stopped",
-                            size=18,
-                            weight=ft.FontWeight.BOLD,
-                            color=ft.Colors.GREEN_600 if True else ft.Colors.RED_600,  # Semantic colors
-                            ref=server_status_text_ref
+                        ft.Container(
+                            content=active_clients_text,
+                            animate_scale=ft.Animation(450, ft.AnimationCurve.EASE_OUT_BACK),
+                            animate_opacity=ft.Animation(350, ft.AnimationCurve.EASE_IN_OUT)
                         )
                     ], spacing=5),
-                    padding=15
-                )
+                    padding=ft.Padding(16, 14, 16, 14),
+                    bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.PURPLE_400),
+                    border_radius=16,
+                    animate=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT_CUBIC),
+                    animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT)
+                ),
+                elevation=2,
+                surface_tint_color=ft.Colors.PURPLE_400
+                # animate_elevation not supported in Flet 0.28.3
             )
         ], col={"sm": 6, "md": 3}),
 
@@ -491,67 +658,74 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
                 content=ft.Container(
                     content=ft.Column([
                         ft.Row([
-                            ft.Icon(ft.Icons.ACCESS_TIME, color=ft.Colors.BLUE, size=16),
-                            ft.Text("Uptime", size=12, weight=ft.FontWeight.W_500)
+                            ft.Container(
+                                content=ft.Icon(ft.Icons.CLOUD_UPLOAD, color=ft.Colors.ORANGE_600, size=16),
+                                animate=ft.Animation(1500, ft.AnimationCurve.EASE_IN_OUT),
+                                animate_opacity=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
+                            ),
+                            ft.Text("Total Transfers", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT)
                         ], spacing=8),
-                        uptime_text
+                        ft.Container(
+                            content=total_transfers_text,
+                            animate_scale=ft.Animation(500, ft.AnimationCurve.EASE_OUT_BACK),
+                            animate_opacity=ft.Animation(350, ft.AnimationCurve.EASE_IN_OUT)
+                        )
                     ], spacing=5),
-                    padding=15
-                )
-            )
-        ], col={"sm": 6, "md": 3}),
-
-        ft.Column([
-            ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Row([
-                            ft.Icon(ft.Icons.PEOPLE, color=ft.Colors.PURPLE, size=16),
-                            ft.Text("Active Clients", size=12, weight=ft.FontWeight.W_500)
-                        ], spacing=8),
-                        active_clients_text
-                    ], spacing=5),
-                    padding=15
-                )
-            )
-        ], col={"sm": 6, "md": 3}),
-
-        ft.Column([
-            ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Row([
-                            ft.Icon(ft.Icons.CLOUD_UPLOAD, color=ft.Colors.ORANGE, size=16),
-                            ft.Text("Total Transfers", size=12, weight=ft.FontWeight.W_500)
-                        ], spacing=8),
-                        total_transfers_text
-                    ], spacing=5),
-                    padding=15
-                )
+                    padding=ft.Padding(16, 14, 16, 14),
+                    bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.ORANGE_400),
+                    border_radius=16,
+                    animate=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT_CUBIC),
+                    animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT)
+                ),
+                elevation=2,
+                surface_tint_color=ft.Colors.ORANGE_400
+                # animate_elevation not supported in Flet 0.28.3
             )
         ], col={"sm": 6, "md": 3})
     ])
 
-    # Create system metrics cards
+    # Create system metrics cards with sophisticated progress animations
     system_metrics_cards = ft.ResponsiveRow([
         ft.Column([
             ft.Card(
                 content=ft.Container(
                     content=ft.Column([
                         ft.Row([
-                            ft.Icon(ft.Icons.COMPUTER, color=ft.Colors.BLUE, size=16),
-                            ft.Text("CPU Usage", size=12, weight=ft.FontWeight.W_500)
+                            ft.Container(
+                                content=ft.Icon(ft.Icons.COMPUTER, color=ft.Colors.BLUE_600, size=16),
+                                animate_scale=ft.Animation(700, ft.AnimationCurve.BOUNCE_OUT),
+                                animate_opacity=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
+                            ),
+                            ft.Text("CPU Usage", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT)
                         ], spacing=8),
-                        cpu_usage_text,
-                        ft.ProgressBar(
-                            value=0.452,
-                            color=ft.Colors.GREEN,
-                            bgcolor=ft.Colors.OUTLINE,
-                            ref=cpu_progress_bar_ref
+                        ft.Container(
+                            content=cpu_usage_text,
+                            animate_scale=ft.Animation(350, ft.AnimationCurve.EASE_OUT),
+                            animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT)
+                        ),
+                        ft.Container(
+                            content=ft.ProgressBar(
+                                value=0.452,
+                                color=ft.Colors.GREEN_600,
+                                bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE),
+                                height=8,
+                                border_radius=4,
+                                ref=cpu_progress_bar_ref,
+                                animate_scale=ft.Animation(800, ft.AnimationCurve.EASE_OUT_CUBIC)
+                            ),
+                            animate_scale=ft.Animation(400, ft.AnimationCurve.EASE_OUT),
+                            animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT)
                         )
-                    ], spacing=5),
-                    padding=15
-                )
+                    ], spacing=8),
+                    padding=ft.Padding(18, 16, 18, 16),
+                    bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.BLUE_400),
+                    border_radius=18,
+                    animate=ft.Animation(450, ft.AnimationCurve.EASE_IN_OUT_CUBIC),
+                    animate_scale=ft.Animation(220, ft.AnimationCurve.EASE_OUT)
+                ),
+                elevation=3,
+                surface_tint_color=ft.Colors.BLUE_400
+                # animate_elevation not supported in Flet 0.28.3
             )
         ], col={"sm": 6, "md": 4}),
 
@@ -560,19 +734,41 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
                 content=ft.Container(
                     content=ft.Column([
                         ft.Row([
-                            ft.Icon(ft.Icons.MEMORY, color=ft.Colors.GREEN, size=16),
-                            ft.Text("Memory", size=12, weight=ft.FontWeight.W_500)
+                            ft.Container(
+                                content=ft.Icon(ft.Icons.MEMORY, color=ft.Colors.GREEN_600, size=16),
+                                animate_scale=ft.Animation(750, ft.AnimationCurve.ELASTIC_OUT),
+                                animate_opacity=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
+                            ),
+                            ft.Text("Memory", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT)
                         ], spacing=8),
-                        memory_usage_text,
-                        ft.ProgressBar(
-                            value=0.678,
-                            color=ft.Colors.GREEN,
-                            bgcolor=ft.Colors.OUTLINE,
-                            ref=memory_progress_bar_ref
+                        ft.Container(
+                            content=memory_usage_text,
+                            animate_scale=ft.Animation(400, ft.AnimationCurve.EASE_OUT),
+                            animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT)
+                        ),
+                        ft.Container(
+                            content=ft.ProgressBar(
+                                value=0.678,
+                                color=ft.Colors.GREEN_600,
+                                bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE),
+                                height=8,
+                                border_radius=4,
+                                ref=memory_progress_bar_ref,
+                                animate_scale=ft.Animation(900, ft.AnimationCurve.EASE_OUT_CUBIC)
+                            ),
+                            animate_scale=ft.Animation(450, ft.AnimationCurve.EASE_OUT),
+                            animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT)
                         )
-                    ], spacing=5),
-                    padding=15
-                )
+                    ], spacing=8),
+                    padding=ft.Padding(18, 16, 18, 16),
+                    bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.GREEN_400),
+                    border_radius=18,
+                    animate=ft.Animation(450, ft.AnimationCurve.EASE_IN_OUT_CUBIC),
+                    animate_scale=ft.Animation(220, ft.AnimationCurve.EASE_OUT)
+                ),
+                elevation=3,
+                surface_tint_color=ft.Colors.GREEN_400
+                # animate_elevation not supported in Flet 0.28.3
             )
         ], col={"sm": 6, "md": 4}),
 
@@ -581,19 +777,41 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
                 content=ft.Container(
                     content=ft.Column([
                         ft.Row([
-                            ft.Icon(ft.Icons.STORAGE, color=ft.Colors.PURPLE, size=16),
-                            ft.Text("Disk Space", size=12, weight=ft.FontWeight.W_500)
+                            ft.Container(
+                                content=ft.Icon(ft.Icons.STORAGE, color=ft.Colors.PURPLE_600, size=16),
+                                animate_scale=ft.Animation(800, ft.AnimationCurve.BOUNCE_OUT),
+                                animate_opacity=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
+                            ),
+                            ft.Text("Disk Space", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT)
                         ], spacing=8),
-                        disk_usage_text,
-                        ft.ProgressBar(
-                            value=0.341,
-                            color=ft.Colors.GREEN,
-                            bgcolor=ft.Colors.OUTLINE,
-                            ref=disk_progress_bar_ref
+                        ft.Container(
+                            content=disk_usage_text,
+                            animate_scale=ft.Animation(450, ft.AnimationCurve.EASE_OUT),
+                            animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT)
+                        ),
+                        ft.Container(
+                            content=ft.ProgressBar(
+                                value=0.341,
+                                color=ft.Colors.PURPLE_600,
+                                bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE),
+                                height=8,
+                                border_radius=4,
+                                ref=disk_progress_bar_ref,
+                                animate_scale=ft.Animation(1000, ft.AnimationCurve.EASE_OUT_CUBIC)
+                            ),
+                            animate_scale=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
+                            animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT)
                         )
-                    ], spacing=5),
-                    padding=15
-                )
+                    ], spacing=8),
+                    padding=ft.Padding(18, 16, 18, 16),
+                    bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.PURPLE_400),
+                    border_radius=18,
+                    animate=ft.Animation(450, ft.AnimationCurve.EASE_IN_OUT_CUBIC),
+                    animate_scale=ft.Animation(220, ft.AnimationCurve.EASE_OUT)
+                ),
+                elevation=3,
+                surface_tint_color=ft.Colors.PURPLE_400
+                # animate_elevation not supported in Flet 0.28.3
             )
         ], col={"sm": 6, "md": 4})
     ])
@@ -632,163 +850,428 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
             )
         )
 
-    # Quick actions
+    # Quick actions with sophisticated hover effects and animations
     quick_actions = ft.ResponsiveRow([
         ft.Column([
-            ft.Stack([
-                ft.FilledButton(
-                    "Start Server",
-                    icon=ft.Icons.PLAY_ARROW,
-                    on_click=on_start_server,
-                    style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN),
-                    tooltip="Start the backup server",
-                    ref=start_server_button_ref
+            ft.Container(
+                content=ft.Stack([
+                    ft.FilledButton(
+                        "Start Server",
+                        icon=ft.Icons.PLAY_ARROW,
+                        on_click=on_start_server,
+                        style=ft.ButtonStyle(
+                            bgcolor=ft.Colors.GREEN_600,
+                            color=ft.Colors.WHITE,
+                            elevation=4,
+                            shadow_color=ft.Colors.with_opacity(0.3, ft.Colors.GREEN_600),
+                            padding=ft.Padding(20, 12, 20, 12),
+                            shape=ft.RoundedRectangleBorder(radius=12),
+                            # Enhanced hover effects
+                            overlay_color={
+                                ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.WHITE),
+                                ft.ControlState.PRESSED: ft.Colors.with_opacity(0.2, ft.Colors.WHITE)
+                            }
+                        ),
+                        tooltip="Start the backup server",
+                        ref=start_server_button_ref
+                    ),
+                    ft.ProgressRing(
+                        ref=start_server_progress_ref,
+                        visible=False,
+                        width=24,
+                        height=24,
+                        stroke_width=3,
+                        color=ft.Colors.GREEN_400
+                    )
+                ], alignment=ft.alignment.center),
+                animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT),  # Faster for performance
+                animate_opacity=ft.Animation(200, ft.AnimationCurve.EASE_OUT),  # More efficient curve
+                # Enhanced hover effect with subtle visual feedback
+                scale=1.0,
+                shadow=ft.BoxShadow(  # Add depth on hover
+                    spread_radius=0,
+                    blur_radius=4,
+                    color=ft.Colors.with_opacity(0.15, ft.Colors.GREEN_600),
+                    offset=ft.Offset(0, 2),
                 ),
-                ft.ProgressRing(
-                    ref=start_server_progress_ref,
-                    visible=False,
-                    width=24,
-                    height=24,
-                    stroke_width=2
-                )
-            ], alignment=ft.alignment.center)
-        ], col={"sm": 6, "md": 3}),
-
-        ft.Column([
-            ft.Stack([
-                ft.OutlinedButton(
-                    "Stop Server",
-                    icon=ft.Icons.STOP,
-                    on_click=on_stop_server,
-                    style=ft.ButtonStyle(color=ft.Colors.ORANGE),
-                    tooltip="Stop the backup server",
-                    ref=stop_server_button_ref
-                ),
-                ft.ProgressRing(
-                    ref=stop_server_progress_ref,
-                    visible=False,
-                    width=24,
-                    height=24,
-                    stroke_width=2
-                )
-            ], alignment=ft.alignment.center)
-        ], col={"sm": 6, "md": 3}),
-
-        ft.Column([
-            ft.FilledButton(
-                "Backup Now",
-                icon=ft.Icons.BACKUP,
-                on_click=on_backup_now,
-                style=ft.ButtonStyle(bgcolor=ft.Colors.PURPLE),
-                tooltip="Start an immediate backup",
-                ref=backup_now_button_ref
+                # Enhanced micro-interaction with icon rotation and sophisticated curves
+                on_hover=lambda e: handle_sophisticated_hover(e, ft.Colors.GREEN_600, start_server_button_ref)
             )
         ], col={"sm": 6, "md": 3}),
 
         ft.Column([
-            ft.Stack([
-                ft.IconButton(
-                    icon=ft.Icons.REFRESH,
-                    tooltip="Refresh Dashboard",
-                    on_click=on_refresh_dashboard,
-                    icon_size=24,
-                    ref=refresh_button_ref
+            ft.Container(
+                content=ft.Stack([
+                    ft.OutlinedButton(
+                        "Stop Server",
+                        icon=ft.Icons.STOP,
+                        on_click=on_stop_server,
+                        style=ft.ButtonStyle(
+                            color=ft.Colors.ORANGE_600,
+                            side=ft.BorderSide(2, ft.Colors.ORANGE_600),
+                            padding=ft.Padding(20, 12, 20, 12),
+                            shape=ft.RoundedRectangleBorder(radius=12),
+                            overlay_color={
+                                ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.ORANGE_600),
+                                ft.ControlState.PRESSED: ft.Colors.with_opacity(0.2, ft.Colors.ORANGE_600)
+                            }
+                        ),
+                        tooltip="Stop the backup server",
+                        ref=stop_server_button_ref
+                    ),
+                    ft.ProgressRing(
+                        ref=stop_server_progress_ref,
+                        visible=False,
+                        width=24,
+                        height=24,
+                        stroke_width=3,
+                        color=ft.Colors.ORANGE_400
+                    )
+                ], alignment=ft.alignment.center),
+                animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
+                animate_opacity=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+                scale=1.0,
+                shadow=ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=4,
+                    color=ft.Colors.with_opacity(0.12, ft.Colors.ORANGE_600),
+                    offset=ft.Offset(0, 2),
                 ),
-                ft.ProgressRing(
-                    ref=refresh_progress_ref,
-                    visible=False,
-                    width=24,
-                    height=24,
-                    stroke_width=2
-                )
-            ], alignment=ft.alignment.center)
+                # Enhanced micro-interaction with icon rotation
+                on_hover=lambda e: handle_sophisticated_hover(e, ft.Colors.ORANGE_600, stop_server_button_ref)
+            )
+        ], col={"sm": 6, "md": 3}),
+
+        ft.Column([
+            ft.Container(
+                content=ft.FilledButton(
+                    "Backup Now",
+                    icon=ft.Icons.BACKUP,
+                    on_click=on_backup_now,
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.PURPLE_600,
+                        color=ft.Colors.WHITE,
+                        elevation=4,
+                        shadow_color=ft.Colors.with_opacity(0.3, ft.Colors.PURPLE_600),
+                        padding=ft.Padding(20, 12, 20, 12),
+                        shape=ft.RoundedRectangleBorder(radius=12),
+                        overlay_color={
+                            ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.WHITE),
+                            ft.ControlState.PRESSED: ft.Colors.with_opacity(0.2, ft.Colors.WHITE)
+                        }
+                    ),
+                    tooltip="Start an immediate backup",
+                    ref=backup_now_button_ref
+                ),
+                animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+                animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT)
+            )
+        ], col={"sm": 6, "md": 3}),
+
+        ft.Column([
+            ft.Container(
+                content=ft.Stack([
+                    ft.Container(
+                        content=ft.IconButton(
+                            icon=ft.Icons.REFRESH,
+                            tooltip="Refresh Dashboard",
+                            on_click=on_refresh_dashboard,
+                            icon_size=24,
+                            icon_color=ft.Colors.PRIMARY,
+                            ref=refresh_button_ref,
+                            style=ft.ButtonStyle(
+                                bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+                                shape=ft.CircleBorder(),
+                                padding=ft.Padding(16, 16, 16, 16)
+                            )
+                        ),
+                        animate_rotation=ft.Animation(800, ft.AnimationCurve.EASE_OUT),
+                        animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT)
+                    ),
+                    ft.ProgressRing(
+                        ref=refresh_progress_ref,
+                        visible=False,
+                        width=24,
+                        height=24,
+                        stroke_width=3,
+                        color=ft.Colors.PRIMARY
+                    )
+                ], alignment=ft.alignment.center),
+                animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+                animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT)
+            )
         ], col={"sm": 6, "md": 3})
     ])
 
-    # Main dashboard layout
+    # Main dashboard layout with smooth animations and modern typography
     main_view = ft.Column([
-        # Header with title and last updated
-        ft.Row([
-            ft.Icon(ft.Icons.DASHBOARD, size=24),
-            ft.Text("Server Dashboard", size=24, weight=ft.FontWeight.BOLD),
-            ft.Container(expand=True),
-            last_updated_text
-        ]),
-        ft.Divider(),
-
-        # Quick Actions
-        ft.Text("Quick Actions", size=18, weight=ft.FontWeight.BOLD),
-        quick_actions,
-        ft.Divider(),
-
-        # Server Status Overview
-        ft.Text("Server Status", size=18, weight=ft.FontWeight.BOLD),
-        server_status_cards,
-        ft.Divider(),
-
-        # System Metrics
-        ft.Text("System Performance", size=18, weight=ft.FontWeight.BOLD),
-        system_metrics_cards,
-        ft.Divider(),
-
-        # Recent Activity and Storage Info
-        ft.ResponsiveRow([
-            # Recent Activity
-            ft.Column([
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            ft.Text("Recent Activity", size=16, weight=ft.FontWeight.BOLD),
-                            ft.Divider(),
-                            ft.Container(
-                                content=ft.Column(activity_items, spacing=0, scroll=ft.ScrollMode.AUTO),
-                                expand=True,
-                                border=ft.border.all(1, ft.Colors.OUTLINE),
-                                border_radius=8,
-                                bgcolor=ft.Colors.SURFACE,
-                                padding=5
-                            )
-                        ], spacing=10),
-                        padding=15
-                    )
+        # Header with title and last updated - enhanced with animations
+        ft.Container(
+            content=ft.Row([
+                ft.Container(
+                    content=ft.Icon(ft.Icons.DASHBOARD, size=26, color=ft.Colors.PRIMARY),
+                    animate_scale=ft.Animation(600, ft.AnimationCurve.BOUNCE_OUT),
+                    animate_opacity=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
+                ),
+                ft.Container(
+                    content=ft.Text(
+                        "Server Dashboard", 
+                        size=28, 
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ON_SURFACE
+                    ),
+                    animate_scale=ft.Animation(400, ft.AnimationCurve.EASE_OUT_BACK),
+                    animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT)
+                ),
+                ft.Container(expand=True),
+                ft.Container(
+                    content=last_updated_text,
+                    animate_opacity=ft.Animation(600, ft.AnimationCurve.EASE_IN_OUT),
+                    animate_scale=ft.Animation(300, ft.AnimationCurve.EASE_OUT)
                 )
-            ], col={"sm": 12, "md": 8}),
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            padding=ft.Padding(0, 8, 0, 16),
+            animate_opacity=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT)
+        ),
+        
+        ft.Container(
+            content=ft.Divider(height=1, color=ft.Colors.with_opacity(0.12, ft.Colors.ON_SURFACE)),
+            animate_opacity=ft.Animation(600, ft.AnimationCurve.EASE_IN_OUT)
+        ),
 
-            # Storage Summary
-            ft.Column([
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            ft.Text("Storage Summary", size=16, weight=ft.FontWeight.BOLD),
-                            ft.Divider(),
-
-                            ft.Row([
-                                ft.Icon(ft.Icons.FOLDER, size=16, color=ft.Colors.BLUE),
-                                ft.Text("Total Files", size=12, weight=ft.FontWeight.W_500)
-                            ], spacing=5),
-                            ft.Text("45", size=16, weight=ft.FontWeight.BOLD),
-
-                            ft.Divider(),
-
-                            ft.Row([
-                                ft.Icon(ft.Icons.CLOUD, size=16, color=ft.Colors.GREEN),
-                                ft.Text("Storage Used", size=12, weight=ft.FontWeight.W_500)
-                            ], spacing=5),
-                            ft.Text("2.4 GB", size=16, weight=ft.FontWeight.BOLD),
-
-                            ft.Divider(),
-
-                            ft.Row([
-                                ft.Icon(ft.Icons.STORAGE, size=16, color=ft.Colors.PURPLE),
-                                ft.Text("Available", size=12, weight=ft.FontWeight.W_500)
-                            ], spacing=5),
-                            ft.Text("477.6 GB", size=16, weight=ft.FontWeight.BOLD)
-                        ], spacing=8),
-                        padding=15
-                    )
+        # Quick Actions Section with enhanced typography
+        ft.Container(
+            content=ft.Column([
+                ft.Container(
+                    content=ft.Text(
+                        "Quick Actions", 
+                        size=20, 
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ON_SURFACE
+                    ),
+                    animate_scale=ft.Animation(350, ft.AnimationCurve.EASE_OUT),
+                    animate_opacity=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
+                ),
+                ft.Container(
+                    content=quick_actions,
+                    animate_opacity=ft.Animation(700, ft.AnimationCurve.EASE_IN_OUT),
+                    animate_scale=ft.Animation(300, ft.AnimationCurve.EASE_OUT)
                 )
-            ], col={"sm": 12, "md": 4})
-        ])
+            ], spacing=16),
+            margin=ft.Margin(0, 16, 0, 16)
+        ),
+        
+        ft.Container(
+            content=ft.Divider(height=1, color=ft.Colors.with_opacity(0.12, ft.Colors.ON_SURFACE)),
+            animate_opacity=ft.Animation(600, ft.AnimationCurve.EASE_IN_OUT)
+        ),
+
+        # Server Status Overview Section
+        ft.Container(
+            content=ft.Column([
+                ft.Container(
+                    content=ft.Text(
+                        "Server Status", 
+                        size=20, 
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ON_SURFACE
+                    ),
+                    animate_scale=ft.Animation(350, ft.AnimationCurve.EASE_OUT),
+                    animate_opacity=ft.Animation(450, ft.AnimationCurve.EASE_IN_OUT)
+                ),
+                ft.Container(
+                    content=server_status_cards,
+                    animate_opacity=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT),
+                    animate_scale=ft.Animation(350, ft.AnimationCurve.EASE_OUT)
+                )
+            ], spacing=16),
+            margin=ft.Margin(0, 16, 0, 16)
+        ),
+        
+        ft.Container(
+            content=ft.Divider(height=1, color=ft.Colors.with_opacity(0.12, ft.Colors.ON_SURFACE)),
+            animate_opacity=ft.Animation(600, ft.AnimationCurve.EASE_IN_OUT)
+        ),
+
+        # System Metrics Section  
+        ft.Container(
+            content=ft.Column([
+                ft.Container(
+                    content=ft.Text(
+                        "System Performance", 
+                        size=20, 
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ON_SURFACE
+                    ),
+                    animate_scale=ft.Animation(350, ft.AnimationCurve.EASE_OUT),
+                    animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT)
+                ),
+                ft.Container(
+                    content=system_metrics_cards,
+                    animate_opacity=ft.Animation(900, ft.AnimationCurve.EASE_IN_OUT),
+                    animate_scale=ft.Animation(400, ft.AnimationCurve.EASE_OUT)
+                )
+            ], spacing=16),
+            margin=ft.Margin(0, 16, 0, 16)
+        ),
+        
+        ft.Container(
+            content=ft.Divider(height=1, color=ft.Colors.with_opacity(0.12, ft.Colors.ON_SURFACE)),
+            animate_opacity=ft.Animation(600, ft.AnimationCurve.EASE_IN_OUT)
+        ),
+
+        # Recent Activity and Storage Info with enhanced animations
+        ft.Container(
+            content=ft.ResponsiveRow([
+                # Recent Activity with smooth animations
+                ft.Column([
+                    ft.Container(
+                        content=ft.Card(
+                            content=ft.Container(
+                                content=ft.Column([
+                                    ft.Container(
+                                        content=ft.Text(
+                                            "Recent Activity", 
+                                            size=18, 
+                                            weight=ft.FontWeight.BOLD,
+                                            color=ft.Colors.ON_SURFACE
+                                        ),
+                                        animate_scale=ft.Animation(350, ft.AnimationCurve.EASE_OUT),
+                                        animate_opacity=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
+                                    ),
+                                    ft.Container(
+                                        content=ft.Divider(height=1, color=ft.Colors.with_opacity(0.12, ft.Colors.ON_SURFACE)),
+                                        animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT)
+                                    ),
+                                    ft.Container(
+                                        content=ft.Container(
+                                            content=ft.Column(activity_items, spacing=2, scroll=ft.ScrollMode.AUTO),
+                                            expand=True,
+                                            border=ft.border.all(1, ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE)),
+                                            border_radius=12,
+                                            bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
+                                            padding=8
+                                        ),
+                                        animate_opacity=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT),
+                                        animate_scale=ft.Animation(400, ft.AnimationCurve.EASE_OUT)
+                                    )
+                                ], spacing=12),
+                                padding=ft.Padding(18, 16, 18, 18),
+                                bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.PRIMARY),
+                                border_radius=16
+                            ),
+                            elevation=2,
+                            surface_tint_color=ft.Colors.PRIMARY
+                            # animate_elevation not supported in Flet 0.28.3
+                        ),
+                        animate_opacity=ft.Animation(1000, ft.AnimationCurve.EASE_IN_OUT),
+                        animate_scale=ft.Animation(450, ft.AnimationCurve.EASE_OUT)
+                    )
+                ], col={"sm": 12, "md": 8}),
+
+                # Storage Summary with sophisticated micro-animations
+                ft.Column([
+                    ft.Container(
+                        content=ft.Card(
+                            content=ft.Container(
+                                content=ft.Column([
+                                    ft.Container(
+                                        content=ft.Text(
+                                            "Storage Summary", 
+                                            size=18, 
+                                            weight=ft.FontWeight.BOLD,
+                                            color=ft.Colors.ON_SURFACE
+                                        ),
+                                        animate_scale=ft.Animation(350, ft.AnimationCurve.EASE_OUT),
+                                        animate_opacity=ft.Animation(450, ft.AnimationCurve.EASE_IN_OUT)
+                                    ),
+                                    ft.Container(
+                                        content=ft.Divider(height=1, color=ft.Colors.with_opacity(0.12, ft.Colors.ON_SURFACE)),
+                                        animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT)
+                                    ),
+
+                                    ft.Container(
+                                        content=ft.Column([
+                                            ft.Row([
+                                                ft.Container(
+                                                    content=ft.Icon(ft.Icons.FOLDER, size=16, color=ft.Colors.BLUE_600),
+                                                    animate_scale=ft.Animation(600, ft.AnimationCurve.BOUNCE_OUT),
+                                                    animate_opacity=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
+                                                ),
+                                                ft.Text("Total Files", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT)
+                                            ], spacing=8),
+                                            ft.Container(
+                                                content=ft.Text("45", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                                                animate_scale=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
+                                                animate_opacity=ft.Animation(350, ft.AnimationCurve.EASE_IN_OUT)
+                                            )
+                                        ], spacing=4),
+                                        animate_opacity=ft.Animation(700, ft.AnimationCurve.EASE_IN_OUT)
+                                    ),
+
+                                    ft.Container(
+                                        content=ft.Divider(height=1, color=ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)),
+                                        animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT)
+                                    ),
+
+                                    ft.Container(
+                                        content=ft.Column([
+                                            ft.Row([
+                                                ft.Container(
+                                                    content=ft.Icon(ft.Icons.CLOUD, size=16, color=ft.Colors.GREEN_600),
+                                                    animate_scale=ft.Animation(650, ft.AnimationCurve.ELASTIC_OUT),
+                                                    animate_opacity=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
+                                                ),
+                                                ft.Text("Storage Used", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT)
+                                            ], spacing=8),
+                                            ft.Container(
+                                                content=ft.Text("2.4 GB", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                                                animate_scale=ft.Animation(350, ft.AnimationCurve.EASE_OUT),
+                                                animate_opacity=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
+                                            )
+                                        ], spacing=4),
+                                        animate_opacity=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT)
+                                    ),
+
+                                    ft.Container(
+                                        content=ft.Divider(height=1, color=ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)),
+                                        animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT)
+                                    ),
+
+                                    ft.Container(
+                                        content=ft.Column([
+                                            ft.Row([
+                                                ft.Container(
+                                                    content=ft.Icon(ft.Icons.STORAGE, size=16, color=ft.Colors.PURPLE_600),
+                                                    animate_scale=ft.Animation(700, ft.AnimationCurve.BOUNCE_OUT),
+                                                    animate_opacity=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
+                                                ),
+                                                ft.Text("Available", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT)
+                                            ], spacing=8),
+                                            ft.Container(
+                                                content=ft.Text("477.6 GB", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                                                animate_scale=ft.Animation(400, ft.AnimationCurve.EASE_OUT),
+                                                animate_opacity=ft.Animation(450, ft.AnimationCurve.EASE_IN_OUT)
+                                            )
+                                        ], spacing=4),
+                                        animate_opacity=ft.Animation(900, ft.AnimationCurve.EASE_IN_OUT)
+                                    )
+                                ], spacing=12),
+                                padding=ft.Padding(18, 16, 18, 18),
+                                bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SECONDARY),
+                                border_radius=16
+                            ),
+                            elevation=2,
+                            surface_tint_color=ft.Colors.SECONDARY
+                            # animate_elevation not supported in Flet 0.28.3
+                        ),
+                        animate_opacity=ft.Animation(1100, ft.AnimationCurve.EASE_IN_OUT),
+                        animate_scale=ft.Animation(500, ft.AnimationCurve.EASE_OUT)
+                    )
+                ], col={"sm": 12, "md": 4})
+            ]),
+            margin=ft.Margin(0, 16, 0, 0)
+        )
 
     ], spacing=20, expand=True, scroll=ft.ScrollMode.AUTO)
 

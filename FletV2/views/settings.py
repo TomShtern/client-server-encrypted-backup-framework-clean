@@ -281,31 +281,34 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         if page:
             show_success_message(page, f"System monitoring {'enabled' if new_value else 'disabled'}")
 
-    async def on_monitoring_interval_change(e):
+    def on_monitoring_interval_change_sync(e):
+        """Working synchronous monitoring interval change handler."""
         nonlocal current_settings
         try:
             interval = int(e.control.value)
-            if interval > 0:
+            if 1 <= interval <= 60:  # Reasonable limits
                 current_settings['monitoring']['interval'] = interval
                 logger.info(f"Monitoring interval changed to: {interval}")
                 e.control.error_text = None
-                if e.control.page:  # Check if control is attached to page
-                    await e.control.update_async()
-                if page:  # Check if page is still available
+                if page:
                     show_success_message(page, f"Monitoring interval updated to {interval} seconds")
             else:
-                e.control.error_text = "Must be greater than 0"
-                if e.control.page:  # Check if control is attached to page
-                    await e.control.update_async()
-                return
+                e.control.error_text = "Must be between 1-60 seconds"
+            e.control.update()
         except ValueError:
-            e.control.error_text = "Invalid number"
-            if e.control.page:  # Check if control is attached to page
-                await e.control.update_async()
-            return
-        e.control.error_text = None
-        if e.control.page:  # Check if control is attached to page
-            await e.control.update_async()
+            e.control.error_text = "Please enter a valid number"
+            e.control.update()
+        except Exception as ex:
+            logger.error(f"Error in monitoring interval change handler: {ex}")
+
+    def on_log_level_change_sync(e):
+        """Working synchronous log level change handler."""
+        nonlocal current_settings
+        log_level = e.control.value
+        current_settings['server']['log_level'] = log_level
+        logger.info(f"Log level changed to: {log_level}")
+        if page:
+            show_success_message(page, f"Log level updated to {log_level}")
 
     def on_alerts_toggle_sync(e):
         """Fixed: Synchronous alerts toggle handler."""
@@ -422,7 +425,7 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             ft.dropdown.Option("ERROR", "Error")
         ],
         width=200,
-        on_change=on_log_level_change
+        on_change=on_log_level_change_sync  # Fixed: Use sync handler
     )
 
     # GUI Settings Fields
@@ -455,7 +458,7 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         value=str(current_settings['monitoring'].get('interval', 2)),
         keyboard_type=ft.KeyboardType.NUMBER,
         width=200,
-        on_change=on_monitoring_interval_change
+        on_change=on_monitoring_interval_change_sync  # Fixed: Use sync handler
     )
 
     def reset_monitoring_interval_field(e):
