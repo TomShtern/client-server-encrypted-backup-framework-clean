@@ -342,7 +342,12 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
 
         except Exception as e:
             logger.error(f"Error loading database info: {e}")
-            show_error_message(page, f"Failed to load database info: {str(e)}")
+            try:
+                # Only show error message if page is ready to accept controls
+                if hasattr(page, 'controls') and page.controls:
+                    show_error_message(page, f"Failed to load database info: {str(e)}")
+            except Exception as ui_error:
+                logger.error(f"Could not show error message (page not ready): {ui_error}")
         finally:
             is_loading = False
 

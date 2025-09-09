@@ -122,35 +122,61 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
         filtered_logs_data = data
 
     # ---------------------- UI Update Functions --------------------------- #
-    def make_tile(entry: Dict[str, Any], index: int) -> ft.ListTile:
-        ts = datetime.fromisoformat(entry["timestamp"]).strftime("%H:%M:%S")
-        msg_text = ft.Text(
-            entry["message"],
-            size=12,
-            color=ft.Colors.GREY_800,
-            overflow=ft.TextOverflow.ELLIPSIS,
-            expand=True,
-        )
-        # Tooltip for longer messages
-        if len(entry.get("message", "")) > 60:
-            msg_text = ft.Tooltip(message=entry["message"], content=msg_text)
-
-    _fg = level_fg(entry["level"])
-    _bg = level_bg(entry["level"])
-    stripe = striped_row_color(index)
-    tile_bg = stripe or _bg
-
-    level_badge = build_level_badge(entry["level"])
-
-        return ft.ListTile(
-            leading=level_badge,
-            title=ft.Row([
-                ft.Text(ts, size=12, weight=ft.FontWeight.W_600, color=ft.Colors.BLUE_GREY_700, width=65),
-                ft.Text(entry["component"], size=12, weight=ft.FontWeight.W_500, color=ft.Colors.INDIGO_700, width=100),
-                msg_text,
-            ], spacing=8),
-            bgcolor=tile_bg,
-            content_padding=ft.Padding(12, 8, 12, 8),
+    def create_log_data_row(entry: Dict[str, Any], index: int) -> ft.DataRow:
+        """Create a DataRow for a log entry with proper styling."""
+        try:
+            # Format timestamp to show date and time
+            dt = datetime.fromisoformat(entry["timestamp"])
+            time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+        except (ValueError, KeyError):
+            time_str = str(entry.get("timestamp", "Unknown"))
+        
+        # Create level badge
+        level_badge = build_level_badge(entry["level"])
+        
+        # Handle long messages with smart truncation
+        message = entry.get("message", "")
+        display_message = message
+        if len(message) > 80:
+            display_message = message[:77] + "..."
+        
+        # Get row background color
+        row_bg = striped_row_color(index)
+        
+        return ft.DataRow(
+            cells=[
+                ft.DataCell(
+                    ft.Text(
+                        time_str, 
+                        size=12, 
+                        weight=ft.FontWeight.W_500,
+                        color=ft.Colors.BLUE_GREY_700,
+                        font_family="monospace"
+                    )
+                ),
+                ft.DataCell(level_badge),
+                ft.DataCell(
+                    ft.Text(
+                        entry.get("component", "Unknown"), 
+                        size=12, 
+                        weight=ft.FontWeight.W_600,
+                        color=ft.Colors.INDIGO_700
+                    )
+                ),
+                ft.DataCell(
+                    ft.Container(
+                        content=ft.Text(
+                            display_message,
+                            size=12,
+                            color=ft.Colors.GREY_800,
+                            overflow=ft.TextOverflow.ELLIPSIS
+                        ),
+                        tooltip=message if len(message) > 80 else None,
+                        expand=True
+                    )
+                )
+            ],
+            color=row_bg
         )
 
     def update_list():
@@ -177,20 +203,47 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
                 pagination_config.current_page,
                 pagination_config.page_size
             )
-            list_view = ft.ListView(
-                controls=[make_tile(x, i) for i, x in enumerate(slice_data)],
-                expand=True,
-                spacing=2,
-                padding=ft.Padding(8, 8, 8, 8),
-                auto_scroll=False,
-                semantic_child_count=len(slice_data),
+            
+            # Create DataTable with proper structure
+            data_table = ft.DataTable(
+                columns=[
+                    ft.DataColumn(
+                        ft.Text("Time", weight=ft.FontWeight.BOLD, size=12),
+                        numeric=False
+                    ),
+                    ft.DataColumn(
+                        ft.Text("Level", weight=ft.FontWeight.BOLD, size=12),
+                        numeric=False
+                    ),
+                    ft.DataColumn(
+                        ft.Text("Component", weight=ft.FontWeight.BOLD, size=12),
+                        numeric=False
+                    ),
+                    ft.DataColumn(
+                        ft.Text("Message", weight=ft.FontWeight.BOLD, size=12),
+                        numeric=False
+                    ),
+                ],
+                rows=[create_log_data_row(entry, i) for i, entry in enumerate(slice_data)],
+                border=ft.border.all(1, ft.Colors.OUTLINE),
+                border_radius=8,
+                vertical_lines=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                horizontal_lines=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                column_spacing=20,
+                data_row_min_height=48,
+                data_row_max_height=80,
             )
+            
+            # Wrap in scrollable container for large datasets
+            scrollable_table = ft.Column([
+                data_table
+            ], expand=True, scroll=ft.ScrollMode.AUTO)
+            
             logs_container.controls = [
                 ft.AnimatedSwitcher(
-                    content=list_view,
+                    content=scrollable_table,
                     transition=ft.AnimatedSwitcherTransition.FADE,
                     duration=250,
-                    reverse=True,
                 )
             ]
         logs_container.update()
@@ -234,7 +287,7 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
     def on_search_change(e):
         nonlocal search_query
         search_query = e.control.value
-        asyncio.create_task(search_debouncer.debounce(perform_search))
+        page.run_task(search_debouncer.debounce(perform_search))
 
     def on_search_clear(e):
         nonlocal search_query
@@ -440,17 +493,6 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
         ),
         ft.Container(content=ft.Row([status_text, ft.Container(expand=True), last_updated_text]), padding=ft.Padding(20, 0, 20, 5)),
         ft.Container(content=ft.Row([ft.Container(expand=True), pagination_row, ft.Container(expand=True)]), padding=ft.Padding(20, 5, 20, 10)),
-        ft.Container(
-            content=ft.Row([
-                ft.Container(content=ft.Text("Time", weight=ft.FontWeight.BOLD, size=12), width=80),
-                ft.Container(content=ft.Text("Level", weight=ft.FontWeight.BOLD, size=12), width=70),
-                ft.Container(content=ft.Text("Component", weight=ft.FontWeight.BOLD, size=12), width=100),
-                ft.Container(content=ft.Text("Message", weight=ft.FontWeight.BOLD, size=12), expand=True),
-            ], spacing=10),
-            padding=ft.Padding(10, 8, 10, 8),
-            bgcolor=ft.Colors.SURFACE,
-            border=ft.border.all(1, ft.Colors.OUTLINE)
-        ),
         ft.Container(
             content=logs_container,
             expand=True,

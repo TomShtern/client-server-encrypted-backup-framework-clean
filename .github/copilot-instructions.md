@@ -660,3 +660,7 @@ Start now: create branch `perf/implement-visual-plan`, capture baseline metrics,
 
 End of prompt.
 ```
+
+### **AI Agent Prompt - Enhanced**
+```text
+You are an expert professional software engineer agent and also a flet 0.

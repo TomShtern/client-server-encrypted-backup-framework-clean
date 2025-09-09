@@ -48,7 +48,6 @@ Configuration for AI behavior when interacting with Codacy's MCP Server
  - Before: Continuing with any other tasks
 
 ## General
-- NEVER CHECK MARKDOWN OR TEXT FILES WITH `codacy_cli_analyze` OR ANY OTHER CHECK. IF YOU IGNORE THIS SENTENCE YOU WILL CRUSH MY COMPUTER FROM ANALYZING SOME GIBBERISH MARKDOWN OR TEXT FILES.
 - Repeat the relevant steps for each modified file.
 - "Propose fixes" means to both suggest and, if possible, automatically apply the fixes.
 - You MUST NOT wait for the user to ask for analysis or remind you to run the tool.

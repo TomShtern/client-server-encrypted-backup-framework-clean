@@ -1122,12 +1122,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         dialog.open = True
         page.update()
 
-    # Debounced search support
-    try:
-        from utils.performance import AsyncDebouncer
-        search_debouncer = AsyncDebouncer(delay=0.3)
-    except Exception:
-        search_debouncer = None  # fallback
+    # Note: search_debouncer already initialized above at line 310
 
     async def perform_search_async():
         pagination_config.current_page = 0
@@ -1375,9 +1370,12 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
             )
 
         def build_row(idx, file_data):
-            name_control: ft.Control = ft.Text(str(file_data.get("name", "Unknown")), overflow=ft.TextOverflow.ELLIPSIS)
-            if len(str(file_data.get("name", ""))) > 28:
-                name_control = ft.Tooltip(message=str(file_data.get("name", "")), content=name_control)
+            name_text = ft.Text(
+                str(file_data.get("name", "Unknown")), 
+                overflow=ft.TextOverflow.ELLIPSIS,
+                tooltip=str(file_data.get("name", "")) if len(str(file_data.get("name", ""))) > 28 else None
+            )
+            name_control = name_text
             status_val = str(file_data.get("status", "Unknown"))
             badge = build_status_badge(status_val, status_val)
             actions_menu = ft.PopupMenuButton(
@@ -1467,7 +1465,6 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 content=body,
                 transition=ft.AnimatedSwitcherTransition.FADE,
                 duration=300,
-                reverse=True,
             )
 
         # Update status text

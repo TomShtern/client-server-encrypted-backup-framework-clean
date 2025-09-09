@@ -9,8 +9,7 @@ FletV2 - Clean Desktop Ap    def __init__(self, page: ft.Page):
         self._loaded_views = {}  # Cache for loaded views
         self._background_tasks = set()  # Track background tasks
         
-        # Configure desktop window
-        self._configure_desktop_window()
+        # Window configuration moved to main() function for proper timing
         
         # Initialize state manager with performance optimizations
         self.state_manager = None
@@ -76,8 +75,7 @@ class FletV2App(ft.Row):
         self.page = page
         self.expand = True
         
-        # Configure desktop window
-        self._configure_desktop_window()
+        # Window configuration moved to main() function for proper timing
         
         # Initialize state manager for reactive UI updates
         self.state_manager = None
@@ -854,10 +852,39 @@ class FletV2App(ft.Row):
 # Simple application entry point
 async def main(page: ft.Page):
     """Simple main function - no complex initialization."""
+    def on_window_event(e):
+        """Handle window events to force sizing."""
+        if e.data == "focus" or e.data == "ready":
+            page.window_width = 1730
+            page.window_height = 1425
+            page.window_center = True
+            page.update()
+            logger.info(f"Window resized via event: {page.window_width}x{page.window_height}")
+    
     try:
+        # Set up window event handler
+        page.on_window_event = on_window_event
+        
+        # Initial window configuration
+        page.window_width = 1730
+        page.window_height = 1425
+        page.window_min_width = 1200
+        page.window_min_height = 900
+        page.window_resizable = True
+        page.window_center = True
+        page.title = "Backup Server Management"
+        
         # Create and add the simple desktop app
         app = FletV2App(page)
         page.add(app)
+        
+        # Additional attempts to force window size
+        await asyncio.sleep(0.2)
+        page.window_width = 1730
+        page.window_height = 1425
+        page.update()
+        
+        logger.info(f"Window configured multiple attempts: {page.window_width}x{page.window_height}")
         
         logger.info(f"FletV2 App started - {BRIDGE_TYPE} active")
         
