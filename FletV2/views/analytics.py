@@ -363,22 +363,14 @@ def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> f
                     stroke_width=3,
                     color=ft.Colors.ORANGE_600,
                     curved=True,
-                    stroke_cap_round=True,
-                    below_line=ft.ChartAreaData(
-                        show=True,
-                        color=ft.Colors.with_opacity(0.12, ft.Colors.ORANGE_400)
-                    )
+                    stroke_cap_round=True
                 ),
                 ft.LineChartData(
                     data_points=recv_data_points,
                     stroke_width=3,
                     color=ft.Colors.GREEN_600,
                     curved=True,
-                    stroke_cap_round=True,
-                    below_line=ft.ChartAreaData(
-                        show=True,
-                        color=ft.Colors.with_opacity(0.12, ft.Colors.GREEN_400)
-                    )
+                    stroke_cap_round=True
                 )
             ]
             network_chart.update()

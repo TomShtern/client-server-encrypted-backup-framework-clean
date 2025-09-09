@@ -1,7 +1,26 @@
 #!/usr/bin/env python3
 """
-FletV2 - Clean Desktop Application
-A properly implemented Flet desktop application following best practices.
+FletV2 - Clean Desktop Ap    def __init__(self, page: ft.Page):
+        super().__init__()
+        self.page = page
+        self.expand = True
+        
+        # Performance optimization: lazy view loading
+        self._loaded_views = {}  # Cache for loaded views
+        self._background_tasks = set()  # Track background tasks
+        
+        # Configure desktop window
+        self._configure_desktop_window()
+        
+        # Initialize state manager with performance optimizations
+        self.state_manager = None
+        self._initialize_state_manager()
+        
+        # Initialize server bridge synchronously for immediate availability
+        self.server_bridge = create_server_bridge()  # Direct synchronous initialization
+        logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
+        
+        # Create optimized content area with fast transitions for better performanceerly implemented Flet desktop application following best practices.
 
 This demonstrates the clean architecture:
 - Uses Flet built-ins exclusively (no framework fighting)
@@ -68,32 +87,59 @@ class FletV2App(ft.Row):
         self.server_bridge = create_server_bridge()  # Direct synchronous initialization
         logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
         
-        # Create enhanced content area with sophisticated animated transitions
+        # Create optimized content area with modern Material Design 3 styling and fast transitions
         self.content_area = ft.Container(
             expand=True,
-            padding=ft.Padding(20, 16, 20, 16),  # Reduced padding for more content space
-            border_radius=ft.BorderRadius(12, 0, 0, 12),  # Slightly smaller radius
-            bgcolor=ft.Colors.with_opacity(0.015, ft.Colors.PRIMARY),  # More subtle background
-            # Add modern visual depth with subtle shadow
+            padding=ft.Padding(24, 20, 24, 20),  # Material Design 3 spacing standards
+            border_radius=ft.BorderRadius(16, 0, 0, 16),  # Modern rounded corners on content side
+            bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),  # Modern surface hierarchy compatible
+            # Enhanced shadow for modern depth without performance impact
             shadow=ft.BoxShadow(
                 spread_radius=0,
                 blur_radius=8,
                 color=ft.Colors.with_opacity(0.06, ft.Colors.BLACK),
                 offset=ft.Offset(0, 2),
             ),
-            animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),  # Faster, more efficient
-            animate_opacity=ft.Animation(250, ft.AnimationCurve.EASE_OUT),
+            animate=ft.Animation(140, ft.AnimationCurve.EASE_OUT_CUBIC),  # Modern animation curve
+            animate_opacity=ft.Animation(100, ft.AnimationCurve.EASE_OUT),
             content=ft.AnimatedSwitcher(
-                content=ft.Container(  # Start with empty container instead of None
-                    content=ft.Text("Loading...", size=16),
-                    padding=20,
-                    expand=True
+                content=ft.Card(  # Modern card-based loading state
+                    content=ft.Container(
+                        content=ft.Column([
+                            ft.Row([
+                                ft.ProgressRing(
+                                    width=24,
+                                    height=24,
+                                    stroke_width=3,
+                                    color=ft.Colors.PRIMARY,
+                                ),
+                                ft.Text(
+                                    "Loading Application...", 
+                                    size=16, 
+                                    weight=ft.FontWeight.W_500,
+                                    color=ft.Colors.ON_SURFACE_VARIANT
+                                ),
+                            ], alignment=ft.MainAxisAlignment.CENTER, spacing=12),
+                            ft.Chip(
+                                label=ft.Text("Encrypted Backup Framework", size=12),
+                                bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+                                color=ft.Colors.PRIMARY,
+                                height=32,
+                            ),
+                        ], alignment=ft.MainAxisAlignment.CENTER, spacing=16),
+                        padding=24,
+                        expand=True,
+                        alignment=ft.alignment.center
+                    ),
+                    elevation=2,
+                    shadow_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+                    surface_tint_color=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
                 ),
-                transition=ft.AnimatedSwitcherTransition.SCALE,  # Enhanced scale transition
-                duration=400,  # Slightly longer for more noticeable effect
-                reverse_duration=300,
-                switch_in_curve=ft.AnimationCurve.EASE_OUT_BACK,  # Bouncy entrance
-                switch_out_curve=ft.AnimationCurve.EASE_IN,  # Smooth exit
+                transition=ft.AnimatedSwitcherTransition.FADE,  # Optimal performance transition
+                duration=160,  # Balanced for smoothness and speed
+                reverse_duration=100,
+                switch_in_curve=ft.AnimationCurve.EASE_OUT_CUBIC,  # Modern curves
+                switch_out_curve=ft.AnimationCurve.EASE_IN_CUBIC,
                 expand=True
             )
         )
@@ -244,7 +290,7 @@ class FletV2App(ft.Row):
         self._on_navigation_change(type('Event', (), {'control': nav_rail_control})())
     
     def _create_navigation_rail(self):
-        """Create enhanced collapsible navigation rail with modern 2025 UI styling."""
+        """Create enhanced collapsible navigation rail with modern 2025 UI styling and performance optimizations."""
         return ft.Container(
             content=ft.NavigationRail(
                 selected_index=0,
@@ -253,31 +299,44 @@ class FletV2App(ft.Row):
                 min_width=68,  # Collapsed width (icons only)
                 min_extended_width=240,  # Extended width (2025 standard)
                 extended=self.nav_rail_extended,  # Collapsible functionality
-                bgcolor=ft.Colors.with_opacity(0.98, ft.Colors.SURFACE),  # Enhanced transparency
-                indicator_color=ft.Colors.with_opacity(0.15, ft.Colors.PRIMARY),  # More vibrant indicator
-                indicator_shape=ft.RoundedRectangleBorder(radius=20),  # More modern rounding
-                elevation=4,  # Enhanced depth for 2025 layering
+                bgcolor=ft.Colors.with_opacity(0.98, ft.Colors.SURFACE),  # Material Design 3 compatible surface
+                indicator_color=ft.Colors.with_opacity(0.2, ft.Colors.PRIMARY),  # Enhanced visibility with optimal opacity
+                indicator_shape=ft.RoundedRectangleBorder(radius=24),  # Material Design 3 rounded corners
+                elevation=6,  # Enhanced depth for modern layering without performance impact
                 destinations=[
+                # Dashboard with modern badge indicator
                 ft.NavigationRailDestination(
-                    icon=ft.Icons.DASHBOARD_OUTLINED,
+                    icon=ft.Icon(
+                        ft.Icons.DASHBOARD_OUTLINED, 
+                        size=22,
+                        badge=ft.Badge(small_size=8, bgcolor=ft.Colors.with_opacity(0.8, ft.Colors.GREEN))
+                    ),
                     selected_icon=ft.Icon(
-                        ft.Icons.DASHBOARD,
-                        color=ft.Colors.PRIMARY,
-                        size=24
+                        ft.Icons.DASHBOARD, 
+                        color=ft.Colors.PRIMARY, 
+                        size=24,
+                        badge=ft.Badge(small_size=10, bgcolor=ft.Colors.with_opacity(0.9, ft.Colors.GREEN))
                     ),
                     label="Dashboard"
                 ),
+                # Clients with adaptive status badge
                 ft.NavigationRailDestination(
-                    icon=ft.Icons.PEOPLE_OUTLINE,
+                    icon=ft.Icon(
+                        ft.Icons.PEOPLE_OUTLINE, 
+                        size=22,
+                        badge=ft.Badge(small_size=8, bgcolor=ft.Colors.with_opacity(0.7, ft.Colors.BLUE))
+                    ),
                     selected_icon=ft.Icon(
-                        ft.Icons.PEOPLE,
-                        color=ft.Colors.PRIMARY,
-                        size=24
+                        ft.Icons.PEOPLE, 
+                        color=ft.Colors.PRIMARY, 
+                        size=24,
+                        badge=ft.Badge(small_size=10, bgcolor=ft.Colors.with_opacity(0.9, ft.Colors.BLUE))
                     ),
                     label="Clients"
                 ),
+                # Files with modern folder indication
                 ft.NavigationRailDestination(
-                    icon=ft.Icons.FOLDER_OUTLINED,
+                    icon=ft.Icon(ft.Icons.FOLDER_OUTLINED, size=22),
                     selected_icon=ft.Icon(
                         ft.Icons.FOLDER,
                         color=ft.Colors.PRIMARY,
@@ -285,8 +344,9 @@ class FletV2App(ft.Row):
                     ),
                     label="Files"
                 ),
+                # Database with enhanced storage visual
                 ft.NavigationRailDestination(
-                    icon=ft.Icons.STORAGE_OUTLINED,
+                    icon=ft.Icon(ft.Icons.STORAGE_OUTLINED, size=22),
                     selected_icon=ft.Icon(
                         ft.Icons.STORAGE,
                         color=ft.Colors.PRIMARY,
@@ -294,8 +354,9 @@ class FletV2App(ft.Row):
                     ),
                     label="Database"
                 ),
+                # Analytics with modern graph styling
                 ft.NavigationRailDestination(
-                    icon=ft.Icons.AUTO_GRAPH_OUTLINED,
+                    icon=ft.Icon(ft.Icons.AUTO_GRAPH_OUTLINED, size=22),
                     selected_icon=ft.Icon(
                         ft.Icons.AUTO_GRAPH,
                         color=ft.Colors.PRIMARY,
@@ -303,17 +364,24 @@ class FletV2App(ft.Row):
                     ),
                     label="Analytics"
                 ),
+                # Logs with activity indicator
                 ft.NavigationRailDestination(
-                    icon=ft.Icons.ARTICLE_OUTLINED,
+                    icon=ft.Icon(
+                        ft.Icons.ARTICLE_OUTLINED, 
+                        size=22,
+                        badge=ft.Badge(small_size=8, bgcolor=ft.Colors.with_opacity(0.7, ft.Colors.ORANGE))
+                    ),
                     selected_icon=ft.Icon(
-                        ft.Icons.ARTICLE,
-                        color=ft.Colors.PRIMARY,
-                        size=24
+                        ft.Icons.ARTICLE, 
+                        color=ft.Colors.PRIMARY, 
+                        size=24,
+                        badge=ft.Badge(small_size=10, bgcolor=ft.Colors.with_opacity(0.9, ft.Colors.ORANGE))
                     ),
                     label="Logs"
                 ),
+                # Settings with modern gear icon
                 ft.NavigationRailDestination(
-                    icon=ft.Icons.SETTINGS_OUTLINED,
+                    icon=ft.Icon(ft.Icons.SETTINGS_OUTLINED, size=22),
                     selected_icon=ft.Icon(
                         ft.Icons.SETTINGS,
                         color=ft.Colors.PRIMARY,
@@ -324,20 +392,11 @@ class FletV2App(ft.Row):
                 ],
                 on_change=self._on_navigation_change,
                 leading=ft.Container(
-                    content=ft.IconButton(
+                    content=ft.FloatingActionButton(
                         icon=ft.Icons.MENU_ROUNDED if self.nav_rail_extended else ft.Icons.MENU_OPEN_ROUNDED,
-                        icon_size=24,
+                        mini=True,
                         tooltip="Toggle Navigation Menu",
                         on_click=self._toggle_navigation_rail,
-                        style=ft.ButtonStyle(
-                            color=ft.Colors.PRIMARY,
-                            shape=ft.RoundedRectangleBorder(radius=14),
-                            overlay_color={
-                                ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
-                                ft.ControlState.PRESSED: ft.Colors.with_opacity(0.15, ft.Colors.PRIMARY)
-                            },
-                            padding=ft.Padding(8, 8, 8, 8)
-                        )
                     ),
                     padding=ft.Padding(8, 16, 8, 8),
                     animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT)  # Shorter animation
@@ -362,139 +421,255 @@ class FletV2App(ft.Row):
                     animate=ft.Animation(100, ft.AnimationCurve.EASE_OUT)  # Shorter animation
                 )
             ),
-            # Enhanced modern depth with 2025 design standards - layering effect
+            # Enhanced depth with optimized performance - reduced shadow for speed
             shadow=ft.BoxShadow(
                 spread_radius=0,
-                blur_radius=24,  # Enhanced blur for modern depth
-                color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),  # Stronger shadow
-                offset=ft.Offset(4, 0),  # Slightly more offset for depth
+                blur_radius=8,  # Reduced blur for better performance
+                color=ft.Colors.with_opacity(0.08, ft.Colors.BLACK),
+                offset=ft.Offset(2, 0),  # Reduced offset for less rendering cost
             ),
-            animate=ft.Animation(180, ft.AnimationCurve.EASE_OUT),  # Shorter but smooth collapse animation
-            border_radius=ft.BorderRadius(0, 16, 16, 0),  # Modern rounded corners
+            animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT),  # Much faster collapse animation
+            border_radius=ft.BorderRadius(0, 12, 12, 0),  # Smaller radius for speed
         )
 
     def _toggle_navigation_rail(self, e=None):
-        """Toggle navigation rail between extended and collapsed states with enhanced smooth animation."""
+        """Toggle navigation rail with modern UI feedback and optimized performance animations."""
         self.nav_rail_extended = not self.nav_rail_extended
         
         # Update the navigation rail extended state
         nav_rail_control = self.nav_rail.content
         nav_rail_control.extended = self.nav_rail_extended
         
-        # Update the toggle icon with smooth rotation animation
+        # Update the toggle button with modern floating action button styling
         toggle_btn = nav_rail_control.leading.content
         toggle_btn.icon = ft.Icons.MENU_ROUNDED if self.nav_rail_extended else ft.Icons.MENU_OPEN_ROUNDED
         
-        # Add subtle rotation animation to the toggle button
-        toggle_btn.rotate = ft.Rotate(0.5 if self.nav_rail_extended else 0)
-        toggle_btn.animate_rotation = ft.Animation(200, ft.AnimationCurve.EASE_OUT)
+        # Add modern scale animation feedback for better UX
+        toggle_btn.scale = 0.95
+        toggle_btn.animate_scale = ft.Animation(80, ft.AnimationCurve.EASE_OUT)
         
-        # Smooth animation for the navigation rail with enhanced curves
-        self.nav_rail.animate = ft.Animation(250, ft.AnimationCurve.EASE_OUT_CUBIC)
+        # Modern rotation animation with cubic curves
+        toggle_btn.rotate = ft.Rotate(0.25 if self.nav_rail_extended else 0)
+        toggle_btn.animate_rotation = ft.Animation(140, ft.AnimationCurve.EASE_OUT_CUBIC)
+        
+        # Optimized animation for the navigation rail with modern curves
+        self.nav_rail.animate = ft.Animation(160, ft.AnimationCurve.EASE_OUT_CUBIC)
         self.nav_rail.update()
         
-        logger.info(f"Navigation rail {'extended' if self.nav_rail_extended else 'collapsed'} with enhanced animation")
+        # Show modern SnackBar feedback for better UX
+        nav_snack = ft.SnackBar(
+            content=ft.Row([
+                ft.Icon(
+                    ft.Icons.MENU_OPEN if self.nav_rail_extended else ft.Icons.MENU,
+                    size=16,
+                    color=ft.Colors.ON_INVERSE_SURFACE
+                ),
+                ft.Text(
+                    f"Navigation {'expanded' if self.nav_rail_extended else 'collapsed'}",
+                    color=ft.Colors.ON_INVERSE_SURFACE,
+                    size=14
+                ),
+            ], spacing=8),
+            bgcolor=ft.Colors.INVERSE_SURFACE,
+            duration=1500,
+            behavior=ft.SnackBarBehavior.FLOATING,
+            margin=ft.Margin(20, 0, 20, 20),
+            shape=ft.RoundedRectangleBorder(radius=12),
+            elevation=3,
+        )
+        self.page.overlay.append(nav_snack)
+        nav_snack.open = True
+        self.page.update()
+        
+        # Reset scale after animation for smooth feel
+        import time
+        import threading
+        
+        def reset_scale():
+            try:
+                toggle_btn.scale = 1.0
+                toggle_btn.animate_scale = ft.Animation(80, ft.AnimationCurve.EASE_OUT)
+                toggle_btn.update()
+            except Exception as e:
+                logger.debug(f"Scale reset completed: {e}")
+        
+        # Use threading timer for proper async timing (more reliable than page timer)
+        threading.Timer(0.08, reset_scale).start()
+        
+        logger.info(f"Navigation rail {'extended' if self.nav_rail_extended else 'collapsed'} with modern UI feedback")
 
     def _on_navigation_change(self, e):
-        """Enhanced navigation callback with loading indicator and smooth transitions."""
+        """Optimized navigation callback with lazy loading."""
         # Map index to view names
         view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
         selected_view = view_names[e.control.selected_index] if e.control.selected_index < len(view_names) else "dashboard"
         
-        logger.info(f"Navigation switching to: {selected_view} with enhanced animation")
+        logger.info(f"Navigation switching to: {selected_view} (optimized)")
         
-        # Show subtle loading indicator during transition
-        self._show_loading_indicator()
-        
-        # Load view with enhanced animation
+        # Performance: Skip loading indicator for faster transitions
+        # Load view with lazy loading optimization
         self._load_view(selected_view)
     
     async def _on_theme_toggle(self, e):
-        """Handle theme toggle button click with smooth animation."""
+        """Handle theme toggle button click with modern UI animations and feedback."""
         try:
             from theme import toggle_theme_mode
             toggle_theme_mode(self.page)
             
-            # Add subtle animation feedback to the toggle button
+            # Add modern animation feedback to the toggle button
             toggle_btn = e.control
             original_icon = toggle_btn.icon
             
-            # Quick scale animation for visual feedback
-            toggle_btn.scale = 0.9
-            toggle_btn.animate_scale = ft.Animation(100, ft.AnimationCurve.EASE_OUT)
+            # Modern bounce-scale animation for visual feedback
+            toggle_btn.scale = 0.85
+            toggle_btn.animate_scale = ft.Animation(100, ft.AnimationCurve.EASE_OUT_BACK)
             toggle_btn.update()
+            
+            # Modern theme feedback with enhanced SnackBar
+            current_theme = "Dark" if self.page.theme_mode == ft.ThemeMode.DARK else "Light"
+            snack_bar = ft.SnackBar(
+                content=ft.Row([
+                    ft.Icon(
+                        ft.Icons.DARK_MODE if current_theme == "Dark" else ft.Icons.LIGHT_MODE,
+                        size=16,
+                        color=ft.Colors.ON_INVERSE_SURFACE
+                    ),
+                    ft.Text(
+                        f"Switched to {current_theme} theme",
+                        color=ft.Colors.ON_INVERSE_SURFACE,
+                        size=14,
+                        weight=ft.FontWeight.W_500
+                    ),
+                ], spacing=8),
+                bgcolor=ft.Colors.INVERSE_SURFACE,
+                duration=2000,
+                behavior=ft.SnackBarBehavior.FLOATING,
+                margin=ft.Margin(20, 0, 20, 20),
+                shape=ft.RoundedRectangleBorder(radius=12),
+                elevation=4,
+            )
+            self.page.overlay.append(snack_bar)
+            snack_bar.open = True
+            self.page.update()
             
             # Reset scale after animation using asyncio.sleep for proper timing
             import asyncio
             await asyncio.sleep(0.1)  # 100ms delay
             
             def reset_scale():
-                toggle_btn.scale = 1.0
-                toggle_btn.animate_scale = ft.Animation(100, ft.AnimationCurve.EASE_OUT)
-                toggle_btn.update()
+                try:
+                    toggle_btn.scale = 1.0
+                    toggle_btn.animate_scale = ft.Animation(120, ft.AnimationCurve.EASE_OUT_BACK)
+                    toggle_btn.update()
+                except Exception as scale_error:
+                    logger.debug(f"Theme toggle scale reset: {scale_error}")
             
             reset_scale()
             
-            logger.info("Theme toggled successfully with animation feedback")
+            logger.info(f"Theme toggled to {current_theme} with modern UI feedback")
             
-        except Exception as ex:
-            logger.error(f"Failed to toggle theme: {ex}", exc_info=True)
-            # Show error feedback
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Failed to toggle theme: {ex}"),
+        except Exception as e:
+            logger.error(f"Theme toggle failed: {e}")
+            # Show error feedback with modern SnackBar
+            error_snack = ft.SnackBar(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.ERROR_OUTLINE, size=16, color=ft.Colors.ON_ERROR),
+                    ft.Text("Theme toggle failed", color=ft.Colors.ON_ERROR, size=14),
+                ], spacing=8),
                 bgcolor=ft.Colors.ERROR,
-                duration=3000
+                duration=3000,
+                behavior=ft.SnackBarBehavior.FLOATING,
             )
-            self.page.snack_bar.open = True
+            self.page.overlay.append(error_snack)
+            error_snack.open = True
             self.page.update()
     
     def _show_loading_indicator(self):
-        """Show subtle loading indicator during view transitions."""
+        """Show modern loading indicator with enhanced UI components during view transitions."""
         try:
-            # Create a subtle loading overlay
+            # Create a modern loading overlay with cards and visual enhancements
             loading_content = ft.Container(
                 content=ft.Column([
-                    ft.Container(height=40),  # Spacer
-                    ft.ProgressRing(
-                        width=32,
-                        height=32,
-                        stroke_width=3,
-                        color=ft.Colors.PRIMARY,
-                        bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY)
+                    ft.Card(
+                        content=ft.Container(
+                            content=ft.Column([
+                                ft.Row([
+                                    ft.ProgressRing(
+                                        width=28,
+                                        height=28,
+                                        stroke_width=3,
+                                        color=ft.Colors.PRIMARY,
+                                        bgcolor=ft.Colors.with_opacity(0.15, ft.Colors.PRIMARY)
+                                    ),
+                                    ft.Text(
+                                        "Loading View...",
+                                        size=15,
+                                        weight=ft.FontWeight.W_500,
+                                        color=ft.Colors.ON_SURFACE
+                                    )
+                                ], alignment=ft.MainAxisAlignment.CENTER, spacing=12),
+                                ft.Row([
+                                    ft.Chip(
+                                        label=ft.Text("Optimized", size=11),
+                                        leading=ft.Icon(ft.Icons.SPEED, size=14),
+                                        bgcolor=ft.Colors.with_opacity(0.12, ft.Colors.GREEN),
+                                        color=ft.Colors.GREEN,
+                                        height=28,
+                                    ),
+                                    ft.Chip(
+                                        label=ft.Text("Secure", size=11),
+                                        leading=ft.Icon(ft.Icons.SECURITY, size=14),
+                                        bgcolor=ft.Colors.with_opacity(0.12, ft.Colors.BLUE),
+                                        color=ft.Colors.BLUE,
+                                        height=28,
+                                    ),
+                                ], alignment=ft.MainAxisAlignment.CENTER, spacing=6),
+                            ], alignment=ft.MainAxisAlignment.CENTER, spacing=16),
+                            padding=24,
+                            alignment=ft.alignment.center
+                        ),
+                        elevation=2,
+                        shadow_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+                        surface_tint_color=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
                     ),
-                    ft.Container(height=16),  # Spacer
-                    ft.Text(
-                        "Loading...",
-                        size=14,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                        text_align=ft.TextAlign.CENTER
-                    )
                 ], 
                 alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=0
                 ),
-                padding=20,
-                expand=True
+                padding=32,
+                expand=True,
+                alignment=ft.alignment.center
             )
             
             # Temporarily show loading indicator
             animated_switcher = self.content_area.content
             animated_switcher.content = loading_content
             
-            # Defensive update for loading indicator
+            # Defensive update for loading indicator with modern error handling
             try:
                 if hasattr(self.page, 'controls') and self.page.controls:
                     animated_switcher.update()
+                    logger.debug("Modern loading indicator updated via AnimatedSwitcher")
                 else:
                     logger.debug("Page not ready for loading indicator update")
             except Exception as update_error:
-                logger.debug(f"Loading indicator update failed: {update_error}")
+                logger.debug(f"Loading indicator update failed, gracefully continuing: {update_error}")
                 # Don't fail the entire operation for loading indicator
             
         except Exception as e:
-            logger.debug(f"Could not show loading indicator: {e}")
-            # Continue without loading indicator if it fails
+            logger.debug(f"Could not show modern loading indicator: {e}")
+            # Fallback to simple loading if modern version fails
+            try:
+                simple_loading = ft.Container(
+                    content=ft.ProgressRing(width=24, height=24),
+                    expand=True,
+                    alignment=ft.alignment.center
+                )
+                self.content_area.content.content = simple_loading
+                self.content_area.content.update()
+            except:
+                pass  # Continue without loading indicator if all attempts fail
     
     def _set_animation_for_view(self, view_name: str):
         """Dynamically set animation type and parameters based on view for enhanced UX."""
