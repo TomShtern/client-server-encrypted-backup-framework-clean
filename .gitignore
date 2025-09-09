@@ -278,3 +278,5 @@ qwen.md
 #Ignore vscode AI rules
 .github\instructions\codacy.instructions.md
 FletV2/image.png
+pyproject.toml
+.vscode/settings.json

@@ -1,14 +1,17 @@
 [tool.pylance]
-# Pylance-specific configuration for KivyMD project
+# Pylance-specific configuration for KivyMD project. we dont use KivyMD at all anymore, deprecated in favor of Flet.
 
 [tool.pyright]
 # Pyright configuration
 include = [
-    "kivymd_gui",
+    "FletV2",
     "Shared",
     "python_server", 
     "api_server"
 ]
+
+[tool.mypy]
+plugins = ['pydantic.mypy']
 
 exclude = [
     "**/__pycache__",
@@ -27,10 +30,6 @@ reportMissingTypeStubs = false
 reportUnknownParameterType = false 
 reportUnknownArgumentType = false
 reportUnknownMemberType = false
-reportGeneralTypeIssues = false
+reportGeneralTypeIssues = true
 reportOptionalCall = false
 reportOptionalMemberAccess = false
-
-# KivyMD specific ignores
-reportAttributeAccessIssue = false
-reportCallIssue = false

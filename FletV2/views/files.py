@@ -6,13 +6,19 @@ Optimized for smooth UI with large file datasets.
 """
 
 import flet as ft
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Tuple
 import os
 import asyncio
 import aiofiles
 from datetime import datetime, timedelta
-from pathlib import Path
 from utils.debug_setup import get_logger
+from utils.ui_helpers import (
+    size_to_human,
+    format_iso_short,
+    build_status_badge,
+    striped_row_color,
+)
+from utils.perf_metrics import PerfTimer
 from utils.loading_states import LoadingState, create_loading_indicator, create_status_text
 from utils.responsive_layouts import create_data_table_container, create_action_bar, SPACING
 from utils.user_feedback import show_success_message, show_error_message, show_info_message
@@ -131,18 +137,16 @@ async def _verify_file_async(file_data, page):
             # Calculate file hash for verification with progress indication - use async
             try:
                 import hashlib
-                hash_md5 = hashlib.md5()
+                # Use SHA256 only (remove MD5 per security guidance)
                 hash_sha256 = hashlib.sha256()
                 
                 # Use aiofiles for async file reading
                 async with aiofiles.open(file_path, "rb") as f:
                     chunk = await f.read(4096)
                     while chunk:
-                        hash_md5.update(chunk)
                         hash_sha256.update(chunk)
                         chunk = await f.read(4096)
-                
-                md5_hash = hash_md5.hexdigest()
+
                 sha256_hash = hash_sha256.hexdigest()
                 
             except (IOError, PermissionError) as hash_error:
@@ -160,9 +164,8 @@ async def _verify_file_async(file_data, page):
                 ft.Text(size_status, color=ft.Colors.GREEN if size_match else ft.Colors.ORANGE),
                 ft.Text(f"Status: File exists and is readable", color=ft.Colors.GREEN),
                 ft.Divider(),
-                ft.Text("Checksums:", weight=ft.FontWeight.BOLD),
-                ft.Text(f"MD5: {md5_hash}", selectable=True),
-                ft.Text(f"SHA256: {sha256_hash}", selectable=True),
+                ft.Text("Checksum (SHA256):", weight=ft.FontWeight.BOLD),
+                ft.Text(f"{sha256_hash}", selectable=True),
             ], tight=True, spacing=5)
 
             # Create and show dialog
@@ -292,9 +295,9 @@ def create_files_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Co
     logger.info("Creating files view with enhanced infrastructure")
     
     # High-performance state variables and optimization utilities
-    files_data: List[Dict[str, Any]] = []
-    filtered_files_data: List[Dict[str, Any]] = []
-    is_loading = False
+    files_data: List[Dict[str, Any]] = []  # raw list
+    filtered_files_data: List[Dict[str, Any]] = []  # filtered slice
+    # is_loading retained for potential future gating (currently unused)
     last_updated = None
     search_query = ""
     status_filter = "all"
@@ -306,7 +309,7 @@ def create_files_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Co
     # NOTE: AsyncDebouncer expects seconds, not milliseconds. 0.3 = 300ms.
     search_debouncer = AsyncDebouncer(delay=0.3)  # 300ms search debouncing
     # Use zero-based page index consistent with paginate_data utility (same fix as logs view)
-    pagination_config = PaginationConfig(page_size=50, current_page=0)  # 50 files per page
+    pagination_config = PaginationConfig(page_size=50, current_page=0)  # 50 files per page (zero-based)
     data_loader = AsyncDataLoader(max_cache_size=100)  # Cache up to 100 items
     
     # Memory management
@@ -699,16 +702,9 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
 
         return filtered
 
-    def format_size(size_bytes):
-        """Format size in bytes to human-readable string."""
-        if size_bytes < 1024:
-            return f"{size_bytes} B"
-        elif size_bytes < 1024**2:
-            return f"{size_bytes/1024:.1f} KB"
-        elif size_bytes < 1024**3:
-            return f"{size_bytes/1024**2:.1f} MB"
-        else:
-            return f"{size_bytes/1024**3:.1f} GB"
+    # Legacy helper retained for backward compatibility (now using size_to_human)
+    def format_size(size_bytes):  # pragma: no cover - wrappers keep compatibility
+        return size_to_human(size_bytes)
 
     def scan_files_directory():
         """Scan received_files directory for files."""
@@ -896,30 +892,8 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
             if hasattr(page, 'update'):
                 page.update()
 
-    def apply_filters():
-        """Apply search and filter criteria to files data (legacy helper - now superseded by filter_files + update_table_display)."""
-        nonlocal filtered_files_data
-        filtered_files_data = files_data.copy()
-        if search_query.strip():
-            query_cmp = (lambda v: v) if case_sensitive_search else (lambda v: v.lower())
-            q = query_cmp(search_query)
-            filtered_files_data = [f for f in filtered_files_data if q in query_cmp(f.get('name', ''))]
-        if status_filter != "all":
-            filtered_files_data = [f for f in filtered_files_data if f.get('status', '').lower() == status_filter.lower()]
-        if type_filter != "all":
-            filtered_files_data = [f for f in filtered_files_data if f.get('type', '').lower() == type_filter.lower()]
-        # Size filter (optional; retained for compatibility)
-        if size_filter != "all":
-            def _size_match(fd):
-                size = fd.get('size', 0)
-                if size_filter == 'small':
-                    return size < 1024 * 1024
-                if size_filter == 'medium':
-                    return 1024 * 1024 <= size < 100 * 1024 * 1024
-                if size_filter == 'large':
-                    return size >= 100 * 1024 * 1024
-                return True
-            filtered_files_data = [f for f in filtered_files_data if _size_match(f)]
+    def apply_filters():  # Backward compatibility stub (deprecated path)
+        pass
 
     # Simple loading state without complex state management during initialization
     # We'll handle loading updates manually to avoid control attachment issues
@@ -946,14 +920,16 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
 
             # Load data - start with scan_files_directory (sync) for immediate data
             # The async loading will happen separately via page.run_task
-            initial_files_data = scan_files_directory()
+            with PerfTimer("files.load.scan_initial"):
+                initial_files_data = scan_files_directory()
             files_data.clear()
             files_data.extend(initial_files_data)
             
             # Now schedule async loading via page.run_task for enhanced data
             async def load_enhanced_data():
                 try:
-                    enhanced_data = await get_files_data()
+                    with PerfTimer("files.load.get_enhanced"):
+                        enhanced_data = await get_files_data()
                     files_data.clear()
                     files_data.extend(enhanced_data)
                     # Update UI after loading
@@ -1051,17 +1027,17 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     file_size = stat.st_size
                     modified_time = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
 
-                    # Calculate file hash for verification (simple checksum)
+                    # Calculate file hash for verification using SHA256 (avoid MD5)
                     import hashlib
-                    hash_md5 = hashlib.md5()
+                    sha256 = hashlib.sha256()
                     with open(file_path, "rb") as f:
-                        for chunk in iter(lambda: f.read(4096), b""):
-                            hash_md5.update(chunk)
-                    file_hash = hash_md5.hexdigest()
+                        for chunk in iter(lambda: f.read(8192), b""):
+                            sha256.update(chunk)
+                    file_hash = sha256.hexdigest()
 
-                    # Show verification results
-                    show_success_message(page, f"Verified {file_name}: {format_size(file_size)}, Modified: {modified_time}, Hash: {file_hash[:8]}...")
-                    logger.info(f"File verified successfully: {file_name}")
+                    # Show verification results (truncate hash for display)
+                    show_success_message(page, f"Verified {file_name}: {format_size(file_size)}, Modified: {modified_time}, SHA256: {file_hash[:12]}...")
+                    logger.info(f"File verified successfully (sha256) : {file_name}")
                 else:
                     show_error_message(page, f"File not found: {file_name}")
                     logger.error(f"File not found for verification: {file_path}")
@@ -1146,12 +1122,28 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         dialog.open = True
         page.update()
 
+    # Debounced search support
+    try:
+        from utils.performance import AsyncDebouncer
+        search_debouncer = AsyncDebouncer(delay=0.3)
+    except Exception:
+        search_debouncer = None  # fallback
+
+    async def perform_search_async():
+        pagination_config.current_page = 0
+        with PerfTimer("files.search.perform"):
+            update_table_display()
+        logger.info(f"Debounced search executed: '{search_query}'")
+
     def on_search_change(e):
-        """Handle search input changes."""
+        """Handle search input changes with debounce."""
         nonlocal search_query
         search_query = e.control.value
-        logger.info(f"Search query changed to: '{search_query}'")
-        update_table_display()
+        logger.info(f"Search query changed to: '{search_query}' (debounced)")
+        if search_debouncer:
+            page.run_task(search_debouncer.debounce(perform_search_async))
+        else:
+            update_table_display()
 
     def on_clear_search():
         """Clear the search field."""
@@ -1339,13 +1331,19 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         padding=ft.Padding(20, 0, 20, 20)
     )
 
+    # Diff engine caches (Phase E)
+    previous_page_signatures: List[tuple] = []
+    previous_page_rows: List[ft.DataRow] = []
+
     def update_table_display():
-        """Build and display DataTable rows directly (fixes previous empty table issue)."""
-        filtered_files = filter_files()
+        """Build and display DataTable rows using signature-based diff reuse (Phase E). Refactored helpers reduce complexity."""
+        nonlocal previous_page_signatures, previous_page_rows
+        with PerfTimer("files.table.total"):
+            filtered_files = filter_files()
         table_container.content = None
 
-        if not filtered_files:
-            table_container.content = ft.Column([
+        def build_empty_state():
+            return ft.Column([
                 ft.Container(
                     content=ft.Column([
                         ft.Icon(ft.Icons.FOLDER_OPEN, size=64, color=ft.Colors.OUTLINE),
@@ -1360,95 +1358,133 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     alignment=ft.alignment.center
                 )
             ], scroll=ft.ScrollMode.AUTO)
+
+        def compute_page_items():
+            return paginate_data(filtered_files, pagination_config.current_page, pagination_config.page_size)[0]
+
+        def enrich_and_signature(file_data):
+            if "_size_fmt" not in file_data:
+                file_data["_size_fmt"] = size_to_human(file_data.get("size", 0))
+            if "_modified_fmt" not in file_data:
+                file_data["_modified_fmt"] = format_iso_short(file_data.get("modified"))
+            return (
+                file_data.get("id"),
+                file_data.get("_size_fmt"),
+                file_data.get("status"),
+                file_data.get("_modified_fmt"),
+            )
+
+        def build_row(idx, file_data):
+            name_control: ft.Control = ft.Text(str(file_data.get("name", "Unknown")), overflow=ft.TextOverflow.ELLIPSIS)
+            if len(str(file_data.get("name", ""))) > 28:
+                name_control = ft.Tooltip(message=str(file_data.get("name", "")), content=name_control)
+            status_val = str(file_data.get("status", "Unknown"))
+            badge = build_status_badge(status_val, status_val)
+            actions_menu = ft.PopupMenuButton(
+                icon=ft.Icons.MORE_VERT,
+                tooltip="File Actions",
+                items=[
+                    ft.PopupMenuItem(text="Download", icon=ft.Icons.DOWNLOAD, on_click=lambda e, d=file_data: download_file_action_enhanced(d, page)),
+                    ft.PopupMenuItem(text="Verify", icon=ft.Icons.VERIFIED, on_click=lambda e, d=file_data: verify_file_action_enhanced(d, page)),
+                    ft.PopupMenuItem(text="Delete", icon=ft.Icons.DELETE, on_click=lambda e, d=file_data: delete_file_action_enhanced(d, page, files_data, update_table_display)),
+                ]
+            )
+            return ft.DataRow(
+                cells=[
+                    ft.DataCell(name_control),
+                    ft.DataCell(ft.Text(file_data.get("_size_fmt"))),
+                    ft.DataCell(ft.Text(str(file_data.get("type", "unknown")).upper())),
+                    ft.DataCell(ft.Text(file_data.get("_modified_fmt"))),
+                    ft.DataCell(ft.Text(str(file_data.get("owner", "Unknown")))),
+                    ft.DataCell(badge),
+                    ft.DataCell(actions_menu),
+                ],
+                color=striped_row_color(idx),
+            )
+
+        if not filtered_files:
+            table_container.content = build_empty_state()
+            previous_page_signatures = []
+            previous_page_rows = []
         else:
-            # Build rows directly
-            status_color_map = {
-                "verified": ft.Colors.GREEN_600,
-                "pending": ft.Colors.ORANGE_600,
-                "received": ft.Colors.BLUE_600,
-                "unverified": ft.Colors.RED_600,
-                "stored": ft.Colors.PURPLE_600,
-                "archived": ft.Colors.BROWN_600,
-                "empty": ft.Colors.GREY_500,
-            }
-            rows = []
-            for file_data in filtered_files:
-                status = str(file_data.get("status", "Unknown"))
-                status_color = status_color_map.get(status.lower(), ft.Colors.GREY_400)
-                # Modified time formatting
-                modified_display = "Unknown"
-                try:
-                    mod_raw = file_data.get("modified")
-                    if mod_raw:
-                        # Accept ISO or already formatted
-                        if 'T' in mod_raw:
-                            modified_display = datetime.fromisoformat(mod_raw).strftime("%Y-%m-%d %H:%M")
+            with PerfTimer("files.table.page_slice"):
+                page_items = compute_page_items()
+            new_rows: List[ft.DataRow] = []
+            new_signatures: List[tuple] = []
+            reuse_threshold = 0.4  # if more than 40% changed -> rebuild all
+
+            # Pre-pass compute signatures & detect changes count
+            changed = 0
+            precomputed: List[tuple] = []
+            with PerfTimer("files.table.prepass"):
+                for idx, file_data in enumerate(page_items):
+                    sig = enrich_and_signature(file_data)
+                    precomputed.append(sig)
+                    if idx >= len(previous_page_signatures) or previous_page_signatures[idx] != sig:
+                        changed += 1
+
+            # Decide strategy
+            total = len(page_items)
+            rebuild_all = (total == 0) or (changed / max(1, total) > (1 - reuse_threshold)) or (total != len(previous_page_rows))
+
+            if rebuild_all:
+                previous_page_rows = []  # discard
+                with PerfTimer("files.table.rebuild_all"):
+                    for idx, file_data in enumerate(page_items):
+                        row = build_row(idx, file_data)
+                        previous_page_rows.append(row)
+                new_rows = previous_page_rows
+            else:
+                # Reuse unchanged rows, rebuild changed ones
+                updated_rows: List[ft.DataRow] = []
+                with PerfTimer("files.table.partial_rebuild"):
+                    for idx, file_data in enumerate(page_items):
+                        sig = precomputed[idx]
+                        if idx < len(previous_page_signatures) and previous_page_signatures[idx] == sig and idx < len(previous_page_rows):
+                            updated_rows.append(previous_page_rows[idx])
                         else:
-                            modified_display = mod_raw
-                except Exception:
-                    pass
-                rows.append(
-                    ft.DataRow(cells=[
-                        ft.DataCell(ft.Text(str(file_data.get("name", "Unknown")))),
-                        ft.DataCell(ft.Text(format_size(file_data.get("size", 0)) if isinstance(file_data.get("size"), int) else str(file_data.get("size", "0")))),
-                        ft.DataCell(ft.Text(str(file_data.get("type", "unknown")).upper())),
-                        ft.DataCell(ft.Text(modified_display)),
-                        ft.DataCell(ft.Text(str(file_data.get("owner", "Unknown")))),
-                        ft.DataCell(
-                            ft.Container(
-                                content=ft.Text(status, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD),
-                                padding=ft.Padding(8, 4, 8, 4),
-                                border_radius=12,
-                                bgcolor=status_color,
-                                border=ft.border.all(1, status_color),
-                            )
-                        ),
-                        ft.DataCell(
-                            ft.PopupMenuButton(
-                                icon=ft.Icons.MORE_VERT,
-                                tooltip="File Actions",
-                                items=[
-                                    ft.PopupMenuItem(text="Download", icon=ft.Icons.DOWNLOAD, on_click=lambda e, d=file_data: download_file_action_enhanced(d, page)),
-                                    ft.PopupMenuItem(text="Verify", icon=ft.Icons.VERIFIED, on_click=lambda e, d=file_data: verify_file_action_enhanced(d, page)),
-                                    ft.PopupMenuItem(text="Delete", icon=ft.Icons.DELETE, on_click=lambda e, d=file_data: delete_file_action_enhanced(d, page, files_data, update_table_display)),
-                                ]
-                            )
-                        ),
-                    ])
-                )
+                            updated_rows.append(build_row(idx, file_data))
+                previous_page_rows = updated_rows
+                new_rows = updated_rows
+
+            new_signatures = precomputed
+            previous_page_signatures = new_signatures
 
             fresh_table = ft.DataTable(
-                columns=[
-                    ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
-                    ft.DataColumn(ft.Text("Size", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
-                    ft.DataColumn(ft.Text("Type", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
-                    ft.DataColumn(ft.Text("Modified", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
-                    ft.DataColumn(ft.Text("Owner", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
-                    ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
-                    ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.GREEN_800)),
-                ],
-                rows=rows,
-                heading_row_color=ft.Colors.GREEN_50,
-                border=ft.border.all(2, ft.Colors.GREEN_300),
-                border_radius=15,
-                data_row_min_height=58,
-                column_spacing=30,
+                columns=files_table.columns,
+                rows=new_rows,
+                heading_row_color=files_table.heading_row_color,
+                border=files_table.border,
+                border_radius=files_table.border_radius,
+                data_row_min_height=files_table.data_row_min_height,
+                column_spacing=files_table.column_spacing,
                 show_checkbox_column=False,
                 ref=files_table_ref,
             )
-            table_container.content = ft.Column([fresh_table], scroll=ft.ScrollMode.AUTO)
+            body = ft.Column([fresh_table], scroll=ft.ScrollMode.AUTO)
+            # AnimatedSwitcher wrapper (low-cost fade)
+            table_container.content = ft.AnimatedSwitcher(
+                content=body,
+                transition=ft.AnimatedSwitcherTransition.FADE,
+                duration=300,
+                reverse=True,
+            )
 
         # Update status text
+        # Pagination + status area update
         try:
             if status_text_ref.current and hasattr(status_text_ref.current, 'page') and status_text_ref.current.page is not None:
                 total = len(files_data)
                 filtered_count = len(filtered_files)
+                total_pages = max(1, (filtered_count + pagination_config.page_size - 1) // pagination_config.page_size)
+                start = pagination_config.current_page * pagination_config.page_size + 1 if filtered_count else 0
+                end = min(start + pagination_config.page_size - 1, filtered_count) if filtered_count else 0
                 status_text_ref.current.value = (
-                    f"Search results: {filtered_count} of {total} files" if search_query.strip() else f"Showing {filtered_count} of {total} files"
+                    f"Showing {start}-{end} of {filtered_count} files (Total: {total}) | Page {pagination_config.current_page + 1} of {total_pages}" if filtered_count else f"No files found (Total: {total})"
                 )
-                status_text_ref.current.color = ft.Colors.PRIMARY
+                status_text_ref.current.color = ft.Colors.PRIMARY if filtered_count else ft.Colors.OUTLINE
                 status_text_ref.current.update()
-        except Exception:
+        except Exception:  # pragma: no cover
             pass
 
         # Force container refresh
@@ -1463,7 +1499,53 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
             except Exception:
                 logger.error("Failed to update files table display")
 
-    # Add the table container to the main view
+    # Pagination controls (Files view – new)
+    def on_first(_):
+        pagination_config.current_page = 0; update_table_display()
+    def on_prev(_):
+        if pagination_config.current_page > 0:
+            pagination_config.current_page -= 1; update_table_display()
+    def on_next(_):
+        filtered = filter_files()
+        total_pages = max(1, (len(filtered) + pagination_config.page_size - 1) // pagination_config.page_size)
+        if (pagination_config.current_page + 1) < total_pages:
+            pagination_config.current_page += 1; update_table_display()
+    def on_last(_):
+        filtered = filter_files()
+        total_pages = max(1, (len(filtered) + pagination_config.page_size - 1) // pagination_config.page_size)
+        pagination_config.current_page = max(0, total_pages - 1); update_table_display()
+
+    first_btn = ft.IconButton(icon=ft.Icons.FIRST_PAGE, tooltip="First Page", on_click=on_first, disabled=True)
+    prev_btn = ft.IconButton(icon=ft.Icons.CHEVRON_LEFT, tooltip="Previous Page", on_click=on_prev, disabled=True)
+    next_btn = ft.IconButton(icon=ft.Icons.CHEVRON_RIGHT, tooltip="Next Page", on_click=on_next, disabled=True)
+    last_btn = ft.IconButton(icon=ft.Icons.LAST_PAGE, tooltip="Last Page", on_click=on_last, disabled=True)
+    page_info_text = ft.Text("Page 1 of 1", size=12, weight=ft.FontWeight.W_500)
+
+    def update_pagination_controls():
+        filtered = filter_files()
+        total_pages = max(1, (len(filtered) + pagination_config.page_size - 1) // pagination_config.page_size)
+        first_btn.disabled = pagination_config.current_page <= 0
+        prev_btn.disabled = pagination_config.current_page <= 0
+        next_btn.disabled = (pagination_config.current_page + 1) >= total_pages
+        last_btn.disabled = (pagination_config.current_page + 1) >= total_pages
+        page_info_text.value = f"Page {pagination_config.current_page + 1} of {total_pages}"
+        for c in [first_btn, prev_btn, next_btn, last_btn, page_info_text]:
+            try:
+                c.update()
+            except Exception:
+                pass
+
+    # Wrap update_table_display to also refresh pagination buttons
+    orig_update_table_display = update_table_display
+    def update_table_display_wrapper():
+        orig_update_table_display()
+        update_pagination_controls()
+    update_table_display = update_table_display_wrapper  # type: ignore
+
+    pagination_row = ft.Row([first_btn, prev_btn, page_info_text, next_btn, last_btn], spacing=5)
+
+    # Add new pagination row & table container
+    main_view.controls.append(ft.Container(content=ft.Row([ft.Container(expand=True), pagination_row, ft.Container(expand=True)]), padding=ft.Padding(20, 0, 20, 10)))
     main_view.controls.append(table_container)
 
     # Initial display update

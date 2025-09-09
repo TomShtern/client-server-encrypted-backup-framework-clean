@@ -19,6 +19,8 @@ from datetime import datetime, timedelta
 import random
 
 from utils.debug_setup import get_logger
+from utils.ui_helpers import level_colors, striped_row_color, build_level_badge
+from utils.perf_metrics import PerfTimer
 from utils.user_feedback import show_success_message
 from config import ASYNC_DELAY
 from utils.performance import (
@@ -98,22 +100,12 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
         return data
 
     def level_fg(level: str):
-        return {
-            "INFO": ft.Colors.BLUE,
-            "SUCCESS": ft.Colors.GREEN,
-            "WARNING": ft.Colors.ORANGE,
-            "ERROR": ft.Colors.RED,
-            "DEBUG": ft.Colors.GREY,
-        }.get(level, ft.Colors.ON_SURFACE)
+        fg, _ = level_colors(level)
+        return fg
 
     def level_bg(level: str):
-        return {
-            "INFO": ft.Colors.BLUE_50,
-            "SUCCESS": ft.Colors.GREEN_50,
-            "WARNING": ft.Colors.ORANGE_50,
-            "ERROR": ft.Colors.RED_50,
-            "DEBUG": ft.Colors.GREY_50,
-        }.get(level, ft.Colors.SURFACE)
+        _, bg = level_colors(level)
+        return bg
 
     def apply_filters():
         nonlocal filtered_logs_data
@@ -130,20 +122,35 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
         filtered_logs_data = data
 
     # ---------------------- UI Update Functions --------------------------- #
-    def make_tile(entry: Dict[str, Any]) -> ft.ListTile:
+    def make_tile(entry: Dict[str, Any], index: int) -> ft.ListTile:
         ts = datetime.fromisoformat(entry["timestamp"]).strftime("%H:%M:%S")
+        msg_text = ft.Text(
+            entry["message"],
+            size=12,
+            color=ft.Colors.GREY_800,
+            overflow=ft.TextOverflow.ELLIPSIS,
+            expand=True,
+        )
+        # Tooltip for longer messages
+        if len(entry.get("message", "")) > 60:
+            msg_text = ft.Tooltip(message=entry["message"], content=msg_text)
+
+    _fg = level_fg(entry["level"])
+    _bg = level_bg(entry["level"])
+    stripe = striped_row_color(index)
+    tile_bg = stripe or _bg
+
+    level_badge = build_level_badge(entry["level"])
+
         return ft.ListTile(
-            leading=ft.Container(
-                content=ft.Text(entry["level"], size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                width=55, height=24, bgcolor=level_fg(entry["level"]), alignment=ft.alignment.center, border_radius=12,
-            ),
+            leading=level_badge,
             title=ft.Row([
                 ft.Text(ts, size=12, weight=ft.FontWeight.W_600, color=ft.Colors.BLUE_GREY_700, width=65),
                 ft.Text(entry["component"], size=12, weight=ft.FontWeight.W_500, color=ft.Colors.INDIGO_700, width=100),
-                ft.Text(entry["message"], size=12, color=ft.Colors.GREY_800, overflow=ft.TextOverflow.ELLIPSIS, expand=True)
+                msg_text,
             ], spacing=8),
-            bgcolor=level_bg(entry["level"]),
-            content_padding=ft.Padding(12, 8, 12, 8)
+            bgcolor=tile_bg,
+            content_padding=ft.Padding(12, 8, 12, 8),
         )
 
     def update_list():
@@ -170,14 +177,20 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
                 pagination_config.current_page,
                 pagination_config.page_size
             )
+            list_view = ft.ListView(
+                controls=[make_tile(x, i) for i, x in enumerate(slice_data)],
+                expand=True,
+                spacing=2,
+                padding=ft.Padding(8, 8, 8, 8),
+                auto_scroll=False,
+                semantic_child_count=len(slice_data),
+            )
             logs_container.controls = [
-                ft.ListView(
-                    controls=[make_tile(x) for x in slice_data],
-                    expand=True,
-                    spacing=2,
-                    padding=ft.Padding(8, 8, 8, 8),
-                    auto_scroll=False,
-                    semantic_child_count=len(slice_data)
+                ft.AnimatedSwitcher(
+                    content=list_view,
+                    transition=ft.AnimatedSwitcherTransition.FADE,
+                    duration=250,
+                    reverse=True,
                 )
             ]
         logs_container.update()
@@ -211,10 +224,11 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
     async def perform_search():
         nonlocal search_query
         pagination_config.current_page = 0
-        apply_filters()
-        update_list()
-        update_status()
-        update_pagination_controls()
+        with PerfTimer("logs.search.perform"):
+            apply_filters()
+            update_list()
+            update_status()
+            update_pagination_controls()
         logger.info(f"Search query='{search_query}' results={len(filtered_logs_data)}")
 
     def on_search_change(e):
@@ -325,22 +339,24 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
         is_loading = True
         try:
             status_text.value = "Loading logs..."; status_text.update()
-            if server_bridge:
-                try:
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor() as ex:
-                        logs_data = await asyncio.get_event_loop().run_in_executor(ex, server_bridge.get_logs)
-                    if not isinstance(logs_data, list):
-                        logs_data = []
-                except Exception as e:  # pragma: no cover
-                    logger.warning(f"Server bridge failure: {e}")
+            with PerfTimer("logs.load.fetch"):
+                if server_bridge:
+                    try:
+                        import concurrent.futures
+                        with concurrent.futures.ThreadPoolExecutor() as ex:
+                            logs_data = await asyncio.get_event_loop().run_in_executor(ex, server_bridge.get_logs)
+                        if not isinstance(logs_data, list):
+                            logs_data = []
+                    except Exception as e:  # pragma: no cover
+                        logger.warning(f"Server bridge failure: {e}")
+                        logs_data = generate_mock_logs()
+                else:
                     logs_data = generate_mock_logs()
-            else:
-                logs_data = generate_mock_logs()
             last_updated = datetime.now()
             last_updated_text.value = f"Last updated: {last_updated.strftime('%H:%M:%S')}"; last_updated_text.update()
-            apply_filters()
-            update_list(); update_status(); update_pagination_controls()
+            with PerfTimer("logs.load.render"):
+                apply_filters()
+                update_list(); update_status(); update_pagination_controls()
         except Exception as e:  # pragma: no cover
             logger.error(f"Loading error: {e}")
             status_text.value = "Error loading logs"; status_text.update()
