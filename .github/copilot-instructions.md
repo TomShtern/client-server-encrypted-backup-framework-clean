@@ -37,6 +37,7 @@ This is a **5-component encrypted backup framework**:
 │ Web GUI (JS)    │    │ Desktop GUI      │    │ Server Bridge   │
 │ Tailwind CSS    │    │ (FletV2)         │    │ Communication   │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
+
 ```
 
 ### When going through massive logs:
@@ -214,11 +215,13 @@ state_manager.subscribe("server_status", callback_function)
 
 ### **Documentation Resources**
 - `important_docs/new_agent_onboarding.md` - **CRITICAL**: Complete context for new agents, startup problem analysis
+- `important_docs/emoji_inventory.md` - Comprehensive emoji inventory
 - `important_docs/FletV2_Architecture_Blueprint.md` - System design and architecture
 - `important_docs/FletV2_Infrastructure_Enhancement_Summary.md` - Recent improvements
 - `important_docs/FletV2_Issues.md` - Known problems and solutions
 - `important_docs/Consolidated_Context7_Flet_Desktop_Framework.md` - Framework guide
 - `PERFORMANCE_OPTIMIZATION_SUMMARY.md` - Documenting timers & usage
+- `important_docs/emoji_inventory.md` - Comprehensive emoji inventory
 
 ## 💡 Quick Reference
 
@@ -252,7 +255,7 @@ Follow these patterns for consistent, maintainable code that works with the fram
 cd FletV2 && python main.py
 
 # FletV2 Development with Hot Reload (RECOMMENDED for development)
-# Uses desktop for instant hot reload - identical runtime behavior to native desktop
+# Uses desktop for instant hot reload - identical runtime behavior to native desktop while enabling instant hot reload. The workflow is: develop in browser → test in native desktop → deploy as desktop app.
 cd FletV2
 flet run -r main.py
 
@@ -623,7 +626,7 @@ Technical requirements (explicit)
 - Instrumentation:
   - Use `utils/perf_metrics.py` to record timings.
   - Provide `get_metrics()` and small `scripts/metrics_summary.py` that prints aggregated p50/p95/max for keys.
-- Testing and verification:
+  - Testing and verification:
   - Before Phase A edits, capture baseline measures: TTFV, P95 search latency, CPU, memory. Record them in the repository at `important_docs/metrics_baseline.json`.
   - After Phases complete, run the scripted interaction (Section 13) and record results to `important_docs/metrics_results.json`.
   - Ensure reusable tests: Add `tests/test_diff_engine.py` to verify reuse/fallback behavior (happy path + >40% changes).

@@ -329,8 +329,14 @@ Original plan delivered Phases A–F with optional diff engine; this enhanced re
 ---
 (End of Enhanced Plan v2)
 \n+---
+ 
 ## 22. Implementation Tracking Checklist (Master)
-Use this section during execution. Mark each item with [x] when complete. Do not remove unchecked items; append dated notes if partial.
+Use this section during execution. Mark each item with [✴️] when complete. Do not remove unchecked items; append dated notes if partial.
+when you are done launch the gui and let the user confirm every single thing. dont assume its actually implemented/fixed untill the user tells you that.
+then after the user confirms some functionality that you implemented, you should change it to ✳️.
+✴️ = implemented, done
+✳️ = confirmed explicitly by user, actually done
+
 
 ### 22.1 Environment & Tooling
 - [ ] Python 3.11+ available
