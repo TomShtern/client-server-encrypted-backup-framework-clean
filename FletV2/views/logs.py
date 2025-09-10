@@ -24,7 +24,7 @@ from utils.perf_metrics import PerfTimer
 from utils.user_feedback import show_success_message
 from config import ASYNC_DELAY
 from utils.performance import (
-    AsyncDebouncer, PaginationConfig,
+    PaginationConfig,
     global_memory_manager, paginate_data
 )
 
@@ -43,8 +43,8 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
     is_loading = False
     last_updated = None
 
-    # Performance helpers
-    search_debouncer = AsyncDebouncer(delay=0.3)
+    # Performance helpers - Flet-compatible debouncing
+    search_debounce_timer = None
     pagination_config = PaginationConfig(page_size=50, current_page=0)  # zero-based
     # (AsyncDataLoader reserved for future use; removed to avoid unused variable warning)
     global_memory_manager.register_component("logs_view")
@@ -285,15 +285,31 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
         logger.info(f"Search query='{search_query}' results={len(filtered_logs_data)}")
 
     def on_search_change(e):
-        nonlocal search_query
+        nonlocal search_query, search_debounce_timer
         search_query = e.control.value
-        # AsyncDebouncer handles its own task creation - no need for page.run_task
-        asyncio.create_task(search_debouncer.debounce(perform_search))
+        
+        # Cancel previous debounce timer if it exists
+        if search_debounce_timer:
+            search_debounce_timer.cancel()
+        
+        # Create debounced search using page.run_task with delay
+        async def debounced_search():
+            await asyncio.sleep(0.3)  # 300ms debounce delay
+            await perform_search()
+        
+        # Use page.run_task for proper Flet async handling
+        search_debounce_timer = page.run_task(debounced_search)
 
     def on_search_clear(e):
-        nonlocal search_query
+        nonlocal search_query, search_debounce_timer
         search_query = ""
         search_field.value = ""
+        
+        # Cancel any pending search
+        if search_debounce_timer:
+            search_debounce_timer.cancel()
+            search_debounce_timer = None
+        
         pagination_config.current_page = 0
         apply_filters()
         update_list()

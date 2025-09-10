@@ -168,11 +168,11 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             logger.warning(f"No data available for table {selected_table_name}")
             empty_content = ft.Container(
                 content=ft.Column([
-                    ft.Icon(ft.Icons.TABLE_VIEW, size=64, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Icon(ft.Icons.TABLE_VIEW, size=64, color=ft.Colors.ON_SURFACE),
                     ft.Text(
                         "No records found in the selected table.",
                         size=14,
-                        color=ft.Colors.ON_SURFACE_VARIANT
+                        color=ft.Colors.ON_SURFACE
                     )
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
@@ -214,12 +214,12 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                                     ft.PopupMenuItem(
                                         text="Edit Row",
                                         icon=ft.Icons.EDIT,
-                                        on_click=lambda e, r=row: [logger.info(f"Edit row: {r.get('id', 'unknown')}"), on_edit_row(e, r)]
+                                        on_click=lambda e, r=row: [logger.info(f"Edit row clicked: {r.get('id', 'unknown')}"), on_edit_row(e, r)]
                                     ),
                                     ft.PopupMenuItem(
                                         text="Delete Row",
                                         icon=ft.Icons.DELETE,
-                                        on_click=lambda e, r=row: [logger.info(f"Delete row: {r.get('id', 'unknown')}"), on_delete_row(e, r)]
+                                        on_click=lambda e, r=row: [logger.info(f"Delete row clicked: {r.get('id', 'unknown')}"), on_delete_row(e, r)]
                                     )
                                 ]
                             )
@@ -571,13 +571,13 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         def close_dialog(e):
             """Close the edit dialog."""
             try:
-                if hasattr(page, 'dialog') and page.dialog:
+                if hasattr(page, 'dialog') and page.dialog and page.dialog.open:
                     page.dialog.open = False
+                    page.update()
                     page.dialog = None
-                page.update()
                 logger.info("Edit dialog closed")
             except Exception as ex:
-                logger.error(f"Error closing dialog: {ex}")
+                logger.error(f"Error closing edit dialog: {ex}")
 
         def save_changes(e):
             """Save form changes to database."""
@@ -707,12 +707,20 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             actions_alignment=ft.MainAxisAlignment.END
         )
 
-        # Show dialog
+        # Show dialog using proper Flet pattern
         try:
+            # Ensure any existing dialog is closed first
+            if hasattr(page, 'dialog') and page.dialog:
+                page.dialog.open = False
+                page.dialog = None
+                
+            # Set and open the new dialog
             page.dialog = dialog
             dialog.open = True
             page.update()
-            logger.info(f"Edit dialog opened for row {row_data.get('id', 'unknown')}")
+            
+            logger.info(f"Edit dialog opened successfully for row {row_data.get('id', 'unknown')}")
+            
         except Exception as ex:
             logger.error(f"Error opening edit dialog: {ex}")
             show_error_message(page, f"Failed to open edit dialog: {str(ex)}")
@@ -740,7 +748,11 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         def confirm_delete(e):
             """Execute the row deletion."""
             try:
-                close_dialog(None)  # Close dialog first
+                # Close dialog first using proper pattern
+                if hasattr(page, 'dialog') and page.dialog and page.dialog.open:
+                    page.dialog.open = False
+                    page.update()
+                    page.dialog = None
                 
                 if server_bridge and hasattr(server_bridge, 'db_manager') and server_bridge.db_manager:
                     try:
@@ -786,13 +798,13 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         def close_dialog(e):
             """Close the confirmation dialog."""
             try:
-                if hasattr(page, 'dialog') and page.dialog:
+                if hasattr(page, 'dialog') and page.dialog and page.dialog.open:
                     page.dialog.open = False
+                    page.update()
                     page.dialog = None
-                page.update()
                 logger.info("Delete confirmation dialog closed")
             except Exception as ex:
-                logger.error(f"Error closing dialog: {ex}")
+                logger.error(f"Error closing delete dialog: {ex}")
 
         # Create enhanced confirmation dialog
         dialog = ft.AlertDialog(
@@ -811,7 +823,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                     ft.Container(
                         content=ft.Column([
                             ft.Text("Row Details:", weight=ft.FontWeight.BOLD, size=12),
-                            ft.Text(summary_text, size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+                            ft.Text(summary_text, size=12, color=ft.Colors.ON_SURFACE)
                         ]),
                         padding=10,
                         bgcolor=ft.Colors.SURFACE,
@@ -844,12 +856,20 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             actions_alignment=ft.MainAxisAlignment.END
         )
         
-        # Show dialog
+        # Show dialog using proper Flet pattern
         try:
+            # Ensure any existing dialog is closed first
+            if hasattr(page, 'dialog') and page.dialog:
+                page.dialog.open = False
+                page.dialog = None
+                
+            # Set and open the new dialog
             page.dialog = dialog
             dialog.open = True
             page.update()
-            logger.info(f"Delete confirmation dialog opened for row {row_id}")
+            
+            logger.info(f"Delete confirmation dialog opened successfully for row {row_id}")
+            
         except Exception as ex:
             logger.error(f"Error opening delete dialog: {ex}")
             show_error_message(page, f"Failed to open delete dialog: {str(ex)}")
@@ -1075,7 +1095,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         # Table content in scrollable container
         ft.Container(
             ref=table_container_ref,
-            content=ft.Text("Loading...", color=ft.Colors.ON_SURFACE_VARIANT),
+            content=ft.Text("Loading...", color=ft.Colors.ON_SURFACE),
             expand=True,
             border=ft.border.all(1, ft.Colors.OUTLINE),
             border_radius=8,

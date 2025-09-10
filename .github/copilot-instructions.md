@@ -726,5 +726,4 @@ def apply_theme_variant(page: ft.Page, theme_name: str) -> bool:
 ```
 
 ---
-
-##
+### **

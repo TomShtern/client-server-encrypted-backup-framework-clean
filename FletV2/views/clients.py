@@ -96,6 +96,12 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
                     ft.Text(f"Protocol Version: {detailed_info.get('protocol_version', 'N/A')}"),
                 ])
             
+            # Define close handler first to avoid lambda closure issues
+            def close_dialog(dialog_ref):
+                dialog_ref.open = False
+                page.overlay.remove(dialog_ref)
+                page.update()  # Update page to properly handle dialog removal
+            
             # Create and show dialog
             dialog = ft.AlertDialog(
                 title=ft.Text(f"Client {client_id} Details"),
@@ -105,11 +111,6 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
                 ],
                 actions_alignment=ft.MainAxisAlignment.END
             )
-            
-            def close_dialog(dialog_ref):
-                dialog_ref.open = False
-                page.overlay.remove(dialog_ref)
-                page.update()  # Update page to properly handle dialog removal
             
             # Properly attach dialog to page before opening
             page.overlay.append(dialog)
@@ -215,7 +216,7 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
         # Create confirmation dialog
         confirmation_dialog = ft.AlertDialog(
             title=ft.Text("Confirm Disconnect"),
-            content=ft.Text(f"Are you sure you want to disconnect client {client_id}?\\n\\nThis action cannot be undone."),
+            content=ft.Text(f"Are you sure you want to disconnect client {client_id}?\n\nThis action cannot be undone."),
             actions=[
                 ft.TextButton("Cancel", on_click=cancel_disconnect),
                 ft.TextButton("Disconnect", on_click=confirm_disconnect, 
