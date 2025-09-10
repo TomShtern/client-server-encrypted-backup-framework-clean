@@ -1,47 +1,41 @@
----
-description: AI rules derived by SpecStory from the project AI interaction history
-globs: *
----
+# CLAUDE.md - FletV2 Development Guide
+This file provides Claude and Claude Code comprehensive guidance for working with FletV2 - a clean, framework-harmonious Flet desktop application that demonstrates proper Flet patterns and best practices.
+Claude and Claude Code will adhere and reference this file for all FletV2-related development tasks.
 
----
-description: Essential AI development guidance for the encrypted backup framework
-applyTo: '**'
+**CRITICAL**: We work exclusively with `FletV2/` directory. The `flet_server_gui/` is obsolete, over-engineered, and kept only as reference of what NOT to do.
+ you should reference the `important_docs/` folder for component usage examples and documentation.
 ---
 
-# Copilot Instructions - Encrypted Backup Framework
+## ⚙️ Essential Configuration
 
-AI coding agents should follow these guidelines when working on this multi-component encrypted backup system.
-
-## 🧠 AI Persona
-
-- **Role**: Professional Software Engineer, Expert Flet UI/UX Designer, Frontend Specialist.
-- **Flet Version**: Always use Flet version 0.28.3 components.
-- **Reasoning**: Use ultrathink and sequential thinking to enhance reasoning capabilities.
-- **Effort**: Apply the highest degree of reasoning effort.
-- **Code Quality**: Write working code and avoid breaking existing functionality.
-- **Tool Usage**: Leverage available tools (context7, MCP, web search, fetch) as needed.
-- **Implementation**: Implement plans to the highest degree.
-
-## 🏗️ System Architecture
-
-This is a **5-component encrypted backup framework**:
-
+### UTF-8 Support
+```python
+# ALWAYS import this in any Python file that deals with subprocess or console I/O
+import Shared.utils.utf8_solution
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   C++ Client    │───▶│  Python Server   │───▶│    Database     │
-│                 │    │                  │    │   (SQLite3)     │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌──────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│ Web GUI (JS)    │    │ Desktop GUI      │    │ Server Bridge   │
-│ Tailwind CSS    │    │ (FletV2)         │    │ Communication   │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
 
-```
+## 🎯 CORE PRINCIPLES: Framework Harmony
+
+### **The FletV2 Way - Work WITH Flet, Not Against It**
+
+**Primary Directive**: Favor Flet's built-in features over custom, over-engineered solutions. Do not reinvent the wheel.
+
+#### **Scale Test**: 
+Be highly suspicious of any custom solution that exceeds 1000 lines. A 3000+ line custom system is an anti-pattern when a 50-450 line native Flet solution exists with full feature parity(or almost full parity).
+
+#### **Framework Fight Test**: 
+Work WITH the framework, not AGAINST it. If your solution feels complex, verbose, or like a struggle, you are fighting the framework. Stop and find the simpler, intended Flet way.
+
+#### **Built-in Checklist**:
+- Can `ft.NavigationRail` handle navigation?
+- Can `expand=True` and `ResponsiveRow` solve layout?
+- Can `control.update()` replace `page.update()`?
+- Does a standard Flet control already do 90% of what you need?
+
 
 ### When going through massive logs:
-🔹 On-Disk + Grep/Awk Tools
+On-Disk + Grep/Awk Tools
+
 If you don’t want the overhead:
 ripgrep (rg) or ag (silversearcher) – insanely fast search in files.
 ast-grep – structured searching if logs have consistent format (JSON logs).
@@ -49,6 +43,7 @@ fzf – fuzzy finder, useful when you know part of the error.
 Pipe logs through grep | tail -n 50 style workflows.
 
 🔹 Using ripgrep (rg)
+
 Fastest way to pull out the “couple of bad lines.”
 Find all ERROR lines:
 rg "ERROR" app.log
@@ -60,6 +55,7 @@ Stream logs + highlight in real time:
 tail -f app.log | rg "ERROR"
 
 🔹 Using ast-grep
+
 Best if your logs are structured (e.g., JSON). Lets you query fields instead of regex spaghetti.
 Example log (JSON):
 {"level": "ERROR", "msg": "Database connection failed", "code": 500}
@@ -74,180 +70,1093 @@ sg -p ' { "msg": $MSG } ' logs.json
 Use ripgrep when you’re just scanning for keywords.
 Use ast-grep when your logs are JSON or structured, so you can surgically extract only what matters.
 Combine them with fzf (if you install it) for interactive filtering.
+---
 
+## ⚡ POWER DIRECTIVES: Maximum Impact Code Generation
 
+### **Critical Framework Compliance (Flet 0.28.3 + Python 3.13.5)**
 
-**Encryption**: RSA-1024 key exchange + AES-256-CBC file encryption
-**Database**: SQLite3 with clients, files, logs tables
-**Communication**: Socket-based with JSON protocol
+1. **Always use `control.update()` instead of `page.update()` to achieve 10x performance and eliminate UI flicker.**
 
-## 🚨 CRITICAL STARTUP ISSUE ALERT
+2. **Leverage `ft.ResponsiveRow` and `expand=True` as your primary layout mechanism, eliminating the need for complex custom responsive systems.**
 
-**⚠️ STARTUP PROBLEM NOT FIXED**: The FletV2 application currently hangs on a "Loading..." screen at startup. The dashboard only appears after manual navigation. This is the PRIMARY issue that needs to be resolved.
+3. **Use `ft.NavigationRail.on_change` for navigation, completely removing the need for custom routing managers.**
 
-**Previous Attempts**: 
-- ✅ Made main function async (Flet 0.21.0+ requirement)
-- ✅ Simplified `_create_enhanced_view` method
-- ❌ **ISSUE PERSISTS** - Loading screen still appears
+4. **Prefer `ft.Theme` and `ft.ColorScheme` for styling, avoiding any custom theming logic over 50 lines.**
 
-**Root Cause**: Complex async detection in `_create_enhanced_view` method incorrectly treats synchronous view functions as async, causing placeholder display.
+5. **Implement async event handlers using `async def` and `await ft.update_async()` to prevent UI blocking.**
 
-**Reference**: See `important_docs/new_agent_onboarding.md` for comprehensive context and mission objectives.
+6. **Use `page.run_task()` for background operations instead of creating custom threading or async management.**
+
+7. **Always provide a fallback in server bridge initialization to ensure graceful degradation.**
+
+8. **Utilize Flet's built-in `ThemeMode` for theme switching instead of creating custom theme toggle mechanisms.**
+
+9. **Replace custom icon management with Flet's native `ft.Icons` enum, which provides comprehensive icon support.**
+
+10. **Design views as pure function-based components that return `ft.Control`, avoiding complex class-based view systems.**
+
+### **Performance & Anti-Pattern Guards**
+
+11. **If your custom solution exceeds 1000 lines, you are fighting the framework - stop and find the Flet-native approach.**
+
+12. **Prefer semantic color tokens like `ft.Colors.PRIMARY` over hardcoded hex values to ensure theme compatibility.**
+
+13. **Use `ft.DataTable` for tabular data instead of building custom table components from scratch.**
+
+14. **Implement error handling using `page.snack_bar` with built-in Flet colors for consistent user feedback.**
+
+15. **Leverage `ft.TextTheme` for consistent typography across your entire application.**
+
+### **Architectural Enforcement**
+
+16. **Structure your desktop app as a single `ft.Row` with a `NavigationRail` and dynamic content area.**
+
+17. **Create a modular `theme.py` as the single source of truth for all styling and theming logic.**
+
+18. **Use `page.run_thread()` for operations that might block, ensuring responsive UI.**
+
+19. **Design components with a maximum of ~400 lines(you dont have to, but its recommended estimates), forcing modularity and readability.**
+
+20. **Always provide a simple, function-based fallback for every dynamic loading mechanism.**
+
+### **Python 3.13.5 & Flet 0.28.3 Optimizations**
+
+21. **Use `page.theme = ft.Theme(color_scheme_seed=ft.Colors.GREEN)` for instant Material 3 theming without custom color management.**
+
+22. **Leverage `page.adaptive = True` for platform-specific UI rendering when targeting multiple platforms.**
+
+23. **Use `ft.run(main, view=ft.AppView.WEB_BROWSER)` for development hot reload - identical runtime to desktop with instant updates.**
+
+24. **Implement `page.theme_mode = ft.ThemeMode.SYSTEM` to automatically respect user system preferences.**
+
+25. **Use `ft.SafeArea` to handle platform-specific UI constraints automatically.**
+
+**Core Philosophy**: "Let Flet do the heavy lifting. Your job is to compose, not reinvent."
 
 ---
 
-## 🎯 Primary Development Directory
+## 🏗️ FletV2 ARCHITECTURE PATTERNS
 
-**CRITICAL**: Work exclusively with `FletV2/` directory for desktop GUI development.
-- `flet_server_gui/` is obsolete and over-engineered
-- Reference `CLAUDE.md` for detailed Flet patterns and best practices
+### **Main Application Structure (CANONICAL)**
 
-## 🚀 Launch Commands
-
-```bash
-# FletV2 Development (Hot Reload)
-cd FletV2 && flet run -r main.py
-
-# FletV2 Production (ASYNC REQUIRED - Flet 0.21.0+)
-cd FletV2 && python main.py
-
-# System Integration Testing
-python scripts/one_click_build_and_run.py
-```
-
-**CRITICAL**: Main function must be `async def main(page: ft.Page)` and use `asyncio.run(ft.app_async(target=main, view=ft.AppView.FLET_APP))`
-
-## 📁 Key Directories & Files
-
-```
-FletV2/                           # Desktop GUI (PRIMARY)
-├── main.py                       # Application entry point
-├── theme.py                      # Material Design 3 theming
-├── views/                        # UI views (function-based)
-│   ├── dashboard.py              # Server overview
-│   ├── clients.py                # Client management
-│   ├── files.py                  # File browser
-│   ├── database.py               # Database viewer
-│   └── database.py               # Database viewer
-│   ├── analytics.py          # Analytics charts
-│   ├── logs.py               # Log viewer
-│   └── settings.py           # Configuration
-└── utils/                        # Helper utilities
-    ├── server_bridge.py          # Server communication
-    ├── debug_setup.py          # Enhanced terminal debugging
-    └── utf8_solution.py          # UTF-8 handling
-
-python_server/                    # Backend server
-Client/                           # C++ client application
-api_server/                       # Flask web API bridge
-scripts/                          # Automation tools
-```
-
-## 🔧 Critical Development Patterns
-
-### **Framework Harmony (Flet)**
-- Use `ft.NavigationRail` for navigation (not custom routers)
-- Use `expand=True` + `ResponsiveRow` for layouts
-- Use `control.update()` not `page.update()` for performance
-- Prefer Flet built-ins over custom components
-
-### **UTF-8 Handling**
 ```python
-# ALWAYS import in files with subprocess/console I/O
-import Shared.utils.utf8_solution
+# FletV2/main.py - Modern desktop app with performance optimizations
+class FletV2App(ft.Row):
+    """
+    Enhanced FletV2 desktop app using pure Flet patterns with modern UI and performance optimizations.
+    
+    Features:
+    - Lazy view loading with caching for performance
+    - Modern Material Design 3 styling and animations
+    - Collapsible navigation rail with keyboard shortcuts
+    - State manager integration for reactive updates
+    - Background task management
+    - Enhanced error handling with graceful fallbacks
+    """
+    
+    def __init__(self, page: ft.Page):
+        super().__init__()
+        self.page = page
+        self.expand = True
+        
+        # Performance optimization: lazy view loading and caching
+        self._loaded_views = {}  # Cache for loaded views
+        self._background_tasks = set()  # Track background tasks
+        
+        # Initialize state manager for reactive UI updates
+        self.state_manager = None
+        self._initialize_state_manager()
+        
+        # Initialize server bridge synchronously for immediate availability
+        from utils.server_bridge import create_server_bridge
+        self.server_bridge = create_server_bridge()
+        
+        # Create optimized content area with modern Material Design 3 styling
+        self.content_area = ft.Container(
+            expand=True,
+            padding=ft.Padding(24, 20, 24, 20),  # Material Design 3 spacing standards
+            border_radius=ft.BorderRadius(16, 0, 0, 16),  # Modern rounded corners
+            bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),  # Surface hierarchy
+            shadow=ft.BoxShadow(
+                spread_radius=0, blur_radius=8,
+                color=ft.Colors.with_opacity(0.06, ft.Colors.BLACK),
+                offset=ft.Offset(0, 2),
+            ),
+            animate=ft.Animation(140, ft.AnimationCurve.EASE_OUT_CUBIC),  # Modern animation
+            content=ft.AnimatedSwitcher(
+                transition=ft.AnimatedSwitcherTransition.FADE,
+                duration=160,
+                switch_in_curve=ft.AnimationCurve.EASE_OUT_CUBIC,
+                switch_out_curve=ft.AnimationCurve.EASE_IN_CUBIC,
+                expand=True
+            )
+        )
+        
+        # Create collapsible navigation rail with modern styling
+        self.nav_rail_extended = True
+        self.nav_rail = self._create_navigation_rail()
+        
+        # Build layout: NavigationRail + content area (pure Flet pattern)
+        self.controls = [
+            self.nav_rail,
+            ft.VerticalDivider(width=1, color=ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)),
+            self.content_area
+        ]
+        
+        # Set up keyboard shortcuts and page handlers
+        page.on_keyboard_event = self._on_keyboard_event
+        
+        # Load initial dashboard view immediately
+        self._load_view("dashboard")
+    
+    def _create_navigation_rail(self):
+        """Create enhanced collapsible navigation rail with modern styling."""
+        return ft.Container(
+            content=ft.NavigationRail(
+                selected_index=0,
+                label_type=ft.NavigationRailLabelType.ALL,
+                group_alignment=-0.8,
+                min_width=68,  # Collapsed width
+                min_extended_width=240,  # Extended width
+                extended=self.nav_rail_extended,
+                bgcolor=ft.Colors.with_opacity(0.98, ft.Colors.SURFACE),
+                indicator_color=ft.Colors.with_opacity(0.2, ft.Colors.PRIMARY),
+                indicator_shape=ft.RoundedRectangleBorder(radius=24),
+                elevation=6,
+                destinations=[
+                    ft.NavigationRailDestination(
+                        icon=ft.Icon(ft.Icons.DASHBOARD_OUTLINED, size=22,
+                                   badge=ft.Badge(small_size=8, bgcolor=ft.Colors.GREEN)),
+                        selected_icon=ft.Icon(ft.Icons.DASHBOARD, color=ft.Colors.PRIMARY, size=24),
+                        label="Dashboard"
+                    ),
+                    ft.NavigationRailDestination(
+                        icon=ft.Icon(ft.Icons.PEOPLE_OUTLINE, size=22),
+                        selected_icon=ft.Icon(ft.Icons.PEOPLE, color=ft.Colors.PRIMARY, size=24),
+                        label="Clients"
+                    ),
+                    ft.NavigationRailDestination(
+                        icon=ft.Icon(ft.Icons.FOLDER_OUTLINED, size=22),
+                        selected_icon=ft.Icon(ft.Icons.FOLDER, color=ft.Colors.PRIMARY, size=24),
+                        label="Files"
+                    ),
+                    ft.NavigationRailDestination(
+                        icon=ft.Icon(ft.Icons.STORAGE_OUTLINED, size=22),
+                        selected_icon=ft.Icon(ft.Icons.STORAGE, color=ft.Colors.PRIMARY, size=24),
+                        label="Database"
+                    ),
+                    ft.NavigationRailDestination(
+                        icon=ft.Icon(ft.Icons.AUTO_GRAPH_OUTLINED, size=22),
+                        selected_icon=ft.Icon(ft.Icons.AUTO_GRAPH, color=ft.Colors.PRIMARY, size=24),
+                        label="Analytics"
+                    ),
+                    ft.NavigationRailDestination(
+                        icon=ft.Icon(ft.Icons.ARTICLE_OUTLINED, size=22),
+                        selected_icon=ft.Icon(ft.Icons.ARTICLE, color=ft.Colors.PRIMARY, size=24),
+                        label="Logs"
+                    ),
+                    ft.NavigationRailDestination(
+                        icon=ft.Icon(ft.Icons.SETTINGS_OUTLINED, size=22),
+                        selected_icon=ft.Icon(ft.Icons.SETTINGS, color=ft.Colors.PRIMARY, size=24),
+                        label="Settings"
+                    ),
+                ],
+                on_change=self._on_navigation_change,
+                leading=ft.Container(
+                    content=ft.FloatingActionButton(
+                        icon=ft.Icons.MENU_ROUNDED if self.nav_rail_extended else ft.Icons.MENU_OPEN_ROUNDED,
+                        mini=True,
+                        tooltip="Toggle Navigation Menu",
+                        on_click=self._toggle_navigation_rail,
+                    ),
+                    padding=ft.Padding(8, 16, 8, 8),
+                ),
+                trailing=ft.Container(
+                    content=ft.IconButton(
+                        icon=ft.Icons.BRIGHTNESS_6_ROUNDED,
+                        tooltip="Toggle Dark/Light Theme",
+                        on_click=self._on_theme_toggle,
+                    ),
+                    padding=ft.Padding(8, 8, 8, 16),
+                )
+            ),
+            shadow=ft.BoxShadow(
+                spread_radius=0, blur_radius=8,
+                color=ft.Colors.with_opacity(0.08, ft.Colors.BLACK),
+                offset=ft.Offset(2, 0),
+            ),
+            animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
+            border_radius=ft.BorderRadius(0, 12, 12, 0),
+        )
+    
+    def _on_navigation_change(self, e):
+        """Enhanced navigation with lazy loading and caching."""
+        view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
+        selected_view = view_names[e.control.selected_index] if e.control.selected_index < len(view_names) else "dashboard"
+        
+        logger.info(f"Navigation switching to: {selected_view}")
+        self._load_view(selected_view)
+    
+    def _load_view(self, view_name: str):
+        """Load view with lazy loading, caching, and enhanced error handling."""
+        try:
+            # Dynamic view loading with state manager integration
+            if view_name == "dashboard":
+                from views.dashboard import create_dashboard_view
+                content = self._create_enhanced_view(create_dashboard_view, view_name)
+            elif view_name == "clients":
+                from views.clients import create_clients_view
+                content = self._create_enhanced_view(create_clients_view, view_name)
+            # ... other views following the same pattern
+            else:
+                # Fallback to dashboard
+                from views.dashboard import create_dashboard_view
+                content = self._create_enhanced_view(create_dashboard_view, "dashboard")
+            
+            # Update content using AnimatedSwitcher for smooth transitions
+            animated_switcher = self.content_area.content
+            animated_switcher.content = content
+            animated_switcher.update()  # Precise update, not page.update()
+            
+        except Exception as e:
+            logger.error(f"Failed to load view {view_name}: {e}")
+            # Show error view as fallback
+            animated_switcher = self.content_area.content
+            animated_switcher.content = self._create_error_view(str(e))
+            animated_switcher.update()
+    
+    def _create_enhanced_view(self, view_function, view_name: str):
+        """Create view with state manager integration."""
+        try:
+            # Try with state_manager first
+            return view_function(self.server_bridge, self.page, state_manager=self.state_manager)
+        except TypeError:
+            # Fallback without state_manager for backward compatibility
+            return view_function(self.server_bridge, self.page)
+    
+    def _on_keyboard_event(self, e: ft.KeyboardEvent):
+        """Handle keyboard shortcuts for navigation."""
+        if not e.ctrl:
+            return
+        
+        shortcuts = {
+            "D": 0, "C": 1, "F": 2, "B": 3, "A": 4, "L": 5, "S": 6
+        }
+        
+        if e.key in shortcuts:
+            nav_rail = self.nav_rail.content
+            nav_rail.selected_index = shortcuts[e.key]
+            self._on_navigation_change(type('Event', (), {'control': nav_rail})())
 ```
 
-### **Enhanced Debugging Setup**
+### **View Creation Pattern (MANDATORY)**
+
 ```python
-# ALWAYS use at the top of main.py and other entry points
+# views/dashboard.py - Enhanced view pattern with state management and modern styling
+def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[StateManager] = None) -> ft.Control:
+    """
+    Create dashboard view with enhanced infrastructure support and modern styling.
+    
+    Features:
+    - State manager integration for reactive updates
+    - Modern 2025 styling with enhanced cards and animations  
+    - Sophisticated hover effects and micro-interactions
+    - Enhanced error handling and user feedback
+    - Real-time data updates when available
+    """
+    
+    from utils.user_feedback import show_success_message, show_error_message
+    from theme import create_modern_card, create_modern_button_style
+    
+    # Essential refs for dynamic styling and interactions
+    cpu_progress_bar_ref = ft.Ref[ft.ProgressBar]()
+    server_status_text_ref = ft.Ref[ft.Text]()
+    start_server_button_ref = ft.Ref[ft.FilledButton]()
+    
+    # Enhanced data loading with state management integration
+    def get_server_status():
+        if server_bridge:
+            try:
+                return server_bridge.get_server_status()
+            except Exception as e:
+                logger.warning(f"Server bridge failed: {e}")
+        return {"server_running": True, "clients": 3, "files": 72}  # Mock fallback
+    
+    # Modern hover effects with sophisticated animations  
+    def handle_card_hover(e, accent_color):
+        """Enhanced card hover with depth and shadow animations."""
+        try:
+            is_hover = e.data == "true"
+            e.control.scale = 1.02 if is_hover else 1.0
+            e.control.animate_scale = ft.Animation(
+                duration=200, 
+                curve=ft.AnimationCurve.EASE_OUT_CUBIC
+            )
+            
+            # Enhanced shadow depth
+            if hasattr(e.control, 'shadow'):
+                e.control.shadow.blur_radius = 16 if is_hover else 8
+                
+            e.control.update()
+        except Exception as ex:
+            logger.debug(f"Card hover effect failed: {ex}")
+    
+    # Enhanced async event handlers with modern UI feedback
+    async def on_start_server(e):
+        """Start server with enhanced feedback and state management."""
+        try:
+            # Show immediate visual feedback
+            if start_server_button_ref.current:
+                start_server_button_ref.current.disabled = True
+                start_server_button_ref.current.update()
+            
+            logger.info("Start server clicked")
+            
+            # Server operation (simplified for demo)
+            result = await asyncio.sleep(1)  # Simulate async operation
+            
+            # Update state if state manager available
+            if state_manager:
+                await state_manager.update_state("server_status", {"running": True})
+            
+            # Show success feedback
+            show_success_message(page, "Server started successfully")
+            
+        except Exception as ex:
+            logger.error(f"Start server failed: {ex}")
+            show_error_message(page, f"Failed to start server: {ex}")
+        finally:
+            # Re-enable button
+            if start_server_button_ref.current:
+                start_server_button_ref.current.disabled = False
+                start_server_button_ref.current.update()
+    
+    # Get current server status
+    status = get_server_status()
+    
+    # Create modern cards with enhanced styling
+    def create_status_card(title, value, icon, color, description=""):
+        return create_modern_card(
+            content=ft.Column([
+                ft.Row([
+                    ft.Icon(icon, size=32, color=color),
+                    ft.Column([
+                        ft.Text(title, size=14, weight=ft.FontWeight.W_500),
+                        ft.Text(str(value), size=24, weight=ft.FontWeight.BOLD),
+                    ], spacing=2, expand=True)
+                ], spacing=16),
+                ft.Text(description, size=12, color=ft.Colors.ON_SURFACE_VARIANT) if description else ft.Container(),
+            ], spacing=8),
+            elevation="soft",
+            hover_effect=True
+        )
+    
+    # Create system monitoring cards
+    system_cards = ft.ResponsiveRow([
+        ft.Column([
+            create_status_card(
+                "Active Clients", 
+                status.get('clients', 0), 
+                ft.Icons.PEOPLE, 
+                ft.Colors.BLUE,
+                "Currently connected"
+            )
+        ], col={"sm": 12, "md": 6, "lg": 3}),
+        
+        ft.Column([
+            create_status_card(
+                "Total Files", 
+                status.get('files', 0), 
+                ft.Icons.FOLDER, 
+                ft.Colors.GREEN,
+                "Successfully backed up"
+            )
+        ], col={"sm": 12, "md": 6, "lg": 3}),
+        
+        ft.Column([
+            create_status_card(
+                "Server Status", 
+                "Running" if status.get('server_running') else "Stopped", 
+                ft.Icons.CLOUD, 
+                ft.Colors.GREEN if status.get('server_running') else ft.Colors.RED,
+                "Current server state"
+            )
+        ], col={"sm": 12, "md": 6, "lg": 3}),
+        
+        ft.Column([
+            create_status_card(
+                "CPU Usage", 
+                "45%", 
+                ft.Icons.MEMORY, 
+                ft.Colors.ORANGE,
+                "System resource usage"
+            )
+        ], col={"sm": 12, "md": 6, "lg": 3}),
+    ], spacing=16)
+    
+    # Enhanced control buttons with modern styling
+    control_buttons = ft.Row([
+        ft.FilledButton(
+            "Start Server",
+            icon=ft.Icons.PLAY_ARROW,
+            style=create_modern_button_style("primary", "filled"),
+            on_click=on_start_server,
+            ref=start_server_button_ref
+        ),
+        ft.OutlinedButton(
+            "Stop Server",
+            icon=ft.Icons.STOP,
+            style=create_modern_button_style("error", "outlined"),
+        ),
+        ft.TextButton(
+            "Refresh",
+            icon=ft.Icons.REFRESH,
+            style=create_modern_button_style("primary", "text"),
+        ),
+    ], spacing=12)
+    
+    # Return enhanced dashboard with modern layout
+    return ft.Column([
+        # Header with modern typography
+        ft.Container(
+            content=ft.Column([
+                ft.Text("Server Dashboard", size=28, weight=ft.FontWeight.BOLD),
+                ft.Text("Monitor and control your backup server", 
+                       size=16, color=ft.Colors.ON_SURFACE_VARIANT),
+            ], spacing=4),
+            padding=ft.Padding(0, 0, 0, 24)
+        ),
+        
+        # System monitoring cards
+        system_cards,
+        
+        # Control panel
+        create_modern_card(
+            content=ft.Column([
+                ft.Text("Server Controls", size=18, weight=ft.FontWeight.W_600),
+                control_buttons,
+            ], spacing=16),
+            elevation="medium",
+            padding=24
+        ),
+        
+        # Real-time updates integration
+        ft.Container(height=20),  # Spacer
+        
+    ], expand=True, scroll=ft.ScrollMode.AUTO, spacing=20)
+```
+
+### **Theme System (SOURCE OF TRUTH)**
+
+```python
+# theme.py - Modern 2025 Theme System with Enhanced Visual Effects
+def setup_modern_theme(page: ft.Page) -> None:
+    """
+    Set up 2025 modern theme with vibrant colors, enhanced depth, and layering effects.
+    Features Material Design 3 with modern color science and sophisticated visual hierarchy.
+    """
+    
+    # 2025 Vibrant Color Palette
+    BRAND_COLORS = {
+        "primary": "#3B82F6",        # Vibrant blue
+        "secondary": "#8B5CF6",      # Vibrant purple
+        "accent_cyan": "#06B6D4",    # Modern cyan
+        "accent_emerald": "#10B981", # Fresh emerald
+        "surface_elevated": "#F8FAFC", # Elevated surface
+        "surface_container": "#F1F5F9", # Container surface
+    }
+    
+    # Enhanced light theme with vibrant color system  
+    page.theme = ft.Theme(
+        color_scheme=ft.ColorScheme(
+            primary=BRAND_COLORS["primary"],
+            primary_container=BRAND_COLORS["surface_container"],
+            secondary=BRAND_COLORS["secondary"],
+            tertiary=BRAND_COLORS["accent_emerald"],
+            surface=BRAND_COLORS["surface_elevated"],
+            background=BRAND_COLORS["surface_elevated"],
+            on_primary=ft.Colors.WHITE,
+            on_surface=ft.Colors.GREY_900,
+        ),
+        font_family="Inter",
+        visual_density=ft.VisualDensity.COMPACT,
+        use_material3=True  # Enable Material Design 3
+    )
+    
+    # Enhanced dark theme with vibrant colors
+    page.dark_theme = ft.Theme(
+        color_scheme=ft.ColorScheme(
+            primary="#60A5FA",          # Bright blue for dark
+            secondary="#A78BFA",        # Bright purple for dark
+            tertiary="#34D399",         # Bright emerald for dark
+            surface="#1E293B",          # Dark elevated surface
+            background="#1E293B",
+            on_primary=ft.Colors.GREY_900,
+            on_surface=ft.Colors.GREY_100,
+        ),
+        font_family="Inter",
+        visual_density=ft.VisualDensity.COMPACT,
+        use_material3=True
+    )
+    
+    page.theme_mode = ft.ThemeMode.SYSTEM
+
+# Multiple Theme Variants Support
+THEMES = {
+    "Teal": {
+        "light": ft.Theme(color_scheme=ft.ColorScheme(
+            primary="#38A298", secondary="#7C5CD9", surface="#F0F4F8", background="#F8F9FA"
+        ), font_family="Inter"),
+        "dark": ft.Theme(color_scheme=ft.ColorScheme(
+            primary="#82D9CF", secondary="#D0BCFF", surface="#1A2228", background="#12181C"
+        ), font_family="Inter")
+    },
+    "Purple": {
+        "light": ft.Theme(color_scheme=ft.ColorScheme(
+            primary="#7C5CD9", secondary="#FFA726", surface="#F0F4F8", background="#F8F9FA"
+        ), font_family="Inter"),
+        "dark": ft.Theme(color_scheme=ft.ColorScheme(
+            primary="#D0BCFF", secondary="#FFB868", surface="#1A2228", background="#12181C"
+        ), font_family="Inter")
+    }
+}
+
+# Enhanced Shadow System for 2025 Layering
+SHADOW_STYLES = {
+    "subtle": ft.BoxShadow(blur_radius=4, offset=ft.Offset(0, 1), 
+                          color=ft.Colors.with_opacity(0.05, ft.Colors.BLACK)),
+    "soft": ft.BoxShadow(blur_radius=8, offset=ft.Offset(0, 2), 
+                        color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK)),
+    "medium": ft.BoxShadow(blur_radius=16, offset=ft.Offset(0, 4), 
+                          color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK)),
+    "elevated": ft.BoxShadow(blur_radius=24, offset=ft.Offset(0, 8), 
+                            color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK)),
+    "primary_glow": ft.BoxShadow(blur_radius=20, offset=ft.Offset(0, 4), 
+                                color=ft.Colors.with_opacity(0.3, "#3B82F6")),
+}
+
+def create_modern_card(content: ft.Control, elevation: str = "soft", 
+                      hover_effect: bool = True, padding: int = 20) -> ft.Container:
+    """Create modern card with 2025 styling: enhanced shadows, hover effects."""
+    return ft.Container(
+        content=content,
+        bgcolor=ft.Colors.SURFACE,
+        shadow=SHADOW_STYLES[elevation],
+        border_radius=16,  # Modern rounded corners
+        border=ft.border.all(1, ft.Colors.with_opacity(0.05, ft.Colors.GREY)),
+        padding=padding,
+        animate=ft.animation.Animation(150, ft.AnimationCurve.EASE_OUT) if hover_effect else None,
+    )
+
+def create_modern_button_style(color_type: str = "primary", 
+                              variant: str = "filled") -> ft.ButtonStyle:
+    """Create modern button style with enhanced states and 2025 color vibrancy."""
+    if variant == "filled":
+        return ft.ButtonStyle(
+            bgcolor={
+                ft.ControlState.DEFAULT: ft.Colors.PRIMARY,
+                ft.ControlState.HOVERED: ft.Colors.with_opacity(0.9, ft.Colors.PRIMARY),
+            },
+            color=ft.Colors.WHITE,
+            elevation={ft.ControlState.DEFAULT: 2, ft.ControlState.HOVERED: 6},
+            shape=ft.RoundedRectangleBorder(radius=12),
+            animation_duration=120,
+        )
+    elif variant == "outlined":
+        return ft.ButtonStyle(
+            bgcolor={
+                ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT,
+                ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+            },
+            color=ft.Colors.PRIMARY,
+            side=ft.BorderSide(2, ft.Colors.PRIMARY),
+            shape=ft.RoundedRectangleBorder(radius=12),
+        )
+
+def toggle_theme_mode(page: ft.Page) -> None:
+    """Enhanced theme toggle with modern UI feedback."""
+    if page.theme_mode == ft.ThemeMode.LIGHT:
+        page.theme_mode = ft.ThemeMode.DARK
+    elif page.theme_mode == ft.ThemeMode.DARK:
+        page.theme_mode = ft.ThemeMode.LIGHT
+    else:
+        page.theme_mode = ft.ThemeMode.LIGHT
+    
+    page.update()  # ONLY acceptable page.update() for theme changes
+
+def apply_theme_variant(page: ft.Page, theme_name: str) -> bool:
+    """Apply different theme variant while preserving current theme mode."""
+    if theme_name not in THEMES:
+        return False
+    
+    current_mode = page.theme_mode
+    theme_data = THEMES[theme_name]
+    page.theme = theme_data["light"]
+    page.dark_theme = theme_data["dark"]
+    page.theme_mode = current_mode
+    page.update()
+    return True
+```
+
+---
+
+## ❌ FRAMEWORK-FIGHTING ANTI-PATTERNS (NEVER DO THESE)
+
+### **🚨 IMMEDIATE RED FLAGS**
+1. **Custom NavigationManager classes** → Use `ft.NavigationRail.on_change`
+2. **Custom responsive systems** → Use `expand=True` + `ResponsiveRow`
+3. **Custom theme managers** → Use `page.theme` and `theme.py`
+4. **Complex routing systems** → Use simple view switching
+5. **`page.update()` abuse** → Use `control.update()` for precision
+6. **God components >500 lines** → Decompose into focused functions
+
+### **🚨 INVALID FLET APIS (RUNTIME ERRORS)**
+```python
+# ❌ WRONG - These don't exist in Flet 0.28.3:
+ft.MaterialState.DEFAULT    # ❌ MaterialState doesn't exist
+ft.Expanded()              # ❌ Use expand=True instead
+ft.Colors.SURFACE_VARIANT  # ❌ Use ft.Colors.SURFACE instead
+ft.UserControl             # ❌ Inherit from ft.Control instead
+
+# ✅ CORRECT - Verified working APIs:
+ft.Colors.PRIMARY, ft.Colors.SURFACE, ft.Colors.ERROR
+ft.Icons.DASHBOARD, ft.Icons.SETTINGS, ft.Icons.PLAY_ARROW
+ft.ResponsiveRow, ft.NavigationRail, ft.Card
+```
+
+---
+
+## ✅ CORRECT FLET PATTERNS (ALWAYS USE THESE)
+
+### **Data Display Patterns**
+
+```python
+# ✅ For tabular data: ft.DataTable
+clients_table = ft.DataTable(
+    columns=[ft.DataColumn(ft.Text("ID")), ft.DataColumn(ft.Text("Status"))],
+    rows=[
+        ft.DataRow(cells=[
+            ft.DataCell(ft.Text(client["id"])),
+            ft.DataCell(ft.Text(client["status"], color=ft.Colors.GREEN))
+        ]) for client in clients_data
+    ],
+    border=ft.border.all(1, ft.Colors.OUTLINE)
+)
+
+# ✅ For metrics: ft.LineChart
+cpu_chart = ft.LineChart(
+    data_series=[
+        ft.LineChartData(
+            data_points=[ft.LineChartDataPoint(x, cpu_values[x]) for x in range(len(cpu_values))],
+            color=ft.Colors.BLUE,
+            curved=True
+        )
+    ],
+    expand=True
+)
+
+# ✅ For responsive layouts: ft.ResponsiveRow
+metrics_cards = ft.ResponsiveRow([
+    ft.Column([
+        ft.Card(content=ft.Text(f"CPU: {cpu}%"))
+    ], col={"sm": 12, "md": 6, "lg": 3})
+    for cpu in cpu_values
+])
+```
+
+### **Form/Settings Patterns**
+
+```python
+# ✅ Use ft.Tabs for categories
+settings_tabs = ft.Tabs([
+    ft.Tab(text="Server", icon=ft.Icons.SETTINGS, content=server_form),
+    ft.Tab(text="Theme", icon=ft.Icons.PALETTE, content=theme_form)
+], expand=True)
+
+# ✅ Built-in form controls with validation
+username_field = ft.TextField(
+    label="Username",
+    on_change=lambda e: validate_field(e)
+)
+
+def validate_field(e):
+    if len(e.control.value) < 3:
+        e.control.error_text = "Too short"
+    else:
+        e.control.error_text = None
+    e.control.update()  # Precise update
+```
+
+### **Async Patterns (CRITICAL)**
+
+```python
+# ✅ CORRECT: Async event handlers
+async def on_fetch_data(e):
+    # Show progress immediately
+    progress_ring.visible = True
+    await progress_ring.update_async()
+    
+    # Background operation
+    data = await fetch_data_async()
+    
+    # Update UI
+    results_text.value = data
+    progress_ring.visible = False
+    await ft.update_async(results_text, progress_ring)  # Batch update
+
+# ✅ Background tasks
+page.run_task(monitor_server_async)
+
+# ❌ WRONG: Blocking operations
+def on_fetch_data_blocking(e):
+    data = requests.get(url)  # ❌ Blocks UI
+    self.page.update()       # ❌ Full page refresh
+```
+
+---
+
+## 🚀 PERFORMANCE & BEST PRACTICES
+
+### **File Size Standards (ENFORCE STRICTLY)**
+- **View files**: 200-500 lines maximum
+- **Component files**: 100-400 lines maximum  
+- **If >600 lines**: MANDATORY refactoring required(probably, not always)
+- **Single responsibility**: Each file has ONE clear purpose
+
+### **UI Update Performance**
+
+```python
+# ✅ CORRECT: Precise updates (10x performance improvement)
+def update_status(status_control, new_status):
+    status_control.value = new_status
+    status_control.update()  # Only this control
+
+# ✅ For multiple controls: Batch updates
+await ft.update_async(control1, control2, control3)
+
+# ❌ WRONG: Full page updates (performance killer)
+def update_status_wrong(self):
+    self.status.value = "New status"
+    self.page.update()  # Updates entire page!
+```
+
+### **Layout Best Practices**
+
+```python
+# ✅ CORRECT: Responsive, flexible layouts
+ft.ResponsiveRow([
+    ft.Column([
+        ft.Card(content=dashboard_content, expand=True)
+    ], col={"sm": 12, "md": 8}, expand=True),
+    
+    ft.Column([
+        ft.Card(content=sidebar_content)
+    ], col={"sm": 12, "md": 4})
+])
+
+# ❌ WRONG: Fixed dimensions (breaks on resize)
+ft.Container(width=800, height=600, content=dashboard_content)
+
+# ✅ CORRECT: Auto-scaling
+ft.Container(content=dashboard_content, expand=True, padding=20)
+```
+
+---
+
+## 🛠️ DEVELOPMENT WORKFLOW
+
+### **Terminal Debugging Setup (PRODUCTION READY)**
+
+```python
+# STEP 1: Import at top of main.py (before other imports)
 from utils.debug_setup import setup_terminal_debugging, get_logger
-logger = setup_terminal_debugging(logger_name="YourModuleName")
+logger = setup_terminal_debugging(logger_name="FletV2.main")
+
+# STEP 2: Use throughout your application
+def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
+    logger.info("Creating dashboard view")
+    
+    def on_button_click(e):
+        logger.debug("Button clicked")
+        try:
+            result = some_operation()
+            logger.info(f"Operation successful: {result}")
+        except Exception as ex:
+            logger.error(f"Operation failed: {ex}", exc_info=True)
 ```
 
-### **Server Bridge Pattern**
+### **Error Handling & User Feedback**
+
 ```python
-# Enhanced bridge with fallback
+# ✅ CORRECT: Centralized user feedback
+def show_user_message(page, message, is_error=False):
+    page.snack_bar = ft.SnackBar(
+        content=ft.Text(message),
+        bgcolor=ft.Colors.ERROR if is_error else ft.Colors.GREEN
+    )
+    page.snack_bar.open = True
+    page.update()
+
+def safe_operation(page):
+    try:
+        result = complex_operation()
+        logger.info(f"Operation completed: {result}")
+        show_user_message(page, "Operation completed successfully!")
+    except Exception as e:
+        logger.error(f"Operation failed: {e}", exc_info=True)
+        show_user_message(page, f"Failed: {str(e)}", is_error=True)
+```
+
+### **Enhanced Server Bridge Pattern (Production Ready)**
+
+```python
+# ✅ CORRECT: Unified server bridge with direct calls and clean fallback
 from utils.server_bridge import ServerBridge, create_server_bridge
-BRIDGE_TYPE = "Unified Server Bridge (with built-in mock fallback)"
+
+# Create bridge with real server integration
+def initialize_server_bridge(real_server_instance=None):
+    """
+    Initialize unified server bridge with direct server integration.
+    
+    Design Philosophy:
+    - Simple and fast - direct function calls to real server when available
+    - Clean fallback to mock data for development
+    - No caching that causes stale data issues
+    - Immediate UI updates after modifications
+    """
+    bridge = create_server_bridge(real_server_instance)
+    
+    if real_server_instance:
+        logger.info("Server bridge initialized in LIVE mode - direct server calls")
+        print("[ServerBridge] Connected to real server - all calls will be direct")
+    else:
+        logger.info("Server bridge initialized in FALLBACK mode - using mock data")
+        print("[ServerBridge] No real server provided - using mock data for development")
+    
+    return bridge
+
+# Key Features:
+# - Direct data access: if self.real_server: return self.real_server.get_clients()
+# - Immediate UI updates: no caching delays after modifications
+# - Clean development experience: automatic mock fallback
+# - Production ready: seamless real server integration
+# - Simple design: no over-engineering or complex async patterns
+
+# Usage Examples:
+
+# Development mode (automatic mock fallback):
+bridge = create_server_bridge()  
+clients = bridge.get_clients()  # Returns mock data
+
+# Production mode (direct server calls):
+from real_server import BackupServer
+real_server = BackupServer()
+bridge = create_server_bridge(real_server)
+clients = bridge.get_clients()  # Direct call: real_server.get_clients()
 ```
 
-### **State Management System**
+### **State Management Integration**
+
 ```python
-# Reactive UI updates with real-time subscriptions
+# ✅ CORRECT: Reactive State Management with precise UI updates
 from utils.state_manager import StateManager, create_state_manager
-state_manager = create_state_manager(page)
 
-# Subscribe to real-time updates
-state_manager.subscribe("server_status", callback_function)
+# Initialize state manager for reactive UI updates
+def initialize_state_manager(page: ft.Page):
+    """
+    Create state manager for cross-view reactive updates.
+    
+    Features:
+    - Automatic UI updates when state changes
+    - Smart caching to prevent duplicate API calls  
+    - Precise control.update() instead of page.update()
+    - Cross-view state sharing
+    - Performance tracking and optimization
+    """
+    state_manager = create_state_manager(page)
+    
+    # Set up initial state
+    initial_state = {
+        "clients": [],
+        "files": [],
+        "server_status": {"running": False},
+        "connection_status": "disconnected",
+        "current_view": "dashboard"
+    }
+    
+    for key, value in initial_state.items():
+        asyncio.create_task(state_manager.update_state(key, value))
+    
+    logger.info("State manager initialized with reactive updates")
+    return state_manager
+
+# ✅ Subscribe to state changes with automatic UI updates
+def setup_reactive_ui(state_manager: StateManager, control: ft.Control):
+    """Set up reactive UI component that updates automatically."""
+    
+    def on_server_status_change(new_status, old_status):
+        """Update UI when server status changes."""
+        if hasattr(control, 'update'):
+            control.bgcolor = ft.Colors.GREEN if new_status.get('running') else ft.Colors.RED
+            control.update()  # Precise update, not page.update()
+    
+    # Subscribe to changes
+    state_manager.subscribe("server_status", on_server_status_change, control)
+
+# ✅ Batch updates for performance
+def update_dashboard_data(state_manager: StateManager, server_bridge):
+    """Update multiple state values efficiently."""
+    try:
+        # Get fresh data from server bridge
+        clients = server_bridge.get_clients()
+        files = server_bridge.get_files()  
+        status = server_bridge.get_server_status()
+        
+        # Batch update for performance
+        updates = {
+            "clients": clients,
+            "files": files,
+            "server_status": status
+        }
+        
+        successful_updates = state_manager.batch_update(updates)
+        logger.info(f"Updated {successful_updates} state values")
+        
+    except Exception as e:
+        logger.error(f"Failed to update dashboard data: {e}")
+
+# ✅ Cache-aware data loading
+async def load_cached_data(state_manager: StateManager, key: str, 
+                          data_fetcher, max_age_seconds: int = 30):
+    """Load data with smart caching."""
+    
+    # Try cache first
+    cached_data = state_manager.get_cached(key, max_age_seconds)
+    if cached_data is not None:
+        logger.debug(f"Using cached data for {key}")
+        return cached_data
+    
+    # Fetch fresh data
+    try:
+        fresh_data = await data_fetcher()
+        await state_manager.update_state(key, fresh_data)
+        return fresh_data
+    except Exception as e:
+        logger.error(f"Failed to fetch {key}: {e}")
+        return state_manager.get_state(key, [])  # Return current state as fallback
+
+# ✅ Performance statistics and monitoring  
+def monitor_state_performance(state_manager: StateManager):
+    """Monitor state manager performance."""
+    stats = state_manager.get_statistics()
+    logger.info(f"State Manager Stats: {stats}")
+    
+    # Performance metrics
+    cache_hit_rate = stats['cache_hits'] / max(stats['total_updates'], 1) * 100
+    logger.info(f"Cache hit rate: {cache_hit_rate:.1f}%")
 ```
 
-### **File Size Guidelines**
-- View files: ~200-500 lines maximum
-- Component files: ~100-400 lines maximum
-- If >600 lines: mandatory decomposition required
+---
 
-## 🚨 Anti-Patterns (Never Do These)
+## 📋 CODE QUALITY CHECKLIST
 
-- Custom navigation managers (use `ft.NavigationRail`)
-- Custom responsive systems (use `expand=True`)
-- Complex theme managers (use `page.theme`)
-- `page.update()` abuse (use `control.update()`)
-- Hardcoded dimensions (use responsive patterns)
+### **Before Writing ANY Code**
+- [ ] Does Flet provide this functionality built-in?
+- [ ] Am I duplicating existing functionality?
+- [ ] Will this file exceed 600 lines? (If yes, decompose first)
+- [ ] Am I using hardcoded dimensions instead of `expand=True`?
+- [ ] Am I using `page.update()` when `control.update()` would work?
 
-## 🔍 Integration Points
+### **Validation Checklist for New Code**
+- [ ] **Framework harmony**: Uses Flet built-ins, not custom replacements
+- [ ] **Single responsibility**: File has ONE clear purpose
+- [ ] **No hardcoded dimensions**: Uses `expand=True`, responsive patterns
+- [ ] **Async operations**: Long operations use async patterns
+- [ ] **Error handling**: Proper user feedback for failures
+- [ ] **Terminal debugging**: Uses logger instead of print()
+- [ ] **Accessibility**: Includes tooltip, semantics_label where appropriate
 
-### **Database Schema**
-- `clients` table: id, name, status, last_seen
-- `files` table: id, client_id, filename, path, size, checksum
-- `logs` table: id, timestamp, level, component, message
+### **The Ultimate Quality Test**
+Before committing ANY code, ask:
+1. "Does Flet already provide this functionality?"
+2. "Can a new developer understand this file's purpose in <2 minutes?"
+3. "Am I working WITH Flet patterns or fighting them?"
 
-### **Communication Protocol**
-- JSON-based socket communication
-- Server bridge handles connection management
-- Automatic fallback to mock data for development
+If any answer is unclear, STOP and refactor.
 
-### **Development Workflow**
-1. Develop in `FletV2/` using hot reload
-2. Test with mock data (automatic fallback)
-3. Integration test with full system
-4. Reference `CLAUDE.md` for detailed Flet guidance
-5. **CRITICAL**: Read `important_docs/new_agent_onboarding.md` for comprehensive project context and startup problem analysis
+---
 
-### **Documentation Resources**
-- `important_docs/new_agent_onboarding.md` - **CRITICAL**: Complete context for new agents, startup problem analysis
-- `important_docs/emoji_inventory.md` - Comprehensive emoji inventory
-- `important_docs/FletV2_Architecture_Blueprint.md` - System design and architecture
-- `important_docs/FletV2_Infrastructure_Enhancement_Summary.md` - Recent improvements
-- `important_docs/FletV2_Issues.md` - Known problems and solutions
-- `important_docs/Consolidated_Context7_Flet_Desktop_Framework.md` - Framework guide
-- `PERFORMANCE_OPTIMIZATION_SUMMARY.md` - Documenting timers & usage
-- `important_docs/emoji_inventory.md` - Comprehensive emoji inventory
+## 🎯 PROJECT CONTEXT
 
-## 💡 Quick Reference
+### **Current Architecture Status**
+- **✅ FletV2/**: Clean, framework-harmonious implementation (USE THIS)
+- **❌ flet_server_gui/**: Obsolete, over-engineered (REFERENCE ONLY)
+- **System**: 5-layer encrypted backup framework with GUI management:
+    - Client: cpp
+    - API Server: python api server for the client web-gui
+    - Client gui: javascript, tailwindcss web-gui
+    - Server: python
+    - server GUI: FletV2 desktop/laptop(NOT mobile/tablet/web) app for management
+    - database: SQLite3
+    - Bridge: Enhanced ServerBridge for communication
+    - Utils: Shared utilities
 
-- **Theme**: Material Design 3 with system detection
-- **Colors**: Semantic color tokens (`ft.Colors.PRIMARY`)
-- **Layout**: Responsive with `ft.ResponsiveRow`
-- **Navigation**: `ft.NavigationRail` with 7 destinations
-- **Data**: Server bridge with automatic mock fallback
-- **Encryption**: RSA + AES for secure file transfer
-- **Documentation**: See `important_docs/new_agent_onboarding.md` for comprehensive context
-- **Startup Issue**: App hangs on loading screen - PRIMARY issue to resolve
-
-Follow these patterns for consistent, maintainable code that works with the framework rather than against it.
-
-│   ├── dashboard.py          # Server dashboard
-│   ├── clients.py            # Client management
-│   ├── files.py              # File browser
-│   ├── database.py           # Database viewer
-│   ├── analytics.py          # Analytics charts
-│   ├── logs.py               # Log viewer
-│   └── settings.py           # Configuration
-└── utils/                     # Helper utilities
-    ├── debug_setup.py        # Terminal debugging
-    ├── server_bridge.py      # Full server integration
-    └── simple_server_bridge.py # Fallback bridge
+### **Key FletV2 Files (Updated Architecture)**
 ```
+FletV2/
+├── main.py                    # Enhanced desktop app (~900 lines) with modern features
+├── theme.py                   # 2025 modern theme system with vibrant colors & effects
+├── config.py                  # Configuration constants and settings
+│
+├── views/                     # Enhanced view functions with state management
+│   ├── dashboard.py          # Enhanced server dashboard with real-time updates
+│   ├── clients.py            # Client management with modern UI  
+│   ├── files.py              # File browser with enhanced navigation
+│   ├── database.py           # Database viewer with advanced querying
+│   ├── analytics.py          # Analytics with interactive charts
+│   ├── logs.py               # Advanced log viewer with filtering
+│   └── settings.py           # Enhanced configuration with theme switching
+│
+└── utils/                     # Production-ready infrastructure utilities
+    ├── debug_setup.py        # Enhanced terminal debugging with UTF-8 support
+    ├── server_bridge.py      # ⭐ Unified bridge with direct server integration
+    ├── state_manager.py      # ⭐ Reactive state management with smart caching
+    ├── mock_data_generator.py # Comprehensive mock data for development
+    ├── user_feedback.py      # Modern user notification system
+    ├── performance.py        # Performance monitoring and optimization
+    ├── ui_components.py      # Reusable modern UI components
+    ├── ui_helpers.py         # UI utility functions
+    ├── system_utils.py       # System monitoring and utilities
+    ├── database_manager.py   # Database operations and management
+    ├── loading_states.py     # Modern loading state components
+    ├── responsive_layouts.py # Responsive design utilities
+    ├── progress_utils.py     # Progress indication components
+    └── perf_metrics.py       # Performance metrics collection
+```
+
+### **Enhanced Infrastructure Features (January 2025)**
+
+🚀 **Modern Architecture Components:**
+- **Unified Server Bridge**: Direct server integration with clean mock fallback
+- **Reactive State Manager**: Smart caching with automatic UI updates using `control.update()`
+- **Modern Theme System**: 2025 vibrant colors with Material Design 3 and enhanced shadows
+- **Performance Optimization**: Lazy loading, view caching, and background task management
+- **Enhanced Navigation**: Collapsible rail with keyboard shortcuts and modern animations
+- **Advanced Debugging**: UTF-8 support with comprehensive logging infrastructure
+
+⚡ **Performance & User Experience:**
+- **10x UI Performance**: Precise `control.update()` instead of `page.update()`
+- **Smart Caching**: Prevents duplicate server calls while maintaining data freshness
+- **Modern Animations**: Sophisticated micro-interactions with optimized curves
+- **Responsive Design**: Material Design 3 spacing and component standards
+- **Real-time Updates**: Cross-view state synchronization with reactive subscriptions
+
+🛡️ **Production Readiness:**
+- **Direct Server Integration**: `if self.real_server: return self.real_server.method()`
+- **Zero Configuration Change**: Seamless development-to-production transition
+- **Error Resilience**: Comprehensive fallback mechanisms and graceful degradation
+- **Resource Management**: Proper cleanup and background task termination
 
 ### **Launch Commands**
 ```bash
@@ -255,15 +1164,67 @@ Follow these patterns for consistent, maintainable code that works with the fram
 cd FletV2 && python main.py
 
 # FletV2 Development with Hot Reload (RECOMMENDED for development)
-# Uses desktop for instant hot reload - identical runtime behavior to native desktop while enabling instant hot reload. The workflow is: develop in browser → test in native desktop → deploy as desktop app.
+# Uses web view for instant hot reload - identical runtime to desktop
 cd FletV2
 flet run -r main.py
 
 # Alternative: Command-line hot reload
 cd FletV2 && flet run --web main.py
 
+# Debug mode with enhanced logging
+cd FletV2 && python main.py --debug
+
 # System integration testing (only after FletV2 is complete, and the user approved)
 python scripts/one_click_build_and_run.py
+```
+
+### **Development Best Practices (Updated September 2025)**
+
+#### **Server Bridge Integration**
+```python
+# ✅ CORRECT: Initialize bridge with cleanup
+def initialize_app(page: ft.Page):
+    bridge = create_server_bridge()
+    
+    # Register cleanup on app close
+    def on_window_close(e):
+        bridge.cleanup()
+        logger.info("Application closed cleanly")
+    
+    page.on_window_event = on_window_close
+    return bridge
+
+# ✅ CORRECT: Use async methods for better performance
+async def load_dashboard_data(bridge):
+    # Parallel data loading
+    clients_task = bridge.get_clients_async()
+    files_task = bridge.get_files_async() 
+    stats_task = bridge.get_server_stats_async()
+    
+    clients, files, stats = await asyncio.gather(
+        clients_task, files_task, stats_task
+    )
+    
+    return {'clients': clients, 'files': files, 'stats': stats}
+
+# ✅ CORRECT: Cache management in views
+def refresh_data(bridge):
+    bridge.clear_cache()  # Force fresh data
+    # Data will be automatically cached on next request
+```
+
+#### **Error Handling Patterns**
+```python
+# ✅ CORRECT: Robust error handling with user feedback
+async def safe_server_operation(bridge, page, operation_name):
+    try:
+        result = await bridge.some_async_operation()
+        show_success_message(page, f"{operation_name} completed successfully")
+        return result
+    except Exception as e:
+        logger.error(f"{operation_name} failed: {e}", exc_info=True)
+        show_error_message(page, f"{operation_name} failed: {str(e)}")
+        return None
 ```
 
 ### **Development Workflow (Desktop Apps)**
@@ -284,383 +1245,56 @@ You have access to ast-grep for syntax-aware searching:
 - **Fallback to ripgrep**: Only when ast-grep isn't applicable
 - **Never use basic grep**: ripgrep is always better for codebase searches (basic grep when other tools fail)
 
-### **Sequential Thinking Tool**
-For complex problem analysis and systematic debugging:
-```python
-# Use sequential thinking for:
-# - Startup problem diagnosis
-# - Complex refactoring analysis
-# - Multi-step problem solving
-# - Architectural decision making
-```
+---
+
+## 💡 KEY INSIGHTS (Updated January 2025)
+
+**★ Framework Enlightenment**: Modern desktop applications with sophisticated UI are achievable in ~900 lines of clean Flet code instead of 10,000+ lines of framework-fighting complexity. The key is working WITH Flet's capabilities.
+
+**★ The Unified Bridge Revolution**: A single unified server bridge with direct function calls (`if self.real_server: return self.real_server.method()`) provides immediate data access and eliminates caching staleness issues while maintaining clean mock fallback.
+
+**★ Performance Multipliers**: 
+- `control.update()` vs `page.update()`: 10x+ performance improvement with precise updates
+- Smart state management: Cross-view reactive updates without manual coordination
+- Modern animations: Sophisticated micro-interactions with optimized performance curves
+- Lazy loading: View caching and background task management for instant responsiveness
+
+**★ Production Readiness**: Zero-configuration transition from development to production. The unified server bridge seamlessly switches from mock data to direct server calls by simply passing a real server instance to `create_server_bridge()`.
+
+**★ Modern UI Excellence**: 2025 design trends implemented through Material Design 3 with vibrant color palettes, enhanced shadow systems, sophisticated animations, and responsive layouts that feel native and performant.
+
+**★ The Architecture Evolution**: FletV2 now demonstrates production-grade desktop application architecture with reactive state management, modern theming, performance optimization, and comprehensive error handling while preserving Flet's core simplicity principles.
+
+**The FletV2 directory is the CANONICAL REFERENCE** for proper modern Flet desktop development. When in doubt, follow its enhanced patterns exactly.
 
 ---
 
-## 💡 KEY INSIGHTS
+## 📊 INFRASTRUCTURE STATUS (January 2025)
 
-**★ Framework Enlightenment**: Desktop resizable apps with navigation are trivial in Flet. The entire application can be ~700 lines instead of 10,000+ lines of framework-fighting code(not really, but to illustrate the point).
+### **✅ Completed Modern Architecture Enhancements**
+- **Unified Server Bridge**: Direct server integration with clean fallback pattern
+- **Reactive State Management**: Smart caching with automatic UI updates using `control.update()`
+- **Modern Theme System**: 2025 vibrant colors with Material Design 3 implementation
+- **Performance Optimization**: Lazy loading, view caching, and 10x UI performance improvements
+- **Enhanced Navigation**: Collapsible rail with keyboard shortcuts and sophisticated animations
+- **Advanced Infrastructure**: Comprehensive debugging, error handling, and resource management
 
-**★ The Semi-Nuclear Protocol**: When refactoring complex code, analyze first to understand TRUE intentions, then rebuild with simple Flet patterns while preserving valuable business logic, achieving feature parity.
+### **🎯 Current Architecture Excellence**
+- **Production-Ready Design**: Zero-configuration development-to-production transition
+- **Modern UI Standards**: Material Design 3 with 2025 design trends and sophisticated interactions
+- **Performance Optimized**: Precise updates, smart caching, and optimized animation curves
+- **Error Resilient**: Comprehensive fallback mechanisms and graceful degradation patterns
+- **Developer Experience**: Hot reload ready with enhanced debugging and UTF-8 support
 
-**★ Performance Secret**: Replacing `page.update()` with `control.update()` can improve performance by 10x+ and eliminate UI flicker.
+### **🚀 Development & User Experience Improvements**
+- **Hot Reload Development**: Instant feedback with `flet run -r main.py`
+- **Modern Visual Design**: Vibrant color palettes, enhanced shadows, and micro-interactions
+- **Responsive Architecture**: Cross-view state synchronization and reactive updates
+- **Professional Polish**: Keyboard shortcuts, hover effects, and sophisticated animations
+- **Production Deployment**: Direct server calls with `create_server_bridge(real_server_instance)`
 
-**★ Flet Version Requirements**: Flet 0.21.0+ is required for async-first architecture. Main function must be async and use `asyncio.run(ft.app_async())`.
+**Last Updated**: January 9, 2025 - Modern Architecture Implementation Complete
+**Status**: Production-Ready Modern Desktop Application with Enhanced Infrastructure
+**Key Achievement**: Sophisticated modern UI with reactive state management, unified server bridge, and production-ready architecture while maintaining Flet's core simplicity principles
 
-**The FletV2 directory is the CANONICAL REFERENCE** for proper Flet desktop development. When in doubt, follow its examples exactly.
-
----
-
-## 📝 .gitignore Management
-When modifying the `.gitignore` file, adhere to the following guidelines:
-- **Avoid Duplication**: Ensure each ignore rule is unique and doesn't overlap with existing rules.
-- **Consolidation**: Group related rules together (e.g., all `.vscode` related ignores should be under the `.vscode/*` section).
-- **Clarity**: Use comments to explain complex or project-specific ignore rules.
-
----
-
-## 💻 VS Code Configuration
-
-### **Python Interpreter Path**
-To ensure VS Code uses the correct Python interpreter for the FletV2 project, set the `python.defaultInterpreterPath` in `.vscode/settings.json` to the Flet virtual environment:
-
-```jsonc
-{
-    // ...existing code...
-    "python.defaultInterpreterPath": "./flet_venv/Scripts/python.exe",
-    // ...existing code...
-}
-```
-
----
-
-## 🐛 Debugging
-
-### **Consolidated Debugging Report Guidelines:**
-- **Severity Ranking**: Prioritize issues by severity (High, Medium, Low).
-- **Symptom Description**: Clearly describe the observed behavior.
-- **Root Cause Analysis**: Explain the underlying cause of the issue.
-- **Status Tracking**: Track issues from discovery to resolution, including regressions.
-- **Asynchronous Task Management**: Pay close attention to the correct usage of async/await patterns in Flet.
-- **Dependency Management**: Ensure all required packages are correctly installed and listed in the project's environment.
-
-### **Known Issues:**
-- **Systemic Asynchronous Task Crash**:
-    - **Symptom**: Application crashes on startup or during specific actions due to `RuntimeError: no running event loop`.
-    - **Root Cause**: Incorrect use of `asyncio.create_task()` from synchronous functions.
-    - **Status**: Critical. Requires immediate attention and architectural review.
-- **Data Sourcing Failure**:
-    - **Symptom**: Application consistently displays mock data instead of live information.
-    - **Root Cause**: `ServerBridge` component starts in `FALLBACK` mode.
-    - **Status**: Persistent and Critical. Investigate backend connection issues.
-- **UI Race Condition in Clients View**:
-    - **Symptom**: Initial list of clients fails to appear in the "Clients" view.
-    - **Root Cause**: Data population logic runs before the UI `DataTable` control is rendered.
-    - **Status**: Persistent. Ensure UI elements are fully initialized before populating data.
-- **Incorrect API Usage**:
-    - **Symptom**: `AttributeError: 'Page' object has no attribute 'after'` when interacting with UI elements.
-    - **Root Cause**: Attempt to call non-existent methods on Flet objects.
-    - **Status**: Unresolved. Review API usage and consult Flet documentation.
-
----
-
-**Last Updated**: September 9, 2025
-**Project Status**: FletV2 GUI launched successfully. Startup loading screen issue appears to be resolved. Requires further testing and visual optimization based on `Gpt5_Visual_Optimization_Plan_09092025.md`.
-**Priority**: Visual optimization and ensure stability.
-
-### **Visual Optimization Plan Progress:**
-- **Phase A (Helper Utilities):** ✅
-- **Phase B (Files View Pagination & Formatting):** ✅
-  - Replaced legacy MD5 with SHA256 in files verify path. ✅
-- **Phase C (Logs View Enhancements):** ✅
-  - Removed unused build_status_badge import in logs view (warning cleared). ✅
-- **Phase E (Diff Engine):** ✅
-- **Phase F (Performance Metrics):** ✅
-  - Added `perf_metrics.py` (PerfTimer, record_metric, get_metrics, reset_metrics).
-  - Instrumented Files view: initial scan, enhanced load, search, table total, slice, prepass, rebuild/partial paths.
-  - Instrumented Logs view: search, load fetch, load render.
-  - Created `PERFORMANCE_OPTIMIZATION_SUMMARY.md` documenting timers & usage.
-
-### **Ongoing Tasks:**
-- ✅ Add debounced search (Files view)
-- ✅ Refactor update_table_display (reduced from 157→86 lines; CCN still high but improved)
-- ✅ Unify logs level badge helper
-- Cleanup unused imports/files view
-
-### **Complexity Warnings:**
-- NLOC (Number of Lines of Code): Function body length. Exceeds maintainability thresholds (e.g., 50). Harder to scan/test.
-- Cyclomatic Complexity (CCN): Count of independent paths (branches, loops, exceptions). Higher CCN (e.g., 17–30) raises risk of hidden bugs and insufficient test coverage.
-- File NLOC: Total non-empty logical lines in file. Over 500 indicates monolith; refactor into modules.
-- Affected hotspots:
-  - update_table_display (now 86 lines, down from 157; CCN still high but improved) – added diff logic + pagination/status + dual build paths.
-  - filter_files (branches across multiple filters).
-  - scan_files_directory / get_files_data: nested conditionals and path logic.
-  - Async operations (load_files_data_async, delete_file_action_enhanced.confirm_delete_async) combine UI + IO + branching.
-  - create_files_view wrapper function itself (too many nested helpers in closure scope).
-
-### **Mitigation Strategy:**
-- Extract pure helpers (signatures, row build, pagination status formatting).
-- Isolate IO vs UI code (e.g., file scanning vs control creation).
-- Reduce nested if/else by early returns / guard clauses.
-
-#### Detailed Removal/Change Audit (From Enhanced Plan)
-1. Success Criteria bullet list
-Replaced by: KPI table (Section 1)
-Justification: Converted qualitative bullets into quantifiable metrics (traceable & automatable).
-Risk: Possible loss of plain-language intent.
-Mitigation: KPI definitions + glossary.
-
-2. Constraints & Compatibility table
-Replaced by: Environment & Prerequisites (Section 2) + Architectural Principles (Section 3)
-Justification: Split operational setup (version, hashing, tooling) from enduring design principles; reduced mixed concerns.
-Risk: Harder to see all constraints at once.
-Mitigation: Two focused tables
-
-3. Verbose Baseline bullet lists (per-view)
-Replaced by: Condensed Baseline Assessment paragraph (Section 4)
-Justification: Removed repetition already implied by later phase playbooks.
-Risk: Slightly less narrative context.
-Mitigation: Phase playbooks retain actionable specifics.
-
-4. Original Optimization Strategy numbered list + Visual Polish sub‑bullets
-Replaced by: Narrative Strategy (Section 5) + Design Tokens (Section 8)
-Justification: Separated mechanics vs styling tokens; improved semantic grouping.
-Risk: Readers may miss a single “all-in-one” checklist.
-Mitigation: Phase Playbooks encode execution steps.
-
-5. Implementation Phases summary table
-Replaced by: Phase Playbooks (Section 6) with exit criteria & metrics keys
-Justification: Table lacked room for metrics/exit criteria; playbook format adds operational clarity.
-Risk: Less compact overview.
-Mitigation: Section headings scannable; glossary added.
-
-6. Detailed Task Breakdown (Phases A–D) section
-Merged into: Phase Playbooks (removed duplication)
-Justification: Eliminated two sources of truth.
-Risk: None (content preserved).
-
-7. Standalone Row Diff (Phase E) brief pseudo
-Replaced by: Expanded Row Diff Algorithm (Section 7) with reuse ratio logic & instrumentation keys
-Justification: Added observability + decision thresholds.
-Risk: Slightly longer to read.
-Mitigation: Pseudo kept concise.
-
-8. Visual Design Tokens bullet list
-Replaced by: Token table with rationale (Section 8)
-Justification: Adds reasoning column → design defensibility.
-Risk: None.
-
-9. Risks & Mitigations simple table
-Replaced by: Risk Register (Section 11) with IDs, triggers, contingency
-Justification: Moves from static awareness to operational risk management.
-Risk: Moves from static awareness to operational risk management.
-Risk: Slight complexity increase.
-Mitigation: Limited to 5 high-signal risks.
-
-10. Validation & Metrics “Manual quick checks” list
-Replaced by: KPI table + Instrumentation Spec (Section 12) + QA Matrix (Section 13)
-Justification: Moves to measurable, repeatable framework; explicit metric keys.
-Risk: Loss of informal guidance tone.
-Mitigation: Scripted interaction outline reintroduced.
-
-11. Rollback Plan early placement
-Moved to: Section 17
-Justification: Grouped near Acceptance & Future for lifecycle continuity.
-Risk: Slightly later discovery.
-Mitigation: TOC-like sectional organization.
-
-12. Future Enhancements (unsorted list)
-Replaced by: Prioritized matrix (Section 18) + Stretch list inside Acceptance
-Justification: Adds effort/prioritization dimension → planning clarity.
-Risk: Subjective effort labels.
-Mitigation: Clearly marked “Prioritized”.
-
-13. Execution Order enumerated list
-Replaced by: Implied flow via Phase Playbooks + Contribution Workflow (Section 15)
-Justification: Avoided divergence between “order” list and actual working practice; workflow now enforces gating (metrics, scans).
-Risk: New contributors may want explicit sequence.
-Mitigation: Phase numbers still indicate natural order.
-
-14. Original Acceptance Checklist
-Replaced by: Expanded Acceptance (Section 16) segmented (Functional / Performance / UX / Code / Instrumentation / Process)
-Justification: Improves traceability to KPIs & risk register.
-Risk: Larger list might discourage completion.
-Mitigation: Logical grouping reduces cognitive load.
-
-15. Notes section (patch size, Codacy reminder, contingency for DataRow color)
-Integrated into: Architectural Principles (reversibility), Contribution Workflow (per-file scans), Visual Tokens (fallback rationale implied), Rollback Strategy.
-Justification: Removed orphan advice; embedded where actionable.
-Risk: Specific fallback (DataRow color unsupported) less prominent.
-Mitigation: Can re-add as an inline footnote if still needed.
-
-16. Explicit “Keep changes incremental, reversible, and Codacy‑clean” wording in Objectives
-Reframed as: Architectural Principle “Reversible Changes” + Contribution Workflow + Code Quality segment
-Justification: De-duplicated phrasing; encoded as enforceable principle.
-Risk: Tone less direct.
-Mitigation: Principle table concise.
-
-Net Effect:
-- Removed redundancy (dual phase descriptions, overlapping strategy vs tasks).
-- Elevated measurability (KPIs, instrumentation keys).
-- Increased operational resilience (risk register, rollback, debt plan).
-- Added governance (contribution workflow, prioritized enhancements).
-
-If you want any removed micro-detail reinstated (e.g., explicit DataRow color fallback), specify and it can be reinserted minimally.
-
-### **Implementation Tracking Checklist**
-
-This checklist is intended for tracking progress during the implementation of the visual optimization plan. Mark items as you complete them.
-
-**General Setup**
-- [ ] Read and understand `important_docs/new_agent_onboarding.md`
-- [ ] Activate the `flet_venv` virtual environment
-- [ ] Verify Flet version 0.28.3 is being used
-
-**Phase A: Helper Utilities**
-- [ ] Implement helper utilities as defined in the plan
-
-**Phase B: Files View Pagination & Formatting**
-- [ ] Implement pagination in Files view
-- [ ] Implement formatting optimizations in Files view
-- [ ] Replace legacy MD5 with SHA256 in files verify path
-
-**Phase C: Logs View Enhancements**
-- [ ] Enhance Logs view according to the plan
-- [ ] Remove unused `build_status_badge` import in logs view
-
-**Phase E: Diff Engine**
-- [ ] Implement diff engine with signature-based reuse
-- [ ] Integrate caching arrays: `previous_page_signatures`, `previous_page_rows`
-
-**Phase F: Performance Metrics**
-- [ ] Add `perf_metrics.py` (PerfTimer, record_metric, get_metrics, reset_metrics)
-- [ ] Instrument Files view (initial scan, enhanced load, search, table total, slice, prepass, rebuild/partial paths)
-- [ ] Instrument Logs view (search, load fetch, load render)
-- [ ] Create `PERFORMANCE_OPTIMIZATION_SUMMARY.md` documenting timers & usage
-
-**Refactoring**
-- [ ] Add debounced search (Files view)
-- [ ] Refactor `update_table_display`
-- [ ] Unify logs level badge helper
-- [ ] Cleanup unused imports/files view
-
-**Documentation**
-- [ ] Update relevant documentation with changes
-
-**Testing & QA**
-- [ ] Perform functional testing of all modified features
-- [ ] Conduct performance testing and record metrics
-- [ ] Verify accessibility and responsiveness
-
-**Code Quality**
-- [ ] Run Codacy analysis and address any new issues
-- [ ] Address any complexity warnings identified
-
-**Final Steps**
-- [ ] Review all changes and ensure they meet requirements
-- [ ] Commit changes with appropriate commit messages
-
-### **Debugging**
-#### **Final Combined Debugging Report**
-Based on the analysis of all provided logs, here is a consolidated summary of the issues found in the Flet application, ranked by severity. This report tracks issues from their initial discovery, through fixes, to regressions.
-##### **High-Severity Issues (Application-Breaking)**
-- **Systemic Asynchronous Task Crash: RuntimeError: no running event loop (CRITICAL REGRESSION)**
-    - **Symptom**: The application crashes on startup when trying to load the initial dashboard view. Previously, this same error occurred when clicking the "Refresh" button.
-    - **Root Cause**: There is a recurring architectural flaw in how asynchronous tasks are being called. The code incorrectly uses asyncio.create_task() from synchronous functions (first in an on_click handler, and now in the create_dashboard_view function). This pattern is fundamentally incompatible with Flet's event model.
-    - **Status**: Critical Regression. Although one instance of this bug was fixed, its reappearance at startup indicates a core misunderstanding of how to manage async operations in Flet. This is the highest priority bug to fix.
-- **Missing Dependency: ModuleNotFoundError: No module named 'aiofiles' (FIXED)**
-    - **Symptom**: The application crashed instantly when started directly with python main.py.
-    - **Root Cause**: A required package, aiofiles, was not listed or installed in the project's environment.
-    - **Status**: Resolved. The logs show a successful pip install aiofiles.
-- **Incorrect API Usage: AttributeError: 'Page' object has no attribute 'after' (Unresolved)**
-    - **Symptom**: Clicking the theme-toggle button in the Settings view causes an AttributeError.
-    - **Root Cause**: The event handler _on_theme_toggle in main.py attempts to call self.page.after(...), a method that does not exist on the Flet Page object.
-    - **Status**: Unresolved.
-##### **Medium-Severity Issues (Functionality-Impairing)**
-- **Data Sourcing Failure (Persistent and Critical)**
-    - **Symptom**: The application consistently displays mock data instead of live information across all views.
-    - **Root Cause**: The ServerBridge component is confirmed to be starting in FALLBACK mode in every log. This indicates a fundamental inability to connect to its intended backend data source.
-    - **Status**: Persistent and Critical. While the app doesn't crash because of this, its primary purpose is defeated. This is the most significant unresolved functional issue after the startup crash.
-- **UI Race Condition in Clients View (Persistent)**
-    - **Symptom**: When navigating to the "Clients" view, the initial list of clients fails to appear.
-    - **Root Cause**: A recurring WARNING (Table reference update failed: DataTable Control must be added to the page first) shows that the data population logic runs before the UI DataTable control has been rendered.
-    - **Status**: Persistent and Unresolved.
-##### **Low-Severity Issues (Inefficiencies & Environment)**
-- **Redundant UI Label Updates (Minor)**
-    - **Symptom**: Labels showing item counts are updated twice in rapid succession.
-    - **Root Cause**: The view-updating logic contains a redundancy.
-    - **Status**: Minor. A non-critical inefficiency.
-- **Development Environment Tooling (Minor)**
-    - **Symptom**: Attempts to run the pyflakes linter failed.
-    - **Root Cause**: pyflakes was not installed, and a shell command (|| true) incompatible with PowerShell was used.
-    - **Status**: Minor. Indicates a small issue in the development workflow setup.
-
-### **AI Agent Prompt**
-```text
-Claude Sonnet 4 Agent Prompt — Implement the GPT-5 Visual Optimization Plan
-
-You are an expert software engineer agent. Your mission: implement the "GPT-5 Visual Optimization & Performance Plan (Enhanced v2)" located at `Gpt5_Visual_Optimization_Plan_09092025.md` in this repository, and complete Phases A–F end-to-end until all Acceptance Checklist items are satisfied or explained. Work in the FletV2 desktop GUI area; focus on `views/files.py`, `views/logs.py`, and `utils/` helpers.
-
-Behavioral contract (must-follow)
-- Work sequentially, phase-by-phase (A → B → C → D → E → F). Do not skip phases.
-- Before editing any file, create a git branch named `perf/<your-short-slug>` and only edit that branch.
-- After editing each file, run Codacy per-repo policy (codacy_cli_analyze) for that file and, if dependencies changed, run Trivy analysis and fix security issues before continuing.
-- Use Flet 0.28.3 idioms and avoid experimental APIs.
-- Keep commits small and atomic; each commit message must start with `perf:`, `feat:`, `refactor:` or `docs:` as appropriate.
-- Write minimal unit tests for any new pure logic (e.g., signature calculation, diff engine). Run tests locally.
-- If a phase introduces risky complexity (large functions), add unit tests that exercise the surface behavior before heavy refactors.
-
-Technical requirements (explicit)
-- Implement helper utilities in `utils/ui_helpers.py`:
-  - size_to_human, format_iso_short, status_color, level_colors, build_status_badge, build_level_badge, striped_row_color, compute_file_signature.
-  - Include a small unit test file `tests/test_ui_helpers.py` for signature and formatting functions.
-- Files view (`views/files.py`):
-  - Add precomputation of `size_fmt`, `modified_fmt`, `row_sig`.
-  - Add pagination controls (page size default 50) and a single container.update() pattern.
-  - Add debounced search (300ms).
-  - Wrap table body in AnimatedSwitcher and integrate diff engine comparing `prev_sigs`.
-  - Instrument timing with `utils/perf_metrics.py` keys: files.load.scan_initial, files.load.get_enhanced, files.search.perform, files.table.diff_prepass, files.table.diff_reuse, files.table.diff_build, files.table.build_total.
-  - Provide a fallback to full rebuild if change ratio > 0.4.
-- Logs view (`views/logs.py`):
-  - Adopt unified `build_level_badge`, apply striping, tooltips for long messages, AnimatedSwitcher for list updates.
-  - Instrument keys: logs.load.fetch, logs.load.render, logs.search.perform.
-- Instrumentation:
-  - Use `utils/perf_metrics.py` to record timings.
-  - Provide `get_metrics()` and small `scripts/metrics_summary.py` that prints aggregated p50/p95/max for keys.
-  - Testing and verification:
-  - Before Phase A edits, capture baseline measures: TTFV, P95 search latency, CPU, memory. Record them in the repository at `important_docs/metrics_baseline.json`.
-  - After Phases complete, run the scripted interaction (Section 13) and record results to `important_docs/metrics_results.json`.
-  - Ensure reusable tests: Add `tests/test_diff_engine.py` to verify reuse/fallback behavior (happy path + >40% changes).
-- Codacy & Security:
-  - After each file edit, run codacy_cli_analyze with rootPath set to the repo and file path set to the modified file.
-  - If any package or dependency is added, immediately run codacy_cli_analyze with tool=trivy and fix issues before proceeding.
-- Accessibility:
-  - Ensure keyboard focusable pagination and tooltips for truncated text.
-- Documentation:
-  - Update `Gpt5_Visual_Optimization_Plan_09092025.md` progress: mark subitems you complete, append `important_docs/IMPLEMENTATION_NOTES.md` summarizing decisions, tradeoffs, and any deferred tasks.
-
-Reporting cadence & deliverables
-- After each phase (A–F) commit, produce a short PR description with:
-  - Files changed list.
-  - Metrics pre/post for impacted keys.
-  - Codacy/Trivy findings and how you resolved them.
-  - Unit tests added/updated and test outputs.
-- When all phases complete, attach `important_docs/metrics_results.json`, `important_docs/metrics_baseline.json`, and `important_docs/IMPLEMENTATION_NOTES.md`, and request formal sign-off.
-
-Failure modes & fallback
-- If Codacy/Trivy finds an unfixable security issue in a third-party package: revert the package change and propose an alternative implementation.
-- If the diff engine reduces reuse below 30% and increases CPU: disable diff engine by default and open a follow-up task to optimize the signature logic.
-- If an edit breaks existing file actions (download/verify/delete), immediately revert the change and create a safe fix branch.
-
-Execution constraints
-- Do not run network calls except to fetch official dependencies via pip if strictly necessary.
-- Preserve existing public APIs and UI flows unless the change is explicitly small and justified in `IMPLEMENTATION_NOTES.md`.
-
-Prompt wrap-up
-Start now: create branch `perf/implement-visual-plan`, capture baseline metrics, and begin Phase A. After each phase, push commits and report a concise phase summary (files changed, key metrics, Codacy/Trivy status, tests added, next steps). Work until the Acceptance Checklist in `Gpt5_Visual_Optimization_Plan_09092025.md` is green or each deviation is documented with rationale.
-
-End of prompt.
-```
-
-### **AI Agent Prompt - Enhanced**
-```text
-You are an expert professional software engineer agent and also a flet 0.
+**Architecture Validation**: The FletV2 implementation successfully demonstrates that complex, professional desktop applications can be built using pure Flet patterns without framework fighting, achieving both modern UX standards and maintainable code architecture.

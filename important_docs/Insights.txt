@@ -269,3 +269,12 @@ Leverage Flet's built-in power - NavigationRail for routing, ResponsiveRow for l
   This demonstrates the value of comprehensive testing methodology that went beyond static analysis to       
   find and fix actual runtime issues.
   ─────────────────────────────────────────────────
+
+  ● ★ Insight ─────────────────────────────────────
+  After analyzing the current FletV2 codebase against the existing
+  documentation, I've identified significant architectural enhancements
+  that need to be reflected in the CLAUDE.md file. The codebase has
+  evolved from a simple Flet application to a sophisticated desktop
+  application with modern Material Design 3 styling, reactive state
+  management, lazy loading, and performance optimizations.
+  ─────────────────────────────────────────────────

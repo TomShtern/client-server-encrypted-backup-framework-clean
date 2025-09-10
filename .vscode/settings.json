@@ -125,7 +125,11 @@
   "search.exclude": {
     "**/node_modules": true,
     "logs": true
-  }
+  },
+  "search.searchView.semanticSearchBehavior": "runOnEmpty",
+  "chat.math.enabled": true,
+  "chat.checkpoints.showFileChanges": true,
+  "chat.agent.maxRequests": 40
 
 
 }
