@@ -443,14 +443,30 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         color=ft.Colors.ON_SURFACE
     )
     
+    # Progress indicator for save operations
+    save_progress = ft.ProgressRing(width=16, height=16, visible=False)
+    
     # Action handlers
     async def save_settings_handler(e):
+        # Show saving feedback
+        save_progress.visible = True
+        last_saved_text.value = "Saving..."
+        last_saved_text.update()
+        save_progress.update()
+        
         success = await settings_state.save_settings()
+        
+        # Hide progress and update status
+        save_progress.visible = False
         if success:
             last_saved_text.value = f"Last saved: {settings_state.last_saved.strftime('%H:%M:%S')}"
-            await last_saved_text.update_async()
+            last_saved_text.update()  # Framework-harmonious: use control.update()
+            save_progress.update()
             show_success_message(page, "Settings saved successfully")
         else:
+            last_saved_text.value = "Save failed"
+            last_saved_text.update()
+            save_progress.update()
             show_error_message(page, "Failed to save settings")
     
     def reset_all_settings(e):
@@ -507,7 +523,8 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             ft.Icon(ft.Icons.SETTINGS, size=24),
             ft.Text("Settings", size=24, weight=ft.FontWeight.BOLD),
             ft.Container(expand=True),
-            last_saved_text
+            last_saved_text,
+            save_progress  # Progress indicator for save operations
         ]),
         ft.Divider(),
         

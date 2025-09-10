@@ -1,12 +1,12 @@
 # Core Encryption & Security
-pycryptodome>=3.15.0
+pycryptodome>=3.19.1
 psutil>=5.9.0
 
 # Flask Web Framework & API
-Flask>=2.0.0
+Flask>=2.3.2
 flask-cors>=6.0.0
 flask-socketio>=5.0.0
-sentry-sdk>=1.0.0
+sentry-sdk>=2.8.0
 
 # File System & Monitoring
 watchdog>=2.1.0
@@ -33,13 +33,13 @@ pillow>=10.4.0
 pygments>=2.19.0
 pypiwin32>=223
 pywin32>=311
-requests>=2.32.0
-urllib3>=2.2.0
+requests>=2.32.4
+urllib3>=2.2.5
 
 #considering to add these:
 loguru>=0.7.0                   # Structured logging library; simplifies logging in Flask API Bridge or Python Server, with rotation and formatting for better error tracking
 pytest>=7.0.0                   # Testing framework; essential for unit testing integration flows (e.g., Flask API to C++ client) and verifying file receipts in server/received_files/
-cryptography>=41.0.0            # Advanced cryptography library; enhances encryption in Flask API communications or C++ client, but test integration carefully to avoid conflicts with pycryptodome
+cryptography>=42.0.4            # Advanced cryptography library; enhances encryption in Flask API communications or C++ client, but test integration carefully to avoid conflicts with pycryptodome
 plotly>=5.15.0                  # Interactive plotting library; integrates with Flet GUI for dynamic charts displaying real-time backup metrics from Flask API
 aiofiles>=23.0.0                # Async file operations; speeds up file handling in Flask bridge or server, reducing latency in subprocess management
 humanize>=4.7.0                 # Human-readable data formatting; formats file sizes or times in GUI analytics, improving user experience in Flet web UI

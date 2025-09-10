@@ -517,172 +517,342 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             return False
 
     def on_edit_row(e, row_data: Dict[str, Any]):
-        """Handle row editing."""
+        """Handle row editing with improved dialog and form handling."""
         logger.info(f"Editing row: {row_data}")
 
-        # Create form fields for each column
-        form_fields = []
+        # Create form fields map for each column with proper references
+        form_fields = {}
         original_data = {}
 
+        # Create form fields with proper field references
+        form_controls = []
+        
         for key, value in row_data.items():
-            # Skip binary data and ID fields for editing
-            if key.lower() == 'id' or (isinstance(value, str) and len(value) == 32 and all(c in '0123456789abcdef' for c in value)):
-                # Display ID as read-only
-                form_fields.append(
-                    ft.TextField(
-                        label=key.replace("_", " ").title(),
-                        value=str(value),
-                        read_only=True,
-                        width=300
-                    )
-                )
-                original_data[key] = value
-            else:
-                form_fields.append(
-                    ft.TextField(
-                        label=key.replace("_", " ").title(),
-                        value=str(value) if value is not None else "",
-                        width=300
-                    )
-                )
-                original_data[key] = value
+            original_data[key] = value
+            
+            # Determine field type and create appropriate control
+            is_readonly = key.lower() == 'id' or (isinstance(value, str) and len(value) == 32 and all(c in '0123456789abcdef' for c in value))
+            
+            # Create text field with proper labeling
+            field = ft.TextField(
+                label=key.replace("_", " ").title(),
+                value=str(value) if value is not None else "",
+                read_only=is_readonly,
+                width=350,
+                height=50
+            )
+            
+            # Store field reference with key for easy access
+            form_fields[key] = field
+            form_controls.append(field)
 
-        # Create form container
-        form_container = ft.Column(form_fields, spacing=10)
+        # Create scrollable form container
+        form_container = ft.Container(
+            content=ft.Column(
+                form_controls, 
+                spacing=12,
+                scroll=ft.ScrollMode.AUTO
+            ),
+            width=380,
+            height=350  # Fixed height with scrolling
+        )
 
         def reset_changes(e):
             """Reset form fields to original values."""
-            for i, field in enumerate(form_container.controls):
-                if hasattr(field, 'value') and not field.read_only:
-                    key = list(original_data.keys())[i]
-                    field.value = str(original_data.get(key, "")) if original_data.get(key) is not None else ""
-            form_container.update()
+            try:
+                for key, original_value in original_data.items():
+                    if key in form_fields and not form_fields[key].read_only:
+                        form_fields[key].value = str(original_value) if original_value is not None else ""
+                        form_fields[key].update()
+                logger.info("Form fields reset to original values")
+            except Exception as ex:
+                logger.error(f"Error resetting form: {ex}")
 
         def close_dialog(e):
-            if hasattr(page, 'dialog') and page.dialog:
-                page.dialog.open = False
-            page.update()
+            """Close the edit dialog."""
+            try:
+                if hasattr(page, 'dialog') and page.dialog:
+                    page.dialog.open = False
+                    page.dialog = None
+                page.update()
+                logger.info("Edit dialog closed")
+            except Exception as ex:
+                logger.error(f"Error closing dialog: {ex}")
 
         def save_changes(e):
+            """Save form changes to database."""
             try:
-                # Collect updated data
-                updated_data = {}
-                
-                # Safely access the original data for ID
+                # Get row ID for update operation
                 row_id = original_data.get('id', None)
                 if not row_id:
                     show_error_message(page, "Cannot save: Row ID not found")
                     return
+
+                # Collect updated data from form fields
+                updated_data = {}
+                validation_errors = []
                 
-                for i, (key, original_value) in enumerate(original_data.items()):
-                    if key.lower() == 'id':
-                        continue  # Skip ID field
+                for key, field in form_fields.items():
+                    if key.lower() == 'id' or field.read_only:
+                        continue  # Skip ID and read-only fields
+                    
+                    try:
+                        new_value = field.value if field.value is not None else ""
+                        original_value = original_data.get(key)
 
-                    # Ensure we have a valid form field
-                    if i < len(form_fields):
-                        control = form_fields[i]
-                        new_value = getattr(control, 'value', '')
-
-                        # Convert value to appropriate type
+                        # Convert value to appropriate type based on original
                         if isinstance(original_value, int):
-                            try:
-                                updated_data[key] = int(new_value)
-                            except (ValueError, TypeError):
+                            if new_value.strip() == "":
                                 updated_data[key] = 0
+                            else:
+                                updated_data[key] = int(new_value)
                         elif isinstance(original_value, float):
-                            try:
-                                updated_data[key] = float(new_value)
-                            except (ValueError, TypeError):
+                            if new_value.strip() == "":
                                 updated_data[key] = 0.0
+                            else:
+                                updated_data[key] = float(new_value)
                         elif isinstance(original_value, bool):
-                            updated_data[key] = str(new_value).lower() in ('true', '1', 'yes', 'on')
+                            updated_data[key] = str(new_value).lower() in ('true', '1', 'yes', 'on', 'checked')
                         else:
-                            updated_data[key] = str(new_value) if new_value is not None else ""
+                            updated_data[key] = str(new_value)
+                            
+                    except ValueError as ve:
+                        validation_errors.append(f"{key}: {str(ve)}")
+                    except Exception as fe:
+                        validation_errors.append(f"{key}: Invalid value format")
 
-                # Update row in database
+                # Check for validation errors
+                if validation_errors:
+                    error_msg = "Validation errors:\n" + "\n".join(validation_errors)
+                    show_error_message(page, error_msg)
+                    return
+
+                logger.info(f"Saving changes for row {row_id}: {updated_data}")
+
+                # Attempt database update
                 if server_bridge and hasattr(server_bridge, 'db_manager') and server_bridge.db_manager:
-                    success = server_bridge.db_manager.update_row(selected_table_name, row_id, updated_data)
-                    if success:
-                        show_success_message(page, f"Row updated successfully in {selected_table_name}")
-                        # Refresh the table
-                        page.run_task(load_database_info_async)
-                    else:
-                        show_error_message(page, f"Failed to update row in {selected_table_name}")
+                    try:
+                        result = server_bridge.db_manager.update_row(selected_table_name, row_id, updated_data)
+                        
+                        # Handle response format
+                        if isinstance(result, dict):
+                            success = result.get('success', False)
+                            message = result.get('message', 'Unknown result')
+                            mode = result.get('mode', 'unknown')
+                        else:
+                            # Backward compatibility
+                            success = bool(result)
+                            message = f'Row updated successfully in {selected_table_name}' if success else f'Failed to update row in {selected_table_name}'
+                            mode = 'real'
+                        
+                        if success:
+                            if mode == 'mock':
+                                show_info_message(page, f"🧪 DEMO: {message}", mode='mock')
+                            else:
+                                show_success_message(page, message, mode='real')
+                            # Refresh the table to show changes
+                            page.run_task(load_database_info_async)
+                        else:
+                            show_error_message(page, f"Update failed: {message}")
+                            return  # Don't close dialog on failure
+                            
+                    except Exception as db_ex:
+                        logger.error(f"Database update error: {db_ex}")
+                        show_error_message(page, f"Database error: {str(db_ex)}")
+                        return  # Don't close dialog on error
                 else:
-                    # Simulate update for mock data
-                    show_info_message(page, "Row would be updated in real implementation")
+                    # Mock mode - simulate successful update
+                    changes_text = ", ".join([f"{k}='{v}'" for k, v in updated_data.items()])
+                    mock_message = f"Updated {row_id}: {changes_text}"
+                    show_info_message(page, mock_message, mode='mock')
+                    
+                    # Refresh table to show mock changes would appear
+                    page.run_task(load_database_info_async)
 
+                # Close dialog after successful save
                 close_dialog(None)
 
             except Exception as ex:
-                logger.error(f"Error updating row: {ex}")
-                show_error_message(page, f"Error updating row: {str(ex)}")
+                logger.error(f"Error saving row changes: {ex}")
+                show_error_message(page, f"Error saving changes: {str(ex)}")
 
-        # Create dialog
+        # Create enhanced dialog with better styling
         dialog = ft.AlertDialog(
-            title=ft.Text(f"Edit Row in {selected_table_name.title()}"),
-            content=ft.Container(
-                content=form_container,
-                width=400,
-                height=400
-            ),
+            modal=True,
+            title=ft.Row([
+                ft.Icon(ft.Icons.EDIT, size=20),
+                ft.Text(f"Edit Row in {selected_table_name.title()}", size=18, weight=ft.FontWeight.BOLD)
+            ]),
+            content=form_container,
             actions=[
-                ft.TextButton("Cancel", icon=ft.Icons.CANCEL, on_click=close_dialog, tooltip="Cancel changes"),
-                ft.TextButton("Reset", icon=ft.Icons.RESTORE, on_click=reset_changes, tooltip="Reset to original values"),
-                ft.TextButton("Save", icon=ft.Icons.SAVE, on_click=save_changes, tooltip="Save database changes")
-            ]
+                ft.TextButton(
+                    "Cancel", 
+                    icon=ft.Icons.CANCEL, 
+                    on_click=close_dialog, 
+                    tooltip="Cancel changes without saving"
+                ),
+                ft.TextButton(
+                    "Reset", 
+                    icon=ft.Icons.RESTORE, 
+                    on_click=reset_changes, 
+                    tooltip="Reset all fields to original values"
+                ),
+                ft.FilledButton(
+                    "Save Changes", 
+                    icon=ft.Icons.SAVE, 
+                    on_click=save_changes, 
+                    tooltip="Save changes to database"
+                )
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
         )
 
-        page.dialog = dialog
-        dialog.open = True
-        page.update()
+        # Show dialog
+        try:
+            page.dialog = dialog
+            dialog.open = True
+            page.update()
+            logger.info(f"Edit dialog opened for row {row_data.get('id', 'unknown')}")
+        except Exception as ex:
+            logger.error(f"Error opening edit dialog: {ex}")
+            show_error_message(page, f"Failed to open edit dialog: {str(ex)}")
 
     def on_delete_row(e, row_data: Dict[str, Any]):
-        """Handle row deletion."""
+        """Handle row deletion with improved confirmation dialog."""
         logger.info(f"Deleting row: {row_data}")
 
-        # Get row ID
+        # Get row ID for deletion
         row_id = row_data.get("id", "")
         if not row_id:
             show_error_message(page, "Cannot delete row: No ID found")
             return
 
-        # Confirm deletion
+        # Create summary of row data for confirmation
+        row_summary = []
+        for key, value in list(row_data.items())[:3]:  # Show first 3 fields
+            if value is not None and str(value).strip():
+                display_key = key.replace("_", " ").title()
+                display_value = str(value)[:30]  # Truncate long values
+                row_summary.append(f"{display_key}: {display_value}")
+        
+        summary_text = "\n".join(row_summary) if row_summary else f"ID: {row_id}"
+
         def confirm_delete(e):
+            """Execute the row deletion."""
             try:
+                close_dialog(None)  # Close dialog first
+                
                 if server_bridge and hasattr(server_bridge, 'db_manager') and server_bridge.db_manager:
-                    # Try to delete from database
-                    success = server_bridge.db_manager.delete_row(selected_table_name, row_id)
-                    if success:
-                        show_success_message(page, f"Row deleted successfully from {selected_table_name}")
-                        # Refresh the table
-                        page.run_task(load_database_info_async)
-                    else:
-                        show_error_message(page, f"Failed to delete row from {selected_table_name}")
+                    try:
+                        # Try to delete from database
+                        result = server_bridge.db_manager.delete_row(selected_table_name, row_id)
+                        
+                        # Handle response format
+                        if isinstance(result, dict):
+                            success = result.get('success', False)
+                            message = result.get('message', 'Unknown result')
+                            mode = result.get('mode', 'unknown')
+                        else:
+                            # Backward compatibility
+                            success = bool(result)
+                            message = f'Row deleted successfully from {selected_table_name}' if success else f'Failed to delete row from {selected_table_name}'
+                            mode = 'real'
+                        
+                        if success:
+                            if mode == 'mock':
+                                show_info_message(page, f"🧪 DEMO: {message}", mode='mock')
+                            else:
+                                show_success_message(page, message, mode='real')
+                            # Refresh the table to show changes
+                            page.run_task(load_database_info_async)
+                        else:
+                            show_error_message(page, f"Delete failed: {message}")
+                            
+                    except Exception as db_ex:
+                        logger.error(f"Database deletion error: {db_ex}")
+                        show_error_message(page, f"Database error: {str(db_ex)}")
                 else:
-                    # Simulate deletion for mock data
-                    show_info_message(page, "Row would be deleted in real implementation")
+                    # Mock mode - simulate deletion
+                    mock_message = f"Deleted row {row_id} from {selected_table_name}"
+                    show_info_message(page, mock_message, mode='mock')
+                    
+                    # Refresh table to show mock changes
+                    page.run_task(load_database_info_async)
+                    
             except Exception as ex:
                 logger.error(f"Error deleting row: {ex}")
                 show_error_message(page, f"Error deleting row: {str(ex)}")
 
         def close_dialog(e):
-            if hasattr(page, 'dialog') and page.dialog:
-                page.dialog.open = False
-            page.update()
+            """Close the confirmation dialog."""
+            try:
+                if hasattr(page, 'dialog') and page.dialog:
+                    page.dialog.open = False
+                    page.dialog = None
+                page.update()
+                logger.info("Delete confirmation dialog closed")
+            except Exception as ex:
+                logger.error(f"Error closing dialog: {ex}")
 
-        # Show confirmation dialog
+        # Create enhanced confirmation dialog
         dialog = ft.AlertDialog(
-            title=ft.Text("Confirm Deletion"),
-            content=ft.Text(f"Are you sure you want to delete this row from {selected_table_name}?"),
+            modal=True,
+            title=ft.Row([
+                ft.Icon(ft.Icons.DELETE_FOREVER, color=ft.Colors.RED, size=20),
+                ft.Text("Confirm Row Deletion", size=18, weight=ft.FontWeight.BOLD)
+            ]),
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Text(
+                        f"Are you sure you want to delete this row from the {selected_table_name} table?",
+                        size=14
+                    ),
+                    ft.Container(height=10),  # Spacer
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Text("Row Details:", weight=ft.FontWeight.BOLD, size=12),
+                            ft.Text(summary_text, size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+                        ]),
+                        padding=10,
+                        bgcolor=ft.Colors.SURFACE,
+                        border_radius=8
+                    ),
+                    ft.Container(height=10),  # Spacer
+                    ft.Row([
+                        ft.Icon(ft.Icons.WARNING, color=ft.Colors.ORANGE, size=16),
+                        ft.Text("This action cannot be undone!", size=12, color=ft.Colors.ORANGE, weight=ft.FontWeight.BOLD)
+                    ])
+                ], spacing=5),
+                width=350,
+                height=180
+            ),
             actions=[
-                ft.TextButton("Cancel", icon=ft.Icons.CANCEL, on_click=close_dialog, tooltip="Cancel deletion"),
-                ft.TextButton("Delete", icon=ft.Icons.DELETE, on_click=confirm_delete, tooltip="Confirm row deletion")
-            ]
+                ft.TextButton(
+                    "Cancel", 
+                    icon=ft.Icons.CANCEL, 
+                    on_click=close_dialog, 
+                    tooltip="Cancel deletion"
+                ),
+                ft.FilledButton(
+                    "Delete Row", 
+                    icon=ft.Icons.DELETE_FOREVER, 
+                    on_click=confirm_delete, 
+                    tooltip="Permanently delete this row",
+                    style=ft.ButtonStyle(bgcolor=ft.Colors.RED, color=ft.Colors.WHITE)
+                )
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
         )
-        page.dialog = dialog
-        dialog.open = True
-        page.update()
+        
+        # Show dialog
+        try:
+            page.dialog = dialog
+            dialog.open = True
+            page.update()
+            logger.info(f"Delete confirmation dialog opened for row {row_id}")
+        except Exception as ex:
+            logger.error(f"Error opening delete dialog: {ex}")
+            show_error_message(page, f"Failed to open delete dialog: {str(ex)}")
 
     def on_export_table(e):
         """Handle table export."""

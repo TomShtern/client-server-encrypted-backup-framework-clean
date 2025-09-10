@@ -9,6 +9,10 @@ from utils.debug_setup import get_logger
 
 logger = get_logger(__name__)
 
+# Mock mode prefixes
+MOCK_PREFIX = "🧪 DEMO: "
+REAL_PREFIX = "✅ "
+
 
 def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, action_label: str = None) -> None:
     """
@@ -39,14 +43,21 @@ def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, acti
         logger.error(f"Failed to show user feedback: {e}")
 
 
-def show_success_message(page: ft.Page, message: str, action_label: str = None) -> None:
-    """Show success message to user."""
+def show_success_message(page: ft.Page, message: str, action_label: str = None, mode: str = None) -> None:
+    """Show success message to user with optional mode indicator."""
     try:
+        # Add mode prefix if specified
+        display_message = message
+        if mode == 'mock':
+            display_message = f"{MOCK_PREFIX}{message}"
+        elif mode == 'real':
+            display_message = f"{REAL_PREFIX}{message}"
+        
         page.snack_bar = ft.SnackBar(
-            content=ft.Text(message),
-            bgcolor=ft.Colors.GREEN,
+            content=ft.Text(display_message),
+            bgcolor=ft.Colors.ORANGE if mode == 'mock' else ft.Colors.GREEN,
             action=action_label if action_label else "DISMISS",
-            duration=4000  # 4 seconds
+            duration=5000 if mode == 'mock' else 4000  # Longer for mock messages
         )
         page.snack_bar.open = True
         page.update()  # ONLY acceptable page.update() use case
@@ -62,9 +73,29 @@ def show_error_message(page: ft.Page, message: str, action_label: str = None) ->
     show_user_feedback(page, message, is_error=True, action_label=action_label)
 
 
-def show_info_message(page: ft.Page, message: str, action_label: str = None) -> None:
-    """Show info message to user."""
-    show_user_feedback(page, message, is_error=False, action_label=action_label)
+def show_info_message(page: ft.Page, message: str, action_label: str = None, mode: str = None) -> None:
+    """Show info message to user with optional mode indicator."""
+    # Add mode prefix if specified
+    display_message = message
+    if mode == 'mock':
+        display_message = f"{MOCK_PREFIX}{message}"
+    elif mode == 'real':
+        display_message = f"{REAL_PREFIX}{message}"
+    
+    try:
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(display_message),
+            bgcolor=ft.Colors.ORANGE if mode == 'mock' else ft.Colors.BLUE,
+            action=action_label if action_label else "DISMISS",
+            duration=5000 if mode == 'mock' else 4000  # Longer for mock messages
+        )
+        page.snack_bar.open = True
+        page.update()
+        
+        logger.info(f"Info message shown ({mode or 'standard'} mode): {display_message}")
+        
+    except Exception as e:
+        logger.error(f"Failed to show info message: {e}")
 
 
 def show_warning_message(page: ft.Page, message: str, action_label: str = None) -> None:

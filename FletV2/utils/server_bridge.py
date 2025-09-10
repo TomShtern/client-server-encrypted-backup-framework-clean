@@ -258,16 +258,25 @@ class ServerBridge:
         await asyncio.sleep(0.01)
         return self.mock_generator.delete_file(file_id)
     
-    def download_file(self, file_id: str, destination_path: str) -> bool:
-        """Download a file."""
+    def download_file(self, file_id: str, destination_path: str) -> Dict[str, Any]:
+        """Download a file.
+        
+        Returns:
+            Dict with 'success' bool and 'message' str indicating real vs mock operation
+        """
         if self.real_server and hasattr(self.real_server, 'download_file'):
             try:
-                return self.real_server.download_file(file_id, destination_path)
+                result = self.real_server.download_file(file_id, destination_path)
+                return {
+                    'success': result,
+                    'message': f'File downloaded successfully' if result else 'Download failed',
+                    'mode': 'real'
+                }
             except Exception as e:
                 logger.error(f"Real server download_file failed: {e}")
 
         # Mock fallback - simulate download without blocking
-        logger.debug(f"[ServerBridge] FALLBACK: Simulating download for file ID: {file_id} to {destination_path}")
+        logger.debug(f"[ServerBridge] FALLBACK: Simulating MOCK download for file ID: {file_id}")
         try:
             # Use asyncio.create_task only if event loop exists, otherwise use synchronous approach
             try:
@@ -280,24 +289,45 @@ class ServerBridge:
                     target=lambda: asyncio.run(self._write_mock_file_async(file_id, destination_path)),
                     daemon=True
                 ).start()
-            return True
+            return {
+                'success': True,
+                'message': f'Mock download completed - sample file created',
+                'mode': 'mock'
+            }
         except Exception as e:
             logger.error(f"Mock download failed: {e}")
-            return False
+            return {
+                'success': False,
+                'message': f'Mock download failed: {str(e)}',
+                'mode': 'mock'
+            }
     
-    async def download_file_async(self, file_id: str, destination_path: str) -> bool:
-        """Async version of download_file."""
+    async def download_file_async(self, file_id: str, destination_path: str) -> Dict[str, Any]:
+        """Async version of download_file.
+        
+        Returns:
+            Dict with 'success' bool and 'message' str indicating real vs mock operation
+        """
         if self.real_server and hasattr(self.real_server, 'download_file_async'):
             try:
-                return await self.real_server.download_file_async(file_id, destination_path)
+                result = await self.real_server.download_file_async(file_id, destination_path)
+                return {
+                    'success': result,
+                    'message': f'File downloaded successfully' if result else 'Download failed',
+                    'mode': 'real'
+                }
             except Exception as e:
                 logger.error(f"Real server async download_file failed: {e}")
         
         # Mock fallback
-        logger.debug(f"[ServerBridge] FALLBACK: Simulating async download for file ID: {file_id}")
+        logger.debug(f"[ServerBridge] FALLBACK: Simulating MOCK async download for file ID: {file_id}")
         await asyncio.sleep(0.001)  # Minimal delay for UI responsiveness
         await self._write_mock_file_async(file_id, destination_path)
-        return True
+        return {
+            'success': True,
+            'message': f'Mock download completed - sample file created',
+            'mode': 'mock'
+        }
     
     async def _write_mock_file_async(self, file_id: str, destination_path: str) -> None:
         """Async helper to write mock file content without blocking."""
@@ -308,30 +338,56 @@ class ServerBridge:
         except Exception as e:
             logger.error(f"Async mock file write failed: {e}")
     
-    def verify_file(self, file_id: str) -> bool:
-        """Verify file integrity."""
+    def verify_file(self, file_id: str) -> Dict[str, Any]:
+        """Verify file integrity.
+        
+        Returns:
+            Dict with 'success' bool and 'message' str indicating real vs mock operation
+        """
         if self.real_server and hasattr(self.real_server, 'verify_file'):
             try:
-                return self.real_server.verify_file(file_id)
+                result = self.real_server.verify_file(file_id)
+                return {
+                    'success': result,
+                    'message': f'File verification passed' if result else 'File verification failed',
+                    'mode': 'real'
+                }
             except Exception as e:
                 logger.error(f"Real server verify_file failed: {e}")
         
         # Mock fallback
-        logger.debug(f"[ServerBridge] FALLBACK: Simulating verify for file ID: {file_id}")
-        return True  # Mock verification always passes
+        logger.debug(f"[ServerBridge] FALLBACK: Simulating MOCK verify for file ID: {file_id}")
+        return {
+            'success': True,
+            'message': f'Mock verification passed - no real verification performed',
+            'mode': 'mock'
+        }
     
-    async def verify_file_async(self, file_id: str) -> bool:
-        """Async version of verify_file."""
+    async def verify_file_async(self, file_id: str) -> Dict[str, Any]:
+        """Async version of verify_file.
+        
+        Returns:
+            Dict with 'success' bool and 'message' str indicating real vs mock operation
+        """
         if self.real_server and hasattr(self.real_server, 'verify_file_async'):
             try:
-                return await self.real_server.verify_file_async(file_id)
+                result = await self.real_server.verify_file_async(file_id)
+                return {
+                    'success': result,
+                    'message': f'File verification passed' if result else 'File verification failed',
+                    'mode': 'real'
+                }
             except Exception as e:
                 logger.error(f"Real server async verify_file failed: {e}")
         
         # Mock fallback
-        logger.debug(f"[ServerBridge] FALLBACK: Simulating async verify for file ID: {file_id}")
+        logger.debug(f"[ServerBridge] FALLBACK: Simulating MOCK async verify for file ID: {file_id}")
         await asyncio.sleep(0.001)  # Minimal delay for UI responsiveness
-        return True
+        return {
+            'success': True,
+            'message': f'Mock verification passed - no real verification performed',
+            'mode': 'mock'
+        }
     
     # --- Server Status and Monitoring ---
     
@@ -415,41 +471,75 @@ class ServerBridge:
         logger.debug(f"[ServerBridge] FALLBACK: Returning mock table data for: {table_name}")
         return self.mock_generator.get_table_data(table_name)
     
-    def update_row(self, table_name: str, row_id: str, updated_data: Dict[str, Any]) -> bool:
-        """Update a row in the database."""
+    def update_row(self, table_name: str, row_id: str, updated_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a row in the database.
+        
+        Returns:
+            Dict with 'success' bool and 'message' str indicating real vs mock operation
+        """
         if self.real_server and hasattr(self.real_server, 'update_row'):
             try:
-                return self.real_server.update_row(table_name, row_id, updated_data)
+                result = self.real_server.update_row(table_name, row_id, updated_data)
+                return {
+                    'success': result,
+                    'message': f'Row updated successfully in {table_name}' if result else f'Failed to update row in {table_name}',
+                    'mode': 'real'
+                }
             except Exception as e:
                 logger.error(f"Real server update_row failed: {e}")
-                return False
+                return {
+                    'success': False,
+                    'message': f'Update failed: {str(e)}',
+                    'mode': 'real'
+                }
         
         # Mock fallback - simulate successful update
-        logger.debug(f"[ServerBridge] FALLBACK: Simulating row update in {table_name} for ID: {row_id}")
-        return True
+        logger.debug(f"[ServerBridge] FALLBACK: Simulating MOCK row update in {table_name} for ID: {row_id}")
+        return {
+            'success': True,
+            'message': f'Mock update completed - no real database changes made',
+            'mode': 'mock'
+        }
     
-    def delete_row(self, table_name: str, row_id: str) -> bool:
-        """Delete a row from the database."""
+    def delete_row(self, table_name: str, row_id: str) -> Dict[str, Any]:
+        """Delete a row from the database.
+        
+        Returns:
+            Dict with 'success' bool and 'message' str indicating real vs mock operation
+        """
         if self.real_server and hasattr(self.real_server, 'delete_row'):
             try:
-                return self.real_server.delete_row(table_name, row_id)
+                result = self.real_server.delete_row(table_name, row_id)
+                return {
+                    'success': result,
+                    'message': f'Row deleted successfully from {table_name}' if result else f'Failed to delete row from {table_name}',
+                    'mode': 'real'
+                }
             except Exception as e:
                 logger.error(f"Real server delete_row failed: {e}")
-                return False
+                return {
+                    'success': False,
+                    'message': f'Delete failed: {str(e)}',
+                    'mode': 'real'
+                }
         
         # Mock fallback - simulate successful deletion
-        logger.debug(f"[ServerBridge] FALLBACK: Simulating row deletion in {table_name} for ID: {row_id}")
-        return True
+        logger.debug(f"[ServerBridge] FALLBACK: Simulating MOCK row deletion in {table_name} for ID: {row_id}")
+        return {
+            'success': True,
+            'message': f'Mock deletion completed - no real database changes made',
+            'mode': 'mock'
+        }
     
     # Database Manager Interface - for compatibility with existing code
     class DatabaseManager:
         def __init__(self, server_bridge):
             self.bridge = server_bridge
         
-        def update_row(self, table_name: str, row_id: str, updated_data: Dict[str, Any]) -> bool:
+        def update_row(self, table_name: str, row_id: str, updated_data: Dict[str, Any]) -> Dict[str, Any]:
             return self.bridge.update_row(table_name, row_id, updated_data)
         
-        def delete_row(self, table_name: str, row_id: str) -> bool:
+        def delete_row(self, table_name: str, row_id: str) -> Dict[str, Any]:
             return self.bridge.delete_row(table_name, row_id)
     
     @property

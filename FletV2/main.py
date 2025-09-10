@@ -58,6 +58,9 @@ from utils.server_bridge import ServerBridge, create_server_bridge
 BRIDGE_TYPE = "Unified Server Bridge (with built-in mock fallback)"
 logger.info("Using Unified Server Bridge with built-in mock fallback.")
 
+# Import mock mode utilities
+from utils.mock_mode_indicator import create_mock_mode_banner, add_mock_indicator_to_snackbar_message
+
 
 class FletV2App(ft.Row):
     """
@@ -874,9 +877,20 @@ async def main(page: ft.Page):
         page.window_center = True
         page.title = "Backup Server Management"
         
-        # Create and add the simple desktop app
+        # Create and add the simple desktop app with mock mode banner
         app = FletV2App(page)
-        page.add(app)
+        
+        # Add mock mode banner if in mock mode
+        from utils.mock_mode_indicator import create_mock_mode_banner
+        mock_banner = create_mock_mode_banner(app.server_bridge)
+        
+        # Create main layout with banner and app
+        main_layout = ft.Column([
+            mock_banner,
+            ft.Container(content=app, expand=True)
+        ], spacing=0, expand=True)
+        
+        page.add(main_layout)
         
         # Additional attempts to force window size
         await asyncio.sleep(0.2)

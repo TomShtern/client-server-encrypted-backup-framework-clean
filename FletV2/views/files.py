@@ -23,7 +23,7 @@ from utils.loading_states import LoadingState, create_loading_indicator, create_
 from utils.responsive_layouts import create_data_table_container, create_action_bar, SPACING
 from utils.user_feedback import show_success_message, show_error_message, show_info_message
 from utils.performance import (
-    AsyncDebouncer, PaginationConfig, AsyncDataLoader,
+    Debouncer, PaginationConfig, AsyncDataLoader,
     global_memory_manager, paginate_data
 )
 from config import RECEIVED_FILES_DIR, ASYNC_DELAY, show_mock_data
@@ -306,8 +306,8 @@ def create_files_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Co
     case_sensitive_search = False  # New state for case sensitivity
     
     # Performance optimization utilities
-    # NOTE: AsyncDebouncer expects seconds, not milliseconds. 0.3 = 300ms.
-    search_debouncer = AsyncDebouncer(delay=0.3)  # 300ms search debouncing
+    # NOTE: Debouncer expects seconds, not milliseconds. 0.3 = 300ms.
+    search_debouncer = Debouncer(delay=0.3)  # 300ms search debouncing
     # Use zero-based page index consistent with paginate_data utility (same fix as logs view)
     pagination_config = PaginationConfig(page_size=50, current_page=0)  # 50 files per page (zero-based)
     data_loader = AsyncDataLoader(max_cache_size=100)  # Cache up to 100 items
@@ -325,9 +325,27 @@ def create_files_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Co
         
         async def download_async():
             try:
-                # Show loading state
-                file_action_feedback_text.value = f"Downloading {file_name}..."
-                await file_action_feedback_text.update_async()
+                # Show loading state with progress ring
+                progress_ring = ft.ProgressRing(value=0.0, width=24, height=24)
+                feedback_row = ft.Row([progress_ring, ft.Text(f"Downloading {file_name}...")], spacing=8)
+                file_action_feedback_text.value = ""
+                file_action_feedback_text.visible = False
+                # Create temporary progress container
+                progress_container = ft.Container(
+                    content=feedback_row,
+                    padding=ft.Padding(20, 10, 20, 10),
+                    bgcolor=ft.Colors.SURFACE,
+                    border_radius=8
+                )
+                
+                # Add progress indicator to page overlay
+                page.overlay.append(progress_container)
+                progress_container.visible = True
+                page.update()
+                
+                # Update progress
+                progress_ring.value = 0.2
+                progress_ring.update()
                 
                 downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
                 if not os.path.exists(downloads_dir):
@@ -340,20 +358,59 @@ def create_files_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Co
                 if server_bridge:
                     try:
                         result = await server_bridge.download_file_async(file_id, destination_path)
-                        if result:
+                        
+                        # Handle new response format with success/message/mode
+                        if isinstance(result, dict):
+                            success = result.get('success', False)
+                            message = result.get('message', 'Unknown result')
+                            mode = result.get('mode', 'unknown')
+                        else:
+                            # Backward compatibility with boolean response
+                            success = bool(result)
+                            message = f'File {file_name} downloaded successfully' if success else 'Download failed'
+                            mode = 'real'
+                            
+                        if success:
                             # Update state via state manager
                             if state_manager:
                                 await state_manager.update_state("file_downloaded", {
                                     "file_id": file_id,
                                     "file_name": file_name,
                                     "destination": destination_path,
-                                    "timestamp": datetime.now().isoformat()
+                                    "timestamp": datetime.now().isoformat(),
+                                    "mode": mode
                                 })
                             
-                            show_success_message(page, f"File {file_name} downloaded successfully")
-                            file_action_feedback_text.value = f"Downloaded {file_name} ({file_size} bytes)"
-                            await file_action_feedback_text.update_async()
-                            logger.info(f"File downloaded via server bridge: {destination_path}")
+                            # Update progress to completion
+                            progress_ring.value = 1.0
+                            progress_ring.update()
+                            
+                            # Show appropriate message based on mode
+                            if mode == 'mock':
+                                show_info_message(page, message, mode='mock')
+                                file_action_feedback_text.value = f"Mock downloaded {file_name} (demo mode)"
+                            else:
+                                show_success_message(page, message, mode='real')
+                                file_action_feedback_text.value = f"Downloaded {file_name} ({file_size} bytes)"
+                            
+                            file_action_feedback_text.visible = True
+                            file_action_feedback_text.update()
+                            
+                            # Clean up progress indicator
+                            if progress_container in page.overlay:
+                                page.overlay.remove(progress_container)
+                            page.update()
+                            logger.info(f"File download completed via server bridge ({mode} mode): {destination_path}")
+                            return
+                        else:
+                            show_error_message(page, f"Download failed: {message}")
+                            # Clean up progress indicator on error
+                            try:
+                                if progress_container in page.overlay:
+                                    page.overlay.remove(progress_container)
+                                page.update()
+                            except:
+                                pass
                             return
                     except Exception as e:
                         logger.error(f"Server bridge download error: {e}")
@@ -366,9 +423,19 @@ def create_files_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Co
                     import shutil
                     shutil.copy2(file_path, destination_path)
                     
+                    # Update progress to completion
+                    progress_ring.value = 1.0
+                    progress_ring.update()
+                    
                     show_success_message(page, f"File {file_name} downloaded to Downloads folder")
                     file_action_feedback_text.value = f"Downloaded {file_name} ({file_size} bytes)"
-                    await file_action_feedback_text.update_async()
+                    file_action_feedback_text.visible = True
+                    file_action_feedback_text.update()
+                    
+                    # Clean up progress indicator
+                    if progress_container in page.overlay:
+                        page.overlay.remove(progress_container)
+                    page.update()
                     logger.info(f"File copied from {file_path} to {destination_path}")
                 else:
                     # For mock data - create a simple text file as placeholder
@@ -380,9 +447,19 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     with open(destination_path, 'w', encoding='utf-8') as f:
                         f.write(mock_content)
                     
+                    # Update progress to completion
+                    progress_ring.value = 1.0
+                    progress_ring.update()
+                    
                     show_success_message(page, f"Mock download: {file_name} created in Downloads")
                     file_action_feedback_text.value = f"Mock download: {file_name}"
-                    await file_action_feedback_text.update_async()
+                    file_action_feedback_text.visible = True
+                    file_action_feedback_text.update()
+                    
+                    # Clean up progress indicator
+                    if progress_container in page.overlay:
+                        page.overlay.remove(progress_container)
+                    page.update()
                     logger.info(f"Mock file created at {destination_path}")
                     
             except PermissionError as e:
@@ -390,14 +467,32 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 logger.error(f"{error_msg}: {e}")
                 show_error_message(page, error_msg)
                 file_action_feedback_text.value = f"Permission error: {file_name}"
-                await file_action_feedback_text.update_async()
+                file_action_feedback_text.visible = True
+                file_action_feedback_text.update()
+                
+                # Clean up progress indicator on error
+                try:
+                    if progress_container in page.overlay:
+                        page.overlay.remove(progress_container)
+                    page.update()
+                except:
+                    pass
                 
             except Exception as e:
                 error_msg = f"Error downloading {file_name}: {str(e)}"
                 logger.error(error_msg)
                 show_error_message(page, error_msg)
                 file_action_feedback_text.value = f"Download failed: {file_name}"
-                await file_action_feedback_text.update_async()
+                file_action_feedback_text.visible = True
+                file_action_feedback_text.update()
+                
+                # Clean up progress indicator on error
+                try:
+                    if progress_container in page.overlay:
+                        page.overlay.remove(progress_container)
+                    page.update()
+                except:
+                    pass
         
         # Run async operation using page.run_task
         page.run_task(download_async)
@@ -410,43 +505,112 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         
         async def verify_async():
             try:
-                # Show loading state
-                file_action_feedback_text.value = f"Verifying {file_name}..."
-                await file_action_feedback_text.update_async()
+                # Show loading state with progress ring
+                progress_ring = ft.ProgressRing(value=0.0, width=24, height=24)
+                feedback_row = ft.Row([progress_ring, ft.Text(f"Verifying {file_name}...")], spacing=8)
+                file_action_feedback_text.value = ""
+                file_action_feedback_text.visible = False
+                # Create temporary progress container
+                progress_container = ft.Container(
+                    content=feedback_row,
+                    padding=ft.Padding(20, 10, 20, 10),
+                    bgcolor=ft.Colors.SURFACE,
+                    border_radius=8
+                )
+                
+                # Add progress indicator to page overlay
+                page.overlay.append(progress_container)
+                progress_container.visible = True
+                page.update()
+                
+                # Update progress
+                progress_ring.value = 0.3
+                progress_ring.update()
                 
                 # Try server bridge first
                 if server_bridge:
                     try:
                         result = await server_bridge.verify_file_async(file_id)
-                        if result:
+                        
+                        # Handle new response format with success/message/mode
+                        if isinstance(result, dict):
+                            success = result.get('success', False)
+                            message = result.get('message', 'Unknown result')
+                            mode = result.get('mode', 'unknown')
+                        else:
+                            # Backward compatibility with boolean response
+                            success = bool(result)
+                            message = f'File {file_name} verification passed' if success else 'File verification failed'
+                            mode = 'real'
+                            
+                        if success:
                             # Update state via state manager
                             if state_manager:
                                 await state_manager.update_state("file_verified", {
                                     "file_id": file_id,
                                     "file_name": file_name,
-                                    "verification_result": result,
-                                    "timestamp": datetime.now().isoformat()
+                                    "verification_result": True,
+                                    "timestamp": datetime.now().isoformat(),
+                                    "mode": mode
                                 })
                             
-                            show_success_message(page, f"File {file_name} verification passed")
-                            file_action_feedback_text.value = f"Verified {file_name} - integrity OK"
-                            await file_action_feedback_text.update_async()
-                            logger.info(f"File verification passed: {file_name}")
+                            # Update progress to completion
+                            progress_ring.value = 1.0
+                            progress_ring.update()
+                            
+                            # Show appropriate message based on mode
+                            if mode == 'mock':
+                                show_info_message(page, message, mode='mock')
+                                file_action_feedback_text.value = f"Mock verified {file_name} (demo mode)"
+                            else:
+                                show_success_message(page, message, mode='real')
+                                file_action_feedback_text.value = f"Verified {file_name} - integrity OK"
+                            
+                            file_action_feedback_text.visible = True
+                            file_action_feedback_text.update()
+                            
+                            # Clean up progress indicator
+                            if progress_container in page.overlay:
+                                page.overlay.remove(progress_container)
+                            page.update()
+                            logger.info(f"File verification completed ({mode} mode): {file_name}")
                             return
                         else:
-                            show_error_message(page, f"File {file_name} verification failed")
+                            show_error_message(page, f"Verification failed: {message}")
                             file_action_feedback_text.value = f"Verification failed: {file_name}"
-                            await file_action_feedback_text.update_async()
+                            file_action_feedback_text.visible = True
+                            file_action_feedback_text.update()
+                            
+                            # Clean up progress indicator on error
+                            try:
+                                if progress_container in page.overlay:
+                                    page.overlay.remove(progress_container)
+                                page.update()
+                            except:
+                                pass
                             return
                     except Exception as e:
                         logger.error(f"Server bridge verify error: {e}")
                         # Fall through to mock implementation
                 
-                # Mock verification - always pass for demo
-                await asyncio.sleep(1)  # Simulate verification time
+                # Mock verification - always pass for demo with progress updates
+                progress_ring.value = 0.6
+                progress_ring.update()
+                await asyncio.sleep(0.5)  # Simulate verification time
+                
+                progress_ring.value = 1.0
+                progress_ring.update()
+                await asyncio.sleep(0.5)  # Show completion briefly
+                
                 show_success_message(page, f"Mock verification: {file_name} is valid")
                 file_action_feedback_text.value = f"Mock verified: {file_name}"
-                await file_action_feedback_text.update_async()
+                file_action_feedback_text.visible = True
+                file_action_feedback_text.update()
+                
+                # Clean up progress indicator
+                if progress_container in page.overlay:
+                    page.overlay.remove(progress_container)
+                page.update()
                 logger.info(f"Mock verification completed for: {file_name}")
                 
             except Exception as e:
@@ -454,7 +618,16 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 logger.error(error_msg)
                 show_error_message(page, error_msg)
                 file_action_feedback_text.value = f"Verify failed: {file_name}"
-                await file_action_feedback_text.update_async()
+                file_action_feedback_text.visible = True
+                file_action_feedback_text.update()
+                
+                # Clean up progress indicator on error
+                try:
+                    if progress_container in page.overlay:
+                        page.overlay.remove(progress_container)
+                    page.update()
+                except:
+                    pass
         
         # Run async operation using page.run_task
         page.run_task(verify_async)
@@ -472,8 +645,24 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 confirmation_dialog.update()
                 
                 # Show loading state
-                file_action_feedback_text.value = f"Deleting {file_name}..."
-                file_action_feedback_text.update()
+                # Create progress ring for delete operation
+                progress_ring = ft.ProgressRing(value=0.2, width=24, height=24)
+                feedback_row = ft.Row([progress_ring, ft.Text(f"Deleting {file_name}...")], spacing=8)
+                progress_container = ft.Container(
+                    content=feedback_row,
+                    padding=ft.Padding(20, 10, 20, 10),
+                    bgcolor=ft.Colors.ERROR_CONTAINER,
+                    border_radius=8
+                )
+                
+                # Add progress indicator to page overlay
+                page.overlay.append(progress_container)
+                progress_container.visible = True
+                page.update()
+                
+                # Update progress
+                progress_ring.value = 0.5
+                progress_ring.update()
                 
                 # Try server bridge first
                 if server_bridge:
@@ -494,15 +683,34 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                                 if update_table_func:
                                     update_table_func()
                             
+                            # Update progress to completion
+                            progress_ring.value = 1.0
+                            progress_ring.update()
+                            
                             show_success_message(page, f"File {file_name} deleted successfully")
                             file_action_feedback_text.value = f"Deleted {file_name}"
+                            file_action_feedback_text.visible = True
                             file_action_feedback_text.update()
+                            
+                            # Clean up progress indicator
+                            if progress_container in page.overlay:
+                                page.overlay.remove(progress_container)
+                            page.update()
                             logger.info(f"File deleted via server bridge: {file_name}")
                             return
                         else:
                             show_error_message(page, f"Failed to delete file {file_name}")
                             file_action_feedback_text.value = f"Delete failed: {file_name}"
+                            file_action_feedback_text.visible = True
                             file_action_feedback_text.update()
+                            
+                            # Clean up progress indicator on error
+                            try:
+                                if progress_container in page.overlay:
+                                    page.overlay.remove(progress_container)
+                                page.update()
+                            except:
+                                pass
                             return
                     except Exception as e:
                         logger.error(f"Server bridge delete error: {e}")
@@ -516,12 +724,34 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     if len(files_data) < original_count:
                         if update_table_func:
                             update_table_func()
+                        # Update progress to completion
+                        progress_ring.value = 1.0
+                        progress_ring.update()
+                        
                         show_success_message(page, f"Mock delete: {file_name} removed from list")
                         file_action_feedback_text.value = f"Mock deleted: {file_name}"
+                        file_action_feedback_text.visible = True
+                        
+                        # Clean up progress indicator
+                        try:
+                            if progress_container in page.overlay:
+                                page.overlay.remove(progress_container)
+                            page.update()
+                        except:
+                            pass
                         logger.info(f"Mock file deleted: {file_name}")
                     else:
                         show_error_message(page, f"File {file_name} not found in data")
                         file_action_feedback_text.value = f"Delete failed: {file_name} not found"
+                        file_action_feedback_text.visible = True
+                        
+                        # Clean up progress indicator on error
+                        try:
+                            if progress_container in page.overlay:
+                                page.overlay.remove(progress_container)
+                            page.update()
+                        except:
+                            pass
                         logger.error(f"File {file_name} not found for deletion")
                 
                 file_action_feedback_text.update()
@@ -531,7 +761,16 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 logger.error(error_msg)
                 show_error_message(page, error_msg)
                 file_action_feedback_text.value = f"Delete failed: {file_name}"
+                file_action_feedback_text.visible = True
                 file_action_feedback_text.update()
+                
+                # Clean up progress indicator on error
+                try:
+                    if progress_container in page.overlay:
+                        page.overlay.remove(progress_container)
+                    page.update()
+                except:
+                    pass
         
         async def confirm_delete(e):
             """Async delete handler"""
@@ -1124,7 +1363,8 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
 
     # Note: search_debouncer already initialized above at line 310
 
-    async def perform_search_async():
+    def perform_search():
+        """Perform the actual search operation."""
         pagination_config.current_page = 0
         with PerfTimer("files.search.perform"):
             update_table_display()
@@ -1136,8 +1376,8 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         search_query = e.control.value
         logger.info(f"Search query changed to: '{search_query}' (debounced)")
         if search_debouncer:
-            # AsyncDebouncer handles its own task creation - no need for page.run_task
-            asyncio.create_task(search_debouncer.debounce(perform_search_async))
+            # Use sync Debouncer with the sync perform_search function
+            search_debouncer.debounce(perform_search)
         else:
             update_table_display()
 
@@ -1247,7 +1487,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
             padding=ft.Padding(20, 10, 20, 10),
             bgcolor=ft.Colors.SURFACE,
             border_radius=4,
-            visible=False  # Hidden by default - only shown during file actions
+            visible=True  # Visible by default to show file action status
         ),
 
         # Filter controls
@@ -1399,11 +1639,36 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     ft.PopupMenuItem(text="Delete", icon=ft.Icons.DELETE, on_click=lambda e, d=file_data: delete_file_action_enhanced(d, page, files_data, update_table_display)),
                 ]
             )
+            # Create type control with colored icon and text
+            file_type_text = str(file_data.get("type", "unknown")).upper()
+            
+            # Get appropriate color for file type icon based on file extension
+            def get_file_type_color(filename):
+                extension = filename.lower().split('.')[-1] if '.' in filename else ''
+                color_map = {
+                    'pdf': ft.Colors.RED_600,
+                    'doc': ft.Colors.BLUE_600, 'docx': ft.Colors.BLUE_600,
+                    'xls': ft.Colors.GREEN_600, 'xlsx': ft.Colors.GREEN_600,
+                    'ppt': ft.Colors.ORANGE_600, 'pptx': ft.Colors.ORANGE_600,
+                    'jpg': ft.Colors.PURPLE_600, 'jpeg': ft.Colors.PURPLE_600, 'png': ft.Colors.PURPLE_600, 'gif': ft.Colors.PURPLE_600,
+                    'mp4': ft.Colors.PINK_600, 'avi': ft.Colors.PINK_600, 'mov': ft.Colors.PINK_600,
+                    'mp3': ft.Colors.CYAN_600, 'wav': ft.Colors.CYAN_600, 'flac': ft.Colors.CYAN_600,
+                    'zip': ft.Colors.AMBER_600, 'rar': ft.Colors.AMBER_600, '7z': ft.Colors.AMBER_600,
+                    'txt': ft.Colors.GREY_600, 'log': ft.Colors.GREY_600,
+                    'py': ft.Colors.BLUE_800, 'js': ft.Colors.YELLOW_600, 'html': ft.Colors.ORANGE_800,
+                }
+                return color_map.get(extension, ft.Colors.BLUE_GREY_600)
+            
+            type_control = ft.Row([
+                ft.Icon(file_type_icon, size=18, color=get_file_type_color(file_name)),
+                ft.Text(file_type_text)
+            ], spacing=8, tight=True)
+            
             return ft.DataRow(
                 cells=[
                     ft.DataCell(name_control),
                     ft.DataCell(ft.Text(file_data.get("_size_fmt"))),
-                    ft.DataCell(ft.Text(str(file_data.get("type", "unknown")).upper())),
+                    ft.DataCell(type_control),
                     ft.DataCell(ft.Text(file_data.get("_modified_fmt"))),
                     ft.DataCell(ft.Text(str(file_data.get("owner", "Unknown")))),
                     ft.DataCell(badge),

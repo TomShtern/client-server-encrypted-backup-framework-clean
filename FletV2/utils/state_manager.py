@@ -142,12 +142,9 @@ class StateManager:
                     else:
                         original_callback(new_value, old_value)
                     
-                    # Update control automatically
+                    # Update control automatically - Framework-harmonious: control.update() is always synchronous in Flet
                     if hasattr(control, 'update') and callable(control.update):
-                        if asyncio.iscoroutinefunction(control.update):
-                            await control.update()
-                        else:
-                            control.update()
+                        control.update()
                     
                 except Exception as e:
                     logger.error(f"Auto-update callback failed: {e}")

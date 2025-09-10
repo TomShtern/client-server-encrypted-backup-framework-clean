@@ -26,7 +26,7 @@ import Shared.utils.utf8_solution
 **Primary Directive**: Favor Flet's built-in features over custom, over-engineered solutions. Do not reinvent the wheel.
 
 #### **Scale Test**: 
-Be highly suspicious of any custom solution that exceeds 1000 lines. A 3000+ line custom system is an anti-pattern when a 50-450 line native Flet solution exists with full feature parity(or almost full parity).
+Be highly suspicious of any custom solution that exceeds 1000 lines. A 3000+ line custom system is an anti-pattern when a 50-450 line native Flet solution exists with full feature parity(or almost full parity). Code files ideally should remain between 600-800 lines, but this is not a hard limit.
 
 #### **Framework Fight Test**: 
 Work WITH the framework, not AGAINST it. If your solution feels complex, verbose, or like a struggle, you are fighting the framework. Stop and find the simpler, intended Flet way.
@@ -37,6 +37,27 @@ Work WITH the framework, not AGAINST it. If your solution feels complex, verbose
 - Can `control.update()` replace `page.update()`?
 - Does a standard Flet control already do 90% of what you need?
 
+
+### Redundant File Analysis Protocol (CRITICAL FOR DEVELOPMENT)
+**Before deleting any file that appears redundant, ALWAYS follow this process**:
+
+1. **Analyze thoroughly**: Read through the "redundant" file completely
+2. **Compare functionality**: Check if it contains methods, utilities, or features not present in the "original" file, that could benifit the original file.
+3. **Identify valuable code**: Look for:
+   - Helper functions or utilities that could be useful
+   - Error handling patterns that are more robust
+   - Configuration options or constants that might be needed
+   - Documentation or comments that provide important context
+   - Different implementation approaches that might be superior
+4. **Integration decision**: If valuable code is found:
+   - Extract and integrate the valuable parts into the primary file
+   - Test that the integration works correctly
+   - Ensure no functionality is lost
+5. **Safe deletion**: Only after successful integration, delete the redundant file
+
+**Why this matters**: "Simple" or "mock" files often contain valuable utilities, edge case handling, or configuration details that aren't obvious at first glance. Premature deletion can result in lost functionality and regression bugs.
+
+**Example**: A "simple" client management component might contain useful date formatting functions or error message templates that the "comprehensive" version lacks.
 
 ### When going through massive logs:
 On-Disk + Grep/Awk Tools
@@ -87,7 +108,7 @@ Combine them with fzf (if you install it) for interactive filtering.
 
 3. **Use `ft.NavigationRail.on_change` for navigation, completely removing the need for custom routing managers.**
 
-4. **Prefer `ft.Theme` and `ft.ColorScheme` for styling, avoiding any custom theming logic over 50 lines.**
+4. **Use `ft.Theme` and `ft.ColorScheme` for styling, avoiding any custom theming logic over 50 lines.**
 
 5. **Implement async event handlers using `async def` and `await ft.update_async()` to prevent UI blocking.**
 
@@ -706,24 +727,4 @@ def apply_theme_variant(page: ft.Page, theme_name: str) -> bool:
 
 ---
 
-## ❌ FRAMEWORK-FIGHTING ANTI-PATTERNS (NEVER DO THESE)
-
-### **🚨 IMMEDIATE RED FLAGS**
-1. **Custom NavigationManager classes** → Use `ft.NavigationRail.on_change`
-2. **Custom responsive systems** → Use `expand=True` + `ResponsiveRow`
-3. **Custom theme managers** → Use `page.theme` and `theme.py`
-4. **Complex routing systems** → Use simple view switching
-5. **`page.update()` abuse** → Use `control.update()` for precision
-6. **God components >500 lines** → Decompose into focused functions
-
-### **🚨 INVALID FLET APIS (RUNTIME ERRORS)**
-```python
-# ❌ WRONG - These don't exist in Flet 0.28.3:
-ft.MaterialState.DEFAULT    # ❌ MaterialState doesn't exist. Use ft.ControlState.DEFAULT instead
-ft.Expanded()              # ❌ Use expand=True instead
-ft.Colors.SURFACE_VARIANT  # ❌ Use ft.Colors.SURFACE instead
-ft.UserControl             # ❌ Inherit from ft.Control instead
-
-# ✅ CORRECT - Verified working APIs:
-ft.Colors.PRIMARY, ft.Colors.SURFACE, ft.Colors.ERROR
-ft.Icons.DASHBOARD, ft.Icons.SETTINGS, ft.Icons
+##

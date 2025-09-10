@@ -462,7 +462,7 @@ def create_interactive_button(text: str, icon: str, on_click: Callable, button_t
     """
     colors = {
         "primary": {"bg": ft.Colors.PRIMARY, "hover": ft.Colors.PRIMARY_CONTAINER},
-        "secondary": {"bg": ft.Colors.SURFACE_VARIANT, "hover": ft.Colors.SECONDARY_CONTAINER},
+        "secondary": {"bg": ft.Colors.SURFACE, "hover": ft.Colors.SECONDARY_CONTAINER},
         "danger": {"bg": ft.Colors.ERROR, "hover": ft.Colors.ERROR_CONTAINER}
     }
     
@@ -504,7 +504,7 @@ def create_interactive_table_row(cells: List[ft.Control], on_click: Optional[Cal
     def handle_hover(e):
         """Handle row hover state for visual feedback."""
         if e.data == "true":
-            e.control.bgcolor = ft.Colors.SURFACE_VARIANT
+            e.control.bgcolor = ft.Colors.SURFACE
         else:
             e.control.bgcolor = ft.Colors.TRANSPARENT
         e.control.update()
@@ -627,7 +627,7 @@ def create_enhanced_metric_card(title: str, value, icon: str, accent_color: str)
             ], spacing=8),
             ft.Text(str(value), size=24, weight=ft.FontWeight.BOLD)
         ], spacing=8),
-        bgcolor=ft.Colors.SURFACE_VARIANT,
+        bgcolor=ft.Colors.SURFACE,
         border_radius=12,
         padding=20,
         animate=ft.animation.Animation(150)
@@ -720,7 +720,7 @@ def create_file_row(file_info: Dict[str, Any]) -> ft.Container:
     def handle_hover(e):
         """Handle file row hover state for visual feedback."""
         if e.data == "true":
-            e.control.bgcolor = ft.Colors.SURFACE_VARIANT
+            e.control.bgcolor = ft.Colors.SURFACE
         else:
             e.control.bgcolor = ft.Colors.TRANSPARENT
         e.control.update()
