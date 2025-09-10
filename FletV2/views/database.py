@@ -231,8 +231,8 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             heading_row_color=ft.Colors.PURPLE_50,
             border=ft.border.all(2, ft.Colors.PURPLE_300),
             border_radius=15,
-            data_row_min_height=60,
-            column_spacing=32,
+            data_row_min_height=40,  # Reduced for better space utilization
+            column_spacing=20,  # Reduced spacing for more content
             show_checkbox_column=False
         )
 
@@ -282,10 +282,14 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             # Fallback to mock data if no server bridge data
             if not db_info:
                 logger.warning("Using fallback database info")
+                # Get actual row count from current table data to fix mismatch
+                current_data = get_current_table_data()
+                actual_records = len(current_data.get("rows", [])) if current_data else 0
+                
                 db_info = {
-                    "status": "Mock Mode",
+                    "status": "Mock Mode", 
                     "tables": 3,
-                    "records": 173,
+                    "records": actual_records,  # Use actual row count instead of fake 173
                     "size": "12.4 MB"
                 }
                 # Cache fallback data too

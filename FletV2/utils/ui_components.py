@@ -444,3 +444,295 @@ def create_loading_overlay(message: str = "Loading...") -> ft.Container:
         ),
         animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_OUT)
     )
+
+
+# ==============================================================================
+# PHASE 2: INTERACTIVE FEEDBACK & ANIMATIONS - Enhanced UI Guide Implementation
+# ==============================================================================
+
+def create_interactive_button(text: str, icon: str, on_click: Callable, button_type: str = "primary") -> ft.Container:
+    """
+    Enhanced button components with hover effects using Flet's built-in animation system.
+    
+    Features:
+    - Consistent color schemes for primary, secondary, danger states
+    - Smooth hover animations using Flet's Animation system
+    - Icon + text layout with proper spacing
+    - Built-in hover effect through bgcolor animation
+    """
+    colors = {
+        "primary": {"bg": ft.Colors.PRIMARY, "hover": ft.Colors.PRIMARY_CONTAINER},
+        "secondary": {"bg": ft.Colors.SURFACE_VARIANT, "hover": ft.Colors.SECONDARY_CONTAINER},
+        "danger": {"bg": ft.Colors.ERROR, "hover": ft.Colors.ERROR_CONTAINER}
+    }
+    
+    def handle_hover(e):
+        """Handle hover state changes for interactive feedback."""
+        if hasattr(e.control, 'data'):
+            if e.data == "true":
+                e.control.bgcolor = e.control.data["hover_bg"]
+            else:
+                e.control.bgcolor = e.control.data["original_bg"]
+            e.control.update()
+    
+    return ft.Container(
+        content=ft.Row([
+            ft.Icon(icon, size=16),
+            ft.Text(text, weight=ft.FontWeight.W_500)
+        ], tight=True, spacing=8),
+        bgcolor=colors[button_type]["bg"],
+        padding=ft.Padding(16, 12, 16, 12),
+        border_radius=8,
+        animate=ft.animation.Animation(150, ft.AnimationCurve.EASE_OUT),
+        on_click=on_click,
+        on_hover=handle_hover,
+        data={"original_bg": colors[button_type]["bg"], "hover_bg": colors[button_type]["hover"]}
+    )
+
+
+def create_interactive_table_row(cells: List[ft.Control], on_click: Optional[Callable] = None) -> ft.Container:
+    """
+    Enhanced table rows with hover effects using Flet's built-in animation system.
+    
+    Features:
+    - Smooth hover transitions
+    - Proper spacing and padding
+    - Built-in click handling
+    - Accessibility support with hover feedback
+    """
+    
+    def handle_hover(e):
+        """Handle row hover state for visual feedback."""
+        if e.data == "true":
+            e.control.bgcolor = ft.Colors.SURFACE_VARIANT
+        else:
+            e.control.bgcolor = ft.Colors.TRANSPARENT
+        e.control.update()
+    
+    return ft.Container(
+        content=ft.Row(cells, spacing=20),
+        padding=ft.Padding(16, 12, 16, 12),
+        animate=ft.animation.Animation(120),
+        on_click=on_click,
+        border_radius=4,
+        on_hover=handle_hover
+    )
+
+
+# ==============================================================================
+# PHASE 3: ENHANCED STATUS INDICATORS - Modern Status Chips with Icons
+# ==============================================================================
+
+def create_status_chip(status: str, size: str = "medium") -> ft.Container:
+    """
+    Enhanced status indicators with icons and better contrast using Material 3 design.
+    
+    Features:
+    - Comprehensive status configuration with appropriate icons
+    - Size variants (small, medium, large)
+    - High contrast design for accessibility
+    - Smooth transitions with animation
+    - Consistent visual language across the app
+    """
+    status_config = {
+        "Connected": {"color": ft.Colors.GREEN, "icon": ft.Icons.CHECK_CIRCLE},
+        "Registered": {"color": ft.Colors.BLUE, "icon": ft.Icons.VERIFIED},
+        "Error": {"color": ft.Colors.RED, "icon": ft.Icons.ERROR},
+        "Offline": {"color": ft.Colors.GREY, "icon": ft.Icons.CIRCLE_OUTLINED},
+        "Uploading": {"color": ft.Colors.ORANGE, "icon": ft.Icons.UPLOAD},
+        "Failed": {"color": ft.Colors.RED, "icon": ft.Icons.ERROR_OUTLINE},
+        "Queued": {"color": ft.Colors.BLUE_GREY, "icon": ft.Icons.SCHEDULE},
+        "Complete": {"color": ft.Colors.GREEN, "icon": ft.Icons.CHECK_CIRCLE_OUTLINE},
+        "Processing": {"color": ft.Colors.BLUE, "icon": ft.Icons.AUTORENEW},
+        "Pending": {"color": ft.Colors.ORANGE, "icon": ft.Icons.PENDING},
+        "Active": {"color": ft.Colors.GREEN, "icon": ft.Icons.PLAY_CIRCLE},
+        "Inactive": {"color": ft.Colors.GREY_600, "icon": ft.Icons.PAUSE_CIRCLE},
+    }
+    
+    config = status_config.get(status, {"color": ft.Colors.GREY, "icon": ft.Icons.HELP})
+    sizes = {"small": 10, "medium": 12, "large": 14}
+    icon_sizes = {"small": 14, "medium": 16, "large": 18}
+    
+    return ft.Container(
+        content=ft.Row([
+            ft.Icon(
+                config["icon"], 
+                size=icon_sizes[size], 
+                color=ft.Colors.WHITE
+            ),
+            ft.Text(
+                status, 
+                size=sizes[size], 
+                color=ft.Colors.WHITE, 
+                weight=ft.FontWeight.W_500
+            )
+        ], spacing=4, tight=True),
+        bgcolor=config["color"],
+        border_radius=16,
+        padding=ft.Padding(12, 6, 12, 6),
+        animate=ft.Animation(150)
+    )
+
+
+# ==============================================================================
+# PHASE 4: RESPONSIVE LAYOUT ENHANCEMENTS - Dashboard & Metric Cards
+# ==============================================================================
+
+def create_dashboard_layout(clients_count: int, transfer_count: int, storage_used: str, uptime: str) -> ft.ResponsiveRow:
+    """
+    Enhanced dashboard cards with responsive design using Flet's ResponsiveRow.
+    
+    Features:
+    - Responsive sizing: sm=12, md=6, lg=3 (stack on mobile, 2x2 on tablet, 4x1 on desktop)
+    - Consistent metric card styling
+    - Proper spacing and alignment
+    - Professional color-coded icons
+    """
+    return ft.ResponsiveRow([
+        # Server status cards with responsive breakpoints
+        ft.Column([
+            create_enhanced_metric_card("Active Clients", clients_count, ft.Icons.PEOPLE, ft.Colors.BLUE)
+        ], col={"sm": 12, "md": 6, "lg": 3}),
+        
+        ft.Column([
+            create_enhanced_metric_card("Total Transfers", transfer_count, ft.Icons.SWAP_HORIZ, ft.Colors.GREEN)
+        ], col={"sm": 12, "md": 6, "lg": 3}),
+        
+        ft.Column([
+            create_enhanced_metric_card("Storage Used", storage_used, ft.Icons.STORAGE, ft.Colors.PURPLE)
+        ], col={"sm": 12, "md": 6, "lg": 3}),
+        
+        ft.Column([
+            create_enhanced_metric_card("Server Uptime", uptime, ft.Icons.TIMER, ft.Colors.ORANGE)
+        ], col={"sm": 12, "md": 6, "lg": 3})
+    ], spacing=16)
+
+
+def create_enhanced_metric_card(title: str, value, icon: str, accent_color: str) -> ft.Container:
+    """
+    Enhanced metric cards with modern styling and better visual hierarchy.
+    
+    Features:
+    - Color-coded icons for quick recognition
+    - Modern Material 3 styling with rounded corners
+    - Proper spacing and typography hierarchy
+    - Smooth hover animations
+    - Consistent padding and elevation
+    """
+    return ft.Container(
+        content=ft.Column([
+            ft.Row([
+                ft.Icon(icon, size=24, color=accent_color),
+                ft.Text(title, style=ft.TextThemeStyle.LABEL_MEDIUM)
+            ], spacing=8),
+            ft.Text(str(value), size=24, weight=ft.FontWeight.BOLD)
+        ], spacing=8),
+        bgcolor=ft.Colors.SURFACE_VARIANT,
+        border_radius=12,
+        padding=20,
+        animate=ft.animation.Animation(150)
+    )
+
+
+# ==============================================================================
+# PHASE 5: FILE TYPE ICONS & VISUAL ENHANCEMENT - File Management UI
+# ==============================================================================
+
+def get_file_type_icon(filename: str) -> str:
+    """
+    File type icon mapping using Flet's built-in Icons for comprehensive file type recognition.
+    
+    Features:
+    - Comprehensive file type coverage
+    - Semantic icon selection for easy recognition
+    - Fallback icon for unknown file types
+    - Consistent visual language
+    """
+    file_icons = {
+        # Document files
+        '.pdf': ft.Icons.PICTURE_AS_PDF,
+        '.doc': ft.Icons.DESCRIPTION, '.docx': ft.Icons.DESCRIPTION,
+        '.txt': ft.Icons.TEXT_SNIPPET,
+        '.rtf': ft.Icons.DESCRIPTION,
+        '.odt': ft.Icons.DESCRIPTION,
+        
+        # Spreadsheet files
+        '.xls': ft.Icons.TABLE_CHART, '.xlsx': ft.Icons.TABLE_CHART,
+        '.csv': ft.Icons.TABLE_CHART,
+        '.ods': ft.Icons.TABLE_CHART,
+        
+        # Presentation files
+        '.ppt': ft.Icons.SLIDESHOW, '.pptx': ft.Icons.SLIDESHOW,
+        '.odp': ft.Icons.SLIDESHOW,
+        
+        # Image files
+        '.jpg': ft.Icons.IMAGE, '.jpeg': ft.Icons.IMAGE, '.png': ft.Icons.IMAGE,
+        '.gif': ft.Icons.IMAGE, '.bmp': ft.Icons.IMAGE, '.svg': ft.Icons.IMAGE,
+        '.webp': ft.Icons.IMAGE, '.tiff': ft.Icons.IMAGE,
+        
+        # Video files
+        '.mp4': ft.Icons.VIDEO_FILE, '.avi': ft.Icons.VIDEO_FILE,
+        '.mov': ft.Icons.VIDEO_FILE, '.mkv': ft.Icons.VIDEO_FILE,
+        '.wmv': ft.Icons.VIDEO_FILE, '.flv': ft.Icons.VIDEO_FILE,
+        '.webm': ft.Icons.VIDEO_FILE,
+        
+        # Audio files
+        '.mp3': ft.Icons.AUDIO_FILE, '.wav': ft.Icons.AUDIO_FILE,
+        '.flac': ft.Icons.AUDIO_FILE, '.aac': ft.Icons.AUDIO_FILE,
+        '.ogg': ft.Icons.AUDIO_FILE,
+        
+        # Archive files
+        '.zip': ft.Icons.FOLDER_ZIP, '.rar': ft.Icons.FOLDER_ZIP,
+        '.7z': ft.Icons.FOLDER_ZIP, '.tar': ft.Icons.FOLDER_ZIP,
+        '.gz': ft.Icons.FOLDER_ZIP,
+        
+        # Code files
+        '.py': ft.Icons.CODE, '.js': ft.Icons.CODE, '.html': ft.Icons.CODE,
+        '.css': ft.Icons.CODE, '.cpp': ft.Icons.CODE, '.java': ft.Icons.CODE,
+        '.php': ft.Icons.CODE, '.json': ft.Icons.CODE, '.xml': ft.Icons.CODE,
+        
+        # System files
+        '.exe': ft.Icons.SETTINGS_APPLICATIONS,
+        '.msi': ft.Icons.SETTINGS_APPLICATIONS,
+        '.deb': ft.Icons.SETTINGS_APPLICATIONS,
+        '.dmg': ft.Icons.SETTINGS_APPLICATIONS,
+    }
+    
+    extension = '.' + filename.split('.')[-1].lower() if '.' in filename else ''
+    return file_icons.get(extension, ft.Icons.INSERT_DRIVE_FILE)
+
+
+def create_file_row(file_info: Dict[str, Any]) -> ft.Container:
+    """
+    Enhanced file list row with file type icons, status indicators, and actions.
+    
+    Features:
+    - File type recognition with appropriate icons
+    - Integrated status chip display
+    - Action buttons for file operations
+    - Hover effects for interactive feedback
+    - Professional spacing and alignment
+    
+    Args:
+        file_info: Dictionary with keys: 'name', 'status', 'size', etc.
+    """
+    
+    def handle_hover(e):
+        """Handle file row hover state for visual feedback."""
+        if e.data == "true":
+            e.control.bgcolor = ft.Colors.SURFACE_VARIANT
+        else:
+            e.control.bgcolor = ft.Colors.TRANSPARENT
+        e.control.update()
+    
+    return ft.Container(
+        content=ft.Row([
+            ft.Icon(get_file_type_icon(file_info["name"]), size=20),
+            ft.Text(file_info["name"], expand=True),
+            create_status_chip(file_info["status"], "small"),
+            ft.IconButton(ft.Icons.MORE_VERT, tooltip="Actions")
+        ], spacing=12),
+        padding=ft.Padding(12, 8, 12, 8),
+        animate=ft.animation.Animation(120),
+        on_hover=handle_hover
+    )

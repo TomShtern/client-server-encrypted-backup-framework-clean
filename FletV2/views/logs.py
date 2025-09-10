@@ -287,7 +287,8 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
     def on_search_change(e):
         nonlocal search_query
         search_query = e.control.value
-        page.run_task(search_debouncer.debounce(perform_search))
+        # AsyncDebouncer handles its own task creation - no need for page.run_task
+        asyncio.create_task(search_debouncer.debounce(perform_search))
 
     def on_search_clear(e):
         nonlocal search_query

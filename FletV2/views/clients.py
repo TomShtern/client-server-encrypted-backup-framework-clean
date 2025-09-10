@@ -108,11 +108,16 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
             
             def close_dialog(dialog_ref):
                 dialog_ref.open = False
-                dialog_ref.update()  # Update only the dialog instead of entire page
+                page.overlay.remove(dialog_ref)
+                page.update()  # Update page to properly handle dialog removal
             
+            # Properly attach dialog to page before opening
             page.overlay.append(dialog)
+            page.update()  # First update to attach dialog to overlay
+            
+            # Open dialog after it's properly attached
             dialog.open = True
-            dialog.update()  # Update only the dialog instead of entire page
+            page.update()  # Second update to open the dialog
             
             feedback_text.value = f"Showing details for client {client_id}"
             feedback_text.update()

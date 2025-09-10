@@ -217,6 +217,25 @@ DEFAULT_THEME_NAME = "Teal"
 # CLEAN API FUNCTIONS - Framework Native Approach
 # ==============================================================================
 
+def setup_enhanced_typography(page: ft.Page):
+    """Enhanced typography system using Flet's built-in TextTheme for visual hierarchy."""
+    text_theme = ft.TextTheme(
+        # Page titles - Large and bold
+        headline_large=ft.TextStyle(size=28, weight=ft.FontWeight.BOLD),
+        # Section headers - Medium, lighter weight
+        headline_medium=ft.TextStyle(size=20, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT),
+        # Body/data text - Comfortable reading
+        body_large=ft.TextStyle(size=16, weight=ft.FontWeight.NORMAL),
+        # Labels and captions
+        label_medium=ft.TextStyle(size=14, weight=ft.FontWeight.W_500)
+    )
+    
+    # Apply to both themes
+    if page.theme:
+        page.theme.text_theme = text_theme
+    if page.dark_theme:
+        page.dark_theme.text_theme = text_theme
+
 def setup_default_theme(page: ft.Page) -> None:
     """
     Set up the default theme using Flet's native theming system with working 2025 design elements.
@@ -241,6 +260,9 @@ def setup_default_theme(page: ft.Page) -> None:
     )
     
     page.theme_mode = ft.ThemeMode.SYSTEM
+    
+    # Apply enhanced typography
+    setup_enhanced_typography(page)
 
 
 def toggle_theme_mode(page: ft.Page) -> None:
@@ -359,6 +381,9 @@ def setup_modern_theme(page: ft.Page) -> None:
     )
     
     page.theme_mode = ft.ThemeMode.SYSTEM
+    
+    # Apply enhanced typography
+    setup_enhanced_typography(page)
 
 def get_shadow_style(style_name: str, is_dark: bool = False) -> ft.BoxShadow:
     """Get shadow style based on current theme mode for 2025 layering effects."""

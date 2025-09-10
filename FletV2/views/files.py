@@ -1136,7 +1136,8 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         search_query = e.control.value
         logger.info(f"Search query changed to: '{search_query}' (debounced)")
         if search_debouncer:
-            page.run_task(search_debouncer.debounce(perform_search_async))
+            # AsyncDebouncer handles its own task creation - no need for page.run_task
+            asyncio.create_task(search_debouncer.debounce(perform_search_async))
         else:
             update_table_display()
 
@@ -1240,12 +1241,13 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
             padding=ft.Padding(20, 20, 20, 10)
         ),
 
-        # File Action Feedback
+        # File Action Feedback (hidden by default, only shows during actions)
         ft.Container(
             content=file_action_feedback_text,
             padding=ft.Padding(20, 10, 20, 10),
             bgcolor=ft.Colors.SURFACE,
-            border_radius=4
+            border_radius=4,
+            visible=False  # Hidden by default - only shown during file actions
         ),
 
         # Filter controls
@@ -1370,14 +1372,24 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
             )
 
         def build_row(idx, file_data):
+            # Get file type icon using our enhanced UI components
+            from utils.ui_components import get_file_type_icon
+            
+            file_name = str(file_data.get("name", "Unknown"))
+            file_type_icon = get_file_type_icon(file_name)
+            
             name_text = ft.Text(
-                str(file_data.get("name", "Unknown")), 
+                file_name, 
                 overflow=ft.TextOverflow.ELLIPSIS,
-                tooltip=str(file_data.get("name", "")) if len(str(file_data.get("name", ""))) > 28 else None
+                tooltip=file_name if len(file_name) > 28 else None
             )
+            
+            # Name control without icon (icon will be in Type column)
             name_control = name_text
             status_val = str(file_data.get("status", "Unknown"))
-            badge = build_status_badge(status_val, status_val)
+            # Use enhanced status chip instead of old badge
+            from utils.ui_components import create_status_chip
+            badge = create_status_chip(status_val)
             actions_menu = ft.PopupMenuButton(
                 icon=ft.Icons.MORE_VERT,
                 tooltip="File Actions",
