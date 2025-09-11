@@ -129,7 +129,9 @@
   "search.searchView.semanticSearchBehavior": "runOnEmpty",
   "chat.math.enabled": true,
   "chat.checkpoints.showFileChanges": true,
-  "chat.agent.maxRequests": 40
+  "chat.agent.maxRequests": 40,
+  "inlineChat.notebookAgent": true,
+  "chat.agentSessionsViewLocation": "view"
 
 
 }

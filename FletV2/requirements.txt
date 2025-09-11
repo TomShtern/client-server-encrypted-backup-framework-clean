@@ -1,6 +1,6 @@
 # FletV2 Requirements
 flet>=0.28.3
-requests>=2.31.0
+requests>=2.32.4
 psutil>=5.9.0
 httpx
 aiofiles>=24.1.0
