@@ -5,19 +5,26 @@ Enhanced with reactive state management and optimized data loading.
 """
 
 import flet as ft
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import asyncio
 import csv
 import os
 import aiofiles
 from utils.debug_setup import get_logger
+from utils.server_bridge import ServerBridge
+from utils.state_manager import StateManager
 from utils.user_feedback import show_success_message, show_error_message, show_info_message
+from utils.test_mocks import MockEvent, MockControl
 from datetime import datetime
 
 logger = get_logger(__name__)
 
 
-def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
+def create_database_view(
+    server_bridge: Optional[ServerBridge], 
+    page: ft.Page, 
+    state_manager: Optional[StateManager] = None
+) -> ft.Control:
     """
     Create database view with enhanced infrastructure and reactive state management.
 
@@ -51,9 +58,9 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         """Get current table data from state manager or fallback to mock data."""
         # Try to get from state manager first
         if state_manager:
-            cached_data = state_manager.get_cached(f"table_data_{selected_table_name}", max_age_seconds=60)
+            cached_data = state_manager.get(f"table_data_{selected_table_name}")
             if cached_data:
-                logger.debug(f"Using cached table data for {selected_table_name}")
+                logger.debug(f"Using state data for {selected_table_name}")
                 return cached_data
         
         # Fallback to mock data since we can't await here
@@ -106,7 +113,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             
             # Update state manager cache
             if state_manager and data:
-                await state_manager.update_state(f"table_data_{table_name}", data)
+                state_manager.update(f"table_data_{table_name}", data)
             
             return data
             
@@ -258,11 +265,11 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             # Load database info from server bridge or state manager
             db_info = None
             
-            # Check state manager cache first
+            # Check state manager first
             if state_manager:
-                db_info = state_manager.get_cached("database_info", max_age_seconds=30)
+                db_info = state_manager.get("database_info")
                 if db_info:
-                    logger.debug("Using cached database info from state manager")
+                    logger.debug("Using state database info from state manager")
 
             # If no cached data, fetch from server bridge
             if not db_info and server_bridge:
@@ -274,7 +281,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                     
                     # Cache the result in state manager
                     if state_manager and db_info:
-                        await state_manager.update_state("database_info", db_info)
+                        state_manager.update("database_info", db_info)
                         
                 except Exception as e:
                     logger.warning(f"Server bridge database info failed: {e}")
@@ -294,7 +301,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                 }
                 # Cache fallback data too
                 if state_manager:
-                    await state_manager.update_state("database_info", db_info)
+                    state_manager.update("database_info", db_info)
 
             # Load initial table data
             try:
@@ -309,35 +316,47 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                 last_updated_text_ref.current.value = f"Last updated: {last_updated.strftime('%H:%M:%S')}"
                 last_updated_text_ref.current.update()
 
-            # Update UI components with precise control updates
+            # Update UI components with precise control updates (batch for performance)
+            updates_to_perform = []
+            
             if status_text_ref.current:
                 status = db_info.get("status", "Unknown")
                 status_text_ref.current.value = status
                 status_text_ref.current.color = ft.Colors.GREEN if status == "Connected" else (ft.Colors.BLUE if "Mock" in status else ft.Colors.RED)
-                status_text_ref.current.update()
+                updates_to_perform.append(status_text_ref.current)
 
             if tables_text_ref.current:
                 tables_text_ref.current.value = str(db_info.get("tables", 0))
-                tables_text_ref.current.update()
+                updates_to_perform.append(tables_text_ref.current)
 
             if records_text_ref.current:
                 records_text_ref.current.value = str(db_info.get("records", 0))
-                records_text_ref.current.update()
+                updates_to_perform.append(records_text_ref.current)
 
             if size_text_ref.current:
                 size_text_ref.current.value = db_info.get("size", "0 MB")
-                size_text_ref.current.update()
+                updates_to_perform.append(size_text_ref.current)
+                
+            # Batch update controls for better performance
+            for control in updates_to_perform:
+                control.update()
 
             # Calculate row count once for reuse
             row_count = len(current_table_data.get("rows", []))
             
+            # Batch update table info controls
+            table_updates = []
             if rows_count_text_ref.current:
                 rows_count_text_ref.current.value = f"{row_count} rows"
-                rows_count_text_ref.current.update()
+                table_updates.append(rows_count_text_ref.current)
 
             if table_info_text_ref.current:
                 table_info_text_ref.current.value = f"Table: {selected_table_name}"
-                table_info_text_ref.current.update()
+                table_updates.append(table_info_text_ref.current)
+                
+            # Apply all table updates at once
+            for control in table_updates:
+                control.update()
 
             # Update table content
             update_table_content()
@@ -360,6 +379,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         def on_database_state_change(new_data, old_data):
             """React to database state changes from other views."""
             logger.debug("Database state changed - refreshing view")
+            # Use async pattern for better performance
             page.run_task(load_database_info_async)
         
         # Subscribe to database-related state changes
@@ -380,15 +400,21 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                 # Load new table data
                 current_table_data = await get_table_data_from_bridge(selected_table_name)
 
-                # Update table info and content with precise control updates
+                # Update table info and content with precise control updates (batch for performance)
+                table_controls_to_update = []
+                row_count = len(current_table_data.get('rows', []))
+                
                 if table_info_text_ref.current:
                     table_info_text_ref.current.value = f"Table: {selected_table_name}"
-                    table_info_text_ref.current.update()
+                    table_controls_to_update.append(table_info_text_ref.current)
 
                 if rows_count_text_ref.current:
-                    row_count = len(current_table_data.get('rows', []))
                     rows_count_text_ref.current.value = f"{row_count} rows"
-                    rows_count_text_ref.current.update()
+                    table_controls_to_update.append(rows_count_text_ref.current)
+                    
+                # Batch update for better performance
+                for control in table_controls_to_update:
+                    control.update()
 
                 # Update table content display
                 update_table_content()
@@ -468,13 +494,13 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
 
             page.dialog = progress_dialog
             progress_dialog.open = True
-            page.update()
+            progress_dialog.update()
 
             # Simulate progress updates
             total_rows = len(table_data["rows"])
             progress_text = ft.Text("Preparing export...", size=14)
             progress_dialog.content.content.controls[2].controls[2] = progress_text
-            page.update()
+            progress_text.update()
 
             # Write CSV file with progress simulation using aiofiles
             async with aiofiles.open(export_path, 'w', newline='', encoding='utf-8') as csvfile:
@@ -482,7 +508,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                 header_line = ','.join(f'"{col}"' for col in table_data["columns"]) + '\n'
                 await csvfile.write(header_line)
                 progress_text.value = "Writing header..."
-                page.update()
+                progress_text.update()
 
                 # Write rows with progress updates
                 for i, row in enumerate(table_data["rows"]):
@@ -494,17 +520,17 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                     if (i + 1) % max(1, total_rows // 10) == 0:
                         progress_percent = int((i + 1) / total_rows * 100)
                         progress_text.value = f"Exporting... {progress_percent}% ({i + 1}/{total_rows} rows)"
-                        page.update()
+                        progress_text.update()
 
                         # Small delay to show progress
                         await asyncio.sleep(0.01)
 
                 progress_text.value = "Finalizing export..."
-                page.update()
+                progress_text.update()
 
             # Close progress dialog
             progress_dialog.open = False
-            page.update()
+            progress_dialog.update()
 
             logger.info(f"Exported table {table_name} to {export_path}")
             return True
@@ -512,7 +538,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             # Close progress dialog on error
             if 'progress_dialog' in locals() and progress_dialog.open:
                 progress_dialog.open = False
-                page.update()
+                progress_dialog.update()
             logger.error(f"Failed to export table {table_name}: {e}")
             return False
 
@@ -573,7 +599,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             try:
                 if hasattr(page, 'dialog') and page.dialog and page.dialog.open:
                     page.dialog.open = False
-                    page.update()
+                    page.dialog.update()
                     page.dialog = None
                 logger.info("Edit dialog closed")
             except Exception as ex:
@@ -717,7 +743,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             # Set and open the new dialog
             page.dialog = dialog
             dialog.open = True
-            page.update()
+            dialog.update()
             
             logger.info(f"Edit dialog opened successfully for row {row_data.get('id', 'unknown')}")
             
@@ -751,7 +777,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
                 # Close dialog first using proper pattern
                 if hasattr(page, 'dialog') and page.dialog and page.dialog.open:
                     page.dialog.open = False
-                    page.update()
+                    page.dialog.update()
                     page.dialog = None
                 
                 if server_bridge and hasattr(server_bridge, 'db_manager') and server_bridge.db_manager:
@@ -800,7 +826,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             try:
                 if hasattr(page, 'dialog') and page.dialog and page.dialog.open:
                     page.dialog.open = False
-                    page.update()
+                    page.dialog.update()
                     page.dialog = None
                 logger.info("Delete confirmation dialog closed")
             except Exception as ex:
@@ -866,7 +892,7 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             # Set and open the new dialog
             page.dialog = dialog
             dialog.open = True
-            page.update()
+            dialog.update()
             
             logger.info(f"Delete confirmation dialog opened successfully for row {row_id}")
             
@@ -1124,14 +1150,6 @@ def create_database_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             await asyncio.sleep(0.1)  # Small delay to ensure UI is ready
             try:
                 # Simulate dropdown selection to load the table
-                class MockEvent:
-                    def __init__(self, value):
-                        self.control = MockControl(value)
-                
-                class MockControl:
-                    def __init__(self, value):
-                        self.value = value
-                
                 mock_event = MockEvent(selected_table_name)
                 on_table_select(mock_event)
                 logger.info(f"Initial table load triggered for: {selected_table_name}")

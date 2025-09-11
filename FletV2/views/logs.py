@@ -13,12 +13,14 @@ All internal page math uses zero-based indexing. User-facing labels add +1.
 """
 
 import flet as ft
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import asyncio
 from datetime import datetime, timedelta
 import random
 
 from utils.debug_setup import get_logger
+from utils.server_bridge import ServerBridge
+from utils.state_manager import StateManager
 from utils.ui_helpers import level_colors, striped_row_color, build_level_badge
 from utils.perf_metrics import PerfTimer
 from utils.user_feedback import show_success_message
@@ -31,7 +33,11 @@ from utils.performance import (
 logger = get_logger(__name__)
 
 
-def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
+def create_logs_view(
+    server_bridge: Optional[ServerBridge], 
+    page: ft.Page, 
+    state_manager: Optional[StateManager] = None
+) -> ft.Control:
     """Return the logs view control."""
     logger.info("Creating logs view (clean implementation)")
 
@@ -335,7 +341,7 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
 
     def close_dialog(_):
         page.dialog.open = False
-        page.dialog.update()
+        page.dialog.update()  # Efficient dialog-specific update
 
     def confirm_clear(_):
         nonlocal logs_data, filtered_logs_data
@@ -357,13 +363,13 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
             ]
         )
         page.dialog.open = True
-        page.update()
+        page.dialog.update()  # Use dialog-specific update
 
     def on_refresh_logs(_):
         page.run_task(load_logs_data_async)
         page.snack_bar = ft.SnackBar(content=ft.Text("Refreshing logs..."), bgcolor=ft.Colors.BLUE)
         page.snack_bar.open = True
-        page.update()
+        page.snack_bar.update()  # Use snackbar-specific update
 
     async def export_logs_async():
         try:
@@ -379,12 +385,12 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
             )
             page.dialog = dlg
             dlg.open = True
-            page.update()
+            dlg.update()  # Use dialog-specific update
             await asyncio.sleep(ASYNC_DELAY * 0.5)
-            txt.value = "Writing file..."; page.update(); await asyncio.sleep(ASYNC_DELAY * 0.5)
-            txt.value = "Finalizing..."; page.update(); await asyncio.sleep(ASYNC_DELAY * 0.5)
+            txt.value = "Writing file..."; txt.update(); await asyncio.sleep(ASYNC_DELAY * 0.5)
+            txt.value = "Finalizing..."; txt.update(); await asyncio.sleep(ASYNC_DELAY * 0.5)
             dlg.open = False
-            page.update()
+            dlg.update()  # Use dialog-specific update
             return True
         except Exception as e:  # pragma: no cover
             logger.error(f"Export failed: {e}")
@@ -398,7 +404,7 @@ def create_logs_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Con
                 bgcolor=ft.Colors.GREEN if ok else ft.Colors.ERROR
             )
             page.snack_bar.open = True
-            page.update()
+            page.snack_bar.update()  # Use snackbar-specific update
         page.run_task(runner)
 
     # ---------------------- Async Data Load -------------------------------- #

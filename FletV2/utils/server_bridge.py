@@ -278,17 +278,14 @@ class ServerBridge:
         # Mock fallback - simulate download without blocking
         logger.debug(f"[ServerBridge] FALLBACK: Simulating MOCK download for file ID: {file_id}")
         try:
-            # Use asyncio.create_task only if event loop exists, otherwise use synchronous approach
+            # Use asyncio.create_task only if event loop exists, otherwise use synchronous fallback
             try:
                 loop = asyncio.get_running_loop()
+                # Schedule the async operation in the existing event loop
                 loop.create_task(self._write_mock_file_async(file_id, destination_path))
             except RuntimeError:
-                # No running event loop, use synchronous approach
-                import threading
-                threading.Thread(
-                    target=lambda: asyncio.run(self._write_mock_file_async(file_id, destination_path)),
-                    daemon=True
-                ).start()
+                # No running event loop, write file synchronously to avoid threading issues
+                self._write_mock_file_sync(file_id, destination_path)
             return {
                 'success': True,
                 'message': f'Mock download completed - sample file created',
@@ -337,6 +334,15 @@ class ServerBridge:
             logger.debug(f"Mock file written successfully to {destination_path}")
         except Exception as e:
             logger.error(f"Async mock file write failed: {e}")
+    
+    def _write_mock_file_sync(self, file_id: str, destination_path: str) -> None:
+        """Synchronous helper to write mock file content - thread-safe fallback."""
+        try:
+            with open(destination_path, 'w', encoding='utf-8') as f:
+                f.write(f"Mock file content for file ID: {file_id}")
+            logger.debug(f"Mock file written successfully to {destination_path}")
+        except Exception as e:
+            logger.error(f"Sync mock file write failed: {e}")
     
     def verify_file(self, file_id: str) -> Dict[str, Any]:
         """Verify file integrity.

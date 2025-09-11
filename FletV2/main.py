@@ -30,41 +30,38 @@ This demonstrates the clean architecture:
 - Resizable desktop app configuration
 """
 
-import flet as ft
+# Standard library imports
 import asyncio
-import sys
 import os
+import sys
 
-# Set up terminal debugging FIRST (before any other imports)
+# Third-party imports
+import flet as ft
+
+# Local imports - utilities first
 from utils.debug_setup import setup_terminal_debugging, get_logger
-logger = setup_terminal_debugging(logger_name="FletV2.main")
-
-# Auto-enable UTF-8 for all subprocess operations
-import sys
-import os
-# Simplified UTF-8 enablement without external Shared dependency
-os.environ.setdefault("PYTHONUTF8", "1")
-# (Optional) future: place any subprocess UTF-8 helpers in utils/utf8_patch.py
 try:
     from utils import utf8_patch  # noqa: F401 (side effects only)
 except ImportError:
     pass  # Non-fatal; continue without extra patch
 
-# Ensure project root (this directory) is in path for direct execution
+# Local imports - application modules
+from theme import setup_modern_theme, toggle_theme_mode
+from utils.server_bridge import ServerBridge, create_server_bridge
+from utils.mock_mode_indicator import create_mock_mode_banner, add_mock_indicator_to_snackbar_message
+
+# Initialize logging and environment
+logger = setup_terminal_debugging(logger_name="FletV2.main")
+os.environ.setdefault("PYTHONUTF8", "1")
+
+# Ensure project root is in path for direct execution
 project_root = os.path.dirname(__file__)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Use our modern 2025 theme system with enhanced visuals
-from theme import setup_modern_theme, toggle_theme_mode
-
-# Import the unified server bridge with built-in mock fallback
-from utils.server_bridge import ServerBridge, create_server_bridge
+# Application constants
 BRIDGE_TYPE = "Unified Server Bridge (with built-in mock fallback)"
 logger.info("Using Unified Server Bridge with built-in mock fallback.")
-
-# Import mock mode utilities
-from utils.mock_mode_indicator import create_mock_mode_banner, add_mock_indicator_to_snackbar_message
 
 
 class FletV2App(ft.Row):

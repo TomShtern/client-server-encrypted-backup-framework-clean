@@ -4,15 +4,30 @@ FUNCTIONAL Clients View - Actually Working Implementation
 This demonstrates proper Flet patterns with ACTUAL FUNCTIONALITY.
 """
 
-import flet as ft
+# Standard library imports
 import asyncio
 from datetime import datetime
+from typing import Optional
+
+# Third-party imports
+import flet as ft
+
+# Local imports
+from utils.async_helpers import async_event_handler
 from utils.debug_setup import get_logger
+from utils.dialog_helpers import create_confirmation_dialog
+from utils.logging_helpers import log_error
+from utils.server_bridge import ServerBridge
+from utils.state_manager import StateManager
 from utils.user_feedback import show_success_message, show_error_message, show_info_message
 
 logger = get_logger(__name__)
 
-def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
+def create_clients_view(
+    server_bridge: Optional[ServerBridge], 
+    page: ft.Page, 
+    state_manager: Optional[StateManager] = None
+) -> ft.Control:
     """Create a proper functional clients view with working filters and buttons."""
     logger.info("Creating functional clients view with real working features")
     
@@ -99,8 +114,9 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
             # Define close handler first to avoid lambda closure issues
             def close_dialog(dialog_ref):
                 dialog_ref.open = False
+                dialog_ref.update()  # Update dialog state first
                 page.overlay.remove(dialog_ref)
-                page.update()  # Update page to properly handle dialog removal
+                page.update()  # Page update needed for overlay management
             
             # Create and show dialog
             dialog = ft.AlertDialog(
@@ -114,11 +130,11 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
             
             # Properly attach dialog to page before opening
             page.overlay.append(dialog)
-            page.update()  # First update to attach dialog to overlay
+            page.update()  # Page update needed for overlay management
             
             # Open dialog after it's properly attached
             dialog.open = True
-            page.update()  # Second update to open the dialog
+            dialog.update()  # Use dialog update for better performance
             
             feedback_text.value = f"Showing details for client {client_id}"
             feedback_text.update()
@@ -135,7 +151,7 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
             try:
                 # Close confirmation dialog
                 confirmation_dialog.open = False
-                confirmation_dialog.update()
+                confirmation_dialog.update()  # Efficient dialog-specific update
                 
                 # Update status text if available
                 if hasattr(locals(), 'status_text') and status_text:
@@ -149,7 +165,7 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
                         if result:
                             # Update local state via state manager
                             if state_manager:
-                                await state_manager.update_state("client_disconnected", {
+                                state_manager.update("client_disconnected", {
                                     "client_id": client_id,
                                     "timestamp": datetime.now().isoformat()
                                 })
@@ -183,7 +199,7 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
                     if client_found:
                         # Update local state via state manager
                         if state_manager:
-                            await state_manager.update_state("client_status_changed", {
+                            state_manager.update("client_status_changed", {
                                 "client_id": client_id,
                                 "old_status": old_status,
                                 "new_status": "Disconnected",
@@ -211,7 +227,7 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
         
         def cancel_disconnect(e):
             confirmation_dialog.open = False
-            page.update()
+            confirmation_dialog.update()  # Use control-specific update
         
         # Create confirmation dialog
         confirmation_dialog = ft.AlertDialog(
@@ -226,8 +242,9 @@ def create_clients_view(server_bridge, page: ft.Page, state_manager=None) -> ft.
         )
         
         page.overlay.append(confirmation_dialog)
+        page.update()  # Page update needed for overlay management
         confirmation_dialog.open = True
-        page.update()
+        confirmation_dialog.update()  # Use dialog-specific update
 
     def get_status_color(status):
         """Get color based on client status."""

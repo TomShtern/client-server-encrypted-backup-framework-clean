@@ -5,18 +5,25 @@ Clean function-based implementation following Framework Harmony principles.
 """
 
 import flet as ft
+from typing import Optional
 import psutil
 import random
 import asyncio
 import os
 from datetime import datetime
 from utils.debug_setup import get_logger
+from utils.server_bridge import ServerBridge
+from utils.state_manager import StateManager
 from utils.user_feedback import show_success_message, show_error_message, show_user_feedback
 
 logger = get_logger(__name__)
 
 
-def create_analytics_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
+def create_analytics_view(
+    server_bridge: Optional[ServerBridge], 
+    page: ft.Page, 
+    state_manager: Optional[StateManager] = None
+) -> ft.Control:
     """
     Create analytics view with enhanced infrastructure and state management.
 

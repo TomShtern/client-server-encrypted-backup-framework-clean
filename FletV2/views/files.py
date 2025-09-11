@@ -6,12 +6,14 @@ Optimized for smooth UI with large file datasets.
 """
 
 import flet as ft
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import os
 import asyncio
 import aiofiles
 from datetime import datetime, timedelta
 from utils.debug_setup import get_logger
+from utils.server_bridge import ServerBridge
+from utils.state_manager import StateManager
 from utils.ui_helpers import (
     size_to_human,
     format_iso_short,
@@ -22,6 +24,9 @@ from utils.perf_metrics import PerfTimer
 from utils.loading_states import LoadingState, create_loading_indicator, create_status_text
 from utils.responsive_layouts import create_data_table_container, create_action_bar, SPACING
 from utils.user_feedback import show_success_message, show_error_message, show_info_message
+from utils.dialog_consolidation_helper import show_info, show_confirmation
+from utils.feedback_consolidation_helper import ActionFeedback, create_action_feedback_control
+from utils.progress_overlay_helper import ProgressOverlay
 from utils.performance import (
     Debouncer, PaginationConfig, AsyncDataLoader,
     global_memory_manager, paginate_data
@@ -168,23 +173,13 @@ async def _verify_file_async(file_data, page):
                 ft.Text(f"{sha256_hash}", selectable=True),
             ], tight=True, spacing=5)
 
-            # Create and show dialog
-            dialog = ft.AlertDialog(
-                title=ft.Text(f"Verification: {file_name}"),
-                content=verification_content,
-                actions=[
-                    ft.TextButton("Close", on_click=lambda e: close_dialog(dialog))
-                ],
-                actions_alignment=ft.MainAxisAlignment.END
+            # Show verification results using consolidated dialog utility
+            show_info(
+                page,
+                f"Verification: {file_name}",
+                verification_content,
+                width=500
             )
-            
-            def close_dialog(dialog_ref):
-                dialog_ref.open = False
-                page.update()
-            
-            page.overlay.append(dialog)
-            dialog.open = True
-            page.update()
             
             show_success_message(page, f"File {file_name} verified successfully")
             file_action_feedback_text.value = f"Verified {file_name} - file is intact"
@@ -213,7 +208,7 @@ def delete_file_action(file_data, page, files_data=None, update_table_func=None)
         try:
             # Close confirmation dialog
             confirmation_dialog.open = False
-            page.update()
+            confirmation_dialog.update()
             
             # First try to delete from server bridge if available
             delete_success = False
@@ -264,30 +259,26 @@ def delete_file_action(file_data, page, files_data=None, update_table_func=None)
             file_action_feedback_text.value = f"Delete failed: {file_name}"
             file_action_feedback_text.update()
     
-    def cancel_delete(e):
-        confirmation_dialog.open = False
-        page.update()
+    def cancel_delete():
         file_action_feedback_text.value = f"Delete cancelled: {file_name}"
         file_action_feedback_text.update()
     
-    # Create confirmation dialog
-    confirmation_dialog = ft.AlertDialog(
-        title=ft.Text("Confirm Delete"),
-        content=ft.Text(f"Are you sure you want to delete '{file_name}'?\n\nThis action cannot be undone."),
-        actions=[
-            ft.TextButton("Cancel", on_click=cancel_delete),
-            ft.TextButton("Delete", on_click=confirm_delete, 
-                         style=ft.ButtonStyle(color=ft.Colors.ERROR))
-        ],
-        actions_alignment=ft.MainAxisAlignment.END
+    # Use consolidated confirmation dialog utility
+    show_confirmation(
+        page,
+        "Confirm Delete",
+        f"Are you sure you want to delete '{file_name}'?\n\nThis action cannot be undone.",
+        confirm_delete,
+        confirm_text="Delete",
+        is_destructive=True
     )
-    
-    page.overlay.append(confirmation_dialog)
-    confirmation_dialog.open = True
-    page.update()
 
 
-def create_files_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
+def create_files_view(
+    server_bridge: Optional[ServerBridge], 
+    page: ft.Page, 
+    state_manager: Optional[StateManager] = None
+) -> ft.Control:
     """
     Create files view with enhanced infrastructure and state management.
     Follows Framework Harmony principles - no custom classes, use Flet's built-ins.
@@ -325,29 +316,15 @@ def create_files_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Co
         
         async def download_async():
             try:
-                # Show loading state with progress ring
-                progress_ring = ft.ProgressRing(value=0.0, width=24, height=24)
-                feedback_row = ft.Row([progress_ring, ft.Text(f"Downloading {file_name}...")], spacing=8)
-                file_action_feedback_text.value = ""
-                file_action_feedback_text.visible = False
-                # Create temporary progress container
-                progress_container = ft.Container(
-                    content=feedback_row,
-                    padding=ft.Padding(20, 10, 20, 10),
-                    bgcolor=ft.Colors.SURFACE,
-                    border_radius=8
-                )
-                
-                # Add progress indicator to page overlay
-                page.overlay.append(progress_container)
-                progress_container.visible = True
-                page.update()
-                
-                # Update progress
-                progress_ring.value = 0.2
-                progress_ring.update()
-                
-                downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+                # Use consolidated progress overlay utility
+                async with ProgressOverlay(page, f"Downloading {file_name}...", "info", True) as progress:
+                    file_action_feedback_text.value = ""
+                    file_action_feedback_text.visible = False
+                    
+                    # Update progress as we go
+                    progress.update_progress(0.2, "Preparing download...")
+                    
+                    downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
                 if not os.path.exists(downloads_dir):
                     os.makedirs(downloads_dir)
                     logger.info(f"Created Downloads directory: {downloads_dir}")
@@ -373,7 +350,7 @@ def create_files_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Co
                         if success:
                             # Update state via state manager
                             if state_manager:
-                                await state_manager.update_state("file_downloaded", {
+                                state_manager.update("file_downloaded", {
                                     "file_id": file_id,
                                     "file_name": file_name,
                                     "destination": destination_path,
@@ -399,7 +376,7 @@ def create_files_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Co
                             # Clean up progress indicator
                             if progress_container in page.overlay:
                                 page.overlay.remove(progress_container)
-                            page.update()
+                                page.update()
                             logger.info(f"File download completed via server bridge ({mode} mode): {destination_path}")
                             return
                         else:
@@ -408,7 +385,7 @@ def create_files_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Co
                             try:
                                 if progress_container in page.overlay:
                                     page.overlay.remove(progress_container)
-                                page.update()
+                                    page.update()
                             except:
                                 pass
                             return
@@ -435,7 +412,7 @@ def create_files_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Co
                     # Clean up progress indicator
                     if progress_container in page.overlay:
                         page.overlay.remove(progress_container)
-                    page.update()
+                        page.update()
                     logger.info(f"File copied from {file_path} to {destination_path}")
                 else:
                     # For mock data - create a simple text file as placeholder
@@ -459,7 +436,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     # Clean up progress indicator
                     if progress_container in page.overlay:
                         page.overlay.remove(progress_container)
-                    page.update()
+                        page.update()
                     logger.info(f"Mock file created at {destination_path}")
                     
             except PermissionError as e:
@@ -474,7 +451,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 try:
                     if progress_container in page.overlay:
                         page.overlay.remove(progress_container)
-                    page.update()
+                        page.update()
                 except:
                     pass
                 
@@ -490,7 +467,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 try:
                     if progress_container in page.overlay:
                         page.overlay.remove(progress_container)
-                    page.update()
+                        page.update()
                 except:
                     pass
         
@@ -521,7 +498,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 # Add progress indicator to page overlay
                 page.overlay.append(progress_container)
                 progress_container.visible = True
-                page.update()
+                progress_container.update()
                 
                 # Update progress
                 progress_ring.value = 0.3
@@ -546,7 +523,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                         if success:
                             # Update state via state manager
                             if state_manager:
-                                await state_manager.update_state("file_verified", {
+                                state_manager.update("file_verified", {
                                     "file_id": file_id,
                                     "file_name": file_name,
                                     "verification_result": True,
@@ -572,7 +549,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                             # Clean up progress indicator
                             if progress_container in page.overlay:
                                 page.overlay.remove(progress_container)
-                            page.update()
+                                page.update()
                             logger.info(f"File verification completed ({mode} mode): {file_name}")
                             return
                         else:
@@ -585,7 +562,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                             try:
                                 if progress_container in page.overlay:
                                     page.overlay.remove(progress_container)
-                                page.update()
+                                    page.update()
                             except:
                                 pass
                             return
@@ -610,7 +587,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 # Clean up progress indicator
                 if progress_container in page.overlay:
                     page.overlay.remove(progress_container)
-                page.update()
+                    page.update()
                 logger.info(f"Mock verification completed for: {file_name}")
                 
             except Exception as e:
@@ -625,7 +602,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 try:
                     if progress_container in page.overlay:
                         page.overlay.remove(progress_container)
-                    page.update()
+                        page.update()
                 except:
                     pass
         
@@ -658,7 +635,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 # Add progress indicator to page overlay
                 page.overlay.append(progress_container)
                 progress_container.visible = True
-                page.update()
+                progress_container.update()
                 
                 # Update progress
                 progress_ring.value = 0.5
@@ -671,7 +648,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                         if result:
                             # Update state via state manager
                             if state_manager:
-                                await state_manager.update_state("file_deleted", {
+                                state_manager.update("file_deleted", {
                                     "file_id": file_id,
                                     "file_name": file_name,
                                     "timestamp": datetime.now().isoformat()
@@ -695,7 +672,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                             # Clean up progress indicator
                             if progress_container in page.overlay:
                                 page.overlay.remove(progress_container)
-                            page.update()
+                                page.update()
                             logger.info(f"File deleted via server bridge: {file_name}")
                             return
                         else:
@@ -708,7 +685,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                             try:
                                 if progress_container in page.overlay:
                                     page.overlay.remove(progress_container)
-                                page.update()
+                                    page.update()
                             except:
                                 pass
                             return
@@ -736,7 +713,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                         try:
                             if progress_container in page.overlay:
                                 page.overlay.remove(progress_container)
-                            page.update()
+                                page.update()
                         except:
                             pass
                         logger.info(f"Mock file deleted: {file_name}")
@@ -749,7 +726,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                         try:
                             if progress_container in page.overlay:
                                 page.overlay.remove(progress_container)
-                            page.update()
+                                page.update()
                         except:
                             pass
                         logger.error(f"File {file_name} not found for deletion")
@@ -768,7 +745,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 try:
                     if progress_container in page.overlay:
                         page.overlay.remove(progress_container)
-                    page.update()
+                        page.update()
                 except:
                     pass
         
@@ -778,7 +755,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         
         def cancel_delete(e):
             confirmation_dialog.open = False
-            page.update()
+            confirmation_dialog.update()
         
         # Create confirmation dialog
         confirmation_dialog = ft.AlertDialog(
@@ -794,7 +771,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         
         page.overlay.append(confirmation_dialog)
         confirmation_dialog.open = True
-        page.update()
+        confirmation_dialog.update()
 
     def create_file_list_tile(file_data: Dict[str, Any]) -> ft.ListTile:
         """Create optimized ListTile for file entry - high performance virtualized rendering."""
@@ -1036,7 +1013,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                         if state_manager:
                             try:
                                 # Use asyncio.create_task to avoid blocking and prevent async warning
-                                asyncio.create_task(state_manager.update_state("files", files_data))
+                                state_manager.update("files", files_data)
                             except Exception as state_error:
                                 logger.debug(f"State manager update failed (non-critical): {state_error}")
                         logger.debug(f"Retrieved {len(files_data)} files from server bridge")
@@ -1321,7 +1298,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         def close_dialog(e):
             if hasattr(page, 'dialog') and page.dialog:
                 page.dialog.open = False
-            page.update()
+                page.dialog.update()
 
         def confirm_delete(e):
             async def async_delete():
@@ -1359,7 +1336,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
 
         page.dialog = dialog
         dialog.open = True
-        page.update()
+        dialog.update()
 
     # Note: search_debouncer already initialized above at line 310
 

@@ -144,8 +144,8 @@ def update_action_button_for_mock_mode(button: ft.Control, server_bridge, operat
             # Add new style for mock mode
             button.style = ft.ButtonStyle(
                 overlay_color={
-                    ft.MaterialState.DEFAULT: ft.Colors.ORANGE_50,
-                    ft.MaterialState.HOVERED: ft.Colors.ORANGE_100,
+                    ft.ControlState.DEFAULT: ft.Colors.ORANGE_50,
+                    ft.ControlState.HOVERED: ft.Colors.ORANGE_100,
                 }
             )
     

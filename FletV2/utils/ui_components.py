@@ -7,60 +7,105 @@ Provides polished, reusable components following 2025 UI/UX best practices.
 """
 
 import flet as ft
-from typing import Optional, List, Callable, Dict, Any
+from typing import Optional, List, Callable, Dict, Any, Union
 
 
 def create_modern_card(
-    title: str, 
-    content: ft.Control, 
+    content: ft.Control,
+    title: Optional[str] = None,
     icon: Optional[str] = None,
     actions: Optional[List[ft.Control]] = None,
-    elevation: int = 3,
+    elevation: Union[str, int] = "soft",
+    is_dark: bool = False,
+    hover_effect: bool = True,
+    color_accent: Optional[str] = None,
     width: Optional[float] = None,
-    animate_on_hover: bool = True
-) -> ft.Card:
+    padding: int = 20,
+    return_type: str = "card"  # "container" or "card"
+) -> Union[ft.Container, ft.Card]:
     """
-    Create a modern card with 2025 design standards.
+    Create a modern card with comprehensive 2025 design standards.
+    
+    This unified function combines the styling capabilities from theme.py
+    and the structural features from the original ui_components.py.
     
     Features:
-    - Rounded corners (20px)
-    - Subtle shadows with hover animation
-    - Modern typography
-    - Optional icon and actions
+    - Both ft.Container and ft.Card return types
+    - Enhanced shadow system with named styles
+    - Color accent support with brand colors
+    - Dark theme compatibility
+    - Optional title, icon, and actions
+    - Modern typography and spacing
     - Accessibility support
+    - Hover animations
+    
+    Args:
+        content: Main content control
+        title: Optional card title
+        icon: Optional icon name (ft.Icons)
+        actions: Optional list of action controls
+        elevation: Shadow style name ("subtle", "soft", "medium", "elevated", "floating") or numeric elevation
+        is_dark: Whether to use dark theme colors
+        hover_effect: Enable hover animations
+        color_accent: Color accent name for subtle border
+        width: Optional fixed width
+        padding: Internal padding (default 20)
+        return_type: "container" for ft.Container, "card" for ft.Card
+        
+    Returns:
+        Union[ft.Container, ft.Card]: Modern card component
     """
     
-    # Title row with optional icon
-    title_controls = []
-    if icon:
-        title_controls.append(
-            ft.Icon(
-                icon, 
-                size=24, 
-                color=ft.Colors.PRIMARY
+    # Import theme functions for color and shadow support
+    try:
+        from theme import get_shadow_style, get_brand_color
+    except ImportError:
+        # Fallback if theme functions not available
+        def get_shadow_style(style_name, is_dark=False):
+            elevation_map = {"subtle": 1, "soft": 2, "medium": 4, "elevated": 6, "floating": 8}
+            return elevation_map.get(style_name, 2)
+        
+        def get_brand_color(color_name, is_dark=False):
+            colors = {"surface_elevated": ft.Colors.SURFACE, "primary": ft.Colors.PRIMARY}
+            return colors.get(color_name, ft.Colors.SURFACE)
+    
+    # Build card content structure
+    card_content = []
+    
+    # Add title row if title or icon provided
+    if title or icon:
+        title_controls = []
+        if icon:
+            title_controls.append(
+                ft.Icon(
+                    icon, 
+                    size=24, 
+                    color=ft.Colors.PRIMARY
+                )
+            )
+            title_controls.append(ft.Container(width=12))  # Spacing
+        
+        if title:
+            title_controls.append(
+                ft.Text(
+                    title,
+                    size=18,
+                    weight=ft.FontWeight.W_600,
+                    color=ft.Colors.ON_SURFACE,
+                    style=ft.TextThemeStyle.TITLE_MEDIUM
+                )
+            )
+        
+        card_content.append(
+            ft.Row(
+                controls=title_controls,
+                alignment=ft.MainAxisAlignment.START
             )
         )
-        title_controls.append(ft.Container(width=12))  # Spacing
+        card_content.append(ft.Container(height=16))  # Spacing
     
-    title_controls.append(
-        ft.Text(
-            title,
-            size=18,
-            weight=ft.FontWeight.W_600,
-            color=ft.Colors.ON_SURFACE,
-            style=ft.TextThemeStyle.TITLE_MEDIUM
-        )
-    )
-    
-    # Build card content
-    card_content = [
-        ft.Row(
-            controls=title_controls,
-            alignment=ft.MainAxisAlignment.START
-        ),
-        ft.Container(height=16),  # Spacing
-        content
-    ]
+    # Add main content
+    card_content.append(content)
     
     # Add actions if provided
     if actions:
@@ -73,24 +118,62 @@ def create_modern_card(
             )
         ])
     
-    card = ft.Card(
-        content=ft.Container(
-            content=ft.Column(
-                controls=card_content,
-                spacing=0,
-                tight=True
-            ),
-            padding=ft.Padding(24, 20, 24, 20),
-            border_radius=ft.BorderRadius(20, 20, 20, 20)
-        ),
-        elevation=elevation,
-        margin=ft.Margin(8, 8, 8, 8),
-        width=width
+    # Create content column
+    content_column = ft.Column(
+        controls=card_content,
+        spacing=0,
+        tight=True
     )
     
-    # Add hover animation
-    if animate_on_hover:
-        card.content.animate = ft.Animation(200, ft.AnimationCurve.EASE_OUT)
+    if return_type == "container":
+        # Container-based card (theme.py style)
+        if isinstance(elevation, str):
+            shadow = get_shadow_style(elevation, is_dark)
+        else:
+            shadow = ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=max(elevation * 2, 4),
+                offset=ft.Offset(0, elevation // 2),
+                color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK),
+            )
+        
+        bg_color = get_brand_color("surface_elevated", is_dark)
+        
+        # Add subtle color accent if specified
+        if color_accent:
+            accent_color = get_brand_color(color_accent, is_dark)
+            border_color = ft.Colors.with_opacity(0.1, accent_color)
+        else:
+            border_color = ft.Colors.with_opacity(0.05, ft.Colors.GREY)
+        
+        card = ft.Container(
+            content=content_column,
+            bgcolor=bg_color,
+            shadow=shadow,
+            border_radius=16,  # Modern rounded corners
+            border=ft.border.all(1, border_color),
+            padding=padding,
+            width=width,
+            animate=ft.animation.Animation(150, ft.AnimationCurve.EASE_OUT) if hover_effect else None,
+        )
+    else:
+        # Card-based component (original ui_components.py style)
+        elevation_value = 3 if isinstance(elevation, str) else elevation
+        
+        card = ft.Card(
+            content=ft.Container(
+                content=content_column,
+                padding=ft.Padding(padding, padding, padding, padding),
+                border_radius=ft.BorderRadius(20, 20, 20, 20)
+            ),
+            elevation=elevation_value,
+            margin=ft.Margin(8, 8, 8, 8),
+            width=width
+        )
+        
+        # Add hover animation
+        if hover_effect:
+            card.content.animate = ft.Animation(200, ft.AnimationCurve.EASE_OUT)
     
     return card
 
@@ -184,20 +267,48 @@ def create_modern_button(
     icon: Optional[str] = None,
     variant: str = "filled",  # "filled", "outlined", "elevated", "text"
     color: str = ft.Colors.PRIMARY,
+    color_type: str = "primary",  # "primary", "secondary", "accent_emerald" etc. for theme integration
     size: str = "medium",  # "small", "medium", "large"
     disabled: bool = False,
-    loading: bool = False
+    loading: bool = False,
+    is_dark: bool = False,
+    use_theme_colors: bool = True
 ) -> ft.Control:
     """
-    Create a modern button with 2025 design standards.
+    Create a modern button with comprehensive 2025 design standards.
+    
+    Enhanced to integrate with theme system from theme.py for consistent styling.
     
     Features:
     - Multiple variants (filled, outlined, elevated, text)
+    - Theme-aware color system
     - Size variants with proper padding
-    - Loading states
-    - Icon support
-    - Proper accessibility
+    - Loading states with progress indicators
+    - Icon support with proper spacing
+    - Enhanced accessibility
+    - Integration with brand color system
     """
+    
+    # Import theme function for consistent colors
+    if use_theme_colors:
+        try:
+            from theme import get_brand_color, create_modern_button_style
+            base_color = get_brand_color(color_type, is_dark)
+            
+            # Use theme's enhanced button style if available
+            if hasattr(create_modern_button_style, '__call__'):
+                try:
+                    theme_style = create_modern_button_style(color_type, is_dark, variant)
+                except Exception:
+                    theme_style = None
+            else:
+                theme_style = None
+        except ImportError:
+            base_color = color
+            theme_style = None
+    else:
+        base_color = color
+        theme_style = None
     
     # Size configurations
     size_configs = {
@@ -240,12 +351,18 @@ def create_modern_button(
         tight=True
     ) if len(button_controls) > 1 else button_controls[0]
     
-    # Create button based on variant
-    button_style = ft.ButtonStyle(
-        padding=config["padding"],
-        shape=ft.RoundedRectangleBorder(radius=16),
-        animation_duration=200
-    )
+    # Create button style - use theme style if available, otherwise fallback
+    if theme_style:
+        button_style = theme_style
+        # Update padding for size if needed
+        if hasattr(button_style, 'padding') and button_style.padding:
+            button_style.padding = config["padding"]
+    else:
+        button_style = ft.ButtonStyle(
+            padding=config["padding"],
+            shape=ft.RoundedRectangleBorder(radius=16),
+            animation_duration=200
+        )
     
     if variant == "filled":
         return ft.FilledButton(
@@ -275,6 +392,46 @@ def create_modern_button(
             disabled=disabled or loading,
             style=button_style
         )
+
+
+def create_floating_action_button(
+    icon: str,
+    on_click: Callable,
+    color_type: str = "primary",
+    is_dark: bool = False,
+    mini: bool = False,
+    tooltip: str = "Quick Action"
+) -> ft.FloatingActionButton:
+    """
+    Create modern floating action button with enhanced shadow and vibrant colors.
+    
+    Consolidated from theme.py with enhanced functionality.
+    
+    Features:
+    - Theme-aware colors
+    - Dark mode support
+    - Customizable tooltip
+    - Smooth animations
+    - Mini size variant
+    """
+    # Import theme function for consistent colors
+    try:
+        from theme import get_brand_color
+        base_color = get_brand_color(color_type, is_dark)
+    except ImportError:
+        base_color = ft.Colors.PRIMARY
+    
+    return ft.FloatingActionButton(
+        icon=icon,
+        on_click=on_click,
+        bgcolor=base_color,
+        foreground_color=ft.Colors.WHITE,
+        elevation=8,
+        shape=ft.CircleBorder(),
+        mini=mini,
+        tooltip=tooltip,
+        animate=ft.animation.Animation(150, ft.AnimationCurve.EASE_OUT_BACK)
+    )
 
 
 def create_progress_indicator(

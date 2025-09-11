@@ -395,36 +395,8 @@ def get_brand_color(color_name: str, is_dark: bool = False) -> str:
     colors = DARK_BRAND_COLORS if is_dark else BRAND_COLORS
     return colors.get(color_name, colors["primary"])
 
-def create_modern_card(
-    content: ft.Control,
-    elevation: str = "soft",
-    is_dark: bool = False,
-    hover_effect: bool = True,
-    color_accent: str = None,
-    padding: int = 20
-) -> ft.Container:
-    """Create a modern card with 2025 styling: enhanced shadows, hover effects, vibrant accents."""
-    shadow = get_shadow_style(elevation, is_dark)
-    bg_color = get_brand_color("surface_elevated", is_dark)
-    
-    # Add subtle color accent if specified
-    if color_accent:
-        accent_color = get_brand_color(color_accent, is_dark)
-        border_color = ft.Colors.with_opacity(0.1, accent_color)
-    else:
-        border_color = ft.Colors.with_opacity(0.05, ft.Colors.GREY)
-    
-    card = ft.Container(
-        content=content,
-        bgcolor=bg_color,
-        shadow=shadow,
-        border_radius=16,  # Modern rounded corners
-        border=ft.border.all(1, border_color),
-        padding=padding,
-        animate=ft.animation.Animation(150, ft.AnimationCurve.EASE_OUT) if hover_effect else None,
-    )
-    
-    return card
+# create_modern_card has been consolidated into utils.ui_components
+# Use: from utils.ui_components import create_modern_card
 
 def create_modern_button_style(
     color_type: str = "primary",
@@ -508,24 +480,5 @@ def create_gradient_container(
         **kwargs
     )
 
-def create_floating_action_button(
-    icon: str,
-    on_click,
-    color_type: str = "primary",
-    is_dark: bool = False,
-    mini: bool = False
-) -> ft.FloatingActionButton:
-    """Create modern floating action button with enhanced shadow and vibrant colors."""
-    base_color = get_brand_color(color_type, is_dark)
-    
-    return ft.FloatingActionButton(
-        icon=icon,
-        on_click=on_click,
-        bgcolor=base_color,
-        foreground_color=ft.Colors.WHITE,
-        elevation=8,
-        shape=ft.CircleBorder(),
-        mini=mini,
-        tooltip="Quick Action",
-        animate=ft.animation.Animation(150, ft.AnimationCurve.EASE_OUT_BACK)
-    )
+# create_floating_action_button has been consolidated into utils.ui_components
+# Use: from utils.ui_components import create_floating_action_button

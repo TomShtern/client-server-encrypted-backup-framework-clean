@@ -6,9 +6,12 @@ Refactored from 865-line monolith to clean, modular functions.
 """
 
 import flet as ft
+from typing import Optional
 import json
 import asyncio
 from utils.debug_setup import get_logger
+from utils.server_bridge import ServerBridge
+from utils.state_manager import StateManager
 from utils.user_feedback import show_success_message, show_error_message, show_info_message
 from pathlib import Path
 from datetime import datetime
@@ -295,7 +298,7 @@ def create_gui_section(state: SettingsState) -> ft.Card:
 
         if state.page:
             state.page.theme_mode = ft.ThemeMode.LIGHT if new_mode == "light" else ft.ThemeMode.DARK
-            state.page.update()
+            state.page.update()  # Page update needed for theme change
             show_info_message(state.page, f"Theme switched to {new_mode} mode")
 
     theme_switch = ft.Switch(
@@ -429,7 +432,11 @@ async def import_settings(state: SettingsState, file_path: str):
         return False
 
 
-def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft.Control:
+def create_settings_view(
+    server_bridge: Optional[ServerBridge], 
+    page: ft.Page, 
+    state_manager: Optional[StateManager] = None
+) -> ft.Control:
     """
     Create modern settings view following Framework Harmony principles.
     Single-file implementation with clean, modular functions.
@@ -477,12 +484,12 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
             settings_state.current_settings = settings_state._load_default_settings()
             settings_state._update_ui_from_settings()
             page.dialog.open = False
-            page.update()
+            page.dialog.update()  # Update dialog state
             show_info_message(page, "Settings reset to defaults")
 
         def cancel_reset(e):
             page.dialog.open = False
-            page.update()
+            page.dialog.update()  # Use dialog-specific update
 
         dialog = ft.AlertDialog(
             title=ft.Text("Reset Settings"),
@@ -494,7 +501,7 @@ def create_settings_view(server_bridge, page: ft.Page, state_manager=None) -> ft
         )
         page.dialog = dialog
         dialog.open = True
-        page.update()
+        page.dialog.update()  # Use dialog-specific update
 
     def export_handler(e):
         page.run_task(export_settings, settings_state)

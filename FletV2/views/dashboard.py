@@ -13,17 +13,24 @@ A clean implementation using pure Flet patterns for Flet 0.28.3.
   ─────────────────────────────────────────────────
 """
 
-import flet as ft
-import psutil
+# Standard library imports
 import asyncio
 from datetime import datetime
 from typing import Optional
+
+# Third-party imports
+import flet as ft
+import psutil
+
+# Local imports
+from theme import create_modern_button_style, get_brand_color, create_gradient_container
+from utils.async_helpers import async_event_handler
 from utils.debug_setup import get_logger
-from utils.user_feedback import show_success_message, show_error_message, show_info_message
-from utils.state_manager import StateManager
+from utils.logging_helpers import log_error
 from utils.server_bridge import ServerBridge
-# Import modern styling functions for 2025 visual enhancements
-from theme import create_modern_card, create_modern_button_style, get_brand_color, create_gradient_container
+from utils.state_manager import StateManager
+from utils.ui_components import create_modern_card
+from utils.user_feedback import show_success_message, show_error_message, show_info_message
 try:
     from config import ASYNC_DELAY
 except ImportError:
@@ -32,7 +39,11 @@ except ImportError:
 logger = get_logger(__name__)
 
 
-def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[StateManager] = None) -> ft.Control:
+def create_dashboard_view(
+    server_bridge: Optional[ServerBridge], 
+    page: ft.Page, 
+    state_manager: Optional[StateManager] = None
+) -> ft.Control:
     """
     Create dashboard view using enhanced infrastructure with real-time updates.
     Preserves all existing functionality while adding state management integration.
@@ -135,11 +146,11 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
 
     async def get_server_status():
         """Get server status from enhanced bridge with state caching."""
-        # Try state manager cache first for performance
+        # Try state manager first for performance
         if state_manager:
-            cached_status = state_manager.get_cached("server_status", max_age_seconds=10)
+            cached_status = state_manager.get("server_status")
             if cached_status:
-                logger.debug("Using cached server status")
+                logger.debug("Using state server status")
                 return cached_status
         
         # Fetch from enhanced bridge
@@ -153,7 +164,7 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
                 
                 # Cache in state manager if available
                 if state_manager:
-                    await state_manager.update_state("server_status", status)
+                    state_manager.update("server_status", status)
                 
                 return status
             except Exception as e:
@@ -172,17 +183,17 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
         
         # Cache fallback data too
         if state_manager:
-            await state_manager.update_state("server_status", fallback_status)
+            state_manager.update("server_status", fallback_status)
         
         return fallback_status
 
     async def get_system_metrics():
         """Get system metrics from enhanced bridge with local fallback."""
-        # Try state manager cache first for performance
+        # Try state manager first for performance
         if state_manager:
-            cached_metrics = state_manager.get_cached("system_status", max_age_seconds=5)
+            cached_metrics = state_manager.get("system_status")
             if cached_metrics:
-                logger.debug("Using cached system metrics")
+                logger.debug("Using state system metrics")
                 return cached_metrics
         
         # Try enhanced bridge first
@@ -195,7 +206,7 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
                 
                 # Cache in state manager if available
                 if state_manager:
-                    await state_manager.update_state("system_status", metrics)
+                    state_manager.update("system_status", metrics)
                 
                 return metrics
             except Exception as e:
@@ -217,7 +228,7 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
             
             # Cache local metrics too
             if state_manager:
-                await state_manager.update_state("system_status", local_metrics)
+                state_manager.update("system_status", local_metrics)
             
             return local_metrics
         except Exception as e:
@@ -234,7 +245,7 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
             }
             
             if state_manager:
-                await state_manager.update_state("system_status", fallback_metrics)
+                state_manager.update("system_status", fallback_metrics)
             
             return fallback_metrics
 
@@ -291,7 +302,7 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
             try:
                 recent_activity = get_recent_activity()
             except Exception as e:
-                logger.error(f"Failed to get recent activity: {e}")
+                log_error(e, "get_recent_activity", "Failed to retrieve dashboard activity data")
                 recent_activity = []
 
             # Update server status (KEEP - requires dynamic styling) - using semantic colors
@@ -360,84 +371,66 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
             last_updated_text.update()
 
         except Exception as e:
-            logger.error(f"Failed to update dashboard UI: {e}")
+            log_error(e, "update_dashboard_ui", "Failed to update dashboard interface components")
 
     # Enhanced action handlers using new infrastructure
-    def on_start_server(e):
+    @async_event_handler("Server started successfully", "Server start failed")
+    async def on_start_server(e):
         """Handle start server button click with enhanced infrastructure"""
         logger.info("Dashboard: Start server clicked")
+        
+        # Disable button during operation
+        e.control.disabled = True
+        e.control.update()
+        
+        try:
+            # Use enhanced bridge for actual server operations
+            if server_bridge and hasattr(server_bridge, 'start_server'):
+                success = await server_bridge.start_server()
+                if not success:
+                    raise Exception("Server bridge returned failure")
+                # Trigger data refresh through state manager
+                if state_manager:
+                    await update_dashboard_ui()
+            else:
+                # Mock operation for development
+                await asyncio.sleep(ASYNC_DELAY)
+                # Update connection status in state
+                if state_manager:
+                    state_manager.update("connection_status", "connected")
+        finally:
+            # Re-enable button
+            e.control.disabled = False
+            e.control.update()
 
-        async def async_start():
-            try:
-                # Disable button during operation
-                e.control.disabled = True
-                e.control.update()
-                
-                # Use enhanced bridge for actual server operations
-                if server_bridge and hasattr(server_bridge, 'start_server'):
-                    success = await server_bridge.start_server()
-                    if success:
-                        show_success_message(page, "Server started successfully")
-                        # Trigger data refresh through state manager
-                        if state_manager:
-                            await update_dashboard_ui()
-                    else:
-                        show_error_message(page, "Failed to start server")
-                else:
-                    # Mock operation for development
-                    await asyncio.sleep(ASYNC_DELAY)
-                    show_success_message(page, "Server start command sent (mock)")
-                    # Update connection status in state
-                    if state_manager:
-                        await state_manager.update_state("connection_status", "connected")
-
-            except Exception as ex:
-                logger.error(f"Failed to start server: {ex}")
-                show_error_message(page, f"Start server failed: {str(ex)}")
-            finally:
-                # Re-enable button
-                e.control.disabled = False
-                e.control.update()
-
-        e.page.run_task(async_start)
-
-    def on_stop_server(e):
+    @async_event_handler("Server stopped successfully", "Server stop failed")
+    async def on_stop_server(e):
         """Handle stop server button click with enhanced infrastructure"""
         logger.info("Dashboard: Stop server clicked")
-
-        async def async_stop():
-            try:
-                # Disable button during operation
-                e.control.disabled = True
-                e.control.update()
-                
-                # Use enhanced bridge for actual server operations
-                if server_bridge and hasattr(server_bridge, 'stop_server'):
-                    success = await server_bridge.stop_server()
-                    if success:
-                        show_info_message(page, "Server stopped successfully")
-                        # Trigger data refresh through state manager
-                        if state_manager:
-                            await update_dashboard_ui()
-                    else:
-                        show_error_message(page, "Failed to stop server")
-                else:
-                    # Mock operation for development
-                    await asyncio.sleep(ASYNC_DELAY)
-                    show_info_message(page, "Server stop command sent (mock)")
-                    # Update connection status in state
-                    if state_manager:
-                        await state_manager.update_state("connection_status", "disconnected")
-
-            except Exception as ex:
-                logger.error(f"Failed to stop server: {ex}")
-                show_error_message(page, f"Stop server failed: {str(ex)}")
-            finally:
-                # Re-enable button
-                e.control.disabled = False
-                e.control.update()
-
-        e.page.run_task(async_stop)
+        
+        # Disable button during operation
+        e.control.disabled = True
+        e.control.update()
+        
+        try:
+            # Use enhanced bridge for actual server operations
+            if server_bridge and hasattr(server_bridge, 'stop_server'):
+                success = await server_bridge.stop_server()
+                if not success:
+                    raise Exception("Server bridge returned failure")
+                # Trigger data refresh through state manager
+                if state_manager:
+                    await update_dashboard_ui()
+            else:
+                # Mock operation for development
+                await asyncio.sleep(ASYNC_DELAY)
+                # Update connection status in state
+                if state_manager:
+                    state_manager.update("connection_status", "disconnected")
+        finally:
+            # Re-enable button
+            e.control.disabled = False
+            e.control.update()
 
     def on_refresh_dashboard(e):
         """Handle refresh dashboard button click with enhanced infrastructure"""
@@ -456,7 +449,7 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
                 logger.info("Dashboard data refreshed via enhanced infrastructure")
 
             except Exception as ex:
-                logger.error(f"Failed to refresh dashboard: {ex}")
+                log_error(ex, "on_refresh_dashboard", "Dashboard refresh operation failed")
                 show_error_message(page, f"Refresh failed: {str(ex)}")
             finally:
                 # Re-enable button
