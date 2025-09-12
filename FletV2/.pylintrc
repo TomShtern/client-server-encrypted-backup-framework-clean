@@ -1,0 +1,35 @@
+[MASTER]
+# Specify a configuration file.
+load-plugins=
+
+[MESSAGES CONTROL]
+# Disable the message, report, category or checker with the given id(s).
+disable=
+    missing-docstring,
+    too-few-public-methods,
+    too-many-arguments,
+    too-many-locals,
+    too-many-branches,
+    too-many-statements,
+    invalid-name,
+    attribute-defined-outside-init,
+    no-member,
+    import-error,
+    unused-import,
+    unused-variable,
+    line-too-long,
+    trailing-whitespace
+
+[VARIABLES]
+# Tells whether we should check for unused import in __init__ files.
+init-import=no
+
+[DESIGN]
+# Maximum number of arguments for function / method
+max-args=10
+# Maximum number of locals for function / method body
+max-locals=25
+
+[FORMAT]
+# Maximum number of characters on a single line.
+max-line-length=120

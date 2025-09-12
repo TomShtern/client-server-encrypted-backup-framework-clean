@@ -113,7 +113,7 @@ def create_data_table_container(
     Returns:
         Container with standardized table layout
     """
-    header_controls = [ft.Text(title, size=20, weight=ft.FontWeight.BOLD)]
+    header_controls: List[ft.Control] = [ft.Text(title, size=20, weight=ft.FontWeight.BOLD)]
     
     if search_field or action_buttons:
         row_controls = []
@@ -162,7 +162,7 @@ def create_settings_section(
     Returns:
         Card with standardized settings layout
     """
-    content = [
+    content: List[ft.Control] = [
         ft.Text(title, size=18, weight=ft.FontWeight.BOLD),
     ]
     

@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run FletV2 Main",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/..;${workspaceFolder}/../Shared;${env:PYTHONPATH}",
+                "PYTHONIOENCODING": "utf-8"
+            },
+            "python": "${workspaceFolder}/flet_venv/Scripts/python.exe"
+        },
+        {
+            "name": "Run FletV2 Example",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/example.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/..;${workspaceFolder}/../Shared;${env:PYTHONPATH}",
+                "PYTHONIOENCODING": "utf-8"
+            },
+            "python": "${workspaceFolder}/flet_venv/Scripts/python.exe"
+        }
+    ]
+}

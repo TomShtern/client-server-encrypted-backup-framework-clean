@@ -153,10 +153,6 @@ def create_clients_view(
                 confirmation_dialog.open = False
                 confirmation_dialog.update()  # Efficient dialog-specific update
                 
-                # Update status text if available
-                if hasattr(locals(), 'status_text') and status_text:
-                    status_text.value = f"Disconnecting client {client_id}..."
-                    status_text.update()
                 
                 # Perform the actual disconnect
                 if server_bridge:

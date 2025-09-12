@@ -52,8 +52,10 @@ def create_files_view(
         options=[
             ft.dropdown.Option("all", "All Status"),
             ft.dropdown.Option("complete", "Complete"),
-            ft.dropdown.Option("verified", "Verified"),
-            ft.dropdown.Option("pending", "Pending")
+            ft.dropdown.Option("uploading", "Uploading"),
+            ft.dropdown.Option("queued", "Queued"),
+            ft.dropdown.Option("failed", "Failed"),
+            ft.dropdown.Option("verified", "Verified")
         ],
         value="all",
         on_change=lambda e: apply_filter("status", e.control.value),
@@ -101,7 +103,8 @@ def create_files_view(
         is_loading = True
         status_text.value = "Loading files..."
         status_text.color = ft.Colors.ORANGE
-        status_text.update()
+        # Use page.update() instead of status_text.update() to avoid page attachment issues
+        page.update()
         
         try:
             if server_bridge:
@@ -129,7 +132,8 @@ def create_files_view(
             status_text.color = ft.Colors.RED
         finally:
             is_loading = False
-            status_text.update()
+            # Use page.update() instead of status_text.update() to avoid page attachment issues
+            page.update()
 
     def generate_mock_files() -> List[Dict[str, Any]]:
         """Generate mock files data for development/fallback."""
@@ -221,27 +225,55 @@ def create_files_view(
             else:
                 type_icon = ft.Icons.INSERT_DRIVE_FILE
             
-            # Status chip
+            # Enhanced status chip with colors matching clients page
             status = file_data.get("status", "unknown")
-            if status == "complete":
-                status_color = ft.Colors.GREEN
-            elif status == "verified":
-                status_color = ft.Colors.BLUE
-            elif status == "pending":
-                status_color = ft.Colors.ORANGE
-            else:
-                status_color = ft.Colors.GREY
             
+            # Enhanced status coloring matching actual mock data values (case-insensitive)
+            status_lower = status.lower()
+            if status_lower in ["complete", "completed"]:
+                status_color = ft.Colors.GREEN_600
+                status_icon = ft.Icons.CHECK_CIRCLE
+            elif status_lower in ["uploading", "upload"]:
+                status_color = ft.Colors.BLUE_600  
+                status_icon = ft.Icons.UPLOAD
+            elif status_lower in ["queued", "pending", "queue"]:
+                status_color = ft.Colors.ORANGE_600
+                status_icon = ft.Icons.PENDING
+            elif status_lower in ["processing", "verified", "verify"]:
+                status_color = ft.Colors.PURPLE_600
+                status_icon = ft.Icons.VERIFIED
+            elif status_lower in ["failed", "error", "fail"]:
+                status_color = ft.Colors.RED_600
+                status_icon = ft.Icons.ERROR
+            else:
+                status_color = ft.Colors.GREY_600
+                status_icon = ft.Icons.HELP
+            
+            # Modern status chip with icon, shadow and animations
             status_chip = ft.Container(
-                content=ft.Text(
-                    status.title(),
-                    size=11,
-                    color=ft.Colors.WHITE,
-                    weight=ft.FontWeight.BOLD
-                ),
+                content=ft.Row([
+                    ft.Icon(
+                        status_icon,
+                        size=14,
+                        color=ft.Colors.WHITE
+                    ),
+                    ft.Text(
+                        status.title(),
+                        size=12,
+                        color=ft.Colors.WHITE,
+                        weight=ft.FontWeight.BOLD
+                    )
+                ], spacing=6, tight=True),
                 bgcolor=status_color,
-                border_radius=12,
-                padding=ft.Padding(8, 4, 8, 4)
+                border_radius=16,
+                padding=ft.Padding(10, 6, 10, 6),
+                shadow=ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=4,
+                    offset=ft.Offset(0, 2),
+                    color=ft.Colors.with_opacity(0.3, status_color)
+                ),
+                animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT)
             )
             
             # Format file size
@@ -253,25 +285,55 @@ def create_files_view(
             else:
                 size_str = f"{size_bytes/(1024*1024):.1f} MB"
             
-            # Action buttons
+            # Enhanced action buttons with modern hover states
             actions_row = ft.Row([
                 ft.IconButton(
                     icon=ft.Icons.DOWNLOAD,
-                    tooltip="Download",
-                    icon_color=ft.Colors.BLUE,
-                    on_click=lambda e, f=file_data: download_file(f)
+                    tooltip="Download File",
+                    icon_color=ft.Colors.BLUE_600,
+                    icon_size=20,
+                    on_click=lambda e, f=file_data: download_file(f),
+                    style=ft.ButtonStyle(
+                        bgcolor={
+                            ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.BLUE),
+                            ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT
+                        },
+                        shape=ft.CircleBorder(),
+                        padding=8,
+                        animation_duration=200
+                    )
                 ),
                 ft.IconButton(
                     icon=ft.Icons.VERIFIED,
-                    tooltip="Verify",
-                    icon_color=ft.Colors.GREEN,
-                    on_click=lambda e, f=file_data: verify_file(f)
+                    tooltip="Verify Integrity",
+                    icon_color=ft.Colors.GREEN_600,
+                    icon_size=20,
+                    on_click=lambda e, f=file_data: verify_file(f),
+                    style=ft.ButtonStyle(
+                        bgcolor={
+                            ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.GREEN),
+                            ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT
+                        },
+                        shape=ft.CircleBorder(),
+                        padding=8,
+                        animation_duration=200
+                    )
                 ),
                 ft.IconButton(
                     icon=ft.Icons.DELETE,
-                    tooltip="Delete",
-                    icon_color=ft.Colors.RED,
-                    on_click=lambda e, f=file_data: delete_file(f)
+                    tooltip="Delete File",
+                    icon_color=ft.Colors.RED_600,
+                    icon_size=20,
+                    on_click=lambda e, f=file_data: delete_file(f),
+                    style=ft.ButtonStyle(
+                        bgcolor={
+                            ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.RED),
+                            ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT
+                        },
+                        shape=ft.CircleBorder(),
+                        padding=8,
+                        animation_duration=200
+                    )
                 )
             ], spacing=4, tight=True)
             
@@ -371,22 +433,74 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         """Delete file with confirmation."""
         file_name = file_data.get("name", "unknown")
         
-        def confirm_delete():
+        async def confirm_delete_async(e):
+            """Actually delete the file like client disconnect does."""
             try:
-                file_path = file_data.get("path", "")
+                file_id = file_data.get("id", "")
                 
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                    show_success_message(page, f"File {file_name} deleted")
+                # Server bridge operation
+                if server_bridge:
+                    try:
+                        result = await server_bridge.delete_file_async(file_id)
+                        if result:
+                            # Update local state via state manager
+                            if state_manager:
+                                state_manager.update("file_deleted", {
+                                    "file_id": file_id,
+                                    "filename": file_name,
+                                    "timestamp": datetime.now().isoformat()
+                                })
+                            
+                            show_success_message(page, f"File {file_name} deleted successfully")
+                            # Refresh files list to show updated data
+                            page.run_task(load_files_data)
+                        else:
+                            show_error_message(page, f"Failed to delete file {file_name}")
+                    except Exception as e:
+                        logger.error(f"Server bridge delete error: {e}")
+                        show_error_message(page, f"Error deleting file: {str(e)}")
                 else:
-                    show_success_message(page, f"Mock deleted {file_name} (demo mode)")
-                
-                # Refresh files list
-                page.run_task(load_files_data)
+                    # Mock delete - ACTUALLY remove from files_data like clients page does
+                    logger.info(f"Performing REAL delete for file {file_id}")
+                    
+                    # Find and remove the file from the data structure
+                    file_found = False
+                    for i, file_item in enumerate(files_data):
+                        current_id = file_item.get("id")
+                        if current_id == file_id:
+                            old_status = file_item.get("status", "Unknown")
+                            files_data.pop(i)  # Actually remove the file
+                            file_found = True
+                            logger.info(f"File {file_id} removed from files_data (was {old_status})")
+                            break
+                    
+                    if file_found:
+                        # Update local state via state manager
+                        if state_manager:
+                            state_manager.update("file_deleted", {
+                                "file_id": file_id,
+                                "filename": file_name,
+                                "timestamp": datetime.now().isoformat()
+                            })
+                        
+                        # Refresh the table to show updated data
+                        apply_filters()
+                        show_success_message(page, f"File {file_name} deleted successfully")
+                        logger.info(f"File {file_id} successfully deleted and UI updated")
+                    else:
+                        show_error_message(page, f"File {file_name} not found in data")
+                        logger.error(f"File {file_id} not found in files_data during delete")
                 
             except Exception as e:
-                logger.error(f"Delete failed for {file_name}: {e}")
-                show_error_message(page, f"Delete failed: {str(e)}")
+                logger.error(f"Error during delete: {e}")
+                show_error_message(page, f"Error deleting file: {str(e)}")
+        
+        def confirm_delete(e):
+            """Wrapper to run async delete in a task like clients page"""
+            async def run_delete():
+                await confirm_delete_async(e)
+            
+            page.run_task(run_delete)
         
         show_confirmation(
             page,
@@ -397,13 +511,27 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
             is_destructive=True
         )
 
-    # UI Layout Construction
+    # Enhanced UI Layout Construction
     header_row = ft.Row([
-        ft.Text("Files", size=24, weight=ft.FontWeight.BOLD),
+        ft.Row([
+            ft.Icon(ft.Icons.FOLDER_COPY, size=28, color=ft.Colors.PRIMARY),
+            ft.Text("Files Management", size=24, weight=ft.FontWeight.BOLD)
+        ], spacing=12),
         ft.IconButton(
             icon=ft.Icons.REFRESH,
-            tooltip="Refresh files",
-            on_click=lambda e: page.run_task(load_files_data)
+            tooltip="Refresh Files",
+            icon_size=24,
+            icon_color=ft.Colors.PRIMARY,
+            on_click=lambda e: page.run_task(load_files_data),
+            style=ft.ButtonStyle(
+                bgcolor={
+                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+                    ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT
+                },
+                shape=ft.CircleBorder(),
+                padding=12,
+                animation_duration=200
+            )
         )
     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
     
@@ -415,7 +543,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
     
     table_container = ft.Container(
         content=files_table,
-        border=ft.Border.all(1, ft.Colors.OUTLINE),
+        border=ft.border.all(1, ft.Colors.OUTLINE),
         border_radius=8,
         padding=16,
         expand=True

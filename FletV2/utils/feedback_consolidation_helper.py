@@ -115,14 +115,14 @@ class FeedbackManager:
             content=content,
             padding=padding or ft.Padding(20, 10, 20, 10),
             bgcolor=bgcolor_map.get(operation_type, ft.Colors.SURFACE),
-            border=ft.Border.all(1, border_color_map.get(operation_type, ft.Colors.BLUE_200)),
+            border=ft.border.all(1, border_color_map.get(operation_type, ft.Colors.BLUE_200)),
             border_radius=8,
             visible=visible
         )
     
     @staticmethod
     def update_feedback_text(
-        text_control: ft.Text,
+        text_control: ft.Control,
         message: str,
         operation_type: str = "info",
         auto_update: bool = True
@@ -143,8 +143,10 @@ class FeedbackManager:
             'error': ft.Colors.RED
         }
         
-        text_control.value = message
-        text_control.color = color_map.get(operation_type, ft.Colors.BLUE)
+        if hasattr(text_control, 'value'):
+            text_control.value = message
+        if hasattr(text_control, 'color'):
+            text_control.color = color_map.get(operation_type, ft.Colors.BLUE)
         
         if auto_update:
             text_control.update()

@@ -541,9 +541,17 @@ def create_analytics_view(
                     logger.info("Analytics refresh timer cancelled")
                 except Exception as e:
                     logger.error(f"Analytics refresh timer error: {e}")
+                    # Ensure timer_cancelled is accessible in exception handler  
+                    try:
+                        timer_cancelled = True
+                    except:
+                        pass  # Ignore if variable is not accessible
                 finally:
                     # Cleanup when loop exits
-                    timer_cancelled = True
+                    try:
+                        timer_cancelled = True
+                    except:
+                        pass  # Ignore if variable is not accessible
 
             refresh_timer = page.run_task(refresh_loop)
             logger.info("Auto-refresh started")

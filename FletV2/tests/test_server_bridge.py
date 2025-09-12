@@ -14,21 +14,20 @@ os.environ['FLET_V2_DEBUG'] = 'true'
 # Add the FletV2 directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from utils.simple_server_bridge import SimpleServerBridge, create_simple_server_bridge
-from utils.server_bridge import ModularServerBridge
+from utils.server_bridge import ServerBridge, create_server_bridge, ModularServerBridge
 
 
 class TestSimpleServerBridge(unittest.TestCase):
-    """Test cases for the SimpleServerBridge."""
+    """Test cases for the simple bridge interface (now unified ServerBridge)."""
 
     def setUp(self):
         """Set up test fixtures before each test method."""
-        with patch('utils.simple_server_bridge.logger'):
-            self.bridge = SimpleServerBridge()
+        with patch('utils.server_bridge.logger'):
+            self.bridge = ServerBridge()
 
     def test_initialization(self):
         """Test that the bridge initializes correctly."""
-        self.assertIsInstance(self.bridge, SimpleServerBridge)
+        self.assertIsInstance(self.bridge, ServerBridge)
         self.assertTrue(self.bridge.connected)
 
     def test_get_clients(self):
@@ -36,7 +35,7 @@ class TestSimpleServerBridge(unittest.TestCase):
         clients = self.bridge.get_clients()
         self.assertIsInstance(clients, list)
         self.assertGreater(len(clients), 0)
-        
+
         # Check structure of first client
         if clients:
             client = clients[0]
@@ -48,7 +47,7 @@ class TestSimpleServerBridge(unittest.TestCase):
         """Test getting file data."""
         files = self.bridge.get_files()
         self.assertIsInstance(files, list)
-        
+
         # Check structure of first file
         if files:
             file_data = files[0]
@@ -60,7 +59,7 @@ class TestSimpleServerBridge(unittest.TestCase):
         """Test getting database information."""
         db_info = self.bridge.get_database_info()
         self.assertIsInstance(db_info, dict)
-        
+
         required_keys = ['status', 'tables', 'records', 'size']
         for key in required_keys:
             self.assertIn(key, db_info)
@@ -83,8 +82,8 @@ class TestSimpleServerBridge(unittest.TestCase):
     def test_create_simple_server_bridge_factory(self):
         """Test the factory function."""
         with patch('utils.simple_server_bridge.logger'):
-            bridge = create_simple_server_bridge()
-            self.assertIsInstance(bridge, SimpleServerBridge)
+            bridge = create_server_bridge()
+            self.assertIsInstance(bridge, ServerBridge)
 
 
 class TestModularServerBridge(unittest.TestCase):
@@ -100,9 +99,9 @@ class TestModularServerBridge(unittest.TestCase):
         mock_response.status_code = 200
         mock_session.get.return_value = mock_response
         mock_session_class.return_value = mock_session
-        
+
         bridge = ModularServerBridge()
-        
+
         self.assertIsInstance(bridge, ModularServerBridge)
         # Note: The bridge might not be connected if the connection test fails
         # We'll just check that it was instantiated correctly
@@ -116,9 +115,9 @@ class TestModularServerBridge(unittest.TestCase):
         mock_session = Mock()
         mock_session.get.side_effect = Exception("Connection failed")
         mock_session_class.return_value = mock_session
-        
+
         bridge = ModularServerBridge()
-        
+
         self.assertIsInstance(bridge, ModularServerBridge)
         self.assertFalse(bridge.connected)
 

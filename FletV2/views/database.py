@@ -65,11 +65,25 @@ def create_database_view(
     )
     
     data_table = ft.DataTable(
-        columns=[],
+        columns=[ft.DataColumn(ft.Text("Loading...", weight=ft.FontWeight.BOLD))],  # Placeholder column
         rows=[],
         show_bottom_border=True,
-        column_spacing=20,
-        expand=True
+        column_spacing=35,  # Enhanced spacing between columns
+        data_row_max_height=65,  # Improved height for better readability
+        data_row_min_height=50,
+        heading_row_height=55,
+        border=ft.border.all(1, ft.Colors.with_opacity(0.12, ft.Colors.ON_SURFACE)),
+        border_radius=6,
+        expand=True,
+        bgcolor=ft.Colors.SURFACE,
+        heading_row_color=ft.Colors.with_opacity(0.08, ft.Colors.PRIMARY),
+        data_row_color={
+            ft.ControlState.HOVERED: ft.Colors.with_opacity(0.04, ft.Colors.ON_SURFACE),
+            ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT,
+        },
+        divider_thickness=0.5,
+        horizontal_lines=ft.BorderSide(0.5, ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)),
+        show_checkbox_column=False
     )
     
     table_info_text = ft.Text("No data", size=12, color=ft.Colors.GREY_600)
@@ -248,13 +262,25 @@ def create_database_view(
         if not columns:
             table_info_text.value = "No data available"
             table_info_text.update()
-            data_table.update()
+            # Don't update data_table when it has no columns as this violates Flet's requirement
             return
         
-        # Create columns
+        # Create columns with better styling
         for col in columns:
             data_table.columns.append(
-                ft.DataColumn(ft.Text(str(col).title(), weight=ft.FontWeight.BOLD, size=12))
+                ft.DataColumn(
+                    ft.Container(
+                        content=ft.Text(
+                            str(col).title().replace('_', ' '), 
+                            weight=ft.FontWeight.BOLD, 
+                            size=13,
+                            color=ft.Colors.ON_SURFACE
+                        ),
+                        padding=ft.Padding(8, 4, 8, 4),
+                        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+                        border_radius=4
+                    )
+                )
             )
         
         # Filter rows based on search
@@ -282,9 +308,34 @@ def create_database_view(
                 else:
                     formatted_value = str(cell)
                 
+                # Add status-based styling
+                cell_color = ft.Colors.ON_SURFACE
+                cell_bgcolor = None
+                
+                if columns[i].lower() == 'status':
+                    if str(cell).lower() in ['online', 'active', 'completed', 'connected']:
+                        cell_color = ft.Colors.GREEN
+                        cell_bgcolor = ft.Colors.with_opacity(0.1, ft.Colors.GREEN)
+                    elif str(cell).lower() in ['offline', 'inactive', 'error', 'failed']:
+                        cell_color = ft.Colors.RED  
+                        cell_bgcolor = ft.Colors.with_opacity(0.1, ft.Colors.RED)
+                    elif str(cell).lower() in ['pending', 'warning', 'in_progress']:
+                        cell_color = ft.Colors.ORANGE
+                        cell_bgcolor = ft.Colors.with_opacity(0.1, ft.Colors.ORANGE)
+                
                 cells.append(ft.DataCell(
-                    ft.Text(formatted_value, size=12),
-                    on_tap=lambda e, r=row, c=i: handle_cell_click(r, c)
+                    ft.Container(
+                        content=ft.Text(
+                            formatted_value, 
+                            size=12,
+                            color=cell_color,
+                            weight=ft.FontWeight.W_500 if columns[i].lower() == 'status' else ft.FontWeight.NORMAL
+                        ),
+                        padding=ft.Padding(8, 8, 8, 8),
+                        bgcolor=cell_bgcolor,
+                        border_radius=4,
+                        on_click=lambda e, r=row, c=i: handle_cell_click(r, c)
+                    )
                 ))
             
             data_table.rows.append(ft.DataRow(cells))
@@ -368,7 +419,7 @@ def create_database_view(
         )
 
     # UI Layout Construction
-    def create_info_card(title: str, value_control: ft.Control, icon: str, color: ft.colors) -> ft.Container:
+    def create_info_card(title: str, value_control: ft.Control, icon: str, color: str) -> ft.Container:
         """Create an information card."""
         return ft.Container(
             content=ft.Column([
@@ -381,7 +432,7 @@ def create_database_view(
                 ], alignment=ft.MainAxisAlignment.START, spacing=12)
             ], spacing=8),
             bgcolor=ft.Colors.SURFACE,
-            border=ft.Border.all(1, ft.Colors.OUTLINE),
+            border=ft.border.all(1, ft.Colors.OUTLINE),
             border_radius=12,
             padding=16,
             expand=True
@@ -400,7 +451,7 @@ def create_database_view(
     # Database status cards
     status_cards = ft.ResponsiveRow([
         ft.Column([
-            create_info_card("Status", status_text, ft.Icons.DATABASE, ft.Colors.BLUE)
+            create_info_card("Status", status_text, ft.Icons.STORAGE, ft.Colors.BLUE)
         ], col={"sm": 12, "md": 6, "lg": 3}),
         ft.Column([
             create_info_card("Tables", tables_count_text, ft.Icons.TABLE_CHART, ft.Colors.GREEN)
@@ -428,20 +479,40 @@ def create_database_view(
         )
     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, spacing=16)
     
-    # Data table container
+    # Enhanced data table container with modern styling
     table_container = ft.Container(
         content=ft.Column([
-            ft.Row([
-                table_info_text,
-                last_updated_text
-            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            ft.Container(height=8),  # Spacing
-            data_table
+            # Table header with better styling
+            ft.Container(
+                content=ft.Row([
+                    table_info_text,
+                    last_updated_text
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                padding=ft.Padding(16, 12, 16, 12),
+                bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+                border_radius=ft.border_radius.only(top_left=8, top_right=8),
+                margin=ft.Margin(0, 0, 0, 0)
+            ),
+            # Table content area with scroll
+            ft.Container(
+                content=ft.Column([data_table], scroll=ft.ScrollMode.ADAPTIVE),
+                padding=ft.Padding(16, 0, 16, 16),
+                expand=True,
+                bgcolor=ft.Colors.SURFACE,
+                border_radius=ft.border_radius.only(bottom_left=8, bottom_right=8)
+            )
         ], spacing=0),
-        border=ft.Border.all(1, ft.Colors.OUTLINE),
+        border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE)),
         border_radius=8,
-        padding=16,
-        expand=True
+        shadow=ft.BoxShadow(
+            spread_radius=1,
+            blur_radius=8,
+            offset=ft.Offset(0, 2),
+            color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
+        ),
+        bgcolor=ft.Colors.SURFACE,
+        expand=True,
+        animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT)
     )
     
     # Main layout
@@ -455,7 +526,30 @@ def create_database_view(
         table_container
     ], expand=True, scroll=ft.ScrollMode.AUTO, spacing=0)
     
-    # Initialize database
+    # Initialize database data but don't update UI yet (controls not added to page)
+    try:
+        db_info = generate_mock_db_info()
+        table_data = generate_mock_table_data(selected_table)
+        logger.info("Database view data initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize database data: {e}")
+        db_info = {"status": "Error", "tables": 0, "total_records": 0, "size": "0 MB"}
+        table_data = {"columns": [], "rows": []}
+    
+    # Schedule UI update after page is ready
+    def delayed_init():
+        try:
+            update_database_info_ui()
+            update_table_display()
+            logger.info("Database UI updated with initial data")
+        except Exception as e:
+            logger.error(f"Failed to update database UI: {e}")
+    
+    # Use a timer to update UI after controls are added to page
+    import threading
+    threading.Timer(0.1, delayed_init).start()
+    
+    # Also schedule async refresh task
     page.run_task(refresh_database)
     
     return main_view

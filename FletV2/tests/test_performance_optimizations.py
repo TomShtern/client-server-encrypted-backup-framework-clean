@@ -158,7 +158,7 @@ async def test_listview_performance():
     
     # Create paginated data (simulating what ListView would render)
     config = PaginationConfig(page_size=50, current_page=1)
-    paginated_data = paginate_data(large_dataset, config.current_page, config.page_size)
+    paginated_data, _ = paginate_data(large_dataset, config.current_page, config.page_size)
     
     # Simulate creating ListTile objects (without actual Flet rendering)
     list_items = []

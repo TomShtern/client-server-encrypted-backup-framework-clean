@@ -20,7 +20,7 @@ class TestDebugSetup(unittest.TestCase):
     def test_setup_terminal_debugging(self):
         """Test setting up terminal debugging."""
         # Test that the function returns a logger
-        logger = setup_terminal_debugging("test_logger")
+        logger = setup_terminal_debugging(logger_name="test_logger")
         self.assertIsNotNone(logger)
         
     def test_get_logger(self):

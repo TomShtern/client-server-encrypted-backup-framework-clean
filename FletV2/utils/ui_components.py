@@ -556,7 +556,7 @@ def create_info_chip(
         ),
         padding=ft.Padding(12, 6, 12, 6),
         bgcolor=color if variant == "filled" else ft.Colors.with_opacity(0.1, color),
-        border=ft.Border.all(1, color) if variant == "outlined" else None,
+        border=ft.border.all(1, color) if variant == "outlined" else None,
         border_radius=ft.BorderRadius(16, 16, 16, 16),
         animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT)
     )

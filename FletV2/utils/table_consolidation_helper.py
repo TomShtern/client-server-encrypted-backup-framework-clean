@@ -20,7 +20,7 @@ class TableManager:
     @staticmethod
     def create_data_table(
         columns: List[Dict[str, Any]],
-        rows: List[Dict[str, Any]] = None,
+        rows: Optional[List[Dict[str, Any]]] = None,
         column_spacing: Optional[float] = 56.0,
         horizontal_lines: bool = True,
         show_checkbox_column: bool = False,
@@ -173,7 +173,7 @@ class TableManager:
     @staticmethod
     def create_status_chip(
         status: str,
-        color_mapping: Optional[Dict[str, ft.colors]] = None
+        color_mapping: Optional[Dict[str, str]] = None
     ) -> ft.Container:
         """
         Create standardized status chip for table cells.
@@ -245,7 +245,7 @@ class TableBuilder:
     def add_action_column(
         self,
         label: str = "Actions",
-        actions: List[Dict[str, Any]] = None
+        actions: Optional[List[Dict[str, Any]]] = None
     ) -> 'TableBuilder':
         """
         Add an actions column with standardized buttons.

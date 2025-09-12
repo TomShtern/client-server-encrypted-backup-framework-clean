@@ -377,24 +377,58 @@ def create_dashboard_view(
             show_error_message(page, f"Failed to stop server: {str(e)}")
 
     # UI Layout Construction
-    def create_stat_card(title: str, value_control: ft.Control, icon: str, color: ft.colors) -> ft.Container:
-        """Create a statistics card."""
+    def create_stat_card(title: str, value_control: ft.Control, icon: str, color: str) -> ft.Container:
+        """Create an enhanced statistics card with hover animations."""
         return ft.Container(
             content=ft.Column([
                 ft.Row([
-                    ft.Icon(icon, size=32, color=color),
+                    ft.Container(
+                        content=ft.Icon(icon, size=32, color=color),
+                        bgcolor=ft.Colors.with_opacity(0.1, color),
+                        border_radius=50,
+                        padding=8
+                    ),
                     ft.Column([
                         value_control,
                         ft.Text(title, size=12, color=ft.Colors.GREY_600, weight=ft.FontWeight.BOLD)
                     ], spacing=2, tight=True)
-                ], alignment=ft.MainAxisAlignment.START, spacing=12)
+                ], alignment=ft.MainAxisAlignment.START, spacing=16)
             ], spacing=8),
             bgcolor=ft.Colors.SURFACE,
-            border=ft.Border.all(1, ft.Colors.OUTLINE),
-            border_radius=12,
-            padding=20,
-            expand=True
+            border=ft.border.all(1, ft.Colors.with_opacity(0.12, ft.Colors.ON_SURFACE)),
+            border_radius=16,
+            padding=24,
+            expand=True,
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=8,
+                offset=ft.Offset(0, 2),
+                color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK)
+            ),
+            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+            animate_opacity=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+            on_hover=lambda e: animate_card_hover(e.control, e.data == "true")
         )
+
+    def animate_card_hover(card: ft.Container, is_hovering: bool):
+        """Animate card on hover with subtle scale and shadow effects."""
+        if is_hovering:
+            card.scale = 1.02
+            card.shadow = ft.BoxShadow(
+                spread_radius=2,
+                blur_radius=16,
+                offset=ft.Offset(0, 4),
+                color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
+            )
+        else:
+            card.scale = 1.0
+            card.shadow = ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=8,
+                offset=ft.Offset(0, 2),
+                color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK)
+            )
+        card.update()
 
     def create_metric_row(label: str, progress: ft.ProgressBar, text: ft.Text) -> ft.Column:
         """Create a system metric row."""
@@ -406,13 +440,27 @@ def create_dashboard_view(
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, spacing=12)
         ], spacing=4)
 
-    # Header section
+    # Enhanced header section
     header_row = ft.Row([
-        ft.Text("Dashboard", size=24, weight=ft.FontWeight.BOLD),
+        ft.Row([
+            ft.Icon(ft.Icons.DASHBOARD, size=28, color=ft.Colors.PRIMARY),
+            ft.Text("Server Dashboard", size=24, weight=ft.FontWeight.BOLD)
+        ], spacing=12),
         ft.IconButton(
             icon=ft.Icons.REFRESH,
-            tooltip="Refresh dashboard",
-            on_click=lambda e: page.run_task(refresh_dashboard)
+            tooltip="Refresh Dashboard",
+            icon_size=24,
+            icon_color=ft.Colors.PRIMARY,
+            on_click=lambda e: page.run_task(refresh_dashboard),
+            style=ft.ButtonStyle(
+                bgcolor={
+                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+                    ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT
+                },
+                shape=ft.CircleBorder(),
+                padding=12,
+                animation_duration=200
+            )
         )
     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
     
@@ -420,7 +468,7 @@ def create_dashboard_view(
     server_status_card = ft.Container(
         content=ft.Column([
             ft.Row([
-                ft.Icon(ft.Icons.SERVER, size=24, color=ft.Colors.BLUE),
+                ft.Icon(ft.Icons.COMPUTER, size=24, color=ft.Colors.BLUE),
                 ft.Text("Server Status", size=16, weight=ft.FontWeight.BOLD)
             ], spacing=8),
             ft.Divider(height=1),
@@ -433,7 +481,7 @@ def create_dashboard_view(
             ft.Row([start_server_btn, stop_server_btn], spacing=12)
         ], spacing=8),
         bgcolor=ft.Colors.SURFACE,
-        border=ft.Border.all(1, ft.Colors.OUTLINE),
+        border=ft.border.all(1, ft.Colors.OUTLINE),
         border_radius=12,
         padding=20
     )
@@ -467,7 +515,7 @@ def create_dashboard_view(
             create_metric_row("Disk", disk_progress, disk_text)
         ], spacing=12),
         bgcolor=ft.Colors.SURFACE,
-        border=ft.Border.all(1, ft.Colors.OUTLINE),
+        border=ft.border.all(1, ft.Colors.OUTLINE),
         border_radius=12,
         padding=20
     )
@@ -483,7 +531,7 @@ def create_dashboard_view(
             ft.Container(content=activity_list, height=200)
         ], spacing=12),
         bgcolor=ft.Colors.SURFACE,
-        border=ft.Border.all(1, ft.Colors.OUTLINE),
+        border=ft.border.all(1, ft.Colors.OUTLINE),
         border_radius=12,
         padding=20,
         expand=True

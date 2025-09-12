@@ -26,7 +26,7 @@ class DialogManager:
         on_cancel: Optional[Callable] = None,
         confirm_text: str = "Confirm",
         cancel_text: str = "Cancel",
-        confirm_color: ft.colors = ft.Colors.PRIMARY,
+        confirm_color: str = ft.Colors.PRIMARY,
         is_destructive: bool = False
     ) -> ft.AlertDialog:
         """
@@ -45,12 +45,21 @@ class DialogManager:
         """
         def close_dialog():
             dialog.open = False
-            dialog.update()
+            page.update()  # Use page.update() for consistency
         
         def handle_confirm(e):
             try:
                 if on_confirm:
-                    on_confirm(e)
+                    # Check if callback is async and run it appropriately
+                    import asyncio
+                    import inspect
+                    
+                    if inspect.iscoroutinefunction(on_confirm):
+                        # Run async callback using page.run_task()
+                        page.run_task(lambda: on_confirm(e))
+                    else:
+                        # Run sync callback normally
+                        on_confirm(e)
                 close_dialog()
             except Exception as ex:
                 logger.error(f"Dialog confirm action failed: {ex}")
@@ -89,7 +98,7 @@ class DialogManager:
         # Auto-manage dialog lifecycle
         page.overlay.append(dialog)
         dialog.open = True
-        dialog.update()
+        page.update()  # Use page.update() instead of dialog.update() to avoid page attachment issues
         
         return dialog
     
@@ -115,7 +124,7 @@ class DialogManager:
         """
         def close_dialog():
             dialog.open = False
-            dialog.update()
+            page.update()  # Use page.update() for consistency
         
         def handle_ok(e):
             close_dialog()
@@ -141,7 +150,7 @@ class DialogManager:
         
         page.overlay.append(dialog)
         dialog.open = True
-        dialog.update()
+        page.update()  # Use page.update() instead of dialog.update()
         
         return dialog
     
@@ -177,7 +186,7 @@ class DialogManager:
         """
         def close_dialog():
             dialog.open = False
-            dialog.update()
+            page.update()  # Use page.update() for consistency
         
         def handle_submit(e):
             try:
@@ -233,11 +242,11 @@ class DialogManager:
         
         page.overlay.append(dialog)
         dialog.open = True
-        dialog.update()
+        page.update()  # Use page.update() instead of dialog.update()
         
         # Auto-focus input field
         input_field.focus()
-        input_field.update()
+        # Remove input_field.update() as it might cause issues - focus() handles display
         
         return dialog
 

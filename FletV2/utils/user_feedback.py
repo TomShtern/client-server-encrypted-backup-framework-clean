@@ -4,6 +4,7 @@ Centralized User Feedback Utilities for FletV2
 Provides consistent user feedback patterns across the application.
 """
 
+from typing import Optional
 import flet as ft
 from utils.debug_setup import get_logger
 
@@ -14,7 +15,7 @@ MOCK_PREFIX = "🧪 DEMO: "
 REAL_PREFIX = "✅ "
 
 
-def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, action_label: str = None) -> None:
+def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, action_label: Optional[str] = None) -> None:
     """
     Show centralized user feedback using Flet's SnackBar.
     
@@ -43,7 +44,7 @@ def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, acti
         logger.error(f"Failed to show user feedback: {e}")
 
 
-def show_success_message(page: ft.Page, message: str, action_label: str = None, mode: str = None) -> None:
+def show_success_message(page: ft.Page, message: str, action_label: Optional[str] = None, mode: Optional[str] = None) -> None:
     """Show success message to user with optional mode indicator."""
     try:
         # Add mode prefix if specified
@@ -68,12 +69,12 @@ def show_success_message(page: ft.Page, message: str, action_label: str = None, 
         logger.error(f"Failed to show user feedback: {e}")
 
 
-def show_error_message(page: ft.Page, message: str, action_label: str = None) -> None:
+def show_error_message(page: ft.Page, message: str, action_label: Optional[str] = None) -> None:
     """Show error message to user."""
     show_user_feedback(page, message, is_error=True, action_label=action_label)
 
 
-def show_info_message(page: ft.Page, message: str, action_label: str = None, mode: str = None) -> None:
+def show_info_message(page: ft.Page, message: str, action_label: Optional[str] = None, mode: Optional[str] = None) -> None:
     """Show info message to user with optional mode indicator."""
     # Add mode prefix if specified
     display_message = message
@@ -98,7 +99,7 @@ def show_info_message(page: ft.Page, message: str, action_label: str = None, mod
         logger.error(f"Failed to show info message: {e}")
 
 
-def show_warning_message(page: ft.Page, message: str, action_label: str = None) -> None:
+def show_warning_message(page: ft.Page, message: str, action_label: Optional[str] = None) -> None:
     """Show warning message to user."""
     try:
         page.snack_bar = ft.SnackBar(

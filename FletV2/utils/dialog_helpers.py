@@ -188,7 +188,7 @@ def create_input_dialog(
     
     def default_confirm(e):
         if confirm_handler:
-            confirm_handler(input_field.value)
+            confirm_handler(input_field.value or "")
         # Dialog closing should be handled by the confirm_handler
     
     return ft.AlertDialog(

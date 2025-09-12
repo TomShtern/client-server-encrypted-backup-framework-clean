@@ -5,7 +5,6 @@ Test script to verify the fixes for:
 2. Database table layout issue
 """
 
-import flet as ft
 import asyncio
 import sys
 import os
@@ -34,11 +33,11 @@ def test_files_scanning():
         server_bridge = ServerBridge()  # Using mock data
         
         # Test the view creation
-        files_view = create_files_view(server_bridge, dummy_page)
+        files_view = create_files_view(server_bridge, dummy_page)  # type: ignore
         print("✅ Files view created successfully")
         
         # Check if the view has the expected structure
-        if hasattr(files_view, 'controls') and len(files_view.controls) > 0:
+        if hasattr(files_view, 'controls') and files_view.controls and len(files_view.controls) > 0:
             print("✅ Files view has content controls")
         else:
             print("❌ Files view has no content controls")
@@ -65,11 +64,11 @@ def test_database_layout():
         server_bridge = ServerBridge()  # Using mock data
         
         # Test the view creation
-        database_view = create_database_view(server_bridge, dummy_page)
+        database_view = create_database_view(server_bridge, dummy_page)  # type: ignore
         print("✅ Database view created successfully")
         
         # Check if the view has the expected structure without scroll conflicts
-        if hasattr(database_view, 'controls') and len(database_view.controls) > 0:
+        if hasattr(database_view, 'controls') and database_view.controls and len(database_view.controls) > 0:
             print("✅ Database view has content controls")
         else:
             print("❌ Database view has no content controls")

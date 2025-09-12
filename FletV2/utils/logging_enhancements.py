@@ -7,7 +7,7 @@ Provides more detailed and informative logging for debugging purposes.
 import logging
 import functools
 import inspect
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 from utils.debug_setup import get_logger
 
 # Get the base logger
@@ -85,7 +85,7 @@ def log_async_operation(operation_name: str, details: str = ""):
     base_logger.info(message)
 
 
-def log_async_completion(operation_name: str, result: Any = None, duration: float = None):
+def log_async_completion(operation_name: str, result: Any = None, duration: Optional[float] = None):
     """
     Log the completion of an async operation.
     
@@ -171,7 +171,7 @@ def log_error_with_context(error: Exception, context: str = "", stack_level: int
     base_logger.error(message, exc_info=True)
 
 
-def log_network_request(method: str, url: str, status_code: int = None, duration: float = None):
+def log_network_request(method: str, url: str, status_code: Optional[int] = None, duration: Optional[float] = None):
     """
     Log network requests for monitoring connectivity.
     

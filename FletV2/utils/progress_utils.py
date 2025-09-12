@@ -4,6 +4,7 @@ Progress Indicator Utilities for FletV2
 Provides consistent progress feedback for async operations.
 """
 
+from typing import Optional
 import flet as ft
 from utils.debug_setup import get_logger
 
@@ -75,7 +76,7 @@ class ProgressIndicator:
         except Exception as e:
             logger.error(f"Failed to show progress bar: {e}")
     
-    def update_progress_bar(self, value: float, message: str = None):
+    def update_progress_bar(self, value: float, message: Optional[str] = None):
         """Update the progress bar value and optional message."""
         try:
             if self.progress_bar:

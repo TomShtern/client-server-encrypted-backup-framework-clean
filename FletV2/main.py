@@ -34,16 +34,15 @@ This demonstrates the clean architecture:
 import asyncio
 import os
 import sys
+import contextlib
 
 # Third-party imports
 import flet as ft
 
 # Local imports - utilities first
 from utils.debug_setup import setup_terminal_debugging, get_logger
-try:
+with contextlib.suppress(ImportError):
     from utils import utf8_patch  # noqa: F401 (side effects only)
-except ImportError:
-    pass  # Non-fatal; continue without extra patch
 
 # Local imports - application modules
 from theme import setup_modern_theme, toggle_theme_mode
@@ -671,7 +670,7 @@ class FletV2App(ft.Row):
                 )
                 self.content_area.content.content = simple_loading
                 self.content_area.content.update()
-            except:
+            except Exception:
                 pass  # Continue without loading indicator if all attempts fail
 
     def _set_animation_for_view(self, view_name: str):
@@ -740,47 +739,26 @@ class FletV2App(ft.Row):
     def _load_view(self, view_name: str):
         """Load view with enhanced infrastructure support and dynamic animated transitions."""
         try:
-            # Enhanced view loading with state manager integration
-            if view_name == "dashboard":
-                # Import and create dashboard view with enhanced infrastructure
-                from views.dashboard import create_dashboard_view
-                content = self._create_enhanced_view(create_dashboard_view, view_name)
-                self._set_animation_for_view("dashboard")
-            elif view_name == "clients":
-                # Import and create clients view
-                from views.clients import create_clients_view
-                content = self._create_enhanced_view(create_clients_view, view_name)
-                self._set_animation_for_view("clients")
-            elif view_name == "files":
-                # Import and create files view
-                from views.files import create_files_view
-                content = self._create_enhanced_view(create_files_view, view_name)
-                self._set_animation_for_view("files")
-            elif view_name == "database":
-                # Import and create database view
-                from views.database import create_database_view
-                content = self._create_enhanced_view(create_database_view, view_name)
-                self._set_animation_for_view("database")
-            elif view_name == "analytics":
-                # Import and create analytics view
-                from views.analytics import create_analytics_view
-                content = self._create_enhanced_view(create_analytics_view, view_name)
-                self._set_animation_for_view("analytics")
-            elif view_name == "logs":
-                # Import and create logs view
-                from views.logs import create_logs_view
-                content = self._create_enhanced_view(create_logs_view, view_name)
-                self._set_animation_for_view("logs")
-            elif view_name == "settings":
-                # Import and create settings view
-                from views.settings import create_settings_view
-                content = self._create_enhanced_view(create_settings_view, view_name)
-                self._set_animation_for_view("settings")
-            else:
-                # Import and create dashboard view as fallback
-                from views.dashboard import create_dashboard_view
-                content = self._create_enhanced_view(create_dashboard_view, "dashboard")
-                self._set_animation_for_view("dashboard")
+            # View configuration mapping for cleaner code organization
+            view_configs = {
+                "dashboard": ("views.dashboard", "create_dashboard_view"),
+                "clients": ("views.clients", "create_clients_view"),
+                "files": ("views.files", "create_files_view"),
+                "database": ("views.database", "create_database_view"),
+                "analytics": ("views.analytics", "create_analytics_view"),
+                "logs": ("views.logs", "create_logs_view"),
+                "settings": ("views.settings", "create_settings_view"),
+            }
+
+            # Get view configuration or use dashboard as fallback
+            module_name, function_name = view_configs.get(view_name, view_configs["dashboard"])
+            actual_view_name = view_name if view_name in view_configs else "dashboard"
+
+            # Dynamic import and view creation
+            module = __import__(module_name, fromlist=[function_name])
+            view_function = getattr(module, function_name)
+            content = self._create_enhanced_view(view_function, actual_view_name)
+            self._set_animation_for_view(actual_view_name)
 
             # Update content area using AnimatedSwitcher for smooth transitions
             animated_switcher = self.content_area.content
@@ -815,10 +793,8 @@ class FletV2App(ft.Row):
             except Exception as fallback_error:
                 logger.error(f"Error view display failed: {fallback_error}")
                 # Last resort
-                try:
+                with contextlib.suppress(Exception):
                     self.page.update()
-                except Exception:
-                    pass
 
     def _create_enhanced_view(self, view_function, view_name: str):
         """Create view with simplified synchronous approach for better performance."""
@@ -859,7 +835,7 @@ async def main(page: ft.Page):
     """Simple main function - no complex initialization."""
     def on_window_event(e):
         """Handle window events to force sizing."""
-        if e.data == "focus" or e.data == "ready":
+        if e.data in ("focus", "ready"):
             page.window_width = 1730
             page.window_height = 1425
             page.window_center = True
