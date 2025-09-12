@@ -1,26 +1,28 @@
 #!/usr/bin/env python3
 """
-Centralized User Feedback Utilities for FletV2
+DEPRECATED: Centralized User Feedback Utilities for FletV2
+This module has been deprecated. Please use utils.dialog_consolidation_helper instead.
+
 Provides consistent user feedback patterns across the application.
 """
 
+import warnings
 from typing import Optional
 import flet as ft
-from utils.debug_setup import get_logger
 
-logger = get_logger(__name__)
-
-# Mock mode prefixes
-MOCK_PREFIX = "🧪 DEMO: "
-REAL_PREFIX = "✅ "
-
+# Import the consolidated functions
+from utils.dialog_consolidation_helper import (
+    show_user_feedback as _show_user_feedback,
+    show_success_message as _show_success_message,
+    show_error_message as _show_error_message,
+    show_info_message as _show_info_message,
+    show_warning_message as _show_warning_message
+)
 
 def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, action_label: Optional[str] = None) -> None:
     """
-    Show centralized user feedback using Flet's SnackBar.
-    
-    This is the ONLY acceptable use of page.update() in the application -
-    for system-level feedback like SnackBar, which requires page-level updates.
+    DEPRECATED: Show centralized user feedback using Flet's SnackBar.
+    This function has been moved to utils.dialog_consolidation_helper.
     
     Args:
         page: Flet page instance
@@ -28,190 +30,70 @@ def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, acti
         is_error: Whether this is an error message (changes color)
         action_label: Optional action button label
     """
-    try:
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text(message),
-            bgcolor=ft.Colors.ERROR if is_error else ft.Colors.BLUE,
-            action=action_label if action_label else "DISMISS",
-            duration=4000  # 4 seconds
-        )
-        page.snack_bar.open = True
-        page.update()  # ONLY acceptable page.update() use case
-        
-        logger.info(f"User feedback shown: {'ERROR' if is_error else 'INFO'} - {message}")
-        
-    except Exception as e:
-        logger.error(f"Failed to show user feedback: {e}")
+    warnings.warn(
+        "show_user_feedback has been moved to utils.dialog_consolidation_helper. "
+        "Please update your imports.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return _show_user_feedback(page, message, is_error, action_label)
 
 
 def show_success_message(page: ft.Page, message: str, action_label: Optional[str] = None, mode: Optional[str] = None) -> None:
-    """Show success message to user with optional mode indicator."""
-    try:
-        # Add mode prefix if specified
-        display_message = message
-        if mode == 'mock':
-            display_message = f"{MOCK_PREFIX}{message}"
-        elif mode == 'real':
-            display_message = f"{REAL_PREFIX}{message}"
-        
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text(display_message),
-            bgcolor=ft.Colors.ORANGE if mode == 'mock' else ft.Colors.GREEN,
-            action=action_label if action_label else "DISMISS",
-            duration=5000 if mode == 'mock' else 4000  # Longer for mock messages
-        )
-        page.snack_bar.open = True
-        page.update()  # ONLY acceptable page.update() use case
-        
-        logger.info(f"User feedback shown: SUCCESS - {message}")
-        
-    except Exception as e:
-        logger.error(f"Failed to show user feedback: {e}")
+    """
+    DEPRECATED: Show success message to user with optional mode indicator.
+    This function has been moved to utils.dialog_consolidation_helper.
+    """
+    warnings.warn(
+        "show_success_message has been moved to utils.dialog_consolidation_helper. "
+        "Please update your imports.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return _show_success_message(page, message, action_label, mode)
 
 
 def show_error_message(page: ft.Page, message: str, action_label: Optional[str] = None) -> None:
-    """Show error message to user."""
-    show_user_feedback(page, message, is_error=True, action_label=action_label)
+    """
+    DEPRECATED: Show error message to user.
+    This function has been moved to utils.dialog_consolidation_helper.
+    """
+    warnings.warn(
+        "show_error_message has been moved to utils.dialog_consolidation_helper. "
+        "Please update your imports.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return _show_error_message(page, message, action_label)
 
 
 def show_info_message(page: ft.Page, message: str, action_label: Optional[str] = None, mode: Optional[str] = None) -> None:
-    """Show info message to user with optional mode indicator."""
-    # Add mode prefix if specified
-    display_message = message
-    if mode == 'mock':
-        display_message = f"{MOCK_PREFIX}{message}"
-    elif mode == 'real':
-        display_message = f"{REAL_PREFIX}{message}"
-    
-    try:
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text(display_message),
-            bgcolor=ft.Colors.ORANGE if mode == 'mock' else ft.Colors.BLUE,
-            action=action_label if action_label else "DISMISS",
-            duration=5000 if mode == 'mock' else 4000  # Longer for mock messages
-        )
-        page.snack_bar.open = True
-        page.update()
-        
-        logger.info(f"Info message shown ({mode or 'standard'} mode): {display_message}")
-        
-    except Exception as e:
-        logger.error(f"Failed to show info message: {e}")
+    """
+    DEPRECATED: Show info message to user with optional mode indicator.
+    This function has been moved to utils.dialog_consolidation_helper.
+    """
+    warnings.warn(
+        "show_info_message has been moved to utils.dialog_consolidation_helper. "
+        "Please update your imports.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return _show_info_message(page, message, action_label, mode)
 
 
 def show_warning_message(page: ft.Page, message: str, action_label: Optional[str] = None) -> None:
-    """Show warning message to user."""
-    try:
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text(message),
-            bgcolor=ft.Colors.BLUE,
-            action=action_label if action_label else "DISMISS",
-            duration=4000  # 4 seconds
-        )
-        page.snack_bar.open = True
-        page.update()  # ONLY acceptable page.update() use case
-        
-        logger.info(f"User feedback shown: WARNING - {message}")
-        
-    except Exception as e:
-        logger.error(f"Failed to show user feedback: {e}")
-
-
-async def show_loading_dialog(page: ft.Page, title: str, message: str) -> ft.AlertDialog:
     """
-    Show loading dialog for long operations.
-    
-    Returns:
-        AlertDialog: The dialog instance for manual closing
+    DEPRECATED: Show warning message to user.
+    This function has been moved to utils.dialog_consolidation_helper.
     """
-    dialog = ft.AlertDialog(
-        modal=True,
-        title=ft.Text(title),
-        content=ft.Row([
-            ft.ProgressRing(width=20, height=20),
-            ft.Text(message, size=14)
-        ], alignment=ft.MainAxisAlignment.START),
+    warnings.warn(
+        "show_warning_message has been moved to utils.dialog_consolidation_helper. "
+        "Please update your imports.",
+        DeprecationWarning,
+        stacklevel=2
     )
-    
-    page.dialog = dialog
-    dialog.open = True
-    page.update()  # ONLY acceptable page.update() for dialogs
-    
-    return dialog
+    return _show_warning_message(page, message, action_label)
 
 
-async def close_loading_dialog(page: ft.Page, dialog: ft.AlertDialog) -> None:
-    """Close loading dialog."""
-    if page.dialog == dialog:
-        dialog.open = False
-        page.dialog = None
-        page.update()  # ONLY acceptable page.update() for dialogs
-
-
-def create_confirmation_dialog(
-    page: ft.Page,
-    title: str,
-    message: str,
-    on_confirm: callable,
-    on_cancel: callable = None,
-    confirm_text: str = "Confirm",
-    cancel_text: str = "Cancel"
-) -> ft.AlertDialog:
-    """
-    Create confirmation dialog for destructive actions.
-    
-    Args:
-        page: Flet page instance
-        title: Dialog title
-        message: Dialog message
-        on_confirm: Callback for confirm action
-        on_cancel: Optional callback for cancel action
-        confirm_text: Confirm button text
-        cancel_text: Cancel button text
-    
-    Returns:
-        AlertDialog: The dialog instance
-    """
-    def handle_confirm(e):
-        page.dialog.open = False
-        page.update()  # ONLY acceptable page.update() for dialogs
-        if on_confirm:
-            on_confirm(e)
-    
-    def handle_cancel(e):
-        page.dialog.open = False
-        page.update()  # ONLY acceptable page.update() for dialogs
-        if on_cancel:
-            on_cancel(e)
-    
-    dialog = ft.AlertDialog(
-        modal=True,
-        title=ft.Text(title),
-        content=ft.Text(message),
-        actions=[
-            ft.TextButton(cancel_text, on_click=handle_cancel),
-            ft.FilledButton(confirm_text, on_click=handle_confirm),
-        ],
-        actions_alignment=ft.MainAxisAlignment.END,
-    )
-    
-    return dialog
-
-
-def show_confirmation_dialog(
-    page: ft.Page,
-    title: str,
-    message: str,
-    on_confirm: callable,
-    on_cancel: callable = None,
-    confirm_text: str = "Confirm",
-    cancel_text: str = "Cancel"
-) -> None:
-    """Show confirmation dialog immediately."""
-    dialog = create_confirmation_dialog(
-        page, title, message, on_confirm, on_cancel, confirm_text, cancel_text
-    )
-    
-    page.dialog = dialog
-    dialog.open = True
-    page.update()  # ONLY acceptable page.update() for dialogs
+# Dialog functions have been consolidated into utils.dialog_consolidation_helper
+# Use show_confirmation, show_info, show_input from that module instead

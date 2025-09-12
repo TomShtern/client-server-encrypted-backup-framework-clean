@@ -13,6 +13,7 @@ Design Principles:
 
 import asyncio
 import time
+import random
 from typing import Dict, List, Tuple, Optional, Any
 import aiofiles
 from utils.debug_setup import get_logger
@@ -47,14 +48,80 @@ class ServerBridge:
             print("[ServerBridge] Initialized in LIVE mode, connected to the real server.")
             logger.info("ServerBridge initialized in LIVE mode with real server")
         else:
-            print("[ServerBridge] Initialized in FALLBACK mode. Will return mock data.")
+            print("[ServerBridge] Initialized in FALLBACK mode. Will use persistent mock data.")
             logger.info("ServerBridge initialized in FALLBACK mode")
 
-        # Initialize mock data generator for fallback mode
-        self.mock_generator = MockDataGenerator(num_clients=45)
+        # Initialize consolidated mock data generator with persistence and realistic fallback behavior
+        self.mock_generator = MockDataGenerator(num_clients=45, persist_to_disk=True)
 
         # Track connection status (legacy compatibility)
         self.connected = self.real_server is not None
+
+    def _create_success_response(self, message: str, data: Any = None, mode: str = 'mock', **kwargs) -> Dict[str, Any]:
+        """Create standardized success response."""
+        response = {
+            'success': True,
+            'message': message,
+            'mode': mode,
+            'timestamp': time.time()
+        }
+        if data is not None:
+            response['data'] = data
+        response.update(kwargs)
+        return response
+
+    def _create_error_response(self, message: str, error_code: str = None, mode: str = 'mock', **kwargs) -> Dict[str, Any]:
+        """Create standardized error response."""
+        response = {
+            'success': False,
+            'message': message,
+            'mode': mode,
+            'timestamp': time.time()
+        }
+        if error_code:
+            response['error_code'] = error_code
+        response.update(kwargs)
+        return response
+
+    def _handle_server_operation(self, operation_name: str, real_method_name: str, 
+                                mock_fallback_func, *args, **kwargs) -> Dict[str, Any]:
+        """Standardized server operation handler with consistent error handling."""
+        if self.real_server and hasattr(self.real_server, real_method_name):
+            try:
+                real_method = getattr(self.real_server, real_method_name)
+                result = real_method(*args, **kwargs)
+                logger.debug(f"[ServerBridge] Real server {operation_name} successful.")
+                
+                # If result is already a dict with success/message, return as-is but add mode
+                if isinstance(result, dict) and 'success' in result:
+                    result['mode'] = 'real'
+                    result['timestamp'] = time.time()
+                    return result
+                
+                # Otherwise, wrap the result
+                return self._create_success_response(
+                    f"{operation_name} completed successfully",
+                    data=result,
+                    mode='real'
+                )
+            except Exception as e:
+                logger.error(f"Real server {operation_name} failed: {e}")
+                return self._create_error_response(
+                    f"Real server {operation_name} failed: {str(e)}",
+                    error_code='REAL_SERVER_ERROR',
+                    mode='real'
+                )
+
+        # Mock fallback
+        try:
+            return mock_fallback_func(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"Mock {operation_name} failed: {e}")
+            return self._create_error_response(
+                f"Mock {operation_name} failed: {str(e)}",
+                error_code='MOCK_OPERATION_ERROR',
+                mode='mock'
+            )
 
     def _normalize_client_data(self, raw_clients: List[Dict]) -> List[Dict]:
         """Normalize client data format for consistent UI expectations."""
@@ -92,34 +159,39 @@ class ServerBridge:
 
     def get_all_clients_from_db(self) -> List[Dict]:
         """Get all clients from database."""
-        if self.real_server:
+        def mock_fallback():
+            logger.debug("[ServerBridge] FALLBACK: Returning mock client data.")
+            raw_data = self.mock_generator.get_clients()
+            # Normalize data format for consistent UI expectations
+            return self._normalize_client_data(raw_data)
+
+        if self.real_server and hasattr(self.real_server, 'get_all_clients_from_db'):
             try:
-                return self.real_server.get_all_clients_from_db()
+                result = self.real_server.get_all_clients_from_db()
+                logger.debug("[ServerBridge] Real server get_all_clients_from_db successful.")
+                return self._normalize_client_data(result) if result else []
             except Exception as e:
                 logger.error(f"Real server get_all_clients_from_db failed: {e}")
                 # Fall through to mock fallback
 
-        logger.debug("[ServerBridge] FALLBACK: Returning mock client data.")
-        raw_data = self.mock_generator.get_clients()
-        # Normalize data format for consistent UI expectations
-        return self._normalize_client_data(raw_data)
+        return mock_fallback()
 
     def get_clients(self) -> List[Dict[str, Any]]:
         """Get client data (alias for get_all_clients_from_db)."""
         return self.get_all_clients_from_db()
 
     async def get_clients_async(self) -> List[Dict[str, Any]]:
-        """Async version of get_clients."""
+        """Async version of get_clients using persistent mock store."""
         if self.real_server and hasattr(self.real_server, 'get_all_clients_from_db_async'):
             try:
                 raw_data = await self.real_server.get_all_clients_from_db_async()
                 return self._normalize_client_data(raw_data)
             except Exception as e:
                 logger.error(f"Real server async get_clients failed: {e}")
-                # Fall through to mock fallback
+                # Fall through to persistent mock fallback
 
-        # Mock fallback with brief async simulation
-        await asyncio.sleep(0.01)
+        # Persistent mock fallback with realistic async simulation
+        await asyncio.sleep(0.02)  # Slightly more realistic delay
         raw_data = self.mock_generator.get_clients()
         return self._normalize_client_data(raw_data)
 
@@ -181,15 +253,15 @@ class ServerBridge:
         return {}
 
     def delete_client(self, client_id: str) -> bool:
-        """Delete a client."""
+        """Delete a client with cascading file deletion."""
         if self.real_server and hasattr(self.real_server, 'delete_client'):
             try:
                 return self.real_server.delete_client(client_id)
             except Exception as e:
                 logger.error(f"Real server delete_client failed: {e}")
 
-        # Mock fallback
-        logger.info(f"[ServerBridge] FALLBACK: Deleting client from mock data: {client_id}")
+        # Persistent mock fallback with cascading delete
+        logger.info(f"[ServerBridge] FALLBACK: Deleting client from persistent mock store: {client_id}")
         return self.mock_generator.delete_client(client_id)
 
     # --- File Management ---
@@ -443,13 +515,23 @@ class ServerBridge:
                     'mode': 'real'
                 }
 
-        # Mock fallback - simulate successful update
-        logger.debug(f"[ServerBridge] FALLBACK: Simulating MOCK row update in {table_name} for ID: {row_id}")
-        return {
-            'success': True,
-            'message': 'Mock update completed - no real database changes made',
-            'mode': 'mock'
-        }
+        # Mock fallback - perform actual mock data update
+        logger.debug(f"[ServerBridge] FALLBACK: Performing MOCK row update in {table_name} for ID: {row_id}")
+        try:
+            success = self.mock_generator.update_table_row(table_name, row_id, updated_data)
+            return {
+                'success': success,
+                'message': f'Mock update completed - row {"updated" if success else "not found"} in {table_name}',
+                'mode': 'mock',
+                'updated_fields': list(updated_data.keys()) if success else []
+            }
+        except Exception as e:
+            logger.error(f"Mock update failed: {e}")
+            return {
+                'success': False,
+                'message': f'Mock update failed: {str(e)}',
+                'mode': 'mock'
+            }
 
     def delete_row(self, table_name: str, row_id: str) -> Dict[str, Any]:
         """Delete a row from the database.
@@ -473,13 +555,31 @@ class ServerBridge:
                     'mode': 'real'
                 }
 
-        # Mock fallback - simulate successful deletion
-        logger.debug(f"[ServerBridge] FALLBACK: Simulating MOCK row deletion in {table_name} for ID: {row_id}")
-        return {
-            'success': True,
-            'message': 'Mock deletion completed - no real database changes made',
-            'mode': 'mock'
-        }
+        # Mock fallback - perform actual mock data deletion
+        logger.debug(f"[ServerBridge] FALLBACK: Performing MOCK row deletion in {table_name} for ID: {row_id}")
+        try:
+            if table_name == "clients":
+                success = self.mock_generator.delete_client(row_id)
+            elif table_name == "files":
+                success = self.mock_generator.delete_file(row_id)
+            else:
+                logger.warning(f"Unknown table '{table_name}' for mock deletion")
+                success = False
+            
+            return {
+                'success': success,
+                'message': f'Mock deletion completed - row {"deleted" if success else "not found"} from {table_name}',
+                'mode': 'mock',
+                'table': table_name,
+                'cascading': table_name == "clients"  # Indicate if this was a cascading delete
+            }
+        except Exception as e:
+            logger.error(f"Mock deletion failed: {e}")
+            return {
+                'success': False,
+                'message': f'Mock deletion failed: {str(e)}',
+                'mode': 'mock'
+            }
 
     # Database Manager Interface - for compatibility with existing code
     class DatabaseManager:
@@ -523,8 +623,8 @@ class ServerBridge:
             except Exception as e:
                 logger.error(f"Real server get_server_status failed: {e}")
 
-        # Mock fallback
-        logger.debug("[ServerBridge] FALLBACK: Returning mock server status.")
+        # Persistent mock fallback with real-time data
+        logger.debug("[ServerBridge] FALLBACK: Returning persistent mock server status.")
         return self.mock_generator.get_server_status()
 
     async def get_server_status_async(self) -> Dict[str, Any]:
@@ -535,30 +635,99 @@ class ServerBridge:
             except Exception as e:
                 logger.error(f"Real server get_server_status_async failed: {e}")
 
-        # Mock fallback with brief async simulation
-        await asyncio.sleep(0.01)
-        logger.debug("[ServerBridge] FALLBACK: Returning mock server status (async).")
+        # Persistent mock fallback with realistic async simulation
+        await asyncio.sleep(0.02)
+        logger.debug("[ServerBridge] FALLBACK: Returning persistent mock server status (async).")
         return self.mock_generator.get_server_status()
 
     async def start_server_async(self) -> Dict[str, Any]:
         """Start the server (async version)."""
+        async def mock_fallback():
+            await asyncio.sleep(0.1)  # Simulate server startup time
+            logger.debug("[ServerBridge] FALLBACK: Mock server started successfully (async).")
+            return self._create_success_response(
+                "Server started successfully",
+                data={"server_running": True},
+                mode='mock',
+                server_running=True
+            )
+
         if self.real_server and hasattr(self.real_server, 'start_server_async'):
             try:
                 result = await self.real_server.start_server_async()
                 logger.debug("[ServerBridge] Real server start_server_async successful.")
-                return result
+                
+                # If result is already standardized, add mode and timestamp
+                if isinstance(result, dict):
+                    result['mode'] = 'real'
+                    result['timestamp'] = time.time()
+                    return result
+                else:
+                    return self._create_success_response(
+                        "Server started successfully",
+                        data=result,
+                        mode='real'
+                    )
             except Exception as e:
                 logger.error(f"Real server start_server_async failed: {e}")
+                return self._create_error_response(
+                    f"Failed to start server: {str(e)}",
+                    error_code='SERVER_START_FAILED',
+                    mode='real'
+                )
+
+        return await mock_fallback()
+
+    async def stop_server_async(self) -> Dict[str, Any]:
+        """Stop the server (async version)."""
+        async def mock_fallback():
+            await asyncio.sleep(0.2)  # Simulate server shutdown time
+            logger.debug("[ServerBridge] FALLBACK: Mock server stopped successfully (async).")
+            return self._create_success_response(
+                "Server stopped successfully",
+                data={"server_running": False},
+                mode='mock',
+                server_running=False
+            )
+
+        if self.real_server and hasattr(self.real_server, 'stop_server_async'):
+            try:
+                result = await self.real_server.stop_server_async()
+                logger.debug("[ServerBridge] Real server stop_server_async successful.")
+                
+                # If result is already standardized, add mode and timestamp
+                if isinstance(result, dict):
+                    result['mode'] = 'real'
+                    result['timestamp'] = time.time()
+                    return result
+                else:
+                    return self._create_success_response(
+                        "Server stopped successfully",
+                        data=result,
+                        mode='real'
+                    )
+            except Exception as e:
+                logger.error(f"Real server stop_server_async failed: {e}")
+                return self._create_error_response(
+                    f"Failed to stop server: {str(e)}",
+                    error_code='SERVER_STOP_FAILED',
+                    mode='real'
+                )
+
+        return await mock_fallback()
+
+    async def get_recent_activity_async(self) -> List[Dict[str, Any]]:
+        """Get recent server activity (async version)."""
+        if self.real_server and hasattr(self.real_server, 'get_recent_activity_async'):
+            try:
+                return await self.real_server.get_recent_activity_async()
+            except Exception as e:
+                logger.error(f"Real server get_recent_activity_async failed: {e}")
 
         # Mock fallback with brief async simulation
-        await asyncio.sleep(0.1)  # Simulate server startup time
-        logger.debug("[ServerBridge] FALLBACK: Mock server started successfully (async).")
-        return {
-            "success": True,
-            "message": "Server started successfully",
-            "server_running": True,
-            "timestamp": time.time()
-        }
+        await asyncio.sleep(0.05)  # Simulate activity query time
+        logger.debug("[ServerBridge] FALLBACK: Returning mock recent activity (async).")
+        return self.mock_generator.get_recent_activity()
 
     def get_system_status(self) -> Dict[str, Any]:
         """Get system status information (CPU, memory, etc.)."""
@@ -590,6 +759,62 @@ class ServerBridge:
         # Mock fallback
         logger.debug("[ServerBridge] FALLBACK: Mock connection test passed.")
         return True
+
+    async def test_connection_async(self) -> bool:
+        """Test connection to real server (async version)."""
+        if self.real_server and hasattr(self.real_server, 'test_connection_async'):
+            try:
+                return await self.real_server.test_connection_async()
+            except Exception as e:
+                logger.error(f"Async connection test failed: {e}")
+                return False
+
+        # Mock fallback with brief async simulation
+        await asyncio.sleep(0.1)  # Simulate connection test time
+        logger.debug("[ServerBridge] FALLBACK: Mock async connection test passed.")
+        return True
+
+    async def get_client_files_async(self, client_id: str) -> List[Tuple]:
+        """Get files for a specific client (async version)."""
+        if self.real_server and hasattr(self.real_server, 'get_client_files_async'):
+            try:
+                return await self.real_server.get_client_files_async(client_id)
+            except Exception as e:
+                logger.error(f"Real server async get_client_files failed: {e}")
+
+        # Mock fallback with brief async simulation
+        await asyncio.sleep(0.02)  # Simulate file query time
+        logger.debug(f"[ServerBridge] FALLBACK: Getting mock files for client ID: {client_id} (async)")
+        all_files = self.mock_generator.get_files()
+        client_files = [f for f in all_files if f.get('client_id') == client_id]
+        # Convert to tuple format if needed
+        return [(f['id'], f['name'], f['path'], f['size']) for f in client_files]
+
+    async def verify_file_async(self, file_id: str) -> Dict[str, Any]:
+        """Verify file integrity (async version).
+
+        Returns:
+            Dict with 'success' bool and 'message' str indicating real vs mock operation
+        """
+        if self.real_server and hasattr(self.real_server, 'verify_file_async'):
+            try:
+                result = await self.real_server.verify_file_async(file_id)
+                return {
+                    'success': result,
+                    'message': 'File verification passed' if result else 'File verification failed',
+                    'mode': 'real'
+                }
+            except Exception as e:
+                logger.error(f"Real server async verify_file failed: {e}")
+
+        # Mock fallback with realistic verification time
+        await asyncio.sleep(random.uniform(0.5, 2.0))  # Simulate file verification time
+        logger.debug(f"[ServerBridge] FALLBACK: Simulating MOCK async verify for file ID: {file_id}")
+        return {
+            'success': True,
+            'message': 'Mock verification passed - no real verification performed',
+            'mode': 'mock'
+        }
 
 
 # --------------------------------------------------------------------------------------
@@ -624,7 +849,7 @@ def create_server_bridge(real_server_instance: Optional[BackupServer] = None) ->
     return ServerBridge(real_server_instance)
 
 
-# Legacy support - alias for backward compatibility
+# Legacy support - alias for backward compatibility - not sure if and why this is needed, could be redunded and not wanted. be carfull.
 def create_modular_server_bridge(host: str = "127.0.0.1", port: int = 1256) -> ServerBridge:
     """
     Legacy factory function for backward compatibility.

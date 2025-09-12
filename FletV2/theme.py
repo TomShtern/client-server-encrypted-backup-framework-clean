@@ -13,21 +13,21 @@ BRAND_COLORS = {
     "primary_variant": "#1E40AF",  # Deeper blue
     "secondary": "#8B5CF6",  # Vibrant purple
     "secondary_variant": "#7C3AED",  # Deeper purple
-    
+
     # Accent colors for 2025 layering
     "accent_cyan": "#06B6D4",  # Modern cyan
     "accent_emerald": "#10B981",  # Fresh emerald
     "accent_amber": "#F59E0B",  # Warm amber
     "accent_rose": "#F43F5E",  # Vibrant rose
-    
+
     # Surface colors with depth
     "surface_elevated": "#F8FAFC",  # Elevated surface
     "surface_container": "#F1F5F9",  # Container surface
     "surface_variant": "#E2E8F0",  # Variant surface
-    
+
     # Status colors - vibrant but accessible
     "success": "#22C55E",
-    "warning": "#EAB308", 
+    "warning": "#EAB308",
     "error": "#EF4444",
     "info": "#3B82F6",
 }
@@ -38,19 +38,19 @@ DARK_BRAND_COLORS = {
     "primary_variant": "#3B82F6",
     "secondary": "#A78BFA",  # Bright purple for dark
     "secondary_variant": "#8B5CF6",
-    
+
     "accent_cyan": "#22D3EE",
-    "accent_emerald": "#34D399", 
+    "accent_emerald": "#34D399",
     "accent_amber": "#FBBF24",
     "accent_rose": "#FB7185",
-    
+
     "surface_elevated": "#1E293B",
     "surface_container": "#334155",
     "surface_variant": "#475569",
-    
+
     "success": "#4ADE80",
     "warning": "#FCD34D",
-    "error": "#F87171", 
+    "error": "#F87171",
     "info": "#60A5FA",
 }
 
@@ -229,7 +229,7 @@ def setup_enhanced_typography(page: ft.Page):
         # Labels and captions
         label_medium=ft.TextStyle(size=14, weight=ft.FontWeight.W_500)
     )
-    
+
     # Apply to both themes
     if page.theme:
         page.theme.text_theme = text_theme
@@ -239,10 +239,10 @@ def setup_enhanced_typography(page: ft.Page):
 def setup_default_theme(page: ft.Page) -> None:
     """
     Set up the default theme using Flet's native theming system with working 2025 design elements.
-    
+
     Uses only verified working Flet 0.28.3 APIs for reliability.
     """
-    
+
     # Enhanced light theme with working APIs
     page.theme = ft.Theme(
         color_scheme=ft.ColorScheme(**TEAL_LIGHT_COLORS),
@@ -250,7 +250,7 @@ def setup_default_theme(page: ft.Page) -> None:
         visual_density=ft.VisualDensity.COMPACT,
         use_material3=True
     )
-    
+
     # Enhanced dark theme with working APIs
     page.dark_theme = ft.Theme(
         color_scheme=ft.ColorScheme(**TEAL_DARK_COLORS),
@@ -258,9 +258,9 @@ def setup_default_theme(page: ft.Page) -> None:
         visual_density=ft.VisualDensity.COMPACT,
         use_material3=True
     )
-    
+
     page.theme_mode = ft.ThemeMode.SYSTEM
-    
+
     # Apply enhanced typography
     setup_enhanced_typography(page)
 
@@ -276,24 +276,24 @@ def toggle_theme_mode(page: ft.Page) -> None:
     else:
         # Default to LIGHT if SYSTEM or None
         page.theme_mode = ft.ThemeMode.LIGHT
-    
+
     page.update()  # ONLY acceptable page.update() for theme changes
 
 
 def apply_theme_variant(page: ft.Page, theme_name: str) -> bool:
     """
     Apply different theme variant while preserving current theme mode.
-    
+
     Args:
         page: Flet page instance
         theme_name: Theme name from THEMES dictionary
-        
+
     Returns:
         bool: True if theme was applied successfully
     """
     if theme_name not in THEMES:
         return False
-    
+
     current_mode = page.theme_mode
     theme_data = THEMES[theme_name]
     page.theme = theme_data["light"]
@@ -311,7 +311,7 @@ def get_available_themes() -> list:
 def get_current_theme_colors(page: ft.Page) -> dict:
     """
     Get current theme colors using Flet's built-in color system.
-    
+
     Returns semantic color names that work with current theme.
     """
     return {
@@ -336,7 +336,7 @@ def setup_modern_theme(page: ft.Page) -> None:
     Set up 2025 modern theme with vibrant colors, enhanced depth, and layering effects.
     Enhanced version of setup_default_theme with 2025 design trends.
     """
-    # Enhanced light theme with vibrant color system  
+    # Enhanced light theme with vibrant color system
     page.theme = ft.Theme(
         color_scheme=ft.ColorScheme(
             primary=BRAND_COLORS["primary"],
@@ -357,7 +357,7 @@ def setup_modern_theme(page: ft.Page) -> None:
         visual_density=ft.VisualDensity.COMPACT,
         use_material3=True
     )
-    
+
     # Enhanced dark theme with vibrant colors
     page.dark_theme = ft.Theme(
         color_scheme=ft.ColorScheme(
@@ -379,9 +379,9 @@ def setup_modern_theme(page: ft.Page) -> None:
         visual_density=ft.VisualDensity.COMPACT,
         use_material3=True
     )
-    
+
     page.theme_mode = ft.ThemeMode.SYSTEM
-    
+
     # Apply enhanced typography
     setup_enhanced_typography(page)
 
@@ -405,7 +405,7 @@ def create_modern_button_style(
 ) -> ft.ButtonStyle:
     """Create modern button style with enhanced states and 2025 color vibrancy."""
     base_color = get_brand_color(color_type, is_dark)
-    
+
     if variant == "filled":
         return ft.ButtonStyle(
             bgcolor={

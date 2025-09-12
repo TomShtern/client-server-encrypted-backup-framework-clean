@@ -180,17 +180,107 @@ class FletV2App(ft.Row):
                 logger.error(f"Even fallback failed: {fallback_ex}")
 
     def _initialize_state_manager(self):
-        """Initialize state manager for reactive UI updates"""
+        """Initialize state manager with server bridge integration for reactive UI updates"""
         try:
             from utils.state_manager import create_state_manager
-            self.state_manager = create_state_manager(self.page)
-            logger.info("State manager initialized successfully")
+            # Pass server_bridge for enhanced server-mediated operations
+            self.state_manager = create_state_manager(self.page, self.server_bridge)
+            
+            # Set up cross-view reactive updates
+            self._setup_cross_view_reactivity()
+            
+            logger.info("State manager initialized with server bridge integration and cross-view reactivity")
         except ImportError:
             logger.warning("State manager not available, UI updates will be manual")
             self.state_manager = None
         except Exception as e:
             logger.error(f"Failed to initialize state manager: {e}")
             self.state_manager = None
+
+    def _setup_cross_view_reactivity(self):
+        """Set up global state listeners for cross-view reactive updates"""
+        if not self.state_manager:
+            return
+            
+        # Global listener for all state changes
+        def global_state_change_handler(key: str, new_value, old_value):
+            """Handle state changes that affect multiple views"""
+            try:
+                # Update navigation indicators based on state
+                if key == "connection_status":
+                    self._update_connection_indicator(new_value)
+                elif key == "server_status":
+                    self._update_server_status_indicator(new_value)
+                elif key == "notifications":
+                    self._handle_notifications_update(new_value)
+                elif key in ["clients", "files", "database_info"]:
+                    # Data changes that might affect multiple views
+                    self._handle_data_update(key, new_value)
+                    
+                logger.debug(f"Cross-view reactive update: {key}")
+                    
+            except Exception as e:
+                logger.error(f"Global state change handler failed: {e}")
+        
+        # Subscribe to global state changes
+        self.state_manager.subscribe_global(global_state_change_handler)
+        
+        # Set up specific cross-view subscriptions
+        self._setup_view_specific_subscriptions()
+
+    def _setup_view_specific_subscriptions(self):
+        """Set up view-specific cross-view subscriptions"""
+        if not self.state_manager:
+            return
+            
+        # Example: When clients change, update any client-related displays
+        self.state_manager.subscribe("clients", self._on_clients_changed)
+        
+        # When server status changes, update relevant views
+        self.state_manager.subscribe("server_status", self._on_server_status_changed)
+        
+        # When files change, update file-related displays  
+        self.state_manager.subscribe("files", self._on_files_changed)
+
+    def _update_connection_indicator(self, status: str):
+        """Update connection status indicator in navigation"""
+        # This could update a visual indicator in the navigation rail
+        pass
+
+    def _update_server_status_indicator(self, status: dict):
+        """Update server status indicator"""
+        # This could update server status displays across views
+        pass
+
+    def _handle_notifications_update(self, notifications: list):
+        """Handle notifications display updates"""
+        # This could show/hide notification indicators
+        pass
+
+    def _handle_data_update(self, data_type: str, new_data):
+        """Handle data updates that affect multiple views"""
+        # This could trigger view refreshes or update counters
+        logger.debug(f"Data update received: {data_type} with {len(new_data) if isinstance(new_data, list) else 'N/A'} items")
+
+    def _on_clients_changed(self, new_clients, old_clients):
+        """Handle clients data changes"""
+        # Could update client count displays, refresh client-dependent views
+        if isinstance(new_clients, list) and isinstance(old_clients, list):
+            if len(new_clients) != len(old_clients):
+                logger.info(f"Client count changed: {len(old_clients)} -> {len(new_clients)}")
+
+    def _on_server_status_changed(self, new_status, old_status):
+        """Handle server status changes"""
+        # Could update server indicators, enable/disable buttons
+        if isinstance(new_status, dict) and new_status.get('server_running') != (old_status or {}).get('server_running'):
+            logger.info(f"Server running state changed: {new_status.get('server_running')}")
+
+    def _on_files_changed(self, new_files, old_files):
+        """Handle files data changes"""
+        # Could update file count displays, refresh file-dependent views
+        if isinstance(new_files, list) and isinstance(old_files, list):
+            if len(new_files) != len(old_files):
+                logger.info(f"Files count changed: {len(old_files)} -> {len(new_files)}")
 
     def _on_page_connect(self, e):
         """Called when page is connected - handle reconnection scenarios."""
@@ -662,7 +752,7 @@ class FletV2App(ft.Row):
         except Exception as e:
             logger.debug(f"Could not show modern loading indicator: {e}")
             # Fallback to simple loading if modern version fails
-            try:
+            with contextlib.suppress(Exception):
                 simple_loading = ft.Container(
                     content=ft.ProgressRing(width=24, height=24),
                     expand=True,
@@ -670,8 +760,6 @@ class FletV2App(ft.Row):
                 )
                 self.content_area.content.content = simple_loading
                 self.content_area.content.update()
-            except Exception:
-                pass  # Continue without loading indicator if all attempts fail
 
     def _set_animation_for_view(self, view_name: str):
         """Dynamically set animation type and parameters based on view for enhanced UX."""
@@ -736,23 +824,51 @@ class FletV2App(ft.Row):
 
         logger.debug(f"Set animation for {view_name}: {animated_switcher.transition}, duration={animated_switcher.duration}ms")
 
+    def _get_view_config(self, view_name: str):
+        """Get view configuration for the specified view name."""
+        view_configs = {
+            "dashboard": ("views.dashboard", "create_dashboard_view"),
+            "clients": ("views.clients", "create_clients_view"),
+            "files": ("views.files", "create_files_view"),
+            "database": ("views.database", "create_database_view"),
+            "analytics": ("views.analytics", "create_analytics_view"),
+            "logs": ("views.logs", "create_logs_view"),
+            "settings": ("views.settings", "create_settings_view"),
+        }
+
+        # Get view configuration or use dashboard as fallback
+        module_name, function_name = view_configs.get(view_name, view_configs["dashboard"])
+        actual_view_name = view_name if view_name in view_configs else "dashboard"
+        return module_name, function_name, actual_view_name
+
+    def _update_content_area(self, animated_switcher, content, view_name: str):
+        """Update content area with error handling and fallback strategies."""
+        animated_switcher.content = content
+
+        # Smart update - check if control is attached to page before updating
+        try:
+            # Verify AnimatedSwitcher is properly attached to page
+            if hasattr(animated_switcher, 'page') and animated_switcher.page is not None:
+                animated_switcher.update()
+                logger.info(f"Successfully loaded {view_name} view")
+            else:
+                # Control not yet attached, use page update as fallback
+                logger.debug("AnimatedSwitcher not yet attached to page, using page update")
+                self.page.update()
+                logger.info(f"Successfully loaded {view_name} view (page update fallback)")
+        except Exception as update_error:
+            logger.warning(f"AnimatedSwitcher update failed, using page update: {update_error}")
+            try:
+                self.page.update()
+                logger.info(f"Successfully loaded {view_name} view (page update fallback)")
+            except Exception as fallback_error:
+                logger.error(f"Page update also failed: {fallback_error}")
+
     def _load_view(self, view_name: str):
         """Load view with enhanced infrastructure support and dynamic animated transitions."""
         try:
-            # View configuration mapping for cleaner code organization
-            view_configs = {
-                "dashboard": ("views.dashboard", "create_dashboard_view"),
-                "clients": ("views.clients", "create_clients_view"),
-                "files": ("views.files", "create_files_view"),
-                "database": ("views.database", "create_database_view"),
-                "analytics": ("views.analytics", "create_analytics_view"),
-                "logs": ("views.logs", "create_logs_view"),
-                "settings": ("views.settings", "create_settings_view"),
-            }
-
-            # Get view configuration or use dashboard as fallback
-            module_name, function_name = view_configs.get(view_name, view_configs["dashboard"])
-            actual_view_name = view_name if view_name in view_configs else "dashboard"
+            # Get view configuration
+            module_name, function_name, actual_view_name = self._get_view_config(view_name)
 
             # Dynamic import and view creation
             module = __import__(module_name, fromlist=[function_name])
@@ -762,26 +878,7 @@ class FletV2App(ft.Row):
 
             # Update content area using AnimatedSwitcher for smooth transitions
             animated_switcher = self.content_area.content
-            animated_switcher.content = content
-
-            # Smart update - check if control is attached to page before updating
-            try:
-                # Verify AnimatedSwitcher is properly attached to page
-                if hasattr(animated_switcher, 'page') and animated_switcher.page is not None:
-                    animated_switcher.update()
-                    logger.info(f"Successfully loaded {view_name} view")
-                else:
-                    # Control not yet attached, use page update as fallback
-                    logger.debug("AnimatedSwitcher not yet attached to page, using page update")
-                    self.page.update()
-                    logger.info(f"Successfully loaded {view_name} view (page update fallback)")
-            except Exception as update_error:
-                logger.warning(f"AnimatedSwitcher update failed, using page update: {update_error}")
-                try:
-                    self.page.update()
-                    logger.info(f"Successfully loaded {view_name} view (page update fallback)")
-                except Exception as fallback_error:
-                    logger.error(f"Page update also failed: {fallback_error}")
+            self._update_content_area(animated_switcher, content, view_name)
 
         except Exception as e:
             logger.error(f"Failed to load view {view_name}: {e}")
@@ -797,17 +894,10 @@ class FletV2App(ft.Row):
                     self.page.update()
 
     def _create_enhanced_view(self, view_function, view_name: str):
-        """Create view with simplified synchronous approach for better performance."""
+        """Create view with state manager integration - now required for all views."""
         try:
-            # Simple synchronous view creation - no complex async handling
-            try:
-                # Try with state_manager first
-                result = view_function(self.server_bridge, self.page, state_manager=self.state_manager)
-            except TypeError:
-                # Fallback without state_manager
-                result = view_function(self.server_bridge, self.page)
-
-            # Return the result directly - no async detection or placeholder logic
+            # All views now require state_manager as per Phase 2 refactor
+            result = view_function(self.server_bridge, self.page, self.state_manager)
             return result
 
         except Exception as e:

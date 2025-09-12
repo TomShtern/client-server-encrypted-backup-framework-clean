@@ -54,5 +54,14 @@
   "chat.checkpoints.showFileChanges": true,
   "chat.agent.maxRequests": 40,
   "inlineChat.notebookAgent": true,
-  "chat.agentSessionsViewLocation": "view"
+  "chat.agentSessionsViewLocation": "view",
+  "chat.mcp.serverSampling": {
+    "FletV2/.vscode/mcp.json: fetch": {
+      "allowedModels": [
+        "copilot/gpt-4.1",
+        "copilot/gpt-5-mini",
+        "copilot/grok-code-fast-1"
+      ]
+    }
+  }
 }

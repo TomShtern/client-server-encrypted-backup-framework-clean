@@ -22,8 +22,8 @@ from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
 from utils.ui_helpers import level_colors, striped_row_color, build_level_badge
-from utils.perf_metrics import PerfTimer
-from utils.user_feedback import show_success_message
+from utils.performance import PerfTimer
+from utils.dialog_consolidation_helper import show_success_message
 from config import ASYNC_DELAY
 from utils.performance import (
     PaginationConfig,
@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 def create_logs_view(
     server_bridge: Optional[ServerBridge], 
     page: ft.Page, 
-    state_manager: Optional[StateManager] = None
+    state_manager: StateManager
 ) -> ft.Control:
     """Return the logs view control."""
     logger.info("Creating logs view (clean implementation)")
@@ -418,9 +418,8 @@ def create_logs_view(
             with PerfTimer("logs.load.fetch"):
                 if server_bridge:
                     try:
-                        import concurrent.futures
-                        with concurrent.futures.ThreadPoolExecutor() as ex:
-                            logs_data = await asyncio.get_event_loop().run_in_executor(ex, server_bridge.get_logs)
+                        # Use the server bridge's get_logs method directly
+                        logs_data = server_bridge.get_logs()
                         if not isinstance(logs_data, list):
                             logs_data = []
                     except Exception as e:  # pragma: no cover

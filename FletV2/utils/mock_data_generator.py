@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
 """
-Mock Data Generator for FletV2 Development
-Provides realistic test data for GUI development and testing.
+Enhanced Mock Data Generator for FletV2 Development
+Provides persistent, thread-safe, realistic test data for GUI development and testing.
+
+Features:
+- Thread-safe operations with referential integrity
+- Optional disk persistence for consistent testing
+- Realistic data generation with time-based changes
+- Database-like operations with cascading deletes
+- Change listeners for reactive UI updates
+- Comprehensive mock data for all system components
 
 TODO: DELETE THIS ENTIRE FILE when connecting to production server/database
 This file is ONLY for development purposes and should not exist in production.
@@ -9,13 +17,65 @@ This file is ONLY for development purposes and should not exist in production.
 
 import random
 import time
+import json
+import threading
 import logging
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Set, Callable
+from dataclasses import dataclass, asdict
+from pathlib import Path
 import uuid
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class MockClient:
+    """Client data structure matching real server schema"""
+    id: str
+    name: str
+    ip_address: str
+    status: str  # connected, disconnected, error
+    last_seen: datetime
+    files_count: int
+    total_size: int
+    connection_time: Optional[datetime] = None
+    version: str = "1.0.0"
+    platform: str = "unknown"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary with proper timestamp handling"""
+        data = asdict(self)
+        # Convert datetime objects to ISO strings for JSON compatibility
+        for key, value in data.items():
+            if isinstance(value, datetime):
+                data[key] = value.isoformat()
+        return data
+
+
+@dataclass  
+class MockFile:
+    """File data structure matching real server schema"""
+    id: str
+    client_id: str
+    name: str
+    path: str
+    size: int
+    hash: str
+    created: datetime
+    modified: datetime
+    status: str  # uploaded, verified, error
+    backup_count: int = 1
+    last_backup: Optional[datetime] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary with proper timestamp handling"""
+        data = asdict(self)
+        for key, value in data.items():
+            if isinstance(value, datetime):
+                data[key] = value.isoformat()
+        return data
 
 
 class MockDataGenerator:
@@ -30,17 +90,46 @@ class MockDataGenerator:
     - Time-based data changes for testing real-time updates
     """
     
-    def __init__(self, num_clients: int = 45):
-        """Initialize with specified number of mock clients"""
+    def __init__(self, num_clients: int = 45, persist_to_disk: bool = False):
+        """Initialize enhanced mock data generator with persistence features"""
         self.num_clients = num_clients
         self.start_time = time.time()
+        self.persist_to_disk = persist_to_disk
+        self.data_file = Path("mock_data_store.json") if persist_to_disk else None
         
-        # Generate consistent mock data
-        self._generate_base_data()
+        # Thread-safe data store
+        self._lock = threading.RLock()
         
-        # Track dynamic changes for real-time testing
+        # Enhanced data structures using dataclasses
+        self._clients: Dict[str, MockClient] = {}
+        self._files: Dict[str, MockFile] = {}
+        self._activity_log: List[Dict[str, Any]] = []
+        self._server_status = {
+            "running": True,
+            "port": 8080,
+            "start_time": datetime.now(),
+            "connections": 0,
+            "total_transfers": 0
+        }
+        
+        # Referential integrity tracking
+        self._client_file_index: Dict[str, Set[str]] = {}  # client_id -> {file_ids}
+        
+        # Change tracking for notifications
+        self._change_listeners: List[Callable] = []
+        
+        # Legacy compatibility fields
         self.last_update = time.time()
         self.change_counter = 0
+        
+        # Initialize with realistic data
+        self._generate_base_data()
+        
+        # Load persisted data if available
+        if persist_to_disk and self.data_file and self.data_file.exists():
+            self._load_from_disk()
+        
+        logger.info(f"Enhanced mock data generator initialized with {len(self._clients)} clients and {len(self._files)} files")
     
     def _generate_base_data(self):
         """Generate base mock data that remains consistent"""
@@ -71,8 +160,10 @@ class MockDataGenerator:
             ".py": 2
         }
         
-        # Generate clients
-        self.clients = []
+        with self._lock:
+            # Generate clients using enhanced data structures
+            self._clients.clear()
+            self._client_file_index.clear()
         for i in range(self.num_clients):
             client_id = f"client_{i+1:03d}"
             
@@ -104,124 +195,167 @@ class MockDataGenerator:
                 weights=[s[1] for s in status_weights]
             )[0]
             
-            client = {
-                "client_id": client_id,
-                "name": client_name,
-                "address": f"{ip}:{port}",
-                "status": status,
-                "connected_at": base_time.strftime("%Y-%m-%d %H:%M:%S"),
-                "last_activity": last_activity.strftime("%Y-%m-%d %H:%M:%S"),
-                "has_public_key": random.choice([True, False]),
-                "has_aes_key": random.choice([True, False]),
-                "files_count": 0,  # Will be calculated
-                "total_size": 0    # Will be calculated
-            }
-            self.clients.append(client)
+            client = MockClient(
+                id=client_id,
+                name=client_name,
+                ip_address=ip,
+                status=status.lower(),
+                last_seen=last_activity,
+                files_count=0,  # Will be calculated
+                total_size=0,   # Will be calculated
+                connection_time=base_time,
+                version=random.choice(["1.0.0", "1.1.0", "1.2.0"]),
+                platform=random.choice(["Windows", "Linux", "MacOS"])
+            )
+            self._clients[client.id] = client
+            self._client_file_index[client.id] = set()
         
-        # Generate files for clients
-        self.files = []
-        for client in self.clients:
-            # Each client has 0-3 files (most have 1)
-            num_files = random.choices([0, 1, 2, 3], weights=[10, 70, 15, 5])[0]
-            
-            for j in range(num_files):
-                # Generate realistic filename
-                base_names = [
-                    "document", "report", "image", "photo", "data", "backup",
-                    "config", "log", "archive", "export", "import", "script"
-                ]
-                base_name = random.choice(base_names)
-                file_extension = random.choices(
-                    list(file_types.keys()),
-                    weights=list(file_types.values())
-                )[0]
-                filename = f"{base_name}_{j+1}{file_extension}"
+            # Generate files for clients
+            self._files.clear()
+            for client in self._clients.values():
+                # Each client has 0-3 files (most have 1)
+                num_files = random.choices([0, 1, 2, 3], weights=[10, 70, 15, 5])[0]
                 
-                # Generate consistent file_id that matches files view format  
-                file_id = f"file_{hash(filename) % 10000}"
-                
-                # Generate realistic file sizes
-                if file_extension in [".jpg", ".png"]:
-                    file_size = random.randint(500_000, 5_000_000)  # 500KB - 5MB
-                elif file_extension in [".pdf", ".docx"]:
-                    file_size = random.randint(100_000, 2_000_000)  # 100KB - 2MB
-                elif file_extension in [".mp4"]:
-                    file_size = random.randint(10_000_000, 100_000_000)  # 10MB - 100MB
-                elif file_extension in [".zip"]:
-                    file_size = random.randint(1_000_000, 50_000_000)  # 1MB - 50MB
-                else:
-                    file_size = random.randint(1000, 500_000)  # 1KB - 500KB
-                
-                # Generate upload time
-                upload_time = datetime.now() - timedelta(
-                    days=random.randint(0, 7),
-                    hours=random.randint(0, 23)
-                )
-                
-                file_data = {
-                    "id": file_id,  # Primary ID for UI consistency  
-                    "file_id": file_id,
-                    "name": filename,  # Changed from "filename" to match files view expectation
-                    "filename": filename,  # Keep both for compatibility
-                    "path": f"/home/user/{random.choice(['documents', 'downloads', 'desktop'])}/{filename}",
-                    "pathname": f"/home/user/{random.choice(['documents', 'downloads', 'desktop'])}/{filename}",  # Keep both for compatibility
-                    "size": file_size,
-                    "type": file_extension.replace('.', ''),  # File extension without dot for type field
-                    "uploaded_at": upload_time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "modification_date": upload_time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "modified": upload_time.isoformat(),  # ISO format for modified field
-                    "owner": client["name"].split()[0].lower(),  # Extract owner from client name
-                    "client_id": client["client_id"],
-                    "client_name": client["name"],
-                    "verified": random.choice([True, False]),
-                    "crc": random.randint(100000000, 999999999),
-                    "status": random.choice(["Complete", "Uploading", "Failed", "Queued"])
-                }
-                
-                self.files.append(file_data)
-                
-                # Update client totals
-                client["files_count"] += 1
-                client["total_size"] += file_size
+                for j in range(num_files):
+                    # Generate realistic filename
+                    base_names = [
+                        "document", "report", "image", "photo", "data", "backup",
+                        "config", "log", "archive", "export", "import", "script"
+                    ]
+                    base_name = random.choice(base_names)
+                    file_extension = random.choices(
+                        list(file_types.keys()),
+                        weights=list(file_types.values())
+                    )[0]
+                    filename = f"{base_name}_{j+1}{file_extension}"
+                    
+                    # Generate consistent file_id that matches files view format  
+                    file_id = f"file_{hash(filename) % 10000}"
+                    
+                    # Generate realistic file sizes
+                    if file_extension in [".jpg", ".png"]:
+                        file_size = random.randint(500_000, 5_000_000)  # 500KB - 5MB
+                    elif file_extension in [".pdf", ".docx"]:
+                        file_size = random.randint(100_000, 2_000_000)  # 100KB - 2MB
+                    elif file_extension in [".mp4"]:
+                        file_size = random.randint(10_000_000, 100_000_000)  # 10MB - 100MB
+                    elif file_extension in [".zip"]:
+                        file_size = random.randint(1_000_000, 50_000_000)  # 1MB - 50MB
+                    else:
+                        file_size = random.randint(1000, 500_000)  # 1KB - 500KB
+                    
+                    # Generate upload time
+                    upload_time = datetime.now() - timedelta(
+                        days=random.randint(0, 7),
+                        hours=random.randint(0, 23)
+                    )
+                    
+                    # Generate consistent file hash
+                    file_hash = f"sha256:{hash(filename + str(file_size)) % 999999999:08x}"
+                    
+                    file_path = f"/home/user/{random.choice(['documents', 'downloads', 'desktop'])}/{filename}"
+                    
+                    file_obj = MockFile(
+                        id=file_id,
+                        client_id=client.id,
+                        name=filename,
+                        path=file_path,
+                        size=file_size,
+                        hash=file_hash,
+                        created=upload_time,
+                        modified=upload_time,
+                        status=random.choice(["uploaded", "verified", "error"]),
+                        backup_count=random.randint(1, 3),
+                        last_backup=upload_time if random.choice([True, False]) else None
+                    )
+                    
+                    # Only add file if client exists (referential integrity)
+                    if file_obj.client_id in self._clients:
+                        self._files[file_obj.id] = file_obj
+                        self._client_file_index[file_obj.client_id].add(file_obj.id)
+                        
+                        # Update client totals
+                        client.files_count += 1
+                        client.total_size += file_size
     
     def get_clients(self) -> List[Dict[str, Any]]:
-        """Get client data with dynamic updates for real-time testing"""
-        self._apply_dynamic_changes()
-        return self.clients.copy()
+        """Get client data with dynamic updates and current statistics"""
+        with self._lock:
+            self._apply_dynamic_changes()
+            clients = []
+            for client in self._clients.values():
+                client_dict = client.to_dict()
+                # Update real-time statistics
+                client_files = self._client_file_index.get(client.id, set())
+                client_dict["files_count"] = len(client_files)
+                client_dict["total_size"] = sum(self._files[fid].size for fid in client_files if fid in self._files)
+                
+                # Legacy compatibility fields
+                client_dict["client_id"] = client.id
+                client_dict["address"] = f"{client.ip_address}:54321"
+                client_dict["connected_at"] = client.connection_time.strftime("%Y-%m-%d %H:%M:%S") if client.connection_time else "N/A"
+                client_dict["last_activity"] = client.last_seen.strftime("%Y-%m-%d %H:%M:%S")
+                client_dict["has_public_key"] = random.choice([True, False])
+                client_dict["has_aes_key"] = random.choice([True, False])
+                
+                clients.append(client_dict)
+            return clients
     
-    def get_files(self) -> List[Dict[str, Any]]:
-        """Get file data with dynamic updates"""
-        self._apply_dynamic_changes()
-        return self.files.copy()
+    def get_files(self, client_id: str = None) -> List[Dict[str, Any]]:
+        """Get file data with dynamic updates, optionally filtered by client"""
+        with self._lock:
+            self._apply_dynamic_changes()
+            files = []
+            for file_obj in self._files.values():
+                if client_id is None or file_obj.client_id == client_id:
+                    file_dict = file_obj.to_dict()
+                    
+                    # Legacy compatibility fields
+                    file_dict["file_id"] = file_obj.id
+                    file_dict["filename"] = file_obj.name
+                    file_dict["pathname"] = file_obj.path
+                    file_dict["type"] = file_obj.name.split('.')[-1] if '.' in file_obj.name else 'unknown'
+                    file_dict["uploaded_at"] = file_obj.created.strftime("%Y-%m-%d %H:%M:%S")
+                    file_dict["modification_date"] = file_obj.modified.strftime("%Y-%m-%d %H:%M:%S")
+                    file_dict["owner"] = self._clients.get(file_obj.client_id, MockClient("", "", "", "", datetime.now(), 0, 0)).name.split()[0].lower()
+                    file_dict["client_name"] = self._clients.get(file_obj.client_id, MockClient("", "", "", "", datetime.now(), 0, 0)).name
+                    file_dict["verified"] = file_obj.status == "verified"
+                    file_dict["crc"] = int(file_obj.hash.split(':')[-1], 16) if ':' in file_obj.hash else random.randint(100000000, 999999999)
+                    
+                    files.append(file_dict)
+            return files
     
     def get_server_status(self) -> Dict[str, Any]:
-        """Get dynamic server status for real-time testing"""
-        uptime_seconds = int(time.time() - self.start_time)
-        uptime_minutes = uptime_seconds // 60
-        uptime_hours = uptime_minutes // 60
-        
-        if uptime_hours > 0:
-            uptime = f"{uptime_hours}h {uptime_minutes % 60}m"
-        else:
-            uptime = f"{uptime_minutes}m"
-        
-        active_clients = len([c for c in self.clients if c["status"] == "Connected"])
-        total_files = len(self.files)
-        total_size = sum(f["size"] for f in self.files)
-        storage_gb = total_size / (1024 * 1024 * 1024)
-        
-        return {
-            "server_running": True,
-            "port": 1256,
-            "uptime": uptime,
-            "total_transfers": total_files + random.randint(0, 50),
-            "active_clients": active_clients,
-            "total_files": total_files,
-            "storage_used": f"{storage_gb:.2f} GB",
-            "cpu_usage": random.uniform(10, 40),
-            "memory_usage": random.uniform(30, 60),
-            "disk_usage": random.uniform(60, 80)
-        }
+        """Get dynamic server status with real-time data"""
+        with self._lock:
+            connected_clients = sum(1 for c in self._clients.values() if c.status == "connected")
+            uptime_seconds = int((datetime.now() - self._server_status["start_time"]).total_seconds())
+            uptime_minutes = uptime_seconds // 60
+            uptime_hours = uptime_minutes // 60
+            
+            if uptime_hours > 0:
+                uptime = f"{uptime_hours}h {uptime_minutes % 60}m"
+            else:
+                uptime = f"{uptime_minutes}m"
+            
+            total_size = sum(f.size for f in self._files.values())
+            storage_gb = total_size / (1024 * 1024 * 1024)
+            
+            return {
+                "server_running": self._server_status["running"],
+                "port": self._server_status["port"],
+                "uptime": uptime,
+                "uptime_seconds": uptime_seconds,
+                "total_transfers": self._server_status["total_transfers"],
+                "active_clients": connected_clients,
+                "clients_connected": connected_clients,
+                "total_files": len(self._files),
+                "storage_used": f"{storage_gb:.2f} GB",
+                "storage_used_gb": storage_gb,
+                "cpu_usage": random.uniform(10, 40),
+                "memory_usage": random.uniform(30, 60),
+                "disk_usage": random.uniform(60, 80)
+            }
     
     def get_system_status(self) -> Dict[str, Any]:
         """Get dynamic system metrics"""
@@ -417,44 +551,576 @@ class MockDataGenerator:
             return {"columns": [], "rows": []}
 
     def delete_file(self, file_id: str) -> bool:
-        """Delete a file from mock data by file_id."""
-        try:
-            original_count = len(self.files)
-            # Remove file with matching id (could be file_id or id field)
-            self.files = [f for f in self.files if f.get('file_id') != file_id and f.get('id') != file_id]
-            deleted = len(self.files) < original_count
-            if deleted:
-                logger.info(f"MockDataGenerator: Deleted file {file_id}")
-            else:
+        """Delete file and update client statistics with thread safety"""
+        with self._lock:
+            if file_id not in self._files:
                 logger.warning(f"MockDataGenerator: File {file_id} not found for deletion")
-            return deleted
-        except Exception as e:
-            logger.error(f"MockDataGenerator delete_file error: {e}")
+                return False
+            
+            file_obj = self._files[file_id]
+            
+            if self._delete_file_internal(file_id):
+                self._add_activity("file_delete", f"Deleted file {file_obj.name}")
+                self._save_to_disk()
+                self._notify_change("files", {"action": "delete", "file_id": file_id})
+                logger.info(f"MockDataGenerator: Successfully deleted file {file_id}")
+                return True
             return False
 
     def delete_client(self, client_id: str) -> bool:
-        """Delete a client from mock data by client_id."""
-        try:
-            original_count = len(self.clients)
-            # Remove client with matching id (could be client_id or id field)
-            self.clients = [c for c in self.clients if c.get('client_id') != client_id and c.get('id') != client_id]
-            deleted = len(self.clients) < original_count
-            if deleted:
-                logger.info(f"MockDataGenerator: Deleted client {client_id}")
-            else:
+        """Delete client with cascading file deletion and thread safety"""
+        with self._lock:
+            if client_id not in self._clients:
                 logger.warning(f"MockDataGenerator: Client {client_id} not found for deletion")
-            return deleted
-        except Exception as e:
-            logger.error(f"MockDataGenerator delete_client error: {e}")
+                return False
+            
+            client = self._clients[client_id]
+            
+            # Cascading delete: remove all client files
+            client_files = self._client_file_index.get(client_id, set()).copy()
+            deleted_files = 0
+            for file_id in client_files:
+                if self._delete_file_internal(file_id):
+                    deleted_files += 1
+            
+            # Delete client
+            del self._clients[client_id]
+            del self._client_file_index[client_id]
+            
+            # Log activity
+            self._add_activity(
+                "client_delete",
+                f"Deleted client {client.name} and {deleted_files} associated files"
+            )
+            
+            self._save_to_disk()
+            self._notify_change("clients", {"action": "delete", "client_id": client_id})
+            logger.info(f"MockDataGenerator: Successfully deleted client {client_id} with {deleted_files} associated files")
+            return True
+    
+    def _delete_file_internal(self, file_id: str) -> bool:
+        """Internal file deletion without locking (for cascading operations)"""
+        if file_id not in self._files:
             return False
+        
+        file_obj = self._files[file_id]
+        
+        # Remove from client index
+        if file_obj.client_id in self._client_file_index:
+            self._client_file_index[file_obj.client_id].discard(file_id)
+        
+        # Delete file
+        del self._files[file_id]
+        return True
+    
+    def _add_activity(self, activity_type: str, message: str, timestamp: datetime = None):
+        """Add activity to log with timestamp"""
+        activity = {
+            "id": f"activity_{int(time.time() * 1000)}_{len(self._activity_log)}",
+            "type": activity_type,
+            "message": message, 
+            "timestamp": timestamp or datetime.now()
+        }
+        self._activity_log.append(activity)
+        
+        # Keep only last 100 activities for performance
+        if len(self._activity_log) > 100:
+            self._activity_log = self._activity_log[-100:]
+        
+        self._notify_change("activity", activity)
+    
+    def _notify_change(self, change_type: str, data: Any):
+        """Notify listeners of data changes"""
+        for listener in self._change_listeners:
+            try:
+                listener(change_type, data)
+            except Exception as e:
+                logger.error(f"Change listener failed: {e}")
+    
+    def _save_to_disk(self):
+        """Save current state to disk"""
+        if not self.persist_to_disk or not self.data_file:
+            return
+        
+        try:
+            data = {
+                "clients": {k: v.to_dict() for k, v in self._clients.items()},
+                "files": {k: v.to_dict() for k, v in self._files.items()},
+                "activity_log": [{**activity, "timestamp": activity["timestamp"].isoformat() if isinstance(activity["timestamp"], datetime) else activity["timestamp"]} for activity in self._activity_log],
+                "server_status": {**self._server_status, "start_time": self._server_status["start_time"].isoformat()},
+                "saved_at": datetime.now().isoformat()
+            }
+        
+            with open(self.data_file, 'w') as f:
+                json.dump(data, f, indent=2)
+        
+            logger.debug(f"Mock data persisted to {self.data_file}")
+        except Exception as e:
+            logger.error(f"Failed to save mock data: {e}")
+    
+    def _load_from_disk(self):
+        """Load state from disk"""
+        try:
+            with open(self.data_file, 'r') as f:
+                data = json.load(f)
+            
+            with self._lock:
+                # Load clients
+                for client_id, client_data in data.get("clients", {}).items():
+                    # Convert ISO strings back to datetime objects
+                    client_data["last_seen"] = datetime.fromisoformat(client_data["last_seen"])
+                    if client_data.get("connection_time"):
+                        client_data["connection_time"] = datetime.fromisoformat(client_data["connection_time"])
+                    
+                    self._clients[client_id] = MockClient(**client_data)
+                    self._client_file_index[client_id] = set()
+                
+                # Load files
+                for file_id, file_data in data.get("files", {}).items():
+                    file_data["created"] = datetime.fromisoformat(file_data["created"])
+                    file_data["modified"] = datetime.fromisoformat(file_data["modified"])
+                    if file_data.get("last_backup"):
+                        file_data["last_backup"] = datetime.fromisoformat(file_data["last_backup"])
+                    
+                    file_obj = MockFile(**file_data)
+                    self._files[file_id] = file_obj
+                    if file_obj.client_id in self._client_file_index:
+                        self._client_file_index[file_obj.client_id].add(file_id)
+                
+                # Load activity log
+                self._activity_log = []
+                for activity in data.get("activity_log", []):
+                    if isinstance(activity["timestamp"], str):
+                        activity["timestamp"] = datetime.fromisoformat(activity["timestamp"])
+                    self._activity_log.append(activity)
+                
+                # Load server status
+                server_status = data.get("server_status", {})
+                if server_status.get("start_time"):
+                    server_status["start_time"] = datetime.fromisoformat(server_status["start_time"])
+                self._server_status.update(server_status)
+            
+            logger.info(f"Mock data loaded from {self.data_file}")
+        except Exception as e:
+            logger.error(f"Failed to load mock data: {e}")
+    
+    def get_client(self, client_id: str) -> Optional[Dict[str, Any]]:
+        """Get specific client by ID"""
+        with self._lock:
+            client = self._clients.get(client_id)
+            if client:
+                client_dict = client.to_dict()
+                client_files = self._client_file_index.get(client_id, set())
+                client_dict["files_count"] = len(client_files)  
+                client_dict["total_size"] = sum(self._files[fid].size for fid in client_files if fid in self._files)
+                return client_dict
+            return None
+    
+    def get_file(self, file_id: str) -> Optional[Dict[str, Any]]:
+        """Get specific file by ID"""
+        with self._lock:
+            file_obj = self._files.get(file_id)
+            return file_obj.to_dict() if file_obj else None
+    
+    def disconnect_client(self, client_id: str) -> bool:
+        """Disconnect client (change status)"""
+        with self._lock:
+            if client_id not in self._clients:
+                return False
+            
+            client = self._clients[client_id]
+            client.status = "disconnected"
+            client.last_seen = datetime.now()
+            
+            self._add_activity("client_disconnect", f"Client {client.name} disconnected")
+            self._save_to_disk()
+            self._notify_change("clients", {"action": "disconnect", "client_id": client_id})
+            return True
+    
+    def verify_file(self, file_id: str) -> Dict[str, Any]:
+        """Verify file integrity"""
+        with self._lock:
+            if file_id not in self._files:
+                return {"success": False, "message": "File not found"}
+            
+            file_obj = self._files[file_id]
+            
+            # 95% success rate for verification
+            if random.random() > 0.05:
+                file_obj.status = "verified"
+                self._add_activity("file_verify", f"File {file_obj.name} verified successfully")
+                self._save_to_disk()
+                return {
+                    "success": True,
+                    "message": "File verified successfully",
+                    "hash": file_obj.hash,
+                    "status": "verified"
+                }
+            else:
+                file_obj.status = "error"
+                self._add_activity("file_error", f"File {file_obj.name} verification failed")
+                return {"success": False, "message": "File verification failed"}
+    
+    def start_server(self) -> Dict[str, Any]:
+        """Start server simulation"""
+        with self._lock:
+            if not self._server_status["running"]:
+                self._server_status["running"] = True
+                self._server_status["start_time"] = datetime.now()
+                self._add_activity("server_start", "Backup server started")
+                self._save_to_disk()
+                self._notify_change("server", {"action": "start"})
+                return {"success": True, "message": "Server started successfully"}
+            return {"success": False, "message": "Server is already running"}
+    
+    def stop_server(self) -> Dict[str, Any]:
+        """Stop server simulation"""
+        with self._lock:
+            if self._server_status["running"]:
+                self._server_status["running"] = False
+                # Disconnect all clients
+                for client in self._clients.values():
+                    if client.status == "connected":
+                        client.status = "disconnected"
+                        client.last_seen = datetime.now()
+                
+                self._add_activity("server_stop", "Backup server stopped")
+                self._save_to_disk()
+                self._notify_change("server", {"action": "stop"})
+                return {"success": True, "message": "Server stopped successfully"}
+            return {"success": False, "message": "Server is not running"}
+    
+    def add_change_listener(self, listener: Callable):
+        """Add listener for data changes"""
+        self._change_listeners.append(listener)
+    
+    def remove_change_listener(self, listener: Callable):
+        """Remove change listener"""
+        if listener in self._change_listeners:
+            self._change_listeners.remove(listener)
+    
+    def cleanup(self):
+        """Cleanup resources"""
+        self._save_to_disk()
+        self._change_listeners.clear()
+    
+    def get_database_info(self) -> Dict[str, Any]:
+        """Get database information and statistics"""
+        with self._lock:
+            return {
+                "tables": {
+                    "clients": len(self._clients),
+                    "files": len(self._files), 
+                    "activity_log": len(self._activity_log)
+                },
+                "total_size": sum(f.size for f in self._files.values()),
+                "indexes": len(self._client_file_index),
+                "last_updated": datetime.now()
+            }
+
+    def get_recent_activity(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get recent server activity for dashboard timeline"""
+        with self._lock:
+            # Use persistent activity log if it exists and has data
+            if self._activity_log:
+                activities = self._activity_log[-limit:] if limit > 0 else self._activity_log
+                return [
+                    {
+                        **activity,
+                        "timestamp": activity["timestamp"] if isinstance(activity["timestamp"], datetime) else datetime.fromisoformat(activity["timestamp"])
+                    }
+                    for activity in reversed(activities)
+                ]
+            
+            # Fallback to legacy generated activity
+            activity_types = [
+            ("client_connect", "Client {} connected"),
+            ("client_disconnect", "Client {} disconnected"),  
+            ("file_transfer", "File '{}' transferred"),
+            ("backup_complete", "Backup job completed ({} files)"),
+            ("system_check", "System health check passed"),
+            ("error", "Failed to connect to update server"),
+            ("database_backup", "Database backup completed"),
+            ("maintenance", "System maintenance started"),
+        ]
+        
+        activities = []
+        now = datetime.now()
+        
+        # Generate 20-30 recent activities
+        for i in range(random.randint(20, 30)):
+            # Activities from last 24 hours, more recent ones more likely
+            hours_ago = random.choices(
+                range(24),
+                weights=[20] + [max(1, 20-h) for h in range(1, 24)]  # Exponential decay
+            )[0]
+            
+            timestamp = now - timedelta(
+                hours=hours_ago,
+                minutes=random.randint(0, 59),
+                seconds=random.randint(0, 59)
+            )
+            
+            activity_type, message_template = random.choice(activity_types)
+            
+            # Generate contextual message based on activity type
+            if activity_type in ["client_connect", "client_disconnect"]:
+                client_name = random.choice([c["name"] for c in self.clients])
+                message = message_template.format(client_name)
+            elif activity_type == "file_transfer":
+                file_name = random.choice([f["filename"] for f in self.files])
+                message = message_template.format(file_name)
+            elif activity_type == "backup_complete":
+                file_count = random.randint(50, 200)
+                message = message_template.format(file_count)
+            else:
+                message = message_template
+            
+            activities.append({
+                "timestamp": timestamp,
+                "type": activity_type,
+                "message": message,
+                "severity": "error" if activity_type == "error" else "info"
+            })
+        
+            # Sort by timestamp, most recent first
+            activities.sort(key=lambda x: x["timestamp"], reverse=True)
+            return activities
+
+    def _update_statistics_after_deletion(self):
+        """Update global statistics and relationships after deletions."""
+        try:
+            # Recalculate global statistics that might be cached
+            self.change_counter += 1
+            self.last_update = time.time()
+            
+            # Could add more sophisticated statistics updates here
+            # For now, just track that changes occurred
+            logger.debug("MockDataGenerator: Statistics updated after deletion operations")
+            
+        except Exception as e:
+            logger.error(f"MockDataGenerator statistics update error: {e}")
+
+    def update_table_row(self, table_name: str, row_id: str, updated_data: Dict[str, Any]) -> bool:
+        """Update a row in mock database table with validation."""
+        try:
+            if table_name == "clients":
+                return self._update_client_row(row_id, updated_data)
+            elif table_name == "files":
+                return self._update_file_row(row_id, updated_data)
+            else:
+                logger.warning(f"MockDataGenerator: Unknown table '{table_name}' for update")
+                return False
+                
+        except Exception as e:
+            logger.error(f"MockDataGenerator update_table_row error: {e}")
+            return False
+    
+    def _update_client_row(self, row_id: str, updated_data: Dict[str, Any]) -> bool:
+        """Update a client row with validation."""
+        try:
+            client_to_update = None
+            for client in self.clients:
+                if client.get('client_id') == row_id or client.get('id') == row_id:
+                    client_to_update = client
+                    break
+            
+            if not client_to_update:
+                logger.warning(f"MockDataGenerator: Client {row_id} not found for update")
+                return False
+            
+            # Validate the update data
+            allowed_fields = {'name', 'address', 'status', 'last_activity', 'last_seen'}
+            
+            for field, value in updated_data.items():
+                if field in allowed_fields:
+                    # Basic validation
+                    if field == 'status' and value not in ['Connected', 'Registered', 'Offline']:
+                        logger.warning(f"MockDataGenerator: Invalid status '{value}' for client update")
+                        continue
+                    
+                    # Apply the update
+                    client_to_update[field] = value
+                    logger.debug(f"MockDataGenerator: Updated client {row_id} field '{field}' to '{value}'")
+                else:
+                    logger.warning(f"MockDataGenerator: Field '{field}' not allowed for client update")
+            
+            self._update_statistics_after_modification()
+            return True
+            
+        except Exception as e:
+            logger.error(f"MockDataGenerator _update_client_row error: {e}")
+            return False
+    
+    def _update_file_row(self, row_id: str, updated_data: Dict[str, Any]) -> bool:
+        """Update a file row with validation."""
+        try:
+            file_to_update = None
+            for file_obj in self.files:
+                if file_obj.get('file_id') == row_id or file_obj.get('id') == row_id:
+                    file_to_update = file_obj
+                    break
+            
+            if not file_to_update:
+                logger.warning(f"MockDataGenerator: File {row_id} not found for update")
+                return False
+            
+            # Validate the update data
+            allowed_fields = {'filename', 'verified', 'status'}
+            
+            original_size = file_to_update.get('size', 0)
+            original_client_id = file_to_update.get('client_id')
+            
+            for field, value in updated_data.items():
+                if field in allowed_fields:
+                    # Basic validation
+                    if field == 'verified' and not isinstance(value, bool):
+                        logger.warning(f"MockDataGenerator: Invalid verified value '{value}' for file update")
+                        continue
+                    
+                    # Apply the update
+                    file_to_update[field] = value
+                    logger.debug(f"MockDataGenerator: Updated file {row_id} field '{field}' to '{value}'")
+                else:
+                    logger.warning(f"MockDataGenerator: Field '{field}' not allowed for file update")
+            
+            # If size changed, update client statistics
+            new_size = file_to_update.get('size', 0)
+            if original_size != new_size and original_client_id:
+                self._update_client_statistics_for_file_change(original_client_id, new_size - original_size)
+            
+            self._update_statistics_after_modification()
+            return True
+            
+        except Exception as e:
+            logger.error(f"MockDataGenerator _update_file_row error: {e}")
+            return False
+    
+    def _update_client_statistics_for_file_change(self, client_id: str, size_delta: int):
+        """Update client statistics when file sizes change."""
+        try:
+            for client in self.clients:
+                if client.get('client_id') == client_id or client.get('id') == client_id:
+                    current_size = client.get('total_size', 0)
+                    client['total_size'] = max(0, current_size + size_delta)
+                    logger.debug(f"MockDataGenerator: Updated client {client_id} total size by {size_delta}")
+                    break
+        except Exception as e:
+            logger.error(f"MockDataGenerator client statistics update error: {e}")
+    
+    def _update_statistics_after_modification(self):
+        """Update statistics after any modification operation."""
+        try:
+            self.change_counter += 1
+            self.last_update = time.time()
+            logger.debug("MockDataGenerator: Statistics updated after modification")
+        except Exception as e:
+            logger.error(f"MockDataGenerator modification statistics error: {e}")
+    
+    def generate_clients(self) -> List[Dict[str, Any]]:
+        """Legacy method name for compatibility"""
+        return self.get_clients()
+    
+    def generate_files(self) -> List[Dict[str, Any]]: 
+        """Legacy method name for compatibility"""
+        return self.get_files()
+    
+    @property
+    def clients(self) -> List[Dict[str, Any]]:
+        """Legacy property for backward compatibility with ServerBridge"""
+        return self.get_clients()
+    
+    @property
+    def files(self) -> List[Dict[str, Any]]:
+        """Legacy property for backward compatibility with ServerBridge"""
+        return self.get_files()
+
+    def validate_data_integrity(self) -> Dict[str, Any]:
+        """Validate referential integrity of mock data (like a real database would)."""
+        try:
+            issues = []
+            
+            # Check for orphaned files (files without valid client_id)
+            valid_client_ids = {c.get('client_id') for c in self.clients} | {c.get('id') for c in self.clients}
+            
+            orphaned_files = []
+            for file_obj in self.files:
+                file_client_id = file_obj.get('client_id')
+                if file_client_id and file_client_id not in valid_client_ids:
+                    orphaned_files.append(file_obj.get('file_id') or file_obj.get('id'))
+            
+            if orphaned_files:
+                issues.append(f"Found {len(orphaned_files)} orphaned files: {orphaned_files[:5]}...")
+            
+            # Check client statistics consistency
+            stats_issues = []
+            for client in self.clients:
+                client_id = client.get('client_id') or client.get('id')
+                
+                # Count actual files for this client
+                actual_files = [f for f in self.files if f.get('client_id') == client_id]
+                actual_file_count = len(actual_files)
+                actual_total_size = sum(f.get('size', 0) for f in actual_files)
+                
+                # Compare with stored statistics
+                stored_file_count = client.get('files_count', 0)
+                stored_total_size = client.get('total_size', 0)
+                
+                if actual_file_count != stored_file_count:
+                    stats_issues.append(f"Client {client_id}: file count mismatch (stored: {stored_file_count}, actual: {actual_file_count})")
+                
+                if abs(actual_total_size - stored_total_size) > 1024:  # Allow small discrepancies
+                    stats_issues.append(f"Client {client_id}: size mismatch (stored: {stored_total_size}, actual: {actual_total_size})")
+            
+            if stats_issues:
+                issues.extend(stats_issues)
+            
+            return {
+                'valid': len(issues) == 0,
+                'issues': issues,
+                'total_clients': len(self.clients),
+                'total_files': len(self.files),
+                'orphaned_files': len(orphaned_files)
+            }
+            
+        except Exception as e:
+            logger.error(f"MockDataGenerator integrity validation error: {e}")
+            return {'valid': False, 'issues': [f"Validation error: {str(e)}"]}
 
 
-# Singleton instance for consistent data across the application
+# Global singleton instances for backward compatibility
 _mock_generator_instance = None
+_store_lock = threading.Lock()
+
 
 def get_mock_generator() -> MockDataGenerator:
     """Get singleton mock data generator instance"""
     global _mock_generator_instance
-    if _mock_generator_instance is None:
-        _mock_generator_instance = MockDataGenerator()
-    return _mock_generator_instance
+    with _store_lock:
+        if _mock_generator_instance is None:
+            _mock_generator_instance = MockDataGenerator()
+        return _mock_generator_instance
+
+
+def get_mock_store(persist_to_disk: bool = False) -> MockDataGenerator:
+    """Get global mock store instance (compatibility with PersistentMockStore interface)"""
+    global _mock_generator_instance
+    with _store_lock:
+        if _mock_generator_instance is None:
+            _mock_generator_instance = MockDataGenerator(persist_to_disk=persist_to_disk)
+        return _mock_generator_instance
+
+
+def cleanup_mock_store():
+    """Cleanup global mock store"""
+    global _mock_generator_instance
+    with _store_lock:
+        if _mock_generator_instance:
+            _mock_generator_instance.cleanup()
+            _mock_generator_instance = None
+
+
+# Legacy compatibility aliases
+PersistentMockStore = MockDataGenerator  # For any direct class imports
+MockClient = MockClient  # Re-export for compatibility
+MockFile = MockFile      # Re-export for compatibility

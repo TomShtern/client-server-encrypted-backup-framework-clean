@@ -2,6 +2,7 @@
 Performance Optimization Utilities for FletV2
 
 This module provides utilities for improving Flet application performance:
+- Performance timing and metrics instrumentation
 - Debouncing for search and filtering operations
 - Async data loading helpers
 - Pagination utilities
@@ -24,6 +25,91 @@ import gc
 logger = logging.getLogger(__name__)
 
 T = TypeVar('T')
+
+# ==========================================
+# Performance Timing & Metrics
+# ==========================================
+
+_metrics_lock = threading.Lock()
+_metrics: Dict[str, Dict[str, Any]] = {}
+
+def record_metric(name: str, elapsed_ms: float) -> None:
+    """
+    Record a performance metric.
+    
+    Args:
+        name: Metric name
+        elapsed_ms: Elapsed time in milliseconds
+    """
+    with _metrics_lock:
+        m = _metrics.setdefault(name, {"count": 0, "total_ms": 0.0, "max_ms": 0.0, "last_ms": 0.0})
+        m["count"] += 1
+        m["total_ms"] += elapsed_ms
+        m["last_ms"] = elapsed_ms
+        if elapsed_ms > m["max_ms"]:
+            m["max_ms"] = elapsed_ms
+
+def get_metrics() -> Dict[str, Dict[str, Any]]:
+    """
+    Get all recorded performance metrics.
+    
+    Returns:
+        Dictionary of metrics with aggregated statistics
+    """
+    with _metrics_lock:
+        # Shallow copy to ensure caller cannot mutate internal state directly
+        return {k: v.copy() for k, v in _metrics.items()}
+
+def reset_metrics(pattern: Optional[str] = None) -> None:
+    """
+    Reset performance metrics.
+    
+    Args:
+        pattern: Optional pattern to match metric names. If None, resets all metrics.
+    """
+    with _metrics_lock:
+        if pattern is None:
+            _metrics.clear()
+        else:
+            for k in list(_metrics.keys()):
+                if pattern in k:
+                    _metrics.pop(k, None)
+
+class PerfTimer:
+    """
+    Context manager for timing performance blocks.
+    
+    Example:
+        with PerfTimer("files.load"):
+            await load_files_data_async()
+    """
+    __slots__ = ("name", "start")
+
+    def __init__(self, name: str):
+        """
+        Initialize performance timer.
+        
+        Args:
+            name: Name of the operation being timed
+        """
+        self.name = name
+        self.start = 0.0
+
+    def __enter__(self):
+        """Start timing."""
+        self.start = time.perf_counter()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        """Stop timing and record metric."""
+        elapsed_ms = (time.perf_counter() - self.start) * 1000.0
+        record_metric(self.name, elapsed_ms)
+        # Don't suppress exceptions
+        return False
+
+# ==========================================
+# Performance Optimization Utilities
+# ==========================================
 
 class Debouncer:
     """

@@ -84,7 +84,7 @@ FletV2/
 ├── utils/                     # Utility modules (50-450 lines each)
 │   ├── server_bridge.py      # Unified server/mock interface
 │   ├── state_manager.py      # Simplified reactive state (87 lines)
-│   ├── user_feedback.py      # SnackBar and dialog systems
+│   ├── dialog_consolidation_helper.py  # SnackBar and dialog systems
 │   ├── ui_components.py      # Reusable UI component creation
 │   ├── debug_setup.py        # Logging and debug configuration
 │   ├── performance.py        # Performance monitoring tools

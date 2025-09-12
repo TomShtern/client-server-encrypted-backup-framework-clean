@@ -12,7 +12,7 @@ import asyncio
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.user_feedback import show_success_message, show_error_message, show_info_message
+from utils.dialog_consolidation_helper import show_success_message, show_error_message, show_info_message
 from pathlib import Path
 from datetime import datetime
 from config import SETTINGS_FILE, ASYNC_DELAY, MIN_PORT, MAX_PORT, MIN_MAX_CLIENTS
@@ -435,7 +435,7 @@ async def import_settings(state: SettingsState, file_path: str):
 def create_settings_view(
     server_bridge: Optional[ServerBridge], 
     page: ft.Page, 
-    state_manager: Optional[StateManager] = None
+    state_manager: StateManager
 ) -> ft.Control:
     """
     Create modern settings view following Framework Harmony principles.

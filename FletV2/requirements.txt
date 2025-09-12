@@ -4,3 +4,4 @@ requests>=2.32.4
 psutil>=5.9.0
 httpx
 aiofiles>=24.1.0
+python-dotenv>=1.0.0

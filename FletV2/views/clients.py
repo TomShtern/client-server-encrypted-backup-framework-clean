@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-FUNCTIONAL Clients View - Actually Working Implementation
-This demonstrates proper Flet patterns with ACTUAL FUNCTIONALITY.
+Server-Mediated Clients View - Framework Harmonious Implementation
+This demonstrates server-mediated operations through state manager with reactive UI updates.
 """
 
 # Standard library imports
 import asyncio
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 
 # Third-party imports
 import flet as ft
@@ -15,32 +15,33 @@ import flet as ft
 # Local imports
 from utils.async_helpers import async_event_handler
 from utils.debug_setup import get_logger
-from utils.dialog_helpers import create_confirmation_dialog
-from utils.logging_helpers import log_error
+from utils.dialog_consolidation_helper import show_confirmation, show_info, show_success_message, show_error_message, show_info_message
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.user_feedback import show_success_message, show_error_message, show_info_message
+from utils.server_mediated_operations import create_server_mediated_operations
 
 logger = get_logger(__name__)
 
 def create_clients_view(
     server_bridge: Optional[ServerBridge], 
     page: ft.Page, 
-    state_manager: Optional[StateManager] = None
+    state_manager: StateManager
 ) -> ft.Control:
-    """Create a proper functional clients view with working filters and buttons."""
-    logger.info("Creating functional clients view with real working features")
+    """Create server-mediated clients view with reactive UI updates."""
+    logger.info("Creating server-mediated clients view with reactive state management")
     
-    # Simple state variables
-    clients_data = []
-    search_query = ""
-    status_filter = "all"
-    connection_filter = "all"
+    # Local UI state (not data state - that's managed by state_manager)
+    ui_state = {
+        "search_query": "",
+        "status_filter": "all",
+        "connection_filter": "all"
+    }
     
-    # Control references
+    # Control references for reactive UI updates
     clients_table_ref = ft.Ref[ft.DataTable]()
     search_field_ref = ft.Ref[ft.TextField]()
     feedback_text_ref = ft.Ref[ft.Text]()
+    loading_indicator_ref = ft.Ref[ft.ProgressBar]()
     
     # Pre-create the DataTable to avoid lifecycle issues
     clients_table = ft.DataTable(
@@ -62,15 +63,22 @@ def create_clients_view(
         show_checkbox_column=False
     )
     
-    # Feedback text control
-    feedback_text = ft.Text("No actions yet - click the menu buttons", size=14, color=ft.Colors.BLUE, ref=feedback_text_ref)
+    # Feedback text and loading indicator
+    feedback_text = ft.Text("Loading clients...", size=14, color=ft.Colors.BLUE, ref=feedback_text_ref)
+    loading_indicator = ft.ProgressBar(visible=False, ref=loading_indicator_ref)
 
-    def view_details_action(client_id: str):
-        """Handle view client details action - fetch and display detailed client information."""
+    async def view_details_action(client_id: str):
+        """Server-mediated view client details with reactive updates."""
         logger.info(f"View details clicked for client {client_id}")
         
         try:
-            # Find the client data
+            # Set loading state
+            state_manager.set_loading("client_details", True)
+            feedback_text.value = f"Loading details for client {client_id}..."
+            feedback_text.update()
+            
+            # Get client data from state
+            clients_data = state_manager.get("clients", [])
             client_data = None
             for client in clients_data:
                 if client.get("id") == client_id:
@@ -81,28 +89,29 @@ def create_clients_view(
                 show_error_message(page, f"Client {client_id} not found")
                 return
             
-            # Fetch additional details from server if available
-            detailed_info = None
-            if server_bridge:
-                try:
-                    detailed_info = server_bridge.get_client_details(client_id)
-                except Exception as e:
-                    logger.warning(f"Could not fetch detailed info from server: {e}")
+            # Use server-mediated update to fetch detailed info
+            result = await state_manager.server_mediated_update(
+                key="client_details",
+                value=client_data,  # Fallback to basic data
+                server_operation="get_client_details_async" if hasattr(server_bridge, 'get_client_details_async') else None
+            )
+            
+            detailed_info = result.get('data') if result.get('success') else client_data
             
             # Create detailed view dialog
             details_content = ft.Column([
                 ft.Text("Client Details", size=20, weight=ft.FontWeight.BOLD),
                 ft.Divider(),
-                ft.Text(f"ID: {client_data.get('id', 'N/A')}"),
-                ft.Text(f"Name: {client_data.get('name', 'N/A')}"),
-                ft.Text(f"Status: {client_data.get('status', 'N/A')}"),
-                ft.Text(f"Last Seen: {client_data.get('last_seen', 'N/A')}"),
-                ft.Text(f"Files Count: {client_data.get('files_count', 'N/A')}"),
-                ft.Text(f"Total Size: {client_data.get('total_size', 'N/A')}"),
+                ft.Text(f"ID: {detailed_info.get('id', 'N/A')}"),
+                ft.Text(f"Name: {detailed_info.get('name', 'N/A')}"),
+                ft.Text(f"Status: {detailed_info.get('status', 'N/A')}"),
+                ft.Text(f"Last Seen: {detailed_info.get('last_seen', 'N/A')}"),
+                ft.Text(f"Files Count: {detailed_info.get('files_count', 'N/A')}"),
+                ft.Text(f"Total Size: {detailed_info.get('total_size', 'N/A')}"),
             ], tight=True, spacing=5)
             
             # Add server details if available
-            if detailed_info:
+            if detailed_info.get('connection_time') or detailed_info.get('ip_address'):
                 details_content.controls.extend([
                     ft.Divider(),
                     ft.Text("Server Information", weight=ft.FontWeight.BOLD),
@@ -111,30 +120,13 @@ def create_clients_view(
                     ft.Text(f"Protocol Version: {detailed_info.get('protocol_version', 'N/A')}"),
                 ])
             
-            # Define close handler first to avoid lambda closure issues
-            def close_dialog(dialog_ref):
-                dialog_ref.open = False
-                dialog_ref.update()  # Update dialog state first
-                page.overlay.remove(dialog_ref)
-                page.update()  # Page update needed for overlay management
-            
-            # Create and show dialog
-            dialog = ft.AlertDialog(
-                title=ft.Text(f"Client {client_id} Details"),
-                content=details_content,
-                actions=[
-                    ft.TextButton("Close", on_click=lambda e: close_dialog(dialog))
-                ],
-                actions_alignment=ft.MainAxisAlignment.END
+            # Show details dialog using consolidated helper
+            show_info(
+                page,
+                f"Client {client_id} Details",
+                details_content,
+                width=400
             )
-            
-            # Properly attach dialog to page before opening
-            page.overlay.append(dialog)
-            page.update()  # Page update needed for overlay management
-            
-            # Open dialog after it's properly attached
-            dialog.open = True
-            dialog.update()  # Use dialog update for better performance
             
             feedback_text.value = f"Showing details for client {client_id}"
             feedback_text.update()
@@ -142,9 +134,11 @@ def create_clients_view(
         except Exception as e:
             logger.error(f"Error showing client details: {e}")
             show_error_message(page, f"Error showing client details: {str(e)}")
+        finally:
+            state_manager.set_loading("client_details", False)
 
-    def disconnect_action(client_id: str):
-        """Handle disconnect client action - real backend integration with async support."""
+    async def disconnect_action(client_id: str):
+        """Server-mediated disconnect client action with reactive updates."""
         logger.info(f"Disconnect clicked for client {client_id}")
         
         async def confirm_disconnect_async(e):
@@ -153,94 +147,78 @@ def create_clients_view(
                 confirmation_dialog.open = False
                 confirmation_dialog.update()  # Efficient dialog-specific update
                 
+                # Set loading state
+                state_manager.set_loading("client_disconnect", True)
+                feedback_text.value = f"Disconnecting client {client_id}..."
+                feedback_text.update()
                 
-                # Perform the actual disconnect
-                if server_bridge:
-                    try:
-                        result = await server_bridge.disconnect_client_async(client_id)
-                        if result:
-                            # Update local state via state manager
-                            if state_manager:
-                                state_manager.update("client_disconnected", {
-                                    "client_id": client_id,
-                                    "timestamp": datetime.now().isoformat()
-                                })
-                            
-                            show_success_message(page, f"Client {client_id} disconnected successfully")
-                            # Refresh the client list
-                            on_refresh_click(None)
-                        else:
-                            show_error_message(page, f"Failed to disconnect client {client_id}")
-                    except Exception as e:
-                        logger.error(f"Server bridge disconnect error: {e}")
-                        show_error_message(page, f"Error disconnecting client: {str(e)}")
+                # Use server-mediated update for disconnect operation
+                disconnect_data = {
+                    "client_id": client_id,
+                    "action": "disconnect",
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                result = await state_manager.server_mediated_update(
+                    key="client_action",
+                    value=disconnect_data,
+                    server_operation="disconnect_client_async"
+                )
+                
+                if result.get('success'):
+                    # Get updated clients list after disconnect
+                    await load_clients_data()
+                    
+                    # Update specific client in state
+                    await state_manager.update_async("client_disconnected", {
+                        "client_id": client_id,
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    
+                    show_success_message(page, f"Client {client_id} disconnected successfully")
+                    feedback_text.value = f"Client {client_id} disconnected successfully"
+                    logger.info(f"Client {client_id} successfully disconnected via server")
                 else:
-                    # Mock disconnect for testing - ACTUALLY disconnect the client
-                    logger.info(f"Performing REAL disconnect for client {client_id}")
+                    # Fallback: update local state directly if server operation fails
+                    clients_data = state_manager.get("clients", [])
+                    updated_clients = []
                     
-                    # Find and update the client in the data structure
-                    client_found = False
                     for client in clients_data:
-                        # Handle both "id" and "client_id" fields for compatibility
-                        current_id = client.get("id") or client.get("client_id")
-                        if current_id == client_id:
-                            old_status = client.get("status", "Unknown")
-                            client["status"] = "Disconnected"
-                            # Update the timestamp to current time
-                            client["last_seen"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            client_found = True
-                            logger.info(f"Client {client_id} status changed from {old_status} to Disconnected")
-                            break
+                        if client.get("id") == client_id:
+                            updated_client = client.copy()
+                            updated_client["status"] = "Disconnected"
+                            updated_client["last_seen"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            updated_clients.append(updated_client)
+                            logger.info(f"Client {client_id} disconnected (fallback mode)")
+                        else:
+                            updated_clients.append(client)
                     
-                    if client_found:
-                        # Update local state via state manager
-                        if state_manager:
-                            state_manager.update("client_status_changed", {
-                                "client_id": client_id,
-                                "old_status": old_status,
-                                "new_status": "Disconnected",
-                                "timestamp": datetime.now().isoformat()
-                            })
-                        
-                        # Refresh the table to show the updated status
-                        update_table()
-                        show_success_message(page, f"Client {client_id} disconnected successfully")
-                        logger.info(f"Client {client_id} successfully disconnected and UI updated")
-                    else:
-                        show_error_message(page, f"Client {client_id} not found in data")
-                        logger.error(f"Client {client_id} not found in clients_data during disconnect")
+                    # Update clients state with modified data
+                    await state_manager.update_async("clients", updated_clients, source="disconnect_fallback")
+                    
+                    show_success_message(page, f"Client {client_id} disconnected successfully (fallback mode)")
+                    feedback_text.value = f"Client {client_id} disconnected (fallback mode)"
                 
             except Exception as e:
                 logger.error(f"Error during disconnect: {e}")
                 show_error_message(page, f"Error disconnecting client: {str(e)}")
+                feedback_text.value = f"Failed to disconnect client {client_id}"
+            finally:
+                state_manager.set_loading("client_disconnect", False)
         
         def confirm_disconnect(e):
             """Wrapper to run async disconnect in a task"""
-            async def run_disconnect():
-                await confirm_disconnect_async(e)
-            # FIXED: Pass the function, not the coroutine object
-            page.run_task(run_disconnect)
+            page.run_task(confirm_disconnect_async, e)
         
-        def cancel_disconnect(e):
-            confirmation_dialog.open = False
-            confirmation_dialog.update()  # Use control-specific update
-        
-        # Create confirmation dialog
-        confirmation_dialog = ft.AlertDialog(
-            title=ft.Text("Confirm Disconnect"),
-            content=ft.Text(f"Are you sure you want to disconnect client {client_id}?\n\nThis action cannot be undone."),
-            actions=[
-                ft.TextButton("Cancel", on_click=cancel_disconnect),
-                ft.TextButton("Disconnect", on_click=confirm_disconnect, 
-                             style=ft.ButtonStyle(color=ft.Colors.ERROR))
-            ],
-            actions_alignment=ft.MainAxisAlignment.END
+        # Show confirmation dialog using consolidated helper
+        show_confirmation(
+            page,
+            "Confirm Disconnect",
+            f"Are you sure you want to disconnect client {client_id}?\n\nThis action cannot be undone.",
+            confirm_disconnect,
+            confirm_text="Disconnect",
+            is_destructive=True
         )
-        
-        page.overlay.append(confirmation_dialog)
-        page.update()  # Page update needed for overlay management
-        confirmation_dialog.open = True
-        confirmation_dialog.update()  # Use dialog-specific update
 
     def get_status_color(status):
         """Get color based on client status."""
@@ -255,15 +233,17 @@ def create_clients_view(
             return ft.Colors.GREY_600   # Unknown status
 
     def filter_clients():
-        """Filter clients based on search query and status filter."""
+        """Filter clients based on search query and status filter - uses state manager data."""
+        # Get clients from state manager instead of local variable
+        clients_data = state_manager.get("clients", [])
         if not clients_data:
             return []
         
         filtered = clients_data.copy()
         
         # Apply search filter
-        if search_query.strip():
-            query_lower = search_query.lower()
+        if ui_state["search_query"].strip():
+            query_lower = ui_state["search_query"].lower()
             filtered = [
                 client for client in filtered
                 if (query_lower in str(client.get("id", "")).lower() or
@@ -272,16 +252,16 @@ def create_clients_view(
             ]
         
         # Apply status filter
-        if status_filter != "all":
+        if ui_state["status_filter"] != "all":
             filtered = [
                 client for client in filtered
-                if str(client.get("status", "")).lower() == status_filter.lower()
+                if str(client.get("status", "")).lower() == ui_state["status_filter"].lower()
             ]
         
         return filtered
 
     def update_table():
-        """Update the DataTable with filtered client data."""
+        """Reactive table update using state manager data."""
         filtered_clients = filter_clients()
         new_rows = []
         
@@ -315,12 +295,12 @@ def create_clients_view(
                                 ft.PopupMenuItem(
                                     text="View Details",
                                     icon=ft.Icons.INFO,
-                                    on_click=lambda e, client_id=client.get("id"): view_details_action(client_id)
+                                    on_click=lambda e, client_id=client.get("id"): page.run_task(view_details_action, client_id)
                                 ),
                                 ft.PopupMenuItem(
                                     text="Disconnect",
                                     icon=ft.Icons.LOGOUT,
-                                    on_click=lambda e, client_id=client.get("id"): disconnect_action(client_id)
+                                    on_click=lambda e, client_id=client.get("id"): page.run_task(disconnect_action, client_id)
                                 )
                             ]
                         )
@@ -329,7 +309,7 @@ def create_clients_view(
             )
             new_rows.append(row)
 
-        # FIXED: Use simple, reliable table update pattern
+        # Framework harmonious table update pattern
         clients_table.rows = new_rows
         
         # Only update the reference if it exists and is properly attached to page
@@ -338,8 +318,8 @@ def create_clients_view(
                 # Check if control is attached to page before updating
                 if hasattr(clients_table_ref.current, 'page') and clients_table_ref.current.page is not None:
                     clients_table_ref.current.rows = new_rows
-                    clients_table_ref.current.update()
-                    logger.debug(f"Table updated successfully with {len(new_rows)} rows")
+                    clients_table_ref.current.update()  # control.update() not page.update()
+                    logger.debug(f"Table updated reactively with {len(new_rows)} rows")
                 else:
                     # Control not yet attached to page, just update the data
                     clients_table_ref.current.rows = new_rows
@@ -349,6 +329,18 @@ def create_clients_view(
                 # Table will still work, just update on next display
         else:
             logger.debug("Table reference not yet initialized, rows updated on object")
+
+    # Reactive callback for clients state changes
+    def on_clients_state_changed(new_clients_data, old_clients_data):
+        """React to clients state changes by updating the UI."""
+        logger.debug(f"Clients state changed: {len(new_clients_data) if new_clients_data else 0} clients")
+        update_table()
+        
+        # Update feedback text
+        clients_count = len(new_clients_data) if new_clients_data else 0
+        if feedback_text_ref.current:
+            feedback_text_ref.current.value = f"Showing {clients_count} clients"
+            feedback_text_ref.current.update()
 
     def get_mock_data():
         """Generate mock client data for testing."""
@@ -435,51 +427,127 @@ def create_clients_view(
             }
         ]
 
-    async def load_data_async():
-        """Load client data asynchronously."""
+    async def load_clients_data():
+        """Server-mediated load client data with reactive state updates."""
         try:
-            if server_bridge:
-                # Try to get real data from server
-                loaded_data = server_bridge.get_clients()
-                clients_data.clear()
-                clients_data.extend(loaded_data)
+            # Set loading state
+            state_manager.set_loading("clients", True)
+            if loading_indicator_ref.current:
+                loading_indicator_ref.current.visible = True
+                loading_indicator_ref.current.update()
+            
+            # Use server-mediated update to load clients
+            result = await state_manager.server_mediated_update(
+                key="clients",
+                value=get_mock_data(),  # Fallback data
+                server_operation="get_clients_async"
+            )
+            
+            if result.get('success'):
+                logger.info(f"Clients loaded successfully via server: {len(result.get('data', []))} clients")
             else:
-                # Fall back to mock data
-                clients_data.clear()
-                clients_data.extend(get_mock_data())
-            
-            update_table()
-            feedback_text.value = f"Loaded {len(clients_data)} clients"
-            feedback_text.update()
-            
+                logger.warning("Using fallback client data")
+                
         except Exception as e:
             logger.error(f"Failed to load client data: {e}")
-            # Use mock data as fallback
-            clients_data.clear()
-            clients_data.extend(get_mock_data())
-            update_table()
-            feedback_text.value = f"Using mock data ({len(clients_data)} clients)"
-            feedback_text.update()
+            # Ensure fallback data is available
+            await state_manager.update_async("clients", get_mock_data(), source="error_fallback")
+        finally:
+            state_manager.set_loading("clients", False)
+            if loading_indicator_ref.current:
+                loading_indicator_ref.current.visible = False
+                loading_indicator_ref.current.update()
 
     def on_search_change(e):
-        """Handle search field changes."""
-        nonlocal search_query
-        search_query = e.control.value
-        logger.info(f"Search query changed to: '{search_query}'")
-        update_table()
+        """Handle search field changes - reactive filtering."""
+        ui_state["search_query"] = e.control.value
+        logger.info(f"Search query changed to: '{ui_state['search_query']}'")
+        update_table()  # Reactive update based on current state
 
     def on_status_filter_change(e):
-        """Handle status filter changes."""
-        nonlocal status_filter
-        status_filter = e.control.value
-        logger.info(f"Status filter changed to: '{status_filter}'")
-        update_table()
+        """Handle status filter changes - reactive filtering."""
+        ui_state["status_filter"] = e.control.value
+        logger.info(f"Status filter changed to: '{ui_state['status_filter']}'")
+        update_table()  # Reactive update based on current state
 
-    def on_refresh_click(e):
-        """Handle refresh button click."""
-        logger.info("Refresh clients list")
-        page.run_task(load_data_async)
-        show_info_message(page, "Refreshing clients list...")
+    async def on_refresh_click(e):
+        """Server-mediated refresh with loading state management."""
+        logger.info("Refreshing clients list via server-mediated update")
+        feedback_text.value = "Refreshing clients list..."
+        feedback_text.update()
+        
+        await load_clients_data()
+        show_info_message(page, "Clients list refreshed successfully")
+
+    # Loading state change handler
+    def on_loading_state_changed(new_loading_states, old_loading_states):
+        """React to loading state changes."""
+        is_loading = new_loading_states.get("clients", False)
+        if loading_indicator_ref.current:
+            loading_indicator_ref.current.visible = is_loading
+            loading_indicator_ref.current.update()
+
+    async def add_client_action(client_data: Dict[str, Any]):
+        """Server-mediated add client operation."""
+        try:
+            # Set loading state
+            state_manager.set_loading("client_add", True)
+            feedback_text.value = f"Adding client {client_data.get('name', 'Unknown')}..."
+            feedback_text.update()
+            
+            # Use server-mediated update
+            result = await state_manager.server_mediated_update(
+                key="client_add",
+                value=client_data,
+                server_operation="add_client_async"
+            )
+            
+            if result.get('success'):
+                # Reload clients list after successful add
+                await load_clients_data()
+                show_success_message(page, f"Client {client_data.get('name')} added successfully")
+                feedback_text.value = f"Client {client_data.get('name')} added successfully"
+            else:
+                show_error_message(page, f"Failed to add client: {result.get('error', 'Unknown error')}")
+                feedback_text.value = f"Failed to add client {client_data.get('name')}"
+                
+        except Exception as e:
+            logger.error(f"Error adding client: {e}")
+            show_error_message(page, f"Error adding client: {str(e)}")
+            feedback_text.value = f"Error adding client"
+        finally:
+            state_manager.set_loading("client_add", False)
+
+    async def delete_client_action(client_id: str):
+        """Server-mediated delete client operation."""
+        try:
+            # Set loading state
+            state_manager.set_loading("client_delete", True)
+            feedback_text.value = f"Deleting client {client_id}..."
+            feedback_text.update()
+            
+            # Use server-mediated update
+            result = await state_manager.server_mediated_update(
+                key="client_delete",
+                value={"client_id": client_id, "action": "delete"},
+                server_operation="delete_client_async"
+            )
+            
+            if result.get('success'):
+                # Reload clients list after successful delete
+                await load_clients_data()
+                show_success_message(page, f"Client {client_id} deleted successfully")
+                feedback_text.value = f"Client {client_id} deleted successfully"
+            else:
+                show_error_message(page, f"Failed to delete client: {result.get('error', 'Unknown error')}")
+                feedback_text.value = f"Failed to delete client {client_id}"
+                
+        except Exception as e:
+            logger.error(f"Error deleting client: {e}")
+            show_error_message(page, f"Error deleting client: {str(e)}")
+            feedback_text.value = f"Error deleting client"
+        finally:
+            state_manager.set_loading("client_delete", False)
 
     # Build the main UI
     main_view = ft.Column([
@@ -512,16 +580,19 @@ def create_clients_view(
                     ft.IconButton(
                         icon=ft.Icons.REFRESH,
                         tooltip="Refresh Clients",
-                        on_click=on_refresh_click
+                        on_click=lambda e: page.run_task(on_refresh_click, e)
                     )
                 ], spacing=10)
             ]),
             padding=ft.Padding(20, 20, 20, 10)
         ),
         
-        # Action Feedback
+        # Action Feedback and Loading Indicator
         ft.Container(
-            content=feedback_text,
+            content=ft.Column([
+                feedback_text,
+                loading_indicator
+            ], spacing=8, tight=True),
             padding=ft.Padding(20, 10, 20, 10),
             bgcolor=ft.Colors.SURFACE,
             border_radius=4
@@ -537,11 +608,12 @@ def create_clients_view(
         )
     ], expand=True)
 
-    # Initial data load
-    clients_data.extend(get_mock_data())
-    update_table()
+    # Set up reactive state subscriptions
+    state_manager.subscribe("clients", on_clients_state_changed, control=clients_table)
+    state_manager.subscribe("loading_states", on_loading_state_changed, control=loading_indicator)
     
-    # Schedule async data loading
-    page.run_task(load_data_async)
+    # Initialize with mock data and trigger server load
+    logger.info("Initializing clients view with reactive state management")
+    page.run_task(load_clients_data)
 
     return main_view

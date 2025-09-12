@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Dialog Consolidation Utilities for FletV2
-Standardized dialog patterns to eliminate the 15+ repeated AlertDialog implementations.
+Standardized dialog patterns and user feedback to eliminate the 15+ repeated AlertDialog implementations.
 """
 
 import flet as ft
@@ -9,6 +9,10 @@ from typing import Optional, Callable, List, Union
 from utils.debug_setup import get_logger
 
 logger = get_logger(__name__)
+
+# Mock mode prefixes
+MOCK_PREFIX = "🧪 DEMO: "
+REAL_PREFIX = "✅ "
 
 
 class DialogManager:
@@ -323,3 +327,106 @@ def show_input(
     return DialogManager.create_input_dialog(
         page, title, message, input_label, on_submit, initial_value=initial_value
     )
+
+
+# User Feedback Functions (migrated from user_feedback.py)
+def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, action_label: Optional[str] = None) -> None:
+    """
+    Show centralized user feedback using Flet's SnackBar.
+    
+    This is the ONLY acceptable use of page.update() in the application -
+    for system-level feedback like SnackBar, which requires page-level updates.
+    
+    Args:
+        page: Flet page instance
+        message: Message to display to user
+        is_error: Whether this is an error message (changes color)
+        action_label: Optional action button label
+    """
+    try:
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(message),
+            bgcolor=ft.Colors.ERROR if is_error else ft.Colors.BLUE,
+            action=action_label if action_label else "DISMISS",
+            duration=4000  # 4 seconds
+        )
+        page.snack_bar.open = True
+        page.update()  # ONLY acceptable page.update() use case
+        
+        logger.info(f"User feedback shown: {'ERROR' if is_error else 'INFO'} - {message}")
+        
+    except Exception as e:
+        logger.error(f"Failed to show user feedback: {e}")
+
+
+def show_success_message(page: ft.Page, message: str, action_label: Optional[str] = None, mode: Optional[str] = None) -> None:
+    """Show success message to user with optional mode indicator."""
+    try:
+        # Add mode prefix if specified
+        display_message = message
+        if mode == 'mock':
+            display_message = f"{MOCK_PREFIX}{message}"
+        elif mode == 'real':
+            display_message = f"{REAL_PREFIX}{message}"
+        
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(display_message),
+            bgcolor=ft.Colors.ORANGE if mode == 'mock' else ft.Colors.GREEN,
+            action=action_label if action_label else "DISMISS",
+            duration=5000 if mode == 'mock' else 4000  # Longer for mock messages
+        )
+        page.snack_bar.open = True
+        page.update()  # ONLY acceptable page.update() use case
+        
+        logger.info(f"User feedback shown: SUCCESS - {message}")
+        
+    except Exception as e:
+        logger.error(f"Failed to show user feedback: {e}")
+
+
+def show_error_message(page: ft.Page, message: str, action_label: Optional[str] = None) -> None:
+    """Show error message to user."""
+    show_user_feedback(page, message, is_error=True, action_label=action_label)
+
+
+def show_info_message(page: ft.Page, message: str, action_label: Optional[str] = None, mode: Optional[str] = None) -> None:
+    """Show info message to user with optional mode indicator."""
+    # Add mode prefix if specified
+    display_message = message
+    if mode == 'mock':
+        display_message = f"{MOCK_PREFIX}{message}"
+    elif mode == 'real':
+        display_message = f"{REAL_PREFIX}{message}"
+    
+    try:
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(display_message),
+            bgcolor=ft.Colors.ORANGE if mode == 'mock' else ft.Colors.BLUE,
+            action=action_label if action_label else "DISMISS",
+            duration=5000 if mode == 'mock' else 4000  # Longer for mock messages
+        )
+        page.snack_bar.open = True
+        page.update()
+        
+        logger.info(f"Info message shown ({mode or 'standard'} mode): {display_message}")
+        
+    except Exception as e:
+        logger.error(f"Failed to show info message: {e}")
+
+
+def show_warning_message(page: ft.Page, message: str, action_label: Optional[str] = None) -> None:
+    """Show warning message to user."""
+    try:
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(message),
+            bgcolor=ft.Colors.BLUE,
+            action=action_label if action_label else "DISMISS",
+            duration=4000  # 4 seconds
+        )
+        page.snack_bar.open = True
+        page.update()  # ONLY acceptable page.update() use case
+        
+        logger.info(f"User feedback shown: WARNING - {message}")
+        
+    except Exception as e:
+        logger.error(f"Failed to show user feedback: {e}")

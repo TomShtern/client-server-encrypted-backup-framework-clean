@@ -5,9 +5,29 @@ Configuration and Constants for FletV2.
 
 import os
 from pathlib import Path
+from contextlib import suppress
+
+# Load environment variables from .env file if it exists
+with suppress(ImportError):
+    from dotenv import load_dotenv
+    load_dotenv()
 
 # Debug mode - controls visibility of mock data and debug features
 DEBUG_MODE = os.environ.get('FLET_V2_DEBUG', 'false').lower() == 'true'
+
+# Secure secret handling from environment variables
+GITHUB_PERSONAL_ACCESS_TOKEN = os.environ.get('GITHUB_PERSONAL_ACCESS_TOKEN')
+SERVER_API_KEY = os.environ.get('SERVER_API_KEY')
+DATABASE_PASSWORD = os.environ.get('DATABASE_PASSWORD')
+
+# Optional: Validate critical secrets in debug mode
+if DEBUG_MODE:
+    if not GITHUB_PERSONAL_ACCESS_TOKEN:
+        print("Warning: GITHUB_PERSONAL_ACCESS_TOKEN not set")
+    if not SERVER_API_KEY:
+        print("Warning: SERVER_API_KEY not set")
+    if not DATABASE_PASSWORD:
+        print("Warning: DATABASE_PASSWORD not set")
 
 # Mock data visibility - when False, mock data is only used when server is unavailable
 SHOW_MOCK_DATA = DEBUG_MODE

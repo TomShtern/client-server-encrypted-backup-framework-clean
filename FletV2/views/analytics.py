@@ -14,7 +14,7 @@ from datetime import datetime
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.user_feedback import show_success_message, show_error_message, show_user_feedback
+from utils.dialog_consolidation_helper import show_success_message, show_error_message, show_user_feedback
 
 logger = get_logger(__name__)
 
@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 def create_analytics_view(
     server_bridge: Optional[ServerBridge], 
     page: ft.Page, 
-    state_manager: Optional[StateManager] = None
+    state_manager: StateManager
 ) -> ft.Control:
     """
     Create analytics view with enhanced infrastructure and state management.
@@ -439,7 +439,7 @@ def create_analytics_view(
     def load_analytics_data():
         """Load analytics data using proper Flet async pattern."""
         nonlocal system_metrics, is_loading, last_updated
-
+        # Use class-level variables instead of nonlocal
         if is_loading:
             return
 
@@ -454,6 +454,7 @@ def create_analytics_view(
             """Callback when data is loaded."""
             nonlocal system_metrics, last_updated, is_loading
             try:
+                # Update system metrics
                 system_metrics = metrics
 
                 # Update last updated timestamp
@@ -467,10 +468,26 @@ def create_analytics_view(
                     update_system_info()
 
                     # Update charts
-                    cpu_chart.update()
-                    memory_chart.update()
-                    network_chart.update()
-                    disk_chart.update()
+                    try:
+                        cpu_chart.update()
+                    except Exception as chart_error:
+                        logger.debug(f"CPU chart update failed: {chart_error}")
+                    
+                    try:
+                        memory_chart.update()
+                    except Exception as chart_error:
+                        logger.debug(f"Memory chart update failed: {chart_error}")
+                    
+                    try:
+                        network_chart.update()
+                    except Exception as chart_error:
+                        logger.debug(f"Network chart update failed: {chart_error}")
+                    
+                    try:
+                        disk_chart.update()
+                    except Exception as chart_error:
+                        logger.debug(f"Disk chart update failed: {chart_error}")
+                    
                     last_updated_text.update()
 
             except Exception as e:
@@ -541,17 +558,11 @@ def create_analytics_view(
                     logger.info("Analytics refresh timer cancelled")
                 except Exception as e:
                     logger.error(f"Analytics refresh timer error: {e}")
-                    # Ensure timer_cancelled is accessible in exception handler  
-                    try:
-                        timer_cancelled = True
-                    except:
-                        pass  # Ignore if variable is not accessible
+                    # Set timer_cancelled to True to stop the loop
+                    timer_cancelled = True
                 finally:
                     # Cleanup when loop exits
-                    try:
-                        timer_cancelled = True
-                    except:
-                        pass  # Ignore if variable is not accessible
+                    timer_cancelled = True
 
             refresh_timer = page.run_task(refresh_loop)
             logger.info("Auto-refresh started")

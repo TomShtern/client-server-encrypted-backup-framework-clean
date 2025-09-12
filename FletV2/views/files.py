@@ -15,29 +15,28 @@ from datetime import datetime
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.user_feedback import show_success_message, show_error_message
-from utils.dialog_consolidation_helper import show_confirmation, show_info
+from utils.dialog_consolidation_helper import show_success_message, show_error_message, show_confirmation, show_info
+from utils.server_mediated_operations import create_server_mediated_operations, file_size_processor
 
 logger = get_logger(__name__)
 
 def create_files_view(
     server_bridge: Optional[ServerBridge], 
     page: ft.Page, 
-    state_manager: Optional[StateManager] = None
+    state_manager: StateManager
 ) -> ft.Control:
     """
-    Create files view with clean, maintainable implementation.
-    Follows successful patterns from clients.py and analytics.py.
+    Create files view with server-mediated operations through state manager.
+    Uses reactive patterns for UI updates following FletV2 framework harmony.
     """
-    logger.info("Creating files view")
+    logger.info("Creating files view with server-mediated operations")
     
-    # State Management - Simple and Direct
+    # State Management - Reactive with State Manager
     files_data: List[Dict[str, Any]] = []
     filtered_files: List[Dict[str, Any]] = []
     search_query = ""
     status_filter = "all"
     type_filter = "all"
-    is_loading = False
     
     # UI Control References
     search_field = ft.TextField(
@@ -92,48 +91,36 @@ def create_files_view(
     
     status_text = ft.Text("Ready", size=12, color=ft.Colors.BLUE)
     
-    # Core Data Functions
+    # Server-Mediated Data Functions
     async def load_files_data():
-        """Load files data from server bridge with fallback to mock data."""
-        nonlocal files_data, is_loading
-        
-        if is_loading:
-            return
-            
-        is_loading = True
+        """Load files data using server-mediated state management."""
+        # Set loading state through state manager
+        state_manager.set_loading("files_data", True)
         status_text.value = "Loading files..."
         status_text.color = ft.Colors.ORANGE
-        # Use page.update() instead of status_text.update() to avoid page attachment issues
-        page.update()
+        status_text.update()
         
         try:
-            if server_bridge:
-                try:
-                    files_data = await server_bridge.get_files_async()
-                    logger.info(f"Loaded {len(files_data)} files from server bridge")
-                except Exception as e:
-                    logger.warning(f"Server bridge failed, using mock data: {e}")
-                    files_data = generate_mock_files()
-            else:
-                files_data = generate_mock_files()
-                
-            # Update state manager
-            if state_manager:
-                state_manager.update("files_data", files_data)
-                
-            apply_filters()
-            status_text.value = f"Loaded {len(files_data)} files"
-            status_text.color = ft.Colors.GREEN
+            # Use server-mediated update for persistence and consistency
+            result = await state_manager.server_mediated_update(
+                key="files_data",
+                value=None,  # Will be set by server response
+                server_operation="get_files_async"
+            )
             
+            if not result.get('success'):
+                # Fallback to mock data if server operation fails
+                mock_files = generate_mock_files()
+                await state_manager.update_async("files_data", mock_files, source="fallback")
+                logger.warning("Using mock files data")
+                
         except Exception as e:
             logger.error(f"Failed to load files: {e}")
             show_error_message(page, f"Failed to load files: {str(e)}")
-            status_text.value = f"Error: {str(e)}"
-            status_text.color = ft.Colors.RED
+            error_files = []
+            await state_manager.update_async("files_data", error_files, source="error")
         finally:
-            is_loading = False
-            # Use page.update() instead of status_text.update() to avoid page attachment issues
-            page.update()
+            state_manager.set_loading("files_data", False)
 
     def generate_mock_files() -> List[Dict[str, Any]]:
         """Generate mock files data for development/fallback."""
@@ -162,50 +149,26 @@ def create_files_view(
 
     def apply_search(query: str):
         """Apply search filter and update display."""
-        nonlocal search_query
         search_query = query.lower().strip()
         apply_filters()
 
     def apply_filter(filter_type: str, value: str):
         """Apply status or type filter and update display."""
-        nonlocal status_filter, type_filter
-        
         if filter_type == "status":
             status_filter = value
         elif filter_type == "type":
             type_filter = value
-            
         apply_filters()
 
     def apply_filters():
-        """Apply all active filters and update table display."""
-        nonlocal filtered_files
-        
-        filtered_files = files_data.copy()
-        
-        # Apply search filter
-        if search_query:
-            filtered_files = [
-                file for file in filtered_files
-                if search_query in file.get("name", "").lower() or
-                   search_query in file.get("type", "").lower()
-            ]
-        
-        # Apply status filter
-        if status_filter != "all":
-            filtered_files = [
-                file for file in filtered_files
-                if file.get("status", "").lower() == status_filter
-            ]
-        
-        # Apply type filter
-        if type_filter != "all":
-            filtered_files = [
-                file for file in filtered_files
-                if file.get("type", "").lower() == type_filter
-            ]
-        
-        update_table_display()
+        """Apply all filters and update table display."""
+        filtered_files = [
+            f for f in files_data
+            if (search_query == "" or search_query in f["name"].lower()) and
+               (status_filter == "all" or f["status"] == status_filter) and
+               (type_filter == "all" or f["type"] == type_filter)
+        ]
+        update_table(filtered_files)
 
     def update_table_display():
         """Update the files table with filtered data."""
@@ -355,25 +318,36 @@ def create_files_view(
         
         files_table.update()
 
-    # File Action Functions
-    def download_file(file_data: Dict[str, Any]):
-        """Download file to Downloads folder."""
+    # Server-Mediated File Action Functions
+    async def download_file_async(file_data: Dict[str, Any]):
+        """Download file using server-mediated operations."""
         file_name = file_data.get("name", "unknown")
-        file_path = file_data.get("path", "")
+        file_id = file_data.get("id", "")
+        
+        # Set loading state
+        state_manager.set_loading(f"download_{file_id}", True)
         
         try:
-            # Create Downloads directory
-            downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
-            os.makedirs(downloads_dir, exist_ok=True)
+            # Server-mediated download operation
+            result = await state_manager.server_mediated_update(
+                key="file_downloaded",
+                value={
+                    "file_id": file_id,
+                    "filename": file_name,
+                    "timestamp": datetime.now().isoformat()
+                },
+                server_operation="download_file_async"
+            )
             
-            destination = os.path.join(downloads_dir, file_name)
-            
-            if os.path.exists(file_path):
-                # Real file copy
-                shutil.copy2(file_path, destination)
-                show_success_message(page, f"Downloaded {file_name} to Downloads")
+            if result.get('success'):
+                show_success_message(page, f"Downloaded {file_name} successfully")
+                logger.info(f"File downloaded: {file_name}")
             else:
-                # Mock download - create placeholder
+                # Fallback mock download
+                downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+                os.makedirs(downloads_dir, exist_ok=True)
+                destination = os.path.join(downloads_dir, file_name)
+                
                 mock_content = f"""Mock file: {file_name}
 Size: {file_data.get('size', 0)} bytes  
 Status: {file_data.get('status', 'unknown')}
@@ -383,124 +357,178 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     f.write(mock_content)
                     
                 show_success_message(page, f"Mock downloaded {file_name} (demo mode)")
-            
-            logger.info(f"File downloaded: {destination}")
-            
+                await state_manager.update_async("file_downloaded", {
+                    "file_id": file_id,
+                    "filename": file_name,
+                    "mode": "mock",
+                    "timestamp": datetime.now().isoformat()
+                }, source="fallback")
+                
         except Exception as e:
             logger.error(f"Download failed for {file_name}: {e}")
             show_error_message(page, f"Download failed: {str(e)}")
+        finally:
+            state_manager.set_loading(f"download_{file_id}", False)
+    
+    def download_file(file_data: Dict[str, Any]):
+        """Wrapper for async download file operation."""
+        page.run_task(download_file_async, file_data)
 
-    def verify_file(file_data: Dict[str, Any]):
-        """Verify file integrity and show results."""
+    async def verify_file_async(file_data: Dict[str, Any]):
+        """Verify file integrity using server-mediated operations."""
         file_name = file_data.get("name", "unknown")
+        file_id = file_data.get("id", "")
         file_path = file_data.get("path", "")
         
+        # Set loading state
+        state_manager.set_loading(f"verify_{file_id}", True)
+        
         try:
-            if os.path.exists(file_path):
-                # Calculate SHA256 hash
-                sha256_hash = hashlib.sha256()
-                with open(file_path, "rb") as f:
-                    for chunk in iter(lambda: f.read(4096), b""):
-                        sha256_hash.update(chunk)
-                
-                file_stats = os.stat(file_path)
-                
+            # Server-mediated verification operation
+            result = await state_manager.server_mediated_update(
+                key="file_verified",
+                value={
+                    "file_id": file_id,
+                    "filename": file_name,
+                    "timestamp": datetime.now().isoformat()
+                },
+                server_operation="verify_file_async"
+            )
+            
+            if result.get('success') and result.get('data'):
+                # Show server verification results
+                verification_data = result['data']
                 verification_info = ft.Column([
                     ft.Text("File Verification Results", size=18, weight=ft.FontWeight.BOLD),
                     ft.Divider(),
                     ft.Text(f"File: {file_name}"),
-                    ft.Text(f"Size: {file_stats.st_size:,} bytes"),
-                    ft.Text(f"Modified: {datetime.fromtimestamp(file_stats.st_mtime).strftime('%Y-%m-%d %H:%M:%S')}"),
-                    ft.Text("Status: File exists and is readable", color=ft.Colors.GREEN),
+                    ft.Text(f"Size: {verification_data.get('size', 'Unknown')} bytes"),
+                    ft.Text(f"Modified: {verification_data.get('modified', 'Unknown')}"),
+                    ft.Text("Status: File verified successfully", color=ft.Colors.GREEN),
                     ft.Divider(),
                     ft.Text("SHA256 Hash:", weight=ft.FontWeight.BOLD),
-                    ft.Text(sha256_hash.hexdigest(), selectable=True, size=11)
+                    ft.Text(verification_data.get('hash', 'N/A'), selectable=True, size=11)
                 ], tight=True, spacing=8)
                 
                 show_info(page, f"Verification: {file_name}", verification_info, width=500)
                 show_success_message(page, f"File {file_name} verified successfully")
             else:
-                # Mock verification
-                show_info(page, f"Verification: {file_name}", 
-                         ft.Text("Mock verification - file integrity confirmed", color=ft.Colors.GREEN))
-                show_success_message(page, f"Mock verified {file_name} (demo mode)")
+                # Fallback verification
+                if os.path.exists(file_path):
+                    # Calculate SHA256 hash
+                    sha256_hash = hashlib.sha256()
+                    with open(file_path, "rb") as f:
+                        for chunk in iter(lambda: f.read(4096), b""):
+                            sha256_hash.update(chunk)
+                    
+                    file_stats = os.stat(file_path)
+                    
+                    verification_info = ft.Column([
+                        ft.Text("File Verification Results", size=18, weight=ft.FontWeight.BOLD),
+                        ft.Divider(),
+                        ft.Text(f"File: {file_name}"),
+                        ft.Text(f"Size: {file_stats.st_size:,} bytes"),
+                        ft.Text(f"Modified: {datetime.fromtimestamp(file_stats.st_mtime).strftime('%Y-%m-%d %H:%M:%S')}"),
+                        ft.Text("Status: File exists and is readable", color=ft.Colors.GREEN),
+                        ft.Divider(),
+                        ft.Text("SHA256 Hash:", weight=ft.FontWeight.BOLD),
+                        ft.Text(sha256_hash.hexdigest(), selectable=True, size=11)
+                    ], tight=True, spacing=8)
+                    
+                    show_info(page, f"Verification: {file_name}", verification_info, width=500)
+                    show_success_message(page, f"File {file_name} verified successfully")
+                else:
+                    # Mock verification
+                    show_info(page, f"Verification: {file_name}", 
+                             ft.Text("Mock verification - file integrity confirmed", color=ft.Colors.GREEN))
+                    show_success_message(page, f"Mock verified {file_name} (demo mode)")
+                
+                await state_manager.update_async("file_verified", {
+                    "file_id": file_id,
+                    "filename": file_name,
+                    "mode": "fallback",
+                    "timestamp": datetime.now().isoformat()
+                }, source="fallback")
                 
         except Exception as e:
             logger.error(f"Verification failed for {file_name}: {e}")
             show_error_message(page, f"Verification failed: {str(e)}")
+        finally:
+            state_manager.set_loading(f"verify_{file_id}", False)
+    
+    def verify_file(file_data: Dict[str, Any]):
+        """Wrapper for async verify file operation."""
+        page.run_task(verify_file_async, file_data)
 
+    async def delete_file_async(file_data: Dict[str, Any]):
+        """Delete file using server-mediated operations."""
+        file_name = file_data.get("name", "unknown")
+        file_id = file_data.get("id", "")
+        
+        # Set loading state
+        state_manager.set_loading(f"delete_{file_id}", True)
+        
+        try:
+            # Server-mediated delete operation
+            result = await state_manager.server_mediated_update(
+                key="file_deleted",
+                value={
+                    "file_id": file_id,
+                    "filename": file_name,
+                    "timestamp": datetime.now().isoformat()
+                },
+                server_operation="delete_file_async"
+            )
+            
+            if result.get('success'):
+                show_success_message(page, f"File {file_name} deleted successfully")
+                # Reload files data to reflect changes
+                page.run_task(load_files_data)
+            else:
+                # Fallback delete - actually remove from files_data
+                logger.info(f"Performing fallback delete for file {file_id}")
+                
+                # Find and remove the file from the data structure
+                file_found = False
+                for i, file_item in enumerate(files_data):
+                    current_id = file_item.get("id")
+                    if current_id == file_id:
+                        old_status = file_item.get("status", "Unknown")
+                        files_data.pop(i)  # Actually remove the file
+                        file_found = True
+                        logger.info(f"File {file_id} removed from files_data (was {old_status})")
+                        break
+                
+                if file_found:
+                    # Update state manager with deletion event
+                    await state_manager.update_async("file_deleted", {
+                        "file_id": file_id,
+                        "filename": file_name,
+                        "mode": "fallback",
+                        "timestamp": datetime.now().isoformat()
+                    }, source="fallback")
+                    
+                    # Refresh the table to show updated data
+                    apply_filters()
+                    show_success_message(page, f"File {file_name} deleted successfully")
+                    logger.info(f"File {file_id} successfully deleted and UI updated")
+                else:
+                    show_error_message(page, f"File {file_name} not found in data")
+                    logger.error(f"File {file_id} not found in files_data during delete")
+                
+        except Exception as e:
+            logger.error(f"Error during delete: {e}")
+            show_error_message(page, f"Error deleting file: {str(e)}")
+        finally:
+            state_manager.set_loading(f"delete_{file_id}", False)
+    
     def delete_file(file_data: Dict[str, Any]):
         """Delete file with confirmation."""
         file_name = file_data.get("name", "unknown")
         
-        async def confirm_delete_async(e):
-            """Actually delete the file like client disconnect does."""
-            try:
-                file_id = file_data.get("id", "")
-                
-                # Server bridge operation
-                if server_bridge:
-                    try:
-                        result = await server_bridge.delete_file_async(file_id)
-                        if result:
-                            # Update local state via state manager
-                            if state_manager:
-                                state_manager.update("file_deleted", {
-                                    "file_id": file_id,
-                                    "filename": file_name,
-                                    "timestamp": datetime.now().isoformat()
-                                })
-                            
-                            show_success_message(page, f"File {file_name} deleted successfully")
-                            # Refresh files list to show updated data
-                            page.run_task(load_files_data)
-                        else:
-                            show_error_message(page, f"Failed to delete file {file_name}")
-                    except Exception as e:
-                        logger.error(f"Server bridge delete error: {e}")
-                        show_error_message(page, f"Error deleting file: {str(e)}")
-                else:
-                    # Mock delete - ACTUALLY remove from files_data like clients page does
-                    logger.info(f"Performing REAL delete for file {file_id}")
-                    
-                    # Find and remove the file from the data structure
-                    file_found = False
-                    for i, file_item in enumerate(files_data):
-                        current_id = file_item.get("id")
-                        if current_id == file_id:
-                            old_status = file_item.get("status", "Unknown")
-                            files_data.pop(i)  # Actually remove the file
-                            file_found = True
-                            logger.info(f"File {file_id} removed from files_data (was {old_status})")
-                            break
-                    
-                    if file_found:
-                        # Update local state via state manager
-                        if state_manager:
-                            state_manager.update("file_deleted", {
-                                "file_id": file_id,
-                                "filename": file_name,
-                                "timestamp": datetime.now().isoformat()
-                            })
-                        
-                        # Refresh the table to show updated data
-                        apply_filters()
-                        show_success_message(page, f"File {file_name} deleted successfully")
-                        logger.info(f"File {file_id} successfully deleted and UI updated")
-                    else:
-                        show_error_message(page, f"File {file_name} not found in data")
-                        logger.error(f"File {file_id} not found in files_data during delete")
-                
-            except Exception as e:
-                logger.error(f"Error during delete: {e}")
-                show_error_message(page, f"Error deleting file: {str(e)}")
-        
         def confirm_delete(e):
-            """Wrapper to run async delete in a task like clients page"""
-            async def run_delete():
-                await confirm_delete_async(e)
-            
-            page.run_task(run_delete)
+            """Wrapper to run async delete in a task."""
+            page.run_task(delete_file_async, file_data)
         
         show_confirmation(
             page,
@@ -563,6 +591,47 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         ft.Container(height=8),   # Spacing
         status_row
     ], expand=True, scroll=ft.ScrollMode.AUTO, spacing=0)
+    
+    # Reactive State Subscriptions
+    async def on_files_data_changed(new_files, old_files):
+        """React to files data changes from state manager."""
+        nonlocal files_data
+        if new_files != files_data:
+            files_data.clear()
+            files_data.extend(new_files if new_files else [])
+            apply_filters()
+            status_text.value = f"Loaded {len(files_data)} files"
+            status_text.color = ft.Colors.GREEN
+            status_text.update()
+            logger.info(f"Files data updated: {len(files_data)} files")
+    
+    async def on_loading_state_changed(new_loading_states, old_loading_states):
+        """React to loading state changes."""
+        if new_loading_states.get("files_data"):
+            status_text.value = "Loading files..."
+            status_text.color = ft.Colors.ORANGE
+            status_text.update()
+    
+    async def on_file_operation_complete(event_data, old_data):
+        """React to file operation completion events."""
+        if event_data:
+            operation_type = "operation"
+            if "file_downloaded" in str(event_data):
+                operation_type = "download"
+            elif "file_verified" in str(event_data):
+                operation_type = "verification"
+            elif "file_deleted" in str(event_data):
+                operation_type = "deletion"
+            
+            logger.info(f"File {operation_type} completed: {event_data}")
+    
+    # Subscribe to reactive state changes
+    if state_manager:
+        state_manager.subscribe_async("files_data", on_files_data_changed)
+        state_manager.subscribe_async("loading_states", on_loading_state_changed)
+        state_manager.subscribe_async("file_downloaded", on_file_operation_complete)
+        state_manager.subscribe_async("file_verified", on_file_operation_complete)
+        state_manager.subscribe_async("file_deleted", on_file_operation_complete)
     
     # Initialize data loading
     page.run_task(load_files_data)
