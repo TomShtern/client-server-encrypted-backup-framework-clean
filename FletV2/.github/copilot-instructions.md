@@ -1,5 +1,10 @@
 ---
 description: AI rules derived by SpecStory from the project AI interaction history
+globs: *
+---
+
+---
+description: AI rules derived by SpecStory from the project AI interaction history
 ---
 
 ---
@@ -8,7 +13,7 @@ description: AI guidance for FletV2 encrypted backup server GUI
 
 # FletV2 Desktop Application Guidelines
 
-This is a **Flet desktop app** for managing an encrypted backup server. Work ONLY inside `FletV2/`. Follow "framework harmony" - use Flet's built-ins, avoid overengineering.
+This is a **Flet desktop app** for managing an encrypted backup server. Work ONLY inside `FletV2/`. Follow "framework harmony" - use Flet's built-ins, avoid overengineering. Emphasize 'Framework Harmony': Always prioritize Flet's built-in features over custom solutions. This reduces code by 50%+ and improves performance by 10x (see `FletV2_Documentation.md` for details).
 
 ## Essential Architecture
 
@@ -33,6 +38,8 @@ cpu_text = ft.Ref[ft.Text]()
 **Performance**: Prefer `control.update()` over `page.update()`
 **Layout**: Use `expand=True` with standard Rows/Columns/Containers
 
+**Performance Update Hierarchy**: 1. `control.update()` (best), 2. `ft.update_async()` (good), 3. `page.update()` (acceptable only for themes). Never use multiple `page.update()` in loops. Target <16ms for 60fps responsiveness.
+
 ## ServerBridge API
 
 **Creation**: `from utils/server_bridge import create_server_bridge`
@@ -54,9 +61,11 @@ cpu_text = ft.Ref[ft.Text]()
 2. Wire into NavigationRail in `main.py` (follow existing pattern)
 3. Use `utils/mock_mode_indicator.py` for fallback UI hints
 
+Example: `def create_my_view(server_bridge, page, state_manager=None) -> ft.Control: return ft.Column([...])` - Wire into NavigationRail in `main.py`.
+
 ## Code Quality Requirements
 
-**CRITICAL**: After ANY file edit, run `codacy_cli_analyze` with `rootPath` set to workspace and `file` set to edited file path (per `.github/instructions/codacy.instructions.md`)
+**CRITICAL**: After ANY file edit, run `codacy_cli_analyze` with `rootPath` set to workspace and `file` set to edited file path (per `.github/instructions/codacy.instructions.md`). Address any issues immediately.
 
 **References**: See patterns in `main.py`, `views/dashboard.py`, `utils/server_bridge.py`
 
@@ -412,3 +421,47 @@ disable=trailing-whitespace
     - Document only discoverable patterns, not aspirational practices.
     - Reference key files/directories that exemplify important patterns.
 - Search existing AI conventions from `**/{.github/copilot-instructions.md,AGENT.md,AGENTS.md,CLAUDE.md,.cursorrules,.windsurfrules,.clinerules,.cursor/rules/**,.windsurf/rules/**,.clinerules/**,README.md}`.
+
+### Project Overview and Functionality
+
+- **Purpose:** FletV2 provides a GUI for administrators to manage backup clients, files, server status, analytics, logs, and database operations for an encrypted backup system.
+- **Key Features:**
+    - View and manage backup clients
+    - Browse, download, verify, and delete files
+    - Inspect and edit database tables
+    - Monitor server status and analytics
+    - View and export logs
+    - Configure application settings
+    - Operate in both real server and mock/demo mode
+- **Problem Solved:** Managing encrypted backups across multiple clients and files is complex. FletV2 simplifies this by providing a unified, user-friendly desktop interface, reducing the risk of errors and improving operational efficiency.
+- **Design Philosophy:**
+    - **Framework Harmony:** Works with Flet's native patterns for stability and performance
+    - **Simplicity:** Avoids unnecessary complexity, making the codebase maintainable
+    - **Performance:** Uses targeted UI updates for responsiveness
+    - **Maintainability:** Clean separation of concerns and modular design
+- **Architecture:**
+    - **Single Page Application:** One main window with dynamic view switching
+    - **NavigationRail:** Sidebar for switching between views (Dashboard, Clients, Files, Database, Analytics, Logs, Settings)
+    - **AnimatedSwitcher:** Smooth transitions between views
+    - **ServerBridge:** Unified interface for backend operations, with automatic fallback to mock data if the real server is unavailable
+    - **StateManager:** Centralized, reactive state management for cross-view updates
+    - **Material Design 3 Theme:** Modern, vibrant UI
+- **Development Patterns:**
+    - Views are created as functions returning Flet controls
+    - Control updates use `control.update()` for performance
+    - Async operations use `async/await` and Flet's background task system
+    - Error handling is centralized with user feedback via SnackBar and dialogs
+- **Intended Functionality:**
+    - Allow administrators to manage all aspects of an encrypted backup server from a desktop GUI
+    - Provide real-time feedback, analytics, and error handling
+    - Support both production (real server) and development/demo (mock mode) environments
+    - Enable extensibility for future features (plugins, advanced analytics, offline mode)
+- **Implementation Details:**
+    - Leverages Flet's built-in controls and patterns for high performance and stability
+    - Modular design (views, utils, theme, server bridge) for easy extension and maintenance
+    - Uses modern UI/UX principles for a professional look and feel
+- **Rationale:**
+    - Avoids the pitfalls of custom frameworks and over-engineering
+    - Ensures the app is robust, maintainable, and easy for new developers to understand
+    - Maximizes performance and minimizes bugs by working with the framework, not against it
+- **References:** For more details, see `FletV2_Documentation.md` and the architecture summary in `README.md`.

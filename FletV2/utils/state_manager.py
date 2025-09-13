@@ -232,7 +232,7 @@ class StateManager:
         loading_states = self.get("loading_states", {})
         return loading_states.get(operation, False)
 
-    async def server_mediated_update(self, key: str, value: Any, server_operation: str = None):
+    async def server_mediated_update(self, key: str, value: Any, server_operation: str | None = None, *args, **kwargs):
         """Update state through server bridge for persistence"""
         if self.server_bridge and server_operation:
             try:
@@ -240,10 +240,18 @@ class StateManager:
                 server_method = getattr(self.server_bridge, server_operation, None)
                 if server_method:
                     logger.debug(f"Calling server method: {server_operation}")
-                    result = await server_method() if asyncio.iscoroutinefunction(server_method) else server_method()
-                    
+                    # Pass the arguments to the server method
+                    if asyncio.iscoroutinefunction(server_method):
+                        result = await server_method(*args, **kwargs)
+                    else:
+                        result = server_method(*args, **kwargs)
+
+                    # Normalize non-dict results into dicts
+                    if not isinstance(result, dict):
+                        result = {'success': bool(result), 'data': result}
+
                     # Update state with server result if successful
-                    if isinstance(result, dict) and result.get('success'):
+                    if result.get('success'):
                         await self.update_async(key, result.get('data', value), source=f"server_{server_operation}")
                         return result
                     else:
@@ -253,6 +261,7 @@ class StateManager:
                 else:
                     logger.warning(f"Server method {server_operation} not found")
                     await self.update_async(key, value, source="server_fallback")
+                    return {'success': False, 'error': f'method {server_operation} not found', 'mode': 'fallback'}
             except Exception as e:
                 logger.error(f"Server operation {server_operation} failed: {e}")
                 await self.update_async(key, value, source="server_error")

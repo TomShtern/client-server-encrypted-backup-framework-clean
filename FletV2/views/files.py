@@ -21,8 +21,8 @@ from utils.server_mediated_operations import create_server_mediated_operations, 
 logger = get_logger(__name__)
 
 def create_files_view(
-    server_bridge: Optional[ServerBridge], 
-    page: ft.Page, 
+    server_bridge: Optional[ServerBridge],
+    page: ft.Page,
     state_manager: StateManager
 ) -> ft.Control:
     """
@@ -30,6 +30,10 @@ def create_files_view(
     Uses reactive patterns for UI updates following FletV2 framework harmony.
     """
     logger.info("Creating files view with server-mediated operations")
+
+    # Comment 8: Show server unavailable status if server_bridge is falsy
+    if not server_bridge:
+        logger.info("Server unavailable - running in mock mode")
     
     # State Management - Reactive with State Manager
     files_data: List[Dict[str, Any]] = []
@@ -38,14 +42,32 @@ def create_files_view(
     status_filter = "all"
     type_filter = "all"
     
-    # UI Control References
+    # UI Control References - Add ft.Ref definitions
+    files_table_ref = ft.Ref[ft.DataTable]()
+    status_text_ref = ft.Ref[ft.Text]()
+    search_field_ref = ft.Ref[ft.TextField]()
+    loading_indicator_ref = ft.Ref[ft.ProgressRing]()
+
+    def handle_search_change(e):
+        """Handle search field changes with proper scoping."""
+        nonlocal search_query
+        search_query = e.control.value.lower().strip()
+        apply_filters()
+
     search_field = ft.TextField(
+        ref=search_field_ref,
         label="Search files...",
         prefix_icon=ft.Icons.SEARCH,
-        on_change=lambda e: apply_search(e.control.value),
+        on_change=handle_search_change,
         width=300
     )
     
+    def handle_status_filter_change(e):
+        """Handle status filter changes with proper scoping."""
+        nonlocal status_filter
+        status_filter = e.control.value
+        apply_filters()
+
     status_dropdown = ft.Dropdown(
         label="Status",
         options=[
@@ -57,10 +79,16 @@ def create_files_view(
             ft.dropdown.Option("verified", "Verified")
         ],
         value="all",
-        on_change=lambda e: apply_filter("status", e.control.value),
+        on_change=handle_status_filter_change,
         width=150
     )
     
+    def handle_type_filter_change(e):
+        """Handle type filter changes with proper scoping."""
+        nonlocal type_filter
+        type_filter = e.control.value
+        apply_filters()
+
     type_dropdown = ft.Dropdown(
         label="Type",
         options=[
@@ -71,11 +99,12 @@ def create_files_view(
             ft.dropdown.Option("code", "Code")
         ],
         value="all",
-        on_change=lambda e: apply_filter("type", e.control.value),
+        on_change=handle_type_filter_change,
         width=150
     )
     
     files_table = ft.DataTable(
+        ref=files_table_ref,
         columns=[
             ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD)),
             ft.DataColumn(ft.Text("Size", weight=ft.FontWeight.BOLD)),
@@ -89,7 +118,12 @@ def create_files_view(
         expand=True
     )
     
-    status_text = ft.Text("Ready", size=12, color=ft.Colors.BLUE)
+    # Comment 8: Initial status message based on server availability
+    initial_status = "Server unavailable—running in mock mode." if not server_bridge else "Ready"
+    status_text = ft.Text(initial_status, ref=status_text_ref, size=12, color=ft.Colors.BLUE)
+
+    # Comment 3: Add ProgressRing for loading indicator
+    loading_indicator = ft.ProgressRing(ref=loading_indicator_ref, visible=False, width=16, height=16)
     
     # Server-Mediated Data Functions
     async def load_files_data():
@@ -162,6 +196,7 @@ def create_files_view(
 
     def apply_filters():
         """Apply all filters and update table display."""
+        nonlocal filtered_files
         filtered_files = [
             f for f in files_data
             if (search_query == "" or search_query in f["name"].lower()) and
@@ -170,11 +205,14 @@ def create_files_view(
         ]
         update_table(filtered_files)
 
-    def update_table_display():
+    def update_table(filtered_files_param=None):
         """Update the files table with filtered data."""
         files_table.rows.clear()
         
-        for file_data in filtered_files[:50]:  # Limit to 50 for performance
+        # Use parameter if provided, otherwise use the nonlocal filtered_files
+        data_to_display = filtered_files_param if filtered_files_param is not None else filtered_files
+
+        for file_data in data_to_display[:50]:  # Limit to 50 for performance
             # File type icon
             file_type = file_data.get("type", "unknown")
             if file_type == "document":
@@ -323,20 +361,28 @@ def create_files_view(
         """Download file using server-mediated operations."""
         file_name = file_data.get("name", "unknown")
         file_id = file_data.get("id", "")
-        
-        # Set loading state
-        state_manager.set_loading(f"download_{file_id}", True)
-        
+
         try:
-            # Server-mediated download operation
+            # Set loading state
+            state_manager.set_loading(f"download_{file_id}", True)
+
+            # Compute destination path (e.g., ~/Downloads/<name>)
+            downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+            os.makedirs(downloads_dir, exist_ok=True)
+            destination_path = os.path.join(downloads_dir, file_name)
+
+            # Server-mediated download operation with arguments
             result = await state_manager.server_mediated_update(
                 key="file_downloaded",
                 value={
                     "file_id": file_id,
                     "filename": file_name,
+                    "destination_path": destination_path,
                     "timestamp": datetime.now().isoformat()
                 },
-                server_operation="download_file_async"
+                server_operation="download_file_async",
+                file_id=file_id,
+                destination_path=destination_path
             )
             
             if result.get('success'):
@@ -344,22 +390,19 @@ def create_files_view(
                 logger.info(f"File downloaded: {file_name}")
             else:
                 # Fallback mock download
-                downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
-                os.makedirs(downloads_dir, exist_ok=True)
-                destination = os.path.join(downloads_dir, file_name)
-                
                 mock_content = f"""Mock file: {file_name}
-Size: {file_data.get('size', 0)} bytes  
+Size: {file_data.get('size', 0)} bytes
 Status: {file_data.get('status', 'unknown')}
 Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
-                
-                with open(destination, 'w', encoding='utf-8') as f:
+
+                with open(destination_path, 'w', encoding='utf-8') as f:
                     f.write(mock_content)
-                    
+
                 show_success_message(page, f"Mock downloaded {file_name} (demo mode)")
                 await state_manager.update_async("file_downloaded", {
                     "file_id": file_id,
                     "filename": file_name,
+                    "destination_path": destination_path,
                     "mode": "mock",
                     "timestamp": datetime.now().isoformat()
                 }, source="fallback")
@@ -379,12 +422,11 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         file_name = file_data.get("name", "unknown")
         file_id = file_data.get("id", "")
         file_path = file_data.get("path", "")
-        
-        # Set loading state
-        state_manager.set_loading(f"verify_{file_id}", True)
-        
+
         try:
-            # Server-mediated verification operation
+            # Set loading state
+            state_manager.set_loading(f"verify_{file_id}", True)
+            # Server-mediated verification operation with arguments
             result = await state_manager.server_mediated_update(
                 key="file_verified",
                 value={
@@ -392,7 +434,8 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     "filename": file_name,
                     "timestamp": datetime.now().isoformat()
                 },
-                server_operation="verify_file_async"
+                server_operation="verify_file_async",
+                file_id=file_id
             )
             
             if result.get('success') and result.get('data'):
@@ -464,12 +507,11 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         """Delete file using server-mediated operations."""
         file_name = file_data.get("name", "unknown")
         file_id = file_data.get("id", "")
-        
-        # Set loading state
-        state_manager.set_loading(f"delete_{file_id}", True)
-        
+
         try:
-            # Server-mediated delete operation
+            # Set loading state
+            state_manager.set_loading(f"delete_{file_id}", True)
+            # Server-mediated delete operation with arguments
             result = await state_manager.server_mediated_update(
                 key="file_deleted",
                 value={
@@ -477,13 +519,16 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     "filename": file_name,
                     "timestamp": datetime.now().isoformat()
                 },
-                server_operation="delete_file_async"
+                server_operation="delete_file_async",
+                file_id=file_id
             )
             
             if result.get('success'):
                 show_success_message(page, f"File {file_name} deleted successfully")
-                # Reload files data to reflect changes
-                page.run_task(load_files_data)
+                # Update files_data via state_manager only when data actually changes
+                updated_files_data = [f for f in files_data if f.get("id") != file_id]
+                if len(updated_files_data) != len(files_data):
+                    await state_manager.update_async("files_data", updated_files_data, source="server_delete")
             else:
                 # Fallback delete - actually remove from files_data
                 logger.info(f"Performing fallback delete for file {file_id}")
@@ -500,6 +545,9 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                         break
                 
                 if file_found:
+                    # Update files_data state only when data actually changes (after fallback delete)
+                    await state_manager.update_async("files_data", files_data, source="fallback_delete")
+
                     # Update state manager with deletion event
                     await state_manager.update_async("file_deleted", {
                         "file_id": file_id,
@@ -507,9 +555,9 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                         "mode": "fallback",
                         "timestamp": datetime.now().isoformat()
                     }, source="fallback")
-                    
-                    # Refresh the table to show updated data
-                    apply_filters()
+
+                    # Keep UI updates minimal - use control.update()
+                    apply_filters()  # This will call files_table.update() internally
                     show_success_message(page, f"File {file_name} deleted successfully")
                     logger.info(f"File {file_id} successfully deleted and UI updated")
                 else:
@@ -579,7 +627,8 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
     
     status_row = ft.Row([
         ft.Icon(ft.Icons.INFO_OUTLINE, size=16, color=ft.Colors.BLUE),
-        status_text
+        status_text,
+        loading_indicator  # Comment 3: Add loading indicator to status row
     ], spacing=8)
     
     main_view = ft.Column([
@@ -611,6 +660,13 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
             status_text.value = "Loading files..."
             status_text.color = ft.Colors.ORANGE
             status_text.update()
+            # Comment 3: Toggle loading indicator visibility
+            loading_indicator.visible = True
+            loading_indicator.update()
+        else:
+            # Comment 3: Hide loading indicator when not loading
+            loading_indicator.visible = False
+            loading_indicator.update()
     
     async def on_file_operation_complete(event_data, old_data):
         """React to file operation completion events."""

@@ -567,6 +567,51 @@ class MockDataGenerator:
                 return True
             return False
 
+    def add_client(self, client_data: dict) -> Optional[Dict[str, Any]]:
+        """Add a new client to the mock data store.
+
+        Args:
+            client_data: Dictionary containing client information (name, ip_address, etc.)
+
+        Returns:
+            Dictionary representation of the created client, or None if creation failed
+        """
+        with self._lock:
+            try:
+                # Generate unique ID
+                client_id = str(uuid.uuid4())
+
+                # Create new client with provided data and defaults
+                new_client = MockClient(
+                    id=client_id,
+                    name=client_data.get('name', f'Client-{client_id[:8]}'),
+                    ip_address=client_data.get('ip_address', f"192.168.1.{random.randint(100, 200)}"),
+                    status=client_data.get('status', 'connected'),
+                    last_seen=datetime.now(),
+                    files_count=0,  # New client starts with no files
+                    total_size=0,   # New client starts with no data
+                    connection_time=datetime.now(),
+                    version=client_data.get('version', "1.0.0"),
+                    platform=client_data.get('platform', random.choice(["Windows", "Linux", "MacOS"]))
+                )
+
+                # Add to internal storage
+                self._clients[client_id] = new_client
+                self._client_file_index[client_id] = set()
+
+                # Update change tracking
+                self._update_statistics_after_modification()
+                self._add_activity("client_add", f"Added client {new_client.name}")
+                self._save_to_disk()
+                self._notify_change("clients", {"action": "add", "client_id": client_id})
+
+                logger.info(f"MockDataGenerator: Successfully added client {client_id} ({new_client.name})")
+                return new_client.to_dict()
+
+            except Exception as e:
+                logger.error(f"MockDataGenerator: Failed to add client: {e}")
+                return None
+
     def delete_client(self, client_id: str) -> bool:
         """Delete client with cascading file deletion and thread safety"""
         with self._lock:

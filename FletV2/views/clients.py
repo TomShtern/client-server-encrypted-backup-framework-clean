@@ -6,6 +6,7 @@ This demonstrates server-mediated operations through state manager with reactive
 
 # Standard library imports
 import asyncio
+import uuid
 from datetime import datetime
 from typing import Optional, Dict, Any
 
@@ -23,12 +24,17 @@ from utils.server_mediated_operations import create_server_mediated_operations
 logger = get_logger(__name__)
 
 def create_clients_view(
-    server_bridge: Optional[ServerBridge], 
-    page: ft.Page, 
+    server_bridge: Optional[ServerBridge],
+    page: ft.Page,
     state_manager: StateManager
 ) -> ft.Control:
     """Create server-mediated clients view with reactive UI updates."""
     logger.info("Creating server-mediated clients view with reactive state management")
+
+    # Comment 8: Add server availability status note
+    server_status_note = None
+    if not server_bridge:
+        server_status_note = "Server unavailable—running in mock mode."
     
     # Local UI state (not data state - that's managed by state_manager)
     ui_state = {
@@ -42,6 +48,8 @@ def create_clients_view(
     search_field_ref = ft.Ref[ft.TextField]()
     feedback_text_ref = ft.Ref[ft.Text]()
     loading_indicator_ref = ft.Ref[ft.ProgressBar]()
+    add_client_dialog_ref = ft.Ref[ft.AlertDialog]()
+    # Comment 4: client_details_dialog_ref removed - not used in current implementation
     
     # Pre-create the DataTable to avoid lifecycle issues
     clients_table = ft.DataTable(
@@ -68,7 +76,11 @@ def create_clients_view(
     loading_indicator = ft.ProgressBar(visible=False, ref=loading_indicator_ref)
 
     async def view_details_action(client_id: str):
-        """Server-mediated view client details with reactive updates."""
+        """Server-mediated view client details with reactive updates.
+
+        Falls back to basic client data from state manager if server operation
+        is unavailable. Server method availability is handled by StateManager.
+        """
         logger.info(f"View details clicked for client {client_id}")
         
         try:
@@ -91,9 +103,10 @@ def create_clients_view(
             
             # Use server-mediated update to fetch detailed info
             result = await state_manager.server_mediated_update(
-                key="client_details",
-                value=client_data,  # Fallback to basic data
-                server_operation="get_client_details_async" if hasattr(server_bridge, 'get_client_details_async') else None
+                "client_details",  # key
+                client_data,       # value - fallback to basic data if server operation fails
+                "get_client_details_async",  # server_operation
+                client_id          # Pass client_id as argument
             )
             
             detailed_info = result.get('data') if result.get('success') else client_data
@@ -138,15 +151,15 @@ def create_clients_view(
             state_manager.set_loading("client_details", False)
 
     async def disconnect_action(client_id: str):
-        """Server-mediated disconnect client action with reactive updates."""
+        """Server-mediated disconnect client action with reactive updates.
+
+        Falls back to local state updates if server operation is unavailable.
+        Server method availability is handled by StateManager.
+        """
         logger.info(f"Disconnect clicked for client {client_id}")
         
         async def confirm_disconnect_async(e):
             try:
-                # Close confirmation dialog
-                confirmation_dialog.open = False
-                confirmation_dialog.update()  # Efficient dialog-specific update
-                
                 # Set loading state
                 state_manager.set_loading("client_disconnect", True)
                 feedback_text.value = f"Disconnecting client {client_id}..."
@@ -160,9 +173,10 @@ def create_clients_view(
                 }
                 
                 result = await state_manager.server_mediated_update(
-                    key="client_action",
-                    value=disconnect_data,
-                    server_operation="disconnect_client_async"
+                    "client_action",           # key
+                    disconnect_data,           # value
+                    "disconnect_client_async", # server_operation
+                    client_id                  # Pass client_id as argument
                 )
                 
                 if result.get('success'):
@@ -301,6 +315,11 @@ def create_clients_view(
                                     text="Disconnect",
                                     icon=ft.Icons.LOGOUT,
                                     on_click=lambda e, client_id=client.get("id"): page.run_task(disconnect_action, client_id)
+                                ),
+                                ft.PopupMenuItem(
+                                    text="Delete",
+                                    icon=ft.Icons.DELETE,
+                                    on_click=lambda e, client_id=client.get("id"): show_delete_confirmation(client_id)
                                 )
                             ]
                         )
@@ -341,6 +360,10 @@ def create_clients_view(
         if feedback_text_ref.current:
             feedback_text_ref.current.value = f"Showing {clients_count} clients"
             feedback_text_ref.current.update()
+        else:
+            # Fallback if reference is not available
+            feedback_text.value = f"Showing {clients_count} clients"
+            feedback_text.update()
 
     def get_mock_data():
         """Generate mock client data for testing."""
@@ -438,9 +461,9 @@ def create_clients_view(
             
             # Use server-mediated update to load clients
             result = await state_manager.server_mediated_update(
-                key="clients",
-                value=get_mock_data(),  # Fallback data
-                server_operation="get_clients_async"
+                "clients",            # key
+                get_mock_data(),      # value - fallback data
+                "get_clients_async"   # server_operation - no additional arguments needed
             )
             
             if result.get('success'):
@@ -488,29 +511,48 @@ def create_clients_view(
             loading_indicator_ref.current.update()
 
     async def add_client_action(client_data: Dict[str, Any]):
-        """Server-mediated add client operation."""
+        """Server-mediated add client operation with local fallback.
+
+        Falls back to local state updates if server operation is unavailable.
+        Server method availability is handled by StateManager.
+        """
         try:
             # Set loading state
             state_manager.set_loading("client_add", True)
             feedback_text.value = f"Adding client {client_data.get('name', 'Unknown')}..."
             feedback_text.update()
-            
-            # Use server-mediated update
+
+            # Use server-mediated update with client_data as argument
             result = await state_manager.server_mediated_update(
-                key="client_add",
-                value=client_data,
-                server_operation="add_client_async"
+                "client_add",     # key
+                client_data,      # value
+                "add_client_async", # server_operation
+                client_data       # Pass client_data as argument
             )
-            
+
             if result.get('success'):
                 # Reload clients list after successful add
                 await load_clients_data()
                 show_success_message(page, f"Client {client_data.get('name')} added successfully")
                 feedback_text.value = f"Client {client_data.get('name')} added successfully"
             else:
-                show_error_message(page, f"Failed to add client: {result.get('error', 'Unknown error')}")
-                feedback_text.value = f"Failed to add client {client_data.get('name')}"
-                
+                # Local fallback: add to local state when server method is missing
+                if "method not found" in str(result.get('error', '')).lower() or "not available" in str(result.get('error', '')).lower():
+                    # Add to local state as fallback
+                    clients_data = state_manager.get("clients", [])
+                    updated_clients = clients_data.copy()
+                    updated_clients.append(client_data)
+
+                    # Update clients state with new client
+                    await state_manager.update_async("clients", updated_clients, source="add_fallback")
+
+                    show_success_message(page, f"Client {client_data.get('name')} added successfully (mock mode)")
+                    feedback_text.value = f"Client {client_data.get('name')} added (mock mode)"
+                    logger.info(f"Client {client_data.get('name')} added via local fallback")
+                else:
+                    show_error_message(page, f"Failed to add client: {result.get('error', 'Unknown error')}")
+                    feedback_text.value = f"Failed to add client {client_data.get('name')}"
+
         except Exception as e:
             logger.error(f"Error adding client: {e}")
             show_error_message(page, f"Error adding client: {str(e)}")
@@ -519,20 +561,25 @@ def create_clients_view(
             state_manager.set_loading("client_add", False)
 
     async def delete_client_action(client_id: str):
-        """Server-mediated delete client operation."""
+        """Server-mediated delete client operation.
+
+        Falls back to error handling if server operation is unavailable.
+        Server method availability is handled by StateManager.
+        """
         try:
             # Set loading state
             state_manager.set_loading("client_delete", True)
             feedback_text.value = f"Deleting client {client_id}..."
             feedback_text.update()
-            
-            # Use server-mediated update
+
+            # Use server-mediated update with delete_client (non-async) and client_id argument
             result = await state_manager.server_mediated_update(
-                key="client_delete",
-                value={"client_id": client_id, "action": "delete"},
-                server_operation="delete_client_async"
+                "client_delete",  # key
+                {"client_id": client_id, "action": "delete"},  # value
+                "delete_client",  # server_operation (non-async)
+                client_id         # Pass client_id as argument
             )
-            
+
             if result.get('success'):
                 # Reload clients list after successful delete
                 await load_clients_data()
@@ -541,13 +588,100 @@ def create_clients_view(
             else:
                 show_error_message(page, f"Failed to delete client: {result.get('error', 'Unknown error')}")
                 feedback_text.value = f"Failed to delete client {client_id}"
-                
+
         except Exception as e:
             logger.error(f"Error deleting client: {e}")
             show_error_message(page, f"Error deleting client: {str(e)}")
             feedback_text.value = f"Error deleting client"
         finally:
             state_manager.set_loading("client_delete", False)
+
+    def show_delete_confirmation(client_id: str):
+        """Show delete confirmation dialog for client."""
+        async def confirm_delete_async(e):
+            await delete_client_action(client_id)
+
+        def confirm_delete(e):
+            page.run_task(confirm_delete_async, e)
+
+        show_confirmation(
+            page,
+            "Confirm Delete",
+            f"Are you sure you want to delete client {client_id}?\n\nThis action cannot be undone and will permanently remove all client data.",
+            confirm_delete,
+            confirm_text="Delete",
+            is_destructive=True
+        )
+
+    def show_add_client_dialog():
+        """Show add client dialog with form fields."""
+        name_field = ft.TextField(label="Client Name", hint_text="Enter client name")
+        ip_field = ft.TextField(label="IP Address", hint_text="Enter IP address")
+        status_dropdown = ft.Dropdown(
+            label="Initial Status",
+            value="Disconnected",
+            options=[
+                ft.dropdown.Option("Connected", "Connected"),
+                ft.dropdown.Option("Disconnected", "Disconnected"),
+                ft.dropdown.Option("Connecting", "Connecting")
+            ]
+        )
+
+        async def submit_add_client(e):
+            if not name_field.value or not name_field.value.strip():
+                show_error_message(page, "Client name is required")
+                return
+
+            # Generate unique client ID
+            client_id = f"client-{str(uuid.uuid4())[:8]}"
+
+            client_data = {
+                "id": client_id,
+                "name": name_field.value.strip(),
+                "ip_address": ip_field.value.strip() if ip_field.value else "Unknown",
+                "status": status_dropdown.value,
+                "files_count": "0",
+                "total_size": "0 MB",
+                "last_seen": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+
+            # Close dialog
+            if add_client_dialog_ref.current:
+                add_client_dialog_ref.current.open = False
+                add_client_dialog_ref.current.update()
+
+            await add_client_action(client_data)
+
+        def on_submit(e):
+            page.run_task(submit_add_client, e)
+
+        def on_cancel(e):
+            if add_client_dialog_ref.current:
+                add_client_dialog_ref.current.open = False
+                add_client_dialog_ref.current.update()
+
+        # Create and show dialog
+        dialog = ft.AlertDialog(
+            ref=add_client_dialog_ref,
+            modal=True,
+            title=ft.Text("Add New Client"),
+            content=ft.Column([
+                name_field,
+                ip_field,
+                status_dropdown
+            ], tight=True, spacing=16),
+            actions=[
+                ft.TextButton("Cancel", on_click=on_cancel),
+                ft.FilledButton("Add Client", on_click=on_submit)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+
+        # Comment 1: Avoid page.update() after overlay.append()
+        # Use dialog-specific update pattern for Flet 0.28.3 compatibility
+        page.overlay.append(dialog)
+        dialog.open = True
+        dialog.update()  # Update dialog directly instead of full page
 
     # Build the main UI
     main_view = ft.Column([
@@ -577,6 +711,11 @@ def create_clients_view(
                         width=150,
                         on_change=on_status_filter_change
                     ),
+                    ft.FilledButton(
+                        "Add Client",
+                        icon=ft.Icons.ADD,
+                        on_click=lambda e: show_add_client_dialog()
+                    ),
                     ft.IconButton(
                         icon=ft.Icons.REFRESH,
                         tooltip="Refresh Clients",
@@ -590,6 +729,8 @@ def create_clients_view(
         # Action Feedback and Loading Indicator
         ft.Container(
             content=ft.Column([
+                # Show server status note if server is unavailable
+                ft.Text(server_status_note, color=ft.Colors.ORANGE_600) if server_status_note else ft.Container(height=0),
                 feedback_text,
                 loading_indicator
             ], spacing=8, tight=True),

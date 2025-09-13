@@ -195,30 +195,84 @@ class ServerBridge:
         raw_data = self.mock_generator.get_clients()
         return self._normalize_client_data(raw_data)
 
-    def disconnect_client(self, client_id: str) -> bool:
+    def disconnect_client(self, client_id: str) -> Dict[str, Any]:
         """Disconnect a client."""
-        if self.real_server and hasattr(self.real_server, 'disconnect_client'):
-            try:
-                return self.real_server.disconnect_client(client_id)
-            except Exception as e:
-                logger.error(f"Real server disconnect_client failed: {e}")
+        def mock_fallback():
+            logger.info(f"[ServerBridge] FALLBACK: Disconnecting client from mock data: {client_id}")
+            success = self.mock_generator.disconnect_client(client_id)
+            if success:
+                return self._create_success_response(
+                    f"Client {client_id} disconnected successfully",
+                    data={"disconnected": True},
+                    mode='mock'
+                )
+            else:
+                return self._create_error_response(
+                    f"Client {client_id} not found or disconnection failed",
+                    error_code='CLIENT_NOT_FOUND',
+                    mode='mock'
+                )
 
-        # Mock fallback - actually remove client from mock data
-        logger.info(f"[ServerBridge] FALLBACK: Disconnecting client from mock data: {client_id}")
-        return self.mock_generator.delete_client(client_id)
+        return self._handle_server_operation(
+            "disconnect_client",
+            "disconnect_client",
+            mock_fallback,
+            client_id
+        )
 
-    async def disconnect_client_async(self, client_id: str) -> bool:
+    async def disconnect_client_async(self, client_id: str) -> Dict[str, Any]:
         """Async version of disconnect_client."""
         if self.real_server and hasattr(self.real_server, 'disconnect_client_async'):
             try:
-                return await self.real_server.disconnect_client_async(client_id)
-            except Exception as e:
-                logger.error(f"Real server async disconnect_client failed: {e}")
+                result = await self.real_server.disconnect_client_async(client_id)
+                logger.debug("[ServerBridge] Real server disconnect_client_async successful.")
 
-        # Mock fallback - actually remove client from mock data
+                # If result is already a dict with success/message, return as-is but add mode
+                if isinstance(result, dict) and 'success' in result:
+                    result['mode'] = 'real'
+                    result['timestamp'] = time.time()
+                    return result
+
+                # Otherwise, wrap the result
+                return self._create_success_response(
+                    f"Client {client_id} disconnected successfully",
+                    data={"disconnected": result},
+                    mode='real'
+                )
+            except Exception as e:
+                logger.error(f"Real server disconnect_client_async failed: {e}")
+                return self._create_error_response(
+                    f"Real server disconnect_client_async failed: {str(e)}",
+                    error_code='REAL_SERVER_ERROR',
+                    mode='real'
+                )
+
+        # Mock fallback
         logger.info(f"[ServerBridge] FALLBACK: Async disconnecting client from mock data: {client_id}")
-        await asyncio.sleep(0.01)
-        return self.mock_generator.delete_client(client_id)
+        try:
+            # Add brief async delay to simulate processing
+            await asyncio.sleep(0.1)
+
+            success = self.mock_generator.disconnect_client(client_id)
+            if success:
+                return self._create_success_response(
+                    f"Client {client_id} disconnected successfully",
+                    data={"disconnected": True},
+                    mode='mock'
+                )
+            else:
+                return self._create_error_response(
+                    f"Client {client_id} not found or disconnection failed",
+                    error_code='CLIENT_NOT_FOUND',
+                    mode='mock'
+                )
+        except Exception as e:
+            logger.error(f"Mock disconnect_client_async failed: {e}")
+            return self._create_error_response(
+                f"Mock disconnect_client_async failed: {str(e)}",
+                error_code='MOCK_OPERATION_ERROR',
+                mode='mock'
+            )
 
     def resolve_client(self, client_id: str) -> Optional[Dict]:
         """Resolve client information by ID."""
@@ -252,17 +306,146 @@ class ServerBridge:
             return client
         return {}
 
-    def delete_client(self, client_id: str) -> bool:
-        """Delete a client with cascading file deletion."""
-        if self.real_server and hasattr(self.real_server, 'delete_client'):
-            try:
-                return self.real_server.delete_client(client_id)
-            except Exception as e:
-                logger.error(f"Real server delete_client failed: {e}")
+    async def add_client_async(self, client_data: dict) -> Dict[str, Any]:
+        """Add a new client (async version).
 
-        # Persistent mock fallback with cascading delete
-        logger.info(f"[ServerBridge] FALLBACK: Deleting client from persistent mock store: {client_id}")
-        return self.mock_generator.delete_client(client_id)
+        Args:
+            client_data: Dictionary containing client information (name, settings, etc.)
+
+        Returns:
+            Dict with 'success', 'message', and 'data' fields
+        """
+        if self.real_server and hasattr(self.real_server, 'add_client_async'):
+            try:
+                result = await self.real_server.add_client_async(client_data)
+                logger.debug("[ServerBridge] Real server add_client_async successful.")
+
+                # If result is already a dict with success/message, return as-is but add mode
+                if isinstance(result, dict) and 'success' in result:
+                    result['mode'] = 'real'
+                    result['timestamp'] = time.time()
+                    return result
+
+                # Otherwise, wrap the result
+                return self._create_success_response(
+                    f"Client '{client_data.get('name', 'Unknown')}' added successfully",
+                    data=result,
+                    mode='real'
+                )
+            except Exception as e:
+                logger.error(f"Real server add_client_async failed: {e}")
+                return self._create_error_response(
+                    f"Real server add_client_async failed: {str(e)}",
+                    error_code='REAL_SERVER_ERROR',
+                    mode='real'
+                )
+
+        # Mock fallback
+        logger.info(f"[ServerBridge] FALLBACK: Adding client to persistent mock store: {client_data}")
+        try:
+            # Add brief async delay to simulate processing
+            await asyncio.sleep(0.1)
+
+            # Generate new client with provided data
+            new_client = self.mock_generator.add_client(client_data)
+            if new_client:
+                return self._create_success_response(
+                    f"Client '{client_data.get('name', 'Unknown')}' added successfully",
+                    data=new_client,
+                    mode='mock'
+                )
+            else:
+                return self._create_error_response(
+                    "Failed to add client to mock store",
+                    error_code='MOCK_ADD_FAILED',
+                    mode='mock'
+                )
+        except Exception as e:
+            logger.error(f"Mock add_client_async failed: {e}")
+            return self._create_error_response(
+                f"Mock add_client_async failed: {str(e)}",
+                error_code='MOCK_OPERATION_ERROR',
+                mode='mock'
+            )
+
+    def delete_client(self, client_id: str) -> Dict[str, Any]:
+        """Delete a client with cascading file deletion."""
+        def mock_fallback():
+            logger.info(f"[ServerBridge] FALLBACK: Deleting client from persistent mock store: {client_id}")
+            success = self.mock_generator.delete_client(client_id)
+            if success:
+                return self._create_success_response(
+                    f"Client {client_id} deleted successfully",
+                    data={"deleted": True, "cascading": True},
+                    mode='mock'
+                )
+            else:
+                return self._create_error_response(
+                    f"Client {client_id} not found or deletion failed",
+                    error_code='CLIENT_NOT_FOUND',
+                    mode='mock'
+                )
+
+        return self._handle_server_operation(
+            "delete_client",
+            "delete_client",
+            mock_fallback,
+            client_id
+        )
+
+    async def delete_client_async(self, client_id: str) -> Dict[str, Any]:
+        """Delete a client with cascading file deletion (async version)."""
+        if self.real_server and hasattr(self.real_server, 'delete_client_async'):
+            try:
+                result = await self.real_server.delete_client_async(client_id)
+                logger.debug("[ServerBridge] Real server delete_client_async successful.")
+
+                # If result is already a dict with success/message, return as-is but add mode
+                if isinstance(result, dict) and 'success' in result:
+                    result['mode'] = 'real'
+                    result['timestamp'] = time.time()
+                    return result
+
+                # Otherwise, wrap the result
+                return self._create_success_response(
+                    f"Client {client_id} deleted successfully",
+                    data={"deleted": result, "cascading": True},
+                    mode='real'
+                )
+            except Exception as e:
+                logger.error(f"Real server delete_client_async failed: {e}")
+                return self._create_error_response(
+                    f"Real server delete_client_async failed: {str(e)}",
+                    error_code='REAL_SERVER_ERROR',
+                    mode='real'
+                )
+
+        # Mock fallback
+        logger.info(f"[ServerBridge] FALLBACK: Async deleting client from persistent mock store: {client_id}")
+        try:
+            # Add brief async delay to simulate processing
+            await asyncio.sleep(0.2)
+
+            success = self.mock_generator.delete_client(client_id)
+            if success:
+                return self._create_success_response(
+                    f"Client {client_id} deleted successfully",
+                    data={"deleted": True, "cascading": True},
+                    mode='mock'
+                )
+            else:
+                return self._create_error_response(
+                    f"Client {client_id} not found or deletion failed",
+                    error_code='CLIENT_NOT_FOUND',
+                    mode='mock'
+                )
+        except Exception as e:
+            logger.error(f"Mock delete_client_async failed: {e}")
+            return self._create_error_response(
+                f"Mock delete_client_async failed: {str(e)}",
+                error_code='MOCK_OPERATION_ERROR',
+                mode='mock'
+            )
 
     # --- File Management ---
 
