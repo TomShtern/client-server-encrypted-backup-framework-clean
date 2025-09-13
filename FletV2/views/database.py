@@ -18,12 +18,14 @@ from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
 from utils.dialog_consolidation_helper import show_success_message, show_error_message, show_confirmation, show_input
 from utils.server_mediated_operations import create_server_mediated_operations
+from theme import setup_modern_theme
+from utils.ui_components import create_modern_card, create_status_chip, create_enhanced_metric_card, create_modern_button, apply_advanced_table_effects
 
 logger = get_logger(__name__)
 
 def create_database_view(
-    server_bridge: Optional[ServerBridge], 
-    page: ft.Page, 
+    server_bridge: Optional[ServerBridge],
+    page: ft.Page,
     state_manager: StateManager
 ) -> ft.Control:
     """
@@ -31,12 +33,12 @@ def create_database_view(
     Follows successful server-mediated patterns from dashboard.py.
     """
     logger.info("Creating database view with server-mediated state management")
-    
+
     # State variables (managed through state_manager)
     selected_table = "clients"
     search_query = ""
     last_export_time = None
-    
+
     # UI Control References with ft.Ref for better control management
     data_table_ref = ft.Ref[ft.DataTable]()
     status_text_ref = ft.Ref[ft.Text]()
@@ -51,7 +53,7 @@ def create_database_view(
     tables_count_text = ft.Text("0", size=20, weight=ft.FontWeight.BOLD, ref=tables_count_text_ref)
     records_count_text = ft.Text("0", size=20, weight=ft.FontWeight.BOLD, ref=records_count_text_ref)
     size_text = ft.Text("0 MB", size=20, weight=ft.FontWeight.BOLD, ref=size_text_ref)
-    
+
     table_selector = ft.Dropdown(
         label="Select Table",
         options=[
@@ -63,64 +65,56 @@ def create_database_view(
         ],
         value="clients",
         on_change=lambda e: page.run_task(load_table_data_action, e.control.value) if e.control.value else None,
-        width=200
+        width=200,
+        border_color=ft.Colors.PRIMARY,
+        focused_border_color=ft.Colors.SECONDARY
     )
-    
+
     search_field = ft.TextField(
         label="Search in table...",
         prefix_icon=ft.Icons.SEARCH,
         on_change=lambda e: page.run_task(search_table_action, e.control.value),
-        width=300
+        width=300,
+        border_color=ft.Colors.PRIMARY,
+        focused_border_color=ft.Colors.SECONDARY
     )
-    
+
     data_table = ft.DataTable(
-        columns=[ft.DataColumn(ft.Text("Loading...", weight=ft.FontWeight.BOLD))],
+        columns=[ft.DataColumn(ft.Text("Loading...", weight=ft.FontWeight.BOLD, color=ft.Colors.PRIMARY))],
         rows=[],
         show_bottom_border=True,
-        column_spacing=35,
-        data_row_max_height=65,
-        data_row_min_height=50,
-        heading_row_height=55,
-        border=ft.border.all(1, ft.Colors.with_opacity(0.12, ft.Colors.ON_SURFACE)),
-        border_radius=6,
         expand=True,
         bgcolor=ft.Colors.SURFACE,
-        heading_row_color=ft.Colors.with_opacity(0.08, ft.Colors.PRIMARY),
-        data_row_color={
-            ft.ControlState.HOVERED: ft.Colors.with_opacity(0.04, ft.Colors.ON_SURFACE),
-            ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT,
-        },
-        divider_thickness=0.5,
-        horizontal_lines=ft.BorderSide(0.5, ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)),
+        divider_thickness=1,
         show_checkbox_column=False,
         ref=data_table_ref
     )
-    
-    table_info_text = ft.Text("No data", size=12, color=ft.Colors.GREY_600, ref=table_info_text_ref)
-    last_updated_text = ft.Text("Never", size=12, color=ft.Colors.GREY_600, ref=last_updated_text_ref)
+
+    table_info_text = ft.Text("No data", size=14, color=ft.Colors.SECONDARY, weight=ft.FontWeight.W_500, ref=table_info_text_ref)
+    last_updated_text = ft.Text("Never", size=14, color=ft.Colors.SECONDARY, weight=ft.FontWeight.W_500, ref=last_updated_text_ref)
     loading_indicator = ft.ProgressRing(visible=False, width=20, height=20, ref=loading_indicator_ref)
-    
+
     # --- Server-Mediated Data Functions ---
-    
+
     async def load_database_info():
         """Load database info through server-mediated state management"""
         try:
             # Set loading state
             state_manager.set_loading("database_info", True)
-            
+
             # Use server-mediated update for state persistence with correct bridge API
             result = await state_manager.server_mediated_update(
                 key="database_info",
                 value=None,  # Will be set by server response
                 server_operation="get_database_info_async"
             )
-            
+
             if not result.get('success'):
                 # Fallback to mock data if server operation fails
                 mock_info = generate_mock_db_info()
                 await state_manager.update_async("database_info", mock_info, source="fallback")
                 logger.warning("Using mock database info")
-                
+
         except Exception as e:
             logger.error(f"Failed to load database info: {e}")
             error_info = {"status": "Error", "error": str(e), "tables": 0, "total_records": 0, "size": "0 MB"}
@@ -152,7 +146,7 @@ def create_database_view(
             if loading_indicator_ref.current:
                 loading_indicator_ref.current.visible = True
                 loading_indicator_ref.current.update()
-            
+
             # Use server-mediated update for table data with correct bridge API
             result = await state_manager.server_mediated_update(
                 key="current_table_data",
@@ -160,17 +154,17 @@ def create_database_view(
                 server_operation="get_table_data_async",
                 table_name=table_name
             )
-            
+
             if not result.get('success'):
                 # Fallback to mock data
                 mock_data = generate_mock_table_data(table_name)
                 table_data = {"table_name": table_name, "columns": mock_data["columns"], "rows": mock_data["rows"]}
                 await state_manager.update_async("current_table_data", table_data, source="fallback")
                 logger.warning(f"Using mock data for table {table_name}")
-            
+
             # Update last updated time
             await state_manager.update_async("table_last_updated", datetime.now(), source="load_table")
-                
+
         except Exception as e:
             logger.error(f"Failed to load table {table_name}: {e}")
             error_data = {"table_name": table_name, "columns": [], "rows": [], "error": str(e)}
@@ -185,16 +179,16 @@ def create_database_view(
         """Search table through server-mediated state management"""
         nonlocal search_query
         search_query = query.lower().strip()
-        
+
         try:
             # Set loading state for search
             state_manager.set_loading("table_search", True)
-            
+
             # Use server-mediated update for search results (fallback to client-side since search_table_data_async doesn't exist)
             # Since search_table_data_async doesn't exist in bridge, use client-side filtering
             result = {"success": False, "error": "Server search not available"}
             logger.info(f"Search operation falling back to client-side filtering for query: {search_query}")
-            
+
             if not result.get('success'):
                 # Fallback to client-side filtering
                 current_data = state_manager.get("current_table_data", {})
@@ -206,10 +200,10 @@ def create_database_view(
                     "rows": filtered_rows
                 }
                 await state_manager.update_async("table_search_results", search_results, source="client_filter")
-                
+
         except Exception as e:
             logger.error(f"Search failed: {e}")
-            await state_manager.update_async("table_search_results", 
+            await state_manager.update_async("table_search_results",
                                             {"error": str(e), "query": search_query}, source="search_error")
         finally:
             state_manager.set_loading("table_search", False)
@@ -349,14 +343,14 @@ def create_database_view(
     async def export_table_action():
         """Export table data through server-mediated state management"""
         nonlocal last_export_time
-        
+
         try:
             state_manager.set_loading("table_export", True)
-            
+
             # Export operation fallback to client-side since export_table_data_async doesn't exist in bridge
             result = {"success": False, "error": "Server export not available"}
             logger.info(f"Export operation falling back to client-side CSV export for table: {selected_table}")
-            
+
             if result.get('success'):
                 # If server export succeeded, show success
                 export_path = result.get('data', {}).get('file_path', 'Downloads folder')
@@ -395,7 +389,7 @@ def create_database_view(
                 # All retries failed, use client-side fallback
                 logger.info("All server export attempts failed, falling back to client-side export")
                 await export_table_csv_fallback()
-                
+
         except Exception as e:
             logger.error(f"Export failed: {e}")
             await export_table_csv_fallback()
@@ -405,84 +399,84 @@ def create_database_view(
     async def export_table_csv_fallback():
         """Fallback client-side CSV export"""
         nonlocal last_export_time
-        
+
         try:
             current_data = state_manager.get("current_table_data", {})
             search_results = state_manager.get("table_search_results", {})
-            
+
             # Use search results if available and query exists, otherwise use current data
             if search_query and search_results.get("rows"):
                 export_data = search_results
             else:
                 export_data = current_data
-                
+
             if not export_data.get("columns") or not export_data.get("rows"):
                 show_error_message(page, "No data to export")
                 return
-            
+
             # Create CSV content
             output = io.StringIO()
             writer = csv.writer(output)
-            
+
             # Write header
             writer.writerow(export_data["columns"])
-            
+
             # Write rows
             for row in export_data["rows"]:
                 writer.writerow(row)
-            
+
             csv_content = output.getvalue()
             output.close()
-            
+
             # Save to Downloads folder
             import os
             downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
             os.makedirs(downloads_dir, exist_ok=True)
-            
+
             filename = f"{selected_table}_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
             filepath = os.path.join(downloads_dir, filename)
-            
+
             with open(filepath, 'w', newline='', encoding='utf-8') as f:
                 f.write(csv_content)
-            
+
             show_success_message(page, f"Table exported to {filename}")
             logger.info(f"Table {selected_table} exported to {filepath}")
-            
+
             # Update export state
             last_export_time = datetime.now()
             await state_manager.update_async("last_export_time", last_export_time, source="fallback_export")
-            
+
         except Exception as e:
             logger.error(f"Fallback export failed: {e}")
             show_error_message(page, f"Export failed: {str(e)}")
 
     # --- State Management Subscriptions ---
-    
+
     def subscribe_to_state_changes():
         """Subscribe to state changes for reactive UI updates"""
-        
+
         # Database info subscription
         def update_database_info_ui(db_info, old_value):
             """Update database info UI elements reactively"""
             if not db_info:
                 return
-                
+
             db_status = db_info.get("status", "Unknown")
-            
+
             if db_status == "Connected":
                 status_text.value = "Connected"
                 status_text.color = ft.Colors.GREEN
             elif db_status == "Disconnected":
-                status_text.value = "Disconnected" 
+                status_text.value = "Disconnected"
                 status_text.color = ft.Colors.RED
             else:
                 status_text.value = db_status
                 status_text.color = ft.Colors.ORANGE
-            
+
             tables_count_text.value = str(db_info.get("tables", 0))
             records_count_text.value = str(db_info.get("total_records", 0))
             size_text.value = db_info.get("size", "0 MB")
-            
+
             # Update controls using refs for safer access
             if status_text_ref.current:
                 status_text_ref.current.update()
@@ -492,13 +486,13 @@ def create_database_view(
                 records_count_text_ref.current.update()
             if size_text_ref.current:
                 size_text_ref.current.update()
-        
+
         # Table data subscription
         def update_table_display_ui(table_data, old_value):
             """Update data table with reactive state changes"""
             if not table_data:
                 return
-                
+
             # Clear existing columns and rows using ref
             if data_table_ref.current:
                 data_table_ref.current.columns.clear()
@@ -506,10 +500,10 @@ def create_database_view(
             else:
                 data_table.columns.clear()
                 data_table.rows.clear()
-            
+
             columns = table_data.get("columns", [])
             rows = table_data.get("rows", [])
-            
+
             if not columns:
                 if table_info_text_ref.current:
                     table_info_text_ref.current.value = "No data available"
@@ -518,7 +512,7 @@ def create_database_view(
                     table_info_text.value = "No data available"
                     table_info_text.update()
                 return
-            
+
             # Create columns with better styling
             table_ref = data_table_ref.current if data_table_ref.current else data_table
             for col in columns:
@@ -526,8 +520,8 @@ def create_database_view(
                     ft.DataColumn(
                         ft.Container(
                             content=ft.Text(
-                                str(col).title().replace('_', ' '), 
-                                weight=ft.FontWeight.BOLD, 
+                                str(col).title().replace('_', ' '),
+                                weight=ft.FontWeight.BOLD,
                                 size=13,
                                 color=ft.Colors.ON_SURFACE
                             ),
@@ -537,7 +531,7 @@ def create_database_view(
                         )
                     )
                 )
-            
+
             # Add rows (limit to 50 for performance)
             for row in rows[:50]:
                 cells = []
@@ -547,33 +541,33 @@ def create_database_view(
                         if cell > 1024*1024*1024:  # GB
                             formatted_value = f"{cell/(1024*1024*1024):.1f} GB"
                         elif cell > 1024*1024:  # MB
-                            formatted_value = f"{cell/(1024*1024):.1f} MB" 
+                            formatted_value = f"{cell/(1024*1024):.1f} MB"
                         elif cell > 1024:  # KB
                             formatted_value = f"{cell/1024:.1f} KB"
                         else:
                             formatted_value = f"{cell} B"
                     else:
                         formatted_value = str(cell)
-                    
+
                     # Add status-based styling
                     cell_color = ft.Colors.ON_SURFACE
                     cell_bgcolor = None
-                    
+
                     if i < len(columns) and columns[i].lower() == 'status':
                         if str(cell).lower() in ['online', 'active', 'completed', 'connected']:
                             cell_color = ft.Colors.GREEN
                             cell_bgcolor = ft.Colors.with_opacity(0.1, ft.Colors.GREEN)
                         elif str(cell).lower() in ['offline', 'inactive', 'error', 'failed']:
-                            cell_color = ft.Colors.RED  
+                            cell_color = ft.Colors.RED
                             cell_bgcolor = ft.Colors.with_opacity(0.1, ft.Colors.RED)
                         elif str(cell).lower() in ['pending', 'warning', 'in_progress']:
                             cell_color = ft.Colors.ORANGE
                             cell_bgcolor = ft.Colors.with_opacity(0.1, ft.Colors.ORANGE)
-                    
+
                     cells.append(ft.DataCell(
                         ft.Container(
                             content=ft.Text(
-                                formatted_value, 
+                                formatted_value,
                                 size=12,
                                 color=cell_color,
                                 weight=ft.FontWeight.W_500 if i < len(columns) and columns[i].lower() == 'status' else ft.FontWeight.NORMAL
@@ -584,13 +578,13 @@ def create_database_view(
                             on_click=lambda e, r=row, c=i: handle_cell_click(r, c)
                         )
                     ))
-                
+
                 table_ref.rows.append(ft.DataRow(cells))
-            
+
             # Update info text
             total_rows = len(rows)
             search_results = state_manager.get("table_search_results", {})
-            
+
             if search_query and search_results.get("query") == search_query:
                 filtered_count = len(search_results.get("rows", []))
                 table_info_text.value = f"Showing {min(50, filtered_count)} of {filtered_count} matches (total: {total_rows} records)"
@@ -600,13 +594,15 @@ def create_database_view(
                     table_info_text_ref.current.update()
                 else:
                     table_info_text.value = f"Showing {min(50, total_rows)} of {total_rows} records"
-                    table_info_text.update()
+                    if hasattr(table_info_text, 'page') and table_info_text.page:
+                        table_info_text.update()
 
             if data_table_ref.current:
                 data_table_ref.current.update()
             else:
-                data_table.update()
-        
+                if hasattr(data_table, 'page') and data_table.page:
+                    data_table.update()
+
         # Search results subscription
         def update_search_results_ui(search_results, old_value):
             """Update UI based on search results"""
@@ -617,7 +613,7 @@ def create_database_view(
                     "rows": search_results.get("rows", [])
                 }
                 update_table_display_ui(table_data, None)
-        
+
         # Last updated subscription
         def update_last_updated_ui(timestamp, old_value):
             """Update last updated timestamp"""
@@ -627,8 +623,9 @@ def create_database_view(
                     last_updated_text_ref.current.update()
                 else:
                     last_updated_text.value = f"Updated: {timestamp.strftime('%H:%M:%S')}"
-                    last_updated_text.update()
-        
+                    if hasattr(last_updated_text, 'page') and last_updated_text.page:
+                        last_updated_text.update()
+
         # Register subscriptions
         state_manager.subscribe("database_info", update_database_info_ui)
         state_manager.subscribe("current_table_data", update_table_display_ui)
@@ -636,7 +633,7 @@ def create_database_view(
         state_manager.subscribe("table_last_updated", update_last_updated_ui)
 
     # --- Helper Functions ---
-    
+
     def generate_mock_db_info() -> Dict[str, Any]:
         """Generate mock database information for development/fallback."""
         return {
@@ -650,7 +647,7 @@ def create_database_view(
 
     def generate_mock_table_data(table_name: str) -> Dict[str, Any]:
         """Generate mock table data based on table name."""
-        
+
         if table_name == "clients":
             return {
                 "columns": ["id", "name", "ip_address", "status", "last_seen", "files_count"],
@@ -700,12 +697,12 @@ def create_database_view(
                     ["compression_level", "6", "Compression level (0-9)", "2025-01-07 16:45"]
                 ]
             }
-    
+
     def filter_rows_client_side(rows: List[List], query: str) -> List[List]:
         """Client-side row filtering fallback"""
         if not query:
             return rows
-        
+
         query = query.lower()
         return [
             row for row in rows
@@ -716,15 +713,15 @@ def create_database_view(
         """Handle cell click for viewing/editing."""
         current_data = state_manager.get("current_table_data", {})
         columns = current_data.get("columns", [])
-        
+
         column_name = columns[cell_index] if cell_index < len(columns) else "Unknown"
         cell_value = row_data[cell_index] if cell_index < len(row_data) else "N/A"
-        
+
         logger.info(f"Cell clicked: {column_name} = {cell_value}")
-        
+
         # Show cell details in a simple info dialog
         from utils.dialog_consolidation_helper import show_info
-        
+
         cell_info = ft.Column([
             ft.Text(f"Column: {column_name}", weight=ft.FontWeight.BOLD),
             ft.Text(f"Value: {cell_value}"),
@@ -761,11 +758,11 @@ def create_database_view(
         """Show edit row dialog"""
         current_data = state_manager.get("current_table_data", {})
         columns = current_data.get("columns", [])
-        
+
         if not columns:
             show_error_message(page, "No column information available")
             return
-        
+
         # Create edit form (simplified for demo)
         edit_fields = []
         for i, (column, value) in enumerate(zip(columns, row_data)):
@@ -776,17 +773,17 @@ def create_database_view(
                     width=300
                 )
                 edit_fields.append(field)
-        
+
         if not edit_fields:
             show_error_message(page, "No editable fields found")
             return
-        
+
         edit_content = ft.Column([
             ft.Text("Edit Row Data", size=16, weight=ft.FontWeight.BOLD),
             ft.Divider(),
             *edit_fields
         ], spacing=8, width=400)
-        
+
         async def save_changes(e):
             try:
                 # Get updated values
@@ -796,27 +793,27 @@ def create_database_view(
                     if column.lower() != 'id':
                         updated_data[column] = edit_fields[field_index].value
                         field_index += 1
-                
+
                 # Get row ID (assuming first column is ID)
                 row_id = row_data[0] if row_data else None
-                
+
                 # Close dialog
                 page.close_dialog()
-                
+
                 # Perform server-mediated update
                 await update_row_action(row_id, updated_data)
-                
+
             except Exception as ex:
                 logger.error(f"Failed to save row changes: {ex}")
                 show_error_message(page, f"Save failed: {str(ex)}")
-        
+
         # Show dialog
         dialog = ft.AlertDialog(
             title=ft.Text("Edit Row"),
             content=edit_content,
             actions=[
                 ft.TextButton("Cancel", on_click=lambda e: page.close_dialog()),
-                ft.ElevatedButton("Save Changes", on_click=save_changes, 
+                ft.ElevatedButton("Save Changes", on_click=save_changes,
                                 style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN, color=ft.Colors.WHITE))
             ]
         )
@@ -825,11 +822,11 @@ def create_database_view(
     async def delete_row_dialog(row_data: list):
         """Show delete confirmation dialog"""
         row_id = row_data[0] if row_data else None
-        
+
         async def confirm_delete(confirmed):
             if confirmed:
                 await delete_row_action(row_id)
-        
+
         await show_confirmation(
             page,
             "Delete Row",
@@ -1000,24 +997,27 @@ def create_database_view(
         )
 
     # --- UI Layout Construction ---
-    
+
     def create_info_card(title: str, value_control: ft.Control, icon: str, color: str) -> ft.Container:
-        """Create an information card."""
-        return ft.Container(
+        """Create an enhanced information card with sophisticated styling."""
+        return create_modern_card(
             content=ft.Column([
                 ft.Row([
-                    ft.Icon(icon, size=24, color=color),
+                    ft.Container(
+                        content=ft.Icon(icon, size=28, color=ft.Colors.WHITE),
+                        bgcolor=color,
+                        border_radius=12,
+                        padding=ft.Padding(12, 12, 12, 12)
+                    ),
                     ft.Column([
                         value_control,
-                        ft.Text(title, size=12, color=ft.Colors.GREY_600, weight=ft.FontWeight.BOLD)
-                    ], spacing=2, tight=True)
-                ], alignment=ft.MainAxisAlignment.START, spacing=12)
-            ], spacing=8),
-            bgcolor=ft.Colors.SURFACE,
-            border=ft.border.all(1, ft.Colors.OUTLINE),
-            border_radius=12,
-            padding=16,
-            expand=True
+                        ft.Text(title, size=14, color=ft.Colors.SECONDARY, weight=ft.FontWeight.BOLD)
+                    ], spacing=4, tight=True)
+                ], alignment=ft.MainAxisAlignment.START, spacing=16)
+            ], spacing=12),
+            elevation="elevated",
+            padding=20,
+            return_type="container"
         )
 
     # Header section
@@ -1032,74 +1032,74 @@ def create_database_view(
             )
         ], spacing=8)
     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
-    
+
     # Database status cards
     status_cards = ft.ResponsiveRow([
         ft.Column([
-            create_info_card("Status", status_text, ft.Icons.STORAGE, ft.Colors.BLUE)
+            create_info_card("Status", status_text, ft.Icons.STORAGE, ft.Colors.PRIMARY)
         ], col={"sm": 12, "md": 6, "lg": 3}),
         ft.Column([
-            create_info_card("Tables", tables_count_text, ft.Icons.TABLE_CHART, ft.Colors.GREEN)
+            create_info_card("Tables", tables_count_text, ft.Icons.TABLE_CHART, ft.Colors.TERTIARY)
         ], col={"sm": 12, "md": 6, "lg": 3}),
         ft.Column([
-            create_info_card("Records", records_count_text, ft.Icons.FORMAT_LIST_NUMBERED, ft.Colors.ORANGE)
+            create_info_card("Records", records_count_text, ft.Icons.FORMAT_LIST_NUMBERED, ft.Colors.SECONDARY)
         ], col={"sm": 12, "md": 6, "lg": 3}),
         ft.Column([
-            create_info_card("Size", size_text, ft.Icons.STORAGE, ft.Colors.PURPLE)
+            create_info_card("Size", size_text, ft.Icons.STORAGE, ft.Colors.OUTLINE)
         ], col={"sm": 12, "md": 6, "lg": 3})
     ])
-    
-    # Table controls
-    table_controls = ft.Row([
-        table_selector,
-        search_field,
-        ft.ElevatedButton(
-            "Export CSV",
-            icon=ft.Icons.DOWNLOAD,
-            on_click=lambda e: page.run_task(export_table_action),
-            style=ft.ButtonStyle(
-                bgcolor=ft.Colors.BLUE,
-                color=ft.Colors.WHITE
+
+    # Table controls with enhanced styling
+    table_controls = create_modern_card(
+        content=ft.Row([
+            table_selector,
+            search_field,
+            ft.ElevatedButton(
+                "Export CSV",
+                icon=ft.Icons.DOWNLOAD,
+                on_click=lambda e: page.run_task(export_table_action),
+                style=ft.ButtonStyle(
+                    bgcolor=ft.Colors.PRIMARY,
+                    color=ft.Colors.ON_PRIMARY,
+                    elevation=4
+                )
             )
-        )
-    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, spacing=16)
-    
-    # Enhanced data table container with modern styling
-    table_container = ft.Container(
+        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, spacing=16),
+        elevation="soft",
+        padding=24,
+        return_type="container"
+    )
+
+    # Apply advanced table effects to the DataTable first
+    styled_table = apply_advanced_table_effects(data_table, container_elevation="none")
+
+    # Enhanced data table container with sophisticated styling
+    table_container = create_modern_card(
         content=ft.Column([
-            # Table header with better styling
+            # Table header with sophisticated styling
             ft.Container(
                 content=ft.Row([
                     table_info_text,
                     last_updated_text
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                padding=ft.Padding(16, 12, 16, 12),
-                bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
-                border_radius=ft.border_radius.only(top_left=8, top_right=8),
+                padding=ft.Padding(24, 16, 24, 16),
+                bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+                border_radius=ft.border_radius.only(top_left=20, top_right=20),
                 margin=ft.Margin(0, 0, 0, 0)
             ),
-            # Table content area with scroll
+            # Table content area with scroll and enhanced padding
             ft.Container(
-                content=ft.Column([data_table], scroll=ft.ScrollMode.ADAPTIVE),
-                padding=ft.Padding(16, 0, 16, 16),
+                content=ft.Column([styled_table], scroll=ft.ScrollMode.ADAPTIVE),
+                padding=ft.Padding(24, 16, 24, 24),
                 expand=True,
                 bgcolor=ft.Colors.SURFACE,
-                border_radius=ft.border_radius.only(bottom_left=8, bottom_right=8)
+                border_radius=ft.border_radius.only(bottom_left=20, bottom_right=20)
             )
         ], spacing=0),
-        border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE)),
-        border_radius=8,
-        shadow=ft.BoxShadow(
-            spread_radius=1,
-            blur_radius=8,
-            offset=ft.Offset(0, 2),
-            color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
-        ),
-        bgcolor=ft.Colors.SURFACE,
-        expand=True,
-        animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT)
+        elevation="floating",
+        return_type="container"
     )
-    
+
     # Main layout
     main_view = ft.Column([
         header_row,
@@ -1110,28 +1110,34 @@ def create_database_view(
         ft.Container(height=16),  # Spacing
         table_container
     ], expand=True, scroll=ft.ScrollMode.AUTO, spacing=0)
-    
-    # Initialize state subscriptions
-    subscribe_to_state_changes()
-    
-    # Initialize with mock data and trigger server-mediated loading
-    try:
-        # Set initial mock data in state
-        mock_db_info = generate_mock_db_info()
-        mock_table_data = generate_mock_table_data(selected_table)
-        
-        state_manager.update("database_info", mock_db_info, source="init")
-        state_manager.update("current_table_data", {
-            "table_name": selected_table,
-            "columns": mock_table_data["columns"],
-            "rows": mock_table_data["rows"]
-        }, source="init")
-        
-        logger.info("Database view initialized with server-mediated state management")
-    except Exception as e:
-        logger.error(f"Failed to initialize database view: {e}")
-    
-    # Schedule server-mediated refresh
-    page.run_task(refresh_database)
-    
+
+    # Defer subscriptions until after view is attached to page
+    async def setup_subscriptions():
+        """Set up state subscriptions after view is attached to page"""
+        await asyncio.sleep(0.1)  # Small delay to ensure page attachment
+        subscribe_to_state_changes()
+
+        # Initialize with mock data and trigger server-mediated loading
+        try:
+            # Set initial mock data in state
+            mock_db_info = generate_mock_db_info()
+            mock_table_data = generate_mock_table_data(selected_table)
+
+            state_manager.update("database_info", mock_db_info, source="init")
+            state_manager.update("current_table_data", {
+                "table_name": selected_table,
+                "columns": mock_table_data["columns"],
+                "rows": mock_table_data["rows"]
+            }, source="init")
+
+            logger.info("Database view initialized with server-mediated state management")
+        except Exception as e:
+            logger.error(f"Failed to initialize database view: {e}")
+
+        # Schedule server-mediated refresh
+        await refresh_database()
+
+    # Start subscription setup in background
+    page.run_task(setup_subscriptions)
+
     return main_view

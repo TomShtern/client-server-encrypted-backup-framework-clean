@@ -11,10 +11,6 @@ FletV2 - Clean Desktop Ap    def __init__(self, page: ft.Page):
 
         # Window configuration moved to main() function for proper timing
 
-        # Initialize state manager with performance optimizations
-        self.state_manager = None
-        self._initialize_state_manager()
-
         # Initialize server bridge synchronously for immediate availability
         self.server_bridge = create_server_bridge()  # Direct synchronous initialization
         logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
@@ -81,13 +77,13 @@ class FletV2App(ft.Row):
 
         # Window configuration moved to main() function for proper timing
 
-        # Initialize state manager for reactive UI updates
-        self.state_manager = None
-        self._initialize_state_manager()
-
         # Initialize server bridge synchronously for immediate availability
         self.server_bridge = create_server_bridge()  # Direct synchronous initialization
         logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
+
+        # Initialize state manager for reactive UI updates - after server bridge is ready
+        self.state_manager = None
+        self._initialize_state_manager()
 
         # Create optimized content area with modern Material Design 3 styling and fast transitions
         self.content_area = ft.Container(
@@ -119,7 +115,7 @@ class FletV2App(ft.Row):
                                     "Loading Application...",
                                     size=16,
                                     weight=ft.FontWeight.W_500,
-                                    color=ft.Colors.ON_SURFACE_VARIANT
+                                    color=ft.Colors.ON_SURFACE
                                 ),
                             ], alignment=ft.MainAxisAlignment.CENTER, spacing=12),
                             ft.Chip(
@@ -185,10 +181,10 @@ class FletV2App(ft.Row):
             from utils.state_manager import create_state_manager
             # Pass server_bridge for enhanced server-mediated operations
             self.state_manager = create_state_manager(self.page, self.server_bridge)
-            
+
             # Set up cross-view reactive updates
             self._setup_cross_view_reactivity()
-            
+
             logger.info("State manager initialized with server bridge integration and cross-view reactivity")
         except ImportError:
             logger.warning("State manager not available, UI updates will be manual")
@@ -201,7 +197,7 @@ class FletV2App(ft.Row):
         """Set up global state listeners for cross-view reactive updates"""
         if not self.state_manager:
             return
-            
+
         # Global listener for all state changes
         def global_state_change_handler(key: str, new_value, old_value):
             """Handle state changes that affect multiple views"""
@@ -216,15 +212,15 @@ class FletV2App(ft.Row):
                 elif key in ["clients", "files", "database_info"]:
                     # Data changes that might affect multiple views
                     self._handle_data_update(key, new_value)
-                    
+
                 logger.debug(f"Cross-view reactive update: {key}")
-                    
+
             except Exception as e:
                 logger.error(f"Global state change handler failed: {e}")
-        
+
         # Subscribe to global state changes
         self.state_manager.subscribe_global(global_state_change_handler)
-        
+
         # Set up specific cross-view subscriptions
         self._setup_view_specific_subscriptions()
 
@@ -232,14 +228,14 @@ class FletV2App(ft.Row):
         """Set up view-specific cross-view subscriptions"""
         if not self.state_manager:
             return
-            
+
         # Example: When clients change, update any client-related displays
         self.state_manager.subscribe("clients", self._on_clients_changed)
-        
+
         # When server status changes, update relevant views
         self.state_manager.subscribe("server_status", self._on_server_status_changed)
-        
-        # When files change, update file-related displays  
+
+        # When files change, update file-related displays
         self.state_manager.subscribe("files", self._on_files_changed)
 
     def _update_connection_indicator(self, status: str):
@@ -500,7 +496,7 @@ class FletV2App(ft.Row):
                         tooltip="Toggle Dark/Light Theme",
                         on_click=self._on_theme_toggle,
                         style=ft.ButtonStyle(
-                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            color=ft.Colors.ON_SURFACE,
                             shape=ft.RoundedRectangleBorder(radius=14),
                             overlay_color={
                                 ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, ft.Colors.PRIMARY),

@@ -19,8 +19,8 @@ from utils.server_mediated_operations import create_server_mediated_operations, 
 logger = get_logger(__name__)
 
 def create_dashboard_view(
-    server_bridge: Optional[ServerBridge], 
-    page: ft.Page, 
+    server_bridge: Optional[ServerBridge],
+    page: ft.Page,
     state_manager: StateManager
 ) -> ft.Control:
     """
@@ -28,20 +28,20 @@ def create_dashboard_view(
     Follows successful patterns from clients.py and analytics.py.
     """
     logger.info("Creating dashboard view")
-    
-    # Initialize modular server-mediated operations utility
-    server_ops = create_server_mediated_operations(state_manager, page)
-    
+
+    # Defer server operations setup until after view is attached
+    server_ops = None
+
     # --- State Management - Now handled by state_manager ---
     activity_filter = "All"
-    
+
     # State variables for dashboard data
     system_metrics_data = {}
     server_status_data = {}
     activity_data = []
     is_loading = False
     last_updated = None
-    
+
     # --- UI Control References ---
     server_status_text = ft.Text("Unknown", size=14, weight=ft.FontWeight.BOLD)
     server_port_text = ft.Text("", size=12, color=ft.Colors.GREY_600)
@@ -50,17 +50,18 @@ def create_dashboard_view(
     files_count_text = ft.Text("0", size=28, weight=ft.FontWeight.BOLD)
     transfers_count_text = ft.Text("0", size=28, weight=ft.FontWeight.BOLD)
     storage_used_text = ft.Text("0 GB", size=28, weight=ft.FontWeight.BOLD)
-    
+
     cpu_progress = ft.ProgressBar(value=0.0, width=150)
     memory_progress = ft.ProgressBar(value=0.0, width=150)
     disk_progress = ft.ProgressBar(value=0.0, width=150)
     cpu_text = ft.Text("0%", size=12)
     memory_text = ft.Text("0.0 / 0.0 GB (0.0%)", size=11, font_family="monospace")
     disk_text = ft.Text("0.0 / 0.0 GB (0.0%)", size=11, font_family="monospace")
-    
+
     activity_list = ft.ListView(expand=True, spacing=8, padding=ft.padding.only(top=8))
     last_updated_text = ft.Text("Never", size=12, color=ft.Colors.GREY_600)
-    
+    loading_indicator = ft.Text("Loading...", size=12, color=ft.Colors.GREY_600, visible=False)
+
     start_server_btn = ft.ElevatedButton("Start Server", icon=ft.Icons.PLAY_ARROW, on_click=lambda e: page.run_task(start_server_action), style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN, color=ft.Colors.WHITE))
     stop_server_btn = ft.ElevatedButton("Stop Server", icon=ft.Icons.STOP, on_click=lambda e: page.run_task(stop_server_action), style=ft.ButtonStyle(bgcolor=ft.Colors.RED, color=ft.Colors.WHITE), disabled=True)
 
@@ -114,7 +115,7 @@ def create_dashboard_view(
             }
         finally:
             update_system_metrics_ui()
-        
+
         # Return the data for use in refresh_dashboard
         return system_metrics_data
 
@@ -143,10 +144,10 @@ def create_dashboard_view(
         """Reactive callback for server status changes"""
         nonlocal server_status_data
         server_status_data = data or {}
-        
+
         if not server_status_data:
             return
-            
+
         running = server_status_data.get("running", False)
         if running:
             server_status_text.value, server_status_text.color = "Running", ft.Colors.GREEN
@@ -159,14 +160,14 @@ def create_dashboard_view(
             server_status_text.value, server_status_text.color = "Stopped", ft.Colors.RED
             server_port_text.value, uptime_text.value = "", ""
             start_server_btn.disabled, stop_server_btn.disabled = False, True
-        
+
         clients_count_text.value = str(server_status_data.get("clients_connected", 0))
         files_count_text.value = str(server_status_data.get("total_files", 0))
         transfers_count_text.value = str(server_status_data.get("total_transfers", 0))
         storage_used_text.value = f"{server_status_data.get('storage_used_gb', 0):.1f} GB"
-        
-        # Use individual control updates for better performance
-        for control in [server_status_text, server_port_text, uptime_text, start_server_btn, 
+
+        # Use simple individual control updates
+        for control in [server_status_text, server_port_text, uptime_text, start_server_btn,
                        stop_server_btn, clients_count_text, files_count_text, transfers_count_text, storage_used_text]:
             control.update()
 
@@ -174,7 +175,7 @@ def create_dashboard_view(
         cpu_percent = system_metrics_data.get("cpu_percent", 0)
         mem_percent = system_metrics_data.get("memory_percent", 0)
         disk_percent = system_metrics_data.get("disk_percent", 0)
-        
+
         cpu_progress.value, memory_progress.value, disk_progress.value = cpu_percent / 100, mem_percent / 100, disk_percent / 100
         cpu_text.value = f"{cpu_percent:.1f}%"
         mem_used, mem_total = system_metrics_data.get("memory_used_gb", 0), system_metrics_data.get("memory_total_gb", 0)
@@ -186,7 +187,7 @@ def create_dashboard_view(
     def update_activity_ui():
         nonlocal activity_data
         activity_list.controls.clear()
-        
+
         filtered_activities = activity_data
         if activity_filter != "All":
             filter_map = {"Clients": ["client_connect", "client_disconnect"], "Files": ["file_transfer", "backup_complete"], "System": ["system_check", "error"]}
@@ -195,7 +196,7 @@ def create_dashboard_view(
 
         if not filtered_activities:
             activity_list.controls.append(ft.Text("No activities for this filter.", text_align=ft.TextAlign.CENTER, color=ft.Colors.GREY_500, italic=True))
-        
+
         for activity in sorted(filtered_activities, key=lambda x: x.get("timestamp"), reverse=True):
             act_type = activity.get("type", "unknown")
             icon, color, bgcolor = ft.Icons.INFO, ft.Colors.GREY, ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE)
@@ -206,7 +207,7 @@ def create_dashboard_view(
             elif act_type == "backup_complete": icon, color, bgcolor = ft.Icons.CHECK_CIRCLE, ft.Colors.GREEN_800, ft.Colors.with_opacity(0.08, ft.Colors.GREEN)
             elif act_type == "system_check": icon, color = ft.Icons.HEALTH_AND_SAFETY, ft.Colors.PURPLE
             elif act_type == "error": icon, color, bgcolor = ft.Icons.ERROR_OUTLINE, ft.Colors.RED_700, ft.Colors.with_opacity(0.08, ft.Colors.RED)
-            
+
             activity_list.controls.append(ft.ListTile(
                 leading=ft.Icon(icon, color=color, size=20),
                 title=ft.Text(activity.get("message", ""), size=13),
@@ -224,15 +225,15 @@ def create_dashboard_view(
         try:
             # Load all data concurrently
             server_status_result, _, activity_result = await asyncio.gather(
-                load_server_status(), 
-                load_system_metrics(), 
+                load_server_status(),
+                load_system_metrics(),
                 load_activity_data()
             )
-            
+
             # Update our data variables with the results
             server_status_data = server_status_result or {}
             activity_data = activity_result or []
-            
+
             last_updated = datetime.now()
             last_updated_text.value = f"Updated: {last_updated.strftime('%H:%M:%S')}"
             last_updated_text.update()
@@ -272,11 +273,11 @@ def create_dashboard_view(
     def create_stat_card(title: str, value_control: ft.Control, icon: str, color: str) -> ft.Container:
         return ft.Container(
             content=ft.Column([ft.Row([
-                ft.Container(content=ft.Icon(icon, size=32, color=color), bgcolor=ft.colors.with_opacity(0.1, color), border_radius=50, padding=8),
+                ft.Container(content=ft.Icon(icon, size=32, color=color), bgcolor=ft.Colors.with_opacity(0.1, color), border_radius=50, padding=8),
                 ft.Column([value_control, ft.Text(title, size=12, color=ft.Colors.GREY_600, weight=ft.FontWeight.BOLD)], spacing=2, tight=True)
             ], alignment=ft.MainAxisAlignment.START, spacing=16)], spacing=8),
-            bgcolor=ft.Colors.SURFACE, border=ft.border.all(1, ft.colors.with_opacity(0.12, ft.Colors.ON_SURFACE)),
-            border_radius=16, padding=24, expand=True, shadow=ft.BoxShadow(spread_radius=0, blur_radius=8, offset=ft.Offset(0, 2), color=ft.colors.with_opacity(0.1, ft.Colors.BLACK)),
+            bgcolor=ft.Colors.SURFACE, border=ft.border.all(1, ft.Colors.with_opacity(0.12, ft.Colors.ON_SURFACE)),
+            border_radius=16, padding=24, expand=True, shadow=ft.BoxShadow(spread_radius=0, blur_radius=8, offset=ft.Offset(0, 2), color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK)),
             animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT), animate_opacity=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
             on_hover=lambda e: animate_card_hover(e.control, e.data == "true")
         )
@@ -311,104 +312,109 @@ def create_dashboard_view(
         chip = ft.Chip(
             label=ft.Text(text), data=text, selected=text == activity_filter,
             on_select=on_filter_click, show_checkmark=False,
-            selected_color=ft.colors.PRIMARY,
+            selected_color=ft.Colors.PRIMARY,
         )
         filter_buttons[text] = chip
         return chip
 
     header_row = ft.Row([
         ft.Row([ft.Icon(ft.Icons.DASHBOARD, size=28, color=ft.Colors.PRIMARY), ft.Text("Server Dashboard", size=24, weight=ft.FontWeight.BOLD)], spacing=12),
-        ft.IconButton(icon=ft.Icons.REFRESH, tooltip="Refresh Dashboard", icon_size=24, icon_color=ft.Colors.PRIMARY, on_click=lambda e: page.run_task(refresh_dashboard), style=ft.ButtonStyle(bgcolor={ft.ControlState.HOVERED: ft.colors.with_opacity(0.1, ft.Colors.PRIMARY), ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT}, shape=ft.CircleBorder(), padding=12))
+        ft.IconButton(icon=ft.Icons.REFRESH, tooltip="Refresh Dashboard", icon_size=24, icon_color=ft.Colors.PRIMARY, on_click=lambda e: page.run_task(refresh_dashboard), style=ft.ButtonStyle(bgcolor={ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY), ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT}, shape=ft.CircleBorder(), padding=12))
     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
-    
+
     server_status_card = ft.Container(content=ft.Column([
         ft.Row([ft.Icon(ft.Icons.DNS, size=24, color=ft.Colors.BLUE), ft.Text("Server Control", size=16, weight=ft.FontWeight.BOLD)], spacing=8),
         ft.Divider(height=1), ft.Column([server_status_text, server_port_text, uptime_text], spacing=4), ft.Container(height=8),
         ft.Row([start_server_btn, stop_server_btn], spacing=12)
     ], spacing=8), bgcolor=ft.Colors.SURFACE, border=ft.border.all(1, ft.Colors.OUTLINE), border_radius=12, padding=20)
-    
+
     stats_row = ft.ResponsiveRow([
         ft.Column([create_stat_card("Active Clients", clients_count_text, ft.Icons.PEOPLE, ft.Colors.BLUE)], col={"sm": 12, "md": 6, "lg": 3}),
         ft.Column([create_stat_card("Total Files", files_count_text, ft.Icons.FOLDER, ft.Colors.GREEN)], col={"sm": 12, "md": 6, "lg": 3}),
         ft.Column([create_stat_card("Transfers", transfers_count_text, ft.Icons.SWAP_HORIZ, ft.Colors.ORANGE)], col={"sm": 12, "md": 6, "lg": 3}),
         ft.Column([create_stat_card("Storage Used", storage_used_text, ft.Icons.STORAGE, ft.Colors.PURPLE)], col={"sm": 12, "md": 6, "lg": 3})
     ])
-    
+
     system_metrics_card = ft.Container(content=ft.Column([
         ft.Row([ft.Icon(ft.Icons.MEMORY, size=20, color=ft.Colors.BLUE), ft.Text("System Metrics", size=16, weight=ft.FontWeight.BOLD)], spacing=8),
         ft.Divider(height=1), create_metric_row("CPU", cpu_progress, cpu_text), create_metric_row("Memory", memory_progress, memory_text), create_metric_row("Disk", disk_progress, disk_text)
     ], spacing=12), bgcolor=ft.Colors.SURFACE, border=ft.border.all(1, ft.Colors.OUTLINE), border_radius=12, padding=20)
-    
+
     activity_card = ft.Container(
         content=ft.Column([
             ft.Row([ft.Icon(ft.Icons.TIMELINE, size=20, color=ft.Colors.BLUE), ft.Text("Recent Activity", size=16, weight=ft.FontWeight.BOLD)], spacing=8),
             ft.Row([create_filter_button(t) for t in ["All", "Clients", "Files", "System"]], spacing=8),
-            ft.Divider(height=1, margin=ft.margin.only(top=4)),
+            ft.Container(height=4),  # Spacing replacement for margin
+            ft.Divider(height=1),
+            loading_indicator,  # Add loading indicator here
             ft.Container(content=activity_list, expand=True)
         ], spacing=4),
         bgcolor=ft.Colors.SURFACE, border=ft.border.all(1, ft.Colors.OUTLINE), border_radius=12, padding=20, expand=True
     )
-    
+
     main_content = ft.ResponsiveRow([
         ft.Column([server_status_card, system_metrics_card], col={"sm": 12, "md": 12, "lg": 4}, spacing=20),
         ft.Column([activity_card], col={"sm": 12, "md": 12, "lg": 8})
     ], spacing=20)
-    
+
     footer_row = ft.Row([ft.Icon(ft.Icons.UPDATE, size=16, color=ft.Colors.GREY), last_updated_text], spacing=8)
-    
-    main_view = ft.Column([
-        header_row, ft.Divider(), stats_row, ft.Container(height=20),
-        main_content, ft.Container(height=16), footer_row
-    ], expand=True, scroll=ft.ScrollMode.AUTO, spacing=0, padding=ft.padding.symmetric(horizontal=24, vertical=12))
-    
+
+    main_view = ft.Container(
+        content=ft.Column([
+            header_row, ft.Divider(), stats_row, ft.Container(height=20),
+            main_content, ft.Container(height=16), footer_row
+        ], expand=True, scroll=ft.ScrollMode.AUTO, spacing=0),
+        padding=ft.padding.symmetric(horizontal=24, vertical=12),
+        expand=True
+    )
+
     # --- Setup Reactive Subscriptions ---
     def setup_reactive_subscriptions():
         """Setup reactive UI updates using modular operations utility"""
         # Server status subscription
         server_ops.create_reactive_subscription("server_status", update_server_status_ui)
-        
-        # Activity data subscription  
+
+        # Activity data subscription
         def update_activity_ui(data, _):
             nonlocal activity_data
             activity_data = data or []
-            
+
             if activity_data is None:
                 return
             activity_list.controls.clear()
-            
+
             filtered_activities = activity_data
             if activity_filter != "All":
                 filter_map = {
-                    "Clients": ["client_connect", "client_disconnect"], 
-                    "Files": ["file_transfer", "backup_complete"], 
+                    "Clients": ["client_connect", "client_disconnect"],
+                    "Files": ["file_transfer", "backup_complete"],
                     "System": ["system_check", "error"]
                 }
                 types_to_show = filter_map.get(activity_filter, [])
                 filtered_activities = [a for a in activity_data if a.get("type") in types_to_show]
 
             if not filtered_activities:
-                activity_list.controls.append(ft.Text("No activities for this filter.", 
+                activity_list.controls.append(ft.Text("No activities for this filter.",
                     text_align=ft.TextAlign.CENTER, color=ft.Colors.GREY_500, italic=True))
-            
+
             for activity in sorted(filtered_activities, key=lambda x: x.get("timestamp"), reverse=True):
                 act_type = activity.get("type", "unknown")
                 icon = ft.Icons.PERSON if "client" in act_type else ft.Icons.FILE_COPY if "file" in act_type else ft.Icons.SYSTEM_UPDATE_ALT
                 color = ft.Colors.GREEN if "connect" in act_type else ft.Colors.RED if "error" in act_type else ft.Colors.BLUE
-                
+
                 activity_list.controls.append(ft.ListTile(
                     leading=ft.Icon(icon, color=color, size=20),
                     title=ft.Text(activity.get("message", ""), size=13),
                     subtitle=ft.Text(format_time_ago(activity.get("timestamp")), size=11, color=ft.Colors.GREY_600)
                 ))
-            
+
             activity_list.update()
-        
+
         server_ops.create_reactive_subscription("recent_activity", update_activity_ui)
-        
-        # Loading indicator subscription  
-        loading_indicator = ft.Text("Loading...", size=12, color=ft.Colors.GREY_600, visible=False)
+
+        # Loading indicator subscription - using the loading_indicator defined at module level
         server_ops.create_loading_subscription(loading_indicator, ["server_status", "recent_activity"])
-    
+
     # --- Initial Data Load with Batch Operations ---
     async def initial_data_load():
         """Load all dashboard data using batch operations for better performance"""
@@ -425,12 +431,24 @@ def create_dashboard_view(
                 'data_processor': timestamp_processor
             }
         ]
-        
+
         results = await server_ops.batch_load_operations(operations)
         logger.info(f"Dashboard initial load completed: {len([r for r in results.values() if r.get('success')])} successful operations")
-    
-    # Setup subscriptions and load initial data
-    setup_reactive_subscriptions()
-    page.run_task(initial_data_load)
-    
+
+    # Defer server operations and subscriptions until after view is attached to page
+    async def setup_dashboard():
+        """Set up server operations and subscriptions after view is attached to page"""
+        nonlocal server_ops
+        await asyncio.sleep(0.1)  # Small delay to ensure page attachment
+
+        # Initialize server operations now that view is attached
+        server_ops = create_server_mediated_operations(state_manager, page)
+
+        # Setup subscriptions and load initial data
+        setup_reactive_subscriptions()
+        await initial_data_load()
+
+    # Start dashboard setup in background
+    page.run_task(setup_dashboard)
+
     return main_view

@@ -34,8 +34,8 @@ logger = get_logger(__name__)
 
 
 def create_logs_view(
-    server_bridge: Optional[ServerBridge], 
-    page: ft.Page, 
+    server_bridge: Optional[ServerBridge],
+    page: ft.Page,
     state_manager: StateManager
 ) -> ft.Control:
     """Return the logs view control."""
@@ -136,25 +136,25 @@ def create_logs_view(
             time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
         except (ValueError, KeyError):
             time_str = str(entry.get("timestamp", "Unknown"))
-        
+
         # Create level badge
         level_badge = build_level_badge(entry["level"])
-        
+
         # Handle long messages with smart truncation
         message = entry.get("message", "")
         display_message = message
         if len(message) > 80:
             display_message = message[:77] + "..."
-        
+
         # Get row background color
         row_bg = striped_row_color(index)
-        
+
         return ft.DataRow(
             cells=[
                 ft.DataCell(
                     ft.Text(
-                        time_str, 
-                        size=12, 
+                        time_str,
+                        size=12,
                         weight=ft.FontWeight.W_500,
                         color=ft.Colors.BLUE_GREY_700,
                         font_family="monospace"
@@ -163,8 +163,8 @@ def create_logs_view(
                 ft.DataCell(level_badge),
                 ft.DataCell(
                     ft.Text(
-                        entry.get("component", "Unknown"), 
-                        size=12, 
+                        entry.get("component", "Unknown"),
+                        size=12,
                         weight=ft.FontWeight.W_600,
                         color=ft.Colors.INDIGO_700
                     )
@@ -209,7 +209,7 @@ def create_logs_view(
                 pagination_config.current_page,
                 pagination_config.page_size
             )
-            
+
             # Create DataTable with proper structure
             data_table = ft.DataTable(
                 columns=[
@@ -233,18 +233,18 @@ def create_logs_view(
                 rows=[create_log_data_row(entry, i) for i, entry in enumerate(slice_data)],
                 border=ft.border.all(1, ft.Colors.OUTLINE),
                 border_radius=8,
-                vertical_lines=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
-                horizontal_lines=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                vertical_lines=ft.border.BorderSide(1, ft.Colors.OUTLINE),
+                horizontal_lines=ft.border.BorderSide(1, ft.Colors.OUTLINE),
                 column_spacing=20,
                 data_row_min_height=48,
                 data_row_max_height=80,
             )
-            
+
             # Wrap in scrollable container for large datasets
             scrollable_table = ft.Column([
                 data_table
             ], expand=True, scroll=ft.ScrollMode.AUTO)
-            
+
             logs_container.controls = [
                 ft.AnimatedSwitcher(
                     content=scrollable_table,
@@ -293,16 +293,16 @@ def create_logs_view(
     def on_search_change(e):
         nonlocal search_query, search_debounce_timer
         search_query = e.control.value
-        
+
         # Cancel previous debounce timer if it exists
         if search_debounce_timer:
             search_debounce_timer.cancel()
-        
+
         # Create debounced search using page.run_task with delay
         async def debounced_search():
             await asyncio.sleep(0.3)  # 300ms debounce delay
             await perform_search()
-        
+
         # Use page.run_task for proper Flet async handling
         search_debounce_timer = page.run_task(debounced_search)
 
@@ -310,12 +310,12 @@ def create_logs_view(
         nonlocal search_query, search_debounce_timer
         search_query = ""
         search_field.value = ""
-        
+
         # Cancel any pending search
         if search_debounce_timer:
             search_debounce_timer.cancel()
             search_debounce_timer = None
-        
+
         pagination_config.current_page = 0
         apply_filters()
         update_list()
