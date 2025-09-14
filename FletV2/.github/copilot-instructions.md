@@ -1,11 +1,23 @@
 ---
 description: AI rules derived by SpecStory from the project AI interaction history
+globs: *
+---
 
 ---
+description: AI rules for FletV2 encrypted backup server GUI.
+
+---
+also read and look at: 'qwen.md', 'claude.md' for very important context.
+you can find important docs in 'important_docs' and in 'Flet_Documentation_From_Context7_&_Web.md'.
+
+
+USE RIPGREP (rg) TO SEARCH FOR PATTERNS MORE EFFICIENTLY.
+USE AST-GREP (SG) TO UNDERSTAND CODE STRUCTURE.
+
 
 # FletV2 – Copilot Instructions (concise)
 
-Scope: Work ONLY inside `FletV2/`. Follow “Framework Harmony” — prefer Flet’s built-ins over custom infra. Keep changes small, readable, and performant.
+Scope: Work ONLY inside `FletV2/`. Follow "Framework Harmony" — prefer Flet's built-ins over custom infra. Keep changes small, readable, and performant.
 
 Architecture snapshot
 - Entry: `main.py` builds `FletV2App(ft.Row)` with `NavigationRail` + `AnimatedSwitcher` content.
@@ -17,7 +29,7 @@ Architecture snapshot
 Golden patterns (do these)
 - Control updates: use `control.update()`; only use `page.update()` for global/theme changes. Batch with `ft.update_async()` when updating several controls.
 - Navigation: only `NavigationRail.on_change` → call `_load_view` (see `main.py`). No custom routers.
-- Layout: `expand=True`, standard `Row/Column/Container`, `ResponsiveRow` when needed.
+- Layout: `expand=True`, standard `Row/Column/Container/Stack/GridView/ListView/Card/DataTable/Tabs/ResponsiveRow/SafeArea`.
 - Control access: `ft.Ref` (e.g., `cpu = ft.Ref[ft.Text]()` … `cpu.current.value = "35%"; cpu.current.update()`).
 - Views stay focused (~200–600 LOC), utils/components smaller (≤~450 LOC). Decompose before exceeding limits.
 
@@ -27,22 +39,33 @@ ServerBridge quick contract
 - Files: `get_files[_async]()`, `get_client_files(client_id)`, `delete_file[_async]()`, `download_file[_async]()` (mock writes a temp file).
 - DB: `get_database_info[_async]()`, `get_table_data[_async]()`, `update_row()`, `delete_row()`.
 - Status/Logs: `get_server_status[_async]()`, `get_system_status()`, `get_logs()`.
-- Keep mock/real return shapes identical so UIs don’t branch.
+- Keep mock/real return shapes identical so UIs don't branch.
 
 Common workflows
 - Run: `flet run -r main.py` (hot reload) or `python main.py`. Set `FLET_V2_DEBUG=true` for verbose logging.
 - Type/Lint: `pyright`, `pylint main.py views/ utils/`.
-- Tests: `python -m pytest tests -v` (note: UI fidelity is limited by Flet; prefer manual smoke for view changes).
-- After ANY file edit: run Codacy analysis on the file (project rule). If MCP isn’t available, see `.github/instructions/codacy.instructions.md`. Codacy checks are currently ignored but still run the tool.
+- Tests: `python -m pytest tests -v` (note: UI fidelity is limited by Flet; prefer manual smoke for view changes). **Avoid running tests; they cannot accurately test Flet implementations.**
+- After ANY file edit: run Codacy analysis on the file (project rule). If MCP isn't available, see `.github/instructions/codacy.instructions.md`. Codacy checks are currently ignored but still run the tool.
+  - **Codacy checks are currently ignored. DO NOT USE CODACY.**
 
 Gotchas and invariants
 - Flet API names are case-sensitive: `ft.Colors` (not `ft.colors`), `ft.Animation` (not `ft.animation`). `FontWeight.W_500` (not `W500`).
-- “Text Control must be added to the page first”: ensure controls are attached before updating; defer subscriptions until the view is constructed and added.
+- "Text Control must be added to the page first": ensure controls are attached before updating; defer subscriptions until the view is constructed and added.
+  - To resolve this, ensure that controls are properly added to the page before attempting to update them.
+    - Defer subscription setup until after the view is constructed and attached to the page. This can be achieved by adding a deferred initialization pattern at the end of the view creation function.
 - Theme inheritance first; avoid hard-coded colors. Prefer `ft.Colors.PRIMARY`, `ColorScheme`, and `theme.py` helpers.
 - Prefer small async handlers (`async def …`) and `page.run_task()` for background work; avoid blocking the UI.
 
+Additional patterns
+- Navigation: `AppBar/BottomAppBar/MenuBar/NavigationBar/NavigationDrawer/NavigationRail` for routing.
+- Theming: `page.theme = ft.Theme(color_scheme_seed=ft.Colors.GREEN)`; nested themes with `theme_mode`.
+- Routing: `page.route`, `page.on_route_change`, `page.views` stack, `page.go(route)`, `TemplateRoute` for params.
+- Desktop: Window props (`page.window.width/height/resizable/title`), `page.window_prevent_close`, `page.on_window_event`.
+- Performance: `ListView` with `item_extent/first_item_prototype`, `page.run_task()` for async, `page.open_dialog()` overlays.
+- Components: `Pagelet` for reusable sections, `SemanticsService` for accessibility, `Tester` for UI tests.
+
 Security/Config
-- Load secrets via env vars in `config.py` (e.g., `GITHUB_PERSONAL_ACCESS_TOKEN`, `SERVER_API_KEY`). Don’t print secrets; warn in debug if missing.
+- Load secrets via env vars in `config.py` (e.g., `GITHUB_PERSONAL_ACCESS_TOKEN`, `SERVER_API_KEY`). Don't print secrets; warn in debug if missing.
 
 Examples to copy
 - View skeleton: `views/<name>.py` → `def create_<name>_view(server_bridge, page, state_manager=None) -> ft.Control`.
@@ -103,6 +126,7 @@ cpu_text = ft.Ref[ft.Text]()
 **Debug**: Set `FLET_V2_DEBUG=true` for verbose logging
 **Test**: `python -m pytest tests -v`. **Avoid running tests; they cannot accurately test Flet implementations.**
 **Lint**: `pyright`, `pylint main.py views/ utils/`
+**Codacy**: **Codacy checks are currently ignored. DO NOT USE CODACY.**
 
 ## Adding Views
 
@@ -114,7 +138,7 @@ Example: `def create_my_view(server_bridge, page, state_manager=None) -> ft.Cont
 
 ## Code Quality Requirements
 
-**CRITICAL**: After ANY file edit, run `codacy_cli_analyze` with `rootPath` set to workspace and `file` set to edited file path (per `.github/instructions/codacy.instructions.md`). Address any issues immediately. **Codacy checks are currently ignored.**
+**CRITICAL**: After ANY file edit, run `codacy_cli_analyze` with `rootPath` set to workspace and `file` set to edited file path (per `.github/instructions/codacy.instructions.md`). Address any issues immediately. **Codacy checks are currently ignored. DO NOT USE CODACY.**
 
 **References**: See patterns in `main.py`, `views/dashboard.py`, `utils/server_bridge.py`
 
@@ -151,7 +175,7 @@ This repo implements a clean Flet desktop app for managing an encrypted backup s
 - Run app: `flet run -r main.py` or `python main.py`. Set `FLET_V2_DEBUG=true` for verbose logging.
 - Tests: `python -m pytest tests -v` (see many focused tests in `tests/`). **Avoid running tests; they cannot accurately test Flet implementations.**
 - Type/lint (if available locally): `pyright`, `pylint main.py views/ utils/`.
-- Codacy analysis: After edits, run `codacy_cli_analyze` with rootPath set to the workspace and file set to the edited file, as required by the project rules in `.github/instructions/codacy.rules`. If the tool is unavailable, follow the troubleshooting steps in `.github/instructions/codacy.instructions.md` (reset MCP, check Copilot MCP settings, or contact Codacy support). **Codacy checks are currently ignored.**
+- Codacy analysis: After edits, run `codacy_cli_analyze` with rootPath set to the workspace and file set to the edited file, as required by the project rules in `.github/instructions/codacy.rules`. If the tool is unavailable, follow the troubleshooting steps in `.github/instructions/codacy.instructions.md` (reset MCP, check Copilot MCP settings, or contact Codacy support). **Codacy checks are currently ignored. DO NOT USE CODACY.**
 - Use ripgrep (rg) to search for patterns more efficiently.
 
 ### Extending the UI
@@ -176,9 +200,10 @@ These rules reflect current code, not aspirations. When in doubt, mirror pattern
 
 - When debugging JSON parsing errors, such as "Incorrect type. Expected 'object'., End of file expected.", ensure the JSON file has a valid structure, including the opening brace `{` for a JSON object. After correcting the file, validate it using a JSON tool (e.g., `python -m json.tool <file>`).
 - When encountering the error "Unknown property 'globs' will be ignored.", review the relevant configuration files (e.g., `.codacy.yml` or similar) and ensure that the `globs` property is correctly defined and supported in the context where it is being used. Check for typos or syntax errors in the property name or its value. Consult the documentation for the tool or library that uses the `globs` property to verify its correct usage and compatibility. If the property is unsupported, remove it. After making the change, validate the file if needed (e.g., by checking for parsing errors). If Codacy analysis is required per project rules, run `codacy_cli_analyze` on this file with `rootPath` set to the workspace and `file` set to the edited file path. If the tool is unavailable, follow the troubleshooting steps in `.github/instructions/codacy.rules`. **Codacy checks are currently ignored.**
+  - **Codacy checks are currently ignored. DO NOT USE CODACY.**
 - Always fix all errors and warnings reported by linters and static analysis tools such as `pylint` and `sourcery`. When fixing errors and warnings, ensure that you are not breaking the code, or breaking/removing functionality. Do not remove useful comments and docstrings. Fix errors and warnings, do not delete problems. Use sequential thinking where you don't know what to do.
-- When encountering the error "Text Control must be added to the page first", this indicates a Flet control lifecycle issue. Ensure that controls are properly added to the page before attempting to update them. To resolve this, ensure that controls are properly added to the page before attempting to
-    - Defer subscription setup until after the view is constructed and attached to the page. This can be achieved by adding a deferred initialization pattern at the end of the view creation function.
+- When encountering the error "Text Control must be added to the page first", this indicates a Flet control lifecycle issue. Ensure that controls are properly added to the page before attempting to update them.
+  - The solution is to defer subscription setup until after the view is constructed and attached to the page. This can be achieved by adding a deferred initialization pattern at the end of the view creation function.
 - Ensure that the UI components use proper theme inheritance and are not explicitly overriding the theme colors. Use `ft.Colors` theme roles instead of manual color definitions.
 
 ### Security Considerations
@@ -282,6 +307,7 @@ else:
     - Prioritize addressing critical missing elements (e.g., security handling, core server bridge methods).
 - Documentation, especially progress tracking, must be accurate and consistent with the actual codebase state.
 - After making any changes, always run `codacy_cli_analyze` on modified files with `rootPath` set to the workspace and `file` set to the file path, as required by project rules. Address any issues that arise immediately. **Codacy checks are currently ignored.**
+  - **Codacy checks are currently ignored. DO NOT USE CODACY.**
 - **Do NOT look at the plan to verify. Look at the code and compare it to the plan.**
 
 ### Simplification and Prioritization
@@ -458,6 +484,7 @@ disable=trailing-whitespace
 ```
 
 - After making this change, run `codacy_cli_analyze` with `rootPath` set to your workspace and `file` set to `FletV2/.codacy/tools-configs/pylint.rc` to verify the update. If issues persist, check `languages-config.yaml` for any overriding Python linter configurations. **Codacy checks are currently ignored.**
+  - **Codacy checks are currently ignored. DO NOT USE CODACY.**
 
 ### Guiding AI Agents
 
@@ -475,39 +502,7 @@ disable=trailing-whitespace
     - Reference key files/directories that exemplify important patterns.
 - Search existing AI conventions from `**/{.github/copilot-instructions.md,AGENT.md,AGENTS.md,CLAUDE.md,.cursorrules,.windsurfrules,.clinerules,.cursor/rules/**,.windsurf/rules/**,.clinerules/**,README.md}`.
 - Use ripgrep (rg) to search for patterns more efficiently.
-- When updating `.github/copilot-instructions.md`, merge intelligently, preserving valuable content while updating outdated sections. Read `OLD_Claude.md` for potentially important data and append it.
+- When updating `.github/copilot-instructions.md`, merge intelligently, preserving valuable content while updating outdated sections. Read
 
-### Project Overview and Functionality
-
-- **Purpose:** FletV2 provides a GUI for administrators to manage backup clients, files, server status, analytics, logs, and database operations for an encrypted backup system.
-- **Key Features:**
-    - View and manage backup clients
-    - Browse, download, verify, and delete files
-    - Inspect and edit database tables
-    - Monitor server status and analytics
-    - View and export logs
-    - Configure application settings
-    - Operate in both real server and mock/demo mode
-- **Problem Solved:** Managing encrypted backups across multiple clients and files is complex. FletV2 simplifies this by providing a unified, user-friendly desktop interface, reducing the risk of errors and improving operational efficiency.
-- **Design Philosophy:**
-    - **Framework Harmony:** Works with Flet's native patterns for stability and performance
-    - **Simplicity:** Avoids unnecessary complexity, making the codebase maintainable
-    - **Performance:** Uses targeted UI updates for responsiveness
-    - **Maintainability:** Clean separation of concerns and modular design
-- **Architecture:**
-    - **Single Page Application:** One main window with dynamic view switching
-    - **NavigationRail:** Sidebar for switching between views (Dashboard, Clients, Files, Database, Analytics, Logs, Settings)
-    - **AnimatedSwitcher:** Smooth transitions between views
-    - **ServerBridge:** Unified interface for backend operations, with automatic fallback to mock data if the real server is unavailable
-    - **StateManager:** Centralized, reactive state management for cross-view updates
-    - **Material Design 3 Theme:** Modern, vibrant UI
-- **Development Patterns:**
-    - Views are created as functions returning Flet controls
-    - Control updates use `control.update()` for performance
-    - Async operations use `async/await` and Flet's background task system
-    - Error handling is centralized with user feedback via SnackBar and dialogs
-- **Intended Functionality:**
-    - Allow administrators to manage all aspects of an encrypted backup server from a desktop GUI
-    - Provide real-time feedback, analytics, and error handling
-    - Support both production (real server) and development/demo (mock mode) environments
-    - Enable extensibility for future features (plugins, advanced analytics, offline
+### Layout and Scaling Issues
+- The action buttons and text in the tables

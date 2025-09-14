@@ -17,7 +17,7 @@ from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
 from utils.dialog_consolidation_helper import show_success_message, show_error_message, show_confirmation, show_info
 from utils.server_mediated_operations import create_server_mediated_operations, file_size_processor
-from utils.ui_components import create_modern_card, apply_advanced_table_effects
+from utils.ui_components import create_modern_card, apply_advanced_table_effects, create_status_chip
 
 logger = get_logger(__name__)
 
@@ -44,7 +44,6 @@ def create_files_view(
     type_filter = "all"
 
     # UI Control References - Add ft.Ref definitions
-    files_table_ref = ft.Ref[ft.DataTable]()
     status_text_ref = ft.Ref[ft.Text]()
     search_field_ref = ft.Ref[ft.TextField]()
     loading_indicator_ref = ft.Ref[ft.ProgressRing]()
@@ -104,18 +103,29 @@ def create_files_view(
         width=150
     )
 
+    # Control references for reactive UI updates
+    files_table_ref = ft.Ref[ft.DataTable]()
+
+    # Professional DataTable with clean styling following clients.py pattern
     files_table = ft.DataTable(
         ref=files_table_ref,
         columns=[
-            ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Size", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Type", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Modified", weight=ft.FontWeight.BOLD)),
-            ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD))
+            ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
+            ft.DataColumn(ft.Text("Size", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
+            ft.DataColumn(ft.Text("Type", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
+            ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
+            ft.DataColumn(ft.Text("Modified", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
+            ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY))
         ],
         rows=[],
-        show_bottom_border=True
+        heading_row_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+        border=ft.border.all(3, ft.Colors.PRIMARY),
+        border_radius=16,
+        data_row_min_height=62,
+        column_spacing=28,
+        show_checkbox_column=False,
+        bgcolor=ft.Colors.SURFACE,
+        divider_thickness=1
     )
 
     # Comment 8: Initial status message based on server availability
@@ -205,160 +215,124 @@ def create_files_view(
         ]
         update_table(filtered_files)
 
-    def update_table(filtered_files_param=None):
-        """Update the files table with filtered data."""
-        files_table.rows.clear()
+    def get_file_type_icon(file_type: str) -> tuple:
+        """Get file type icon and color."""
+        if file_type == "document":
+            return ft.Icons.DESCRIPTION, ft.Colors.AMBER
+        elif file_type == "image":
+            return ft.Icons.IMAGE, ft.Colors.PINK
+        elif file_type == "video":
+            return ft.Icons.VIDEO_FILE, ft.Colors.CYAN
+        elif file_type == "code":
+            return ft.Icons.CODE, ft.Colors.SECONDARY
+        else:
+            return ft.Icons.INSERT_DRIVE_FILE, ft.Colors.PRIMARY
 
+    def get_status_color(status: str) -> str:
+        """Get status color matching clients.py pattern."""
+        status_lower = status.lower()
+        if status_lower in ["complete", "completed"]:
+            return ft.Colors.GREEN_600
+        elif status_lower in ["uploading", "upload"]:
+            return ft.Colors.BLUE_600
+        elif status_lower in ["queued", "pending", "queue"]:
+            return ft.Colors.ORANGE_600
+        elif status_lower in ["processing", "verified", "verify"]:
+            return ft.Colors.PURPLE_600
+        elif status_lower in ["failed", "error", "fail"]:
+            return ft.Colors.RED_600
+        else:
+            return ft.Colors.GREY_600
+
+    def format_file_size(size_bytes: int) -> str:
+        """Format file size in human readable format."""
+        if size_bytes < 1024:
+            return f"{size_bytes} B"
+        elif size_bytes < 1024*1024:
+            return f"{size_bytes/1024:.1f} KB"
+        else:
+            return f"{size_bytes/(1024*1024):.1f} MB"
+
+    def update_table(filtered_files_param=None):
+        """Professional DataTable update with clean styling following clients.py pattern."""
         # Use parameter if provided, otherwise use the nonlocal filtered_files
         data_to_display = filtered_files_param if filtered_files_param is not None else filtered_files
 
-        for file_data in data_to_display[:50]:  # Limit to 50 for performance
-            # File type icon with theme colors
-            file_type = file_data.get("type", "unknown")
-            if file_type == "document":
-                type_icon = ft.Icons.DESCRIPTION
-                icon_color = ft.Colors.AMBER
-            elif file_type == "image":
-                type_icon = ft.Icons.IMAGE
-                icon_color = ft.Colors.PINK
-            elif file_type == "video":
-                type_icon = ft.Icons.VIDEO_FILE
-                icon_color = ft.Colors.CYAN
-            elif file_type == "code":
-                type_icon = ft.Icons.CODE
-                icon_color = ft.Colors.SECONDARY
-            else:
-                type_icon = ft.Icons.INSERT_DRIVE_FILE
-                icon_color = ft.Colors.PRIMARY
+        # Clear existing rows
+        files_table.rows.clear()
 
-            # Enhanced status chip with colors matching clients page
+        # Populate DataTable rows with clean cell structure
+        for file_data in data_to_display[:50]:  # Limit to 50 for performance
+            file_type = file_data.get("type", "unknown")
+            type_icon, icon_color = get_file_type_icon(file_type)
             status = file_data.get("status", "unknown")
 
-            # Enhanced status coloring matching actual mock data values (case-insensitive)
-            status_lower = status.lower()
-            if status_lower in ["complete", "completed"]:
-                status_color = ft.Colors.GREEN_600
-                status_icon = ft.Icons.CHECK_CIRCLE
-            elif status_lower in ["uploading", "upload"]:
-                status_color = ft.Colors.BLUE_600
-                status_icon = ft.Icons.UPLOAD
-            elif status_lower in ["queued", "pending", "queue"]:
-                status_color = ft.Colors.ORANGE_600
-                status_icon = ft.Icons.PENDING
-            elif status_lower in ["processing", "verified", "verify"]:
-                status_color = ft.Colors.PURPLE_600
-                status_icon = ft.Icons.VERIFIED
-            elif status_lower in ["failed", "error", "fail"]:
-                status_color = ft.Colors.RED_600
-                status_icon = ft.Icons.ERROR
-            else:
-                status_color = ft.Colors.GREY_600
-                status_icon = ft.Icons.HELP
-
-            # Modern status chip with icon, shadow and animations using theme colors
-            status_chip = ft.Container(
-                content=ft.Row([
-                    ft.Icon(
-                        status_icon,
-                        size=14,
-                        color=ft.Colors.WHITE
-                    ),
-                    ft.Text(
-                        status.title(),
-                        size=12,
-                        color=ft.Colors.WHITE,
-                        weight=ft.FontWeight.BOLD
-                    )
-                ], spacing=6, tight=True),
-                bgcolor=status_color,
-                border_radius=16,
-                padding=ft.Padding(12, 8, 12, 8),
-                animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT)
-            )
-
-            # Format file size
-            size_bytes = file_data.get("size", 0)
-            if size_bytes < 1024:
-                size_str = f"{size_bytes} B"
-            elif size_bytes < 1024*1024:
-                size_str = f"{size_bytes/1024:.1f} KB"
-            else:
-                size_str = f"{size_bytes/(1024*1024):.1f} MB"
-
-            # Enhanced action buttons with modern hover states using theme colors
-            actions_row = ft.Row([
-                ft.IconButton(
-                    icon=ft.Icons.DOWNLOAD,
-                    tooltip="Download File",
-                    icon_color=ft.Colors.PRIMARY,
-                    icon_size=22,
-                    on_click=lambda e, f=file_data: download_file(f),
-                    style=ft.ButtonStyle(
-                        bgcolor={
-                            ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
-                            ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT
-                        },
-                        shape=ft.CircleBorder(),
-                        padding=10,
-                        animation_duration=200
-                    )
+            # Create name cell with file type icon
+            name_content = ft.Row([
+                ft.Container(
+                    content=ft.Icon(type_icon, size=16, color=icon_color),
+                    bgcolor=ft.Colors.with_opacity(0.1, icon_color),
+                    border_radius=6,
+                    padding=ft.Padding(4, 4, 4, 4)
                 ),
-                ft.IconButton(
-                    icon=ft.Icons.VERIFIED,
-                    tooltip="Verify Integrity",
-                    icon_color=ft.Colors.TERTIARY,
-                    icon_size=22,
-                    on_click=lambda e, f=file_data: verify_file(f),
-                    style=ft.ButtonStyle(
-                        bgcolor={
-                            ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.TERTIARY),
-                            ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT
-                        },
-                        shape=ft.CircleBorder(),
-                        padding=10,
-                        animation_duration=200
-                    )
-                ),
-                ft.IconButton(
-                    icon=ft.Icons.DELETE,
-                    tooltip="Delete File",
-                    icon_color=ft.Colors.ERROR,
-                    icon_size=22,
-                    on_click=lambda e, f=file_data: delete_file(f),
-                    style=ft.ButtonStyle(
-                        bgcolor={
-                            ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.ERROR),
-                            ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT
-                        },
-                        shape=ft.CircleBorder(),
-                        padding=10,
-                        animation_duration=200
-                    )
+                ft.Text(
+                    file_data.get("name", ""),
+                    size=13,
+                    weight=ft.FontWeight.W_500,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                    max_lines=1
                 )
-            ], spacing=4, tight=True)
+            ], spacing=6, tight=True)
 
-            files_table.rows.append(
-                ft.DataRow([
+            # Create DataRow following clients.py pattern
+            row = ft.DataRow(
+                cells=[
+                    ft.DataCell(name_content),
+                    ft.DataCell(ft.Text(format_file_size(file_data.get("size", 0)), size=13)),
+                    ft.DataCell(ft.Text(file_type.title(), size=13)),
+                    ft.DataCell(create_status_chip(status)),
+                    ft.DataCell(ft.Text(str(file_data.get("modified", "")), size=13)),
                     ft.DataCell(
-                        ft.Row([
-                            ft.Container(
-                                content=ft.Icon(type_icon, size=20, color=icon_color),
-                                bgcolor=ft.Colors.with_opacity(0.1, icon_color),
-                                border_radius=8,
-                                padding=ft.Padding(6, 6, 6, 6)
-                            ),
-                            ft.Text(file_data.get("name", ""), size=14, weight=ft.FontWeight.W_500)
-                        ], spacing=12, tight=True)
-                    ),
-                    ft.DataCell(ft.Text(size_str, size=14)),
-                    ft.DataCell(ft.Text(file_type.title(), size=14)),
-                    ft.DataCell(status_chip),
-                    ft.DataCell(ft.Text(file_data.get("modified", ""), size=14)),
-                    ft.DataCell(actions_row)
-                ])
+                        ft.PopupMenuButton(
+                            icon=ft.Icons.MORE_VERT,
+                            tooltip="File Actions",
+                            icon_color=ft.Colors.PRIMARY,
+                            items=[
+                                ft.PopupMenuItem(
+                                    text="Download",
+                                    icon=ft.Icons.DOWNLOAD,
+                                    on_click=lambda e, f=file_data: download_file(f)
+                                ),
+                                ft.PopupMenuItem(
+                                    text="Verify",
+                                    icon=ft.Icons.VERIFIED,
+                                    on_click=lambda e, f=file_data: verify_file(f)
+                                ),
+                                ft.PopupMenuItem(
+                                    text="Delete",
+                                    icon=ft.Icons.DELETE,
+                                    on_click=lambda e, f=file_data: delete_file(f)
+                                )
+                            ]
+                        )
+                    )
+                ]
             )
+            files_table.rows.append(row)
 
-        files_table.update()
+        # Update DataTable efficiently with proper safety checks
+        try:
+            if files_table_ref.current is not None and hasattr(files_table_ref.current, 'page') and files_table_ref.current.page is not None:
+                files_table_ref.current.update()
+            elif hasattr(files_table, 'page') and files_table.page is not None:
+                files_table.update()
+            else:
+                logger.debug("Skipping DataTable update - control not attached to page yet")
+        except Exception as e:
+            logger.warning(f"Failed to update DataTable: {e}")
+            # Skip update to prevent errors - the table will be updated when properly attached
+
+        logger.debug(f"DataTable updated with {len(data_to_display[:50])} rows")
 
     # Server-Mediated File Action Functions
     async def download_file_async(file_data: Dict[str, Any]):
@@ -561,7 +535,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     }, source="fallback")
 
                     # Keep UI updates minimal - use control.update()
-                    apply_filters()  # This will call files_table.update() internally
+                    apply_filters()  # This will call table_content.update() internally
                     show_success_message(page, f"File {file_name} deleted successfully")
                     logger.info(f"File {file_id} successfully deleted and UI updated")
                 else:
@@ -615,17 +589,14 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         )
     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
-    # Desktop-focused filters row (avoid ResponsiveRow for fixed spacing on desktop)
-    # Adjust widths for desktop ergonomics
-    search_field.width = 360
-    status_dropdown.width = 180
-    type_dropdown.width = 180
+    # Responsive filters row - removes hardcoded widths for better responsive behavior
+    # Remove hardcoded width assignments for responsive layout
     filters_row = create_modern_card(
-        content=ft.Row([
-            search_field,
-            status_dropdown,
-            type_dropdown
-        ], spacing=16, alignment=ft.MainAxisAlignment.START),
+        content=ft.ResponsiveRow([
+            ft.Column([search_field], col={"sm": 12, "md": 6, "lg": 4}),
+            ft.Column([status_dropdown], col={"sm": 12, "md": 3, "lg": 2}),
+            ft.Column([type_dropdown], col={"sm": 12, "md": 3, "lg": 2})
+        ], spacing=16),
         elevation="soft",
         padding=24,
         return_type="container"
@@ -653,28 +624,38 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
     async def on_files_data_changed(new_files, old_files):
         """React to files data changes from state manager."""
         nonlocal files_data
-        if new_files != files_data:
-            files_data.clear()
-            files_data.extend(new_files or [])
-            apply_filters()
-            status_text.value = f"Loaded {len(files_data)} files"
-            status_text.color = ft.Colors.PRIMARY
-            status_text.update()
-            logger.info(f"Files data updated: {len(files_data)} files")
+        try:
+            if new_files != files_data:
+                files_data.clear()
+                files_data.extend(new_files or [])
+                apply_filters()
+                status_text.value = f"Loaded {len(files_data)} files"
+                status_text.color = ft.Colors.PRIMARY
+                if hasattr(status_text, 'page') and status_text.page:
+                    status_text.update()
+                logger.info(f"Files data updated: {len(files_data)} files")
+        except Exception as e:
+            logger.warning(f"Failed to update files data UI: {e}")
 
     async def on_loading_state_changed(new_loading_states, old_loading_states):
         """React to loading state changes."""
-        if new_loading_states.get("files_data"):
-            status_text.value = "Loading files..."
-            status_text.color = ft.Colors.ON_SURFACE
-            status_text.update()
-            # Comment 3: Toggle loading indicator visibility
-            loading_indicator.visible = True
-            loading_indicator.update()
-        else:
-            # Comment 3: Hide loading indicator when not loading
-            loading_indicator.visible = False
-            loading_indicator.update()
+        try:
+            if new_loading_states.get("files_data"):
+                status_text.value = "Loading files..."
+                status_text.color = ft.Colors.ON_SURFACE
+                if hasattr(status_text, 'page') and status_text.page:
+                    status_text.update()
+                # Comment 3: Toggle loading indicator visibility
+                loading_indicator.visible = True
+                if hasattr(loading_indicator, 'page') and loading_indicator.page:
+                    loading_indicator.update()
+            else:
+                # Comment 3: Hide loading indicator when not loading
+                loading_indicator.visible = False
+                if hasattr(loading_indicator, 'page') and loading_indicator.page:
+                    loading_indicator.update()
+        except Exception as e:
+            logger.warning(f"Failed to update loading state UI: {e}")
 
     async def on_file_operation_complete(event_data, old_data):
         """React to file operation completion events."""

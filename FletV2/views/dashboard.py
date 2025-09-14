@@ -322,11 +322,23 @@ def create_dashboard_view(
         ft.IconButton(icon=ft.Icons.REFRESH, tooltip="Refresh Dashboard", icon_size=24, icon_color=ft.Colors.PRIMARY, on_click=lambda e: page.run_task(refresh_dashboard), style=ft.ButtonStyle(bgcolor={ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY), ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT}, shape=ft.CircleBorder(), padding=12))
     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
-    server_status_card = ft.Container(content=ft.Column([
-        ft.Row([ft.Icon(ft.Icons.DNS, size=24, color=ft.Colors.BLUE), ft.Text("Server Control", size=16, weight=ft.FontWeight.BOLD)], spacing=8),
-        ft.Divider(height=1), ft.Column([server_status_text, server_port_text, uptime_text], spacing=4), ft.Container(height=8),
-        ft.Row([start_server_btn, stop_server_btn], spacing=12)
-    ], spacing=8), bgcolor=ft.Colors.SURFACE, border=ft.border.all(1, ft.Colors.OUTLINE), border_radius=12, padding=20)
+    server_status_card = ft.Container(
+        content=ft.Column([
+            ft.Row([ft.Icon(ft.Icons.DNS, size=24, color=ft.Colors.BLUE), ft.Text("Server Control", size=16, weight=ft.FontWeight.BOLD)], spacing=8),
+            ft.Divider(height=1),
+            ft.Column([server_status_text, server_port_text, uptime_text], spacing=4),
+            ft.Container(height=8),
+            ft.ResponsiveRow([
+                ft.Column([start_server_btn], col={"sm": 12, "md": 6}),
+                ft.Column([stop_server_btn], col={"sm": 12, "md": 6})
+            ], spacing=12)
+        ], spacing=8),
+        bgcolor=ft.Colors.SURFACE,
+        border=ft.border.all(1, ft.Colors.OUTLINE),
+        border_radius=12,
+        padding=20,
+        expand=True  # Allow card to expand with responsive layout
+    )
 
     stats_row = ft.ResponsiveRow([
         ft.Column([create_stat_card("Active Clients", clients_count_text, ft.Icons.PEOPLE, ft.Colors.BLUE)], col={"sm": 12, "md": 6, "lg": 3}),
@@ -335,10 +347,20 @@ def create_dashboard_view(
         ft.Column([create_stat_card("Storage Used", storage_used_text, ft.Icons.STORAGE, ft.Colors.PURPLE)], col={"sm": 12, "md": 6, "lg": 3})
     ])
 
-    system_metrics_card = ft.Container(content=ft.Column([
-        ft.Row([ft.Icon(ft.Icons.MEMORY, size=20, color=ft.Colors.BLUE), ft.Text("System Metrics", size=16, weight=ft.FontWeight.BOLD)], spacing=8),
-        ft.Divider(height=1), create_metric_row("CPU", cpu_progress, cpu_text), create_metric_row("Memory", memory_progress, memory_text), create_metric_row("Disk", disk_progress, disk_text)
-    ], spacing=12), bgcolor=ft.Colors.SURFACE, border=ft.border.all(1, ft.Colors.OUTLINE), border_radius=12, padding=20)
+    system_metrics_card = ft.Container(
+        content=ft.Column([
+            ft.Row([ft.Icon(ft.Icons.MEMORY, size=20, color=ft.Colors.BLUE), ft.Text("System Metrics", size=16, weight=ft.FontWeight.BOLD)], spacing=8),
+            ft.Divider(height=1),
+            create_metric_row("CPU", cpu_progress, cpu_text),
+            create_metric_row("Memory", memory_progress, memory_text),
+            create_metric_row("Disk", disk_progress, disk_text)
+        ], spacing=12),
+        bgcolor=ft.Colors.SURFACE,
+        border=ft.border.all(1, ft.Colors.OUTLINE),
+        border_radius=12,
+        padding=20,
+        expand=True  # Allow card to expand with responsive layout
+    )
 
     activity_card = ft.Container(
         content=ft.Column([
@@ -355,17 +377,24 @@ def create_dashboard_view(
     main_content = ft.ResponsiveRow([
         ft.Column([server_status_card, system_metrics_card], col={"sm": 12, "md": 12, "lg": 4}, spacing=20),
         ft.Column([activity_card], col={"sm": 12, "md": 12, "lg": 8})
-    ], spacing=20)
+    ], spacing=20, expand=True)
 
     footer_row = ft.Row([ft.Icon(ft.Icons.UPDATE, size=16, color=ft.Colors.GREY), last_updated_text], spacing=8)
 
     main_view = ft.Container(
         content=ft.Column([
-            header_row, ft.Divider(), stats_row, ft.Container(height=20),
-            main_content, ft.Container(height=16), footer_row
+            header_row,
+            ft.Divider(),
+            stats_row,
+            ft.Container(height=20),
+            main_content,
+            ft.Container(height=16),
+            footer_row
         ], expand=True, scroll=ft.ScrollMode.AUTO, spacing=0),
         padding=ft.padding.symmetric(horizontal=24, vertical=12),
-        expand=True
+        expand=True,
+        # Ensure container adapts to window size changes
+        alignment=ft.alignment.top_left
     )
 
     # --- Setup Reactive Subscriptions ---

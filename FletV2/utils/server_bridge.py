@@ -83,7 +83,7 @@ class ServerBridge:
         response.update(kwargs)
         return response
 
-    def _handle_server_operation(self, operation_name: str, real_method_name: str, 
+    def _handle_server_operation(self, operation_name: str, real_method_name: str,
                                 mock_fallback_func, *args, **kwargs) -> Dict[str, Any]:
         """Standardized server operation handler with consistent error handling."""
         if self.real_server and hasattr(self.real_server, real_method_name):
@@ -91,13 +91,13 @@ class ServerBridge:
                 real_method = getattr(self.real_server, real_method_name)
                 result = real_method(*args, **kwargs)
                 logger.debug(f"[ServerBridge] Real server {operation_name} successful.")
-                
+
                 # If result is already a dict with success/message, return as-is but add mode
                 if isinstance(result, dict) and 'success' in result:
                     result['mode'] = 'real'
                     result['timestamp'] = time.time()
                     return result
-                
+
                 # Otherwise, wrap the result
                 return self._create_success_response(
                     f"{operation_name} completed successfully",
@@ -370,7 +370,7 @@ class ServerBridge:
 
     def delete_client(self, client_id: str) -> Dict[str, Any]:
         """Delete a client with cascading file deletion."""
-        def mock_fallback():
+        def mock_fallback(client_id: str):
             logger.info(f"[ServerBridge] FALLBACK: Deleting client from persistent mock store: {client_id}")
             success = self.mock_generator.delete_client(client_id)
             if success:
@@ -748,7 +748,7 @@ class ServerBridge:
             else:
                 logger.warning(f"Unknown table '{table_name}' for mock deletion")
                 success = False
-            
+
             return {
                 'success': success,
                 'message': f'Mock deletion completed - row {"deleted" if success else "not found"} from {table_name}',
@@ -839,7 +839,7 @@ class ServerBridge:
             try:
                 result = await self.real_server.start_server_async()
                 logger.debug("[ServerBridge] Real server start_server_async successful.")
-                
+
                 # If result is already standardized, add mode and timestamp
                 if isinstance(result, dict):
                     result['mode'] = 'real'
@@ -877,7 +877,7 @@ class ServerBridge:
             try:
                 result = await self.real_server.stop_server_async()
                 logger.debug("[ServerBridge] Real server stop_server_async successful.")
-                
+
                 # If result is already standardized, add mode and timestamp
                 if isinstance(result, dict):
                     result['mode'] = 'real'

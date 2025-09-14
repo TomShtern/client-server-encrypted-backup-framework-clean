@@ -19,7 +19,7 @@ from utils.debug_setup import get_logger
 from utils.dialog_consolidation_helper import show_confirmation, show_info, show_success_message, show_error_message, show_info_message
 from utils.server_bridge import ServerBridge
 from theme import setup_modern_theme
-from utils.ui_components import create_modern_card, apply_advanced_table_effects
+from utils.ui_components import create_modern_card, apply_advanced_table_effects, create_status_chip
 from utils.state_manager import StateManager
 from utils.server_mediated_operations import create_server_mediated_operations
 
@@ -46,14 +46,13 @@ def create_clients_view(
     }
 
     # Control references for reactive UI updates
-    clients_table_ref = ft.Ref[ft.DataTable]()
     search_field_ref = ft.Ref[ft.TextField]()
     feedback_text_ref = ft.Ref[ft.Text]()
     loading_indicator_ref = ft.Ref[ft.ProgressBar]()
     add_client_dialog_ref = ft.Ref[ft.AlertDialog]()
-    # Comment 4: client_details_dialog_ref removed - not used in current implementation
+    clients_table_ref = ft.Ref[ft.DataTable]()
 
-    # Pre-create the DataTable to avoid lifecycle issues
+    # Professional DataTable with clean styling (restoring elegant appearance)
     clients_table = ft.DataTable(
         ref=clients_table_ref,
         columns=[
@@ -65,7 +64,14 @@ def create_clients_view(
             ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY))
         ],
         rows=[],
-        show_checkbox_column=False
+        heading_row_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+        border=ft.border.all(3, ft.Colors.PRIMARY),
+        border_radius=16,
+        data_row_min_height=62,
+        column_spacing=28,
+        show_checkbox_column=False,
+        bgcolor=ft.Colors.SURFACE,
+        divider_thickness=1
     )
 
     # Feedback text and loading indicator
@@ -272,52 +278,28 @@ def create_clients_view(
         return filtered
 
     def update_table():
-        """Reactive table update using state manager data."""
+        """Professional DataTable update with clean styling."""
         filtered_clients = filter_clients()
-        new_rows = []
 
-        # Helper to build animated, hoverable status chip
-        def make_status_chip(label: str, bg_color: str) -> ft.Container:
-            chip = ft.Container(
-                content=ft.Text(
-                    label,
-                    color=ft.Colors.WHITE,
-                    weight=ft.FontWeight.BOLD,
-                    size=12
-                ),
-                padding=ft.Padding(12, 6, 12, 6),
-                border_radius=16,
-                bgcolor=bg_color,
-                animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT)
-            )
+        # Clear existing rows
+        clients_table.rows.clear()
 
-            def on_chip_hover(e: ft.HoverEvent):
-                try:
-                    e.control.bgcolor = ft.Colors.with_opacity(0.9, bg_color) if e.data == "true" else bg_color
-                    e.control.update()
-                except Exception:
-                    pass
-
-            chip.on_hover = on_chip_hover
-            return chip
-
+        # Populate DataTable rows with clean cell structure
         for client in filtered_clients:
             status = client.get("status", "Unknown")
-            status_color = get_status_color(status)
 
             row = ft.DataRow(
                 cells=[
-                    ft.DataCell(ft.Text(str(client.get("id", "Unknown")), size=14)),
-                    ft.DataCell(ft.Text(str(client.get("name", "Unknown")), size=14, weight=ft.FontWeight.W_500)),
-                    ft.DataCell(make_status_chip(status, status_color)),
-                    ft.DataCell(ft.Text(str(client.get("last_seen", "Unknown")), size=14)),
-                    ft.DataCell(ft.Text(str(client.get("files_count", "0")), size=14)),
+                    ft.DataCell(ft.Text(str(client.get("id", "Unknown")), size=13)),
+                    ft.DataCell(ft.Text(str(client.get("name", "Unknown")), size=13, weight=ft.FontWeight.W_500)),
+                    ft.DataCell(create_status_chip(status)),
+                    ft.DataCell(ft.Text(str(client.get("last_seen", "Unknown")), size=13)),
+                    ft.DataCell(ft.Text(str(client.get("files_count", "0")), size=13)),
                     ft.DataCell(
                         ft.PopupMenuButton(
                             icon=ft.Icons.MORE_VERT,
                             tooltip="Client Actions",
                             icon_color=ft.Colors.PRIMARY,
-                            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
                             items=[
                                 ft.PopupMenuItem(
                                     text="View Details",
@@ -339,28 +321,22 @@ def create_clients_view(
                     )
                 ]
             )
-            new_rows.append(row)
 
-        # Framework harmonious table update pattern
-        clients_table.rows = new_rows
+            clients_table.rows.append(row)
 
-        # Only update the reference if it exists and is properly attached to page
-        if clients_table_ref.current is not None:
-            try:
-                # Check if control is attached to page before updating
-                if hasattr(clients_table_ref.current, 'page') and clients_table_ref.current.page is not None:
-                    clients_table_ref.current.rows = new_rows
-                    clients_table_ref.current.update()  # Simple control update
-                    logger.debug(f"Table updated reactively with {len(new_rows)} rows")
-                else:
-                    # Control not yet attached to page, just update the data
-                    clients_table_ref.current.rows = new_rows
-                    logger.debug(f"Table data updated (not yet attached to page), {len(new_rows)} rows")
-            except Exception as update_error:
-                logger.warning(f"Table reference update failed: {update_error}")
-                # Table will still work, just update on next display
-        else:
-            logger.debug("Table reference not yet initialized, rows updated on object")
+        # Update DataTable efficiently with proper safety checks
+        try:
+            if clients_table_ref.current is not None and hasattr(clients_table_ref.current, 'page') and clients_table_ref.current.page is not None:
+                clients_table_ref.current.update()
+            elif hasattr(clients_table, 'page') and clients_table.page is not None:
+                clients_table.update()
+            else:
+                logger.debug("Skipping DataTable update - control not attached to page yet")
+        except Exception as e:
+            logger.warning(f"Failed to update DataTable: {e}")
+            # Skip update to prevent errors - the table will be updated when properly attached
+
+        logger.debug(f"DataTable updated with {len(filtered_clients)} rows")
 
     # Reactive callback for clients state changes
     def on_clients_state_changed(new_clients_data, old_clients_data):
@@ -694,7 +670,14 @@ def create_clients_view(
         # Use dialog-specific update pattern for Flet 0.28.3 compatibility
         page.overlay.append(dialog)
         dialog.open = True
-        dialog.update()  # Update dialog directly instead of full page
+        try:
+            if hasattr(dialog, 'page') and dialog.page is not None:
+                dialog.update()  # Update dialog directly instead of full page
+            else:
+                page.update()  # Fallback to page update if dialog not attached
+        except Exception as e:
+            logger.warning(f"Dialog update failed: {e}, using page update fallback")
+            page.update()
 
     # Build the main UI
     main_view = ft.Column([
@@ -761,8 +744,19 @@ def create_clients_view(
             return_type="container"
         ),
 
-        # Clients table
-        apply_advanced_table_effects(clients_table, container_elevation="floating")
+        # Clients table - DataTable wrapped in scrollable column with modern card styling
+        ft.Column(
+            controls=[
+                create_modern_card(
+                    content=clients_table,
+                    elevation="floating",
+                    padding=0,  # No padding for table - let DataTable handle its own spacing
+                    return_type="container"
+                )
+            ],
+            scroll=ft.ScrollMode.AUTO,
+            expand=True
+        )
     ], expand=True)
 
     # Defer subscriptions until after view is attached to page

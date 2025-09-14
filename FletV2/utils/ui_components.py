@@ -1046,10 +1046,9 @@ def apply_advanced_table_effects(data_table: ft.DataTable, container_elevation: 
 
     # Ensure table expands and allow horizontal scrolling to avoid overflow
     data_table.expand = True
-    scrollable = ft.Container(
-        content=data_table,
+    scrollable = ft.Column(
+        controls=[data_table],
         expand=True,
-        alignment=ft.alignment.top_left,
         scroll=ft.ScrollMode.AUTO
     )
 
@@ -1117,3 +1116,519 @@ def create_enhanced_table_header(
         padding=32,
         return_type="container"
     )
+
+
+# ==============================================================================
+# PROFESSIONAL DATATABLE HELPER FUNCTIONS
+# Consolidating common patterns from clients.py, files.py, and database.py
+# ==============================================================================
+
+def create_professional_datatable(
+    columns: List[ft.DataColumn],
+    initial_rows: Optional[List[ft.DataRow]] = None,
+    table_ref: Optional[ft.Ref] = None,
+    heading_row_height: int = 65,
+    data_row_min_height: int = 62,
+    column_spacing: int = 28,
+    border_width: int = 3,
+    border_radius: int = 16
+) -> ft.DataTable:
+    """
+    Create a professional DataTable with consistent styling used across all views.
+
+    This function consolidates the common DataTable styling patterns from clients.py,
+    files.py, and database.py to ensure visual consistency.
+
+    Features:
+    - Consistent header styling with primary color theming
+    - Professional border and background colors
+    - Hover effects for data rows
+    - Optimized column spacing and row heights
+    - Optional reference assignment for reactive updates
+
+    Args:
+        columns: List of DataColumn objects defining table headers
+        initial_rows: Optional list of initial DataRow objects
+        table_ref: Optional ft.Ref for table reference management
+        heading_row_height: Height of header row (default: 65)
+        data_row_min_height: Minimum height of data rows (default: 62)
+        column_spacing: Spacing between columns (default: 28)
+        border_width: Width of table border (default: 3)
+        border_radius: Border radius for rounded corners (default: 16)
+
+    Returns:
+        ft.DataTable: Professionally styled DataTable
+
+    Usage Example:
+        ```python
+        # Define columns
+        columns = [
+            ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
+            ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY))
+        ]
+
+        # Create table with reference
+        table_ref = ft.Ref[ft.DataTable]()
+        table = create_professional_datatable(columns, table_ref=table_ref)
+        ```
+    """
+
+    return ft.DataTable(
+        ref=table_ref,
+        columns=columns,
+        rows=initial_rows or [],
+        # Professional styling matching all views
+        heading_row_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+        border=ft.border.all(border_width, ft.Colors.PRIMARY),
+        border_radius=border_radius,
+        data_row_min_height=data_row_min_height,
+        heading_row_height=heading_row_height,
+        column_spacing=column_spacing,
+        show_checkbox_column=False,
+        bgcolor=ft.Colors.SURFACE,
+        divider_thickness=1,
+        # Enhanced hover effects
+        data_row_color={
+            ft.ControlState.HOVERED: ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+            ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT
+        }
+    )
+
+
+def create_status_chip(
+    status: str,
+    size: str = "medium",
+    custom_colors: Optional[Dict[str, str]] = None
+) -> ft.Container:
+    """
+    Create consistent status chips with proper color mapping used across all views.
+
+    This function consolidates status chip creation from clients.py, files.py, and database.py
+    with comprehensive status-to-color mapping and consistent visual styling.
+
+    Features:
+    - Comprehensive status type support with semantic colors
+    - Three size variants (small, medium, large)
+    - Custom color override capability
+    - Consistent padding and border radius
+    - Professional shadow effects
+
+    Args:
+        status: Status text to display
+        size: Size variant - "small", "medium", or "large" (default: "medium")
+        custom_colors: Optional dict to override default status colors
+
+    Returns:
+        ft.Container: Styled status chip
+
+    Supported Status Types:
+        Connection: Connected (green), Disconnected (red), Connecting (orange)
+        File Operations: Uploaded (green), Failed (red), Pending (orange), Processing (blue)
+        General: Active (green), Inactive (grey), Error (red), Complete (green)
+
+    Usage Example:
+        ```python
+        # Basic usage
+        chip = create_status_chip("Connected")
+
+        # Small size variant
+        small_chip = create_status_chip("Pending", size="small")
+
+        # Custom colors
+        custom_chip = create_status_chip("Special", custom_colors={"Special": ft.Colors.PURPLE})
+        ```
+    """
+
+    # Default status color mapping (consolidated from all views)
+    default_status_colors = {
+        # Connection status
+        "Connected": ft.Colors.GREEN,
+        "Disconnected": ft.Colors.RED,
+        "Connecting": ft.Colors.ORANGE,
+        "Registered": ft.Colors.BLUE,
+        "Offline": ft.Colors.GREY,
+
+        # File operation status
+        "Uploaded": ft.Colors.GREEN,
+        "Uploading": ft.Colors.BLUE,
+        "Failed": ft.Colors.RED,
+        "Pending": ft.Colors.ORANGE,
+        "Processing": ft.Colors.BLUE,
+        "Complete": ft.Colors.GREEN,
+        "Queued": ft.Colors.GREY_600,
+
+        # General status
+        "Active": ft.Colors.GREEN,
+        "Inactive": ft.Colors.GREY_600,
+        "Error": ft.Colors.RED,
+        "Success": ft.Colors.GREEN,
+        "Warning": ft.Colors.ORANGE,
+        "Unknown": ft.Colors.GREY
+    }
+
+    # Merge custom colors if provided
+    status_colors = {**default_status_colors, **(custom_colors or {})}
+
+    # Get status color with fallback
+    status_color = status_colors.get(status, ft.Colors.GREY)
+
+    # Size configurations
+    size_configs = {
+        "small": {"padding": ft.Padding(8, 4, 8, 4), "text_size": 11, "border_radius": 10},
+        "medium": {"padding": ft.Padding(10, 6, 10, 6), "text_size": 12, "border_radius": 12},
+        "large": {"padding": ft.Padding(12, 8, 12, 8), "text_size": 13, "border_radius": 14}
+    }
+
+    config = size_configs.get(size, size_configs["medium"])
+
+    return ft.Container(
+        content=ft.Text(
+            status,
+            size=config["text_size"],
+            color=ft.Colors.WHITE,
+            weight=ft.FontWeight.W_500,
+            text_align=ft.TextAlign.CENTER
+        ),
+        bgcolor=status_color,
+        border_radius=config["border_radius"],
+        padding=config["padding"],
+        # Professional shadow for depth
+        shadow=ft.BoxShadow(
+            spread_radius=0,
+            blur_radius=2,
+            offset=ft.Offset(0, 1),
+            color=ft.Colors.with_opacity(0.2, ft.Colors.SHADOW)
+        ),
+        animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT)
+    )
+
+
+def create_action_popup_menu(
+    actions: List[Dict[str, Any]],
+    icon: str = ft.Icons.MORE_VERT,
+    tooltip: str = "Actions",
+    icon_color: str = ft.Colors.PRIMARY
+) -> ft.PopupMenuButton:
+    """
+    Create standardized PopupMenuButton with common actions and consistent styling.
+
+    This function consolidates popup menu creation patterns from all views with
+    support for common action types and proper icon assignments.
+
+    Features:
+    - Standardized action definitions with icons and callbacks
+    - Consistent tooltip and icon styling
+    - Support for common action types (view, edit, delete, download, etc.)
+    - Proper lambda callback handling for parameter passing
+
+    Args:
+        actions: List of action dictionaries with keys: 'text', 'icon', 'callback', 'data'
+        icon: Menu button icon (default: MORE_VERT)
+        tooltip: Button tooltip text (default: "Actions")
+        icon_color: Icon color (default: ft.Colors.PRIMARY)
+
+    Returns:
+        ft.PopupMenuButton: Styled popup menu with actions
+
+    Action Dictionary Format:
+        {
+            'text': 'Action Name',           # Required: Display text
+            'icon': ft.Icons.ACTION_ICON,    # Required: Action icon
+            'callback': callback_function,    # Required: Callback function
+            'data': additional_data          # Optional: Data to pass to callback
+        }
+
+    Usage Example:
+        ```python
+        # Define actions
+        actions = [
+            {
+                'text': 'View Details',
+                'icon': ft.Icons.INFO,
+                'callback': view_details_action,
+                'data': item_id
+            },
+            {
+                'text': 'Delete',
+                'icon': ft.Icons.DELETE,
+                'callback': delete_action,
+                'data': item_id
+            }
+        ]
+
+        # Create popup menu
+        popup_menu = create_action_popup_menu(actions, tooltip="Item Actions")
+        ```
+    """
+
+    menu_items = []
+    for action in actions:
+        # Create callback wrapper to handle data passing
+        if 'data' in action and action['data'] is not None:
+            callback = lambda e, cb=action['callback'], data=action['data']: cb(data)
+        else:
+            callback = action['callback']
+
+        menu_items.append(
+            ft.PopupMenuItem(
+                text=action['text'],
+                icon=action['icon'],
+                on_click=callback
+            )
+        )
+
+    return ft.PopupMenuButton(
+        icon=icon,
+        tooltip=tooltip,
+        icon_color=icon_color,
+        items=menu_items
+    )
+
+
+def create_file_type_icon(
+    filename: str,
+    icon_size: int = 20,
+    return_color: bool = False
+) -> Union[ft.Icon, tuple]:
+    """
+    Create file type icons with appropriate color coding based on file extension.
+
+    This function consolidates file type recognition from files.py and provides
+    comprehensive file type coverage with semantic icon selection.
+
+    Features:
+    - Comprehensive file type coverage (documents, media, code, archives, etc.)
+    - Semantic color coding for quick recognition
+    - Configurable icon size
+    - Option to return both icon and color
+    - Fallback icon for unknown file types
+
+    Args:
+        filename: Name of the file with extension
+        icon_size: Size of the icon (default: 20)
+        return_color: If True, returns tuple of (icon, color) (default: False)
+
+    Returns:
+        Union[ft.Icon, tuple]: Icon object or (icon, color) tuple if return_color=True
+
+    Supported File Types:
+        Documents: pdf, doc, docx, txt, rtf
+        Spreadsheets: xls, xlsx, csv
+        Images: jpg, png, gif, svg, etc.
+        Videos: mp4, avi, mov, mkv, etc.
+        Audio: mp3, wav, flac, etc.
+        Archives: zip, rar, 7z, tar, etc.
+        Code: py, js, html, css, etc.
+
+    Usage Example:
+        ```python
+        # Basic usage
+        icon = create_file_type_icon("document.pdf")
+
+        # Get icon with color
+        icon, color = create_file_type_icon("image.jpg", return_color=True)
+
+        # Custom size
+        large_icon = create_file_type_icon("code.py", icon_size=24)
+        ```
+    """
+
+    # Extract file extension
+    extension = '.' + filename.split('.')[-1].lower() if '.' in filename else ''
+
+    # Comprehensive file type mapping with colors
+    file_type_mapping = {
+        # Document files
+        '.pdf': (ft.Icons.PICTURE_AS_PDF, ft.Colors.RED),
+        '.doc': (ft.Icons.DESCRIPTION, ft.Colors.BLUE),
+        '.docx': (ft.Icons.DESCRIPTION, ft.Colors.BLUE),
+        '.txt': (ft.Icons.TEXT_SNIPPET, ft.Colors.GREY),
+        '.rtf': (ft.Icons.DESCRIPTION, ft.Colors.BLUE),
+        '.odt': (ft.Icons.DESCRIPTION, ft.Colors.BLUE),
+
+        # Spreadsheet files
+        '.xls': (ft.Icons.TABLE_CHART, ft.Colors.GREEN),
+        '.xlsx': (ft.Icons.TABLE_CHART, ft.Colors.GREEN),
+        '.csv': (ft.Icons.TABLE_CHART, ft.Colors.GREEN),
+        '.ods': (ft.Icons.TABLE_CHART, ft.Colors.GREEN),
+
+        # Presentation files
+        '.ppt': (ft.Icons.SLIDESHOW, ft.Colors.ORANGE),
+        '.pptx': (ft.Icons.SLIDESHOW, ft.Colors.ORANGE),
+        '.odp': (ft.Icons.SLIDESHOW, ft.Colors.ORANGE),
+
+        # Image files
+        '.jpg': (ft.Icons.IMAGE, ft.Colors.PINK),
+        '.jpeg': (ft.Icons.IMAGE, ft.Colors.PINK),
+        '.png': (ft.Icons.IMAGE, ft.Colors.PINK),
+        '.gif': (ft.Icons.IMAGE, ft.Colors.PINK),
+        '.bmp': (ft.Icons.IMAGE, ft.Colors.PINK),
+        '.svg': (ft.Icons.IMAGE, ft.Colors.PINK),
+        '.webp': (ft.Icons.IMAGE, ft.Colors.PINK),
+        '.tiff': (ft.Icons.IMAGE, ft.Colors.PINK),
+
+        # Video files
+        '.mp4': (ft.Icons.VIDEO_FILE, ft.Colors.PURPLE),
+        '.avi': (ft.Icons.VIDEO_FILE, ft.Colors.PURPLE),
+        '.mov': (ft.Icons.VIDEO_FILE, ft.Colors.PURPLE),
+        '.mkv': (ft.Icons.VIDEO_FILE, ft.Colors.PURPLE),
+        '.wmv': (ft.Icons.VIDEO_FILE, ft.Colors.PURPLE),
+        '.flv': (ft.Icons.VIDEO_FILE, ft.Colors.PURPLE),
+        '.webm': (ft.Icons.VIDEO_FILE, ft.Colors.PURPLE),
+
+        # Audio files
+        '.mp3': (ft.Icons.AUDIO_FILE, ft.Colors.DEEP_PURPLE),
+        '.wav': (ft.Icons.AUDIO_FILE, ft.Colors.DEEP_PURPLE),
+        '.flac': (ft.Icons.AUDIO_FILE, ft.Colors.DEEP_PURPLE),
+        '.aac': (ft.Icons.AUDIO_FILE, ft.Colors.DEEP_PURPLE),
+        '.ogg': (ft.Icons.AUDIO_FILE, ft.Colors.DEEP_PURPLE),
+
+        # Archive files
+        '.zip': (ft.Icons.FOLDER_ZIP, ft.Colors.AMBER),
+        '.rar': (ft.Icons.FOLDER_ZIP, ft.Colors.AMBER),
+        '.7z': (ft.Icons.FOLDER_ZIP, ft.Colors.AMBER),
+        '.tar': (ft.Icons.FOLDER_ZIP, ft.Colors.AMBER),
+        '.gz': (ft.Icons.FOLDER_ZIP, ft.Colors.AMBER),
+
+        # Code files
+        '.py': (ft.Icons.CODE, ft.Colors.BLUE_GREY),
+        '.js': (ft.Icons.CODE, ft.Colors.YELLOW),
+        '.html': (ft.Icons.CODE, ft.Colors.ORANGE),
+        '.css': (ft.Icons.CODE, ft.Colors.BLUE),
+        '.cpp': (ft.Icons.CODE, ft.Colors.BLUE_GREY),
+        '.java': (ft.Icons.CODE, ft.Colors.RED),
+        '.php': (ft.Icons.CODE, ft.Colors.INDIGO),
+        '.json': (ft.Icons.CODE, ft.Colors.GREEN),
+        '.xml': (ft.Icons.CODE, ft.Colors.ORANGE),
+
+        # System files
+        '.exe': (ft.Icons.SETTINGS_APPLICATIONS, ft.Colors.GREY),
+        '.msi': (ft.Icons.SETTINGS_APPLICATIONS, ft.Colors.GREY),
+        '.deb': (ft.Icons.SETTINGS_APPLICATIONS, ft.Colors.GREY),
+        '.dmg': (ft.Icons.SETTINGS_APPLICATIONS, ft.Colors.GREY),
+    }
+
+    # Get icon and color with fallback
+    icon_name, color = file_type_mapping.get(extension, (ft.Icons.INSERT_DRIVE_FILE, ft.Colors.GREY))
+
+    icon = ft.Icon(icon_name, size=icon_size, color=color)
+
+    return (icon, color) if return_color else icon
+
+
+def format_file_size(size_bytes: int) -> str:
+    """
+    Format file size in human-readable format with consistent units.
+
+    This function consolidates file size formatting from files.py to provide
+    consistent size display across all views.
+
+    Features:
+    - Automatic unit selection (B, KB, MB, GB, TB)
+    - Consistent decimal precision
+    - Handles zero and negative values gracefully
+    - International standards compliance (1024-based)
+
+    Args:
+        size_bytes: File size in bytes
+
+    Returns:
+        str: Formatted file size string
+
+    Usage Example:
+        ```python
+        # Format different sizes
+        small = format_file_size(512)          # "512 B"
+        medium = format_file_size(1536)        # "1.5 KB"
+        large = format_file_size(2097152)      # "2.0 MB"
+        huge = format_file_size(1073741824)    # "1.0 GB"
+        ```
+    """
+
+    if size_bytes < 0:
+        return "0 B"
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    elif size_bytes < 1024 * 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024 * 1024):.1f} TB"
+
+
+def wrap_datatable_in_container(
+    datatable: ft.DataTable,
+    elevation: str = "elevated",
+    padding: int = 32,
+    title: Optional[str] = None,
+    enable_scroll: bool = True
+) -> ft.Container:
+    """
+    Wrap DataTable in a modern card container with professional styling.
+
+    This function consolidates DataTable container wrapping patterns from all views
+    using the existing apply_advanced_table_effects function while providing additional
+    customization options.
+
+    Features:
+    - Uses existing apply_advanced_table_effects for consistency
+    - Optional title header
+    - Configurable elevation and padding
+    - Automatic scroll handling for large tables
+    - Professional shadow and border effects
+
+    Args:
+        datatable: DataTable to wrap
+        elevation: Shadow elevation level (default: "elevated")
+        padding: Container padding (default: 32)
+        title: Optional title text
+        enable_scroll: Enable scrolling for large tables (default: True)
+
+    Returns:
+        ft.Container: DataTable wrapped in modern container
+
+    Usage Example:
+        ```python
+        # Create table
+        table = create_professional_datatable(columns)
+
+        # Wrap with title
+        container = wrap_datatable_in_container(
+            table,
+            title="Client Management",
+            elevation="soft"
+        )
+
+        # Simple wrapping
+        container = wrap_datatable_in_container(table)
+        ```
+    """
+
+    # Use existing advanced table effects for consistency
+    enhanced_container = apply_advanced_table_effects(datatable, elevation)
+
+    # If title is provided, create header and combine
+    if title:
+        title_header = ft.Container(
+            content=ft.Text(
+                title,
+                size=20,
+                weight=ft.FontWeight.BOLD,
+                color=ft.Colors.PRIMARY
+            ),
+            padding=ft.Padding(0, 0, 0, 16)
+        )
+
+        # Create new container combining title and table
+        return ft.Container(
+            content=ft.Column([
+                title_header,
+                enhanced_container
+            ], spacing=0, tight=True),
+            expand=True
+        )
+
+    return enhanced_container
