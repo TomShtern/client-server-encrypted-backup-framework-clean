@@ -306,7 +306,7 @@ def create_logs_view(
                         time_str,
                         size=12,
                         weight=ft.FontWeight.W_500,
-                        color=ft.Colors.BLUE_GREY_700 if not is_dark_theme else ft.Colors.BLUE_GREY_300,
+                        color=ft.Colors.BLUE_GREY_300 if is_dark_theme else ft.Colors.BLUE_GREY_700,
                         font_family="monospace"
                     )
                 ),
@@ -316,7 +316,7 @@ def create_logs_view(
                         entry.get("component", "Unknown"),
                         size=12,
                         weight=ft.FontWeight.W_600,
-                        color=ft.Colors.INDIGO_700 if not is_dark_theme else ft.Colors.INDIGO_300
+                        color=ft.Colors.INDIGO_300 if is_dark_theme else ft.Colors.INDIGO_700
                     )
                 ),
                 ft.DataCell(
@@ -324,7 +324,7 @@ def create_logs_view(
                         content=ft.Text(
                             display_message,
                             size=12,
-                            color=ft.Colors.GREY_800 if not is_dark_theme else ft.Colors.GREY_200,
+                            color=ft.Colors.GREY_200 if is_dark_theme else ft.Colors.GREY_800,
                             overflow=ft.TextOverflow.ELLIPSIS
                         ),
                         tooltip=message if len(message) > 80 else None,
@@ -1500,12 +1500,12 @@ def create_logs_view(
             )
         ),
         ft.IconButton(
-            icon=ft.Icons.STREAM if not streaming_enabled else ft.Icons.STOP_CIRCLE,
-            tooltip="Toggle Live Streaming" if not streaming_enabled else "Stop Streaming",
+            icon=ft.Icons.STOP_CIRCLE if streaming_enabled else ft.Icons.STREAM,
+            tooltip="Stop Streaming" if streaming_enabled else "Toggle Live Streaming",
             on_click=toggle_streaming,
             style=ft.ButtonStyle(
                 bgcolor={ft.ControlState.HOVERED: ft.Colors.TERTIARY_CONTAINER},
-                color=ft.Colors.TERTIARY if not streaming_enabled else ft.Colors.ERROR
+                color=ft.Colors.ERROR if streaming_enabled else ft.Colors.TERTIARY
             )
         ),
         ft.IconButton(

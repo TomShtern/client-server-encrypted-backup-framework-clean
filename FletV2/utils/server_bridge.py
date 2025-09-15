@@ -73,7 +73,7 @@ class ServerBridge:
         response.update(kwargs)
         return response
 
-    def _create_error_response(self, message: str, error_code: str = None, mode: str = 'mock', **kwargs) -> Dict[str, Any]:
+    def _create_error_response(self, message: str, error_code: Optional[str] = None, mode: str = 'mock', **kwargs) -> Dict[str, Any]:
         """Create standardized error response."""
         response = {
             'success': False,
@@ -181,11 +181,11 @@ class ServerBridge:
 
     def get_clients(self) -> List[Dict[str, Any]]:
         """Get client data (alias for get_all_clients_from_db)."""
-        return self.get_all_clients_from_db()
+        return self.get_all_clients_from_db() or []
 
     async def get_clients_async(self) -> List[Dict[str, Any]]:
         """Async version of get_clients using persistent mock store."""
-        if self.real_server and hasattr(self.real_server, 'get_all_clients_from_db_async'):
+        if self.real_server and hasattr(self.real_server, 'get_all_clients_from_db_async') and self.real_server.get_all_clients_from_db_async:
             try:
                 raw_data = await self.real_server.get_all_clients_from_db_async()
                 return self._normalize_client_data(raw_data)
@@ -895,7 +895,7 @@ class ServerBridge:
                 mode='mock'
             )
 
-    async def export_logs_async(self, format: str, filters: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def export_logs_async(self, format: str, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Export logs in specified format with filters."""
         if self.real_server and hasattr(self.real_server, 'export_logs_async'):
             try:
@@ -1729,7 +1729,7 @@ class ServerBridge:
                 mode='mock'
             )
 
-    async def restore_settings_async(self, backup_file: str, settings_data: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def restore_settings_async(self, backup_file: str, settings_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Restore settings from backup."""
         if self.real_server and hasattr(self.real_server, 'restore_settings_async'):
             try:
@@ -2070,7 +2070,7 @@ class ServerBridge:
 
         return result_data
 
-    async def export_analytics_data_async(self, format: str = "csv", metrics: dict = None) -> Dict[str, Any]:
+    async def export_analytics_data_async(self, format: str = "csv", metrics: Optional[dict] = None) -> Dict[str, Any]:
         """Export analytics data to file (async version).
 
         Args:
@@ -2250,7 +2250,7 @@ class ServerBridge:
                 # Small delay to prevent overwhelming the system
                 await asyncio.sleep(0.01)
 
-            success_count = sum(1 for r in results if r['result'].get('success', False))
+            success_count = sum(r['result'].get('success', False) for r in results)
 
             return self._create_success_response(
                 f"Batch log operations completed: {success_count}/{total} successful",
@@ -2398,7 +2398,7 @@ class ServerBridge:
                 # Small delay to prevent overwhelming the system
                 await asyncio.sleep(0.01)
 
-            success_count = sum(1 for r in results if r['result'].get('success', False))
+            success_count = sum(r['result'].get('success', False) for r in results)
 
             return self._create_success_response(
                 f"Batch settings operations completed: {success_count}/{total} successful",
@@ -2498,7 +2498,7 @@ class ServerBridge:
 
         return await self._execute_with_retry(operation, max_retries)
 
-    async def export_logs_with_retry_async(self, format: str, filters: Dict[str, Any] = None,
+    async def export_logs_with_retry_async(self, format: str, filters: Optional[Dict[str, Any]] = None,
                                          max_retries: int = 3) -> Dict[str, Any]:
         """Export logs with automatic retry on failure."""
         async def operation():
@@ -2523,7 +2523,7 @@ class ServerBridge:
             """Add a progress callback function."""
             self.callbacks.append(callback)
 
-        def update(self, step: int = None, message: str = None):
+        def update(self, step: Optional[int] = None, message: Optional[str] = None):
             """Update progress and notify callbacks."""
             if step is not None:
                 self.current_step = step
@@ -2557,7 +2557,7 @@ class ServerBridge:
             """Check if operation was cancelled."""
             return self.cancelled
 
-    async def export_logs_with_progress_async(self, format: str, filters: Dict[str, Any] = None,
+    async def export_logs_with_progress_async(self, format: str, filters: Optional[Dict[str, Any]] = None,
                                             progress_callback=None) -> Dict[str, Any]:
         """Export logs with detailed progress tracking."""
         tracker = self.ProgressTracker(5, f"Export logs as {format}")
@@ -2639,7 +2639,7 @@ class ServerBridge:
         return self.CancellationToken()
 
     async def export_large_dataset_async(self, dataset_type: str, format: str,
-                                       cancellation_token: CancellationToken = None,
+                                       cancellation_token: Optional[CancellationToken] = None,
                                        progress_callback=None) -> Dict[str, Any]:
         """Export large datasets with cancellation support.
 

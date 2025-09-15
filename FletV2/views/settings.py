@@ -8,6 +8,7 @@ import flet as ft
 from typing import Optional, Dict, Any, Callable
 import json
 import asyncio
+import sys
 import time
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
@@ -664,8 +665,9 @@ def create_enhanced_field_handler(state: EnhancedSettingsState, section: str, ke
 
         # Real-time validation
         if validator:
-            is_valid, error_msg = validator(value)
-            e.control.error_text = error_msg if not is_valid else None
+            if (result := validator(value)):
+                is_valid, error_msg = result
+                e.control.error_text = error_msg if not is_valid else None
 
             # Visual feedback for validation state
             if not is_valid:
@@ -703,7 +705,7 @@ def create_enhanced_field_handler(state: EnhancedSettingsState, section: str, ke
             e.control.update()
 
             # Show success notification for important settings
-            if key in ['port', 'host', 'max_clients']:
+            if key in {'port', 'host', 'max_clients'}:
                 if state.state_manager:
                     state.state_manager.add_notification(
                         f"{key.title().replace('_', ' ')} updated to {value}",
@@ -1131,9 +1133,12 @@ def create_enhanced_server_section(state: EnhancedSettingsState) -> ft.Control:
     )
 
     # Logging Configuration
+    log_level_value = state.get_setting('server', 'log_level', 'INFO')
+    if log_level_value is None:
+        log_level_value = 'INFO'
     log_level_dropdown = create_modern_dropdown(
         "Log Level",
-        state.get_setting('server', 'log_level', 'INFO'),
+        log_level_value,
         [
             ft.dropdown.Option("DEBUG", "Debug - Detailed information"),
             ft.dropdown.Option("INFO", "Info - General information"),
@@ -1145,9 +1150,12 @@ def create_enhanced_server_section(state: EnhancedSettingsState) -> ft.Control:
     )
 
     # SSL Configuration
+    ssl_switch_value = state.get_setting('server', 'enable_ssl', False)
+    if ssl_switch_value is None:
+        ssl_switch_value = False
     ssl_switch = create_modern_switch(
         "Enable SSL/TLS",
-        state.get_setting('server', 'enable_ssl', False),
+        ssl_switch_value,
         state, 'server', 'enable_ssl'
     )
 
@@ -1295,37 +1303,52 @@ def create_enhanced_gui_section(state: EnhancedSettingsState) -> ft.Control:
         on_change_callback=handle_theme_toggle
     )
 
+    animations_switch_value = state.get_setting('gui', 'animations_enabled', True)
+    if animations_switch_value is None:
+        animations_switch_value = True
     animations_switch = create_modern_switch(
         "Enable Animations",
-        state.get_setting('gui', 'animations_enabled', True),
+        animations_switch_value,
         state, 'gui', 'animations_enabled'
     )
 
+    sound_switch_value = state.get_setting('gui', 'sound_enabled', False)
+    if sound_switch_value is None:
+        sound_switch_value = False
     sound_switch = create_modern_switch(
         "Sound Effects",
-        state.get_setting('gui', 'sound_enabled', False),
+        sound_switch_value,
         state, 'gui', 'sound_enabled'
     )
 
     # Refresh and Updates
+    auto_refresh_switch_value = state.get_setting('gui', 'auto_refresh', True)
+    if auto_refresh_switch_value is None:
+        auto_refresh_switch_value = True
     auto_refresh_switch = create_modern_switch(
         "Auto Refresh Data",
-        state.get_setting('gui', 'auto_refresh', True),
+        auto_refresh_switch_value,
         state, 'gui', 'auto_refresh'
     )
 
+    refresh_interval_value = state.get_setting('gui', 'refresh_interval', 5)
+    if refresh_interval_value is None:
+        refresh_interval_value = 5
     refresh_interval_slider = create_modern_slider(
         "Refresh Interval",
-        float(state.get_setting('gui', 'refresh_interval', 5)),
+        float(refresh_interval_value),
         1.0, 30.0, 29,
         state, 'gui', 'refresh_interval',
         suffix=" seconds"
     )
 
     # Notifications and Feedback
+    notifications_switch_value = state.get_setting('gui', 'notifications', True)
+    if notifications_switch_value is None:
+        notifications_switch_value = True
     notifications_switch = create_modern_switch(
         "Show Notifications",
-        state.get_setting('gui', 'notifications', True),
+        notifications_switch_value,
         state, 'gui', 'notifications'
     )
 
@@ -1341,9 +1364,12 @@ def create_enhanced_gui_section(state: EnhancedSettingsState) -> ft.Control:
     )
 
     # Language Selection
+    language_value = state.get_setting('gui', 'language', 'en')
+    if language_value is None:
+        language_value = 'en'
     language_dropdown = create_modern_dropdown(
         "Language",
-        state.get_setting('gui', 'language', 'en'),
+        language_value,
         [
             ft.dropdown.Option("en", "English"),
             ft.dropdown.Option("es", "Español"),
@@ -1468,9 +1494,12 @@ def create_enhanced_monitoring_section(state: EnhancedSettingsState) -> ft.Contr
     """Create enhanced monitoring settings section with responsive layout and comprehensive controls."""
 
     # Core Monitoring
+    monitoring_switch_value = state.get_setting('monitoring', 'enabled', True)
+    if monitoring_switch_value is None:
+        monitoring_switch_value = True
     monitoring_switch = create_modern_switch(
         "Enable System Monitoring",
-        state.get_setting('monitoring', 'enabled', True),
+        monitoring_switch_value,
         state, 'monitoring', 'enabled'
     )
 
@@ -1487,47 +1516,65 @@ def create_enhanced_monitoring_section(state: EnhancedSettingsState) -> ft.Contr
     )
 
     # Alert Configuration
+    alerts_switch_value = state.get_setting('monitoring', 'alerts', True)
+    if alerts_switch_value is None:
+        alerts_switch_value = True
     alerts_switch = create_modern_switch(
         "Performance Alerts",
-        state.get_setting('monitoring', 'alerts', True),
+        alerts_switch_value,
         state, 'monitoring', 'alerts'
     )
 
     # Threshold Sliders
+    cpu_threshold_value = state.get_setting('monitoring', 'cpu_threshold', 80)
+    if cpu_threshold_value is None:
+        cpu_threshold_value = 80
     cpu_threshold_slider = create_modern_slider(
         "CPU Alert Threshold",
-        float(state.get_setting('monitoring', 'cpu_threshold', 80)),
+        float(cpu_threshold_value),
         50.0, 95.0, 45,
         state, 'monitoring', 'cpu_threshold',
         suffix="%"
     )
 
+    memory_threshold_value = state.get_setting('monitoring', 'memory_threshold', 85)
+    if memory_threshold_value is None:
+        memory_threshold_value = 85
     memory_threshold_slider = create_modern_slider(
         "Memory Alert Threshold",
-        float(state.get_setting('monitoring', 'memory_threshold', 85)),
+        float(memory_threshold_value),
         60.0, 95.0, 35,
         state, 'monitoring', 'memory_threshold',
         suffix="%"
     )
 
+    disk_threshold_value = state.get_setting('monitoring', 'disk_threshold', 90)
+    if disk_threshold_value is None:
+        disk_threshold_value = 90
     disk_threshold_slider = create_modern_slider(
         "Disk Alert Threshold",
-        float(state.get_setting('monitoring', 'disk_threshold', 90)),
+        float(disk_threshold_value),
         70.0, 98.0, 28,
         state, 'monitoring', 'disk_threshold',
         suffix="%"
     )
 
     # Monitoring Features
+    network_monitoring_switch_value = state.get_setting('monitoring', 'network_monitoring', True)
+    if network_monitoring_switch_value is None:
+        network_monitoring_switch_value = True
     network_monitoring_switch = create_modern_switch(
         "Network Monitoring",
-        state.get_setting('monitoring', 'network_monitoring', True),
+        network_monitoring_switch_value,
         state, 'monitoring', 'network_monitoring'
     )
 
+    log_monitoring_switch_value = state.get_setting('monitoring', 'log_monitoring', True)
+    if log_monitoring_switch_value is None:
+        log_monitoring_switch_value = True
     log_monitoring_switch = create_modern_switch(
         "Log Monitoring",
-        state.get_setting('monitoring', 'log_monitoring', True),
+        log_monitoring_switch_value,
         state, 'monitoring', 'log_monitoring'
     )
 
@@ -1635,9 +1682,12 @@ def create_enhanced_logging_section(state: EnhancedSettingsState) -> ft.Control:
     """Create enhanced logging settings section with responsive layout."""
 
     # Log Level and Output
+    log_level_value = state.get_setting('logging', 'level', 'INFO')
+    if log_level_value is None:
+        log_level_value = 'INFO'
     log_level_dropdown = create_modern_dropdown(
         "Log Level",
-        state.get_setting('logging', 'level', 'INFO'),
+        log_level_value,
         [
             ft.dropdown.Option("DEBUG", "Debug - Detailed information"),
             ft.dropdown.Option("INFO", "Info - General information"),
@@ -1648,9 +1698,12 @@ def create_enhanced_logging_section(state: EnhancedSettingsState) -> ft.Control:
         width=300
     )
 
+    console_output_value = state.get_setting('logging', 'console_output', True)
+    if console_output_value is None:
+        console_output_value = True
     console_output_switch = create_modern_switch(
         "Console Output",
-        state.get_setting('logging', 'console_output', True),
+        console_output_value,
         state, 'logging', 'console_output'
     )
 
@@ -1754,9 +1807,12 @@ def create_enhanced_security_section(state: EnhancedSettingsState) -> ft.Control
     """Create enhanced security settings section with responsive layout."""
 
     # Authentication
+    auth_switch_value = state.get_setting('security', 'authentication_required', False)
+    if auth_switch_value is None:
+        auth_switch_value = False
     auth_switch = create_modern_switch(
         "Require Authentication",
-        state.get_setting('security', 'authentication_required', False),
+        auth_switch_value,
         state, 'security', 'authentication_required'
     )
 
@@ -1860,15 +1916,21 @@ def create_enhanced_backup_section(state: EnhancedSettingsState) -> ft.Control:
     """Create enhanced backup settings section with responsive layout."""
 
     # Auto Backup
+    auto_backup_switch_value = state.get_setting('backup', 'auto_backup_settings', True)
+    if auto_backup_switch_value is None:
+        auto_backup_switch_value = True
     auto_backup_switch = create_modern_switch(
         "Auto Backup Settings",
-        state.get_setting('backup', 'auto_backup_settings', True),
+        auto_backup_switch_value,
         state, 'backup', 'auto_backup_settings'
     )
 
+    backup_interval_value = state.get_setting('backup', 'backup_interval_hours', 24)
+    if backup_interval_value is None:
+        backup_interval_value = 24
     backup_interval_slider = create_modern_slider(
         "Backup Interval",
-        float(state.get_setting('backup', 'backup_interval_hours', 24)),
+        float(backup_interval_value),
         1.0, 168.0, 167,  # 1 hour to 1 week
         state, 'backup', 'backup_interval_hours',
         suffix=" hours"
@@ -1883,9 +1945,12 @@ def create_enhanced_backup_section(state: EnhancedSettingsState) -> ft.Control:
         keyboard_type=ft.KeyboardType.NUMBER
     )
 
+    compression_switch_value = state.get_setting('backup', 'compression_enabled', True)
+    if compression_switch_value is None:
+        compression_switch_value = True
     compression_switch = create_modern_switch(
         "Enable Compression",
-        state.get_setting('backup', 'compression_enabled', True),
+        compression_switch_value,
         state, 'backup', 'compression_enabled'
     )
 
@@ -2082,7 +2147,7 @@ async def enhanced_import_settings(state: EnhancedSettingsState, file_path: str)
         if state.state_manager:
             state.state_manager.set_loading("settings_import", False)
 
-def create_modern_progress_indicator(operation: str, state_manager: StateManager) -> ft.Container:
+def create_modern_progress_indicator(operation: str, state_manager: Optional[StateManager]) -> ft.Container:
     """Create modern progress indicator with enhanced Material Design 3 styling and state management integration."""
     # Enhanced progress ring with Material Design 3 styling
     progress_ring = ft.ProgressRing(

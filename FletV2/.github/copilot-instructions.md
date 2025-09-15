@@ -19,7 +19,7 @@ USE AST-GREP (SG) TO UNDERSTAND CODE STRUCTURE.
 # FletV2 – Copilot Instructions (2025-09 update)
 
 ## Scope & Philosophy
-Work ONLY inside `FletV2/`. Follow "Framework Harmony": always use Flet's built-ins, avoid custom infra, keep code simple, readable, and performant. All changes must be small, focused, and maintainable.
+Work ONLY inside `FletV2/`. Follow "Framework Harmony": always use Flet's built-ins, avoid custom infra, keep code simple, readable, and performant. All changes must be small, focused, and maintainable. Emphasize 'Framework Harmony': Always prioritize Flet's built-in features over custom solutions. This reduces code by 50%+ and improves performance by 10x (see `FletV2_Documentation.md` for details).
 
 ## Architecture & Patterns
 - Entry: `main.py` builds `FletV2App(ft.Row)` with `NavigationRail` and `AnimatedSwitcher` for content.
@@ -27,6 +27,7 @@ Work ONLY inside `FletV2/`. Follow "Framework Harmony": always use Flet's built-
 - ServerBridge: `utils/server_bridge.py` provides unified API, auto-mocks if no real server. Return shapes must be stable in both modes.
 - Theme: Use `theme.py` helpers (`setup_modern_theme`, `toggle_theme_mode`).
 - Logging/Debug: Use `utils/debug_setup.py` and config flags in `config.py` (e.g., `FLET_V2_DEBUG`).
+- Config: `config.py` centralizes flags like `FLET_V2_DEBUG` and other constants.
 
 ## Golden Patterns
 - **Control updates:** Use `control.update()` for UI changes; only use `page.update()` for global/theme changes. Batch with `ft.update_async()` for multiple controls.
@@ -212,6 +213,7 @@ These rules reflect current code, not aspirations. When in doubt, mirror pattern
 - When encountering the error "Text Control must be added to the page first", this indicates a Flet control lifecycle issue. Ensure that controls are properly added to the page before attempting to update them.
   - The solution is to defer subscription setup until after the view is constructed and attached to the page. This can be achieved by adding a deferred initialization pattern at the end of the view creation function.
 - Ensure that the UI components use proper theme inheritance and are not explicitly overriding the theme colors. Use `ft.Colors` theme roles instead of manual color definitions.
+- When addressing Sourcery warnings, adhere to best practices and ensure that the changes do not break the code or functionality. Functionality should remain the same.
 
 ### Security Considerations
 
@@ -277,6 +279,8 @@ else:
             runs-on: ubuntu-latest
             steps:
               - uses: actions/checkout@v4
+              - name: Set up Python
+                uses: actions/setup-python@v4
               - name: Set up Python
                 uses: actions/setup-python@v4
               - name: Install dependencies
@@ -513,7 +517,3 @@ disable=trailing-whitespace
 
 ### Layout and Scaling Issues
 - The action buttons and text in the tables
-
-### Recent Enhancements (2025-09)
-- FilePicker lifecycle: Only one per view, removed on dispose: Ensure exactly one `FilePicker` per settings view instance, reuse it for import/export, and cleanly remove it on dispose. Ensure exactly one `FilePicker` per settings view instance, reuse it for import/export, and cleanly remove it on dispose. Ensure exactly one `FilePicker` per settings view instance, reuse it for import/export, and cleanly remove it on dispose.
-- Progress tracking: Use StateManager for granular progress in export/backup flows: Emit progress updates from these operations and
