@@ -85,6 +85,10 @@ class FletV2App(ft.Row):
         self.state_manager = None
         self._initialize_state_manager()
 
+        # Comment 12: Track current view dispose function for proper StateManager cleanup
+        self._current_view_dispose = None
+        self._current_view_name = None
+
         # Create optimized content area with modern Material Design 3 styling and fast transitions
         self.content_area = ft.Container(
             expand=True,
@@ -863,13 +867,28 @@ class FletV2App(ft.Row):
     def _load_view(self, view_name: str):
         """Load view with enhanced infrastructure support and dynamic animated transitions."""
         try:
+            # Comment 12: Dispose of current view before loading new one
+            if self._current_view_dispose and view_name != self._current_view_name:
+                try:
+                    self._current_view_dispose()
+                    logger.debug(f"Disposed of previous view: {self._current_view_name}")
+                except Exception as e:
+                    logger.warning(f"Failed to dispose previous view {self._current_view_name}: {e}")
+                self._current_view_dispose = None
+                self._current_view_name = None
+
             # Get view configuration
             module_name, function_name, actual_view_name = self._get_view_config(view_name)
 
             # Dynamic import and view creation
             module = __import__(module_name, fromlist=[function_name])
             view_function = getattr(module, function_name)
-            content = self._create_enhanced_view(view_function, actual_view_name)
+            content, dispose_func = self._create_enhanced_view(view_function, actual_view_name)
+
+            # Store dispose function for cleanup (Comment 12)
+            self._current_view_dispose = dispose_func
+            self._current_view_name = view_name
+
             self._set_animation_for_view(actual_view_name)
 
             # Update content area using AnimatedSwitcher for smooth transitions
@@ -894,11 +913,28 @@ class FletV2App(ft.Row):
         try:
             # All views now require state_manager as per Phase 2 refactor
             result = view_function(self.server_bridge, self.page, self.state_manager)
-            return result
+
+            # Comment 12: Check if view returned dispose function (new pattern)
+            if isinstance(result, tuple) and len(result) == 2:
+                content, dispose_func = result
+                return content, dispose_func
+            else:
+                # Backward compatibility: create auto-dispose function
+                # Track subscriptions for automatic cleanup
+                dispose_func = self._create_auto_dispose_for_view(view_name)
+                return result, dispose_func
 
         except Exception as e:
             logger.error(f"View creation failed for {view_name}: {e}")
-            return self._create_error_view(f"Failed to create {view_name} view: {e}")
+            return self._create_error_view(f"Failed to create {view_name} view: {e}"), lambda: None
+
+    def _create_auto_dispose_for_view(self, view_name: str):
+        """Create auto-dispose function for views that don't implement dispose (Comment 12)."""
+        # For now, return a no-op function since automatic tracking would be complex
+        # This allows views to be enhanced incrementally
+        def auto_dispose():
+            logger.debug(f"Auto-dispose called for view: {view_name} (no-op)")
+        return auto_dispose
 
     def _create_error_view(self, error_message: str) -> ft.Control:
         """Simple error view for fallback."""

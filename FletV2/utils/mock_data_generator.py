@@ -20,6 +20,9 @@ import time
 import json
 import threading
 import logging
+import asyncio
+import math
+import psutil
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Set, Callable
 from dataclasses import dataclass, asdict
@@ -368,15 +371,204 @@ class MockDataGenerator:
             'cpu_usage': max(5, min(95, base_cpu + random.uniform(-5, 15))),
             'memory_usage': max(10, min(90, base_memory + random.uniform(-5, 10))),
             'disk_usage': max(50, min(95, base_disk + random.uniform(-2, 5))),
-            'memory_total_gb': 16,
-            'memory_used_gb': random.uniform(6, 12),
-            'disk_total_gb': 500,
-            'disk_used_gb': random.uniform(350, 400),
-            'network_sent_mb': random.uniform(1000, 5000),
-            'network_recv_mb': random.uniform(2000, 8000),
-            'active_connections': len([c for c in self.clients if c["status"] == "Connected"]),
-            'cpu_cores': 8
+            'cpu_cores': psutil.cpu_count(),
+            'memory_total_gb': psutil.virtual_memory().total / (1024**3),
+            'memory_used_gb': psutil.virtual_memory().used / (1024**3),
+            'disk_total_gb': psutil.disk_usage('/').total / (1024**3),
+            'disk_used_gb': psutil.disk_usage('/').used / (1024**3),
+            'network_sent_mb': psutil.net_io_counters().bytes_sent / (1024**2),
+            'network_recv_mb': psutil.net_io_counters().bytes_recv / (1024**2),
+            'active_connections': len(psutil.net_connections()) if hasattr(psutil, 'net_connections') else 0
         }
+
+    def get_analytics_data(self) -> Dict[str, Any]:
+        """Get analytics data for performance dashboards."""
+        system_status = self.get_system_status()
+        server_status = self.get_server_status()
+        
+        return {
+            'system_metrics': system_status,
+            'server_metrics': server_status,
+            'performance_trends': {
+                'cpu_trend': [random.uniform(20, 40) for _ in range(24)],  # Last 24 hours
+                'memory_trend': [random.uniform(40, 60) for _ in range(24)],
+                'disk_trend': [random.uniform(70, 80) for _ in range(24)],
+                'network_trend': [random.uniform(1000, 5000) for _ in range(24)]
+            },
+            'peak_usage': {
+                'cpu_peak': random.uniform(80, 95),
+                'memory_peak': random.uniform(75, 85),
+                'disk_peak': random.uniform(85, 95)
+            }
+        }
+
+    def get_performance_metrics(self) -> Dict[str, Any]:
+        """Get detailed performance metrics for analytics."""
+        system_status = self.get_system_status()
+        
+        return {
+            'cpu_metrics': {
+                'usage_percent': system_status['cpu_usage'],
+                'load_average': [random.uniform(0.5, 2.0) for _ in range(3)],  # 1, 5, 15 min
+                'process_count': random.randint(50, 200),
+                'thread_count': random.randint(200, 800)
+            },
+            'memory_metrics': {
+                'usage_percent': system_status['memory_usage'],
+                'available_mb': (system_status['memory_total_gb'] - system_status['memory_used_gb']) * 1024,
+                'cached_mb': random.uniform(1000, 3000),
+                'swap_used_percent': random.uniform(0, 10)
+            },
+            'disk_metrics': {
+                'usage_percent': system_status['disk_usage'],
+                'read_ops_per_sec': random.randint(100, 1000),
+                'write_ops_per_sec': random.randint(50, 500),
+                'io_wait_time': random.uniform(0.1, 1.0)
+            },
+            'network_metrics': {
+                'sent_kbps': system_status['network_sent_mb'] * 8 / 60,  # Convert to kbps
+                'recv_kbps': system_status['network_recv_mb'] * 8 / 60,
+                'packet_loss': random.uniform(0, 0.1),
+                'latency_ms': random.uniform(1, 50)
+            }
+        }
+
+    def get_historical_data(self, metric: str, hours: int = 24) -> List[Dict[str, Any]]:
+        """Get historical data for a specific metric."""
+        now = datetime.now()
+        data = []
+        
+        for i in range(hours):
+            timestamp = now - timedelta(hours=i)
+            value = 0
+            
+            # Generate realistic values based on metric type
+            if metric == 'cpu_usage':
+                value = random.uniform(20, 40) + 10 * math.sin(i * math.pi / 12)  # Daily pattern
+            elif metric == 'memory_usage':
+                value = random.uniform(40, 60) + 5 * math.cos(i * math.pi / 6)  # 12-hour pattern
+            elif metric == 'disk_usage':
+                value = random.uniform(70, 80) + random.uniform(-2, 2)
+            elif metric == 'network_sent_mb':
+                value = random.uniform(1000, 5000) + 2000 * math.sin(i * math.pi / 6)  # Peak during business hours
+            elif metric == 'network_recv_mb':
+                value = random.uniform(2000, 8000) + 3000 * math.cos(i * math.pi / 8)
+            else:
+                value = random.uniform(0, 100)
+            
+            data.append({
+                'timestamp': timestamp.isoformat(),
+                'value': max(0, value)  # Ensure non-negative values
+            })
+        
+        return list(reversed(data))  # Return in chronological order
+
+    def get_dashboard_summary(self) -> Dict[str, Any]:
+        """Get dashboard summary data including clients, files, transfers, and storage."""
+        server_status = self.get_server_status()
+        clients = self.get_clients()
+        
+        # Calculate summary statistics
+        total_clients = len(clients)
+        connected_clients = sum(1 for c in clients if c['status'] == 'connected')
+        total_files = server_status['total_files']
+        total_transfers = server_status['total_transfers']
+        storage_used = server_status['storage_used_gb']
+        
+        return {
+            'clients': {
+                'total': total_clients,
+                'connected': connected_clients,
+                'disconnected': total_clients - connected_clients
+            },
+            'files': {
+                'total': total_files,
+                'verified': int(total_files * 0.95),  # Assume 95% verified
+                'pending': int(total_files * 0.05)   # Assume 5% pending
+            },
+            'transfers': {
+                'completed': total_transfers,
+                'failed': random.randint(0, max(1, total_transfers // 20)),  # 5% failure rate
+                'in_progress': random.randint(0, 5)
+            },
+            'storage': {
+                'used_gb': storage_used,
+                'total_gb': storage_used * random.uniform(1.5, 3.0),  # Assume 33-66% utilization
+                'free_gb': lambda: storage_used * random.uniform(0.5, 2.0)  # Free space
+            }
+        }
+
+    def get_server_statistics(self) -> Dict[str, Any]:
+        """Get detailed server statistics for dashboard display."""
+        server_status = self.get_server_status()
+        
+        return {
+            'uptime_days': server_status['uptime_seconds'] / (24 * 3600),
+            'requests_per_second': random.uniform(10, 100),
+            'average_response_time_ms': random.uniform(50, 500),
+            'error_rate': random.uniform(0, 0.05),  # 0-5% error rate
+            'throughput_mb_per_sec': random.uniform(1, 50),
+            'active_connections': server_status['active_clients'],
+            'total_connections': server_status['active_clients'] + random.randint(10, 50),
+            'peak_concurrent_connections': server_status['active_clients'] + random.randint(5, 20)
+        }
+
+    def get_server_health(self) -> Dict[str, Any]:
+        """Get server health metrics and status."""
+        system_status = self.get_system_status()
+        server_status = self.get_server_status()
+        
+        # Determine overall health status
+        cpu_health = 'healthy' if system_status['cpu_usage'] < 70 else 'warning' if system_status['cpu_usage'] < 85 else 'critical'
+        memory_health = 'healthy' if system_status['memory_usage'] < 75 else 'warning' if system_status['memory_usage'] < 90 else 'critical'
+        disk_health = 'healthy' if system_status['disk_usage'] < 80 else 'warning' if system_status['disk_usage'] < 90 else 'critical'
+        
+        # Overall health is the worst of individual metrics
+        health_levels = {'healthy': 0, 'warning': 1, 'critical': 2}
+        overall_health = max([cpu_health, memory_health, disk_health], key=lambda x: health_levels[x])
+        
+        return {
+            'overall_status': overall_health,
+            'cpu_health': cpu_health,
+            'memory_health': memory_health,
+            'disk_health': disk_health,
+            'last_check': datetime.now().isoformat(),
+            'uptime_percentage': random.uniform(99.5, 100.0),  # 99.5-100% uptime
+            'incident_count': random.randint(0, 5),
+            'last_incident': (datetime.now() - timedelta(hours=random.randint(0, 100))).isoformat() if random.random() > 0.7 else None
+        }
+
+    # --- Async versions of mock data methods ---
+
+    async def get_analytics_data_async(self) -> Dict[str, Any]:
+        """Async version of get_analytics_data."""
+        await asyncio.sleep(0.01)  # Simulate async operation
+        return self.get_analytics_data()
+
+    async def get_performance_metrics_async(self) -> Dict[str, Any]:
+        """Async version of get_performance_metrics."""
+        await asyncio.sleep(0.01)  # Simulate async operation
+        return self.get_performance_metrics()
+
+    async def get_historical_data_async(self, metric: str, hours: int = 24) -> List[Dict[str, Any]]:
+        """Async version of get_historical_data."""
+        await asyncio.sleep(0.01)  # Simulate async operation
+        return self.get_historical_data(metric, hours)
+
+    async def get_dashboard_summary_async(self) -> Dict[str, Any]:
+        """Async version of get_dashboard_summary."""
+        await asyncio.sleep(0.01)  # Simulate async operation
+        return self.get_dashboard_summary()
+
+    async def get_server_statistics_async(self) -> Dict[str, Any]:
+        """Async version of get_server_statistics."""
+        await asyncio.sleep(0.01)  # Simulate async operation
+        return self.get_server_statistics()
+
+    async def get_server_health_async(self) -> Dict[str, Any]:
+        """Async version of get_server_health."""
+        await asyncio.sleep(0.01)  # Simulate async operation
+        return self.get_server_health()
     
     def get_database_info(self) -> Dict[str, Any]:
         """Get database information"""
@@ -446,7 +638,20 @@ class MockDataGenerator:
         # Sort by timestamp (newest first)
         logs.sort(key=lambda x: x["timestamp"], reverse=True)
         return logs
-    
+
+    def clear_logs(self) -> bool:
+        """Clear all logs (mock implementation)"""
+        with self._lock:
+            try:
+                # In a real implementation, this would clear the log storage
+                # For mock purposes, we just log the action
+                self._add_activity("logs_clear", "All logs have been cleared")
+                logger.info("MockDataGenerator: Logs cleared (mock operation)")
+                return True
+            except Exception as e:
+                logger.error(f"MockDataGenerator: Failed to clear logs: {e}")
+                return False
+
     def _apply_dynamic_changes(self):
         """Apply small changes to simulate real-time activity"""
         current_time = time.time()
@@ -879,18 +1084,63 @@ class MockDataGenerator:
             
             # Fallback to legacy generated activity
             activity_types = [
-            ("client_connect", "Client {} connected"),
-            ("client_disconnect", "Client {} disconnected"),  
-            ("file_transfer", "File '{}' transferred"),
-            ("backup_complete", "Backup job completed ({} files)"),
-            ("system_check", "System health check passed"),
-            ("error", "Failed to connect to update server"),
-            ("database_backup", "Database backup completed"),
-            ("maintenance", "System maintenance started"),
-        ]
-        
-        activities = []
-        now = datetime.now()
+                ("client_connect", "Client {} connected"),
+                ("client_disconnect", "Client {} disconnected"),  
+                ("file_transfer", "File '{}' transferred"),
+                ("backup_complete", "Backup job completed ({} files)"),
+                ("system_check", "System health check passed"),
+                ("error", "Failed to connect to update server"),
+                ("database_backup", "Database backup completed"),
+                ("maintenance", "System maintenance started"),
+                ("user_login", "User {} logged in"),
+                ("config_change", "Configuration updated by {}"),
+                ("security_alert", "Security scan completed"),
+                ("performance_issue", "Performance threshold exceeded"),
+            ]
+            
+            activities = []
+            now = datetime.now()
+            
+            # Generate more realistic activity data
+            for i in range(limit):
+                # Generate activity with realistic timestamps (within last 24 hours)
+                time_offset = timedelta(minutes=random.randint(0, 1440))  # 0-1440 minutes = 24 hours
+                timestamp = now - time_offset
+                
+                # Select activity type
+                activity_type, message_template = random.choice(activity_types)
+                
+                # Generate appropriate message based on type
+                if activity_type in ["client_connect", "client_disconnect", "user_login"]:
+                    client_ip = f"192.168.1.{random.randint(1, 254)}"
+                    message = message_template.format(client_ip)
+                elif activity_type == "file_transfer":
+                    filename = f"backup_{random.randint(1000, 9999)}.zip"
+                    message = message_template.format(filename)
+                elif activity_type == "backup_complete":
+                    file_count = random.randint(10, 1000)
+                    message = message_template.format(file_count)
+                elif activity_type == "config_change":
+                    user = random.choice(["admin", "operator", "manager"])
+                    message = message_template.format(user)
+                else:
+                    message = message_template
+                
+                activities.append({
+                    "timestamp": timestamp,
+                    "type": activity_type,
+                    "message": message,
+                    "severity": "info" if activity_type not in ["error", "security_alert", "performance_issue"] else "warning" if activity_type == "performance_issue" else "error"
+                })
+            
+            # Sort by timestamp (newest first)
+            activities.sort(key=lambda x: x["timestamp"], reverse=True)
+            return activities
+
+    async def get_recent_activity_async(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Async version of get_recent_activity."""
+        await asyncio.sleep(0.01)  # Simulate async operation
+        return self.get_recent_activity(limit)
         
         # Generate 20-30 recent activities
         for i in range(random.randint(20, 30)):
@@ -1131,6 +1381,44 @@ class MockDataGenerator:
         except Exception as e:
             logger.error(f"MockDataGenerator integrity validation error: {e}")
             return {'valid': False, 'issues': [f"Validation error: {str(e)}"]}
+
+
+    # --- Async versions of mock data methods ---
+
+    async def get_analytics_data_async(self) -> Dict[str, Any]:
+        """Async version of get_analytics_data."""
+        await asyncio.sleep(0.01)  # Simulate async operation
+        return self.get_analytics_data()
+
+    async def get_performance_metrics_async(self) -> Dict[str, Any]:
+        """Async version of get_performance_metrics."""
+        await asyncio.sleep(0.01)  # Simulate async operation
+        return self.get_performance_metrics()
+
+    async def get_historical_data_async(self, metric: str, hours: int = 24) -> List[Dict[str, Any]]:
+        """Async version of get_historical_data."""
+        await asyncio.sleep(0.01)  # Simulate async operation
+        return self.get_historical_data(metric, hours)
+
+    async def get_dashboard_summary_async(self) -> Dict[str, Any]:
+        """Async version of get_dashboard_summary."""
+        await asyncio.sleep(0.01)  # Simulate async operation
+        return self.get_dashboard_summary()
+
+    async def get_server_statistics_async(self) -> Dict[str, Any]:
+        """Async version of get_server_statistics."""
+        await asyncio.sleep(0.01)  # Simulate async operation
+        return self.get_server_statistics()
+
+    async def get_server_health_async(self) -> Dict[str, Any]:
+        """Async version of get_server_health."""
+        await asyncio.sleep(0.01)  # Simulate async operation
+        return self.get_server_health()
+
+    async def get_recent_activity_async(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Async version of get_recent_activity."""
+        await asyncio.sleep(0.01)  # Simulate async operation
+        return self.get_recent_activity(limit)
 
 
 # Global singleton instances for backward compatibility

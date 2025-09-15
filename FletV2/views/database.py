@@ -609,21 +609,21 @@ def create_database_view(
                                 tooltip="View Details",
                                 icon_color=ft.Colors.BLUE,
                                 icon_size=18,
-                                on_click=lambda e, r=row: handle_cell_click(r, 0)
+                                on_click=lambda e, r=row: (logger.info(f"[DEBUG] View Details clicked for row: {r}"), handle_cell_click(r, 0))
                             ),
                             ft.IconButton(
                                 icon=ft.Icons.EDIT_OUTLINED,
                                 tooltip="Edit Row",
                                 icon_color=ft.Colors.GREEN,
                                 icon_size=18,
-                                on_click=lambda e, r=row: page.run_task(edit_row_dialog, r)
+                                on_click=lambda e, r=row: (logger.info(f"[DEBUG] Edit Row clicked for row: {r}"), page.run_task(edit_row_dialog, r))
                             ),
                             ft.IconButton(
                                 icon=ft.Icons.DELETE_OUTLINE,
                                 tooltip="Delete Row",
                                 icon_color=ft.Colors.RED,
                                 icon_size=18,
-                                on_click=lambda e, r=row: page.run_task(delete_row_dialog, r)
+                                on_click=lambda e, r=row: (logger.info(f"[DEBUG] Delete Row clicked for row: {r}"), page.run_task(delete_row_dialog, r))
                             )
                         ], spacing=4, tight=True)
                     )
@@ -631,9 +631,13 @@ def create_database_view(
 
                     data_rows.append(ft.DataRow(cells=cells))
 
-                # Update DataTable structure
-                database_table_ref.current.columns = data_columns
-                database_table_ref.current.rows = data_rows
+                # Update DataTable structure with safety check
+                if database_table_ref.current and hasattr(database_table_ref.current, 'page') and database_table_ref.current.page:
+                    database_table_ref.current.columns = data_columns
+                    database_table_ref.current.rows = data_rows
+                    database_table_ref.current.update()
+                else:
+                    logger.warning("Database table ref not ready for update")
 
                 # Update info text with enhanced information
                 total_rows = len(rows)
@@ -772,16 +776,18 @@ def create_database_view(
 
     def handle_cell_click(row_data: list, cell_index: int):
         """Handle cell click for viewing/editing."""
+        nonlocal selected_table
         current_data = state_manager.get("current_table_data", {})
         columns = current_data.get("columns", [])
 
         # DEBUGGING: Log state manager contents
-        logger.debug(f"[handle_cell_click] Current data from state manager: {current_data}")
-        logger.debug(f"[handle_cell_click] Columns: {columns}, Row data: {row_data}")
+        logger.info(f"[handle_cell_click] Selected table: {selected_table}")
+        logger.info(f"[handle_cell_click] Current data from state manager: {current_data}")
+        logger.info(f"[handle_cell_click] Columns: {columns}, Row data: {row_data}")
 
-        # FALLBACK: If no state data, use mock data directly
-        if not columns and not current_data:
-            logger.warning("[handle_cell_click] No state data found, falling back to mock data")
+        # FALLBACK: If no columns available, use mock data directly
+        if not columns:
+            logger.warning("[handle_cell_click] No columns found, falling back to mock data")
             mock_table_data = generate_mock_table_data(selected_table)
             columns = mock_table_data["columns"]
             current_data = {"columns": columns, "rows": mock_table_data["rows"], "table_name": selected_table}
@@ -839,6 +845,7 @@ def create_database_view(
 
     async def edit_row_dialog(row_data: list):
         """Show edit row dialog"""
+        nonlocal selected_table
         current_data = state_manager.get("current_table_data", {})
         columns = current_data.get("columns", [])
 
@@ -846,9 +853,9 @@ def create_database_view(
         logger.debug(f"[edit_row_dialog] Current data from state manager: {current_data}")
         logger.debug(f"[edit_row_dialog] Columns: {columns}, Row data: {row_data}")
 
-        # FALLBACK: If no state data, use mock data directly
-        if not columns and not current_data:
-            logger.warning("[edit_row_dialog] No state data found, falling back to mock data")
+        # FALLBACK: If no columns available, use mock data directly
+        if not columns:
+            logger.warning("[edit_row_dialog] No columns found, falling back to mock data")
             mock_table_data = generate_mock_table_data(selected_table)
             columns = mock_table_data["columns"]
             current_data = {"columns": columns, "rows": mock_table_data["rows"], "table_name": selected_table}
@@ -914,7 +921,9 @@ def create_database_view(
                                 style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN, color=ft.Colors.WHITE))
             ]
         )
-        page.show_dialog(dialog)
+        page.overlay.append(dialog)
+        dialog.open = True
+        page.update()
 
     async def delete_row_dialog(row_data: list):
         """Show delete confirmation dialog"""
@@ -1001,9 +1010,9 @@ def create_database_view(
         logger.debug(f"[add_row_dialog] Current data from state manager: {current_data}")
         logger.debug(f"[add_row_dialog] Columns: {columns}")
 
-        # FALLBACK: If no state data, use mock data directly
-        if not columns and not current_data:
-            logger.warning("[add_row_dialog] No state data found, falling back to mock data")
+        # FALLBACK: If no columns available, use mock data directly
+        if not columns:
+            logger.warning("[add_row_dialog] No columns found, falling back to mock data")
             mock_table_data = generate_mock_table_data(selected_table)
             columns = mock_table_data["columns"]
             current_data = {"columns": columns, "rows": mock_table_data["rows"], "table_name": selected_table}
@@ -1098,7 +1107,9 @@ def create_database_view(
                                 style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN, color=ft.Colors.WHITE))
             ]
         )
-        page.show_dialog(dialog)
+        page.overlay.append(dialog)
+        dialog.open = True
+        page.update()
 
     async def refresh_database():
         """Refresh all database data through server-mediated operations"""

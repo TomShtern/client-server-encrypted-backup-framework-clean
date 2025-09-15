@@ -59,7 +59,11 @@ MAX_MAX_CLIENTS = 1000
 # Paths
 PROJECT_ROOT = Path(__file__).parent
 RECEIVED_FILES_DIR = PROJECT_ROOT.parent / "received_files"
-SETTINGS_FILE = "flet_server_gui_settings.json"
+
+# Settings persistence path with proper directory structure
+CONFIG_DIR = PROJECT_ROOT / "data"
+CONFIG_DIR.mkdir(exist_ok=True)
+SETTINGS_FILE = CONFIG_DIR / "flet_server_gui_settings.json"
 
 # Status colors
 STATUS_COLORS = {

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Modern Settings View for FletV2
-Single-file implementation following Framework Harmony principles.
-Refactored from 865-line monolith to clean, modular functions.
+Enhanced Settings View for FletV2
+Comprehensive server bridge integration with Material Design 3 styling and reactive state management.
 """
 
 import flet as ft
-from typing import Optional
+from typing import Optional, Dict, Any, Callable
 import json
 import asyncio
+import time
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
@@ -29,63 +29,184 @@ except ImportError:
 logger = get_logger(__name__)
 
 
-class SettingsState:
-    """Modern state management following CLAUDE.md principles."""
+class EnhancedSettingsState:
+    """Enhanced state management with server bridge integration and reactive updates."""
 
-    def __init__(self, page: ft.Page):
+    def __init__(self, page: ft.Page, server_bridge: Optional[ServerBridge] = None, state_manager: Optional[StateManager] = None):
         self.page = page
+        self.server_bridge = server_bridge
+        self.state_manager = state_manager
         self.current_settings = self._load_default_settings()
         self.is_saving = False
+        self.is_loading = False
         self.last_saved = None
+        self.last_loaded = None
         self._ui_refs = {}
+        self._validation_errors = {}
+        self._pending_changes = {}
+        self._auto_save_task = None
+        self._sync_enabled = True
+        self._auto_save_lock = asyncio.Lock()  # Thread-safety for auto-save operations
+
+        # Subscribe to state manager for reactive updates
+        if self.state_manager:
+            self.state_manager.subscribe_to_settings(self._on_settings_changed)
+            self.state_manager.subscribe("settings_events", self._on_settings_event)
 
     def _load_default_settings(self):
-        """Load default settings structure."""
+        """Load comprehensive default settings structure."""
         return {
             'server': {
                 'port': 1256,
                 'host': '127.0.0.1',
                 'max_clients': 50,
-                'log_level': 'INFO'
+                'log_level': 'INFO',
+                'timeout': 30,
+                'buffer_size': 4096,
+                'enable_ssl': False,
+                'ssl_cert_path': '',
+                'ssl_key_path': ''
             },
             'gui': {
                 'theme_mode': 'dark',
                 'auto_refresh': True,
-                'notifications': True
+                'notifications': True,
+                'refresh_interval': 5,
+                'page_size': 50,
+                'language': 'en',
+                'animations_enabled': True,
+                'sound_enabled': False
             },
             'monitoring': {
                 'enabled': True,
                 'interval': 2,
-                'alerts': True
+                'alerts': True,
+                'cpu_threshold': 80,
+                'memory_threshold': 85,
+                'disk_threshold': 90,
+                'network_monitoring': True,
+                'log_monitoring': True
+            },
+            'logging': {
+                'level': 'INFO',
+                'file_path': 'server.log',
+                'max_file_size': 10485760,  # 10MB
+                'backup_count': 5,
+                'console_output': True
+            },
+            'security': {
+                'authentication_required': False,
+                'session_timeout': 3600,
+                'max_login_attempts': 5,
+                'lockout_duration': 900
+            },
+            'backup': {
+                'auto_backup_settings': True,
+                'backup_interval_hours': 24,
+                'max_backups': 10,
+                'compression_enabled': True
             }
         }
 
-    async def load_settings(self):
-        """Load settings from file asynchronously."""
+    async def load_settings_async(self):
+        """Load settings with server bridge integration and fallback."""
+        if self.is_loading:
+            return False
+
+        self.is_loading = True
         try:
-            settings_path = Path(SETTINGS_FILE)
-            if settings_path.exists():
-                with open(settings_path, 'r', encoding='utf-8') as f:
+            # Set loading state in state manager
+            if self.state_manager:
+                self.state_manager.set_loading("settings_load", True)
+
+            # Try server bridge first
+            if self.server_bridge:
+                try:
+                    result = await self.server_bridge.load_settings_async()
+                    if result.get('success') and result.get('data'):
+                        loaded_settings = result['data']
+                        # Merge with defaults to ensure all keys exist
+                        merged_settings = self._deep_merge_settings(self._load_default_settings(), loaded_settings)
+                        self.current_settings = merged_settings
+                        self.last_loaded = datetime.now()
+
+                        # Update state manager
+                        if self.state_manager:
+                            await self.state_manager.update_settings_async(self.current_settings, "server_load")
+
+                        self._update_ui_from_settings()
+                        logger.info(f"Settings loaded from server ({result.get('mode', 'server')})")
+                        return True
+                except Exception as e:
+                    logger.warning(f"Server settings load failed, falling back to local: {e}")
+
+            # Fallback to local file
+            if SETTINGS_FILE.exists():
+                with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
                     loaded = json.load(f)
-                    self.current_settings.update(loaded)
+                    merged_settings = self._deep_merge_settings(self._load_default_settings(), loaded)
+                    self.current_settings = merged_settings
+                    self.last_loaded = datetime.now()
+
+                    # Update state manager
+                    if self.state_manager:
+                        await self.state_manager.update_settings_async(self.current_settings, "local_load")
+
+                    self._update_ui_from_settings()
+                    logger.info("Settings loaded from local file")
+                    return True
+            else:
+                # Use defaults
+                if self.state_manager:
+                    await self.state_manager.update_settings_async(self.current_settings, "defaults")
                 self._update_ui_from_settings()
-            logger.info("Settings loaded successfully")
+                logger.info("Using default settings")
+                return True
+
         except Exception as e:
             logger.error(f"Failed to load settings: {e}")
+            if self.state_manager:
+                self.state_manager.set_error_state("settings_load", str(e))
+            return False
+        finally:
+            self.is_loading = False
+            if self.state_manager:
+                self.state_manager.set_loading("settings_load", False)
+
+    def _deep_merge_settings(self, defaults: Dict[str, Any], loaded: Dict[str, Any]) -> Dict[str, Any]:
+        """Deep merge loaded settings with defaults to ensure all keys exist."""
+        result = defaults.copy()
+        for section, section_data in loaded.items():
+            if section in result and isinstance(section_data, dict) and isinstance(result[section], dict):
+                result[section].update(section_data)
+            else:
+                result[section] = section_data
+        return result
 
     def _update_ui_from_settings(self):
         """Update all UI controls with loaded settings."""
         for section_key, controls in self._ui_refs.items():
-            section, key = section_key.split('.')
-            value = self.current_settings.get(section, {}).get(key)
-            if value is not None:
-                for control in controls:
-                    if hasattr(control, 'value'):
-                        if isinstance(control, ft.Switch):
-                            control.value = bool(value)
-                        else:
-                            control.value = str(value)
-                        control.update()
+            try:
+                section, key = section_key.split('.')
+                value = self.current_settings.get(section, {}).get(key)
+                if value is not None:
+                    for control in controls:
+                        if hasattr(control, 'value'):
+                            if isinstance(control, ft.Switch):
+                                control.value = bool(value)
+                            elif isinstance(control, ft.Slider):
+                                control.value = float(value)
+                            else:
+                                control.value = str(value)
+
+                            # Clear any validation errors
+                            if hasattr(control, 'error_text'):
+                                control.error_text = None
+
+                            if hasattr(control, 'update'):
+                                control.update()
+            except Exception as e:
+                logger.debug(f"Failed to update UI control for {section_key}: {e}")
 
     def register_ui_control(self, section: str, key: str, control):
         """Register UI control for automatic updates."""
@@ -94,505 +215,2021 @@ class SettingsState:
             self._ui_refs[section_key] = []
         self._ui_refs[section_key].append(control)
 
-    async def save_settings(self):
-        """Save settings asynchronously."""
+    async def save_settings_async(self, auto_save: bool = False):
+        """Save settings with server bridge integration and validation."""
         if self.is_saving:
             return False
 
         self.is_saving = True
         try:
-            settings_path = Path(SETTINGS_FILE)
-            settings_path.parent.mkdir(parents=True, exist_ok=True)
+            # Set loading state
+            if self.state_manager:
+                self.state_manager.set_loading("settings_save", True)
+
+            # Validate settings first
+            validation_result = await self.validate_settings_async(self.current_settings)
+            if not validation_result.get('success', True):
+                validation_data = validation_result.get('data', {})
+                if not validation_data.get('valid', True):
+                    errors = validation_data.get('errors', [])
+                    logger.warning(f"Settings validation failed: {errors}")
+                    if self.state_manager:
+                        self.state_manager.set_error_state("settings_validation", "Validation failed", {"errors": errors})
+                    return False
+
+            # Try server bridge first
+            if self.server_bridge:
+                try:
+                    result = await self.server_bridge.save_settings_async(self.current_settings)
+                    if result.get('success'):
+                        self.last_saved = datetime.now()
+
+                        # Update state manager
+                        if self.state_manager:
+                            await self.state_manager.update_settings_async(self.current_settings, "server_save")
+                            if not auto_save:
+                                self.state_manager.add_notification(
+                                    f"Settings saved to server ({result.get('mode', 'server')})",
+                                    "success"
+                                )
+
+                        logger.info(f"Settings saved to server ({result.get('mode', 'server')})")
+
+                        # Also save locally as backup
+                        await self._save_local_backup()
+                        return True
+                except Exception as e:
+                    logger.warning(f"Server settings save failed, falling back to local: {e}")
+
+            # Fallback to local file
+            SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
             with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(self.current_settings, f, indent=2, ensure_ascii=False)
 
             self.last_saved = datetime.now()
-            logger.info("Settings saved successfully")
+
+            # Update state manager
+            if self.state_manager:
+                await self.state_manager.update_settings_async(self.current_settings, "local_save")
+                if not auto_save:
+                    self.state_manager.add_notification("Settings saved locally", "success")
+
+            logger.info("Settings saved to local file")
             return True
+
         except Exception as e:
             logger.error(f"Failed to save settings: {e}")
+            if self.state_manager:
+                self.state_manager.set_error_state("settings_save", str(e))
             return False
         finally:
             self.is_saving = False
+            if self.state_manager:
+                self.state_manager.set_loading("settings_save", False)
 
-    def update_setting(self, section: str, key: str, value):
-        """Update a setting with validation."""
-        if section in self.current_settings:
+    async def _save_local_backup(self):
+        """Save local backup of settings."""
+        try:
+            SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.current_settings, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.debug(f"Failed to save local backup: {e}")
+
+    async def validate_settings_async(self, settings_data: Dict[str, Any]):
+        """Validate settings with comprehensive cross-field checks and server bridge integration."""
+        try:
+            if self.server_bridge:
+                return await self.server_bridge.validate_settings_async(settings_data)
+            else:
+                # Local validation fallback with comprehensive cross-field checks
+                validation_result = {
+                    'valid': True,
+                    'errors': [],
+                    'warnings': []
+                }
+
+                # Basic validation
+                if 'server' in settings_data:
+                    server_settings = settings_data['server']
+                    port = server_settings.get('port')
+                    if port and (not isinstance(port, int) or port < 1024 or port > 65535):
+                        validation_result['errors'].append("Port must be between 1024-65535")
+                        validation_result['valid'] = False
+
+                    # Cross-field validation: SSL configuration
+                    ssl_enabled = server_settings.get('ssl_enabled', False)
+                    if ssl_enabled:
+                        ssl_cert_path = server_settings.get('ssl_cert_path', '').strip()
+                        ssl_key_path = server_settings.get('ssl_key_path', '').strip()
+
+                        if not ssl_cert_path:
+                            validation_result['errors'].append("SSL certificate path is required when SSL is enabled")
+                            validation_result['valid'] = False
+                        elif not Path(ssl_cert_path).exists():
+                            validation_result['warnings'].append(f"SSL certificate file not found: {ssl_cert_path}")
+
+                        if not ssl_key_path:
+                            validation_result['errors'].append("SSL key path is required when SSL is enabled")
+                            validation_result['valid'] = False
+                        elif not Path(ssl_key_path).exists():
+                            validation_result['warnings'].append(f"SSL key file not found: {ssl_key_path}")
+
+                # Cross-field validation: Backup settings
+                if 'backup' in settings_data:
+                    backup_settings = settings_data['backup']
+                    auto_backup = backup_settings.get('auto_backup_enabled', False)
+
+                    if auto_backup:
+                        backup_interval = backup_settings.get('backup_interval_hours', 0)
+                        if not isinstance(backup_interval, (int, float)) or backup_interval <= 0:
+                            validation_result['errors'].append("Backup interval must be greater than 0 hours when auto-backup is enabled")
+                            validation_result['valid'] = False
+
+                        backup_path = backup_settings.get('backup_path', '').strip()
+                        if not backup_path:
+                            validation_result['errors'].append("Backup path is required when auto-backup is enabled")
+                            validation_result['valid'] = False
+                        else:
+                            # Check if backup directory exists or can be created
+                            try:
+                                backup_dir = Path(backup_path).parent
+                                if not backup_dir.exists():
+                                    validation_result['warnings'].append(f"Backup directory does not exist: {backup_dir}")
+                            except Exception:
+                                validation_result['errors'].append(f"Invalid backup path: {backup_path}")
+                                validation_result['valid'] = False
+
+                # Cross-field validation: Monitoring thresholds
+                if 'monitoring' in settings_data:
+                    monitoring_settings = settings_data['monitoring']
+                    monitoring_enabled = monitoring_settings.get('enabled', False)
+
+                    if monitoring_enabled:
+                        cpu_threshold = monitoring_settings.get('cpu_threshold', 80)
+                        memory_threshold = monitoring_settings.get('memory_threshold', 85)
+
+                        if not isinstance(cpu_threshold, (int, float)) or cpu_threshold <= 0 or cpu_threshold > 100:
+                            validation_result['errors'].append("CPU threshold must be between 1-100 when monitoring is enabled")
+                            validation_result['valid'] = False
+
+                        if not isinstance(memory_threshold, (int, float)) or memory_threshold <= 0 or memory_threshold > 100:
+                            validation_result['errors'].append("Memory threshold must be between 1-100 when monitoring is enabled")
+                            validation_result['valid'] = False
+
+                        # Logical validation: CPU threshold should typically be lower than memory threshold
+                        if isinstance(cpu_threshold, (int, float)) and isinstance(memory_threshold, (int, float)):
+                            if cpu_threshold >= memory_threshold:
+                                validation_result['warnings'].append("CPU threshold is higher than memory threshold - this may cause frequent alerts")
+
+                # Cross-field validation: GUI refresh settings
+                if 'gui' in settings_data:
+                    gui_settings = settings_data['gui']
+                    auto_refresh = gui_settings.get('auto_refresh', False)
+
+                    if auto_refresh:
+                        refresh_interval = gui_settings.get('refresh_interval', 5)
+                        if not isinstance(refresh_interval, (int, float)) or refresh_interval < 1:
+                            validation_result['errors'].append("Refresh interval must be at least 1 second when auto-refresh is enabled")
+                            validation_result['valid'] = False
+                        elif refresh_interval < 3:
+                            validation_result['warnings'].append("Refresh intervals below 3 seconds may impact performance")
+
+                return {'success': True, 'data': validation_result}
+        except Exception as e:
+            logger.error(f"Settings validation failed: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def update_setting(self, section: str, key: str, value, validate: bool = True):
+        """Update a setting with validation and reactive updates."""
+        try:
+            if section not in self.current_settings:
+                self.current_settings[section] = {}
+
+            old_value = self.current_settings[section].get(key)
             self.current_settings[section][key] = value
-            logger.info(f"Setting updated: {section}.{key} = {value}")
+
+            # Track pending changes for auto-save
+            change_key = f"{section}.{key}"
+            self._pending_changes[change_key] = {
+                'old_value': old_value,
+                'new_value': value,
+                'timestamp': time.time()
+            }
+
+            # Schedule auto-save if enabled
+            if self._sync_enabled:
+                self._schedule_auto_save()
+
+            # Update state manager
+            if self.state_manager:
+                self.state_manager.update(f"settings.{section}.{key}", value, source="user_input")
+
+            logger.debug(f"Setting updated: {section}.{key} = {value}")
             return True
-        return False
+        except Exception as e:
+            logger.error(f"Failed to update setting {section}.{key}: {e}")
+            return False
+
+    def _schedule_auto_save(self):
+        """Schedule auto-save with debouncing and proper concurrency control."""
+        if self._auto_save_task:
+            self._auto_save_task.cancel()
+
+        async def auto_save_worker():
+            try:
+                await asyncio.sleep(2.0)  # Debounce delay
+
+                # Use lock for thread-safety
+                async with self._auto_save_lock:
+                    # Snapshot pending changes atomically
+                    pending_snapshot = self._pending_changes.copy()
+
+                    if pending_snapshot:
+                        await self.save_settings_async(auto_save=True)
+                        # Only clear the changes that were present at snapshot time
+                        for key in pending_snapshot:
+                            self._pending_changes.pop(key, None)
+
+            except asyncio.CancelledError:
+                pass  # Expected cancellation
+            except Exception as e:
+                logger.debug(f"Auto-save failed: {e}")
+
+        # Create task and await previous task cancellation if needed
+        async def start_auto_save():
+            if self._auto_save_task and not self._auto_save_task.done():
+                try:
+                    await self._auto_save_task
+                except asyncio.CancelledError:
+                    pass  # Expected cancellation
+                except Exception:
+                    pass  # Ignore other errors during cleanup
+                finally:
+                    self._auto_save_task = None
+
+            self._auto_save_task = asyncio.create_task(auto_save_worker())
+
+        # Schedule the start task
+        asyncio.create_task(start_auto_save())
 
     def get_setting(self, section: str, key: str, default=None):
         """Get a setting value safely."""
         return self.current_settings.get(section, {}).get(key, default)
 
+    def _on_settings_changed(self, settings_data, old_data):
+        """Handle settings changes from state manager."""
+        if self._sync_enabled and settings_data != self.current_settings:
+            self.current_settings = settings_data
+            self._update_ui_from_settings()
 
+    def _on_settings_event(self, event_data, old_data):
+        """Handle settings events from state manager."""
+        if isinstance(event_data, dict):
+            event_type = event_data.get('type')
+            if event_type == 'settings_updated':
+                logger.debug("Settings updated event received")
+            elif event_type == 'settings_conflict_merged':
+                if self.state_manager:
+                    self.state_manager.add_notification("Settings conflict resolved", "warning")
+
+    async def backup_settings_async(self, backup_name: str):
+        """Create settings backup with versioning and progress tracking."""
+        try:
+            if self.state_manager:
+                self.state_manager.start_progress("settings_backup", total_steps=2, message="Creating backup")
+                self.state_manager.set_loading("settings_backup", True)
+
+            if self.server_bridge:
+                result = await self.server_bridge.backup_settings_async(backup_name, self.current_settings)
+                if result.get('success'):
+                    if self.state_manager:
+                        self.state_manager.update_progress("settings_backup", step=1, message="Saving")
+                        self.state_manager.add_notification(f"Backup '{backup_name}' created", "success")
+                    return result
+
+            # Local backup fallback
+            backup_dir = Path("settings_backups")
+            backup_dir.mkdir(exist_ok=True)
+
+            backup_file = backup_dir / f"{backup_name}.json"
+            backup_data = {
+                'created_at': time.time(),
+                'backup_name': backup_name,
+                'settings': self.current_settings
+            }
+
+            with open(backup_file, 'w', encoding='utf-8') as f:
+                json.dump(backup_data, f, indent=2, ensure_ascii=False)
+
+            if self.state_manager:
+                self.state_manager.update_progress("settings_backup", step=1, message="Saving")
+                self.state_manager.add_notification(f"Local backup '{backup_name}' created", "success")
+
+            return {'success': True, 'backup_file': str(backup_file)}
+
+        except Exception as e:
+            logger.error(f"Failed to create backup: {e}")
+            if self.state_manager:
+                self.state_manager.set_error_state("settings_backup", str(e))
+            return {'success': False, 'error': str(e)}
+        finally:
+            if self.state_manager:
+                self.state_manager.clear_progress("settings_backup")
+                self.state_manager.set_loading("settings_backup", False)
+
+    async def restore_settings_async(self, backup_file: str):
+        """Restore settings from backup."""
+        try:
+            if self.state_manager:
+                self.state_manager.set_loading("settings_restore", True)
+
+            if self.server_bridge:
+                result = await self.server_bridge.restore_settings_async(backup_file)
+                if result.get('success'):
+                    restored_settings = result.get('data', {}).get('restored_settings')
+                    if restored_settings:
+                        self.current_settings = restored_settings
+                        self._update_ui_from_settings()
+                        if self.state_manager:
+                            await self.state_manager.update_settings_async(self.current_settings, "restore")
+                            self.state_manager.add_notification("Settings restored from backup", "success")
+                    return result
+
+            # Local restore fallback
+            backup_path = Path(backup_file)
+            if backup_path.exists():
+                with open(backup_path, 'r', encoding='utf-8') as f:
+                    backup_data = json.load(f)
+
+                restored_settings = backup_data.get('settings', backup_data)
+                self.current_settings = self._deep_merge_settings(self._load_default_settings(), restored_settings)
+                self._update_ui_from_settings()
+
+                if self.state_manager:
+                    await self.state_manager.update_settings_async(self.current_settings, "local_restore")
+                    self.state_manager.add_notification("Settings restored from local backup", "success")
+
+                return {'success': True}
+            else:
+                raise FileNotFoundError(f"Backup file not found: {backup_file}")
+
+        except Exception as e:
+            logger.error(f"Failed to restore settings: {e}")
+            if self.state_manager:
+                self.state_manager.set_error_state("settings_restore", str(e))
+            return {'success': False, 'error': str(e)}
+        finally:
+            if self.state_manager:
+                self.state_manager.set_loading("settings_restore", False)
+
+
+# Enhanced validation functions with comprehensive checks
 def validate_port(value: str) -> tuple[bool, str]:
-    """Validate port number."""
+    """Validate port number with enhanced checks."""
     try:
         port = int(value)
         min_port = getattr(sys.modules[__name__], 'MIN_PORT', 1024)
         max_port = getattr(sys.modules[__name__], 'MAX_PORT', 65535)
-        if min_port <= port <= max_port:
+
+        if port < min_port:
+            return False, f"Port must be at least {min_port} (system reserved)"
+        elif port > max_port:
+            return False, f"Port cannot exceed {max_port}"
+        elif port == 80:
+            return True, "⚠️ Port 80 may require administrator privileges"
+        elif port == 443:
+            return True, "⚠️ Port 443 may require administrator privileges"
+        else:
             return True, ""
-        return False, f"Port must be between {min_port}-{max_port}"
     except ValueError:
         return False, "Please enter a valid number"
-
 
 def validate_max_clients(value: str) -> tuple[bool, str]:
-    """Validate max clients."""
+    """Validate max clients with performance warnings."""
     try:
         clients = int(value)
-        if 1 <= clients <= 1000:
+        if clients < 1:
+            return False, "Must be at least 1"
+        elif clients > 1000:
+            return False, "Cannot exceed 1000 clients"
+        elif clients > 100:
+            return True, "⚠️ High client count may impact performance"
+        else:
             return True, ""
-        return False, "Must be between 1-1000"
     except ValueError:
         return False, "Please enter a valid number"
-
 
 def validate_monitoring_interval(value: str) -> tuple[bool, str]:
-    """Validate monitoring interval."""
+    """Validate monitoring interval with performance guidance."""
     try:
         interval = int(value)
-        if 1 <= interval <= 60:
+        if interval < 1:
+            return False, "Interval must be at least 1 second"
+        elif interval > 60:
+            return False, "Interval cannot exceed 60 seconds"
+        elif interval < 2:
+            return True, "⚠️ Very frequent monitoring may impact performance"
+        else:
             return True, ""
-        return False, "Must be between 1-60 seconds"
     except ValueError:
         return False, "Please enter a valid number"
 
+def validate_file_size(value: str) -> tuple[bool, str]:
+    """Validate file size in bytes."""
+    try:
+        size = int(value)
+        if size < 1024:  # 1KB minimum
+            return False, "File size must be at least 1KB (1024 bytes)"
+        elif size > 1073741824:  # 1GB maximum
+            return False, "File size cannot exceed 1GB"
+        else:
+            return True, ""
+    except ValueError:
+        return False, "Please enter a valid number"
 
-def create_field_handler(state: SettingsState, section: str, key: str, validator=None):
-    """Factory for consistent field change handlers."""
+def validate_timeout(value: str) -> tuple[bool, str]:
+    """Validate timeout values."""
+    try:
+        timeout = int(value)
+        if timeout < 1:
+            return False, "Timeout must be at least 1 second"
+        elif timeout > 3600:
+            return False, "Timeout cannot exceed 1 hour (3600 seconds)"
+        else:
+            return True, ""
+    except ValueError:
+        return False, "Please enter a valid number"
+
+def create_enhanced_field_handler(state: EnhancedSettingsState, section: str, key: str, validator=None, data_type=str):
+    """Enhanced field change handler with real-time validation and feedback."""
     def handler(e):
         value = e.control.value
 
+        # Real-time validation
         if validator:
             is_valid, error_msg = validator(value)
             e.control.error_text = error_msg if not is_valid else None
+
+            # Visual feedback for validation state
             if not is_valid:
-                e.control.update()
+                e.control.border_color = ft.Colors.ERROR
+            elif error_msg.startswith("⚠️"):
+                e.control.border_color = ft.Colors.ORANGE
+            else:
+                e.control.border_color = ft.Colors.PRIMARY
+
+            e.control.update()
+
+            if not is_valid:
                 return
 
-        # Convert to appropriate type for numeric fields
-        if key in ['port', 'max_clients', 'interval']:
-            try:
+        # Convert to appropriate type
+        try:
+            if data_type == int:
                 value = int(value)
-            except ValueError:
-                return
+            elif data_type == float:
+                value = float(value)
+            elif data_type == bool:
+                value = bool(value)
+        except ValueError:
+            e.control.error_text = f"Invalid {data_type.__name__} value"
+            e.control.border_color = ft.Colors.ERROR
+            e.control.update()
+            return
 
-        state.update_setting(section, key, value)
-        e.control.update()
+        # Update setting with reactive state management
+        success = state.update_setting(section, key, value)
 
-        if state.page:
-            show_success_message(state.page, f"{key.title().replace('_', ' ')} updated")
+        if success:
+            # Visual success feedback
+            e.control.border_color = ft.Colors.PRIMARY
+            e.control.update()
+
+            # Show success notification for important settings
+            if key in ['port', 'host', 'max_clients']:
+                if state.state_manager:
+                    state.state_manager.add_notification(
+                        f"{key.title().replace('_', ' ')} updated to {value}",
+                        "success",
+                        auto_dismiss=3
+                    )
 
     return handler
 
-
-def create_switch_handler(state: SettingsState, section: str, key: str):
-    """Factory for switch toggle handlers."""
+def create_enhanced_switch_handler(state: EnhancedSettingsState, section: str, key: str, on_change_callback: Callable = None):
+    """Enhanced switch handler with animations and feedback."""
     def handler(e):
         value = e.control.value
-        state.update_setting(section, key, value)
+        success = state.update_setting(section, key, value)
 
-        if state.page:
-            show_success_message(state.page, f"{key.title().replace('_', ' ')} {'enabled' if value else 'disabled'}")
+        if success:
+            # Animate switch feedback
+            e.control.scale = 1.1
+            e.control.update()
+
+            # Reset scale after animation
+            async def reset_scale():
+                await asyncio.sleep(0.1)
+                e.control.scale = 1.0
+                e.control.update()
+
+            if state.page:
+                state.page.run_task(reset_scale)
+
+            # Custom callback for special handling
+            if on_change_callback:
+                on_change_callback(value)
+
+            # Notification for important toggles
+            if key in ['enabled', 'alerts', 'notifications']:
+                if state.state_manager:
+                    state.state_manager.add_notification(
+                        f"{key.title().replace('_', ' ')} {'enabled' if value else 'disabled'}",
+                        "info",
+                        auto_dismiss=2
+                    )
 
     return handler
 
-
-def create_reset_button(field: ft.TextField, default_value: str, state: SettingsState):
-    """Create reset button for field."""
+def create_modern_reset_button(field: ft.Control, default_value: Any, state: EnhancedSettingsState, field_type: str = "text"):
+    """Create modern reset button with enhanced styling and animations."""
     def reset_handler(e):
-        field.value = default_value
-        field.error_text = None
+        # Animate button press
+        e.control.scale = 0.9
+        e.control.update()
+
+        # Reset field value
+        if hasattr(field, 'value'):
+            if isinstance(field, ft.Switch):
+                field.value = bool(default_value)
+            elif isinstance(field, ft.Slider):
+                field.value = float(default_value)
+            else:
+                field.value = str(default_value)
+
+        # Clear validation errors
+        if hasattr(field, 'error_text'):
+            field.error_text = None
+        if hasattr(field, 'border_color'):
+            field.border_color = ft.Colors.PRIMARY
+
         field.update()
+
+        # Reset button scale and show feedback
+        async def reset_animation():
+            await asyncio.sleep(0.1)
+            e.control.scale = 1.0
+            e.control.update()
+
+            if state.state_manager:
+                state.state_manager.add_notification(
+                    f"{getattr(field, 'label', field_type)} reset to default",
+                    "info",
+                    auto_dismiss=2
+                )
+
         if state.page:
-            show_info_message(state.page, f"{field.label} reset to default")
+            state.page.run_task(reset_animation)
 
     return ft.IconButton(
         icon=ft.Icons.REFRESH,
         tooltip=f"Reset to default ({default_value})",
         on_click=reset_handler,
-        icon_size=16
+        icon_size=18,
+        style=ft.ButtonStyle(
+            color={
+                ft.ControlState.DEFAULT: ft.Colors.ON_SURFACE_VARIANT,
+                ft.ControlState.HOVERED: ft.Colors.PRIMARY,
+            },
+            bgcolor={
+                ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+            },
+            shape=ft.CircleBorder(),
+            animation_duration=150,
+        )
     )
 
+def create_modern_text_field(
+    label: str,
+    value: Any,
+    state: EnhancedSettingsState,
+    section: str,
+    key: str,
+    validator: Callable = None,
+    data_type: type = str,
+    width: int = None,
+    keyboard_type: ft.KeyboardType = None,
+    prefix_icon: str = None,
+    suffix_text: str = None
+) -> ft.TextField:
+    """Create modern Material Design 3 text field with enhanced styling."""
+    field = ft.TextField(
+        label=label,
+        value=str(value),
+        width=width,
+        keyboard_type=keyboard_type,
+        prefix_icon=ft.Icon(prefix_icon) if prefix_icon else None,
+        suffix_text=suffix_text,
+        border_radius=12,
+        filled=True,
+        border=ft.InputBorder.OUTLINE,
+        focused_border_color=ft.Colors.PRIMARY,
+        focused_bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+        cursor_color=ft.Colors.PRIMARY,
+        selection_color=ft.Colors.with_opacity(0.3, ft.Colors.PRIMARY),
+        on_change=create_enhanced_field_handler(state, section, key, validator, data_type),
+        animate_size=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
+    )
 
-def create_server_section(state: SettingsState) -> ft.Card:
-    """Create server settings section."""
-    port_field = ft.TextField(
-        label="Server Port",
-        value=str(state.get_setting('server', 'port', 1256)),
-        keyboard_type=ft.KeyboardType.NUMBER,
+    state.register_ui_control(section, key, field)
+    return field
+
+def create_modern_switch(
+    label: str,
+    value: bool,
+    state: EnhancedSettingsState,
+    section: str,
+    key: str,
+    on_change_callback: Callable = None
+) -> ft.Switch:
+    """Create modern Material Design 3 switch with enhanced styling."""
+    switch = ft.Switch(
+        label=label,
+        value=value,
+        active_color=ft.Colors.PRIMARY,
+        active_track_color=ft.Colors.with_opacity(0.5, ft.Colors.PRIMARY),
+        inactive_thumb_color=ft.Colors.OUTLINE,
+        inactive_track_color=ft.Colors.with_opacity(0.3, ft.Colors.OUTLINE),
+        on_change=create_enhanced_switch_handler(state, section, key, on_change_callback),
+        scale=ft.Scale(1.0),
+    )
+
+    state.register_ui_control(section, key, switch)
+    return switch
+
+def create_modern_dropdown(
+    label: str,
+    value: str,
+    options: list,
+    state: EnhancedSettingsState,
+    section: str,
+    key: str,
+    width: int = None
+) -> ft.Dropdown:
+    """Create modern Material Design 3 dropdown with enhanced styling."""
+    dropdown = ft.Dropdown(
+        label=label,
+        value=value,
+        options=options,
+        width=width,
+        border_radius=12,
+        filled=True,
+        border=ft.InputBorder.OUTLINE,
+        focused_border_color=ft.Colors.PRIMARY,
+        focused_bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+        on_change=create_enhanced_field_handler(state, section, key),
+    )
+
+    state.register_ui_control(section, key, dropdown)
+    return dropdown
+
+def create_modern_slider(
+    label: str,
+    value: float,
+    min_val: float,
+    max_val: float,
+    divisions: int,
+    state: EnhancedSettingsState,
+    section: str,
+    key: str,
+    suffix: str = ""
+) -> ft.Column:
+    """Create modern Material Design 3 slider with value display."""
+    value_text = ft.Text(f"{value}{suffix}", size=14, weight=ft.FontWeight.W_500)
+
+    def slider_change(e):
+        new_value = e.control.value
+        value_text.value = f"{new_value}{suffix}"
+        value_text.update()
+        state.update_setting(section, key, new_value)
+
+    slider = ft.Slider(
+        min=min_val,
+        max=max_val,
+        divisions=divisions,
+        value=value,
+        label="{value}",
+        active_color=ft.Colors.PRIMARY,
+        inactive_color=ft.Colors.with_opacity(0.3, ft.Colors.PRIMARY),
+        thumb_color=ft.Colors.PRIMARY,
+        on_change=slider_change,
+    )
+
+    state.register_ui_control(section, key, slider)
+
+    return ft.Column([
+        ft.Row([
+            ft.Text(label, size=14, weight=ft.FontWeight.W_500),
+            ft.Container(expand=True),
+            value_text
+        ]),
+        slider
+    ], spacing=5)
+
+
+def create_enhanced_server_section(state: EnhancedSettingsState) -> ft.Card:
+    """Create enhanced server settings section with comprehensive controls."""
+
+    # Network Configuration
+    port_field = create_modern_text_field(
+        "Server Port",
+        state.get_setting('server', 'port', 1256),
+        state, 'server', 'port',
+        validator=validate_port,
+        data_type=int,
         width=200,
-        on_change=create_field_handler(state, 'server', 'port', validate_port)
-    )
-    state.register_ui_control('server', 'port', port_field)
-
-    host_field = ft.TextField(
-        label="Server Host",
-        value=state.get_setting('server', 'host', '127.0.0.1'),
-        expand=True,
-        on_change=create_field_handler(state, 'server', 'host')
-    )
-    state.register_ui_control('server', 'host', host_field)
-
-    max_clients_field = ft.TextField(
-        label="Max Clients",
-        value=str(state.get_setting('server', 'max_clients', 50)),
         keyboard_type=ft.KeyboardType.NUMBER,
-        width=200,
-        on_change=create_field_handler(state, 'server', 'max_clients', validate_max_clients)
+        prefix_icon=ft.Icons.ROUTER
     )
-    state.register_ui_control('server', 'max_clients', max_clients_field)
 
-    log_level_dropdown = ft.Dropdown(
-        label="Log Level",
-        value=state.get_setting('server', 'log_level', 'INFO'),
-        options=[
-            ft.dropdown.Option("DEBUG", "Debug"),
-            ft.dropdown.Option("INFO", "Info"),
-            ft.dropdown.Option("WARNING", "Warning"),
-            ft.dropdown.Option("ERROR", "Error")
+    host_field = create_modern_text_field(
+        "Server Host",
+        state.get_setting('server', 'host', '127.0.0.1'),
+        state, 'server', 'host',
+        width=300,
+        prefix_icon=ft.Icons.COMPUTER
+    )
+
+    # Client Management
+    max_clients_field = create_modern_text_field(
+        "Maximum Clients",
+        state.get_setting('server', 'max_clients', 50),
+        state, 'server', 'max_clients',
+        validator=validate_max_clients,
+        data_type=int,
+        width=200,
+        keyboard_type=ft.KeyboardType.NUMBER,
+        prefix_icon=ft.Icons.PEOPLE
+    )
+
+    timeout_field = create_modern_text_field(
+        "Connection Timeout",
+        state.get_setting('server', 'timeout', 30),
+        state, 'server', 'timeout',
+        validator=validate_timeout,
+        data_type=int,
+        width=200,
+        keyboard_type=ft.KeyboardType.NUMBER,
+        suffix_text="seconds"
+    )
+
+    # Buffer and Performance
+    buffer_size_field = create_modern_text_field(
+        "Buffer Size",
+        state.get_setting('server', 'buffer_size', 4096),
+        state, 'server', 'buffer_size',
+        validator=validate_file_size,
+        data_type=int,
+        width=200,
+        keyboard_type=ft.KeyboardType.NUMBER,
+        suffix_text="bytes"
+    )
+
+    # Logging Configuration
+    log_level_dropdown = create_modern_dropdown(
+        "Log Level",
+        state.get_setting('server', 'log_level', 'INFO'),
+        [
+            ft.dropdown.Option("DEBUG", "Debug - Detailed information"),
+            ft.dropdown.Option("INFO", "Info - General information"),
+            ft.dropdown.Option("WARNING", "Warning - Warning messages"),
+            ft.dropdown.Option("ERROR", "Error - Error messages only")
         ],
-        width=200,
-        on_change=create_field_handler(state, 'server', 'log_level')
+        state, 'server', 'log_level',
+        width=250
     )
-    state.register_ui_control('server', 'log_level', log_level_dropdown)
+
+    # SSL Configuration
+    ssl_switch = create_modern_switch(
+        "Enable SSL/TLS",
+        state.get_setting('server', 'enable_ssl', False),
+        state, 'server', 'enable_ssl'
+    )
+
+    ssl_cert_field = create_modern_text_field(
+        "SSL Certificate Path",
+        state.get_setting('server', 'ssl_cert_path', ''),
+        state, 'server', 'ssl_cert_path',
+        width=400,
+        prefix_icon=ft.Icons.SECURITY
+    )
+
+    ssl_key_field = create_modern_text_field(
+        "SSL Private Key Path",
+        state.get_setting('server', 'ssl_key_path', ''),
+        state, 'server', 'ssl_key_path',
+        width=400,
+        prefix_icon=ft.Icons.KEY
+    )
 
     return ft.Card(
         content=ft.Container(
             content=ft.Column([
-                ft.Text("Server Configuration", size=18, weight=ft.FontWeight.BOLD),
-                ft.Divider(),
-                ft.Column([
-                    ft.Text("Port Configuration", size=14, weight=ft.FontWeight.W_500),
-                    ft.Row([port_field, create_reset_button(port_field, "1256", state)], spacing=5)
-                ], spacing=5),
-                ft.Column([
-                    ft.Text("Host Configuration", size=14, weight=ft.FontWeight.W_500),
-                    ft.Row([host_field, create_reset_button(host_field, "127.0.0.1", state)], spacing=5)
-                ], spacing=5),
-                ft.Column([
-                    ft.Text("Client Limits", size=14, weight=ft.FontWeight.W_500),
-                    ft.Row([max_clients_field, create_reset_button(max_clients_field, "50", state)], spacing=5)
-                ], spacing=5),
-                ft.Column([
-                    ft.Text("Logging", size=14, weight=ft.FontWeight.W_500),
-                    log_level_dropdown
-                ], spacing=5)
-            ], spacing=15),
-            padding=20
-        )
+                # Header
+                ft.Row([
+                    ft.Icon(ft.Icons.DNS, size=24, color=ft.Colors.PRIMARY),
+                    ft.Text("Server Configuration", size=20, weight=ft.FontWeight.BOLD),
+                ], spacing=10),
+                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
+
+                # Network Settings
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Network Settings", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.PRIMARY),
+                        ft.Row([
+                            ft.Column([port_field], expand=True),
+                            create_modern_reset_button(port_field, 1256, state, "port")
+                        ], spacing=10),
+                        ft.Row([
+                            ft.Column([host_field], expand=True),
+                            create_modern_reset_button(host_field, "127.0.0.1", state, "host")
+                        ], spacing=10),
+                    ], spacing=10),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+                    border_radius=8,
+                ),
+
+                # Client Management
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Client Management", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.SECONDARY),
+                        ft.Row([
+                            ft.Column([max_clients_field], expand=True),
+                            create_modern_reset_button(max_clients_field, 50, state, "max clients")
+                        ], spacing=10),
+                        ft.Row([
+                            ft.Column([timeout_field], expand=True),
+                            create_modern_reset_button(timeout_field, 30, state, "timeout")
+                        ], spacing=10),
+                    ], spacing=10),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SECONDARY),
+                    border_radius=8,
+                ),
+
+                # Performance Settings
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Performance Settings", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.TERTIARY),
+                        ft.Row([
+                            ft.Column([buffer_size_field], expand=True),
+                            create_modern_reset_button(buffer_size_field, 4096, state, "buffer size")
+                        ], spacing=10),
+                        ft.Column([log_level_dropdown], spacing=5),
+                    ], spacing=10),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.TERTIARY),
+                    border_radius=8,
+                ),
+
+                # SSL/TLS Configuration
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("SSL/TLS Security", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.ERROR),
+                        ssl_switch,
+                        ft.Row([
+                            ft.Column([ssl_cert_field], expand=True),
+                            create_modern_reset_button(ssl_cert_field, "", state, "SSL certificate")
+                        ], spacing=10),
+                        ft.Row([
+                            ft.Column([ssl_key_field], expand=True),
+                            create_modern_reset_button(ssl_key_field, "", state, "SSL key")
+                        ], spacing=10),
+                    ], spacing=10),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ERROR),
+                    border_radius=8,
+                ),
+
+            ], spacing=20),
+            padding=20,
+        ),
+        elevation=2,
+        surface_tint_color=ft.Colors.PRIMARY,
+        shadow_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
     )
 
 
-def create_gui_section(state: SettingsState) -> ft.Card:
-    """Create GUI settings section."""
-    def handle_theme_toggle(e):
-        new_mode = "light" if state.get_setting('gui', 'theme_mode') == "dark" else "dark"
+def create_enhanced_gui_section(state: EnhancedSettingsState) -> ft.Card:
+    """Create enhanced GUI settings section with comprehensive controls."""
+
+    def handle_theme_toggle(value):
+        """Handle theme mode changes with immediate application."""
+        new_mode = "dark" if value else "light"
         state.update_setting('gui', 'theme_mode', new_mode)
 
         if state.page:
-            state.page.theme_mode = ft.ThemeMode.LIGHT if new_mode == "light" else ft.ThemeMode.DARK
+            state.page.theme_mode = ft.ThemeMode.DARK if value else ft.ThemeMode.LIGHT
             state.page.update()  # Page update needed for theme change
-            show_info_message(state.page, f"Theme switched to {new_mode} mode")
 
-    theme_switch = ft.Switch(
-        label="Dark Mode",
-        value=state.get_setting('gui', 'theme_mode', 'dark') == 'dark',
-        on_change=handle_theme_toggle
+            if state.state_manager:
+                state.state_manager.broadcast_settings_event("theme_change", {"theme_mode": new_mode})
+
+    # Theme and Appearance
+    theme_switch = create_modern_switch(
+        "Dark Mode",
+        state.get_setting('gui', 'theme_mode', 'dark') == 'dark',
+        state, 'gui', 'theme_mode',
+        on_change_callback=handle_theme_toggle
     )
 
-    auto_refresh_switch = ft.Switch(
-        label="Auto Refresh",
-        value=state.get_setting('gui', 'auto_refresh', True),
-        on_change=create_switch_handler(state, 'gui', 'auto_refresh')
-    )
-    state.register_ui_control('gui', 'auto_refresh', auto_refresh_switch)
-
-    notifications_switch = ft.Switch(
-        label="Show Notifications",
-        value=state.get_setting('gui', 'notifications', True),
-        on_change=create_switch_handler(state, 'gui', 'notifications')
-    )
-    state.register_ui_control('gui', 'notifications', notifications_switch)
-
-    return ft.Card(
-        content=ft.Container(
-            content=ft.Column([
-                ft.Text("GUI Configuration", size=18, weight=ft.FontWeight.BOLD),
-                ft.Divider(),
-                ft.Column([
-                    ft.Text("Theme Mode:", size=16, weight=ft.FontWeight.W_500),
-                    theme_switch
-                ], spacing=5),
-                ft.Divider(),
-                auto_refresh_switch,
-                notifications_switch
-            ], spacing=15),
-            padding=20
-        )
+    animations_switch = create_modern_switch(
+        "Enable Animations",
+        state.get_setting('gui', 'animations_enabled', True),
+        state, 'gui', 'animations_enabled'
     )
 
-
-def create_monitoring_section(state: SettingsState) -> ft.Card:
-    """Create monitoring settings section."""
-    monitoring_switch = ft.Switch(
-        label="Enable System Monitoring",
-        value=state.get_setting('monitoring', 'enabled', True),
-        on_change=create_switch_handler(state, 'monitoring', 'enabled')
+    sound_switch = create_modern_switch(
+        "Sound Effects",
+        state.get_setting('gui', 'sound_enabled', False),
+        state, 'gui', 'sound_enabled'
     )
-    state.register_ui_control('monitoring', 'enabled', monitoring_switch)
 
-    interval_field = ft.TextField(
-        label="Monitoring Interval (seconds)",
-        value=str(state.get_setting('monitoring', 'interval', 2)),
-        keyboard_type=ft.KeyboardType.NUMBER,
+    # Refresh and Updates
+    auto_refresh_switch = create_modern_switch(
+        "Auto Refresh Data",
+        state.get_setting('gui', 'auto_refresh', True),
+        state, 'gui', 'auto_refresh'
+    )
+
+    refresh_interval_slider = create_modern_slider(
+        "Refresh Interval",
+        float(state.get_setting('gui', 'refresh_interval', 5)),
+        1.0, 30.0, 29,
+        state, 'gui', 'refresh_interval',
+        suffix=" seconds"
+    )
+
+    # Notifications and Feedback
+    notifications_switch = create_modern_switch(
+        "Show Notifications",
+        state.get_setting('gui', 'notifications', True),
+        state, 'gui', 'notifications'
+    )
+
+    # Data Display
+    page_size_field = create_modern_text_field(
+        "Items per Page",
+        state.get_setting('gui', 'page_size', 50),
+        state, 'gui', 'page_size',
+        data_type=int,
         width=200,
-        on_change=create_field_handler(state, 'monitoring', 'interval', validate_monitoring_interval)
+        keyboard_type=ft.KeyboardType.NUMBER,
+        prefix_icon=ft.Icons.VIEW_LIST
     )
-    state.register_ui_control('monitoring', 'interval', interval_field)
 
-    alerts_switch = ft.Switch(
-        label="Performance Alerts",
-        value=state.get_setting('monitoring', 'alerts', True),
-        on_change=create_switch_handler(state, 'monitoring', 'alerts')
+    # Language Selection
+    language_dropdown = create_modern_dropdown(
+        "Language",
+        state.get_setting('gui', 'language', 'en'),
+        [
+            ft.dropdown.Option("en", "English"),
+            ft.dropdown.Option("es", "Español"),
+            ft.dropdown.Option("fr", "Français"),
+            ft.dropdown.Option("de", "Deutsch"),
+            ft.dropdown.Option("zh", "中文"),
+        ],
+        state, 'gui', 'language',
+        width=200
     )
-    state.register_ui_control('monitoring', 'alerts', alerts_switch)
 
     return ft.Card(
         content=ft.Container(
             content=ft.Column([
-                ft.Text("Monitoring Configuration", size=18, weight=ft.FontWeight.BOLD),
-                ft.Divider(),
-                ft.Column([
-                    ft.Text("System Monitoring", size=16, weight=ft.FontWeight.W_500),
-                    monitoring_switch
-                ], spacing=5),
-                ft.Column([
-                    ft.Text("Monitoring Interval", size=16, weight=ft.FontWeight.W_500),
-                    ft.Row([interval_field, create_reset_button(interval_field, "2", state)], spacing=5)
-                ], spacing=5),
-                ft.Column([
-                    ft.Text("Performance Alerts", size=16, weight=ft.FontWeight.W_500),
-                    alerts_switch
-                ], spacing=5)
-            ], spacing=15),
-            padding=20
-        )
+                # Header
+                ft.Row([
+                    ft.Icon(ft.Icons.PALETTE, size=24, color=ft.Colors.PRIMARY),
+                    ft.Text("User Interface", size=20, weight=ft.FontWeight.BOLD),
+                ], spacing=10),
+                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
+
+                # Theme and Appearance
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Theme & Appearance", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.PRIMARY),
+                        ft.Row([
+                            ft.Icon(ft.Icons.DARK_MODE, size=20),
+                            ft.Column([theme_switch], expand=True),
+                        ], spacing=10),
+                        ft.Row([
+                            ft.Icon(ft.Icons.ANIMATION, size=20),
+                            ft.Column([animations_switch], expand=True),
+                        ], spacing=10),
+                        ft.Row([
+                            ft.Icon(ft.Icons.VOLUME_UP, size=20),
+                            ft.Column([sound_switch], expand=True),
+                        ], spacing=10),
+                        ft.Row([
+                            ft.Column([language_dropdown], expand=True),
+                            create_modern_reset_button(language_dropdown, "en", state, "language")
+                        ], spacing=10),
+                    ], spacing=10),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+                    border_radius=8,
+                ),
+
+                # Data Refresh Settings
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Data & Refresh", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.SECONDARY),
+                        ft.Row([
+                            ft.Icon(ft.Icons.REFRESH, size=20),
+                            ft.Column([auto_refresh_switch], expand=True),
+                        ], spacing=10),
+                        refresh_interval_slider,
+                        ft.Row([
+                            ft.Column([page_size_field], expand=True),
+                            create_modern_reset_button(page_size_field, 50, state, "page size")
+                        ], spacing=10),
+                    ], spacing=10),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SECONDARY),
+                    border_radius=8,
+                ),
+
+                # Notifications
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Notifications & Feedback", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.TERTIARY),
+                        ft.Row([
+                            ft.Icon(ft.Icons.NOTIFICATIONS, size=20),
+                            ft.Column([notifications_switch], expand=True),
+                        ], spacing=10),
+                    ], spacing=10),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.TERTIARY),
+                    border_radius=8,
+                ),
+
+            ], spacing=20),
+            padding=20,
+        ),
+        elevation=2,
+        surface_tint_color=ft.Colors.PRIMARY,
+        shadow_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
     )
 
 
-async def export_settings(state: SettingsState):
-    """Export settings to backup file."""
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    backup_file = f"settings_backup_{timestamp}.json"
+def create_enhanced_monitoring_section(state: EnhancedSettingsState) -> ft.Card:
+    """Create enhanced monitoring settings section with comprehensive controls."""
 
+    # Core Monitoring
+    monitoring_switch = create_modern_switch(
+        "Enable System Monitoring",
+        state.get_setting('monitoring', 'enabled', True),
+        state, 'monitoring', 'enabled'
+    )
+
+    interval_field = create_modern_text_field(
+        "Monitoring Interval",
+        state.get_setting('monitoring', 'interval', 2),
+        state, 'monitoring', 'interval',
+        validator=validate_monitoring_interval,
+        data_type=int,
+        width=200,
+        keyboard_type=ft.KeyboardType.NUMBER,
+        suffix_text="seconds",
+        prefix_icon=ft.Icons.TIMER
+    )
+
+    # Alert Configuration
+    alerts_switch = create_modern_switch(
+        "Performance Alerts",
+        state.get_setting('monitoring', 'alerts', True),
+        state, 'monitoring', 'alerts'
+    )
+
+    # Threshold Sliders
+    cpu_threshold_slider = create_modern_slider(
+        "CPU Alert Threshold",
+        float(state.get_setting('monitoring', 'cpu_threshold', 80)),
+        50.0, 95.0, 45,
+        state, 'monitoring', 'cpu_threshold',
+        suffix="%"
+    )
+
+    memory_threshold_slider = create_modern_slider(
+        "Memory Alert Threshold",
+        float(state.get_setting('monitoring', 'memory_threshold', 85)),
+        60.0, 95.0, 35,
+        state, 'monitoring', 'memory_threshold',
+        suffix="%"
+    )
+
+    disk_threshold_slider = create_modern_slider(
+        "Disk Alert Threshold",
+        float(state.get_setting('monitoring', 'disk_threshold', 90)),
+        70.0, 98.0, 28,
+        state, 'monitoring', 'disk_threshold',
+        suffix="%"
+    )
+
+    # Monitoring Features
+    network_monitoring_switch = create_modern_switch(
+        "Network Monitoring",
+        state.get_setting('monitoring', 'network_monitoring', True),
+        state, 'monitoring', 'network_monitoring'
+    )
+
+    log_monitoring_switch = create_modern_switch(
+        "Log Monitoring",
+        state.get_setting('monitoring', 'log_monitoring', True),
+        state, 'monitoring', 'log_monitoring'
+    )
+
+    return ft.Card(
+        content=ft.Container(
+            content=ft.Column([
+                # Header
+                ft.Row([
+                    ft.Icon(ft.Icons.MONITOR_HEART, size=24, color=ft.Colors.PRIMARY),
+                    ft.Text("System Monitoring", size=20, weight=ft.FontWeight.BOLD),
+                ], spacing=10),
+                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
+
+                # Core Monitoring Settings
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Core Monitoring", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.PRIMARY),
+                        ft.Row([
+                            ft.Icon(ft.Icons.MONITOR, size=20),
+                            ft.Column([monitoring_switch], expand=True),
+                        ], spacing=10),
+                        ft.Row([
+                            ft.Column([interval_field], expand=True),
+                            create_modern_reset_button(interval_field, 2, state, "interval")
+                        ], spacing=10),
+                    ], spacing=10),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+                    border_radius=8,
+                ),
+
+                # Alert Configuration
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Alert Configuration", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.SECONDARY),
+                        ft.Row([
+                            ft.Icon(ft.Icons.NOTIFICATIONS_ACTIVE, size=20),
+                            ft.Column([alerts_switch], expand=True),
+                        ], spacing=10),
+                        cpu_threshold_slider,
+                        memory_threshold_slider,
+                        disk_threshold_slider,
+                    ], spacing=10),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SECONDARY),
+                    border_radius=8,
+                ),
+
+                # Monitoring Features
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Monitoring Features", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.TERTIARY),
+                        ft.Row([
+                            ft.Icon(ft.Icons.NETWORK_CHECK, size=20),
+                            ft.Column([network_monitoring_switch], expand=True),
+                        ], spacing=10),
+                        ft.Row([
+                            ft.Icon(ft.Icons.DESCRIPTION, size=20),
+                            ft.Column([log_monitoring_switch], expand=True),
+                        ], spacing=10),
+                    ], spacing=10),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.TERTIARY),
+                    border_radius=8,
+                ),
+
+            ], spacing=20),
+            padding=20,
+        ),
+        elevation=2,
+        surface_tint_color=ft.Colors.PRIMARY,
+        shadow_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+    )
+
+def create_enhanced_logging_section(state: EnhancedSettingsState) -> ft.Card:
+    """Create enhanced logging settings section."""
+
+    # Log Level and Output
+    log_level_dropdown = create_modern_dropdown(
+        "Log Level",
+        state.get_setting('logging', 'level', 'INFO'),
+        [
+            ft.dropdown.Option("DEBUG", "Debug - Detailed information"),
+            ft.dropdown.Option("INFO", "Info - General information"),
+            ft.dropdown.Option("WARNING", "Warning - Warning messages"),
+            ft.dropdown.Option("ERROR", "Error - Error messages only")
+        ],
+        state, 'logging', 'level',
+        width=300
+    )
+
+    console_output_switch = create_modern_switch(
+        "Console Output",
+        state.get_setting('logging', 'console_output', True),
+        state, 'logging', 'console_output'
+    )
+
+    # File Configuration
+    log_file_field = create_modern_text_field(
+        "Log File Path",
+        state.get_setting('logging', 'file_path', 'server.log'),
+        state, 'logging', 'file_path',
+        width=400,
+        prefix_icon=ft.Icons.DESCRIPTION
+    )
+
+    max_file_size_field = create_modern_text_field(
+        "Max File Size",
+        state.get_setting('logging', 'max_file_size', 10485760),
+        state, 'logging', 'max_file_size',
+        validator=validate_file_size,
+        data_type=int,
+        width=200,
+        keyboard_type=ft.KeyboardType.NUMBER,
+        suffix_text="bytes"
+    )
+
+    backup_count_field = create_modern_text_field(
+        "Backup File Count",
+        state.get_setting('logging', 'backup_count', 5),
+        state, 'logging', 'backup_count',
+        data_type=int,
+        width=150,
+        keyboard_type=ft.KeyboardType.NUMBER
+    )
+
+    return ft.Card(
+        content=ft.Container(
+            content=ft.Column([
+                # Header
+                ft.Row([
+                    ft.Icon(ft.Icons.ARTICLE, size=24, color=ft.Colors.PRIMARY),
+                    ft.Text("Logging Configuration", size=20, weight=ft.FontWeight.BOLD),
+                ], spacing=10),
+                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
+
+                # Log Level and Output
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Log Level & Output", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.PRIMARY),
+                        ft.Column([log_level_dropdown], spacing=5),
+                        ft.Row([
+                            ft.Icon(ft.Icons.TERMINAL, size=20),
+                            ft.Column([console_output_switch], expand=True),
+                        ], spacing=10),
+                    ], spacing=10),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+                    border_radius=8,
+                ),
+
+                # File Configuration
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("File Configuration", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.SECONDARY),
+                        ft.Row([
+                            ft.Column([log_file_field], expand=True),
+                            create_modern_reset_button(log_file_field, "server.log", state, "log file")
+                        ], spacing=10),
+                        ft.Row([
+                            ft.Column([max_file_size_field], expand=True),
+                            create_modern_reset_button(max_file_size_field, 10485760, state, "file size")
+                        ], spacing=10),
+                        ft.Row([
+                            ft.Column([backup_count_field], expand=True),
+                            create_modern_reset_button(backup_count_field, 5, state, "backup count")
+                        ], spacing=10),
+                    ], spacing=10),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SECONDARY),
+                    border_radius=8,
+                ),
+
+            ], spacing=20),
+            padding=20,
+        ),
+        elevation=2,
+        surface_tint_color=ft.Colors.PRIMARY,
+        shadow_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+    )
+
+def create_enhanced_security_section(state: EnhancedSettingsState) -> ft.Card:
+    """Create enhanced security settings section."""
+
+    # Authentication
+    auth_switch = create_modern_switch(
+        "Require Authentication",
+        state.get_setting('security', 'authentication_required', False),
+        state, 'security', 'authentication_required'
+    )
+
+    session_timeout_field = create_modern_text_field(
+        "Session Timeout",
+        state.get_setting('security', 'session_timeout', 3600),
+        state, 'security', 'session_timeout',
+        validator=validate_timeout,
+        data_type=int,
+        width=200,
+        keyboard_type=ft.KeyboardType.NUMBER,
+        suffix_text="seconds"
+    )
+
+    # Login Security
+    max_login_attempts_field = create_modern_text_field(
+        "Max Login Attempts",
+        state.get_setting('security', 'max_login_attempts', 5),
+        state, 'security', 'max_login_attempts',
+        data_type=int,
+        width=150,
+        keyboard_type=ft.KeyboardType.NUMBER
+    )
+
+    lockout_duration_field = create_modern_text_field(
+        "Lockout Duration",
+        state.get_setting('security', 'lockout_duration', 900),
+        state, 'security', 'lockout_duration',
+        validator=validate_timeout,
+        data_type=int,
+        width=200,
+        keyboard_type=ft.KeyboardType.NUMBER,
+        suffix_text="seconds"
+    )
+
+    return ft.Card(
+        content=ft.Container(
+            content=ft.Column([
+                # Header
+                ft.Row([
+                    ft.Icon(ft.Icons.SECURITY, size=24, color=ft.Colors.PRIMARY),
+                    ft.Text("Security Configuration", size=20, weight=ft.FontWeight.BOLD),
+                ], spacing=10),
+                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
+
+                # Authentication
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Authentication", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.PRIMARY),
+                        ft.Row([
+                            ft.Icon(ft.Icons.LOGIN, size=20),
+                            ft.Column([auth_switch], expand=True),
+                        ], spacing=10),
+                        ft.Row([
+                            ft.Column([session_timeout_field], expand=True),
+                            create_modern_reset_button(session_timeout_field, 3600, state, "session timeout")
+                        ], spacing=10),
+                    ], spacing=10),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+                    border_radius=8,
+                ),
+
+                # Login Security
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Login Security", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.ERROR),
+                        ft.Row([
+                            ft.Column([max_login_attempts_field], expand=True),
+                            create_modern_reset_button(max_login_attempts_field, 5, state, "max attempts")
+                        ], spacing=10),
+                        ft.Row([
+                            ft.Column([lockout_duration_field], expand=True),
+                            create_modern_reset_button(lockout_duration_field, 900, state, "lockout duration")
+                        ], spacing=10),
+                    ], spacing=10),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ERROR),
+                    border_radius=8,
+                ),
+
+            ], spacing=20),
+            padding=20,
+        ),
+        elevation=2,
+        surface_tint_color=ft.Colors.PRIMARY,
+        shadow_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+    )
+
+def create_enhanced_backup_section(state: EnhancedSettingsState) -> ft.Card:
+    """Create enhanced backup settings section."""
+
+    # Auto Backup
+    auto_backup_switch = create_modern_switch(
+        "Auto Backup Settings",
+        state.get_setting('backup', 'auto_backup_settings', True),
+        state, 'backup', 'auto_backup_settings'
+    )
+
+    backup_interval_slider = create_modern_slider(
+        "Backup Interval",
+        float(state.get_setting('backup', 'backup_interval_hours', 24)),
+        1.0, 168.0, 167,  # 1 hour to 1 week
+        state, 'backup', 'backup_interval_hours',
+        suffix=" hours"
+    )
+
+    max_backups_field = create_modern_text_field(
+        "Maximum Backups",
+        state.get_setting('backup', 'max_backups', 10),
+        state, 'backup', 'max_backups',
+        data_type=int,
+        width=150,
+        keyboard_type=ft.KeyboardType.NUMBER
+    )
+
+    compression_switch = create_modern_switch(
+        "Enable Compression",
+        state.get_setting('backup', 'compression_enabled', True),
+        state, 'backup', 'compression_enabled'
+    )
+
+    return ft.Card(
+        content=ft.Container(
+            content=ft.Column([
+                # Header
+                ft.Row([
+                    ft.Icon(ft.Icons.BACKUP, size=24, color=ft.Colors.PRIMARY),
+                    ft.Text("Backup Configuration", size=20, weight=ft.FontWeight.BOLD),
+                ], spacing=10),
+                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
+
+                # Backup Settings
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Automatic Backup", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.PRIMARY),
+                        ft.Row([
+                            ft.Icon(ft.Icons.SCHEDULE, size=20),
+                            ft.Column([auto_backup_switch], expand=True),
+                        ], spacing=10),
+                        backup_interval_slider,
+                        ft.Row([
+                            ft.Column([max_backups_field], expand=True),
+                            create_modern_reset_button(max_backups_field, 10, state, "max backups")
+                        ], spacing=10),
+                        ft.Row([
+                            ft.Icon(ft.Icons.COMPRESS, size=20),
+                            ft.Column([compression_switch], expand=True),
+                        ], spacing=10),
+                    ], spacing=10),
+                    padding=ft.Padding(15, 10, 15, 10),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+                    border_radius=8,
+                ),
+
+            ], spacing=20),
+            padding=20,
+        ),
+        elevation=2,
+        surface_tint_color=ft.Colors.PRIMARY,
+        shadow_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+    )
+
+
+async def enhanced_export_settings(state: EnhancedSettingsState, export_format: str = "json"):
+    """Enhanced export settings with multiple formats and server integration."""
     try:
-        backup_path = Path(backup_file)
-        backup_path.parent.mkdir(parents=True, exist_ok=True)
+        if state.state_manager:
+            state.state_manager.start_progress("settings_export", total_steps=2, message="Preparing")
+            state.state_manager.set_loading("settings_export", True)
 
-        with open(backup_file, 'w', encoding='utf-8') as f:
-            json.dump(state.current_settings, f, indent=2, ensure_ascii=False)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-        show_success_message(state.page, f"Settings exported to {backup_file}")
-        return True
+        if export_format == "json":
+            backup_file = f"settings_backup_{timestamp}.json"
+            backup_data = {
+                'exported_at': timestamp,
+                'version': '2.0',
+                'settings': state.current_settings,
+                'metadata': {
+                    'export_format': export_format,
+                    'app_version': 'FletV2',
+                    'total_sections': len(state.current_settings)
+                }
+            }
+
+            backup_path = Path(backup_file)
+            backup_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(backup_file, 'w', encoding='utf-8') as f:
+                json.dump(backup_data, f, indent=2, ensure_ascii=False)
+
+        elif export_format == "ini":
+            backup_file = f"settings_backup_{timestamp}.ini"
+            backup_path = Path(backup_file)
+            backup_path.parent.mkdir(parents=True, exist_ok=True)
+
+            import configparser
+            config = configparser.ConfigParser()
+
+            for section, settings in state.current_settings.items():
+                config[section] = {}
+                for key, value in settings.items():
+                    config[section][key] = str(value)
+
+            with open(backup_file, 'w', encoding='utf-8') as f:
+                config.write(f)
+
+        else:
+            raise ValueError(f"Unsupported export format: {export_format}")
+
+        if state.state_manager:
+            state.state_manager.update_progress("settings_export", step=1, message="Writing file")
+            state.state_manager.add_notification(f"Settings exported to {backup_file}", "success")
+
+        logger.info(f"Settings exported to {backup_file}")
+        return {'success': True, 'file': backup_file}
+    finally:
+        if state.state_manager:
+            state.state_manager.clear_progress("settings_export")
+            state.state_manager.set_loading("settings_export", False)
+
     except Exception as e:
         logger.error(f"Export failed: {e}")
-        show_error_message(state.page, "Failed to export settings")
-        return False
+        if state.state_manager:
+            state.state_manager.set_error_state("settings_export", str(e))
+        return {'success': False, 'error': str(e)}
+    finally:
+        if state.state_manager:
+            state.state_manager.set_loading("settings_export", False)
 
-
-async def import_settings(state: SettingsState, file_path: str):
-    """Import settings from file."""
+async def enhanced_import_settings(state: EnhancedSettingsState, file_path: str):
+    """Enhanced import settings with validation and server integration."""
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            imported = json.load(f)
+        if state.state_manager:
+            state.state_manager.set_loading("settings_import", True)
+
+        file_ext = Path(file_path).suffix.lower()
+
+        if file_ext == '.json':
+            with open(file_path, 'r', encoding='utf-8') as f:
+                imported_data = json.load(f)
+
+            # Handle both old and new format
+            if 'settings' in imported_data:
+                imported = imported_data['settings']
+                version = imported_data.get('version', '1.0')
+                logger.info(f"Importing settings version {version}")
+            else:
+                imported = imported_data
+
+        elif file_ext == '.ini':
+            import configparser
+            config = configparser.ConfigParser()
+            config.read(file_path, encoding='utf-8')
+
+            imported = {}
+            for section in config.sections():
+                imported[section] = dict(config[section])
+                # Convert string values back to appropriate types
+                for key, value in imported[section].items():
+                    if value.lower() in ('true', 'false'):
+                        imported[section][key] = value.lower() == 'true'
+                    elif value.isdigit():
+                        imported[section][key] = int(value)
+                    elif value.replace('.', '').isdigit():
+                        imported[section][key] = float(value)
+
+        else:
+            raise ValueError(f"Unsupported file format: {file_ext}")
 
         if not isinstance(imported, dict):
             raise ValueError("Invalid settings format")
 
-        # Validate structure and merge with defaults
+        # Validate and merge with defaults
         default_settings = state._load_default_settings()
-        for section in default_settings:
-            if section in imported:
-                default_settings[section].update(imported[section])
+        merged_settings = state._deep_merge_settings(default_settings, imported)
 
-        state.current_settings = default_settings
+        # Validate settings before applying
+        validation_result = await state.validate_settings_async(merged_settings)
+        if not validation_result.get('success', True):
+            validation_data = validation_result.get('data', {})
+            if not validation_data.get('valid', True):
+                errors = validation_data.get('errors', [])
+                raise ValueError(f"Settings validation failed: {'; '.join(errors)}")
+
+        # Apply settings
+        state.current_settings = merged_settings
         state._update_ui_from_settings()
-        show_success_message(state.page, "Settings imported successfully")
-        return True
+
+        # Update state manager
+        if state.state_manager:
+            await state.state_manager.update_settings_async(state.current_settings, "import")
+            state.state_manager.add_notification("Settings imported successfully", "success")
+
+        logger.info("Settings imported successfully")
+        return {'success': True}
+
     except Exception as e:
         logger.error(f"Import failed: {e}")
-        show_error_message(state.page, "Failed to import settings")
-        return False
+        if state.state_manager:
+            state.state_manager.set_error_state("settings_import", str(e))
+        return {'success': False, 'error': str(e)}
+    finally:
+        if state.state_manager:
+            state.state_manager.set_loading("settings_import", False)
 
+def create_modern_progress_indicator(operation: str, state_manager: StateManager) -> ft.Container:
+    """Create modern progress indicator with state management integration."""
+    progress_ring = ft.ProgressRing(width=20, height=20, visible=False)
+    progress_text = ft.Text("", size=12, visible=False)
 
-def create_settings_view(
-    server_bridge: Optional[ServerBridge], 
-    page: ft.Page, 
-    state_manager: StateManager
-) -> ft.Control:
-    """
-    Create modern settings view following Framework Harmony principles.
-    Single-file implementation with clean, modular functions.
-    """
-    logger.info("Creating modern settings view")
+    def update_progress(loading_states, old_states):
+        is_loading = loading_states.get(operation, False)
+        progress_ring.visible = is_loading
+        progress_text.visible = is_loading
+        progress_text.value = f"{operation.replace('_', ' ').title()}..." if is_loading else ""
+        progress_ring.update()
+        progress_text.update()
 
-    # Initialize state management
-    settings_state = SettingsState(page)
+    if state_manager:
+        state_manager.subscribe("loading_states", update_progress)
 
-    # Status display
-    last_saved_text = ft.Text(
-        value="Last saved: Never",
-        size=12,
-        color=ft.Colors.ON_SURFACE
+    return ft.Container(
+        content=ft.Row([
+            progress_ring,
+            progress_text
+        ], spacing=5),
+        visible=False
     )
 
-    # Progress indicator for save operations
-    save_progress = ft.ProgressRing(width=16, height=16, visible=False)
+def create_enhanced_action_buttons(state: EnhancedSettingsState) -> ft.Row:
+    """Create enhanced action buttons with modern styling and progress indicators."""
 
-    # Action handlers
+    # Progress indicators
+    save_progress = create_modern_progress_indicator("settings_save", state.state_manager)
+    export_progress = create_modern_progress_indicator("settings_export", state.state_manager)
+    import_progress = create_modern_progress_indicator("settings_import", state.state_manager)
+
     async def save_settings_handler(e):
-        # Show saving feedback
-        save_progress.visible = True
-        last_saved_text.value = "Saving..."
-        last_saved_text.update()
-        save_progress.update()
+        success = await state.save_settings_async()
+        if not success and state.state_manager:
+            state.state_manager.add_notification("Failed to save settings", "error")
 
-        success = await settings_state.save_settings()
+    async def export_handler(e):
+        result = await enhanced_export_settings(state, "json")
+        if not result['success'] and state.state_manager:
+            state.state_manager.add_notification(f"Export failed: {result.get('error', 'Unknown error')}", "error")
 
-        # Hide progress and update status
-        save_progress.visible = False
-        if success:
-            last_saved_text.value = f"Last saved: {settings_state.last_saved.strftime('%H:%M:%S')}"
-            last_saved_text.update()  # Framework-harmonious: use control.update()
-            save_progress.update()
-            show_success_message(page, "Settings saved successfully")
-        else:
-            last_saved_text.value = "Save failed"
-            last_saved_text.update()
-            save_progress.update()
-            show_error_message(page, "Failed to save settings")
+    async def backup_handler(e):
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_name = f"settings_backup_{timestamp}"
+        result = await state.backup_settings_async(backup_name)
+        if not result['success'] and state.state_manager:
+            state.state_manager.add_notification(f"Backup failed: {result.get('error', 'Unknown error')}", "error")
 
     def reset_all_settings(e):
         def confirm_reset(e):
-            settings_state.current_settings = settings_state._load_default_settings()
-            settings_state._update_ui_from_settings()
-            page.dialog.open = False
-            page.dialog.update()  # Update dialog state
-            show_info_message(page, "Settings reset to defaults")
+            state.current_settings = state._load_default_settings()
+            state._update_ui_from_settings()
+            if state.page:
+                state.page.dialog.open = False
+                state.page.dialog.update()
+            if state.state_manager:
+                state.state_manager.add_notification("Settings reset to defaults", "info")
 
         def cancel_reset(e):
-            page.dialog.open = False
-            page.dialog.update()  # Use dialog-specific update
+            if state.page:
+                state.page.dialog.open = False
+                state.page.dialog.update()
 
         dialog = ft.AlertDialog(
-            title=ft.Text("Reset Settings"),
-            content=ft.Text("Are you sure you want to reset all settings to their default values? This cannot be undone."),
+            title=ft.Text("Reset All Settings"),
+            content=ft.Text(
+                "Are you sure you want to reset all settings to their default values?\n\n"
+                "This action cannot be undone and will affect:\n"
+                "• Server configuration\n"
+                "• User interface preferences\n"
+                "• Monitoring settings\n"
+                "• Security settings\n"
+                "• All other configurations"
+            ),
             actions=[
-                ft.TextButton("Cancel", icon=ft.Icons.CANCEL, on_click=cancel_reset, tooltip="Cancel settings reset"),
-                ft.TextButton("Reset", icon=ft.Icons.RESET_TV, on_click=confirm_reset, tooltip="Reset all settings to defaults")
-            ]
+                ft.TextButton(
+                    "Cancel",
+                    icon=ft.Icons.CANCEL,
+                    on_click=cancel_reset,
+                    style=ft.ButtonStyle(color=ft.Colors.ON_SURFACE)
+                ),
+                ft.FilledButton(
+                    "Reset All",
+                    icon=ft.Icons.RESTORE,
+                    on_click=confirm_reset,
+                    style=ft.ButtonStyle(bgcolor=ft.Colors.ERROR)
+                )
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
         )
-        page.dialog = dialog
-        dialog.open = True
-        page.dialog.update()  # Use dialog-specific update
 
-    def export_handler(e):
-        page.run_task(export_settings, settings_state)
+        if state.page:
+            state.page.dialog = dialog
+            dialog.open = True
+            state.page.dialog.update()
 
-    # File picker for import
+
+    # FilePicker lifecycle management
     def pick_files_result(e: ft.FilePickerResultEvent):
         if e.files:
-            page.run_task(import_settings, settings_state, e.files[0].path)
+            state.page.run_task(enhanced_import_settings, state, e.files[0].path)
         else:
-            show_info_message(page, "Import cancelled")
+            if state.state_manager:
+                state.state_manager.add_notification("Import cancelled", "info")
 
-    file_picker = ft.FilePicker(on_result=pick_files_result)
-    page.overlay.append(file_picker)
+    # Ensure only one FilePicker per view instance
+    if not hasattr(state, 'file_picker') or state.file_picker is None:
+        state.file_picker = ft.FilePicker(on_result=pick_files_result)
+    file_picker = state.file_picker
+    # Add to overlay if not already present
+    if state.page and file_picker not in state.page.overlay:
+        state.page.overlay.append(file_picker)
 
     def import_handler(e):
         try:
-            file_picker.pick_files(
-                allowed_extensions=["json"],
+            state.file_picker.pick_files(
+                allowed_extensions=["json", "ini"],
                 dialog_title="Select Settings File"
             )
         except Exception as e:
             logger.error(f"Error opening file picker: {e}")
-            show_error_message(page, "Error opening file picker")
+            if state.state_manager:
+                state.state_manager.add_notification("Error opening file picker", "error")
 
-    # Build main view using modern Flet patterns
-    main_view = ft.Column([
-        # Header
-        ft.Row([
-            ft.Icon(ft.Icons.SETTINGS, size=24),
-            ft.Text("Settings", size=24, weight=ft.FontWeight.BOLD),
-            ft.Container(expand=True),
-            last_saved_text,
-            save_progress  # Progress indicator for save operations
-        ]),
-        ft.Divider(),
-
-        # Action buttons
+    return ft.Column([
         ft.Row([
             ft.FilledButton(
                 "Save Settings",
                 icon=ft.Icons.SAVE,
-                on_click=save_settings_handler,
-                tooltip="Save current settings"
-            ),
-            ft.OutlinedButton(
-                "Reset All",
-                icon=ft.Icons.RESTORE,
-                on_click=reset_all_settings,
-                tooltip="Reset all settings to defaults"
+                on_click=lambda e: state.page.run_task(save_settings_handler, e),
+                style=ft.ButtonStyle(
+                    bgcolor=ft.Colors.PRIMARY,
+                    color=ft.Colors.ON_PRIMARY,
+                    elevation=2,
+                    shape=ft.RoundedRectangleBorder(radius=8),
+                )
             ),
             ft.OutlinedButton(
                 "Export Backup",
                 icon=ft.Icons.DOWNLOAD,
-                on_click=export_handler,
-                tooltip="Export settings to backup file"
+                on_click=lambda e: state.page.run_task(export_handler, e),
+                style=ft.ButtonStyle(
+                    side=ft.BorderSide(2, ft.Colors.PRIMARY),
+                    color=ft.Colors.PRIMARY,
+                    shape=ft.RoundedRectangleBorder(radius=8),
+                )
+            ),
+            ft.OutlinedButton(
+                "Create Backup",
+                icon=ft.Icons.BACKUP,
+                on_click=lambda e: state.page.run_task(backup_handler, e),
+                style=ft.ButtonStyle(
+                    side=ft.BorderSide(2, ft.Colors.SECONDARY),
+                    color=ft.Colors.SECONDARY,
+                    shape=ft.RoundedRectangleBorder(radius=8),
+                )
             ),
             ft.TextButton(
                 "Import Settings",
                 icon=ft.Icons.UPLOAD,
                 on_click=import_handler,
-                tooltip="Import settings from file"
-            )
-        ], spacing=10, wrap=True),
-        ft.Divider(),
-
-        # Settings tabs using Flet's built-in Tabs component
-        ft.Tabs(
-            selected_index=0,
-            animation_duration=300,
-            tabs=[
-                ft.Tab(
-                    text="Server",
-                    icon=ft.Icons.SETTINGS,
-                    content=create_server_section(settings_state)
-                ),
-                ft.Tab(
-                    text="GUI",
-                    icon=ft.Icons.PALETTE,
-                    content=create_gui_section(settings_state)
-                ),
-                ft.Tab(
-                    text="Monitoring",
-                    icon=ft.Icons.MONITOR_HEART,
-                    content=create_monitoring_section(settings_state)
+                style=ft.ButtonStyle(
+                    color=ft.Colors.TERTIARY,
+                    shape=ft.RoundedRectangleBorder(radius=8),
                 )
-            ],
-            expand=True
-        )
-    ], spacing=20, expand=True, scroll=ft.ScrollMode.AUTO)
+            ),
+            ft.Container(expand=True),
+            ft.TextButton(
+                "Reset All",
+                icon=ft.Icons.RESTORE,
+                on_click=reset_all_settings,
+                style=ft.ButtonStyle(
+                    color=ft.Colors.ERROR,
+                    shape=ft.RoundedRectangleBorder(radius=8),
+                )
+            ),
+        ], spacing=10, wrap=True),
 
-    # Load settings asynchronously
-    page.run_task(settings_state.load_settings)
+        # Progress indicators row
+        ft.Row([
+            save_progress,
+            export_progress,
+            import_progress,
+        ], spacing=20),
+    ], spacing=10)
 
-    return main_view
+    def dispose(self):
+        """Dispose of StateManager subscriptions and FilePicker for settings view (Comment 12 & 1)."""
+        try:
+            # Cancel auto-save task if running
+            if self._auto_save_task and not self._auto_save_task.done():
+                self._auto_save_task.cancel()
+
+            # Unsubscribe from state manager events
+            if self.state_manager:
+                if hasattr(self.state_manager, 'unsubscribe_settings'):
+                    self.state_manager.unsubscribe_settings(self._on_settings_changed)
+                else:
+                    logger.debug("Settings-specific unsubscribe not available")
+                self.state_manager.unsubscribe("settings_events", self._on_settings_event)
+
+            # Remove FilePicker from overlay if present
+            if self.page and hasattr(self, 'file_picker') and self.file_picker is not None:
+                if self.file_picker in self.page.overlay:
+                    self.page.overlay.remove(self.file_picker)
+                    self.page.update()
+                self.file_picker = None
+
+            logger.debug("Settings view disposed: cleaned up subscriptions, tasks, and FilePicker")
+        except Exception as e:
+            logger.warning(f"Error during settings view disposal: {e}")
+
+
+def create_settings_view(
+    server_bridge: Optional[ServerBridge],
+    page: ft.Page,
+    state_manager: StateManager
+) -> ft.Control:
+    """
+    Create enhanced settings view with comprehensive server bridge integration and Material Design 3 styling.
+    """
+    logger.info("Creating enhanced settings view with server bridge integration")
+
+    # Initialize enhanced state management
+    settings_state = EnhancedSettingsState(page, server_bridge, state_manager)
+
+    # Status display with enhanced information
+    status_container = ft.Container(
+        content=ft.Column([
+            ft.Row([
+                ft.Icon(ft.Icons.CLOUD_SYNC, size=16),
+                ft.Text("", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+            ], spacing=5),
+            ft.Row([
+                ft.Icon(ft.Icons.SCHEDULE, size=16),
+                ft.Text("", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+            ], spacing=5),
+        ], spacing=2),
+        padding=10,
+        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+        border_radius=8,
+    )
+
+    def update_status_display():
+        """Update status display with current information."""
+        status_lines = status_container.content.controls
+
+        # Server connection status
+        if server_bridge:
+            connection_status = "Connected to server" if server_bridge.is_connected() else "Using local storage"
+            status_lines[0].controls[1].value = connection_status
+        else:
+            status_lines[0].controls[1].value = "No server bridge"
+
+        # Last saved/loaded status
+        if settings_state.last_saved:
+            status_lines[1].controls[1].value = f"Last saved: {settings_state.last_saved.strftime('%H:%M:%S')}"
+        elif settings_state.last_loaded:
+            status_lines[1].controls[1].value = f"Last loaded: {settings_state.last_loaded.strftime('%H:%M:%S')}"
+        else:
+            status_lines[1].controls[1].value = "No recent activity"
+
+        status_container.update()
+
+    # Subscribe to state changes for reactive status updates
+    if state_manager:
+        def on_loading_change(loading_states, old_states):
+            if loading_states.get("settings_save") or loading_states.get("settings_load"):
+                update_status_display()
+
+        state_manager.subscribe("loading_states", on_loading_change)
+
+    # Enhanced action buttons
+    action_buttons = create_enhanced_action_buttons(settings_state)
+
+    # Create enhanced tabs with comprehensive settings
+    enhanced_tabs = ft.Tabs(
+        selected_index=0,
+        animation_duration=300,
+        indicator_color=ft.Colors.PRIMARY,
+        label_color=ft.Colors.PRIMARY,
+        unselected_label_color=ft.Colors.ON_SURFACE_VARIANT,
+        tabs=[
+            ft.Tab(
+                text="Server",
+                icon=ft.Icons.DNS,
+                content=ft.Container(
+                    content=create_enhanced_server_section(settings_state),
+                    padding=10,
+                )
+            ),
+            ft.Tab(
+                text="Interface",
+                icon=ft.Icons.PALETTE,
+                content=ft.Container(
+                    content=create_enhanced_gui_section(settings_state),
+                    padding=10,
+                )
+            ),
+            ft.Tab(
+                text="Monitoring",
+                icon=ft.Icons.MONITOR_HEART,
+                content=ft.Container(
+                    content=create_enhanced_monitoring_section(settings_state),
+                    padding=10,
+                )
+            ),
+            ft.Tab(
+                text="Logging",
+                icon=ft.Icons.ARTICLE,
+                content=ft.Container(
+                    content=create_enhanced_logging_section(settings_state),
+                    padding=10,
+                )
+            ),
+            ft.Tab(
+                text="Security",
+                icon=ft.Icons.SECURITY,
+                content=ft.Container(
+                    content=create_enhanced_security_section(settings_state),
+                    padding=10,
+                )
+            ),
+            ft.Tab(
+                text="Backup",
+                icon=ft.Icons.BACKUP,
+                content=ft.Container(
+                    content=create_enhanced_backup_section(settings_state),
+                    padding=10,
+                )
+            ),
+        ],
+        expand=True,
+        scrollable=True,
+    )
+
+    # Build main view with enhanced Material Design 3 styling
+    main_view = ft.Column([
+        # Enhanced header with status
+        ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    ft.Icon(ft.Icons.SETTINGS, size=28, color=ft.Colors.PRIMARY),
+                    ft.Text("Settings", size=28, weight=ft.FontWeight.BOLD),
+                    ft.Container(expand=True),
+                    status_container,
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
+            ], spacing=10),
+            padding=ft.Padding(20, 20, 20, 10),
+            bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.PRIMARY),
+        ),
+
+        # Enhanced action buttons
+        ft.Container(
+            content=action_buttons,
+            padding=ft.Padding(20, 10, 20, 10),
+        ),
+
+        # Enhanced tabs
+        ft.Container(
+            content=enhanced_tabs,
+            expand=True,
+            padding=ft.Padding(10, 0, 10, 10),
+        ),
+
+    ], spacing=0, expand=True, scroll=ft.ScrollMode.AUTO)
+
+    # Load settings asynchronously with enhanced error handling
+    async def load_settings_with_status():
+        try:
+            success = await settings_state.load_settings_async()
+            update_status_display()
+            if success:
+                logger.info("Settings loaded successfully")
+            else:
+                logger.warning("Settings load completed with issues")
+        except Exception as e:
+            logger.error(f"Failed to load settings: {e}")
+            if state_manager:
+                state_manager.add_notification("Failed to load settings", "error")
+
+    page.run_task(load_settings_with_status)
+
+    # Initial status update
+    update_status_display()
+
+    # Comment 12: Return view and dispose function for StateManager cleanup
+    return main_view, settings_state.dispose

@@ -1241,21 +1241,37 @@ def create_status_chip(
 
     # Default status color mapping (consolidated from all views)
     default_status_colors = {
-        # Connection status
+        # Connection status (both lowercase and capitalized)
         "Connected": ft.Colors.GREEN,
+        "connected": ft.Colors.GREEN,
         "Disconnected": ft.Colors.RED,
+        "disconnected": ft.Colors.RED,
         "Connecting": ft.Colors.ORANGE,
+        "connecting": ft.Colors.ORANGE,
         "Registered": ft.Colors.BLUE,
+        "registered": ft.Colors.BLUE,
         "Offline": ft.Colors.GREY,
+        "offline": ft.Colors.GREY,
 
-        # File operation status
+        # File operation status (both lowercase and capitalized)
         "Uploaded": ft.Colors.GREEN,
+        "uploaded": ft.Colors.GREEN,
         "Uploading": ft.Colors.BLUE,
+        "uploading": ft.Colors.BLUE,
         "Failed": ft.Colors.RED,
+        "failed": ft.Colors.RED,
         "Pending": ft.Colors.ORANGE,
+        "pending": ft.Colors.ORANGE,
         "Processing": ft.Colors.BLUE,
+        "processing": ft.Colors.BLUE,
         "Complete": ft.Colors.GREEN,
+        "complete": ft.Colors.GREEN,
         "Queued": ft.Colors.GREY_600,
+        "queued": ft.Colors.GREY_600,
+        "Verified": ft.Colors.GREEN,
+        "verified": ft.Colors.GREEN,
+        "Error": ft.Colors.RED,
+        "error": ft.Colors.RED,
 
         # General status
         "Active": ft.Colors.GREEN,

@@ -15,8 +15,12 @@ from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
 from utils.dialog_consolidation_helper import show_success_message, show_error_message
 from utils.server_mediated_operations import create_server_mediated_operations, timestamp_processor
+from utils.ui_components import create_modern_button, create_progress_indicator, create_status_chip
 
 logger = get_logger(__name__)
+
+# Module-level server operations initialization to fix timing issues
+server_ops = None
 
 def create_dashboard_view(
     server_bridge: Optional[ServerBridge],
@@ -29,8 +33,10 @@ def create_dashboard_view(
     """
     logger.info("Creating dashboard view")
 
-    # Defer server operations setup until after view is attached
-    server_ops = None
+    # Initialize server operations immediately to prevent race conditions
+    global server_ops
+    if server_ops is None:
+        server_ops = create_server_mediated_operations(state_manager, page)
 
     # --- State Management - Now handled by state_manager ---
     activity_filter = "All"
@@ -51,19 +57,39 @@ def create_dashboard_view(
     transfers_count_text = ft.Text("0", size=28, weight=ft.FontWeight.BOLD)
     storage_used_text = ft.Text("0 GB", size=28, weight=ft.FontWeight.BOLD)
 
-    cpu_progress = ft.ProgressBar(value=0.0, width=150)
-    memory_progress = ft.ProgressBar(value=0.0, width=150)
-    disk_progress = ft.ProgressBar(value=0.0, width=150)
-    cpu_text = ft.Text("0%", size=12)
+    # Material Design 3 progress indicators
+    cpu_progress = ft.ProgressBar(value=0.0, width=150, color=ft.Colors.BLUE)
+    memory_progress = ft.ProgressBar(value=0.0, width=150, color=ft.Colors.GREEN)
+    disk_progress = ft.ProgressBar(value=0.0, width=150, color=ft.Colors.PURPLE)
+    cpu_text = ft.Text("0%", size=12, weight=ft.FontWeight.W_500)
     memory_text = ft.Text("0.0 / 0.0 GB (0.0%)", size=11, font_family="monospace")
     disk_text = ft.Text("0.0 / 0.0 GB (0.0%)", size=11, font_family="monospace")
 
     activity_list = ft.ListView(expand=True, spacing=8, padding=ft.padding.only(top=8))
     last_updated_text = ft.Text("Never", size=12, color=ft.Colors.GREY_600)
-    loading_indicator = ft.Text("Loading...", size=12, color=ft.Colors.GREY_600, visible=False)
+    loading_indicator = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
 
-    start_server_btn = ft.ElevatedButton("Start Server", icon=ft.Icons.PLAY_ARROW, on_click=lambda e: page.run_task(start_server_action), style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN, color=ft.Colors.WHITE))
-    stop_server_btn = ft.ElevatedButton("Stop Server", icon=ft.Icons.STOP, on_click=lambda e: page.run_task(stop_server_action), style=ft.ButtonStyle(bgcolor=ft.Colors.RED, color=ft.Colors.WHITE), disabled=True)
+    # Create activity loading row with reference to avoid brittle index access
+    activity_loading_row = ft.Row([
+        ft.Container(content=loading_indicator, padding=ft.Padding(0, 0, 8, 0)),
+        ft.Text("Loading...", size=12, color=ft.Colors.GREY_600)
+    ], visible=False, spacing=4)
+    
+    # Material Design 3 styled buttons
+    start_server_btn = create_modern_button(
+        "Start Server", 
+        ft.Icons.PLAY_ARROW, 
+        lambda e: page.run_task(start_server_action),
+        variant="filled",
+        color_type="primary"
+    )
+    stop_server_btn = create_modern_button(
+        "Stop Server", 
+        ft.Icons.STOP, 
+        lambda e: page.run_task(stop_server_action),
+        variant="filled",
+        color_type="secondary"
+    )
 
     # --- Helper Functions ---
     def format_time_ago(dt_obj: datetime) -> str:
@@ -141,7 +167,7 @@ def create_dashboard_view(
 
     # --- Reactive UI Update Functions ---
     def update_server_status_ui(data, _):
-        """Reactive callback for server status changes"""
+        """Reactive callback for server status changes with enhanced state management"""
         nonlocal server_status_data
         server_status_data = data or {}
 
@@ -166,10 +192,15 @@ def create_dashboard_view(
         transfers_count_text.value = str(server_status_data.get("total_transfers", 0))
         storage_used_text.value = f"{server_status_data.get('storage_used_gb', 0):.1f} GB"
 
+        # Update state manager with current server status
+        if state_manager:
+            state_manager.update("server_status", server_status_data, source="dashboard_ui")
+
         # Use simple individual control updates
         for control in [server_status_text, server_port_text, uptime_text, start_server_btn,
                        stop_server_btn, clients_count_text, files_count_text, transfers_count_text, storage_used_text]:
-            control.update()
+            if hasattr(control, 'update'):
+                control.update()
 
     def update_system_metrics_ui():
         cpu_percent = system_metrics_data.get("cpu_percent", 0)
@@ -182,6 +213,29 @@ def create_dashboard_view(
         memory_text.value = f"{mem_used:.1f}/{mem_total:.1f} GB ({mem_percent:.1f}%)"
         disk_used, disk_total = system_metrics_data.get("disk_used_gb", 0), system_metrics_data.get("disk_total_gb", 0)
         disk_text.value = f"{disk_used:.1f}/{disk_total:.1f} GB ({disk_percent:.1f}%)"
+        
+        # Update progress bar colors based on values
+        if cpu_percent > 80:
+            cpu_progress.color = ft.Colors.RED
+        elif cpu_percent > 60:
+            cpu_progress.color = ft.Colors.ORANGE
+        else:
+            cpu_progress.color = ft.Colors.BLUE
+            
+        if mem_percent > 80:
+            memory_progress.color = ft.Colors.RED
+        elif mem_percent > 60:
+            memory_progress.color = ft.Colors.ORANGE
+        else:
+            memory_progress.color = ft.Colors.GREEN
+            
+        if disk_percent > 90:
+            disk_progress.color = ft.Colors.RED
+        elif disk_percent > 75:
+            disk_progress.color = ft.Colors.ORANGE
+        else:
+            disk_progress.color = ft.Colors.PURPLE
+
         page.update(cpu_progress, memory_progress, disk_progress, cpu_text, memory_text, disk_text)
 
     def update_activity_ui():
@@ -219,10 +273,17 @@ def create_dashboard_view(
 
     # --- Main Refresh & Actions ---
     async def refresh_dashboard():
+        """Refresh dashboard with enhanced error handling and state management"""
         nonlocal is_loading, last_updated, server_status_data, system_metrics_data, activity_data
-        if is_loading: return
+        if is_loading: 
+            return
         is_loading = True
+        
         try:
+            # Show loading indicator
+            activity_loading_row.visible = True
+            activity_loading_row.update()
+            
             # Load all data concurrently
             server_status_result, _, activity_result = await asyncio.gather(
                 load_server_status(),
@@ -230,55 +291,164 @@ def create_dashboard_view(
                 load_activity_data()
             )
 
-            # Update our data variables with the results
-            server_status_data = server_status_result or {}
-            activity_data = activity_result or []
+            # Get actual data from state manager (not the wrapper results)
+            server_status_data = state_manager.get('server_status', {})
+            activity_data = state_manager.get('recent_activity', [])
 
             last_updated = datetime.now()
             last_updated_text.value = f"Updated: {last_updated.strftime('%H:%M:%S')}"
             last_updated_text.update()
+            
             if state_manager:
-                state_manager.update("dashboard_data", {"server_status": server_status_data, "system_metrics": system_metrics_data, "activity": activity_data})
+                state_manager.update("dashboard_data", {
+                    "server_status": server_status_data, 
+                    "system_metrics": system_metrics_data, 
+                    "activity": activity_data
+                }, source="dashboard_refresh")
+                
         except Exception as e:
             logger.error(f"Failed to refresh dashboard: {e}")
             show_error_message(page, f"Failed to refresh dashboard: {str(e)}")
         finally:
             is_loading = False
+            # Hide loading indicator
+            activity_loading_row.visible = False
+            activity_loading_row.update()
 
     async def start_server_action():
-        """Start server using modular action operation"""
-        result = await server_ops.action_operation(
-            action_name="start_server",
-            server_operation="start_server_async",
-            operation_data={"action": "start"},
-            success_message="Server started successfully",
-            error_message="Failed to start server",
-            refresh_keys=["server_status", "recent_activity"]
-        )
-        return result
+        """Start server using modular action operation with enhanced error handling"""
+        # Guard against uninitialized server_ops
+        if server_ops is None:
+            show_error_message(page, "Server operations not initialized, please wait...")
+            return {'success': False, 'error': 'Operations not initialized'}
+
+        try:
+            # Update UI to show server is starting
+            server_status_text.value = "Starting..."
+            server_status_text.color = ft.Colors.ORANGE
+            start_server_btn.disabled = True
+            stop_server_btn.disabled = True
+            page.update()
+
+            result = await server_ops.action_operation(
+                action_name="start_server",
+                server_operation="start_server_async",
+                operation_data={"action": "start"},
+                success_message="Server started successfully",
+                error_message="Failed to start server",
+                refresh_keys=["server_status", "recent_activity"]
+            )
+            
+            # Update UI based on result
+            if result.get('success'):
+                server_status_text.value = "Running"
+                server_status_text.color = ft.Colors.GREEN
+                start_server_btn.disabled = True
+                stop_server_btn.disabled = False
+            else:
+                server_status_text.value = "Error"
+                server_status_text.color = ft.Colors.RED
+                start_server_btn.disabled = False
+                stop_server_btn.disabled = True
+                
+            page.update()
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error starting server: {e}")
+            show_error_message(page, f"Error starting server: {str(e)}")
+            
+            # Reset UI on error
+            server_status_text.value = "Error"
+            server_status_text.color = ft.Colors.RED
+            start_server_btn.disabled = False
+            stop_server_btn.disabled = True
+            page.update()
+            
+            return {'success': False, 'error': str(e)}
 
     async def stop_server_action():
-        """Stop server using modular action operation"""
-        result = await server_ops.action_operation(
-            action_name="stop_server",
-            server_operation="stop_server_async",
-            operation_data={"action": "stop"},
-            success_message="Server stopped successfully",
-            error_message="Failed to stop server",
-            refresh_keys=["server_status", "recent_activity"]
-        )
-        return result
+        """Stop server using modular action operation with enhanced error handling"""
+        # Guard against uninitialized server_ops
+        if server_ops is None:
+            show_error_message(page, "Server operations not initialized, please wait...")
+            return {'success': False, 'error': 'Operations not initialized'}
+
+        try:
+            # Update UI to show server is stopping
+            server_status_text.value = "Stopping..."
+            server_status_text.color = ft.Colors.ORANGE
+            start_server_btn.disabled = True
+            stop_server_btn.disabled = True
+            page.update()
+
+            result = await server_ops.action_operation(
+                action_name="stop_server",
+                server_operation="stop_server_async",
+                operation_data={"action": "stop"},
+                success_message="Server stopped successfully",
+                error_message="Failed to stop server",
+                refresh_keys=["server_status", "recent_activity"]
+            )
+            
+            # Update UI based on result
+            if result.get('success'):
+                server_status_text.value = "Stopped"
+                server_status_text.color = ft.Colors.RED
+                start_server_btn.disabled = False
+                stop_server_btn.disabled = True
+            else:
+                server_status_text.value = "Error"
+                server_status_text.color = ft.Colors.RED
+                start_server_btn.disabled = True
+                stop_server_btn.disabled = False
+                
+            page.update()
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error stopping server: {e}")
+            show_error_message(page, f"Error stopping server: {str(e)}")
+            
+            # Reset UI on error
+            server_status_text.value = "Error"
+            server_status_text.color = ft.Colors.RED
+            start_server_btn.disabled = True
+            stop_server_btn.disabled = False
+            page.update()
+            
+            return {'success': False, 'error': str(e)}
 
     # --- UI Layout Construction ---
     def create_stat_card(title: str, value_control: ft.Control, icon: str, color: str) -> ft.Container:
         return ft.Container(
-            content=ft.Column([ft.Row([
-                ft.Container(content=ft.Icon(icon, size=32, color=color), bgcolor=ft.Colors.with_opacity(0.1, color), border_radius=50, padding=8),
-                ft.Column([value_control, ft.Text(title, size=12, color=ft.Colors.GREY_600, weight=ft.FontWeight.BOLD)], spacing=2, tight=True)
-            ], alignment=ft.MainAxisAlignment.START, spacing=16)], spacing=8),
-            bgcolor=ft.Colors.SURFACE, border=ft.border.all(1, ft.Colors.with_opacity(0.12, ft.Colors.ON_SURFACE)),
-            border_radius=16, padding=24, expand=True, shadow=ft.BoxShadow(spread_radius=0, blur_radius=8, offset=ft.Offset(0, 2), color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK)),
-            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT), animate_opacity=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+            content=ft.Column([
+                ft.Row([
+                    ft.Container(
+                        content=ft.Icon(icon, size=32, color=color),
+                        bgcolor=ft.Colors.with_opacity(0.1, color),
+                        border_radius=16,  # Material Design 3 rounded corners
+                        padding=12
+                    ),
+                    ft.Column([
+                        value_control, 
+                        ft.Text(title, size=12, color=ft.Colors.GREY_600, weight=ft.FontWeight.BOLD)
+                    ], spacing=2, tight=True)
+                ], alignment=ft.MainAxisAlignment.START, spacing=16)
+            ], spacing=8),
+            bgcolor=ft.Colors.SURFACE,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.12, ft.Colors.ON_SURFACE)),
+            border_radius=20,  # Material Design 3 rounded corners
+            padding=24,
+            expand=True,
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=8,
+                offset=ft.Offset(0, 2),
+                color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK)
+            ),
+            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+            animate_opacity=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
             on_hover=lambda e: animate_card_hover(e.control, e.data == "true")
         )
 
@@ -288,13 +458,18 @@ def create_dashboard_view(
         card.shadow.spread_radius = 2 if is_hovering else 0
         card.update()
 
-    def create_metric_row(label: str, progress: ft.ProgressBar, text: ft.Text) -> ft.Column:
+    def create_metric_row(label: str, progress: ft.ProgressBar, text: ft.Text) -> ft.Container:
         text.text_align = ft.TextAlign.RIGHT
-        return ft.Column([ft.Row([
-            ft.Text(label, size=14, weight=ft.FontWeight.W_500, width=60),
-            progress,
-            ft.Container(content=text, expand=True),
-        ], alignment=ft.MainAxisAlignment.START, spacing=12)], spacing=4)
+        return ft.Container(
+            content=ft.Column([
+                ft.Text(label, size=14, weight=ft.FontWeight.W_500),
+                ft.Row([
+                    progress,
+                    ft.Container(content=text, expand=True),
+                ], alignment=ft.MainAxisAlignment.START, spacing=12)
+            ], spacing=8),
+            padding=ft.Padding(0, 8, 0, 8)
+        )
 
     filter_buttons = {}
     def on_filter_click(e):
@@ -319,7 +494,21 @@ def create_dashboard_view(
 
     header_row = ft.Row([
         ft.Row([ft.Icon(ft.Icons.DASHBOARD, size=28, color=ft.Colors.PRIMARY), ft.Text("Server Dashboard", size=24, weight=ft.FontWeight.BOLD)], spacing=12),
-        ft.IconButton(icon=ft.Icons.REFRESH, tooltip="Refresh Dashboard", icon_size=24, icon_color=ft.Colors.PRIMARY, on_click=lambda e: page.run_task(refresh_dashboard), style=ft.ButtonStyle(bgcolor={ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY), ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT}, shape=ft.CircleBorder(), padding=12))
+        ft.IconButton(
+            icon=ft.Icons.REFRESH, 
+            tooltip="Refresh Dashboard", 
+            icon_size=24, 
+            icon_color=ft.Colors.PRIMARY, 
+            on_click=lambda e: page.run_task(refresh_dashboard),
+            style=ft.ButtonStyle(
+                bgcolor={
+                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+                    ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT
+                },
+                shape=ft.RoundedRectangleBorder(radius=12),  # Material Design 3 rounded button
+                padding=12
+            )
+        )
     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
     server_status_card = ft.Container(
@@ -327,17 +516,23 @@ def create_dashboard_view(
             ft.Row([ft.Icon(ft.Icons.DNS, size=24, color=ft.Colors.BLUE), ft.Text("Server Control", size=16, weight=ft.FontWeight.BOLD)], spacing=8),
             ft.Divider(height=1),
             ft.Column([server_status_text, server_port_text, uptime_text], spacing=4),
-            ft.Container(height=8),
+            ft.Container(height=16),
             ft.ResponsiveRow([
                 ft.Column([start_server_btn], col={"sm": 12, "md": 6}),
                 ft.Column([stop_server_btn], col={"sm": 12, "md": 6})
-            ], spacing=12)
-        ], spacing=8),
+            ], spacing=16)
+        ], spacing=12),
         bgcolor=ft.Colors.SURFACE,
         border=ft.border.all(1, ft.Colors.OUTLINE),
-        border_radius=12,
-        padding=20,
-        expand=True  # Allow card to expand with responsive layout
+        border_radius=16,  # Material Design 3 rounded corners
+        padding=24,  # Enhanced padding
+        expand=True,
+        shadow=ft.BoxShadow(  # Material Design 3 shadow
+            spread_radius=0,
+            blur_radius=8,
+            offset=ft.Offset(0, 4),
+            color=ft.Colors.with_opacity(0.15, ft.Colors.SHADOW)
+        )
     )
 
     stats_row = ft.ResponsiveRow([
@@ -357,43 +552,61 @@ def create_dashboard_view(
         ], spacing=12),
         bgcolor=ft.Colors.SURFACE,
         border=ft.border.all(1, ft.Colors.OUTLINE),
-        border_radius=12,
-        padding=20,
-        expand=True  # Allow card to expand with responsive layout
+        border_radius=16,  # Material Design 3 rounded corners
+        padding=24,  # Enhanced padding
+        expand=True,
+        shadow=ft.BoxShadow(  # Material Design 3 shadow
+            spread_radius=0,
+            blur_radius=8,
+            offset=ft.Offset(0, 4),
+            color=ft.Colors.with_opacity(0.15, ft.Colors.SHADOW)
+        )
     )
 
     activity_card = ft.Container(
         content=ft.Column([
             ft.Row([ft.Icon(ft.Icons.TIMELINE, size=20, color=ft.Colors.BLUE), ft.Text("Recent Activity", size=16, weight=ft.FontWeight.BOLD)], spacing=8),
             ft.Row([create_filter_button(t) for t in ["All", "Clients", "Files", "System"]], spacing=8),
-            ft.Container(height=4),  # Spacing replacement for margin
+            ft.Container(height=8),  # Spacing replacement for margin
             ft.Divider(height=1),
-            loading_indicator,  # Add loading indicator here
+            activity_loading_row,  # Use reference instead of inline definition
             ft.Container(content=activity_list, expand=True)
-        ], spacing=4),
-        bgcolor=ft.Colors.SURFACE, border=ft.border.all(1, ft.Colors.OUTLINE), border_radius=12, padding=20, expand=True
+        ], spacing=8),
+        bgcolor=ft.Colors.SURFACE, 
+        border=ft.border.all(1, ft.Colors.OUTLINE), 
+        border_radius=16,  # Material Design 3 rounded corners
+        padding=24,  # Enhanced padding
+        expand=True,
+        shadow=ft.BoxShadow(  # Material Design 3 shadow
+            spread_radius=0,
+            blur_radius=8,
+            offset=ft.Offset(0, 4),
+            color=ft.Colors.with_opacity(0.15, ft.Colors.SHADOW)
+        )
     )
 
     main_content = ft.ResponsiveRow([
-        ft.Column([server_status_card, system_metrics_card], col={"sm": 12, "md": 12, "lg": 4}, spacing=20),
+        ft.Column([server_status_card, system_metrics_card], col={"sm": 12, "md": 12, "lg": 4}, spacing=24),
         ft.Column([activity_card], col={"sm": 12, "md": 12, "lg": 8})
-    ], spacing=20, expand=True)
+    ], spacing=24, expand=True)
 
-    footer_row = ft.Row([ft.Icon(ft.Icons.UPDATE, size=16, color=ft.Colors.GREY), last_updated_text], spacing=8)
+    footer_row = ft.Row([
+        ft.Icon(ft.Icons.UPDATE, size=16, color=ft.Colors.GREY), 
+        last_updated_text
+    ], spacing=8)
 
     main_view = ft.Container(
         content=ft.Column([
             header_row,
             ft.Divider(),
             stats_row,
-            ft.Container(height=20),
+            ft.Container(height=24),
             main_content,
-            ft.Container(height=16),
+            ft.Container(height=20),
             footer_row
         ], expand=True, scroll=ft.ScrollMode.AUTO, spacing=0),
-        padding=ft.padding.symmetric(horizontal=24, vertical=12),
+        padding=ft.padding.symmetric(horizontal=24, vertical=16),
         expand=True,
-        # Ensure container adapts to window size changes
         alignment=ft.alignment.top_left
     )
 
@@ -404,7 +617,7 @@ def create_dashboard_view(
         server_ops.create_reactive_subscription("server_status", update_server_status_ui)
 
         # Activity data subscription
-        def update_activity_ui(data, _):
+        def on_activity_state_change(data, _):
             nonlocal activity_data
             activity_data = data or []
 
@@ -439,10 +652,19 @@ def create_dashboard_view(
 
             activity_list.update()
 
-        server_ops.create_reactive_subscription("recent_activity", update_activity_ui)
+        server_ops.create_reactive_subscription("recent_activity", on_activity_state_change)
 
         # Loading indicator subscription - using the loading_indicator defined at module level
-        server_ops.create_loading_subscription(loading_indicator, ["server_status", "recent_activity"])
+        def update_loading_indicator(loading_states, old_states):
+            try:
+                # Show indicator if any tracked operation is loading
+                is_loading = any(loading_states.get(key, False) for key in ["server_status", "recent_activity"])
+                activity_loading_row.visible = is_loading
+                activity_loading_row.update()
+            except Exception as e:
+                logger.error(f"Loading subscription callback failed: {e}")
+
+        server_ops.create_reactive_subscription("loading_states", update_loading_indicator)
 
     # --- Initial Data Load with Batch Operations ---
     async def initial_data_load():
@@ -464,18 +686,27 @@ def create_dashboard_view(
         results = await server_ops.batch_load_operations(operations)
         logger.info(f"Dashboard initial load completed: {len([r for r in results.values() if r.get('success')])} successful operations")
 
-    # Defer server operations and subscriptions until after view is attached to page
+    # Setup server operations and subscriptions immediately (using module-level server_ops)
     async def setup_dashboard():
-        """Set up server operations and subscriptions after view is attached to page"""
-        nonlocal server_ops
-        await asyncio.sleep(0.1)  # Small delay to ensure page attachment
-
-        # Initialize server operations now that view is attached
-        server_ops = create_server_mediated_operations(state_manager, page)
-
+        """Set up server operations and subscriptions using module-level server_ops"""
+        global server_ops
+        
+        # Ensure server_ops is initialized
+        if server_ops is None:
+            server_ops = create_server_mediated_operations(state_manager, page)
+            logger.info("Server operations initialized in setup_dashboard")
+        
+        # Small delay to ensure page attachment
+        await asyncio.sleep(0.05)
+        
         # Setup subscriptions and load initial data
-        setup_reactive_subscriptions()
-        await initial_data_load()
+        try:
+            setup_reactive_subscriptions()
+            await initial_data_load()
+            logger.info("Dashboard setup completed successfully")
+        except Exception as e:
+            logger.error(f"Error during dashboard setup: {e}")
+            show_error_message(page, f"Dashboard setup failed: {str(e)}")
 
     # Start dashboard setup in background
     page.run_task(setup_dashboard)
