@@ -845,6 +845,14 @@ class FletV2App(ft.Row):
         """Update content area with error handling and fallback strategies."""
         animated_switcher.content = content
 
+        # Set up subscriptions after view is added to page (prevents "Control must be added to page first" error)
+        if hasattr(content, '_setup_subscriptions') and content._setup_subscriptions is not None:
+            try:
+                content._setup_subscriptions()
+                logger.debug(f"Set up subscriptions for {view_name} view")
+            except Exception as sub_error:
+                logger.warning(f"Failed to set up subscriptions for {view_name}: {sub_error}")
+
         # Smart update - check if control is attached to page before updating
         try:
             # Verify AnimatedSwitcher is properly attached to page
@@ -914,10 +922,16 @@ class FletV2App(ft.Row):
             # All views now require state_manager as per Phase 2 refactor
             result = view_function(self.server_bridge, self.page, self.state_manager)
 
-            # Comment 12: Check if view returned dispose function (new pattern)
-            if isinstance(result, tuple) and len(result) == 2:
-                content, dispose_func = result
-                return content, dispose_func
+            # Comment 12: Check if view returned dispose function and subscription setup (new pattern)
+            if isinstance(result, tuple):
+                if len(result) == 3:
+                    content, dispose_func, setup_subscriptions_func = result
+                    # Store setup function for later execution
+                    content._setup_subscriptions = setup_subscriptions_func
+                    return content, dispose_func
+                elif len(result) == 2:
+                    content, dispose_func = result
+                    return content, dispose_func
             else:
                 # Backward compatibility: create auto-dispose function
                 # Track subscriptions for automatic cleanup

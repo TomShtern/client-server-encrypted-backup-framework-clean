@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Analytics View for FletV2
-Clean function-based implementation following Framework Harmony principles.
-Enhanced with Material Design 3 progress indicators, loading states, and server bridge integration.
+Analytics View for FletV2 - Enhanced 2025 Edition
+Comprehensive analytics dashboard with responsive layout, Material Design 3 styling,
+and advanced state management integration following Framework Harmony principles.
 """
 
 import flet as ft
@@ -17,6 +17,8 @@ from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
 from utils.dialog_consolidation_helper import show_success_message, show_error_message, show_user_feedback
 from utils.server_mediated_operations import create_server_mediated_operations
+from utils.ui_components import create_modern_card, create_progress_indicator, create_loading_overlay
+from theme import get_shadow_style, get_brand_color
 
 logger = get_logger(__name__)
 
@@ -71,39 +73,25 @@ def create_analytics_view(
     disk_space_text = ft.Text("0 GB", size=16, weight=ft.FontWeight.BOLD)
     active_connections_text = ft.Text("0", size=16, weight=ft.FontWeight.BOLD)
     
-    # Material Design 3 progress indicators
-    # Create simple progress indicators since we can't import ui_components here
-    def create_simple_progress_indicator(value, label, color):
-        return ft.Container(
-            content=ft.Column([
-                ft.Row([
-                    ft.Text(label, size=14, weight=ft.FontWeight.W_500),
-                    ft.Text(f"{value*100:.1f}%", size=12, weight=ft.FontWeight.W_500)
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                ft.ProgressBar(value=value, color=color, height=8, border_radius=4)
-            ], spacing=4),
-            padding=ft.Padding(0, 8, 0, 8)
-        )
+    # Enhanced Material Design 3 progress indicators using ui_components
+    cpu_progress = create_progress_indicator(0.0, "CPU Usage", ft.Colors.BLUE, animated=True)
+    memory_progress = create_progress_indicator(0.0, "Memory Usage", ft.Colors.GREEN, animated=True)
+    disk_progress = create_progress_indicator(0.0, "Disk Usage", ft.Colors.PURPLE, animated=True)
+    network_progress = create_progress_indicator(0.0, "Network Load", ft.Colors.ORANGE, animated=True)
     
-    cpu_progress = create_simple_progress_indicator(0.0, "CPU Usage", ft.Colors.BLUE)
-    memory_progress = create_simple_progress_indicator(0.0, "Memory Usage", ft.Colors.GREEN)
-    disk_progress = create_simple_progress_indicator(0.0, "Disk Usage", ft.Colors.PURPLE)
-    network_progress = create_simple_progress_indicator(0.0, "Network Load", ft.Colors.ORANGE)
-    
-    # Status indicators (simple version since we can't import ui_components)
-    def create_simple_status_chip(text, color):
-        return ft.Container(
-            content=ft.Row([
-                ft.Icon(ft.Icons.CIRCLE, size=12, color=ft.Colors.WHITE),
-                ft.Text(text, size=12, color=ft.Colors.WHITE, weight=ft.FontWeight.W_500)
-            ], spacing=4, tight=True),
-            bgcolor=color,
-            border_radius=12,
-            padding=ft.Padding(8, 4, 8, 4)
-        )
-    
-    connection_status_chip = create_simple_status_chip("Disconnected", ft.Colors.RED)
-    server_status_chip = create_simple_status_chip("Offline", ft.Colors.RED)
+    # Enhanced status indicators using ui_components
+    def create_status_chip_enhanced(text, color):
+        from utils.ui_components import create_info_chip
+        return create_info_chip(text, ft.Icons.CIRCLE, color, "filled")
+
+    connection_status_chip = create_status_chip_enhanced("Disconnected", ft.Colors.RED)
+    server_status_chip = create_status_chip_enhanced("Offline", ft.Colors.RED)
+
+    # Loading overlay for data operations
+    loading_overlay = create_loading_overlay("Loading analytics data...")
+    loading_overlay.visible = False
+    loading_overlay_ref = ft.Ref[ft.Container]()
+    loading_overlay.ref = loading_overlay_ref
 
     # Enhanced Chart control references with wow factor styling
     cpu_chart = ft.LineChart(
@@ -552,24 +540,33 @@ def create_analytics_view(
         network_recv = safe_float_conversion(system_metrics.get('network_recv_mb', 0))
         network_load = min((network_sent + network_recv) / 10000.0, 1.0)  # Normalize network load
         
-        # Update progress bars
-        cpu_progress.content.controls[1].value = cpu_usage
-        cpu_progress.content.controls[0].controls[1].value = f"{cpu_usage * 100:.1f}%"
-        
-        memory_progress.content.controls[1].value = memory_usage
-        memory_progress.content.controls[0].controls[1].value = f"{memory_usage * 100:.1f}%"
-        
-        disk_progress.content.controls[1].value = disk_usage
-        disk_progress.content.controls[0].controls[1].value = f"{disk_usage * 100:.1f}%"
-        
-        network_progress.content.controls[1].value = network_load
-        network_progress.content.controls[0].controls[1].value = f"{network_load * 100:.1f}%"
+        # Update enhanced progress indicators
+        # The create_progress_indicator from ui_components handles internal updates
+        # We need to update the underlying progress bar values
+        try:
+            if hasattr(cpu_progress.content.controls[-1], 'value'):
+                cpu_progress.content.controls[-1].value = cpu_usage
+                cpu_progress.content.controls[0].controls[-1].value = f"{cpu_usage * 100:.1f}%"
+
+            if hasattr(memory_progress.content.controls[-1], 'value'):
+                memory_progress.content.controls[-1].value = memory_usage
+                memory_progress.content.controls[0].controls[-1].value = f"{memory_usage * 100:.1f}%"
+
+            if hasattr(disk_progress.content.controls[-1], 'value'):
+                disk_progress.content.controls[-1].value = disk_usage
+                disk_progress.content.controls[0].controls[-1].value = f"{disk_usage * 100:.1f}%"
+
+            if hasattr(network_progress.content.controls[-1], 'value'):
+                network_progress.content.controls[-1].value = network_load
+                network_progress.content.controls[0].controls[-1].value = f"{network_load * 100:.1f}%"
+        except Exception as e:
+            logger.debug(f"Progress indicator update failed: {e}")
 
         # Update status chips
         connection_status = system_metrics.get('connection_status', 'Unknown')
         server_status = system_metrics.get('server_status', 'Unknown')
         
-        # Update chip text and colors based on status
+        # Update enhanced status chips
         status_colors = {
             "Connected": ft.Colors.GREEN,
             "Disconnected": ft.Colors.RED,
@@ -578,9 +575,7 @@ def create_analytics_view(
             "Fallback": ft.Colors.GREY
         }
         connection_color = status_colors.get(connection_status, ft.Colors.GREY)
-        connection_status_chip.bgcolor = connection_color
-        connection_status_chip.content.controls[1].value = connection_status
-        
+
         server_colors = {
             "Online": ft.Colors.GREEN,
             "Offline": ft.Colors.RED,
@@ -589,8 +584,16 @@ def create_analytics_view(
             "Unavailable": ft.Colors.GREY
         }
         server_color = server_colors.get(server_status, ft.Colors.GREY)
-        server_status_chip.bgcolor = server_color
-        server_status_chip.content.controls[1].value = server_status
+
+        # Update chip backgrounds and text
+        try:
+            connection_status_chip.bgcolor = connection_color
+            connection_status_chip.content.controls[-1].value = connection_status
+
+            server_status_chip.bgcolor = server_color
+            server_status_chip.content.controls[-1].value = server_status
+        except Exception as e:
+            logger.debug(f"Status chip update failed: {e}")
 
         # Update all text controls
         cpu_cores_text.update()
@@ -609,24 +612,34 @@ def create_analytics_view(
         server_status_chip.update()
 
     async def load_analytics_data():
-        """Load analytics data using proper async pattern with server operations."""
+        """Enhanced analytics data loading with comprehensive state management and UI feedback."""
         nonlocal system_metrics, is_loading, last_updated
 
         if is_loading:
             return
         is_loading = True
 
-        # Show loading state immediately with Material Design 3 progress indicator
+        # Show enhanced loading state with overlay
         last_updated_text.value = "Updating..."
+        if loading_overlay_ref.current:
+            loading_overlay_ref.current.visible = True
+            loading_overlay_ref.current.update()
+
         if hasattr(last_updated_text, 'page') and last_updated_text.page is not None:
             last_updated_text.update()
 
         try:
+            # Notify state manager of analytics loading
+            if state_manager:
+                await state_manager.update_async("analytics_loading", True, source="load_start")
+
             # Use async data loading with server operations
             metrics = await get_system_metrics_async()
 
-            # Update system metrics
+            # Update system metrics with state manager integration
             system_metrics = metrics
+            if state_manager:
+                await state_manager.update_async("system_metrics", metrics, source="analytics_load")
 
             # Update last updated timestamp
             last_updated = datetime.now()
@@ -638,7 +651,7 @@ def create_analytics_view(
                 update_charts()
                 update_system_info()
 
-                # Update charts with error handling
+                # Update charts with comprehensive error handling
                 for chart_name, chart_obj in [
                     ("CPU", cpu_chart),
                     ("Memory", memory_chart),
@@ -651,55 +664,170 @@ def create_analytics_view(
                         logger.debug(f"{chart_name} chart update failed: {chart_error}")
 
                 last_updated_text.update()
+                show_success_message(page, "Analytics data refreshed successfully")
 
         except Exception as e:
             logger.error(f"Error loading analytics data: {e}")
             last_updated_text.value = "Error loading data"
             if hasattr(last_updated_text, 'page') and last_updated_text.page is not None:
                 last_updated_text.update()
-            show_error_message(page, f"Error loading analytics data: {e}")
+            show_error_message(page, f"Error loading analytics data: {str(e)}")
+
+            # Update state manager with error
+            if state_manager:
+                await state_manager.update_async("analytics_error", str(e), source="load_error")
         finally:
             is_loading = False
 
+            # Hide loading overlay
+            if loading_overlay_ref.current:
+                loading_overlay_ref.current.visible = False
+                loading_overlay_ref.current.update()
+
+            # Notify state manager loading completed
+            if state_manager:
+                await state_manager.update_async("analytics_loading", False, source="load_complete")
+
     def on_refresh_analytics(e):
-        """Handle refresh button click."""
+        """Enhanced refresh button handler with comprehensive feedback."""
         logger.info("Analytics refresh requested")
-        page.run_task(load_analytics_data)
+
+        # Provide immediate user feedback
         show_user_feedback(page, "Refreshing analytics data...")
 
+        # Update state manager
+        if state_manager:
+            asyncio.create_task(state_manager.update_async("analytics_refresh", {
+                "requested_at": datetime.now().isoformat(),
+                "trigger": "manual_button"
+            }, source="refresh_request"))
+
+        # Trigger data load
+        page.run_task(load_analytics_data)
+
     async def export_analytics_data():
-        """Export analytics data with server integration."""
+        """Enhanced analytics data export with comprehensive error handling and progress tracking."""
         try:
+            # Show loading state
+            if loading_overlay_ref.current:
+                loading_overlay_ref.current.content.controls[0].controls[-1].value = "Exporting analytics data..."
+                loading_overlay_ref.current.visible = True
+                loading_overlay_ref.current.update()
+
+            # Update state manager
+            if state_manager:
+                await state_manager.update_async("analytics_export", {"status": "starting"}, source="export_start")
+
             if server_ops:
-                # Use server operations for export
+                # Use enhanced server operations for export
                 result = await server_ops.action_operation(
                     action_name="export_analytics",
                     server_operation="export_analytics_data_async",
-                    operation_data={"format": "csv", "metrics": system_metrics},
+                    operation_data={
+                        "format": "csv",
+                        "metrics": system_metrics,
+                        "timestamp": datetime.now().isoformat(),
+                        "charts_data": {
+                            "cpu_history": chart_state.get('cpu_history', []),
+                            "memory_history": chart_state.get('memory_history', []),
+                            "network_sent_history": chart_state.get('network_sent_history', []),
+                            "network_recv_history": chart_state.get('network_recv_history', [])
+                        }
+                    },
                     success_message="Analytics data exported successfully",
                     error_message="Failed to export analytics data"
                 )
 
                 if result.get('success'):
-                    show_success_message(page, "Analytics exported to analytics_data.csv")
+                    export_path = result.get('data', {}).get('export_path', 'analytics_data.csv')
+                    show_success_message(page, f"Analytics exported to {export_path}")
+
+                    # Update state manager with success
+                    if state_manager:
+                        await state_manager.update_async("analytics_export", {
+                            "status": "completed",
+                            "export_path": export_path
+                        }, source="export_success")
                 else:
-                    show_error_message(page, f"Export failed: {result.get('error', 'Unknown error')}")
+                    error_msg = result.get('error', 'Unknown error')
+                    show_error_message(page, f"Export failed: {error_msg}")
+
+                    # Update state manager with error
+                    if state_manager:
+                        await state_manager.update_async("analytics_export", {
+                            "status": "failed",
+                            "error": error_msg
+                        }, source="export_error")
             else:
-                # Fallback to mock export
+                # Enhanced fallback export with multiple formats
                 import json
+                import csv
                 import tempfile
                 import os
 
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-                    json.dump(system_metrics, f, indent=2, default=str)
-                    temp_path = f.name
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-                show_success_message(page, f"Mock analytics exported to {temp_path}")
-                logger.info(f"Analytics data exported to {temp_path}")
+                # Create comprehensive export data
+                export_data = {
+                    "timestamp": datetime.now().isoformat(),
+                    "system_metrics": system_metrics,
+                    "charts_data": {
+                        "cpu_history": chart_state.get('cpu_history', []),
+                        "memory_history": chart_state.get('memory_history', []),
+                        "network_sent_history": chart_state.get('network_sent_history', []),
+                        "network_recv_history": chart_state.get('network_recv_history', [])
+                    },
+                    "connection_status": system_metrics.get('connection_status', 'Unknown'),
+                    "server_status": system_metrics.get('server_status', 'Unknown')
+                }
+
+                # Export as JSON
+                json_file = tempfile.NamedTemporaryFile(mode='w', suffix=f'_analytics_{timestamp}.json', delete=False)
+                json.dump(export_data, json_file, indent=2, default=str)
+                json_path = json_file.name
+                json_file.close()
+
+                # Export as CSV (system metrics only)
+                csv_file = tempfile.NamedTemporaryFile(mode='w', suffix=f'_analytics_{timestamp}.csv', delete=False, newline='')
+                csv_writer = csv.writer(csv_file)
+                csv_writer.writerow(['Metric', 'Value', 'Unit'])
+
+                for key, value in system_metrics.items():
+                    if isinstance(value, (int, float)):
+                        unit = '%' if 'usage' in key.lower() else ('GB' if any(x in key.lower() for x in ['memory', 'disk']) else 'count')
+                        csv_writer.writerow([key.replace('_', ' ').title(), value, unit])
+                    else:
+                        csv_writer.writerow([key.replace('_', ' ').title(), str(value), 'text'])
+
+                csv_path = csv_file.name
+                csv_file.close()
+
+                show_success_message(page, f"Analytics exported:\nJSON: {json_path}\nCSV: {csv_path}")
+                logger.info(f"Analytics data exported to {json_path} and {csv_path}")
+
+                # Update state manager with mock export success
+                if state_manager:
+                    await state_manager.update_async("analytics_export", {
+                        "status": "completed",
+                        "export_paths": [json_path, csv_path],
+                        "mode": "mock"
+                    }, source="export_mock_success")
 
         except Exception as e:
             logger.error(f"Export analytics failed: {e}")
             show_error_message(page, f"Export failed: {str(e)}")
+
+            # Update state manager with error
+            if state_manager:
+                await state_manager.update_async("analytics_export", {
+                    "status": "failed",
+                    "error": str(e)
+                }, source="export_exception")
+        finally:
+            # Hide loading overlay
+            if loading_overlay_ref.current:
+                loading_overlay_ref.current.visible = False
+                loading_overlay_ref.current.update()
 
     def on_export_analytics(e):
         """Handle export analytics button click."""
@@ -755,28 +883,90 @@ def create_analytics_view(
             logger.info("Auto-refresh started")
             show_user_feedback(page, "Auto-refresh started (every 5 seconds)")
 
-    # Subscribe to state manager updates for real-time data
+    # Enhanced state manager integration with reactive subscriptions
     if state_manager:
-        def on_server_status_change(new_status, old_status):
-            """Handle server status changes from state manager."""
+        async def on_server_status_change_async(new_status, old_status):
+            """Enhanced async handler for server status changes."""
             logger.debug(f"Server status changed: {old_status} -> {new_status}")
-            # Trigger a refresh when server status changes
-            page.run_task(load_analytics_data)
-            
-        # Subscribe to server status changes
-        state_manager.subscribe("server_status", on_server_status_change)
-        
-        def on_system_metrics_change(new_metrics, old_metrics):
-            """Handle system metrics changes from state manager."""
-            logger.debug("System metrics updated")
-            # Trigger a refresh when system metrics change
-            page.run_task(load_analytics_data)
-            
-        # Subscribe to system metrics changes
-        state_manager.subscribe("system_metrics", on_system_metrics_change)
+            # Update connection status chip
+            if new_status and isinstance(new_status, dict):
+                connection_status = new_status.get('connection_status', 'Unknown')
+                server_status = new_status.get('server_status', 'Unknown')
 
-    # Build the main view
-    view = ft.Column([
+                # Update status chips immediately
+                try:
+                    status_colors = {
+                        "Connected": ft.Colors.GREEN, "Disconnected": ft.Colors.RED,
+                        "Error": ft.Colors.RED, "Local": ft.Colors.BLUE, "Fallback": ft.Colors.GREY
+                    }
+                    connection_color = status_colors.get(connection_status, ft.Colors.GREY)
+                    connection_status_chip.bgcolor = connection_color
+                    connection_status_chip.content.controls[-1].value = connection_status
+                    connection_status_chip.update()
+
+                    server_colors = {
+                        "Online": ft.Colors.GREEN, "Offline": ft.Colors.RED,
+                        "Error": ft.Colors.RED, "N/A": ft.Colors.GREY, "Unavailable": ft.Colors.GREY
+                    }
+                    server_color = server_colors.get(server_status, ft.Colors.GREY)
+                    server_status_chip.bgcolor = server_color
+                    server_status_chip.content.controls[-1].value = server_status
+                    server_status_chip.update()
+                except Exception as e:
+                    logger.debug(f"Status chip update error: {e}")
+
+            # Trigger analytics refresh for server changes
+            page.run_task(load_analytics_data)
+
+        async def on_system_metrics_change_async(new_metrics, old_metrics):
+            """Enhanced async handler for system metrics changes."""
+            logger.debug("System metrics updated via state manager")
+            if new_metrics and isinstance(new_metrics, dict):
+                # Update local metrics without triggering another load
+                nonlocal system_metrics
+                system_metrics = new_metrics
+
+                # Update UI components directly
+                try:
+                    update_charts()
+                    update_system_info()
+                except Exception as e:
+                    logger.debug(f"Direct UI update error: {e}")
+
+        # Subscribe to enhanced async handlers
+        try:
+            state_manager.subscribe_async("server_status", on_server_status_change_async)
+            state_manager.subscribe_async("system_metrics", on_system_metrics_change_async)
+        except AttributeError:
+            # Fallback to regular subscription if async not available
+            def on_server_status_change(new_status, old_status):
+                page.run_task(on_server_status_change_async(new_status, old_status))
+            def on_system_metrics_change(new_metrics, old_metrics):
+                page.run_task(on_system_metrics_change_async(new_metrics, old_metrics))
+
+            state_manager.subscribe("server_status", on_server_status_change)
+            state_manager.subscribe("system_metrics", on_system_metrics_change)
+
+        # Subscribe to analytics-specific events
+        try:
+            async def on_analytics_event(event_data, old_data):
+                """Handle analytics-specific events from state manager."""
+                logger.debug(f"Analytics event received: {event_data}")
+                if isinstance(event_data, dict):
+                    event_type = event_data.get('status')
+                    if event_type == 'export_completed':
+                        show_success_message(page, "Analytics export completed successfully")
+                    elif event_type == 'export_failed':
+                        show_error_message(page, f"Analytics export failed: {event_data.get('error', 'Unknown error')}")
+
+            # Subscribe to analytics events if async subscription available
+            if hasattr(state_manager, 'subscribe_async'):
+                state_manager.subscribe_async("analytics_export", on_analytics_event)
+        except Exception as e:
+            logger.debug(f"Analytics event subscription failed: {e}")
+
+    # Build the main view with stack overlay for loading
+    main_content = ft.Column([
         # Header with title and action buttons
         ft.Row([
             ft.Icon(ft.Icons.AUTO_GRAPH, size=24),
@@ -785,18 +975,30 @@ def create_analytics_view(
             ft.Row([
                 ft.IconButton(
                     icon=ft.Icons.FILE_DOWNLOAD,
-                    tooltip="Export Analytics Data",
-                    on_click=on_export_analytics
+                    tooltip="Export Analytics Data (JSON & CSV)",
+                    on_click=on_export_analytics,
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.TERTIARY),
+                        color=ft.Colors.TERTIARY
+                    )
                 ),
                 ft.IconButton(
                     icon=ft.Icons.REFRESH,
                     tooltip="Refresh Analytics Data",
-                    on_click=on_refresh_analytics
+                    on_click=on_refresh_analytics,
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.SECONDARY),
+                        color=ft.Colors.SECONDARY
+                    )
                 ),
                 ft.IconButton(
                     icon=ft.Icons.PLAY_ARROW,
-                    tooltip="Start Auto-refresh",
-                    on_click=on_toggle_auto_refresh
+                    tooltip="Toggle Auto-refresh (5s interval)",
+                    on_click=on_toggle_auto_refresh,
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+                        color=ft.Colors.PRIMARY
+                    )
                 )
             ], spacing=5)
         ]),
@@ -812,141 +1014,209 @@ def create_analytics_view(
         ], spacing=10, alignment=ft.MainAxisAlignment.START),
         ft.Divider(),
 
-        # Last updated text
-        ft.Row([
-            ft.Text("System Performance Metrics", size=18, weight=ft.FontWeight.BOLD),
-            ft.Container(expand=True),
-        ]),
+        # Removed separate performance metrics title since it's now in the card above
 
-        # Performance progress indicators
-        ft.Column([
-            cpu_progress,
-            memory_progress,
-            disk_progress,
-            network_progress
-        ], spacing=10),
+        # Enhanced responsive performance progress indicators
+        create_modern_card(
+            content=ft.Column([
+                ft.Text("System Performance Metrics", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                ft.Container(height=16),  # Spacing
+                ft.ResponsiveRow([
+                    ft.Column([cpu_progress], col={"sm": 12, "md": 6, "lg": 6}),
+                    ft.Column([memory_progress], col={"sm": 12, "md": 6, "lg": 6})
+                ], spacing=12),
+                ft.ResponsiveRow([
+                    ft.Column([disk_progress], col={"sm": 12, "md": 6, "lg": 6}),
+                    ft.Column([network_progress], col={"sm": 12, "md": 6, "lg": 6})
+                ], spacing=12)
+            ], spacing=12, tight=True),
+            title=None,  # Title included in content
+            elevation="soft",
+            hover_effect=False,  # Static metrics card
+            padding=24
+        ),
 
-        # Performance charts
+        # Enhanced responsive performance charts with Material Design 3 styling
         ft.ResponsiveRow([
-            # CPU Usage Chart
+            # CPU Usage Chart - Responsive: mobile 1x4, tablet 1x4, desktop 2x2
             ft.Column([
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            ft.Row([
-                                ft.Icon(ft.Icons.SHOW_CHART, color=ft.Colors.BLUE, size=20),
-                                ft.Text("CPU Usage Over Time", size=16, weight=ft.FontWeight.BOLD)
-                            ], spacing=8),
-                            ft.Container(content=cpu_chart, expand=True, height=200, padding=10)
-                        ], spacing=12),
-                        padding=16
-                    )
+                create_modern_card(
+                    content=ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.SHOW_CHART, color=ft.Colors.BLUE, size=24),
+                            ft.Text("CPU Usage Over Time", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE)
+                        ], spacing=12, alignment=ft.MainAxisAlignment.START),
+                        ft.Container(height=8),  # Spacing
+                        ft.Container(
+                            content=cpu_chart,
+                            expand=True,
+                            height=220,
+                            padding=ft.Padding(12, 8, 12, 8),
+                            border_radius=12
+                        )
+                    ], spacing=0, tight=True),
+                    title=None,  # Title already included in content
+                    elevation="elevated",
+                    hover_effect=True,
+                    padding=24
                 )
-            ], col={"sm": 12, "md": 6}),
+            ], col={"sm": 12, "md": 12, "lg": 6}),  # Mobile: full width, Desktop: half width
 
             # Memory Usage Chart
             ft.Column([
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            ft.Row([
-                                ft.Icon(ft.Icons.BAR_CHART, color=ft.Colors.GREEN, size=20),
-                                ft.Text("Memory Usage History", size=16, weight=ft.FontWeight.BOLD)
-                            ], spacing=8),
-                            ft.Container(content=memory_chart, expand=True, height=200, padding=10)
-                        ], spacing=12),
-                        padding=16
-                    )
+                create_modern_card(
+                    content=ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.BAR_CHART, color=ft.Colors.GREEN, size=24),
+                            ft.Text("Memory Usage History", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE)
+                        ], spacing=12, alignment=ft.MainAxisAlignment.START),
+                        ft.Container(height=8),
+                        ft.Container(
+                            content=memory_chart,
+                            expand=True,
+                            height=220,
+                            padding=ft.Padding(12, 8, 12, 8),
+                            border_radius=12
+                        )
+                    ], spacing=0, tight=True),
+                    elevation="elevated",
+                    hover_effect=True,
+                    padding=24
                 )
-            ], col={"sm": 12, "md": 6}),
+            ], col={"sm": 12, "md": 12, "lg": 6}),
 
             # Network Traffic Chart
             ft.Column([
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            ft.Row([
-                                ft.Icon(ft.Icons.NETWORK_CHECK, color=ft.Colors.ORANGE, size=20),
-                                ft.Text("Network Traffic", size=16, weight=ft.FontWeight.BOLD)
-                            ], spacing=8),
-                            ft.Container(content=network_chart, expand=True, height=200, padding=10)
-                        ], spacing=12),
-                        padding=16
-                    )
+                create_modern_card(
+                    content=ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.NETWORK_CHECK, color=ft.Colors.ORANGE, size=24),
+                            ft.Text("Network Traffic", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE)
+                        ], spacing=12, alignment=ft.MainAxisAlignment.START),
+                        ft.Container(height=8),
+                        ft.Container(
+                            content=network_chart,
+                            expand=True,
+                            height=220,
+                            padding=ft.Padding(12, 8, 12, 8),
+                            border_radius=12
+                        )
+                    ], spacing=0, tight=True),
+                    elevation="elevated",
+                    hover_effect=True,
+                    padding=24
                 )
-            ], col={"sm": 12, "md": 6}),
+            ], col={"sm": 12, "md": 12, "lg": 6}),
 
             # Disk Usage Chart
             ft.Column([
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            ft.Row([
-                                ft.Icon(ft.Icons.STORAGE, color=ft.Colors.PURPLE, size=20),
-                                ft.Text("Disk Usage", size=16, weight=ft.FontWeight.BOLD)
-                            ], spacing=8),
-                            ft.Container(content=disk_chart, expand=True, height=200, padding=10)
-                        ], spacing=12),
-                        padding=16
-                    )
+                create_modern_card(
+                    content=ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.STORAGE, color=ft.Colors.PURPLE, size=24),
+                            ft.Text("Disk Usage", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE)
+                        ], spacing=12, alignment=ft.MainAxisAlignment.START),
+                        ft.Container(height=8),
+                        ft.Container(
+                            content=disk_chart,
+                            expand=True,
+                            height=220,
+                            padding=ft.Padding(12, 8, 12, 8),
+                            border_radius=12
+                        )
+                    ], spacing=0, tight=True),
+                    elevation="elevated",
+                    hover_effect=True,
+                    padding=24
                 )
-            ], col={"sm": 12, "md": 6})
-        ]),
+            ], col={"sm": 12, "md": 12, "lg": 6})
+        ], spacing=20),  # Enhanced spacing between charts
 
-        # System information cards
+        # Enhanced system information cards with Material Design 3 styling
         ft.Divider(),
-        ft.Text("System Information", size=18, weight=ft.FontWeight.BOLD),
+        ft.Text("System Information", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
         ft.ResponsiveRow([
             ft.Column([
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            ft.Icon(ft.Icons.COMPUTER, size=24, color=ft.Colors.BLUE),
-                            ft.Text("CPU Cores", size=12, weight=ft.FontWeight.W_500),
-                            cpu_cores_text
-                        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5),
-                        padding=15
-                    )
+                create_modern_card(
+                    content=ft.Column([
+                        ft.Container(
+                            content=ft.Icon(ft.Icons.COMPUTER, size=32, color=ft.Colors.WHITE),
+                            bgcolor=ft.Colors.BLUE,
+                            border_radius=16,
+                            padding=ft.Padding(12, 12, 12, 12),
+                            alignment=ft.alignment.center
+                        ),
+                        ft.Text("CPU Cores", size=14, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE),
+                        cpu_cores_text
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=12),
+                    elevation="soft",
+                    hover_effect=True,
+                    padding=20
                 )
-            ], col={"sm": 6, "md": 3}),
+            ], col={"sm": 6, "md": 6, "lg": 3}),
             ft.Column([
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            ft.Icon(ft.Icons.MEMORY, size=24, color=ft.Colors.GREEN),
-                            ft.Text("Total Memory", size=12, weight=ft.FontWeight.W_500),
-                            total_memory_text
-                        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5),
-                        padding=15
-                    )
+                create_modern_card(
+                    content=ft.Column([
+                        ft.Container(
+                            content=ft.Icon(ft.Icons.MEMORY, size=32, color=ft.Colors.WHITE),
+                            bgcolor=ft.Colors.GREEN,
+                            border_radius=16,
+                            padding=ft.Padding(12, 12, 12, 12),
+                            alignment=ft.alignment.center
+                        ),
+                        ft.Text("Total Memory", size=14, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE),
+                        total_memory_text
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=12),
+                    elevation="soft",
+                    hover_effect=True,
+                    padding=20
                 )
-            ], col={"sm": 6, "md": 3}),
+            ], col={"sm": 6, "md": 6, "lg": 3}),
             ft.Column([
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            ft.Icon(ft.Icons.STORAGE, size=24, color=ft.Colors.PURPLE),
-                            ft.Text("Disk Space", size=12, weight=ft.FontWeight.W_500),
-                            disk_space_text
-                        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5),
-                        padding=15
-                    )
+                create_modern_card(
+                    content=ft.Column([
+                        ft.Container(
+                            content=ft.Icon(ft.Icons.STORAGE, size=32, color=ft.Colors.WHITE),
+                            bgcolor=ft.Colors.PURPLE,
+                            border_radius=16,
+                            padding=ft.Padding(12, 12, 12, 12),
+                            alignment=ft.alignment.center
+                        ),
+                        ft.Text("Disk Space", size=14, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE),
+                        disk_space_text
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=12),
+                    elevation="soft",
+                    hover_effect=True,
+                    padding=20
                 )
-            ], col={"sm": 6, "md": 3}),
+            ], col={"sm": 6, "md": 6, "lg": 3}),
             ft.Column([
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            ft.Icon(ft.Icons.LINK, size=24, color=ft.Colors.ORANGE),
-                            ft.Text("Active Connections", size=12, weight=ft.FontWeight.W_500),
-                            active_connections_text
-                        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5),
-                        padding=15
-                    )
+                create_modern_card(
+                    content=ft.Column([
+                        ft.Container(
+                            content=ft.Icon(ft.Icons.LINK, size=32, color=ft.Colors.WHITE),
+                            bgcolor=ft.Colors.ORANGE,
+                            border_radius=16,
+                            padding=ft.Padding(12, 12, 12, 12),
+                            alignment=ft.alignment.center
+                        ),
+                        ft.Text("Active Connections", size=14, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE),
+                        active_connections_text
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=12),
+                    elevation="soft",
+                    hover_effect=True,
+                    padding=20
                 )
-            ], col={"sm": 6, "md": 3})
-        ])
+            ], col={"sm": 6, "md": 6, "lg": 3})
+        ], spacing=16),
+
     ], expand=True, scroll=ft.ScrollMode.AUTO, spacing=20)
+
+    # Create the main view with loading overlay capability
+    view = ft.Stack([
+        main_content,
+        loading_overlay  # Overlay positioned above main content
+    ], expand=True)
 
     # Schedule initial data load after controls are added to page
     def schedule_initial_load():
@@ -980,5 +1250,8 @@ def create_analytics_view(
     # Schedule initial load and export trigger function
     schedule_initial_load()
     view.trigger_initial_load = trigger_initial_load
+
+    # Add accessibility and debug info
+    logger.info("Enhanced analytics view created with responsive layout and Material Design 3 styling")
 
     return view

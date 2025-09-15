@@ -38,6 +38,7 @@ from utils.performance import (
     global_memory_manager, paginate_data
 )
 from theme import get_brand_color, create_modern_button_style, get_shadow_style
+from utils.ui_components import create_modern_card
 
 logger = get_logger(__name__)
 
@@ -335,59 +336,70 @@ def create_logs_view(
         )
 
     def create_statistics_panel() -> ft.Container:
-        """Create a statistics panel with Material Design 3 styling."""
+        """Create a responsive statistics panel with Material Design 3 styling."""
         if not logs_statistics:
             return ft.Container()
 
-        stats_cards = []
-
-        # Total logs card
-        stats_cards.append(
-            ft.Container(
-                content=ft.Column([
-                    ft.Text("Total Logs", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT),
-                    ft.Text(str(logs_statistics.get("total_logs", 0)), size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.PRIMARY)
-                ], spacing=4),
-                padding=ft.Padding(12, 8, 12, 8),
-                bgcolor=ft.Colors.SURFACE_VARIANT,
-                border_radius=8,
-                width=100
-            )
+        # Total logs card with modern styling
+        total_logs_card = create_modern_card(
+            content=ft.Column([
+                ft.Text("Total Logs", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text(str(logs_statistics.get("total_logs", 0)), size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.PRIMARY)
+            ], spacing=6),
+            elevation="soft",
+            is_dark=is_dark_theme,
+            padding=16,
+            hover_effect=True
         )
 
-        # Error rate card
+        # Error rate card with enhanced color coding
         error_rate = logs_statistics.get("error_rate", 0)
-        error_color = ft.Colors.ERROR if error_rate > 0.1 else ft.Colors.SUCCESS if error_rate < 0.05 else ft.Colors.WARNING
-        stats_cards.append(
-            ft.Container(
-                content=ft.Column([
-                    ft.Text("Error Rate", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT),
-                    ft.Text(f"{error_rate:.1%}", size=20, weight=ft.FontWeight.BOLD, color=error_color)
-                ], spacing=4),
-                padding=ft.Padding(12, 8, 12, 8),
-                bgcolor=ft.Colors.SURFACE_VARIANT,
-                border_radius=8,
-                width=100
-            )
+        error_color = ft.Colors.ERROR if error_rate > 0.1 else ft.Colors.GREEN_500 if error_rate < 0.05 else ft.Colors.YELLOW_500
+        error_rate_card = create_modern_card(
+            content=ft.Column([
+                ft.Text("Error Rate", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text(f"{error_rate:.1%}", size=24, weight=ft.FontWeight.BOLD, color=error_color)
+            ], spacing=6),
+            elevation="soft",
+            is_dark=is_dark_theme,
+            padding=16,
+            hover_effect=True,
+            color_accent="error" if error_rate > 0.1 else "success" if error_rate < 0.05 else "warning"
         )
 
-        # Last 24h card
-        stats_cards.append(
-            ft.Container(
-                content=ft.Column([
-                    ft.Text("Last 24h", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT),
-                    ft.Text(str(logs_statistics.get("last_24h", 0)), size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.SECONDARY)
-                ], spacing=4),
-                padding=ft.Padding(12, 8, 12, 8),
-                bgcolor=ft.Colors.SURFACE_VARIANT,
-                border_radius=8,
-                width=100
-            )
+        # Last 24h card with secondary accent
+        last_24h_card = create_modern_card(
+            content=ft.Column([
+                ft.Text("Last 24h", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text(str(logs_statistics.get("last_24h", 0)), size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.SECONDARY)
+            ], spacing=6),
+            elevation="soft",
+            is_dark=is_dark_theme,
+            padding=16,
+            hover_effect=True
         )
 
+        # Recent errors card with tertiary accent
+        recent_errors_card = create_modern_card(
+            content=ft.Column([
+                ft.Text("Recent Errors", size=12, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text(str(logs_statistics.get("recent_errors", 0)), size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.TERTIARY)
+            ], spacing=6),
+            elevation="soft",
+            is_dark=is_dark_theme,
+            padding=16,
+            hover_effect=True
+        )
+
+        # Use ResponsiveRow for adaptive layout
         return ft.Container(
-            content=ft.Row(stats_cards, spacing=12),
-            padding=ft.Padding(0, 8, 0, 8)
+            content=ft.ResponsiveRow([
+                ft.Column([total_logs_card], col={"sm": 12, "md": 6, "lg": 3}),
+                ft.Column([error_rate_card], col={"sm": 12, "md": 6, "lg": 3}),
+                ft.Column([last_24h_card], col={"sm": 12, "md": 6, "lg": 3}),
+                ft.Column([recent_errors_card], col={"sm": 12, "md": 6, "lg": 3})
+            ]),
+            padding=ft.Padding(0, 12, 0, 16)
         )
 
     def update_list():
@@ -397,23 +409,25 @@ def create_logs_view(
         logs_statistics = calculate_logs_statistics(filtered_logs_data)
 
         if not filtered_logs_data:
-            empty_state = ft.Container(
+            empty_state = create_modern_card(
                 content=ft.Column([
-                    ft.Icon(ft.Icons.ARTICLE, size=48, color=ft.Colors.OUTLINE),
-                    ft.Text("No logs found", weight=ft.FontWeight.BOLD, size=16),
-                    ft.Text("Adjust filters or search query.", size=12, color=ft.Colors.OUTLINE),
+                    ft.Icon(ft.Icons.ARTICLE_OUTLINED, size=64, color=ft.Colors.PRIMARY),
                     ft.Container(height=16),
+                    ft.Text("No logs found", weight=ft.FontWeight.BOLD, size=18, color=ft.Colors.ON_SURFACE),
+                    ft.Text("Adjust filters or search query to view logs.", size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Container(height=24),
                     ft.Row([
-                        ft.OutlinedButton("Show All", icon=ft.Icons.CLEAR, on_click=create_filter_handler("ALL")),
+                        ft.FilledButton("Show All", icon=ft.Icons.CLEAR_ALL, on_click=create_filter_handler("ALL")),
                         ft.OutlinedButton("Refresh", icon=ft.Icons.REFRESH, on_click=on_refresh_logs)
-                    ], alignment=ft.MainAxisAlignment.CENTER, spacing=12)
+                    ], alignment=ft.MainAxisAlignment.CENTER, spacing=16)
                 ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
-                height=300,
-                alignment=ft.alignment.center,
-                bgcolor=ft.Colors.SURFACE_VARIANT,
-                border_radius=12,
-                padding=ft.Padding(20, 20, 20, 20)
+                elevation="medium",
+                is_dark=is_dark_theme,
+                padding=32,
+                hover_effect=True
             )
+            empty_state.height = 320
+            empty_state.alignment = ft.alignment.center
             logs_container.controls = [empty_state]
         else:
             # Ensure current page valid after any filter change
@@ -534,14 +548,28 @@ def create_logs_view(
 
     # ---------------------- Enhanced Event Handlers -------------------------------- #
     async def perform_search():
-        """Enhanced search with state manager integration."""
+        """Enhanced search with comprehensive error handling and user feedback."""
         nonlocal search_query
         pagination_config.current_page = 0
 
-        # Set loading state
+        # Set loading state with enhanced UI feedback
         state_manager.set_loading("logs_search", True)
+        if loading_indicator_ref.current:
+            loading_indicator_ref.current.visible = True
+            loading_indicator_ref.current.update()
 
         try:
+            # Validate search query for regex mode
+            if regex_search_enabled and search_query.strip():
+                try:
+                    re.compile(search_query.strip())
+                except re.error as e:
+                    state_manager.add_notification(
+                        f"Invalid regex pattern: {str(e)}",
+                        "error", auto_dismiss=5
+                    )
+                    return
+
             with PerfTimer("logs.search.perform"):
                 apply_filters()
                 update_list()
@@ -551,17 +579,35 @@ def create_logs_view(
             # Update state manager with search results
             await state_manager.update_async("logs_filtered", filtered_logs_data, source="search")
 
-            logger.info(f"Search query='{search_query}' results={len(filtered_logs_data)}")
+            logger.info(f"Search query='{search_query}' results={len(filtered_logs_data)} regex={regex_search_enabled}")
 
-            # Add notification for search results
+            # Enhanced notification for search results
             if search_query.strip():
-                state_manager.add_notification(
-                    f"Search found {len(filtered_logs_data)} results for '{search_query}'",
-                    "info" if filtered_logs_data else "warning",
-                    auto_dismiss=3
-                )
+                search_type = "regex" if regex_search_enabled else "text"
+                highlight_info = f" ({len(search_highlights)} highlights)" if search_highlights else ""
+
+                if filtered_logs_data:
+                    state_manager.add_notification(
+                        f"{search_type.title()} search found {len(filtered_logs_data)} results{highlight_info}",
+                        "success", auto_dismiss=3
+                    )
+                else:
+                    state_manager.add_notification(
+                        f"No results found for {search_type} search '{search_query}'",
+                        "warning", auto_dismiss=4
+                    )
+
+        except Exception as e:
+            logger.error(f"Search operation failed: {e}", exc_info=True)
+            state_manager.add_notification(
+                f"Search failed: {str(e)}",
+                "error", auto_dismiss=5
+            )
         finally:
             state_manager.set_loading("logs_search", False)
+            if loading_indicator_ref.current:
+                loading_indicator_ref.current.visible = False
+                loading_indicator_ref.current.update()
 
     def on_search_change(e):
         nonlocal search_query, search_debounce_timer, cancelled_tasks
@@ -654,13 +700,23 @@ def create_logs_view(
             page.dialog.update()
 
     async def confirm_clear(_):
-        """Enhanced clear operation with server bridge integration."""
+        """Enhanced clear operation with comprehensive error handling and progress tracking."""
         nonlocal logs_data, filtered_logs_data
 
-        # Set loading state
+        # Set loading state with enhanced UI feedback
         state_manager.set_loading("logs_clear", True)
+        if loading_indicator_ref.current:
+            loading_indicator_ref.current.visible = True
+            loading_indicator_ref.current.update()
 
         try:
+            # Show progress notification
+            state_manager.add_notification(
+                "Clearing logs...", "info", auto_dismiss=False
+            )
+
+            original_count = len(logs_data)
+
             # Use server bridge if available
             if server_bridge and hasattr(server_bridge, 'clear_logs_async'):
                 try:
@@ -670,35 +726,77 @@ def create_logs_view(
                         filtered_logs_data = []
 
                         # Update state manager
-                        await state_manager.clear_logs_state()
+                        if hasattr(state_manager, 'clear_logs_state'):
+                            await state_manager.clear_logs_state()
+                        else:
+                            await state_manager.update_async("logs_data", [], source="clear")
+
+                        # Broadcast clear event to other views (if method exists)
+                        if hasattr(state_manager, 'broadcast_logs_event'):
+                            await state_manager.broadcast_logs_event({
+                                "type": "logs_cleared",
+                                "count": original_count,
+                                "mode": result.get('mode', 'server')
+                            })
+                        else:
+                            # Fallback: update logs_events state
+                            await state_manager.update_async("logs_events", {
+                                "type": "logs_cleared",
+                                "count": original_count,
+                                "mode": result.get('mode', 'server')
+                            }, source="clear_operation")
 
                         state_manager.add_notification(
-                            f"Logs cleared successfully ({result.get('mode', 'server')})",
-                            "success"
+                            f"Successfully cleared {original_count} logs ({result.get('mode', 'server')} mode)",
+                            "success", auto_dismiss=4
                         )
                     else:
+                        error_msg = result.get('error', 'Unknown server error')
+                        logger.error(f"Server clear failed: {error_msg}")
                         state_manager.add_notification(
-                            f"Failed to clear logs: {result.get('error', 'Unknown error')}",
-                            "error"
+                            f"Failed to clear logs: {error_msg}",
+                            "error", auto_dismiss=6
                         )
+                        return  # Don't proceed with local clear if server explicitly failed
+
                 except Exception as e:
-                    logger.warning(f"Server clear failed, using local clear: {e}")
+                    logger.warning(f"Server clear failed, attempting local clear: {e}")
+                    # Fall through to local clear
                     logs_data = []
                     filtered_logs_data = []
-                    state_manager.add_notification("Logs cleared locally (server unavailable)", "warning")
+                    await state_manager.update_async("logs_data", [], source="local_clear")
+                    state_manager.add_notification(
+                        f"Logs cleared locally ({original_count} entries) - server unavailable",
+                        "warning", auto_dismiss=5
+                    )
             else:
-                # Local clear
+                # Local clear with enhanced feedback
                 logs_data = []
                 filtered_logs_data = []
-                state_manager.add_notification("Logs cleared locally", "success")
+                await state_manager.update_async("logs_data", [], source="local_clear")
+                state_manager.add_notification(
+                    f"Logs cleared locally ({original_count} entries)",
+                    "success", auto_dismiss=4
+                )
 
-            # Update UI
+            # Update UI with smooth transition
+            populate_component_filter()  # Clear component options
+            apply_filters()
             update_list()
             update_status()
             update_pagination_controls()
 
+        except Exception as e:
+            logger.error(f"Clear operation failed: {e}", exc_info=True)
+            state_manager.add_notification(
+                f"Clear operation failed: {str(e)}",
+                "error", auto_dismiss=6
+            )
         finally:
             state_manager.set_loading("logs_clear", False)
+            if loading_indicator_ref.current:
+                loading_indicator_ref.current.visible = False
+                loading_indicator_ref.current.update()
             close_dialog(None)
 
     def on_clear_logs(_):
@@ -724,9 +822,57 @@ def create_logs_view(
         page.dialog.update()
 
     def on_refresh_logs(_):
-        """Enhanced refresh with state manager integration."""
-        page.run_task(load_logs_data_async)
-        state_manager.add_notification("Refreshing logs...", "info", auto_dismiss=2)
+        """Enhanced refresh with comprehensive error handling and progress tracking."""
+        async def refresh_with_feedback():
+            try:
+                # Show immediate feedback
+                state_manager.add_notification("Refreshing logs...", "info", auto_dismiss=3)
+
+                # Set loading state
+                state_manager.set_loading("logs_load", True)
+                if loading_indicator_ref.current:
+                    loading_indicator_ref.current.visible = True
+                    loading_indicator_ref.current.update()
+
+                # Store previous count for comparison
+                previous_count = len(logs_data)
+
+                # Perform the refresh
+                await load_logs_data_async()
+
+                # Show completion feedback with change information
+                new_count = len(logs_data)
+                change = new_count - previous_count
+
+                if change > 0:
+                    state_manager.add_notification(
+                        f"Refresh complete: {new_count} logs ({change} new entries)",
+                        "success", auto_dismiss=4
+                    )
+                elif change < 0:
+                    state_manager.add_notification(
+                        f"Refresh complete: {new_count} logs ({abs(change)} removed)",
+                        "info", auto_dismiss=4
+                    )
+                else:
+                    state_manager.add_notification(
+                        f"Refresh complete: {new_count} logs (no changes)",
+                        "info", auto_dismiss=3
+                    )
+
+            except Exception as e:
+                logger.error(f"Refresh operation failed: {e}", exc_info=True)
+                state_manager.add_notification(
+                    f"Refresh failed: {str(e)}",
+                    "error", auto_dismiss=5
+                )
+            finally:
+                state_manager.set_loading("logs_load", False)
+                if loading_indicator_ref.current:
+                    loading_indicator_ref.current.visible = False
+                    loading_indicator_ref.current.update()
+
+        page.run_task(refresh_with_feedback)
 
     # Helper function for file save dialog
     async def choose_save_location(temp_path: str, export_format: str) -> Optional[str]:
@@ -971,12 +1117,18 @@ def create_logs_view(
             return final_path is not None
 
         except Exception as e:
-            logger.error(f"Export failed: {e}")
-            state_manager.add_notification(f"Export failed: {str(e)}", "error")
+            logger.error(f"Export operation failed: {e}", exc_info=True)
+            state_manager.add_notification(
+                f"Export failed: {str(e)}",
+                "error", auto_dismiss=6
+            )
             return False
         finally:
             state_manager.set_loading("logs_export", False)
             state_manager.clear_progress("logs_export")
+            if loading_indicator_ref.current:
+                loading_indicator_ref.current.visible = False
+                loading_indicator_ref.current.update()
             if page.dialog:
                 page.dialog.open = False
                 page.dialog.update()
@@ -1193,7 +1345,7 @@ def create_logs_view(
         update_pagination_controls()
 
     regex_toggle = ft.IconButton(
-        icon=ft.Icons.REGEX,
+        icon=ft.Icons.SEARCH,
         tooltip="Toggle regex search",
         selected=False,
         on_click=on_regex_toggle,
@@ -1210,7 +1362,7 @@ def create_logs_view(
         on_change=on_search_change,
         expand=True,
         filled=True,
-        bgcolor=ft.Colors.SURFACE_VARIANT,
+        bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
         border_radius=12,
         content_padding=ft.Padding(16, 12, 16, 12),
         border_color=ft.Colors.OUTLINE_VARIANT,
@@ -1317,6 +1469,17 @@ def create_logs_view(
     pagination_row = ft.Row([first_btn, prev_btn, page_info_text, next_btn, last_btn], spacing=5)
 
     # Enhanced action buttons with Material Design 3 styling
+    # Enhanced loading indicator with Material Design 3 styling
+    loading_indicator_ref = ft.Ref[ft.ProgressRing]()
+    loading_indicator = ft.ProgressRing(
+        ref=loading_indicator_ref,
+        width=24,
+        height=24,
+        stroke_width=3,
+        color=ft.Colors.PRIMARY,
+        visible=False
+    )
+
     action_buttons = ft.Row([
         ft.IconButton(
             icon=ft.Icons.REFRESH,
@@ -1354,6 +1517,8 @@ def create_logs_view(
                 color=ft.Colors.ERROR
             )
         ),
+        ft.Container(width=8),  # Spacer
+        loading_indicator  # Add loading indicator to action row
     ], spacing=8)
 
     # Enhanced layout with Material Design 3 structure
@@ -1373,36 +1538,55 @@ def create_logs_view(
             border_radius=ft.BorderRadius(16, 16, 0, 0)
         ),
 
-        # Filter section with enhanced controls
+        # Filter section with responsive design
         ft.Container(
-            content=ft.Column([
-                ft.Row(filter_buttons, spacing=12, wrap=True),
-                ft.Container(height=12),
-                ft.Row([
-                    component_dropdown,
-                    ft.Container(width=16),
-                    date_filter_toggle,
-                    date_from_field,
-                    date_to_field
-                ], spacing=8, wrap=True)
-            ], spacing=8),
+            content=ft.ResponsiveRow([
+                # Filter buttons - responsive layout
+                ft.Column([
+                    ft.Row(filter_buttons[:3], spacing=12, wrap=True),  # First row: ALL, INFO, SUCCESS
+                    ft.Container(height=8),
+                    ft.Row(filter_buttons[3:], spacing=12, wrap=True)   # Second row: WARNING, ERROR, DEBUG
+                ], col={"sm": 12, "md": 8, "lg": 9}),
+
+                # Additional controls - stacked on mobile, inline on desktop
+                ft.Column([
+                    ft.Row([
+                        component_dropdown,
+                        date_filter_toggle
+                    ], spacing=12, wrap=True),
+                    ft.Container(height=8),
+                    ft.Row([
+                        date_from_field,
+                        date_to_field
+                    ], spacing=8, wrap=True)
+                ], col={"sm": 12, "md": 4, "lg": 3})
+            ]),
             padding=ft.Padding(24, 0, 24, 16),
-            bgcolor=ft.Colors.SURFACE_VARIANT,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
             border_radius=0
         ),
 
-        # Search section with enhanced styling
+        # Search section with responsive design
         ft.Container(
-            content=ft.Row([
-                search_field,
-                ft.Container(width=12),
+            content=ft.ResponsiveRow([
+                # Search field - takes most space
                 ft.Column([
-                    ft.Text("🔍 Smart Search", size=11, color=ft.Colors.ON_SURFACE_VARIANT, italic=True),
-                    ft.Text("300ms debounced", size=10, color=ft.Colors.OUTLINE, italic=True)
-                ], spacing=2)
+                    search_field
+                ], col={"sm": 12, "md": 9, "lg": 10}),
+
+                # Search info - hidden on small screens
+                ft.Column([
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Text("🔍 Smart Search", size=11, color=ft.Colors.ON_SURFACE_VARIANT, italic=True),
+                            ft.Text("300ms debounced", size=10, color=ft.Colors.OUTLINE, italic=True)
+                        ], spacing=2),
+                        visible=True  # Always visible but responsive
+                    )
+                ], col={"sm": 0, "md": 3, "lg": 2})
             ]),
             padding=ft.Padding(24, 0, 24, 16),
-            bgcolor=ft.Colors.SURFACE_VARIANT
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST
         ),
 
         # Status and pagination section
@@ -1413,7 +1597,7 @@ def create_logs_view(
                 last_updated_text
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             padding=ft.Padding(24, 8, 24, 8),
-            bgcolor=ft.Colors.SURFACE_VARIANT
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST
         ),
 
         ft.Container(
@@ -1423,7 +1607,7 @@ def create_logs_view(
                 ft.Container(expand=True)
             ], alignment=ft.MainAxisAlignment.CENTER),
             padding=ft.Padding(24, 8, 24, 16),
-            bgcolor=ft.Colors.SURFACE_VARIANT,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
             border_radius=ft.BorderRadius(0, 0, 16, 16)
         ),
 
@@ -1432,7 +1616,7 @@ def create_logs_view(
             content=logs_container,
             expand=True,
             padding=ft.Padding(24, 16, 24, 24),
-            bgcolor=ft.Colors.BACKGROUND,
+            bgcolor=ft.Colors.SURFACE,
             border_radius=0
         )
     ], expand=True, spacing=0)
@@ -1448,14 +1632,42 @@ def create_logs_view(
             nonlocal logs_data
             if new_logs != logs_data:
                 logs_data = new_logs
+                # Update component filter dropdown with new data
+                populate_component_filter()
                 apply_filters()
                 update_list()
                 update_status()
                 update_pagination_controls()
 
+                # Show notification if logs were updated from external source
+                if old_logs and len(new_logs) != len(old_logs):
+                    state_manager.add_notification(
+                        f"Logs updated: {len(new_logs)} entries ({abs(len(new_logs) - len(old_logs))} change)",
+                        "info", auto_dismiss=3
+                    )
+
         def on_loading_states(loading_states, _):
-            """Handle loading state updates."""
+            """Handle loading state updates with enhanced UI feedback."""
             update_loading_indicators(loading_states)
+
+            # Update search field state during search operations
+            if search_field and hasattr(search_field, 'disabled'):
+                search_field.disabled = loading_states.get("logs_search", False)
+                search_field.update()
+
+            # Update status text during loading operations
+            if loading_states.get("logs_load", False):
+                status_text.value = "Loading logs..."
+                status_text.update()
+            elif loading_states.get("logs_search", False):
+                status_text.value = "Searching logs..."
+                status_text.update()
+            elif loading_states.get("logs_export", False):
+                status_text.value = "Exporting logs..."
+                status_text.update()
+            elif loading_states.get("logs_clear", False):
+                status_text.value = "Clearing logs..."
+                status_text.update()
 
         def on_logs_events(event, _):
             """Handle logs event notifications."""

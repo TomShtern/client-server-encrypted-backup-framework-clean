@@ -15,65 +15,72 @@ USE RIPGREP (rg) TO SEARCH FOR PATTERNS MORE EFFICIENTLY.
 USE AST-GREP (SG) TO UNDERSTAND CODE STRUCTURE.
 
 
-# FletV2 – Copilot Instructions (concise)
 
-Scope: Work ONLY inside `FletV2/`. Follow "Framework Harmony" — prefer Flet's built-ins over custom infra. Keep changes small, readable, and performant.
+# FletV2 – Copilot Instructions (2025-09 update)
 
-Architecture snapshot
-- Entry: `main.py` builds `FletV2App(ft.Row)` with `NavigationRail` + `AnimatedSwitcher` content.
-- Views: Functions returning `ft.Control` with signature `create_<name>_view(server_bridge, page: ft.Page, state_manager=None)` in `views/`.
-- Server: `utils/server_bridge.py` unified `ServerBridge` with automatic mock fallback; keep return shapes stable in both modes.
-- Theme: `theme.py` (`setup_modern_theme(page)`, `toggle_theme_mode`).
-- Logging/Debug: `utils/debug_setup.py`; config flags in `config.py` (e.g., `FLET_V2_DEBUG`).
+## Scope & Philosophy
+Work ONLY inside `FletV2/`. Follow "Framework Harmony": always use Flet's built-ins, avoid custom infra, keep code simple, readable, and performant. All changes must be small, focused, and maintainable.
 
-Golden patterns (do these)
-- Control updates: use `control.update()`; only use `page.update()` for global/theme changes. Batch with `ft.update_async()` when updating several controls.
-- Navigation: only `NavigationRail.on_change` → call `_load_view` (see `main.py`). No custom routers.
-- Layout: `expand=True`, standard `Row/Column/Container/Stack/GridView/ListView/Card/DataTable/Tabs/ResponsiveRow/SafeArea`.
-- Control access: `ft.Ref` (e.g., `cpu = ft.Ref[ft.Text]()` … `cpu.current.value = "35%"; cpu.current.update()`).
-- Views stay focused (~200–600 LOC), utils/components smaller (≤~450 LOC). Decompose before exceeding limits.
+## Architecture & Patterns
+- Entry: `main.py` builds `FletV2App(ft.Row)` with `NavigationRail` and `AnimatedSwitcher` for content.
+- Views: Functions in `views/` with signature `create_<name>_view(server_bridge, page, state_manager=None) -> ft.Control`.
+- ServerBridge: `utils/server_bridge.py` provides unified API, auto-mocks if no real server. Return shapes must be stable in both modes.
+- Theme: Use `theme.py` helpers (`setup_modern_theme`, `toggle_theme_mode`).
+- Logging/Debug: Use `utils/debug_setup.py` and config flags in `config.py` (e.g., `FLET_V2_DEBUG`).
 
-ServerBridge quick contract
-- Create with `from utils.server_bridge import create_server_bridge`.
-- Clients: `get_all_clients_from_db()` or `get_clients_async()` → list of dicts `{id, client_id, name, status, last_seen, files_count, total_size}`.
-- Files: `get_files[_async]()`, `get_client_files(client_id)`, `delete_file[_async]()`, `download_file[_async]()` (mock writes a temp file).
-- DB: `get_database_info[_async]()`, `get_table_data[_async]()`, `update_row()`, `delete_row()`.
-- Status/Logs: `get_server_status[_async]()`, `get_system_status()`, `get_logs()`.
-- Keep mock/real return shapes identical so UIs don't branch.
+## Golden Patterns
+- **Control updates:** Use `control.update()` for UI changes; only use `page.update()` for global/theme changes. Batch with `ft.update_async()` for multiple controls.
+- **Navigation:** Only use `NavigationRail.on_change` → `_load_view` (see `main.py`). No custom routers.
+- **Layout:** Use `expand=True` and standard Flet containers (Row, Column, etc.).
+- **Control access:** Use `ft.Ref` for control references, never deep index chains.
+- **View disposal:** All views must implement a `dispose()` method to clean up subscriptions, async tasks, and overlays (e.g., remove FilePicker from `page.overlay`). Main app must call dispose before switching views.
+- **FilePicker lifecycle:** Only one FilePicker per view instance. Store on state, add to overlay if not present, remove on dispose. Always reference via state object.
+- **Progress tracking:** For long-running operations (export, backup), use StateManager's `start_progress`, `update_progress`, and `clear_progress`. UI indicators should bind to progress states for granular feedback.
+- **Event deduplication:** StateManager must deduplicate events to prevent duplicate notifications and unnecessary UI updates.
+- **Async patterns:** Use small async handlers and `page.run_task()` for background work. Avoid blocking the UI.
 
-Common workflows
-- Run: `flet run -r main.py` (hot reload) or `python main.py`. Set `FLET_V2_DEBUG=true` for verbose logging.
-- Type/Lint: `pyright`, `pylint main.py views/ utils/`.
-- Tests: `python -m pytest tests -v` (note: UI fidelity is limited by Flet; prefer manual smoke for view changes). **Avoid running tests; they cannot accurately test Flet implementations.**
-- After ANY file edit: run Codacy analysis on the file (project rule). If MCP isn't available, see `.github/instructions/codacy.instructions.md`. Codacy checks are currently ignored but still run the tool.
-  - **Codacy checks are currently ignored. DO NOT USE CODACY.**
+## ServerBridge API
+- Create with `from utils/server_bridge import create_server_bridge`.
+- All methods must return normalized dicts (e.g., `{success, data, mode}`) for both real and mock modes.
+- Mock operations must update persistent state and enforce referential integrity (e.g., cascading deletes).
 
-Gotchas and invariants
-- Flet API names are case-sensitive: `ft.Colors` (not `ft.colors`), `ft.Animation` (not `ft.animation`). `FontWeight.W_500` (not `W500`).
-- "Text Control must be added to the page first": ensure controls are attached before updating; defer subscriptions until the view is constructed and added.
-  - To resolve this, ensure that controls are properly added to the page before attempting to update them.
-    - Defer subscription setup until after the view is constructed and attached to the page. This can be achieved by adding a deferred initialization pattern at the end of the view creation function.
-- Theme inheritance first; avoid hard-coded colors. Prefer `ft.Colors.PRIMARY`, `ColorScheme`, and `theme.py` helpers.
-- Prefer small async handlers (`async def …`) and `page.run_task()` for background work; avoid blocking the UI.
+## Common Workflows
+- Run: `flet run -r main.py` or `python main.py`. Set `FLET_V2_DEBUG=true` for verbose logging.
+- Lint: `pyright`, `pylint main.py views/ utils/`.
+- Tests: `python -m pytest tests -v` (manual smoke preferred for UI). **Avoid running tests; Flet UI is not testable by standard frameworks.**
+- After ANY file edit: Codacy analysis required by project rules, but checks are currently ignored. **DO NOT USE CODACY.**
+- Use ripgrep (rg) to search for patterns more efficiently.
 
-Additional patterns
-- Navigation: `AppBar/BottomAppBar/MenuBar/NavigationBar/NavigationDrawer/NavigationRail` for routing.
-- Theming: `page.theme = ft.Theme(color_scheme_seed=ft.Colors.GREEN)`; nested themes with `theme_mode`.
-- Routing: `page.route`, `page.on_route_change`, `page.views` stack, `page.go(route)`, `TemplateRoute` for params.
-- Desktop: Window props (`page.window.width/height/resizable/title`), `page.window_prevent_close`, `page.on_window_event`.
-- Performance: `ListView` with `item_extent/first_item_prototype`, `page.run_task()` for async, `page.open_dialog()` overlays.
-- Components: `Pagelet` for reusable sections, `SemanticsService` for accessibility, `Tester` for UI tests.
+## Gotchas & Invariants
+- Flet API names are case-sensitive.
+- Controls must be attached to the page before updating. Defer subscriptions until view is constructed and added.
+- Theme inheritance first; avoid hard-coded colors. Use `ft.Colors` and `theme.py` helpers.
+- Never loop `page.update()`; prefer granular control updates.
 
-Security/Config
-- Load secrets via env vars in `config.py` (e.g., `GITHUB_PERSONAL_ACCESS_TOKEN`, `SERVER_API_KEY`). Don't print secrets; warn in debug if missing.
+## Security & Config
+- Load secrets via env vars in `config.py`. Never print secrets; warn in debug if missing.
 
-Examples to copy
+## Debugging & Search
+- Use ripgrep (rg) for fast code search. For JSON errors, fix structure and validate (`python -m json.tool <file>`).
+
+## Examples
 - View skeleton: `views/<name>.py` → `def create_<name>_view(server_bridge, page, state_manager=None) -> ft.Control`.
-- Reference files: `main.py` (navigation + switcher), `views/dashboard.py` (view shape), `utils/server_bridge.py` (server contract), `theme.py` (Material 3), `docs/server_bridge_api.md`.
+- Reference: `main.py`, `views/dashboard.py`, `utils/server_bridge.py`, `theme.py`.
 
-Debugging tips
-- Prefer granular updates; never loop `page.update()`.
-- Quick searches: use ripgrep (rg). For JSON errors, fix structure and validate (`python -m json.tool <file>`).
+## Recent Enhancements (2025-09)
+- FilePicker lifecycle: Only one per view, removed on dispose: Ensure exactly one `FilePicker` per settings view instance, reuse it for import/export, and cleanly remove it on dispose. Ensure exactly one `FilePicker` per settings view instance, reuse it for import/export, and cleanly remove it on dispose.
+- Progress tracking: Use StateManager for granular progress in export/backup flows: Emit progress updates from these operations and bind UI indicators to `progress_states`. Use StateManager for granular progress in export/backup flows: Emit progress updates from these operations and bind UI indicators to `progress_states`.
+- Event deduplication: StateManager prevents duplicate notifications.
+- View disposal: All views must clean up subscriptions, async tasks, overlays.
+- API normalization: All server bridge methods return `{success, data, mode}`.
+
+## What NOT to do
+- Do not use custom routers, overlays, or state managers outside Flet's built-ins.
+- Do not use Codacy checks (currently ignored).
+- Do not hardcode colors, secrets, or control references.
+
+## References
+- See `main.py`, `views/settings.py`, `views/logs.py`, `utils/server_bridge.py`, `theme.py` for canonical patterns.
 
 ---
 description: AI rules derived by SpecStory from the project AI interaction history
@@ -506,3 +513,7 @@ disable=trailing-whitespace
 
 ### Layout and Scaling Issues
 - The action buttons and text in the tables
+
+### Recent Enhancements (2025-09)
+- FilePicker lifecycle: Only one per view, removed on dispose: Ensure exactly one `FilePicker` per settings view instance, reuse it for import/export, and cleanly remove it on dispose. Ensure exactly one `FilePicker` per settings view instance, reuse it for import/export, and cleanly remove it on dispose. Ensure exactly one `FilePicker` per settings view instance, reuse it for import/export, and cleanly remove it on dispose.
+- Progress tracking: Use StateManager for granular progress in export/backup flows: Emit progress updates from these operations and

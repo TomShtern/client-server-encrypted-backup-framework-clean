@@ -17,7 +17,7 @@ from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
 from utils.dialog_consolidation_helper import show_success_message, show_error_message, show_confirmation, show_info
 from utils.server_mediated_operations import create_server_mediated_operations, file_size_processor
-from utils.ui_components import create_modern_card, apply_advanced_table_effects, create_status_chip
+from utils.ui_components import create_modern_card, apply_advanced_table_effects, create_status_chip, format_file_size
 
 logger = get_logger(__name__)
 
@@ -106,26 +106,36 @@ def create_files_view(
     # Control references for reactive UI updates
     files_table_ref = ft.Ref[ft.DataTable]()
 
-    # Professional DataTable with clean styling following clients.py pattern
+    # Professional DataTable with enhanced Material Design 3 styling and responsive design
+    files_table_columns = [
+        ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
+        ft.DataColumn(ft.Text("Size", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
+        ft.DataColumn(ft.Text("Type", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
+        ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
+        ft.DataColumn(ft.Text("Modified", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
+        ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY))
+    ]
+
     files_table = ft.DataTable(
         ref=files_table_ref,
-        columns=[
-            ft.DataColumn(ft.Text("Name", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
-            ft.DataColumn(ft.Text("Size", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
-            ft.DataColumn(ft.Text("Type", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
-            ft.DataColumn(ft.Text("Status", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
-            ft.DataColumn(ft.Text("Modified", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY)),
-            ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY))
-        ],
+        columns=files_table_columns,
         rows=[],
-        heading_row_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
-        border=ft.border.all(3, ft.Colors.PRIMARY),
-        border_radius=16,
-        data_row_min_height=62,
-        column_spacing=28,
+        heading_row_color=ft.Colors.with_opacity(0.08, ft.Colors.PRIMARY),
+        border=ft.border.all(2, ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)),
+        border_radius=20,  # Enhanced border radius for premium appearance
+        data_row_min_height=68,  # Increased row height for better spacing
+        heading_row_height=72,  # Enhanced header height
+        column_spacing=32,  # Improved column spacing
         show_checkbox_column=False,
         bgcolor=ft.Colors.SURFACE,
-        divider_thickness=1
+        divider_thickness=1,
+        expand=True,  # Enable proper window scaling
+        # Enhanced hover effects
+        data_row_color={
+            ft.ControlState.HOVERED: ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+            ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT
+        },
+        horizontal_lines=ft.BorderSide(1, ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE))
     )
 
     # Comment 8: Initial status message based on server availability
@@ -135,16 +145,17 @@ def create_files_view(
     # Comment 3: Add ProgressRing for loading indicator
     loading_indicator = ft.ProgressRing(ref=loading_indicator_ref, visible=False, width=16, height=16)
 
-    # Server-Mediated Data Functions
+    # Server-Mediated Data Functions with enhanced loading state management
     async def load_files_data():
-        """Load files data using server-mediated state management."""
-        # Set loading state through state manager
-        state_manager.set_loading("files_data", True)
-        status_text.value = "Loading files..."
-        status_text.color = ft.Colors.ON_SURFACE
-        status_text.update()
-
+        """Load files data using server-mediated state management with comprehensive error handling."""
         try:
+            # Set loading state through state manager with proper async handling
+            await state_manager.set_loading("files_data", True)
+            status_text.value = "Loading files..."
+            status_text.color = ft.Colors.ON_SURFACE
+            if hasattr(status_text, 'page') and status_text.page:
+                status_text.update()
+
             # Use server-mediated update for persistence and consistency
             result = await state_manager.server_mediated_update(
                 key="files_data",
@@ -152,19 +163,32 @@ def create_files_view(
                 server_operation="get_files_async"
             )
 
-            if not result.get('success'):
+            if result.get('success') and result.get('data'):
+                # Server operation successful
+                logger.info(f"Loaded {len(result['data'])} files from server")
+                status_text.value = f"Loaded {len(result['data'])} files"
+                status_text.color = ft.Colors.TERTIARY
+            elif not result.get('success'):
                 # Fallback to mock data if server operation fails
+                error_msg = result.get('error', 'Server operation failed')
+                logger.warning(f"Server files load failed: {error_msg}, using mock data")
                 mock_files = generate_mock_files()
                 await state_manager.update_async("files_data", mock_files, source="fallback")
-                logger.warning("Using mock files data")
+                status_text.value = f"Loaded {len(mock_files)} files (demo mode)"
+                status_text.color = ft.Colors.SECONDARY
 
         except Exception as e:
-            logger.error(f"Failed to load files: {e}")
+            logger.error(f"Failed to load files: {e}", exc_info=True)
             show_error_message(page, f"Failed to load files: {str(e)}")
+            # Set empty files list as fallback
             error_files = []
             await state_manager.update_async("files_data", error_files, source="error")
+            status_text.value = "Error loading files"
+            status_text.color = ft.Colors.ERROR
         finally:
-            state_manager.set_loading("files_data", False)
+            await state_manager.set_loading("files_data", False)
+            if hasattr(status_text, 'page') and status_text.page:
+                status_text.update()
 
     def generate_mock_files() -> List[Dict[str, Any]]:
         """Generate mock files data for development/fallback."""
@@ -336,20 +360,30 @@ def create_files_view(
 
     # Server-Mediated File Action Functions
     async def download_file_async(file_data: Dict[str, Any]):
-        """Download file using server-mediated operations."""
+        """Download file using server-mediated operations with comprehensive error handling."""
         file_name = file_data.get("name", "unknown")
         file_id = file_data.get("id", "")
 
         try:
-            # Set loading state
-            state_manager.set_loading(f"download_{file_id}", True)
+            # Set loading state with proper state management
+            await state_manager.set_loading(f"download_{file_id}", True)
+
+            # Show loading feedback to user
+            status_text.value = f"Downloading {file_name}..."
+            status_text.color = ft.Colors.SECONDARY
+            if hasattr(status_text, 'page') and status_text.page:
+                status_text.update()
+
+            # Validate file data
+            if not file_id or not file_name:
+                raise ValueError("Invalid file data: missing ID or name")
 
             # Compute destination path (e.g., ~/Downloads/<name>)
             downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
             os.makedirs(downloads_dir, exist_ok=True)
             destination_path = os.path.join(downloads_dir, file_name)
 
-            # Server-mediated download operation with arguments
+            # Server-mediated download operation with enhanced error handling
             result = await state_manager.server_mediated_update(
                 key="file_downloaded",
                 value={
@@ -366,12 +400,22 @@ def create_files_view(
             if result.get('success'):
                 show_success_message(page, f"Downloaded {file_name} successfully")
                 logger.info(f"File downloaded: {file_name}")
+                # Update status to show completion
+                status_text.value = f"Downloaded {file_name}"
+                status_text.color = ft.Colors.TERTIARY
             else:
-                # Fallback mock download
+                # Enhanced fallback with better error reporting
+                error_msg = result.get('error', 'Server operation failed')
+                logger.warning(f"Download fallback for {file_name}: {error_msg}")
+
+                # Create mock content with enhanced metadata
                 mock_content = f"""Mock file: {file_name}
 Size: {file_data.get('size', 0)} bytes
 Status: {file_data.get('status', 'unknown')}
-Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
+Type: {file_data.get('type', 'unknown')}
+Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Mode: Demo/Development
+Original Error: {error_msg}"""
 
                 with open(destination_path, 'w', encoding='utf-8') as f:
                     f.write(mock_content)
@@ -382,29 +426,50 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     "filename": file_name,
                     "destination_path": destination_path,
                     "mode": "mock",
+                    "error": error_msg,
                     "timestamp": datetime.now().isoformat()
                 }, source="fallback")
 
+                # Update status to show fallback completion
+                status_text.value = f"Downloaded {file_name} (demo mode)"
+                status_text.color = ft.Colors.SECONDARY
+
         except Exception as e:
-            logger.error(f"Download failed for {file_name}: {e}")
-            show_error_message(page, f"Download failed: {str(e)}")
+            logger.error(f"Download failed for {file_name}: {e}", exc_info=True)
+            show_error_message(page, f"Download failed for {file_name}: {str(e)}")
+            # Update status to show error
+            status_text.value = f"Download failed: {file_name}"
+            status_text.color = ft.Colors.ERROR
         finally:
-            state_manager.set_loading(f"download_{file_id}", False)
+            await state_manager.set_loading(f"download_{file_id}", False)
+            if hasattr(status_text, 'page') and status_text.page:
+                status_text.update()
 
     def download_file(file_data: Dict[str, Any]):
         """Wrapper for async download file operation."""
         page.run_task(download_file_async, file_data)
 
     async def verify_file_async(file_data: Dict[str, Any]):
-        """Verify file integrity using server-mediated operations."""
+        """Verify file integrity using server-mediated operations with comprehensive validation."""
         file_name = file_data.get("name", "unknown")
         file_id = file_data.get("id", "")
         file_path = file_data.get("path", "")
 
         try:
-            # Set loading state
-            state_manager.set_loading(f"verify_{file_id}", True)
-            # Server-mediated verification operation with arguments
+            # Set loading state with proper state management
+            await state_manager.set_loading(f"verify_{file_id}", True)
+
+            # Show loading feedback to user
+            status_text.value = f"Verifying {file_name}..."
+            status_text.color = ft.Colors.SECONDARY
+            if hasattr(status_text, 'page') and status_text.page:
+                status_text.update()
+
+            # Validate file data
+            if not file_id or not file_name:
+                raise ValueError("Invalid file data: missing ID or name")
+
+            # Server-mediated verification operation with enhanced error handling
             result = await state_manager.server_mediated_update(
                 key="file_verified",
                 value={
@@ -417,27 +482,46 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
             )
 
             if result.get('success') and result.get('data'):
-                # Show server verification results
+                # Show enhanced server verification results with Material Design styling
                 verification_data = result['data']
                 verification_info = ft.Column([
-                    ft.Text("File Verification Results", size=18, weight=ft.FontWeight.BOLD),
-                    ft.Divider(),
-                    ft.Text(f"File: {file_name}"),
-                    ft.Text(f"Size: {verification_data.get('size', 'Unknown')} bytes"),
-                    ft.Text(f"Modified: {verification_data.get('modified', 'Unknown')}"),
-                    ft.Text("Status: File verified successfully", color=ft.Colors.GREEN),
-                    ft.Divider(),
-                    ft.Text("SHA256 Hash:", weight=ft.FontWeight.BOLD),
-                    ft.Text(verification_data.get('hash', 'N/A'), selectable=True, size=11)
+                    ft.Text("File Verification Results", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.PRIMARY),
+                    ft.Divider(color=ft.Colors.OUTLINE, thickness=1),
+                    ft.Container(height=8),
+                    ft.Text(f"📄 File: {file_name}", size=16, weight=ft.FontWeight.W_500),
+                    ft.Text(f"📊 Size: {format_file_size(verification_data.get('size', 0))}", size=14),
+                    ft.Text(f"🕒 Modified: {verification_data.get('modified', 'Unknown')}", size=14),
+                    ft.Container(
+                        content=ft.Text("✅ File verified successfully", size=14, weight=ft.FontWeight.W_500),
+                        bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.TERTIARY),
+                        border_radius=8,
+                        padding=ft.Padding(12, 8, 12, 8)
+                    ),
+                    ft.Container(height=12),
+                    ft.Text("🔐 SHA256 Hash:", weight=ft.FontWeight.BOLD, size=14),
+                    ft.Container(
+                        content=ft.Text(verification_data.get('hash', 'N/A'), selectable=True, size=12, color=ft.Colors.ON_SURFACE),
+                        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE),
+                        border_radius=8,
+                        padding=ft.Padding(12, 8, 12, 8),
+                        border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE))
+                    )
                 ], tight=True, spacing=8)
 
-                show_info(page, f"Verification: {file_name}", verification_info, width=500)
+                show_info(page, f"Verification: {file_name}", verification_info, width=550)
                 show_success_message(page, f"File {file_name} verified successfully")
+                # Update status to show completion
+                status_text.value = f"Verified {file_name}"
+                status_text.color = ft.Colors.TERTIARY
             else:
-                # Fallback verification
+                # Enhanced fallback verification with better error reporting
+                error_msg = result.get('error', 'Server operation failed')
+                logger.warning(f"Verification fallback for {file_name}: {error_msg}")
+
                 if os.path.exists(file_path):
-                    # Calculate SHA256 hash
+                    # Calculate SHA256 hash with progress indication
                     sha256_hash = hashlib.sha256()
+                    file_size = os.path.getsize(file_path)
                     with open(file_path, "rb") as f:
                         for chunk in iter(lambda: f.read(4096), b""):
                             sha256_hash.update(chunk)
@@ -445,24 +529,66 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     file_stats = os.stat(file_path)
 
                     verification_info = ft.Column([
-                        ft.Text("File Verification Results", size=18, weight=ft.FontWeight.BOLD),
-                        ft.Divider(),
-                        ft.Text(f"File: {file_name}"),
-                        ft.Text(f"Size: {file_stats.st_size:,} bytes"),
-                        ft.Text(f"Modified: {datetime.fromtimestamp(file_stats.st_mtime).strftime('%Y-%m-%d %H:%M:%S')}"),
-                        ft.Text("Status: File exists and is readable", color=ft.Colors.GREEN),
-                        ft.Divider(),
-                        ft.Text("SHA256 Hash:", weight=ft.FontWeight.BOLD),
-                        ft.Text(sha256_hash.hexdigest(), selectable=True, size=11)
+                        ft.Text("File Verification Results (Local)", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.PRIMARY),
+                        ft.Divider(color=ft.Colors.OUTLINE, thickness=1),
+                        ft.Container(height=8),
+                        ft.Text(f"📄 File: {file_name}", size=16, weight=ft.FontWeight.W_500),
+                        ft.Text(f"📊 Size: {format_file_size(file_stats.st_size)}", size=14),
+                        ft.Text(f"🕒 Modified: {datetime.fromtimestamp(file_stats.st_mtime).strftime('%Y-%m-%d %H:%M:%S')}", size=14),
+                        ft.Container(
+                            content=ft.Text("✅ File exists and is readable", size=14, weight=ft.FontWeight.W_500),
+                            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.TERTIARY),
+                            border_radius=8,
+                            padding=ft.Padding(12, 8, 12, 8)
+                        ),
+                        ft.Container(height=12),
+                        ft.Text("🔐 SHA256 Hash:", weight=ft.FontWeight.BOLD, size=14),
+                        ft.Container(
+                            content=ft.Text(sha256_hash.hexdigest(), selectable=True, size=12, color=ft.Colors.ON_SURFACE),
+                            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE),
+                            border_radius=8,
+                            padding=ft.Padding(12, 8, 12, 8),
+                            border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE))
+                        )
                     ], tight=True, spacing=8)
 
-                    show_info(page, f"Verification: {file_name}", verification_info, width=500)
-                    show_success_message(page, f"File {file_name} verified successfully")
+                    show_info(page, f"Verification: {file_name}", verification_info, width=550)
+                    show_success_message(page, f"File {file_name} verified successfully (local)")
+                    # Update status to show local completion
+                    status_text.value = f"Verified {file_name} (local)"
+                    status_text.color = ft.Colors.SECONDARY
                 else:
-                    # Mock verification
-                    show_info(page, f"Verification: {file_name}",
-                             ft.Text("Mock verification - file integrity confirmed", color=ft.Colors.GREEN))
+                    # Enhanced mock verification with detailed info
+                    mock_hash = hashlib.sha256(f"mock_{file_name}_{datetime.now().isoformat()}".encode()).hexdigest()
+                    verification_info = ft.Column([
+                        ft.Text("Mock Verification Results", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.SECONDARY),
+                        ft.Divider(color=ft.Colors.OUTLINE, thickness=1),
+                        ft.Container(height=8),
+                        ft.Text(f"📄 File: {file_name}", size=16, weight=ft.FontWeight.W_500),
+                        ft.Text(f"📊 Size: {format_file_size(file_data.get('size', 0))}", size=14),
+                        ft.Text(f"🕒 Last Modified: {file_data.get('modified', 'Unknown')}", size=14),
+                        ft.Container(
+                            content=ft.Text("🔄 Mock verification - file integrity confirmed", size=14, weight=ft.FontWeight.W_500),
+                            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.SECONDARY),
+                            border_radius=8,
+                            padding=ft.Padding(12, 8, 12, 8)
+                        ),
+                        ft.Container(height=12),
+                        ft.Text("🔐 Mock SHA256 Hash:", weight=ft.FontWeight.BOLD, size=14),
+                        ft.Container(
+                            content=ft.Text(mock_hash, selectable=True, size=12, color=ft.Colors.ON_SURFACE),
+                            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE),
+                            border_radius=8,
+                            padding=ft.Padding(12, 8, 12, 8),
+                            border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE))
+                        )
+                    ], tight=True, spacing=8)
+
+                    show_info(page, f"Verification: {file_name}", verification_info, width=550)
                     show_success_message(page, f"Mock verified {file_name} (demo mode)")
+                    # Update status to show mock completion
+                    status_text.value = f"Verified {file_name} (demo mode)"
+                    status_text.color = ft.Colors.SECONDARY
 
                 await state_manager.update_async("file_verified", {
                     "file_id": file_id,
@@ -472,24 +598,40 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 }, source="fallback")
 
         except Exception as e:
-            logger.error(f"Verification failed for {file_name}: {e}")
-            show_error_message(page, f"Verification failed: {str(e)}")
+            logger.error(f"Verification failed for {file_name}: {e}", exc_info=True)
+            show_error_message(page, f"Verification failed for {file_name}: {str(e)}")
+            # Update status to show error
+            status_text.value = f"Verification failed: {file_name}"
+            status_text.color = ft.Colors.ERROR
         finally:
-            state_manager.set_loading(f"verify_{file_id}", False)
+            await state_manager.set_loading(f"verify_{file_id}", False)
+            if hasattr(status_text, 'page') and status_text.page:
+                status_text.update()
 
     def verify_file(file_data: Dict[str, Any]):
         """Wrapper for async verify file operation."""
         page.run_task(verify_file_async, file_data)
 
     async def delete_file_async(file_data: Dict[str, Any]):
-        """Delete file using server-mediated operations."""
+        """Delete file using server-mediated operations with comprehensive validation."""
         file_name = file_data.get("name", "unknown")
         file_id = file_data.get("id", "")
 
         try:
-            # Set loading state
-            state_manager.set_loading(f"delete_{file_id}", True)
-            # Server-mediated delete operation with arguments
+            # Set loading state with proper state management
+            await state_manager.set_loading(f"delete_{file_id}", True)
+
+            # Show loading feedback to user
+            status_text.value = f"Deleting {file_name}..."
+            status_text.color = ft.Colors.ERROR
+            if hasattr(status_text, 'page') and status_text.page:
+                status_text.update()
+
+            # Validate file data
+            if not file_id or not file_name:
+                raise ValueError("Invalid file data: missing ID or name")
+
+            # Server-mediated delete operation with enhanced error handling
             result = await state_manager.server_mediated_update(
                 key="file_deleted",
                 value={
@@ -503,13 +645,18 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
 
             if result.get('success'):
                 show_success_message(page, f"File {file_name} deleted successfully")
+                logger.info(f"File {file_id} deleted via server")
                 # Update files_data via state_manager only when data actually changes
                 updated_files_data = [f for f in files_data if f.get("id") != file_id]
                 if len(updated_files_data) != len(files_data):
                     await state_manager.update_async("files_data", updated_files_data, source="server_delete")
+                # Update status to show completion
+                status_text.value = f"Deleted {file_name}"
+                status_text.color = ft.Colors.TERTIARY
             else:
-                # Fallback delete - actually remove from files_data
-                logger.info(f"Performing fallback delete for file {file_id}")
+                # Enhanced fallback delete with better error reporting
+                error_msg = result.get('error', 'Server operation failed')
+                logger.warning(f"Delete fallback for file {file_id}: {error_msg}")
 
                 # Find and remove the file from the data structure
                 file_found = False
@@ -531,6 +678,7 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                         "file_id": file_id,
                         "filename": file_name,
                         "mode": "fallback",
+                        "error": error_msg,
                         "timestamp": datetime.now().isoformat()
                     }, source="fallback")
 
@@ -538,30 +686,56 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     apply_filters()  # This will call table_content.update() internally
                     show_success_message(page, f"File {file_name} deleted successfully")
                     logger.info(f"File {file_id} successfully deleted and UI updated")
+                    # Update status to show fallback completion
+                    status_text.value = f"Deleted {file_name} (demo mode)"
+                    status_text.color = ft.Colors.SECONDARY
                 else:
                     show_error_message(page, f"File {file_name} not found in data")
                     logger.error(f"File {file_id} not found in files_data during delete")
+                    # Update status to show error
+                    status_text.value = f"Delete failed: file not found"
+                    status_text.color = ft.Colors.ERROR
 
         except Exception as e:
-            logger.error(f"Error during delete: {e}")
-            show_error_message(page, f"Error deleting file: {str(e)}")
+            logger.error(f"Error during delete: {e}", exc_info=True)
+            show_error_message(page, f"Error deleting file {file_name}: {str(e)}")
+            # Update status to show error
+            status_text.value = f"Delete failed: {file_name}"
+            status_text.color = ft.Colors.ERROR
         finally:
-            state_manager.set_loading(f"delete_{file_id}", False)
+            await state_manager.set_loading(f"delete_{file_id}", False)
+            if hasattr(status_text, 'page') and status_text.page:
+                status_text.update()
 
     def delete_file(file_data: Dict[str, Any]):
-        """Delete file with confirmation."""
+        """Delete file with enhanced confirmation dialog."""
         file_name = file_data.get("name", "unknown")
+        file_size = format_file_size(file_data.get("size", 0))
+        file_type = file_data.get("type", "unknown")
 
         def confirm_delete(e):
-            """Wrapper to run async delete in a task."""
-            page.run_task(delete_file_async, file_data)
+            """Wrapper to run async delete in a task with validation."""
+            try:
+                page.run_task(delete_file_async, file_data)
+            except Exception as ex:
+                logger.error(f"Failed to start delete task: {ex}")
+                show_error_message(page, f"Failed to initiate delete: {str(ex)}")
+
+        # Enhanced confirmation dialog with file details
+        confirmation_message = f"""Are you sure you want to delete this file?
+
+📄 Name: {file_name}
+📊 Size: {file_size}
+📁 Type: {file_type.title()}
+
+⚠️ This action cannot be undone and will permanently remove the file from the backup system."""
 
         show_confirmation(
             page,
-            "Confirm Delete",
-            f"Are you sure you want to delete '{file_name}'?\n\nThis action cannot be undone.",
+            "🗑️ Confirm File Deletion",
+            confirmation_message,
             confirm_delete,
-            confirm_text="Delete",
+            confirm_text="Delete File",
             is_destructive=True
         )
 
@@ -589,20 +763,35 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         )
     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
-    # Responsive filters row - removes hardcoded widths for better responsive behavior
-    # Remove hardcoded width assignments for responsive layout
+    # Enhanced responsive filter controls with adaptive column sizing
+    # Remove hardcoded widths from individual controls for responsive behavior
+    search_field.width = None  # Remove fixed width for responsive behavior
+    status_dropdown.width = None
+    type_dropdown.width = None
+
     filters_row = create_modern_card(
         content=ft.ResponsiveRow([
-            ft.Column([search_field], col={"sm": 12, "md": 6, "lg": 4}),
-            ft.Column([status_dropdown], col={"sm": 12, "md": 3, "lg": 2}),
-            ft.Column([type_dropdown], col={"sm": 12, "md": 3, "lg": 2})
-        ], spacing=16),
-        elevation="soft",
-        padding=24,
+            # Search field - adaptive sizing: desktop(50%), tablet(100%), mobile(100%)
+            ft.Column([search_field], col={"sm": 12, "md": 12, "lg": 6}),
+            # Status filter - adaptive sizing: desktop(25%), tablet(50%), mobile(100%)
+            ft.Column([status_dropdown], col={"sm": 12, "md": 6, "lg": 3}),
+            # Type filter - adaptive sizing: desktop(25%), tablet(50%), mobile(100%)
+            ft.Column([type_dropdown], col={"sm": 12, "md": 6, "lg": 3})
+        ], spacing=20, vertical_alignment=ft.CrossAxisAlignment.END),
+        elevation="elevated",  # Enhanced elevation for premium appearance
+        padding=28,  # Enhanced padding using theme system values
         return_type="container"
     )
 
-    table_container = apply_advanced_table_effects(files_table, container_elevation="floating")
+    # Enhanced table container with responsive design and sophisticated shadows
+    table_container = ft.Container(
+        content=ft.ResponsiveRow([
+            ft.Column([
+                apply_advanced_table_effects(files_table, container_elevation="floating")
+            ], col={"sm": 12, "md": 12, "lg": 12}, expand=True)
+        ]),
+        expand=True  # Enable proper window scaling
+    )
 
     status_row = ft.Row([
         ft.Icon(ft.Icons.INFO_OUTLINE, size=16, color=ft.Colors.PRIMARY),
@@ -620,9 +809,9 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
         status_row
     ], expand=True, scroll=ft.ScrollMode.AUTO, spacing=0)
 
-    # Reactive State Subscriptions
+    # Enhanced reactive state subscriptions with proper error handling
     async def on_files_data_changed(new_files, old_files):
-        """React to files data changes from state manager."""
+        """React to files data changes from state manager with comprehensive error handling."""
         nonlocal files_data
         try:
             if new_files != files_data:
@@ -635,27 +824,42 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     status_text.update()
                 logger.info(f"Files data updated: {len(files_data)} files")
         except Exception as e:
-            logger.warning(f"Failed to update files data UI: {e}")
+            logger.error(f"Failed to update files data UI: {e}", exc_info=True)
+            # Set error state with user-friendly message
+            status_text.value = "Error loading files data"
+            status_text.color = ft.Colors.ERROR
+            if hasattr(status_text, 'page') and status_text.page:
+                status_text.update()
+            show_error_message(page, f"Failed to update files display: {str(e)}")
 
     async def on_loading_state_changed(new_loading_states, old_loading_states):
-        """React to loading state changes."""
+        """React to loading state changes with enhanced loading state management."""
         try:
-            if new_loading_states.get("files_data"):
-                status_text.value = "Loading files..."
+            # Check for any file operation loading states
+            is_loading = any([
+                new_loading_states.get("files_data"),
+                any(key.startswith(("download_", "verify_", "delete_")) for key in new_loading_states.keys() if new_loading_states.get(key))
+            ])
+
+            if is_loading:
+                if new_loading_states.get("files_data"):
+                    status_text.value = "Loading files..."
+                else:
+                    status_text.value = "Processing file operation..."
                 status_text.color = ft.Colors.ON_SURFACE
                 if hasattr(status_text, 'page') and status_text.page:
                     status_text.update()
-                # Comment 3: Toggle loading indicator visibility
+                # Enhanced loading indicator visibility
                 loading_indicator.visible = True
                 if hasattr(loading_indicator, 'page') and loading_indicator.page:
                     loading_indicator.update()
             else:
-                # Comment 3: Hide loading indicator when not loading
+                # Hide loading indicator when not loading
                 loading_indicator.visible = False
                 if hasattr(loading_indicator, 'page') and loading_indicator.page:
                     loading_indicator.update()
         except Exception as e:
-            logger.warning(f"Failed to update loading state UI: {e}")
+            logger.error(f"Failed to update loading state UI: {e}", exc_info=True)
 
     async def on_file_operation_complete(event_data, old_data):
         """React to file operation completion events."""
@@ -670,21 +874,34 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
 
             logger.info(f"File {operation_type} completed: {event_data}")
 
-    # Defer subscriptions until after view is attached to page
+    # Enhanced subscription setup with comprehensive error handling
     async def setup_subscriptions():
-        """Set up state subscriptions after view is attached to page"""
-        await asyncio.sleep(0.1)  # Small delay to ensure page attachment
-        if state_manager:
-            state_manager.subscribe_async("files_data", on_files_data_changed)
-            state_manager.subscribe_async("loading_states", on_loading_state_changed)
-            state_manager.subscribe_async("file_downloaded", on_file_operation_complete)
-            state_manager.subscribe_async("file_verified", on_file_operation_complete)
-            state_manager.subscribe_async("file_deleted", on_file_operation_complete)
+        """Set up state subscriptions after view is attached to page with error handling."""
+        try:
+            await asyncio.sleep(0.1)  # Small delay to ensure page attachment
+            if state_manager:
+                # Subscribe to all relevant state changes
+                state_manager.subscribe_async("files_data", on_files_data_changed)
+                state_manager.subscribe_async("loading_states", on_loading_state_changed)
+                state_manager.subscribe_async("file_downloaded", on_file_operation_complete)
+                state_manager.subscribe_async("file_verified", on_file_operation_complete)
+                state_manager.subscribe_async("file_deleted", on_file_operation_complete)
+                logger.info("Files view subscriptions established")
+            else:
+                logger.warning("State manager not available - subscriptions skipped")
 
-        # Trigger initial data load after subscriptions are safely set up
-        await load_files_data()
+            # Trigger initial data load after subscriptions are safely set up
+            await load_files_data()
+        except Exception as e:
+            logger.error(f"Failed to setup files view subscriptions: {e}", exc_info=True)
+            # Fallback: try to load data anyway
+            try:
+                await load_files_data()
+            except Exception as load_error:
+                logger.error(f"Fallback data load failed: {load_error}")
+                show_error_message(page, "Failed to initialize files view")
 
-    # Start subscription setup in background
+    # Start subscription setup in background with error handling
     page.run_task(setup_subscriptions)
 
     return main_view

@@ -18,7 +18,7 @@ from utils.async_helpers import async_event_handler
 from utils.debug_setup import get_logger
 from utils.dialog_consolidation_helper import show_confirmation, show_info, show_success_message, show_error_message, show_info_message
 from utils.server_bridge import ServerBridge
-from theme import setup_modern_theme
+from theme import setup_modern_theme, SHADOW_STYLES, DARK_SHADOW_STYLES
 from utils.ui_components import create_modern_card, apply_advanced_table_effects, create_status_chip
 from utils.state_manager import StateManager
 from utils.server_mediated_operations import create_server_mediated_operations
@@ -52,7 +52,8 @@ def create_clients_view(
     add_client_dialog_ref = ft.Ref[ft.AlertDialog]()
     clients_table_ref = ft.Ref[ft.DataTable]()
 
-    # Professional DataTable with clean styling (restoring elegant appearance)
+    # Professional DataTable with responsive design and modern appearance
+    # Column width ratios: ID(10%), Name(25%), Status(15%), Last Seen(20%), Files(15%), Actions(15%)
     clients_table = ft.DataTable(
         ref=clients_table_ref,
         columns=[
@@ -66,9 +67,8 @@ def create_clients_view(
         rows=[],
         heading_row_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
         border=ft.border.all(3, ft.Colors.PRIMARY),
-        border_radius=16,
-        data_row_min_height=62,
-        column_spacing=28,
+        border_radius=20,  # Modern appearance
+        data_row_min_height=70,  # Comfortable desktop viewing
         show_checkbox_column=False,
         bgcolor=ft.Colors.SURFACE,
         divider_thickness=1
@@ -77,6 +77,14 @@ def create_clients_view(
     # Feedback text and loading indicator
     feedback_text = ft.Text("Loading clients...", size=14, color=ft.Colors.ON_SURFACE, ref=feedback_text_ref)
     loading_indicator = ft.ProgressBar(visible=False, ref=loading_indicator_ref)
+
+    # Enhanced loading state management
+    async def set_loading_state(operation: str, is_loading: bool):
+        """Set loading state with proper UI feedback."""
+        state_manager.set_loading(operation, is_loading)
+        if loading_indicator_ref.current:
+            loading_indicator_ref.current.visible = is_loading
+            loading_indicator_ref.current.update()
 
     async def view_details_action(client_id: str):
         """Server-mediated view client details with reactive updates.
@@ -87,8 +95,8 @@ def create_clients_view(
         logger.info(f"View details clicked for client {client_id}")
 
         try:
-            # Set loading state
-            state_manager.set_loading("client_details", True)
+            # Enhanced loading state management
+            await set_loading_state("client_details", True)
             feedback_text.value = f"Loading details for client {client_id}..."
             feedback_text.update()
 
@@ -151,7 +159,7 @@ def create_clients_view(
             logger.error(f"Error showing client details: {e}")
             show_error_message(page, f"Error showing client details: {str(e)}")
         finally:
-            state_manager.set_loading("client_details", False)
+            await set_loading_state("client_details", False)
 
     async def disconnect_action(client_id: str):
         """Server-mediated disconnect client action with reactive updates.
@@ -163,8 +171,8 @@ def create_clients_view(
 
         async def confirm_disconnect_async(e):
             try:
-                # Set loading state
-                state_manager.set_loading("client_disconnect", True)
+                # Enhanced loading state management
+                await set_loading_state("client_disconnect", True)
                 feedback_text.value = f"Disconnecting client {client_id}..."
                 feedback_text.update()
 
@@ -221,7 +229,7 @@ def create_clients_view(
                 show_error_message(page, f"Error disconnecting client: {str(e)}")
                 feedback_text.value = f"Failed to disconnect client {client_id}"
             finally:
-                state_manager.set_loading("client_disconnect", False)
+                await set_loading_state("client_disconnect", False)
 
         def confirm_disconnect(e):
             """Wrapper to run async disconnect in a task"""
@@ -338,9 +346,9 @@ def create_clients_view(
 
         logger.debug(f"DataTable updated with {len(filtered_clients)} rows")
 
-    # Reactive callback for clients state changes
-    def on_clients_state_changed(new_clients_data, old_clients_data):
-        """React to clients state changes by updating the UI."""
+    # Responsive update function for reactive UI updates
+    def update_clients_display(new_clients_data, old_clients_data):
+        """Reactive callback for clients state changes with responsive table update."""
         logger.debug(f"Clients state changed: {len(new_clients_data) if new_clients_data else 0} clients")
         update_table()
 
@@ -353,6 +361,11 @@ def create_clients_view(
             # Fallback if reference is not available
             feedback_text.value = f"Showing {clients_count} clients"
             feedback_text.update()
+
+    # Legacy callback for backward compatibility
+    def on_clients_state_changed(new_clients_data, old_clients_data):
+        """React to clients state changes by delegating to update_clients_display."""
+        update_clients_display(new_clients_data, old_clients_data)
 
     def get_mock_data():
         """Generate mock client data for testing."""
@@ -442,11 +455,8 @@ def create_clients_view(
     async def load_clients_data():
         """Server-mediated load client data with reactive state updates."""
         try:
-            # Set loading state
-            state_manager.set_loading("clients", True)
-            if loading_indicator_ref.current:
-                loading_indicator_ref.current.visible = True
-                loading_indicator_ref.current.update()
+            # Enhanced loading state management
+            await set_loading_state("clients", True)
 
             # Use server-mediated update to load clients
             result = await state_manager.server_mediated_update(
@@ -465,10 +475,7 @@ def create_clients_view(
             # Ensure fallback data is available
             await state_manager.update_async("clients", get_mock_data(), source="error_fallback")
         finally:
-            state_manager.set_loading("clients", False)
-            if loading_indicator_ref.current:
-                loading_indicator_ref.current.visible = False
-                loading_indicator_ref.current.update()
+            await set_loading_state("clients", False)
 
     def on_search_change(e):
         """Handle search field changes - reactive filtering."""
@@ -506,8 +513,8 @@ def create_clients_view(
         Server method availability is handled by StateManager.
         """
         try:
-            # Set loading state
-            state_manager.set_loading("client_add", True)
+            # Enhanced loading state management
+            await set_loading_state("client_add", True)
             feedback_text.value = f"Adding client {client_data.get('name', 'Unknown')}..."
             feedback_text.update()
 
@@ -547,7 +554,7 @@ def create_clients_view(
             show_error_message(page, f"Error adding client: {str(e)}")
             feedback_text.value = f"Error adding client"
         finally:
-            state_manager.set_loading("client_add", False)
+            await set_loading_state("client_add", False)
 
     async def delete_client_action(client_id: str):
         """Server-mediated delete client operation.
@@ -556,8 +563,8 @@ def create_clients_view(
         Server method availability is handled by StateManager.
         """
         try:
-            # Set loading state
-            state_manager.set_loading("client_delete", True)
+            # Enhanced loading state management
+            await set_loading_state("client_delete", True)
             feedback_text.value = f"Deleting client {client_id}..."
             feedback_text.update()
 
@@ -583,7 +590,7 @@ def create_clients_view(
             show_error_message(page, f"Error deleting client: {str(e)}")
             feedback_text.value = f"Error deleting client"
         finally:
-            state_manager.set_loading("client_delete", False)
+            await set_loading_state("client_delete", False)
 
     def show_delete_confirmation(client_id: str):
         """Show delete confirmation dialog for client."""
@@ -679,8 +686,111 @@ def create_clients_view(
             logger.warning(f"Dialog update failed: {e}, using page update fallback")
             page.update()
 
-    # Build the main UI
-    main_view = ft.Column([
+    # Responsive table container with sophisticated shadow
+    def create_responsive_table_container():
+        """Create responsive table container with proper scaling and modern styling."""
+        return ft.Container(
+            content=clients_table,
+            expand=True,
+            shadow=SHADOW_STYLES["elevated"],  # Sophisticated shadow from theme system
+            bgcolor=ft.Colors.SURFACE,
+            border_radius=20,  # Match table border radius
+            padding=0  # No padding for table - let DataTable handle its own spacing
+        )
+
+    # Build the main UI with responsive layout
+    main_view = ft.ResponsiveRow([
+        ft.Column(
+            [
+                # Header section with responsive controls
+                ft.ResponsiveRow([
+                    ft.Column([
+                        create_modern_card(
+                            content=ft.Row([
+                                ft.Text("Client Management", size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.PRIMARY),
+                                ft.Container(expand=True),  # Spacer
+                                ft.Row([
+                                    ft.TextField(
+                                        label="Search clients...",
+                                        hint_text="Search by ID, name, or status...",
+                                        prefix_icon=ft.Icons.SEARCH,
+                                        width=300,
+                                        on_change=on_search_change,
+                                        ref=search_field_ref,
+                                        border_color=ft.Colors.OUTLINE,
+                                        focused_border_color=ft.Colors.PRIMARY
+                                    ),
+                                    ft.Dropdown(
+                                        label="Status Filter",
+                                        value="all",
+                                        options=[
+                                            ft.dropdown.Option("all", "All Statuses"),
+                                            ft.dropdown.Option("connected", "Connected"),
+                                            ft.dropdown.Option("disconnected", "Disconnected"),
+                                            ft.dropdown.Option("connecting", "Connecting")
+                                        ],
+                                        width=150,
+                                        on_change=on_status_filter_change,
+                                        border_color=ft.Colors.OUTLINE,
+                                        focused_border_color=ft.Colors.PRIMARY
+                                    ),
+                                    ft.FilledButton(
+                                        "Add Client",
+                                        icon=ft.Icons.ADD,
+                                        on_click=lambda e: show_add_client_dialog(),
+                                        bgcolor=ft.Colors.PRIMARY,
+                                        color=ft.Colors.ON_PRIMARY
+                                    ),
+                                    ft.IconButton(
+                                        icon=ft.Icons.REFRESH,
+                                        tooltip="Refresh Clients",
+                                        on_click=lambda e: page.run_task(on_refresh_click, e),
+                                        icon_color=ft.Colors.PRIMARY,
+                                        bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.PRIMARY)
+                                    )
+                                ], spacing=10)
+                            ]),
+                            elevation="soft",
+                            padding=32,
+                            return_type="container"
+                        )
+                    ], col={"sm": 12, "md": 12, "lg": 12})
+                ]),
+
+                # Feedback section with responsive padding
+                ft.ResponsiveRow([
+                    ft.Column([
+                        create_modern_card(
+                            content=ft.Column([
+                                ft.Text(server_status_note, color=ft.Colors.ORANGE_600) if server_status_note else ft.Container(height=0),
+                                feedback_text,
+                                loading_indicator
+                            ], spacing=8, tight=True),
+                            elevation="soft",
+                            padding=24,
+                            return_type="container"
+                        )
+                    ], col={"sm": 12, "md": 12, "lg": 12})
+                ]),
+
+                # Responsive table section with proper scaling
+                ft.ResponsiveRow([
+                    ft.Column([
+                        ft.Column(
+                            controls=[create_responsive_table_container()],
+                            scroll=ft.ScrollMode.AUTO,
+                            expand=True
+                        )
+                    ], col={"sm": 12, "md": 12, "lg": 12}, expand=True)
+                ])
+            ],
+            expand=True,
+            spacing=20
+        )
+    ], col={"xs": 12, "sm": 12, "md": 12, "lg": 12}, expand=True)
+
+    # Legacy layout structure for backward compatibility
+    legacy_view = ft.Column([
         # Header with title and refresh button
         create_modern_card(
             content=ft.Row([
@@ -746,25 +856,26 @@ def create_clients_view(
 
         # Clients table - DataTable wrapped in scrollable column with modern card styling
         ft.Column(
-            controls=[
-                create_modern_card(
-                    content=clients_table,
-                    elevation="floating",
-                    padding=0,  # No padding for table - let DataTable handle its own spacing
-                    return_type="container"
-                )
-            ],
+            controls=[create_responsive_table_container()],
             scroll=ft.ScrollMode.AUTO,
             expand=True
         )
     ], expand=True)
 
-    # Defer subscriptions until after view is attached to page
+    # Enhanced subscription setup with reactive updates
     async def setup_subscriptions():
-        """Set up state subscriptions after view is attached to page"""
+        """Set up state subscriptions with enhanced reactive UI updates."""
         await asyncio.sleep(0.1)  # Small delay to ensure page attachment
-        state_manager.subscribe("clients", on_clients_state_changed, control=clients_table)
+
+        # Set up reactive subscriptions using both callback functions
+        state_manager.subscribe("clients", update_clients_display, control=clients_table)
         state_manager.subscribe("loading_states", on_loading_state_changed, control=loading_indicator)
+
+        # Add async subscription for real-time client updates if available
+        try:
+            await state_manager.subscribe_async("clients", update_clients_display)
+        except AttributeError:
+            logger.debug("Async subscriptions not available, using standard subscriptions")
 
         # Trigger initial data load after subscriptions are safely set up
         await load_clients_data()
@@ -772,4 +883,11 @@ def create_clients_view(
     # Start subscription setup in background
     page.run_task(setup_subscriptions)
 
-    return main_view
+    # Return responsive layout as primary, with fallback detection
+    try:
+        # Test if ResponsiveRow is properly supported
+        test_responsive = ft.ResponsiveRow([ft.Container()])
+        return main_view  # Use responsive layout
+    except Exception as e:
+        logger.warning(f"ResponsiveRow not fully supported, using legacy layout: {e}")
+        return legacy_view  # Fallback to legacy layout
