@@ -15,8 +15,10 @@ from datetime import datetime
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.dialog_consolidation_helper import show_success_message, show_error_message, show_confirmation, show_info
-from utils.server_mediated_operations import create_server_mediated_operations, file_size_processor
+from utils.user_feedback import show_success_message, show_error_message, show_confirmation, show_info
+from config import get_status_color
+from utils.server_mediated_operations import create_server_mediated_operations
+from utils.server_mediated_operations import file_size_processor
 from utils.ui_components import create_modern_card, apply_advanced_table_effects, create_status_chip, format_file_size
 
 logger = get_logger(__name__)
@@ -149,31 +151,39 @@ def create_files_view(
     async def load_files_data():
         """Load files data using server-mediated state management with comprehensive error handling."""
         try:
-            # Set loading state through state manager with proper async handling
-            await state_manager.set_loading("files_data", True)
+            # Set loading state through state manager (sync method)
+            if state_manager:
+                state_manager.set_loading("files_data", True)
             status_text.value = "Loading files..."
             status_text.color = ft.Colors.ON_SURFACE
             if hasattr(status_text, 'page') and status_text.page:
                 status_text.update()
 
             # Use server-mediated update for persistence and consistency
-            result = await state_manager.server_mediated_update(
-                key="files_data",
-                value=None,  # Will be set by server response
-                server_operation="get_files_async"
-            )
+            if state_manager:
+                result = await state_manager.server_mediated_update(
+                    key="files_data",
+                    value=None,  # Will be set by server response
+                    server_operation="get_files_async"
+                )
+            else:
+                # Fallback when no state manager - use server bridge directly
+                result = await server_bridge.get_files_async() if server_bridge else {'success': False, 'error': 'No server connection'}
 
             if result.get('success') and result.get('data'):
                 # Server operation successful
                 logger.info(f"Loaded {len(result['data'])} files from server")
                 status_text.value = f"Loaded {len(result['data'])} files"
                 status_text.color = ft.Colors.TERTIARY
+                if state_manager:
+                    await state_manager.update_async("files_data", result['data'], source="server")
             elif not result.get('success'):
                 # Fallback to mock data if server operation fails
                 error_msg = result.get('error', 'Server operation failed')
                 logger.warning(f"Server files load failed: {error_msg}, using mock data")
                 mock_files = generate_mock_files()
-                await state_manager.update_async("files_data", mock_files, source="fallback")
+                if state_manager:
+                    await state_manager.update_async("files_data", mock_files, source="fallback")
                 status_text.value = f"Loaded {len(mock_files)} files (demo mode)"
                 status_text.color = ft.Colors.SECONDARY
 
@@ -182,11 +192,13 @@ def create_files_view(
             show_error_message(page, f"Failed to load files: {str(e)}")
             # Set empty files list as fallback
             error_files = []
-            await state_manager.update_async("files_data", error_files, source="error")
+            if state_manager:
+                await state_manager.update_async("files_data", error_files, source="error")
             status_text.value = "Error loading files"
             status_text.color = ft.Colors.ERROR
         finally:
-            await state_manager.set_loading("files_data", False)
+            if state_manager:
+                state_manager.set_loading("files_data", False)
             if hasattr(status_text, 'page') and status_text.page:
                 status_text.update()
 
@@ -252,21 +264,7 @@ def create_files_view(
         else:
             return ft.Icons.INSERT_DRIVE_FILE, ft.Colors.PRIMARY
 
-    def get_status_color(status: str) -> str:
-        """Get status color matching clients.py pattern."""
-        status_lower = status.lower()
-        if status_lower in ["complete", "completed"]:
-            return ft.Colors.GREEN_600
-        elif status_lower in ["uploading", "upload"]:
-            return ft.Colors.BLUE_600
-        elif status_lower in ["queued", "pending", "queue"]:
-            return ft.Colors.ORANGE_600
-        elif status_lower in ["processing", "verified", "verify"]:
-            return ft.Colors.PURPLE_600
-        elif status_lower in ["failed", "error", "fail"]:
-            return ft.Colors.RED_600
-        else:
-            return ft.Colors.GREY_600
+    # get_status_color function moved to utils/ui_patterns.py for reuse
 
     def format_file_size(size_bytes: int) -> str:
         """Format file size in human readable format."""
@@ -366,7 +364,8 @@ def create_files_view(
 
         try:
             # Set loading state with proper state management
-            await state_manager.set_loading(f"download_{file_id}", True)
+            if state_manager:
+                state_manager.set_loading(f"download_{file_id}", True)
 
             # Show loading feedback to user
             status_text.value = f"Downloading {file_name}..."
@@ -384,18 +383,22 @@ def create_files_view(
             destination_path = os.path.join(downloads_dir, file_name)
 
             # Server-mediated download operation with enhanced error handling
-            result = await state_manager.server_mediated_update(
-                key="file_downloaded",
-                value={
-                    "file_id": file_id,
-                    "filename": file_name,
-                    "destination_path": destination_path,
-                    "timestamp": datetime.now().isoformat()
-                },
-                server_operation="download_file_async",
-                file_id=file_id,
-                destination_path=destination_path
-            )
+            if state_manager:
+                result = await state_manager.server_mediated_update(
+                    key="file_downloaded",
+                    value={
+                        "file_id": file_id,
+                        "filename": file_name,
+                        "destination_path": destination_path,
+                        "timestamp": datetime.now().isoformat()
+                    },
+                    server_operation="download_file_async",
+                    file_id=file_id,
+                    destination_path=destination_path
+                )
+            else:
+                # Fallback when no state manager - use server bridge directly
+                result = await server_bridge.download_file_async(file_id, destination_path) if server_bridge else {'success': False, 'error': 'No server connection'}
 
             if result.get('success'):
                 show_success_message(page, f"Downloaded {file_name} successfully")
@@ -421,14 +424,15 @@ Original Error: {error_msg}"""
                     f.write(mock_content)
 
                 show_success_message(page, f"Mock downloaded {file_name} (demo mode)")
-                await state_manager.update_async("file_downloaded", {
-                    "file_id": file_id,
-                    "filename": file_name,
-                    "destination_path": destination_path,
-                    "mode": "mock",
-                    "error": error_msg,
-                    "timestamp": datetime.now().isoformat()
-                }, source="fallback")
+                if state_manager:
+                    await state_manager.update_async("file_downloaded", {
+                        "file_id": file_id,
+                        "filename": file_name,
+                        "destination_path": destination_path,
+                        "mode": "mock",
+                        "error": error_msg,
+                        "timestamp": datetime.now().isoformat()
+                    }, source="fallback")
 
                 # Update status to show fallback completion
                 status_text.value = f"Downloaded {file_name} (demo mode)"
@@ -441,7 +445,8 @@ Original Error: {error_msg}"""
             status_text.value = f"Download failed: {file_name}"
             status_text.color = ft.Colors.ERROR
         finally:
-            await state_manager.set_loading(f"download_{file_id}", False)
+            if state_manager:
+                state_manager.set_loading(f"download_{file_id}", False)
             if hasattr(status_text, 'page') and status_text.page:
                 status_text.update()
 
@@ -457,7 +462,8 @@ Original Error: {error_msg}"""
 
         try:
             # Set loading state with proper state management
-            await state_manager.set_loading(f"verify_{file_id}", True)
+            if state_manager:
+                state_manager.set_loading(f"verify_{file_id}", True)
 
             # Show loading feedback to user
             status_text.value = f"Verifying {file_name}..."
@@ -470,16 +476,20 @@ Original Error: {error_msg}"""
                 raise ValueError("Invalid file data: missing ID or name")
 
             # Server-mediated verification operation with enhanced error handling
-            result = await state_manager.server_mediated_update(
-                key="file_verified",
-                value={
-                    "file_id": file_id,
-                    "filename": file_name,
-                    "timestamp": datetime.now().isoformat()
-                },
-                server_operation="verify_file_async",
-                file_id=file_id
-            )
+            if state_manager:
+                result = await state_manager.server_mediated_update(
+                    key="file_verified",
+                    value={
+                        "file_id": file_id,
+                        "filename": file_name,
+                        "timestamp": datetime.now().isoformat()
+                    },
+                    server_operation="verify_file_async",
+                    file_id=file_id
+                )
+            else:
+                # Fallback when no state manager - use server bridge directly
+                result = await server_bridge.verify_file_async(file_id) if server_bridge else {'success': False, 'error': 'No server connection'}
 
             if result.get('success') and result.get('data'):
                 # Show enhanced server verification results with Material Design styling
@@ -590,12 +600,13 @@ Original Error: {error_msg}"""
                     status_text.value = f"Verified {file_name} (demo mode)"
                     status_text.color = ft.Colors.SECONDARY
 
-                await state_manager.update_async("file_verified", {
-                    "file_id": file_id,
-                    "filename": file_name,
-                    "mode": "fallback",
-                    "timestamp": datetime.now().isoformat()
-                }, source="fallback")
+                if state_manager:
+                    await state_manager.update_async("file_verified", {
+                        "file_id": file_id,
+                        "filename": file_name,
+                        "mode": "fallback",
+                        "timestamp": datetime.now().isoformat()
+                    }, source="fallback")
 
         except Exception as e:
             logger.error(f"Verification failed for {file_name}: {e}", exc_info=True)
@@ -604,7 +615,8 @@ Original Error: {error_msg}"""
             status_text.value = f"Verification failed: {file_name}"
             status_text.color = ft.Colors.ERROR
         finally:
-            await state_manager.set_loading(f"verify_{file_id}", False)
+            if state_manager:
+                state_manager.set_loading(f"verify_{file_id}", False)
             if hasattr(status_text, 'page') and status_text.page:
                 status_text.update()
 
@@ -619,7 +631,8 @@ Original Error: {error_msg}"""
 
         try:
             # Set loading state with proper state management
-            await state_manager.set_loading(f"delete_{file_id}", True)
+            if state_manager:
+                state_manager.set_loading(f"delete_{file_id}", True)
 
             # Show loading feedback to user
             status_text.value = f"Deleting {file_name}..."
@@ -632,16 +645,20 @@ Original Error: {error_msg}"""
                 raise ValueError("Invalid file data: missing ID or name")
 
             # Server-mediated delete operation with enhanced error handling
-            result = await state_manager.server_mediated_update(
-                key="file_deleted",
-                value={
-                    "file_id": file_id,
-                    "filename": file_name,
-                    "timestamp": datetime.now().isoformat()
-                },
-                server_operation="delete_file_async",
-                file_id=file_id
-            )
+            if state_manager:
+                result = await state_manager.server_mediated_update(
+                    key="file_deleted",
+                    value={
+                        "file_id": file_id,
+                        "filename": file_name,
+                        "timestamp": datetime.now().isoformat()
+                    },
+                    server_operation="delete_file_async",
+                    file_id=file_id
+                )
+            else:
+                # Fallback when no state manager - use server bridge directly
+                result = await server_bridge.delete_file_async(file_id) if server_bridge else {'success': False, 'error': 'No server connection'}
 
             if result.get('success'):
                 show_success_message(page, f"File {file_name} deleted successfully")
@@ -671,16 +688,17 @@ Original Error: {error_msg}"""
 
                 if file_found:
                     # Update files_data state only when data actually changes (after fallback delete)
-                    await state_manager.update_async("files_data", files_data, source="fallback_delete")
+                    if state_manager:
+                        await state_manager.update_async("files_data", files_data, source="fallback_delete")
 
-                    # Update state manager with deletion event
-                    await state_manager.update_async("file_deleted", {
-                        "file_id": file_id,
-                        "filename": file_name,
-                        "mode": "fallback",
-                        "error": error_msg,
-                        "timestamp": datetime.now().isoformat()
-                    }, source="fallback")
+                        # Update state manager with deletion event
+                        await state_manager.update_async("file_deleted", {
+                            "file_id": file_id,
+                            "filename": file_name,
+                            "mode": "fallback",
+                            "error": error_msg,
+                            "timestamp": datetime.now().isoformat()
+                        }, source="fallback")
 
                     # Keep UI updates minimal - use control.update()
                     apply_filters()  # This will call table_content.update() internally
@@ -703,7 +721,7 @@ Original Error: {error_msg}"""
             status_text.value = f"Delete failed: {file_name}"
             status_text.color = ft.Colors.ERROR
         finally:
-            await state_manager.set_loading(f"delete_{file_id}", False)
+            state_manager.set_loading(f"delete_{file_id}", False)
             if hasattr(status_text, 'page') and status_text.page:
                 status_text.update()
 

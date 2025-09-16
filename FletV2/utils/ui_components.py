@@ -1648,3 +1648,49 @@ def wrap_datatable_in_container(
         )
 
     return enhanced_container
+
+
+def safe_update_control(control: ft.Control, force: bool = False) -> bool:
+    """
+    Safely update a Flet control only if it's attached to the page.
+
+    Args:
+        control: The Flet control to update
+        force: If True, attempt update even if checks fail (for debugging)
+
+    Returns:
+        bool: True if update was successful, False otherwise
+    """
+    try:
+        # Check if control has page attribute and is attached
+        if hasattr(control, 'page') and control.page:
+            control.update()
+            return True
+        elif force:
+            # Force update for debugging purposes
+            control.update()
+            return True
+        else:
+            logger.debug(f"Skipped update for {type(control).__name__} - not attached to page")
+            return False
+    except Exception as e:
+        logger.debug(f"Failed to update {type(control).__name__}: {e}")
+        return False
+
+
+def safe_update_controls(*controls: ft.Control, force: bool = False) -> int:
+    """
+    Safely update multiple Flet controls.
+
+    Args:
+        *controls: Multiple Flet controls to update
+        force: If True, attempt update even if checks fail
+
+    Returns:
+        int: Number of successfully updated controls
+    """
+    updated_count = 0
+    for control in controls:
+        if safe_update_control(control, force):
+            updated_count += 1
+    return updated_count

@@ -13,8 +13,9 @@ from datetime import datetime, timedelta
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.dialog_consolidation_helper import show_success_message, show_error_message
-from utils.server_mediated_operations import create_server_mediated_operations, timestamp_processor
+from utils.user_feedback import show_success_message, show_error_message
+from utils.server_mediated_operations import create_server_mediated_operations
+from utils.server_mediated_operations import timestamp_processor
 from utils.ui_components import create_modern_card, create_modern_button, create_progress_indicator, create_status_chip
 from theme import get_brand_color, get_shadow_style
 
@@ -107,19 +108,19 @@ def create_dashboard_view(
         border_radius=8,
         animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT)
     )
-    
+
     # Material Design 3 styled buttons
     start_server_btn = create_modern_button(
-        "Start Server", 
-        ft.Icons.PLAY_ARROW, 
+        "Start Server",
         lambda e: page.run_task(start_server_action),
+        ft.Icons.PLAY_ARROW,
         variant="filled",
         color_type="primary"
     )
     stop_server_btn = create_modern_button(
-        "Stop Server", 
-        ft.Icons.STOP, 
+        "Stop Server",
         lambda e: page.run_task(stop_server_action),
+        ft.Icons.STOP,
         variant="filled",
         color_type="secondary"
     )
@@ -337,7 +338,9 @@ def create_dashboard_view(
             # Show enhanced loading indicators
             activity_loading_row.visible = True
             loading_indicator.visible = True
-            activity_loading_row.update()
+            # Safe update - only if control is attached to page
+            if hasattr(activity_loading_row, 'page') and activity_loading_row.page:
+                activity_loading_row.update()
 
             # Load all data concurrently with enhanced error handling
             tasks = [
@@ -404,7 +407,9 @@ def create_dashboard_view(
             # Hide loading indicators
             activity_loading_row.visible = False
             loading_indicator.visible = False
-            activity_loading_row.update()
+            # Safe update - only if control is attached to page
+            if hasattr(activity_loading_row, 'page') and activity_loading_row.page:
+                activity_loading_row.update()
 
     async def start_server_action():
         """Enhanced start server action with comprehensive state management and validation"""
@@ -440,7 +445,8 @@ def create_dashboard_view(
             )
 
             # Enhanced UI update based on result with proper state management
-            if result.get('success'):
+            # Safe result handling to prevent mapping errors
+            if result and isinstance(result, dict) and result.get('success'):
                 server_status_text.value = "Running"
                 server_status_text.color = ft.Colors.GREEN
                 start_server_btn.disabled = True
@@ -455,7 +461,13 @@ def create_dashboard_view(
                 start_server_btn.disabled = False
                 start_server_btn.content.controls[1].value = "Start Server"
                 stop_server_btn.disabled = True
-                show_error_message(page, f"Failed to start server: {result.get('error', 'Unknown error')}")
+                # Safe error message handling
+                error_msg = "Unknown error"
+                if result and isinstance(result, dict):
+                    error_msg = result.get('error', 'Unknown error')
+                elif result is None:
+                    error_msg = "No response from server"
+                show_error_message(page, f"Failed to start server: {error_msg}")
 
             # Use individual control updates for better performance
             server_status_text.update()
@@ -921,7 +933,7 @@ def create_dashboard_view(
                 active_ops = [key for key in dashboard_loading_keys if loading_states.get(key, False)]
                 if active_ops:
                     loading_text = f"Loading {', '.join(active_ops)}..."
-                    if len(activity_loading_row.controls) > 1:
+                    if hasattr(activity_loading_row, 'controls') and activity_loading_row.controls and len(activity_loading_row.controls) > 1:
                         activity_loading_row.controls[1].value = loading_text
 
                 activity_loading_row.update()
@@ -970,15 +982,15 @@ def create_dashboard_view(
     async def setup_dashboard():
         """Set up server operations and subscriptions using module-level server_ops"""
         global server_ops
-        
+
         # Ensure server_ops is initialized
         if server_ops is None:
             server_ops = create_server_mediated_operations(state_manager, page)
             logger.info("Server operations initialized in setup_dashboard")
-        
+
         # Small delay to ensure page attachment
         await asyncio.sleep(0.05)
-        
+
         # Setup subscriptions and load initial data
         try:
             setup_reactive_subscriptions()

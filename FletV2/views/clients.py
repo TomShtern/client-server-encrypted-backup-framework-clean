@@ -16,8 +16,9 @@ import flet as ft
 # Local imports
 from utils.async_helpers import async_event_handler
 from utils.debug_setup import get_logger
-from utils.dialog_consolidation_helper import show_confirmation, show_info, show_success_message, show_error_message, show_info_message
+from utils.user_feedback import show_confirmation, show_info, show_success_message, show_error_message, show_info_message
 from utils.server_bridge import ServerBridge
+from config import get_status_color
 from theme import setup_modern_theme, SHADOW_STYLES, DARK_SHADOW_STYLES
 from utils.ui_components import create_modern_card, apply_advanced_table_effects, create_status_chip
 from utils.state_manager import StateManager
@@ -245,17 +246,7 @@ def create_clients_view(
             is_destructive=True
         )
 
-    def get_status_color(status):
-        """Get color based on client status."""
-        status_lower = str(status).lower()
-        if status_lower in ["connected", "online", "active"]:
-            return ft.Colors.GREEN_600  # Success - online/connected
-        elif status_lower in ["disconnected", "offline", "inactive"]:
-            return ft.Colors.RED_600    # Error - offline/disconnected
-        elif status_lower in ["connecting", "pending", "initializing"]:
-            return ft.Colors.ORANGE_600  # Warning - transitional states
-        else:
-            return ft.Colors.GREY_600   # Unknown status
+    # get_status_color function moved to utils/ui_patterns.py for reuse
 
     def filter_clients():
         """Filter clients based on search query and status filter - uses state manager data."""
@@ -871,9 +862,14 @@ def create_clients_view(
         state_manager.subscribe("clients", update_clients_display, control=clients_table)
         state_manager.subscribe("loading_states", on_loading_state_changed, control=loading_indicator)
 
+        # Create async wrapper for update_clients_display since it's synchronous
+        async def async_update_clients_display(new_clients_data, old_clients_data):
+            """Async wrapper for the synchronous update_clients_display function."""
+            update_clients_display(new_clients_data, old_clients_data)
+
         # Add async subscription for real-time client updates if available
         try:
-            await state_manager.subscribe_async("clients", update_clients_display)
+            state_manager.subscribe_async("clients", async_update_clients_display)
         except AttributeError:
             logger.debug("Async subscriptions not available, using standard subscriptions")
 

@@ -21,24 +21,30 @@ def capture_baseline_metrics():
     """Capture baseline metrics without running the full GUI."""
     try:
         # Import the performance metrics utility
-        from utils.perf_metrics import get_metrics, reset_metrics
+        try:
+            from utils.perf_metrics import get_metrics, reset_metrics
+        except ImportError:
+            print("Warning: utils.perf_metrics not available, using mock metrics")
+            def get_metrics(): return {}
+            def reset_metrics(): pass
+
         from utils.ui_helpers import (
             size_to_human, format_iso_short, compute_file_signature,
             build_status_badge, build_level_badge
         )
-        
+
         print("Starting baseline metrics capture...")
-        
+
         # Reset any existing metrics
         reset_metrics()
-        
+
         # Test helper functions performance
         test_data = [
             {"id": "1", "size": 1024*1024, "status": "Complete", "modified": "2025-09-09T10:30:00"},
             {"id": "2", "size": 5*1024*1024, "status": "Pending", "modified": "2025-09-08T15:45:00"},
             {"id": "3", "size": 100*1024, "status": "Verified", "modified": "2025-09-07T09:15:00"},
         ]
-        
+
         # Simulate helper function usage
         start_time = time.perf_counter()
         for _ in range(1000):
@@ -46,9 +52,9 @@ def capture_baseline_metrics():
                 size_to_human(item["size"])
                 format_iso_short(item["modified"])
                 compute_file_signature(item)
-        
+
         helper_time = (time.perf_counter() - start_time) * 1000  # Convert to ms
-        
+
         # Capture system info
         baseline_data = {
             "timestamp": datetime.now().isoformat(),
@@ -66,7 +72,7 @@ def capture_baseline_metrics():
             },
             "implementation_status": {
                 "phase_a_helpers": "IMPLEMENTED",
-                "phase_b_files_view": "IMPLEMENTED", 
+                "phase_b_files_view": "IMPLEMENTED",
                 "phase_c_logs_view": "IMPLEMENTED",
                 "phase_d_animations": "IMPLEMENTED",
                 "phase_e_diff_engine": "IMPLEMENTED",
@@ -74,9 +80,9 @@ def capture_baseline_metrics():
             },
             "current_metrics": get_metrics()
         }
-        
+
         return baseline_data
-        
+
     except Exception as e:
         return {
             "timestamp": datetime.now().isoformat(),
@@ -99,20 +105,20 @@ def save_metrics_json(data, filename):
 if __name__ == "__main__":
     print("GPT-5 Visual Optimization Plan - Baseline Metrics Capture")
     print("=" * 60)
-    
+
     baseline = capture_baseline_metrics()
     baseline_file = save_metrics_json(baseline, "metrics_baseline.json")
-    
+
     print("\nBaseline Summary:")
     if "error" not in baseline:
         print(f"Helper functions (1000 iter): {baseline['performance_baseline']['helper_functions_1000_iterations_ms']:.2f}ms")
-        print(f"Implementation phases A-E: COMPLETE")
-        print(f"Phase F (QA): IN_PROGRESS")
+        print("Implementation phases A-E: COMPLETE")
+        print("Phase F (QA): IN_PROGRESS")
     else:
         print(f"Error: {baseline['error']}")
-    
+
     print(f"\nFull baseline data saved to: {baseline_file}")
     print("\nNext steps:")
-    print("  1. Run full GUI application test")  
+    print("  1. Run full GUI application test")
     print("  2. Capture interactive metrics")
     print("  3. Validate KPI targets")

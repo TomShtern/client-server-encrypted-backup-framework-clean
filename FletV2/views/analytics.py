@@ -15,7 +15,7 @@ from datetime import datetime
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.dialog_consolidation_helper import show_success_message, show_error_message, show_user_feedback
+from utils.user_feedback import show_success_message, show_error_message, show_user_feedback
 from utils.server_mediated_operations import create_server_mediated_operations
 from utils.ui_components import create_modern_card, create_progress_indicator, create_loading_overlay
 from theme import get_shadow_style, get_brand_color

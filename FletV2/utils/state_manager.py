@@ -150,12 +150,9 @@ class StateManager:
         # indicating it comes from a view, check if it's the same source triggering again
         try:
             callback_name = getattr(callback, '__name__', '') or getattr(callback, '__qualname__', '')
-            if callback_name and source != "manual":
-                # If callback name suggests it's from the same view/source as the update, skip it
-                # This prevents re-entrant updates (e.g., settings view updating state that triggers its own callback)
-                if source.lower() in callback_name.lower() or callback_name.lower() in source.lower():
-                    logger.debug(f"Skipping callback {callback_name} for {key} (source: {source}) - preventing re-entry")
-                    return False
+            if callback_name and source != "manual" and (source.lower() in callback_name.lower() or callback_name.lower() in source.lower()):
+                logger.debug(f"Skipping callback {callback_name} for {key} (source: {source}) - preventing re-entry")
+                return False
         except Exception:
             pass  # Fall through to normal notification
         return True
@@ -538,7 +535,7 @@ class StateManager:
         except Exception as e:
             logger.error(f"Failed to apply logs filter: {e}")
 
-    async def export_logs_state(self, format: str, filters: Dict[str, Any] = None):
+    async def export_logs_state(self, format: str, filters: Optional[Dict[str, Any]] = None):
         """Export logs through server bridge with state tracking"""
         try:
             self.set_loading("logs_export", True)
@@ -717,7 +714,7 @@ class StateManager:
         finally:
             self.set_loading("settings_backup", False)
 
-    async def restore_settings_state(self, backup_file: str, settings_data: Dict[str, Any] = None):
+    async def restore_settings_state(self, backup_file: str, settings_data: Optional[Dict[str, Any]] = None):
         """Restore settings from backup"""
         try:
             self.set_loading("settings_restore", True)
@@ -869,7 +866,7 @@ class StateManager:
         self.update("progress_states", progress_states, source="progress_start")
         self._progress_internal[operation] = p
 
-    def update_progress(self, operation: str, step: int = None, message: str = None):
+    def update_progress(self, operation: str, step: Optional[int] = None, message: Optional[str] = None):
         """Update progress for an operation"""
         progress_states = self.get("progress_states", {})
         p = progress_states.get(operation, None)
@@ -948,7 +945,7 @@ class StateManager:
 
     # --- Enhanced Error State Management ---
 
-    def set_error_state(self, operation: str, error: str, details: Dict[str, Any] = None):
+    def set_error_state(self, operation: str, error: str, details: Optional[Dict[str, Any]] = None):
         """Set error state for an operation"""
         error_data = {
             'operation': operation,
@@ -1011,3 +1008,5 @@ def create_state_manager(page: ft.Page, server_bridge=None) -> StateManager:
 
     logger.info("Enhanced StateManager created with logs and settings support")
     return state_manager
+
+

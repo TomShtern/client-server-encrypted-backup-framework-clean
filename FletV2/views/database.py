@@ -16,7 +16,7 @@ from datetime import datetime
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.dialog_consolidation_helper import show_success_message, show_error_message, show_confirmation, show_input
+from utils.user_feedback import show_success_message, show_error_message, show_confirmation, show_input
 from utils.server_mediated_operations import create_server_mediated_operations
 from theme import setup_modern_theme
 from utils.ui_components import create_modern_card, create_status_chip, create_enhanced_metric_card, create_modern_button, create_professional_datatable, get_premium_table_styling
@@ -131,7 +131,7 @@ def create_database_view(
         """Enhanced database info loading with comprehensive error handling and loading states"""
         try:
             # Set enhanced loading state with visual indicator
-            await state_manager.set_loading("database_info", True)
+            state_manager.set_loading("database_info", True)
             if loading_indicator_ref.current:
                 loading_indicator_ref.current.visible = True
                 loading_indicator_ref.current.update()
@@ -152,10 +152,12 @@ def create_database_view(
                         original_value = status_text_ref.current.value
                         status_text_ref.current.value = "✓ Connected"
                         status_text_ref.current.color = ft.Colors.GREEN
-                        status_text_ref.current.update()
+                        # Safe update - only if control is attached to page
+                        if hasattr(status_text_ref.current, 'page') and status_text_ref.current.page:
+                            status_text_ref.current.update()
                         # Reset after 2 seconds
                         await asyncio.sleep(2)
-                        if status_text_ref.current and hasattr(status_text_ref.current, 'page'):
+                        if status_text_ref.current and hasattr(status_text_ref.current, 'page') and status_text_ref.current.page:
                             status_text_ref.current.value = original_value
                             status_text_ref.current.update()
             else:
@@ -168,7 +170,9 @@ def create_database_view(
                 if status_text_ref.current:
                     status_text_ref.current.value = "Mock Mode"
                     status_text_ref.current.color = ft.Colors.ORANGE
-                    status_text_ref.current.update()
+                    # Safe update - only if control is attached to page
+                    if hasattr(status_text_ref.current, 'page') and status_text_ref.current.page:
+                        status_text_ref.current.update()
 
         except Exception as e:
             logger.error(f"Failed to load database info: {e}", exc_info=True)
@@ -179,10 +183,12 @@ def create_database_view(
             if status_text_ref.current:
                 status_text_ref.current.value = "Error"
                 status_text_ref.current.color = ft.Colors.ERROR
-                status_text_ref.current.update()
+                # Safe update - only if control is attached to page
+                if hasattr(status_text_ref.current, 'page') and status_text_ref.current.page:
+                    status_text_ref.current.update()
 
         finally:
-            await state_manager.set_loading("database_info", False)
+            state_manager.set_loading("database_info", False)
             if loading_indicator_ref.current:
                 loading_indicator_ref.current.visible = False
                 loading_indicator_ref.current.update()
@@ -207,7 +213,7 @@ def create_database_view(
 
         try:
             # Enhanced loading state management
-            await state_manager.set_loading(f"table_data_{table_name}", True)
+            state_manager.set_loading(f"table_data_{table_name}", True)
             if loading_indicator_ref.current:
                 loading_indicator_ref.current.visible = True
                 loading_indicator_ref.current.update()
@@ -259,7 +265,7 @@ def create_database_view(
                 table_info_text_ref.current.update()
 
         finally:
-            await state_manager.set_loading(f"table_data_{table_name}", False)
+            state_manager.set_loading(f"table_data_{table_name}", False)
             if loading_indicator_ref.current:
                 loading_indicator_ref.current.visible = False
                 loading_indicator_ref.current.update()
@@ -341,7 +347,7 @@ def create_database_view(
                 logger.warning(f"Validation warnings: {validation_warnings}")
 
             # Enhanced loading state management
-            await state_manager.set_loading("row_update", True)
+            state_manager.set_loading("row_update", True)
             if loading_indicator_ref.current:
                 loading_indicator_ref.current.visible = True
                 loading_indicator_ref.current.update()
@@ -372,7 +378,7 @@ def create_database_view(
             logger.error(f"Row update failed for row {row_id}: {e}", exc_info=True)
             show_error_message(page, f"Update operation failed: {str(e)}")
         finally:
-            await state_manager.set_loading("row_update", False)
+            state_manager.set_loading("row_update", False)
             if loading_indicator_ref.current:
                 loading_indicator_ref.current.visible = False
                 loading_indicator_ref.current.update()
@@ -385,7 +391,7 @@ def create_database_view(
                 return
 
             # Enhanced loading state management
-            await state_manager.set_loading("row_delete", True)
+            state_manager.set_loading("row_delete", True)
             if loading_indicator_ref.current:
                 loading_indicator_ref.current.visible = True
                 loading_indicator_ref.current.update()
@@ -420,7 +426,7 @@ def create_database_view(
                             else:
                                 logger.info(f"User cancelled cascading delete for row {row_id}")
                         finally:
-                            await state_manager.set_loading("row_delete", False)
+                            state_manager.set_loading("row_delete", False)
                             if loading_indicator_ref.current:
                                 loading_indicator_ref.current.visible = False
                                 loading_indicator_ref.current.update()
@@ -445,7 +451,7 @@ def create_database_view(
                     else:
                         logger.info(f"User cancelled delete for row {row_id}")
                 finally:
-                    await state_manager.set_loading("row_delete", False)
+                    state_manager.set_loading("row_delete", False)
                     if loading_indicator_ref.current:
                         loading_indicator_ref.current.visible = False
                         loading_indicator_ref.current.update()
@@ -460,7 +466,7 @@ def create_database_view(
         except Exception as e:
             logger.error(f"Row deletion preparation failed for row {row_id}: {e}", exc_info=True)
             show_error_message(page, f"Deletion setup failed: {str(e)}")
-            await state_manager.set_loading("row_delete", False)
+            state_manager.set_loading("row_delete", False)
             if loading_indicator_ref.current:
                 loading_indicator_ref.current.visible = False
                 loading_indicator_ref.current.update()
@@ -530,7 +536,7 @@ def create_database_view(
 
         try:
             # Enhanced loading state management
-            await state_manager.set_loading("table_export", True)
+            state_manager.set_loading("table_export", True)
             if loading_indicator_ref.current:
                 loading_indicator_ref.current.visible = True
                 loading_indicator_ref.current.update()
@@ -592,7 +598,7 @@ def create_database_view(
                 table_info_text_ref.current.update()
 
         finally:
-            await state_manager.set_loading("table_export", False)
+            state_manager.set_loading("table_export", False)
             if loading_indicator_ref.current:
                 loading_indicator_ref.current.visible = False
                 loading_indicator_ref.current.update()
@@ -766,6 +772,11 @@ def create_database_view(
         def update_table_display_ui(table_data, old_value):
             """Update professional DataTable with enhanced responsive design and sophisticated styling"""
             if not table_data or not database_table_ref.current:
+                return
+
+            # Validate table_data is a dictionary
+            if not isinstance(table_data, dict):
+                logger.warning(f"Invalid table_data type: {type(table_data)}, value: {table_data}")
                 return
 
             columns = table_data.get("columns", [])
@@ -984,7 +995,7 @@ def create_database_view(
                     database_table_ref.current.update()
 
             except Exception as e:
-                logger.error(f"Failed to update DataTable display: {e}")
+                logger.error(f"Failed to update DataTable display: {str(e)}", exc_info=True)
                 if table_info_text_ref.current and hasattr(table_info_text_ref.current, 'page') and table_info_text_ref.current.page:
                     table_info_text_ref.current.value = f"Error displaying table: {str(e)}"
                     table_info_text_ref.current.update()
@@ -1143,7 +1154,7 @@ def create_database_view(
         logger.info(f"Cell clicked: {column_name} = {cell_value}")
 
         # Show cell details in a simple info dialog
-        from utils.dialog_consolidation_helper import show_info
+        from utils.user_feedback import show_info
 
         cell_info = ft.Column([
             ft.Text(f"Column: {column_name}", weight=ft.FontWeight.BOLD),
@@ -1707,7 +1718,9 @@ def create_database_view(
                 if status_text_ref.current:
                     status_text_ref.current.value = "Mock Mode"
                     status_text_ref.current.color = ft.Colors.ORANGE
-                    status_text_ref.current.update()
+                    # Safe update - only if control is attached to page
+                    if hasattr(status_text_ref.current, 'page') and status_text_ref.current.page:
+                        status_text_ref.current.update()
 
         except Exception as e:
             logger.error(f"Critical error in database view setup: {e}", exc_info=True)

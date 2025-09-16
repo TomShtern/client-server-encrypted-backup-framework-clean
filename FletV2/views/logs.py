@@ -31,7 +31,7 @@ from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
 from utils.ui_helpers import level_colors, striped_row_color, build_level_badge
 from utils.performance import PerfTimer
-from utils.dialog_consolidation_helper import show_success_message
+from utils.user_feedback import show_success_message
 from config import ASYNC_DELAY
 from utils.performance import (
     PaginationConfig,
@@ -534,7 +534,9 @@ def create_logs_view(
             status_parts.append(f"Highlights: {len(search_highlights)}")
 
         status_text.value = " | ".join(status_parts)
-        status_text.update()
+        # Safe update - only if control is attached to page
+        if hasattr(status_text, 'page') and status_text.page:
+            status_text.update()
 
     def update_pagination_controls():
         total_pages = max(1, (len(filtered_logs_data) + pagination_config.page_size - 1) // pagination_config.page_size)
@@ -733,7 +735,7 @@ def create_logs_view(
 
                         # Broadcast clear event to other views (if method exists)
                         if hasattr(state_manager, 'broadcast_logs_event'):
-                            await state_manager.broadcast_logs_event({
+                            state_manager.broadcast_logs_event({
                                 "type": "logs_cleared",
                                 "count": original_count,
                                 "mode": result.get('mode', 'server')
@@ -1194,7 +1196,9 @@ def create_logs_view(
 
         try:
             status_text.value = "Loading logs..."
-            status_text.update()
+            # Safe update - only if control is attached to page
+            if hasattr(status_text, 'page') and status_text.page:
+                status_text.update()
 
             with PerfTimer("logs.load.fetch"):
                 if server_bridge:
@@ -1227,7 +1231,9 @@ def create_logs_view(
 
             last_updated = datetime.now()
             last_updated_text.value = f"Last updated: {last_updated.strftime('%H:%M:%S')}"
-            last_updated_text.update()
+            # Safe update - only if control is attached to page
+            if hasattr(last_updated_text, 'page') and last_updated_text.page:
+                last_updated_text.update()
 
             with PerfTimer("logs.load.render"):
                 apply_filters()
@@ -1249,7 +1255,9 @@ def create_logs_view(
         except Exception as e:
             logger.error(f"Loading error: {e}")
             status_text.value = "Error loading logs"
-            status_text.update()
+            # Safe update - only if control is attached to page
+            if hasattr(status_text, 'page') and status_text.page:
+                status_text.update()
             state_manager.add_notification(f"Failed to load logs: {str(e)}", "error")
         finally:
             is_loading = False
@@ -1653,21 +1661,27 @@ def create_logs_view(
             # Update search field state during search operations
             if search_field and hasattr(search_field, 'disabled'):
                 search_field.disabled = loading_states.get("logs_search", False)
-                search_field.update()
+                # Safe update - only if control is attached to page
+                if hasattr(search_field, 'page') and search_field.page:
+                    search_field.update()
 
-            # Update status text during loading operations
+            # Update status text during loading operations (safe updates)
             if loading_states.get("logs_load", False):
                 status_text.value = "Loading logs..."
-                status_text.update()
+                if hasattr(status_text, 'page') and status_text.page:
+                    status_text.update()
             elif loading_states.get("logs_search", False):
                 status_text.value = "Searching logs..."
-                status_text.update()
+                if hasattr(status_text, 'page') and status_text.page:
+                    status_text.update()
             elif loading_states.get("logs_export", False):
                 status_text.value = "Exporting logs..."
-                status_text.update()
+                if hasattr(status_text, 'page') and status_text.page:
+                    status_text.update()
             elif loading_states.get("logs_clear", False):
                 status_text.value = "Clearing logs..."
-                status_text.update()
+                if hasattr(status_text, 'page') and status_text.page:
+                    status_text.update()
 
         def on_logs_events(event, _):
             """Handle logs event notifications."""
@@ -1738,7 +1752,9 @@ def create_logs_view(
                 options.append(ft.dropdown.Option(component, component))
 
             component_dropdown.options = options
-            component_dropdown.update()
+            # Safe update - only if control is attached to page
+            if hasattr(component_dropdown, 'page') and component_dropdown.page:
+                component_dropdown.update()
 
     # Expose manual trigger and setup
     def trigger_initial_load():

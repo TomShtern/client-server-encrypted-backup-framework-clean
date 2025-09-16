@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional, Callable, List, Union
 from utils.debug_setup import get_logger
 from utils.state_manager import StateManager
-from utils.dialog_consolidation_helper import show_success_message, show_error_message
+from utils.user_feedback import show_success_message, show_error_message
 
 logger = get_logger(__name__)
 
@@ -88,9 +88,9 @@ class ServerMediatedOperations:
         action_name: str,
         server_operation: str,
         operation_data: Any,
-        success_message: str = None,
-        error_message: str = None,
-        refresh_keys: List[str] = None,
+        success_message: Optional[str] = None,
+        error_message: Optional[str] = None,
+        refresh_keys: Optional[List[str]] = None,
         loading_key: Optional[str] = None
     ) -> Dict[str, Any]:
         """
@@ -131,7 +131,7 @@ class ServerMediatedOperations:
                 error_msg = error_message or f"Failed to {action_name}: {result.get('message', 'Unknown error')}"
                 show_error_message(self.page, error_msg)
 
-            return result
+            return result if result is not None else {'success': False, 'error': 'No result returned from server operation'}
 
         except Exception as e:
             logger.error(f"Action operation failed for {action_name}: {e}")
@@ -196,8 +196,7 @@ class ServerMediatedOperations:
             try:
                 # Trigger refresh by calling the corresponding load operation
                 # This assumes a naming convention: load_{key}_operation
-                current_data = self.state_manager.get(key)
-                if current_data:
+                if (current_data := self.state_manager.get(key)):
                     # Force refresh by clearing and reloading
                     await self.state_manager.update_async(key, None, source="refresh_clear")
                     # The UI subscriptions should handle reloading
@@ -220,7 +219,13 @@ class ServerMediatedOperations:
         """
         def reactive_callback(new_value, old_value):
             try:
-                ui_update_callback(new_value, old_value)
+                # Check if callback is async and handle appropriately
+                import asyncio
+                if asyncio.iscoroutinefunction(ui_update_callback):
+                    # Schedule async callback to run in background
+                    asyncio.create_task(ui_update_callback(new_value, old_value))
+                else:
+                    ui_update_callback(new_value, old_value)
                 logger.debug(f"Reactive UI update completed for {state_key}")
             except Exception as e:
                 logger.error(f"Reactive callback failed for {state_key}: {e}")
@@ -251,7 +256,7 @@ class ServerMediatedOperations:
     async def dashboard_load_system_metrics(self) -> Dict[str, Any]:
         """
         Load system metrics for dashboard with specialized error handling.
-        
+
         Returns:
             Dictionary with system metrics or fallback data
         """
@@ -262,7 +267,7 @@ class ServerMediatedOperations:
                 value=None,
                 server_operation="get_system_metrics_async"
             )
-            
+
             if result.get('success'):
                 return result
             else:
@@ -294,17 +299,16 @@ class ServerMediatedOperations:
     async def dashboard_load_server_status(self) -> Dict[str, Any]:
         """
         Load server status for dashboard with specialized error handling.
-        
+
         Returns:
             Dictionary with server status or fallback data
         """
         try:
-            result = await self.load_data_operation(
+            return await self.load_data_operation(
                 state_key="server_status",
                 server_operation="get_server_status_async",
                 fallback_data=self._generate_fallback_server_status()
             )
-            return result
         except Exception as e:
             logger.error(f"Dashboard server status load failed: {e}")
             return {
@@ -327,17 +331,17 @@ class ServerMediatedOperations:
         }
 
     async def dashboard_load_activity_data(
-        self, 
+        self,
         limit: int = 20,
         activity_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Load recent activity data for dashboard with filtering options.
-        
+
         Args:
             limit: Maximum number of activities to load
             activity_type: Optional filter for activity type
-            
+
         Returns:
             Dictionary with activity data or fallback data
         """
@@ -346,15 +350,14 @@ class ServerMediatedOperations:
                 'limit': limit,
                 'type': activity_type
             } if activity_type else {'limit': limit}
-            
-            result = await self.load_data_operation(
+
+            return await self.load_data_operation(
                 state_key="recent_activity",
                 server_operation="get_recent_activity_async",
                 operation_data=operation_data,
                 fallback_data=self._generate_fallback_activity_data(limit),
                 data_processor=timestamp_processor
             )
-            return result
         except Exception as e:
             logger.error(f"Dashboard activity data load failed: {e}")
             return {
@@ -366,19 +369,19 @@ class ServerMediatedOperations:
         """Generate fallback activity data for dashboard."""
         import random
         from datetime import datetime, timedelta
-        
+
         activity_types = [
-            'client_connect', 'client_disconnect', 'file_transfer', 
+            'client_connect', 'client_disconnect', 'file_transfer',
             'backup_complete', 'system_check', 'error'
         ]
-        
+
         activities = []
         now = datetime.now()
-        
-        for i in range(min(limit, 10)):  # Generate up to 10 fallback activities
+
+        for _ in range(min(limit, 10)):  # Generate up to 10 fallback activities
             activity_type = random.choice(activity_types)
             timestamp = now - timedelta(minutes=random.randint(1, 1440))  # Up to 24 hours ago
-            
+
             activity_messages = {
                 'client_connect': f"Client {random.randint(1, 255)}.{random.randint(1, 255)}.{random.randint(1, 255)}.{random.randint(1, 255)} connected",
                 'client_disconnect': f"Client {random.randint(1, 255)}.{random.randint(1, 255)}.{random.randint(1, 255)}.{random.randint(1, 255)} disconnected",
@@ -387,13 +390,13 @@ class ServerMediatedOperations:
                 'system_check': "System health check passed",
                 'error': "Failed to connect to update server"
             }
-            
+
             activities.append({
                 'timestamp': timestamp.isoformat(),
                 'type': activity_type,
                 'message': activity_messages.get(activity_type, "System event occurred")
             })
-            
+
         return sorted(activities, key=lambda x: x['timestamp'], reverse=True)
 
     # Analytics-specific operation patterns
@@ -404,11 +407,11 @@ class ServerMediatedOperations:
     ) -> Dict[str, Any]:
         """
         Load performance metrics for analytics with time range filtering.
-        
+
         Args:
             time_range: Time range for metrics (e.g., "1h", "24h", "7d")
             metric_types: Specific metric types to load
-            
+
         Returns:
             Dictionary with performance metrics
         """
@@ -417,14 +420,13 @@ class ServerMediatedOperations:
                 'time_range': time_range,
                 'metric_types': metric_types or ['cpu', 'memory', 'disk', 'network']
             }
-            
-            result = await self.load_data_operation(
+
+            return await self.load_data_operation(
                 state_key=f"performance_metrics_{time_range}",
                 server_operation="get_performance_metrics_async",
                 operation_data=operation_data,
                 fallback_data=self._generate_fallback_performance_metrics(time_range)
             )
-            return result
         except Exception as e:
             logger.error(f"Analytics performance metrics load failed: {e}")
             return {
@@ -436,7 +438,7 @@ class ServerMediatedOperations:
         """Generate fallback performance metrics for analytics."""
         import random
         from datetime import datetime, timedelta
-        
+
         # Determine number of data points based on time range
         points_map = {
             "1h": 60,    # 1 point per minute
@@ -444,7 +446,7 @@ class ServerMediatedOperations:
             "7d": 7      # 1 point per day
         }
         points = points_map.get(time_range, 24)
-        
+
         # Generate time series data
         base_time = datetime.now()
         metrics = {
@@ -454,14 +456,14 @@ class ServerMediatedOperations:
             'network_sent': [],
             'network_recv': []
         }
-        
+
         for i in range(points):
             time_point = base_time - timedelta(
                 minutes=i if time_range == "1h" else 0,
                 hours=i if time_range == "24h" else 0,
                 days=i if time_range == "7d" else 0
             )
-            
+
             metrics['cpu'].append({
                 'timestamp': time_point.isoformat(),
                 'value': random.uniform(20, 90)
@@ -482,23 +484,22 @@ class ServerMediatedOperations:
                 'timestamp': time_point.isoformat(),
                 'value': random.uniform(100, 800)
             })
-        
+
         return metrics
 
     async def analytics_load_system_info(self) -> Dict[str, Any]:
         """
         Load detailed system information for analytics.
-        
+
         Returns:
             Dictionary with system information
         """
         try:
-            result = await self.load_data_operation(
+            return await self.load_data_operation(
                 state_key="system_info",
                 server_operation="get_system_info_async",
                 fallback_data=self._generate_fallback_system_info()
             )
-            return result
         except Exception as e:
             logger.error(f"Analytics system info load failed: {e}")
             return {
@@ -528,7 +529,7 @@ class ServerMediatedOperations:
     ):
         """
         Create a reactive subscription optimized for dashboard updates with throttling.
-        
+
         Args:
             state_key: State key to subscribe to
             ui_update_callback: Function to call when state changes
@@ -536,11 +537,11 @@ class ServerMediatedOperations:
             throttle_ms: Minimum time between updates in milliseconds
         """
         last_update_time = 0
-        
+
         def throttled_callback(new_value, old_value):
             nonlocal last_update_time
             current_time = datetime.now().timestamp() * 1000  # Convert to milliseconds
-            
+
             # Only update if enough time has passed
             if current_time - last_update_time >= throttle_ms:
                 try:
@@ -563,7 +564,7 @@ class ServerMediatedOperations:
     ):
         """
         Create a reactive subscription optimized for analytics with optional aggregation.
-        
+
         Args:
             state_key: State key to subscribe to
             ui_update_callback: Function to call when state changes
@@ -588,22 +589,21 @@ class ServerMediatedOperations:
         """Aggregate analytics data for better visualization."""
         if not data:
             return {}
-        
+
         # Simple aggregation example
         aggregated = {
             'count': len(data),
             'latest': data[-1] if data else None
         }
-        
+
         # Add numerical aggregations if present
         numerical_keys = [k for k, v in (data[0].items() if data else {}) if isinstance(v, (int, float))]
         for key in numerical_keys:
-            values = [item[key] for item in data if key in item]
-            if values:
+            if (values := [item[key] for item in data if key in item]):
                 aggregated[f"{key}_avg"] = sum(values) / len(values)
                 aggregated[f"{key}_min"] = min(values)
                 aggregated[f"{key}_max"] = max(values)
-        
+
         return aggregated
 
     def create_multi_key_subscription(
@@ -614,7 +614,7 @@ class ServerMediatedOperations:
     ):
         """
         Create a subscription that reacts to changes in multiple state keys.
-        
+
         Args:
             state_keys: List of state keys to subscribe to
             ui_update_callback: Function to call when any state changes
@@ -626,14 +626,14 @@ class ServerMediatedOperations:
                 logger.debug(f"Multi-key UI update completed for {state_keys}")
             except Exception as e:
                 logger.error(f"Multi-key callback failed for {state_keys}: {e}")
-        
+
         # Subscribe to each key and collect values
         for key in state_keys:
-            self.state_manager.subscribe(key, 
+            self.state_manager.subscribe(key,
                 lambda new_val, old_val, k=key: multi_key_callback(
-                    {k: new_val}, 
+                    {k: new_val},
                     {k: old_val}
-                ), 
+                ),
                 control
             )
 
@@ -647,7 +647,7 @@ class ServerMediatedOperations:
     ):
         """
         Create a loading operation with progressive stages and callbacks.
-        
+
         Args:
             state_key: Key to store data in state manager
             server_operation: Name of server bridge method to call
@@ -656,37 +656,37 @@ class ServerMediatedOperations:
         """
         async def progressive_operation(**kwargs):
             results = {}
-            
+
             for i, stage in enumerate(stages):
                 try:
                     # Set loading state for current stage
                     self.state_manager.set_loading(f"{state_key}_{stage}", True)
-                    
+
                     # Execute stage-specific operation
                     stage_result = await self.state_manager.server_mediated_update(
                         key=f"{state_key}_{stage}",
                         value=kwargs.get(f"{stage}_data"),
                         server_operation=f"{server_operation}_{stage}"
                     )
-                    
+
                     results[stage] = stage_result
-                    
+
                     # Update overall progress
                     progress = (i + 1) / len(stages)
                     self.state_manager.set_progress(state_key, progress)
-                    
+
                     # Call stage completion callback if provided
                     if on_stage_complete:
                         on_stage_complete(stage, stage_result)
-                        
+
                 except Exception as e:
                     logger.error(f"Progressive operation failed at stage {stage}: {e}")
                     results[stage] = {'success': False, 'error': str(e)}
                 finally:
                     self.state_manager.set_loading(f"{state_key}_{stage}", False)
-            
+
             return results
-            
+
         return progressive_operation
 
     def create_loading_with_retry(
@@ -698,7 +698,7 @@ class ServerMediatedOperations:
     ):
         """
         Create a loading operation with automatic retry logic.
-        
+
         Args:
             state_key: Key to store data in state manager
             server_operation: Name of server bridge method to call
@@ -707,34 +707,34 @@ class ServerMediatedOperations:
         """
         async def retry_operation(**kwargs):
             last_exception = None
-            
+
             for attempt in range(max_retries + 1):
                 try:
                     if attempt > 0:
                         logger.info(f"Retry attempt {attempt}/{max_retries} for {state_key}")
                         await asyncio.sleep(retry_delay * (2 ** (attempt - 1)))  # Exponential backoff
-                    
+
                     result = await self.state_manager.server_mediated_update(
                         key=state_key,
                         value=kwargs.get('fallback_data'),
                         server_operation=server_operation,
                         operation_data=kwargs
                     )
-                    
+
                     if result.get('success'):
                         return result
                     elif attempt < max_retries:
                         logger.warning(f"Operation failed, retrying: {result.get('error')}")
-                        
+
                 except Exception as e:
                     last_exception = e
                     if attempt < max_retries:
                         logger.warning(f"Operation failed with exception, retrying: {e}")
-                    
+
             # If all retries failed, return the last error
             logger.error(f"All retry attempts failed for {state_key}")
             return {'success': False, 'error': str(last_exception) if last_exception else "All retry attempts failed"}
-            
+
         return retry_operation
 
     def create_batch_operation_with_progress(
@@ -744,7 +744,7 @@ class ServerMediatedOperations:
     ):
         """
         Execute batch operations with progress tracking.
-        
+
         Args:
             operations: List of operation configs
             on_progress: Callback function to report progress
@@ -752,24 +752,24 @@ class ServerMediatedOperations:
         async def batch_with_progress():
             results = {}
             total_operations = len(operations)
-            
+
             for i, op in enumerate(operations):
                 try:
                     # Report progress
                     if on_progress:
                         progress = (i + 1) / total_operations
                         on_progress(progress, op.get('state_key', f'operation_{i}'))
-                    
+
                     # Execute operation
                     result = await self.load_data_operation(**op)
                     results[op.get('state_key', f'operation_{i}')] = result
-                    
+
                 except Exception as e:
                     logger.error(f"Batch operation failed for {op.get('state_key', f'operation_{i}')}: {e}")
                     results[op.get('state_key', f'operation_{i}')] = {'success': False, 'error': str(e)}
-            
+
             return results
-            
+
         return batch_with_progress
 
     def create_conditional_loading_operation(
@@ -781,7 +781,7 @@ class ServerMediatedOperations:
     ):
         """
         Create a loading operation that conditionally executes based on a condition function.
-        
+
         Args:
             state_key: Key to store data in state manager
             server_operation: Name of server bridge method to call
@@ -813,7 +813,7 @@ class ServerMediatedOperations:
             except Exception as e:
                 logger.error(f"Conditional operation failed for {state_key}: {e}")
                 return {'success': False, 'error': str(e)}
-                
+
         return conditional_operation
 
 
@@ -831,12 +831,11 @@ def timestamp_processor(data: List[Dict]) -> List[Dict]:
 
     from datetime import datetime
     for item in data:
-        if isinstance(item, dict) and 'timestamp' in item:
-            if isinstance(item['timestamp'], str):
-                try:
-                    item['timestamp'] = datetime.fromisoformat(item['timestamp'])
-                except ValueError:
-                    logger.warning(f"Failed to parse timestamp: {item['timestamp']}")
+        if isinstance(item, dict) and 'timestamp' in item and isinstance(item['timestamp'], str):
+            try:
+                item['timestamp'] = datetime.fromisoformat(item['timestamp'])
+            except ValueError:
+                logger.warning(f"Failed to parse timestamp: {item['timestamp']}")
     return data
 
 
@@ -856,9 +855,8 @@ def file_size_processor(data: List[Dict]) -> List[Dict]:
             return f"{size_bytes/(1024**3):.1f} GB"
 
     for item in data:
-        if isinstance(item, dict) and 'size' in item:
-            if isinstance(item['size'], (int, float)):
-                item['size_formatted'] = format_size(item['size'])
+        if isinstance(item, dict) and 'size' in item and isinstance(item['size'], (int, float)):
+            item['size_formatted'] = format_size(item['size'])
     return data
 
 
@@ -868,9 +866,8 @@ def percentage_processor(data: List[Dict], key: str = 'value') -> List[Dict]:
         return data
 
     for item in data:
-        if isinstance(item, dict) and key in item:
-            if isinstance(item[key], (int, float)):
-                item[f'{key}_percentage'] = f"{item[key]:.1f}%"
+        if isinstance(item, dict) and key in item and isinstance(item[key], (int, float)):
+            item[f'{key}_percentage'] = f"{item[key]:.1f}%"
     return data
 
 

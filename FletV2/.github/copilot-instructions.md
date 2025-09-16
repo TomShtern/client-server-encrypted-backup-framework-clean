@@ -39,6 +39,7 @@ Work ONLY inside `FletV2/`. Follow "Framework Harmony": always use Flet's built-
 - **Progress tracking:** For long-running operations (export, backup), use StateManager's `start_progress`, `update_progress`, and `clear_progress`. UI indicators should bind to progress states for granular feedback.
 - **Event deduplication:** StateManager must deduplicate events to prevent duplicate notifications and unnecessary UI updates.
 - **Async patterns:** Use small async handlers and `page.run_task()` for background work. Avoid blocking the UI.
+- **State Manager Null Checks:** When the `state_manager` is optional in view creation, add null checks before calling methods on it. If `state_manager` is `None`, the code should fall back to using the `server_bridge` directly or skip state management operations.
 
 ## ServerBridge API
 - Create with `from utils/server_bridge import create_server_bridge`.
@@ -63,6 +64,7 @@ Work ONLY inside `FletV2/`. Follow "Framework Harmony": always use Flet's built-
 
 ## Debugging & Search
 - Use ripgrep (rg) for fast code search. For JSON errors, fix structure and validate (`python -m json.tool <file>`).
+- When encountering the error "Text Control must be added to the page first", this indicates a Flet control lifecycle issue. Ensure that controls are properly added to the page before attempting to update them. Defer subscription setup until after the view is constructed and attached to the page. This can be achieved by adding a deferred initialization pattern at the end of the view creation function.
 
 ## Examples
 - View skeleton: `views/<name>.py` → `def create_<name>_view(server_bridge, page, state_manager=None) -> ft.Control`.
@@ -79,6 +81,7 @@ Work ONLY inside `FletV2/`. Follow "Framework Harmony": always use Flet's built-
 - Do not use custom routers, overlays, or state managers outside Flet's built-ins.
 - Do not use Codacy checks (currently ignored).
 - Do not hardcode colors, secrets, or control references.
+- Do not break the code or remove functionality when fixing problems.
 
 ## References
 - See `main.py`, `views/settings.py`, `views/logs.py`, `utils/server_bridge.py`, `theme.py` for canonical patterns.
@@ -214,6 +217,7 @@ These rules reflect current code, not aspirations. When in doubt, mirror pattern
   - The solution is to defer subscription setup until after the view is constructed and attached to the page. This can be achieved by adding a deferred initialization pattern at the end of the view creation function.
 - Ensure that the UI components use proper theme inheritance and are not explicitly overriding the theme colors. Use `ft.Colors` theme roles instead of manual color definitions.
 - When addressing Sourcery warnings, adhere to best practices and ensure that the changes do not break the code or functionality. Functionality should remain the same.
+- When a view receives `None` for the `state_manager`, handle it gracefully by either using the `server_bridge` directly or skipping state management operations. Implement null checks to avoid "TypeError: object NoneType can't be used in 'await' expression" errors.
 
 ### Security Considerations
 
@@ -506,14 +510,3 @@ disable=trailing-whitespace
     - Integration points, external dependencies, and cross-component communication patterns.
 - When creating or updating `.github/copilot-instructions.md`:
     - Merge intelligently, preserving valuable content while updating outdated sections.
-    - Write concise, actionable instructions (~20-50 lines) using markdown structure.
-    - Include specific examples from the codebase when describing patterns.
-    - Avoid generic advice ("write tests", "handle errors") and focus on the project's specific approaches.
-    - Document only discoverable patterns, not aspirational practices.
-    - Reference key files/directories that exemplify important patterns.
-- Search existing AI conventions from `**/{.github/copilot-instructions.md,AGENT.md,AGENTS.md,CLAUDE.md,.cursorrules,.windsurfrules,.clinerules,.cursor/rules/**,.windsurf/rules/**,.clinerules/**,README.md}`.
-- Use ripgrep (rg) to search for patterns more efficiently.
-- When updating `.github/copilot-instructions.md`, merge intelligently, preserving valuable content while updating outdated sections. Read
-
-### Layout and Scaling Issues
-- The action buttons and text in the tables

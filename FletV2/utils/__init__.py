@@ -11,9 +11,9 @@ from .state_manager import create_state_manager
 from .database_manager import FletDatabaseManager, create_database_manager
 from .mock_data_generator import MockDataGenerator
 from .ui_components import create_modern_card, create_floating_action_button
-from .dialog_consolidation_helper import (
-    show_user_feedback, show_success_message, show_error_message, 
-    show_info_message, show_warning_message, show_confirmation, 
+from .user_feedback import (
+    show_user_feedback, show_success_message, show_error_message,
+    show_info_message, show_warning_message, show_confirmation,
     show_info, show_input
 )
 from .performance import (

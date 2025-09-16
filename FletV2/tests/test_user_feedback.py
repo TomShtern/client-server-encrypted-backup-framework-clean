@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 # Mock flet for testing
 sys.modules['flet'] = MagicMock()
 
-from utils.dialog_consolidation_helper import (
+from utils.user_feedback import (
     show_success_message, show_error_message, show_info_message, 
     show_warning_message, show_confirmation, show_input
 )

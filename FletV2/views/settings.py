@@ -13,14 +13,25 @@ import time
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.dialog_consolidation_helper import show_success_message, show_error_message, show_info_message
+from utils.user_feedback import show_success_message, show_error_message, show_info_message
 from utils.ui_components import create_modern_card
 from pathlib import Path
 from datetime import datetime
 from config import SETTINGS_FILE, ASYNC_DELAY, MIN_PORT, MAX_PORT, MIN_MAX_CLIENTS
 
 # UTF-8 support
-import Shared.utils.utf8_solution
+import sys
+import os
+# Add parent directory to path to access Shared module
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    import Shared.utils.utf8_solution
+except ImportError:
+    # Fallback: use local utf8_patch if available
+    try:
+        from utils import utf8_patch
+    except ImportError:
+        pass  # Continue without UTF-8 patch
 
 logger = get_logger(__name__)
 
@@ -151,8 +162,8 @@ class EnhancedSettingsState:
                     self._update_ui_from_settings()
                     logger.info("Settings loaded from local file")
                     return True
-            else:
-                # Use defaults
+
+                # Use defaults (when settings file doesn't exist)
                 if self.state_manager:
                     await self.state_manager.update_settings_async(self.current_settings, "defaults")
                 self._update_ui_from_settings()
@@ -187,13 +198,12 @@ class EnhancedSettingsState:
                 value = self.current_settings.get(section, {}).get(key)
                 if value is not None:
                     for control in controls:
-                        if hasattr(control, 'value'):
-                            if isinstance(control, ft.Switch):
-                                control.value = bool(value)
-                            elif isinstance(control, ft.Slider):
-                                control.value = float(value)
-                            else:
-                                control.value = str(value)
+                        if hasattr(control, 'value') and isinstance(control, ft.Switch):
+                            control.value = bool(value)
+                        elif hasattr(control, 'value') and isinstance(control, ft.Slider):
+                            control.value = float(value)
+                        elif hasattr(control, 'value'):
+                            control.value = str(value)
 
                             # Clear any validation errors
                             if hasattr(control, 'error_text'):
@@ -298,101 +308,97 @@ class EnhancedSettingsState:
         try:
             if self.server_bridge:
                 return await self.server_bridge.validate_settings_async(settings_data)
-            else:
-                # Local validation fallback with comprehensive cross-field checks
-                validation_result = {
-                    'valid': True,
-                    'errors': [],
-                    'warnings': []
-                }
 
-                # Basic validation
-                if 'server' in settings_data:
-                    server_settings = settings_data['server']
-                    port = server_settings.get('port')
-                    if port and (not isinstance(port, int) or port < 1024 or port > 65535):
-                        validation_result['errors'].append("Port must be between 1024-65535")
+            # Local validation fallback with comprehensive cross-field checks
+            validation_result = {
+                'valid': True,
+                'errors': [],
+                'warnings': []
+            }
+
+            # Basic validation
+            if 'server' in settings_data:
+                server_settings = settings_data['server']
+                port = server_settings.get('port')
+                if port and (not isinstance(port, int) or port < 1024 or port > 65535):
+                    validation_result['errors'].append("Port must be between 1024-65535")
+                    validation_result['valid'] = False
+
+                # Cross-field validation: SSL configuration
+                if (ssl_enabled := server_settings.get('ssl_enabled', False)):
+                    ssl_cert_path = server_settings.get('ssl_cert_path', '').strip()
+                    ssl_key_path = server_settings.get('ssl_key_path', '').strip()
+
+                    if not ssl_cert_path:
+                        validation_result['errors'].append("SSL certificate path is required when SSL is enabled")
+                        validation_result['valid'] = False
+                    elif not Path(ssl_cert_path).exists():
+                        validation_result['warnings'].append(f"SSL certificate file not found: {ssl_cert_path}")
+
+                    if not ssl_key_path:
+                        validation_result['errors'].append("SSL key path is required when SSL is enabled")
+                        validation_result['valid'] = False
+                    elif not Path(ssl_key_path).exists():
+                        validation_result['warnings'].append(f"SSL key file not found: {ssl_key_path}")
+
+            # Cross-field validation: Backup settings
+            if 'backup' in settings_data:
+                backup_settings = settings_data['backup']
+                if (auto_backup := backup_settings.get('auto_backup_enabled', False)):
+                    backup_interval = backup_settings.get('backup_interval_hours', 0)
+                    if not isinstance(backup_interval, (int, float)) or backup_interval <= 0:
+                        validation_result['errors'].append("Backup interval must be greater than 0 hours when auto-backup is enabled")
                         validation_result['valid'] = False
 
-                    # Cross-field validation: SSL configuration
-                    ssl_enabled = server_settings.get('ssl_enabled', False)
-                    if ssl_enabled:
-                        ssl_cert_path = server_settings.get('ssl_cert_path', '').strip()
-                        ssl_key_path = server_settings.get('ssl_key_path', '').strip()
-
-                        if not ssl_cert_path:
-                            validation_result['errors'].append("SSL certificate path is required when SSL is enabled")
-                            validation_result['valid'] = False
-                        elif not Path(ssl_cert_path).exists():
-                            validation_result['warnings'].append(f"SSL certificate file not found: {ssl_cert_path}")
-
-                        if not ssl_key_path:
-                            validation_result['errors'].append("SSL key path is required when SSL is enabled")
-                            validation_result['valid'] = False
-                        elif not Path(ssl_key_path).exists():
-                            validation_result['warnings'].append(f"SSL key file not found: {ssl_key_path}")
-
-                # Cross-field validation: Backup settings
-                if 'backup' in settings_data:
-                    backup_settings = settings_data['backup']
-                    auto_backup = backup_settings.get('auto_backup_enabled', False)
-
-                    if auto_backup:
-                        backup_interval = backup_settings.get('backup_interval_hours', 0)
-                        if not isinstance(backup_interval, (int, float)) or backup_interval <= 0:
-                            validation_result['errors'].append("Backup interval must be greater than 0 hours when auto-backup is enabled")
+                    backup_path = backup_settings.get('backup_path', '').strip()
+                    if not backup_path:
+                        validation_result['errors'].append("Backup path is required when auto-backup is enabled")
+                        validation_result['valid'] = False
+                    else:
+                        # Check if backup directory exists or can be created
+                        try:
+                            backup_dir = Path(backup_path).parent
+                            if not backup_dir.exists():
+                                validation_result['warnings'].append(f"Backup directory does not exist: {backup_dir}")
+                        except Exception:
+                            validation_result['errors'].append(f"Invalid backup path: {backup_path}")
                             validation_result['valid'] = False
 
-                        backup_path = backup_settings.get('backup_path', '').strip()
-                        if not backup_path:
-                            validation_result['errors'].append("Backup path is required when auto-backup is enabled")
-                            validation_result['valid'] = False
-                        else:
-                            # Check if backup directory exists or can be created
-                            try:
-                                backup_dir = Path(backup_path).parent
-                                if not backup_dir.exists():
-                                    validation_result['warnings'].append(f"Backup directory does not exist: {backup_dir}")
-                            except Exception:
-                                validation_result['errors'].append(f"Invalid backup path: {backup_path}")
-                                validation_result['valid'] = False
+            # Cross-field validation: Monitoring thresholds
+            if 'monitoring' in settings_data:
+                monitoring_settings = settings_data['monitoring']
+                monitoring_enabled = monitoring_settings.get('enabled', False)
 
-                # Cross-field validation: Monitoring thresholds
-                if 'monitoring' in settings_data:
-                    monitoring_settings = settings_data['monitoring']
-                    monitoring_enabled = monitoring_settings.get('enabled', False)
+                if monitoring_enabled:
+                    cpu_threshold = monitoring_settings.get('cpu_threshold', 80)
+                    memory_threshold = monitoring_settings.get('memory_threshold', 85)
 
-                    if monitoring_enabled:
-                        cpu_threshold = monitoring_settings.get('cpu_threshold', 80)
-                        memory_threshold = monitoring_settings.get('memory_threshold', 85)
+                    if not isinstance(cpu_threshold, (int, float)) or cpu_threshold <= 0 or cpu_threshold > 100:
+                        validation_result['errors'].append("CPU threshold must be between 1-100 when monitoring is enabled")
+                        validation_result['valid'] = False
 
-                        if not isinstance(cpu_threshold, (int, float)) or cpu_threshold <= 0 or cpu_threshold > 100:
-                            validation_result['errors'].append("CPU threshold must be between 1-100 when monitoring is enabled")
-                            validation_result['valid'] = False
+                    if not isinstance(memory_threshold, (int, float)) or memory_threshold <= 0 or memory_threshold > 100:
+                        validation_result['errors'].append("Memory threshold must be between 1-100 when monitoring is enabled")
+                        validation_result['valid'] = False
 
-                        if not isinstance(memory_threshold, (int, float)) or memory_threshold <= 0 or memory_threshold > 100:
-                            validation_result['errors'].append("Memory threshold must be between 1-100 when monitoring is enabled")
-                            validation_result['valid'] = False
+                    # Logical validation: CPU threshold should typically be lower than memory threshold
+                    if isinstance(cpu_threshold, (int, float)) and isinstance(memory_threshold, (int, float)) and cpu_threshold >= memory_threshold:
+                        validation_result['warnings'].append("CPU threshold is higher than memory threshold - this may cause frequent alerts")
 
-                        # Logical validation: CPU threshold should typically be lower than memory threshold
-                        if isinstance(cpu_threshold, (int, float)) and isinstance(memory_threshold, (int, float)):
-                            if cpu_threshold >= memory_threshold:
-                                validation_result['warnings'].append("CPU threshold is higher than memory threshold - this may cause frequent alerts")
+            # Cross-field validation: GUI refresh settings
+            if 'gui' in settings_data:
+                gui_settings = settings_data['gui']
+                auto_refresh = gui_settings.get('auto_refresh', False)
 
-                # Cross-field validation: GUI refresh settings
-                if 'gui' in settings_data:
-                    gui_settings = settings_data['gui']
-                    auto_refresh = gui_settings.get('auto_refresh', False)
+                if auto_refresh:
+                    refresh_interval = gui_settings.get('refresh_interval', 5)
+                    if not isinstance(refresh_interval, (int, float)) or refresh_interval < 1:
+                        validation_result['errors'].append("Refresh interval must be at least 1 second when auto-refresh is enabled")
+                        validation_result['valid'] = False
+                    elif refresh_interval < 3:
+                        validation_result['warnings'].append("Refresh intervals below 3 seconds may impact performance")
 
-                    if auto_refresh:
-                        refresh_interval = gui_settings.get('refresh_interval', 5)
-                        if not isinstance(refresh_interval, (int, float)) or refresh_interval < 1:
-                            validation_result['errors'].append("Refresh interval must be at least 1 second when auto-refresh is enabled")
-                            validation_result['valid'] = False
-                        elif refresh_interval < 3:
-                            validation_result['warnings'].append("Refresh intervals below 3 seconds may impact performance")
-
-                return {'success': True, 'data': validation_result}
+            return {'success': True, 'data': validation_result}
         except Exception as e:
             logger.error(f"Settings validation failed: {e}")
             return {'success': False, 'error': str(e)}
@@ -486,9 +492,8 @@ class EnhancedSettingsState:
             event_type = event_data.get('type')
             if event_type == 'settings_updated':
                 logger.debug("Settings updated event received")
-            elif event_type == 'settings_conflict_merged':
-                if self.state_manager:
-                    self.state_manager.add_notification("Settings conflict resolved", "warning")
+            elif event_type == 'settings_conflict_merged' and self.state_manager:
+                self.state_manager.add_notification("Settings conflict resolved", "warning")
 
     async def backup_settings_async(self, backup_name: str):
         """Create settings backup with versioning and progress tracking."""
@@ -499,10 +504,9 @@ class EnhancedSettingsState:
 
             if self.server_bridge:
                 result = await self.server_bridge.backup_settings_async(backup_name, self.current_settings)
-                if result.get('success'):
-                    if self.state_manager:
-                        self.state_manager.update_progress("settings_backup", step=1, message="Saving")
-                        self.state_manager.add_notification(f"Backup '{backup_name}' created", "success")
+                if result.get('success') and self.state_manager:
+                    self.state_manager.update_progress("settings_backup", step=1, message="Saving")
+                    self.state_manager.add_notification(f"Backup '{backup_name}' created", "success")
                     return result
 
             # Local backup fallback
@@ -555,21 +559,21 @@ class EnhancedSettingsState:
 
             # Local restore fallback
             backup_path = Path(backup_file)
-            if backup_path.exists():
-                with open(backup_path, 'r', encoding='utf-8') as f:
-                    backup_data = json.load(f)
-
-                restored_settings = backup_data.get('settings', backup_data)
-                self.current_settings = self._deep_merge_settings(self._load_default_settings(), restored_settings)
-                self._update_ui_from_settings()
-
-                if self.state_manager:
-                    await self.state_manager.update_settings_async(self.current_settings, "local_restore")
-                    self.state_manager.add_notification("Settings restored from local backup", "success")
-
-                return {'success': True}
-            else:
+            if not backup_path.exists():
                 raise FileNotFoundError(f"Backup file not found: {backup_file}")
+
+            with open(backup_path, 'r', encoding='utf-8') as f:
+                backup_data = json.load(f)
+
+            restored_settings = backup_data.get('settings', backup_data)
+            self.current_settings = self._deep_merge_settings(self._load_default_settings(), restored_settings)
+            self._update_ui_from_settings()
+
+            if self.state_manager:
+                await self.state_manager.update_settings_async(self.current_settings, "local_restore")
+                self.state_manager.add_notification("Settings restored from local backup", "success")
+
+            return {'success': True}
 
         except Exception as e:
             logger.error(f"Failed to restore settings: {e}")
@@ -579,6 +583,49 @@ class EnhancedSettingsState:
         finally:
             if self.state_manager:
                 self.state_manager.set_loading("settings_restore", False)
+
+    def dispose(self):
+        """Enhanced disposal with comprehensive cleanup for settings view."""
+        try:
+            # Cancel auto-save task if running
+            if self._auto_save_task and not self._auto_save_task.done():
+                self._auto_save_task.cancel()
+                logger.debug("Auto-save task cancelled")
+
+            # Unsubscribe from state manager events
+            if self.state_manager:
+                try:
+                    if hasattr(self.state_manager, 'unsubscribe_settings'):
+                        self.state_manager.unsubscribe_settings(self._on_settings_changed)
+                    else:
+                        logger.debug("Settings-specific unsubscribe not available")
+
+                    # Unsubscribe from all event types
+                    self.state_manager.unsubscribe("settings_events", self._on_settings_event)
+                    self.state_manager.unsubscribe("loading_states", lambda x, y: None)
+                    logger.debug("State manager subscriptions cleaned up")
+                except Exception as e:
+                    logger.debug(f"Error unsubscribing from state manager: {e}")
+
+            # Remove FilePicker from overlay if present
+            if self.page and hasattr(self, 'file_picker') and self.file_picker is not None:
+                try:
+                    if self.file_picker in self.page.overlay:
+                        self.page.overlay.remove(self.file_picker)
+                        self.page.update()
+                    self.file_picker = None
+                    logger.debug("FilePicker removed from overlay")
+                except Exception as e:
+                    logger.debug(f"Error removing FilePicker: {e}")
+
+            # Clear UI control references to prevent memory leaks
+            self._ui_refs.clear()
+            self._validation_errors.clear()
+            self._pending_changes.clear()
+
+            logger.debug("Settings view disposed: cleaned up subscriptions, tasks, and UI references")
+        except Exception as e:
+            logger.warning(f"Error during settings view disposal: {e}")
 
 
 # Enhanced validation functions with comprehensive checks
@@ -593,10 +640,9 @@ def validate_port(value: str) -> tuple[bool, str]:
             return False, f"Port must be at least {min_port} (system reserved)"
         elif port > max_port:
             return False, f"Port cannot exceed {max_port}"
-        elif port == 80:
-            return True, "⚠️ Port 80 may require administrator privileges"
-        elif port == 443:
-            return True, "⚠️ Port 443 may require administrator privileges"
+        privileged_ports = {80, 443}
+        if port in privileged_ports:
+            return True, f"⚠️ Port {port} may require administrator privileges"
         else:
             return True, ""
     except ValueError:
@@ -667,7 +713,7 @@ def create_enhanced_field_handler(state: EnhancedSettingsState, section: str, ke
         if validator:
             if (result := validator(value)):
                 is_valid, error_msg = result
-                e.control.error_text = error_msg if not is_valid else None
+                e.control.error_text = None if is_valid else error_msg
 
             # Visual feedback for validation state
             if not is_valid:
@@ -683,18 +729,16 @@ def create_enhanced_field_handler(state: EnhancedSettingsState, section: str, ke
                 return
 
         # Convert to appropriate type
-        try:
-            if data_type == int:
-                value = int(value)
-            elif data_type == float:
-                value = float(value)
-            elif data_type == bool:
-                value = bool(value)
-        except ValueError:
-            e.control.error_text = f"Invalid {data_type.__name__} value"
-            e.control.border_color = ft.Colors.ERROR
-            e.control.update()
-            return
+        type_converters = {int: int, float: float, bool: bool}
+        converter = type_converters.get(data_type)
+        if converter:
+            try:
+                value = converter(value)
+            except ValueError:
+                e.control.error_text = f"Invalid {data_type.__name__} value"
+                e.control.border_color = ft.Colors.ERROR
+                e.control.update()
+                return
 
         # Update setting with reactive state management
         success = state.update_setting(section, key, value)
@@ -705,17 +749,16 @@ def create_enhanced_field_handler(state: EnhancedSettingsState, section: str, ke
             e.control.update()
 
             # Show success notification for important settings
-            if key in {'port', 'host', 'max_clients'}:
-                if state.state_manager:
-                    state.state_manager.add_notification(
-                        f"{key.title().replace('_', ' ')} updated to {value}",
-                        "success",
-                        auto_dismiss=3
-                    )
+            if key in {'port', 'host', 'max_clients'} and state.state_manager:
+                state.state_manager.add_notification(
+                    f"{key.title().replace('_', ' ')} updated to {value}",
+                    "success",
+                    auto_dismiss=3
+                )
 
     return handler
 
-def create_enhanced_switch_handler(state: EnhancedSettingsState, section: str, key: str, on_change_callback: Callable = None):
+def create_enhanced_switch_handler(state: EnhancedSettingsState, section: str, key: str, on_change_callback: Optional[Callable] = None):
     """Enhanced switch handler with animations and feedback."""
     def handler(e):
         value = e.control.value
@@ -740,13 +783,12 @@ def create_enhanced_switch_handler(state: EnhancedSettingsState, section: str, k
                 on_change_callback(value)
 
             # Notification for important toggles
-            if key in ['enabled', 'alerts', 'notifications']:
-                if state.state_manager:
-                    state.state_manager.add_notification(
-                        f"{key.title().replace('_', ' ')} {'enabled' if value else 'disabled'}",
-                        "info",
-                        auto_dismiss=2
-                    )
+            if key in {'enabled', 'alerts', 'notifications'} and state.state_manager:
+                state.state_manager.add_notification(
+                    f"{key.title().replace('_', ' ')} {'enabled' if value else 'disabled'}",
+                    "info",
+                    auto_dismiss=2
+                )
 
     return handler
 
@@ -814,12 +856,12 @@ def create_modern_text_field(
     state: EnhancedSettingsState,
     section: str,
     key: str,
-    validator: Callable = None,
+    validator: Optional[Callable] = None,
     data_type: type = str,
-    width: int = None,
-    keyboard_type: ft.KeyboardType = None,
-    prefix_icon: str = None,
-    suffix_text: str = None
+    width: Optional[int] = None,
+    keyboard_type: Optional[ft.KeyboardType] = None,
+    prefix_icon: Optional[str] = None,
+    suffix_text: Optional[str] = None
 ) -> ft.TextField:
     """Create modern Material Design 3 text field with enhanced styling and proper event handlers."""
 
@@ -870,7 +912,7 @@ def create_modern_switch(
     state: EnhancedSettingsState,
     section: str,
     key: str,
-    on_change_callback: Callable = None
+    on_change_callback: Optional[Callable] = None
 ) -> ft.Switch:
     """Create modern Material Design 3 switch with enhanced styling and proper event handlers."""
 
@@ -899,13 +941,12 @@ def create_modern_switch(
                     on_change_callback(value)
 
                 # Notification for important toggles
-                if key in ['enabled', 'alerts', 'notifications']:
-                    if state.state_manager:
-                        state.state_manager.add_notification(
-                            f"{key.title().replace('_', ' ')} {'enabled' if value else 'disabled'}",
-                            "info",
-                            auto_dismiss=2
-                        )
+                if key in {'enabled', 'alerts', 'notifications'} and state.state_manager:
+                    state.state_manager.add_notification(
+                        f"{key.title().replace('_', ' ')} {'enabled' if value else 'disabled'}",
+                        "info",
+                        auto_dismiss=2
+                    )
             else:
                 # Show error feedback
                 e.control.scale = 0.9
@@ -943,7 +984,7 @@ def create_modern_dropdown(
     state: EnhancedSettingsState,
     section: str,
     key: str,
-    width: int = None
+    width: Optional[int] = None
 ) -> ft.Dropdown:
     """Create modern Material Design 3 dropdown with enhanced styling and proper event handlers."""
 
@@ -959,13 +1000,12 @@ def create_modern_dropdown(
                 e.control.update()
 
                 # Show notification for important settings
-                if key in ['log_level', 'language', 'theme_mode']:
-                    if state.state_manager:
-                        state.state_manager.add_notification(
-                            f"{key.title().replace('_', ' ')} changed to {new_value}",
-                            "success",
-                            auto_dismiss=3
-                        )
+                if key in {'log_level', 'language', 'theme_mode'} and state.state_manager:
+                    state.state_manager.add_notification(
+                        f"{key.title().replace('_', ' ')} changed to {new_value}",
+                        "success",
+                        auto_dismiss=3
+                    )
             else:
                 # Show error feedback
                 e.control.border_color = ft.Colors.ERROR
@@ -1020,13 +1060,13 @@ def create_modern_slider(
                 e.control.update()
 
                 # Show notification for important sliders
-                if key in ['refresh_interval', 'cpu_threshold', 'memory_threshold']:
-                    if state.state_manager:
-                        state.state_manager.add_notification(
-                            f"{label} set to {new_value}{suffix}",
-                            "info",
-                            auto_dismiss=2
-                        )
+                important_sliders = {'refresh_interval', 'cpu_threshold', 'memory_threshold'}
+                if key in important_sliders and state.state_manager:
+                    state.state_manager.add_notification(
+                        f"{label} set to {new_value}{suffix}",
+                        "info",
+                        auto_dismiss=2
+                    )
             else:
                 # Show error feedback
                 e.control.active_color = ft.Colors.ERROR
@@ -1494,9 +1534,7 @@ def create_enhanced_monitoring_section(state: EnhancedSettingsState) -> ft.Contr
     """Create enhanced monitoring settings section with responsive layout and comprehensive controls."""
 
     # Core Monitoring
-    monitoring_switch_value = state.get_setting('monitoring', 'enabled', True)
-    if monitoring_switch_value is None:
-        monitoring_switch_value = True
+    monitoring_switch_value = bool(state.get_setting('monitoring', 'enabled', True))
     monitoring_switch = create_modern_switch(
         "Enable System Monitoring",
         monitoring_switch_value,
@@ -1912,13 +1950,12 @@ def create_enhanced_security_section(state: EnhancedSettingsState) -> ft.Control
         return_type="container"
     )
 
+
 def create_enhanced_backup_section(state: EnhancedSettingsState) -> ft.Control:
     """Create enhanced backup settings section with responsive layout."""
 
     # Auto Backup
-    auto_backup_switch_value = state.get_setting('backup', 'auto_backup_settings', True)
-    if auto_backup_switch_value is None:
-        auto_backup_switch_value = True
+    auto_backup_switch_value = bool(state.get_setting('backup', 'auto_backup_settings', True))
     auto_backup_switch = create_modern_switch(
         "Auto Backup Settings",
         auto_backup_switch_value,
@@ -2375,50 +2412,6 @@ def create_enhanced_action_buttons(state: EnhancedSettingsState) -> ft.Column:
         ], spacing=20),
     ], spacing=10)
 
-    def dispose(self):
-        """Enhanced disposal with comprehensive cleanup for settings view."""
-        try:
-            # Cancel auto-save task if running
-            if self._auto_save_task and not self._auto_save_task.done():
-                self._auto_save_task.cancel()
-                logger.debug("Auto-save task cancelled")
-
-            # Unsubscribe from state manager events
-            if self.state_manager:
-                try:
-                    if hasattr(self.state_manager, 'unsubscribe_settings'):
-                        self.state_manager.unsubscribe_settings(self._on_settings_changed)
-                    else:
-                        logger.debug("Settings-specific unsubscribe not available")
-
-                    # Unsubscribe from all event types
-                    self.state_manager.unsubscribe("settings_events", self._on_settings_event)
-                    self.state_manager.unsubscribe("loading_states", lambda x, y: None)
-                    logger.debug("State manager subscriptions cleaned up")
-                except Exception as e:
-                    logger.debug(f"Error unsubscribing from state manager: {e}")
-
-            # Remove FilePicker from overlay if present
-            if self.page and hasattr(self, 'file_picker') and self.file_picker is not None:
-                try:
-                    if self.file_picker in self.page.overlay:
-                        self.page.overlay.remove(self.file_picker)
-                        self.page.update()
-                    self.file_picker = None
-                    logger.debug("FilePicker removed from overlay")
-                except Exception as e:
-                    logger.debug(f"Error removing FilePicker: {e}")
-
-            # Clear UI control references to prevent memory leaks
-            self._ui_refs.clear()
-            self._validation_errors.clear()
-            self._pending_changes.clear()
-
-            logger.debug("Settings view disposed: cleaned up subscriptions, tasks, and UI references")
-        except Exception as e:
-            logger.warning(f"Error during settings view disposal: {e}")
-
-
 def create_settings_view(
     server_bridge: Optional[ServerBridge],
     page: ft.Page,
@@ -2617,14 +2610,14 @@ def create_settings_view(
             if state_manager:
                 state_manager.add_notification("Failed to load settings", "error")
 
+    # Modified return to make dispose accessible
+    main_view.dispose = settings_state.dispose
+
+    # Run setup after view is constructed
     page.run_task(load_settings_with_status)
 
-    # Defer initial status update until view is added to page
-    def setup_view():
-        """Set up view after it's added to the page."""
-        update_status_display()
-        if hasattr(settings_state, 'setup_subscriptions'):
-            settings_state.setup_subscriptions()
+    # Call setup function after the view is added to the page
+    page.run_task(lambda: setup_view())
 
-    # Enhanced return with proper cleanup and setup functions
+    return main_view
     return main_view, lambda: settings_state.dispose(), setup_view

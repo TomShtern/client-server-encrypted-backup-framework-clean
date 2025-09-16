@@ -70,8 +70,7 @@ class ServerBridge:
         }
         if data is not None:
             response['data'] = data
-        response.update(kwargs)
-        return response
+        return response | kwargs
 
     def _create_error_response(self, message: str, error_code: Optional[str] = None, mode: str = 'mock', **kwargs) -> Dict[str, Any]:
         """Create standardized error response."""
@@ -83,8 +82,7 @@ class ServerBridge:
         }
         if error_code:
             response['error_code'] = error_code
-        response.update(kwargs)
-        return response
+        return response | kwargs
 
     def _handle_server_operation(self, operation_name: str, real_method_name: str,
                                 mock_fallback_func, *args, **kwargs) -> Dict[str, Any]:
@@ -606,7 +604,7 @@ class ServerBridge:
                 result = await self.real_server.download_file_async(file_id, destination_path)
                 return {
                     'success': result,
-                    'message': f'File downloaded successfully' if result else 'Download failed',
+                    'message': 'File downloaded successfully' if result else 'Download failed',
                     'mode': 'real'
                 }
             except Exception as e:
@@ -618,7 +616,7 @@ class ServerBridge:
         await self._write_mock_file_async(file_id, destination_path)
         return {
             'success': True,
-            'message': f'Mock download completed - sample file created',
+            'message': 'Mock download completed - sample file created',
             'mode': 'mock'
         }
 
@@ -767,7 +765,7 @@ class ServerBridge:
             try:
                 result = self.real_server.delete_row(table_name, row_id)
                 return {
-                    'success': True if result else False,
+                    'success': bool(result),
                     'message': f'Row deleted successfully from {table_name}' if result else f'Failed to delete row from {table_name}',
                     'mode': 'real'
                 }
@@ -857,16 +855,16 @@ class ServerBridge:
                 result = await self.real_server.clear_logs_async()
                 logger.debug("[ServerBridge] Real server clear_logs_async successful.")
 
-                if isinstance(result, dict) and 'success' in result:
-                    result['mode'] = 'real'
-                    result['timestamp'] = time.time()
-                    return result
-                else:
+                if not isinstance(result, dict) or 'success' not in result:
                     return self._create_success_response(
                         "Logs cleared successfully",
                         data={"cleared": result},
                         mode='real'
                     )
+
+                result['mode'] = 'real'
+                result['timestamp'] = time.time()
+                return result
             except Exception as e:
                 logger.error(f"Real server clear_logs_async failed: {e}")
                 return self._create_error_response(
@@ -902,16 +900,16 @@ class ServerBridge:
                 result = await self.real_server.export_logs_async(format, filters)
                 logger.debug(f"[ServerBridge] Real server export_logs_async successful for format: {format}")
 
-                if isinstance(result, dict) and 'success' in result:
-                    result['mode'] = 'real'
-                    result['timestamp'] = time.time()
-                    return result
-                else:
+                if not isinstance(result, dict) or 'success' not in result:
                     return self._create_success_response(
                         f"Logs exported successfully as {format}",
                         data=result,
                         mode='real'
                     )
+
+                result['mode'] = 'real'
+                result['timestamp'] = time.time()
+                return result
             except Exception as e:
                 logger.error(f"Real server export_logs_async failed: {e}")
                 return self._create_error_response(
@@ -1077,10 +1075,9 @@ class ServerBridge:
 
         if stream_task and not stream_task.done():
             stream_task.cancel()
-            try:
+            from contextlib import suppress
+            with suppress(asyncio.CancelledError):
                 await stream_task
-            except asyncio.CancelledError:
-                pass
 
         return self._create_success_response(
             "Mock log streaming stopped",
@@ -1457,16 +1454,16 @@ class ServerBridge:
                 result = await self.real_server.save_settings_async(settings_data)
                 logger.debug("[ServerBridge] Real server save_settings_async successful.")
 
-                if isinstance(result, dict) and 'success' in result:
-                    result['mode'] = 'real'
-                    result['timestamp'] = time.time()
-                    return result
-                else:
+                if not isinstance(result, dict) or 'success' not in result:
                     return self._create_success_response(
                         "Settings saved successfully",
                         data=result,
                         mode='real'
                     )
+
+                result['mode'] = 'real'
+                result['timestamp'] = time.time()
+                return result
             except Exception as e:
                 logger.error(f"Real server save_settings_async failed: {e}")
                 return self._create_error_response(
@@ -1509,24 +1506,17 @@ class ServerBridge:
                 result = await self.real_server.load_settings_async()
                 logger.debug("[ServerBridge] Real server load_settings_async successful.")
 
-                if isinstance(result, dict):
-                    if 'success' in result:
-                        result['mode'] = 'real'
-                        result['timestamp'] = time.time()
-                        return result
-                    else:
-                        # Direct settings data
-                        return self._create_success_response(
-                            "Settings loaded successfully",
-                            data=result,
-                            mode='real'
-                        )
-                else:
-                    return self._create_success_response(
-                        "Settings loaded successfully",
-                        data=result,
-                        mode='real'
-                    )
+                if isinstance(result, dict) and 'success' in result:
+                    result['mode'] = 'real'
+                    result['timestamp'] = time.time()
+                    return result
+
+                # Handle both direct settings data and other formats
+                return self._create_success_response(
+                    "Settings loaded successfully",
+                    data=result,
+                    mode='real'
+                )
             except Exception as e:
                 logger.error(f"Real server load_settings_async failed: {e}")
                 return self._create_error_response(
@@ -1591,16 +1581,16 @@ class ServerBridge:
                 result = await self.real_server.validate_settings_async(settings_data)
                 logger.debug("[ServerBridge] Real server validate_settings_async successful.")
 
-                if isinstance(result, dict) and 'success' in result:
-                    result['mode'] = 'real'
-                    result['timestamp'] = time.time()
-                    return result
-                else:
+                if not isinstance(result, dict) or 'success' not in result:
                     return self._create_success_response(
                         "Settings validation completed",
                         data=result,
                         mode='real'
                     )
+
+                result['mode'] = 'real'
+                result['timestamp'] = time.time()
+                return result
             except Exception as e:
                 logger.error(f"Real server validate_settings_async failed: {e}")
                 return self._create_error_response(
@@ -1676,16 +1666,16 @@ class ServerBridge:
                 result = await self.real_server.backup_settings_async(backup_name, settings_data)
                 logger.debug("[ServerBridge] Real server backup_settings_async successful.")
 
-                if isinstance(result, dict) and 'success' in result:
-                    result['mode'] = 'real'
-                    result['timestamp'] = time.time()
-                    return result
-                else:
+                if not isinstance(result, dict) or 'success' not in result:
                     return self._create_success_response(
                         "Settings backup created successfully",
                         data=result,
                         mode='real'
                     )
+
+                result['mode'] = 'real'
+                result['timestamp'] = time.time()
+                return result
             except Exception as e:
                 logger.error(f"Real server backup_settings_async failed: {e}")
                 return self._create_error_response(
@@ -1736,16 +1726,16 @@ class ServerBridge:
                 result = await self.real_server.restore_settings_async(backup_file, settings_data)
                 logger.debug("[ServerBridge] Real server restore_settings_async successful.")
 
-                if isinstance(result, dict) and 'success' in result:
-                    result['mode'] = 'real'
-                    result['timestamp'] = time.time()
-                    return result
-                else:
+                if not isinstance(result, dict) or 'success' not in result:
                     return self._create_success_response(
                         "Settings restored successfully",
                         data=result,
                         mode='real'
                     )
+
+                result['mode'] = 'real'
+                result['timestamp'] = time.time()
+                return result
             except Exception as e:
                 logger.error(f"Real server restore_settings_async failed: {e}")
                 return self._create_error_response(
@@ -1796,16 +1786,16 @@ class ServerBridge:
                 result = await self.real_server.get_default_settings_async()
                 logger.debug("[ServerBridge] Real server get_default_settings_async successful.")
 
-                if isinstance(result, dict) and 'success' in result:
-                    result['mode'] = 'real'
-                    result['timestamp'] = time.time()
-                    return result
-                else:
+                if not isinstance(result, dict) or 'success' not in result:
                     return self._create_success_response(
                         "Default settings retrieved successfully",
                         data=result,
                         mode='real'
                     )
+
+                result['mode'] = 'real'
+                result['timestamp'] = time.time()
+                return result
             except Exception as e:
                 logger.error(f"Real server get_default_settings_async failed: {e}")
                 return self._create_error_response(
@@ -2052,7 +2042,7 @@ class ServerBridge:
         # Execute all tasks concurrently
         if tasks:
             try:
-                results = await asyncio.gather(*[task for task in tasks.values()], return_exceptions=True)
+                results = await asyncio.gather(*list(tasks.values()), return_exceptions=True)
                 for i, (key, _) in enumerate(tasks.items()):
                     if isinstance(results[i], Exception):
                         result_data[key] = {
