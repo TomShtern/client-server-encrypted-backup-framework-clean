@@ -12,7 +12,7 @@ from pathlib import Path
 # Add the utils directory to sys.path so we can import our modules
 sys.path.insert(0, str(Path(__file__).parent))
 
-from utils.server_bridge_simplified import ServerBridge, create_server_bridge
+from utils.server_bridge import ServerBridge, create_server_bridge
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

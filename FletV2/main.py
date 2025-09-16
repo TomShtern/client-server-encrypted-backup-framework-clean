@@ -574,19 +574,17 @@ class FletV2App(ft.Row):
         self.page.update()
 
         # Reset scale after animation for smooth feel
-        import time
-        import threading
-
-        def reset_scale():
+        async def reset_scale_async():
             try:
+                await asyncio.sleep(0.08)
                 toggle_btn.scale = 1.0
                 toggle_btn.animate_scale = ft.Animation(80, ft.AnimationCurve.EASE_OUT)
                 toggle_btn.update()
             except Exception as e:
                 logger.debug(f"Scale reset completed: {e}")
 
-        # Use threading timer for proper async timing (more reliable than page timer)
-        threading.Timer(0.08, reset_scale).start()
+        # Use asyncio for proper async timing (replaces threading.Timer)
+        self.page.run_task(reset_scale_async)
 
         logger.info(f"Navigation rail {'extended' if self.nav_rail_extended else 'collapsed'} with modern UI feedback")
 

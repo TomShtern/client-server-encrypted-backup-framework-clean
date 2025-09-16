@@ -10,6 +10,7 @@ import os
 import asyncio
 import hashlib
 import shutil
+import aiofiles
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from utils.debug_setup import get_logger
@@ -420,8 +421,8 @@ Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 Mode: Demo/Development
 Original Error: {error_msg}"""
 
-                with open(destination_path, 'w', encoding='utf-8') as f:
-                    f.write(mock_content)
+                async with aiofiles.open(destination_path, 'w', encoding='utf-8') as f:
+                    await f.write(mock_content)
 
                 show_success_message(page, f"Mock downloaded {file_name} (demo mode)")
                 if state_manager:
@@ -529,12 +530,17 @@ Original Error: {error_msg}"""
                 logger.warning(f"Verification fallback for {file_name}: {error_msg}")
 
                 if os.path.exists(file_path):
-                    # Calculate SHA256 hash with progress indication
+                    # Calculate SHA256 hash with progress indication (async)
                     sha256_hash = hashlib.sha256()
                     file_size = os.path.getsize(file_path)
-                    with open(file_path, "rb") as f:
-                        for chunk in iter(lambda: f.read(4096), b""):
+                    async with aiofiles.open(file_path, "rb") as f:
+                        while True:
+                            chunk = await f.read(4096)
+                            if not chunk:
+                                break
                             sha256_hash.update(chunk)
+                            # Allow other async operations to run during hash calculation
+                            await asyncio.sleep(0)
 
                     file_stats = os.stat(file_path)
 

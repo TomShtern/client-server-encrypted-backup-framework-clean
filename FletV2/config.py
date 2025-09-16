@@ -9,7 +9,7 @@ from contextlib import suppress
 
 # Load environment variables from .env file if it exists
 with suppress(ImportError):
-    from dotenv import load_dotenv
+    from dotenv import load_dotenv  # type: ignore
     load_dotenv()
 
 # Debug mode - controls visibility of mock data and debug features

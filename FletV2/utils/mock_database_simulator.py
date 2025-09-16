@@ -456,7 +456,7 @@ class MockDatabase:
         await asyncio.sleep(0.001)
         return self.clear_logs()
 
-    async def export_logs_async(self, export_format: str, filters: Dict = None) -> Dict[str, Any]:
+    async def export_logs_async(self, export_format: str, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Export logs in specified format."""
         await asyncio.sleep(0.001)
         logs = self.get_logs()

@@ -9,7 +9,7 @@ from .server_bridge import ServerBridge, create_server_bridge
 from .mock_mode_indicator import create_mock_mode_banner, add_mock_indicator_to_snackbar_message
 from .state_manager import create_state_manager
 from .database_manager import FletDatabaseManager, create_database_manager
-from .mock_data_generator import MockDataGenerator
+# Legacy MockDataGenerator removed - using MockDatabase in server_bridge
 from .ui_components import create_modern_card, create_floating_action_button
 from .user_feedback import (
     show_user_feedback, show_success_message, show_error_message,

@@ -337,11 +337,77 @@ def create_clients_view(
 
         logger.debug(f"DataTable updated with {len(filtered_clients)} rows")
 
+    async def update_table_async():
+        """Async version of update_table for consistent async patterns."""
+        # This is primarily a UI update function, so we just add async consistency
+        # and allow other async operations to run during processing
+        filtered_clients = filter_clients()
+
+        # Clear existing rows
+        clients_table.rows.clear()
+
+        # Populate DataTable rows with clean cell structure
+        for client in filtered_clients:
+            status = client.get("status", "Unknown")
+
+            row = ft.DataRow(
+                cells=[
+                    ft.DataCell(ft.Text(str(client.get("id", "Unknown")), size=13)),
+                    ft.DataCell(ft.Text(str(client.get("name", "Unknown")), size=13, weight=ft.FontWeight.W_500)),
+                    ft.DataCell(create_status_chip(status)),
+                    ft.DataCell(ft.Text(str(client.get("last_seen", "Unknown")), size=13)),
+                    ft.DataCell(ft.Text(str(client.get("files_count", "0")), size=13)),
+                    ft.DataCell(
+                        ft.PopupMenuButton(
+                            icon=ft.Icons.MORE_VERT,
+                            tooltip="Client Actions",
+                            icon_color=ft.Colors.PRIMARY,
+                            items=[
+                                ft.PopupMenuItem(
+                                    text="View Details",
+                                    icon=ft.Icons.INFO,
+                                    on_click=lambda e, client_id=client.get("id"): page.run_task(view_details_action, client_id)
+                                ),
+                                ft.PopupMenuItem(
+                                    text="Disconnect",
+                                    icon=ft.Icons.LOGOUT,
+                                    on_click=lambda e, client_id=client.get("id"): page.run_task(disconnect_action, client_id)
+                                ),
+                                ft.PopupMenuItem(
+                                    text="Delete",
+                                    icon=ft.Icons.DELETE,
+                                    on_click=lambda e, client_id=client.get("id"): show_delete_confirmation(client_id)
+                                )
+                            ]
+                        )
+                    )
+                ]
+            )
+
+            clients_table.rows.append(row)
+            # Allow other async operations to run during large table updates
+            await asyncio.sleep(0)
+
+        # Update DataTable efficiently with proper safety checks
+        try:
+            if clients_table_ref.current is not None and hasattr(clients_table_ref.current, 'page') and clients_table_ref.current.page is not None:
+                clients_table_ref.current.update()
+            elif hasattr(clients_table, 'page') and clients_table.page is not None:
+                clients_table.update()
+            else:
+                logger.debug("Skipping DataTable update - control not attached to page yet")
+        except Exception as e:
+            logger.warning(f"Failed to update DataTable: {e}")
+            # Skip update to prevent errors - the table will be updated when properly attached
+
+        logger.debug(f"DataTable updated with {len(filtered_clients)} rows (async)")
+
     # Responsive update function for reactive UI updates
     def update_clients_display(new_clients_data, old_clients_data):
         """Reactive callback for clients state changes with responsive table update."""
         logger.debug(f"Clients state changed: {len(new_clients_data) if new_clients_data else 0} clients")
-        update_table()
+        # Use page.run_task for async version in sync callback context
+        page.run_task(update_table_async)
 
         # Update feedback text
         clients_count = len(new_clients_data) if new_clients_data else 0
@@ -468,17 +534,17 @@ def create_clients_view(
         finally:
             await set_loading_state("clients", False)
 
-    def on_search_change(e):
-        """Handle search field changes - reactive filtering."""
+    async def on_search_change(e):
+        """Handle search field changes - reactive filtering (async)."""
         ui_state["search_query"] = e.control.value
         logger.info(f"Search query changed to: '{ui_state['search_query']}'")
-        update_table()  # Reactive update based on current state
+        await update_table_async()  # Reactive update based on current state
 
-    def on_status_filter_change(e):
-        """Handle status filter changes - reactive filtering."""
+    async def on_status_filter_change(e):
+        """Handle status filter changes - reactive filtering (async)."""
         ui_state["status_filter"] = e.control.value
         logger.info(f"Status filter changed to: '{ui_state['status_filter']}'")
-        update_table()  # Reactive update based on current state
+        await update_table_async()  # Reactive update based on current state
 
     async def on_refresh_click(e):
         """Server-mediated refresh with loading state management."""

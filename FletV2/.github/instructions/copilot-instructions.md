@@ -1,5 +1,5 @@
 ---
-description: AI rules derived by SpecStory from the project AI interaction history
+description: AI coding agent instructions for FletV2 encrypted backup server GUI
 globs: *
 ---
 
@@ -42,7 +42,7 @@ utils/ (18 files, core optimized)    # Framework-aligned utilities
 ### Data Flow & Integration Points
 1. **Server Integration**: `ServerBridge` → real server OR mock database (seamless fallback)
 2. **State Propagation**: `StateManager` → reactive updates across views
-3. **UI Updates**: `control.update()` for UI changes; only use `page.update()` for themes/dialogs/overlays
+3. **UI Updates**: `control.update()` for performance, `page.update()` only for themes/dialogs/overlays
 4. **Async Operations**: `page.run_task()` for background work, `aiofiles` for I/O
 
 ## ⭐ Golden Patterns
@@ -118,7 +118,7 @@ flet run -r main.py
 python main.py
 
 # Debug mode (verbose logging)
-set FLET_V2_DEBUG=true && python python main.py  # Windows
+set FLET_V2_DEBUG=true && python main.py  # Windows
 export FLET_V2_DEBUG=true && python main.py  # Unix
 
 # Performance validation
@@ -185,8 +185,6 @@ python performance_benchmark.py         # Full benchmark suite
 - **View disposal**: All views must clean up subscriptions, async tasks, overlays
 - **API normalization**: All server bridge methods return `{success, data, mode}`
 - **`page.update()` → `control.update()` Conversion**: ✅ **COMPLETED** - Codebase already optimized
-- **Settings.py Refactoring**: Settings view is now config-driven, state-heavy logic moved to `settings_state.py`, import/export via `utils/settings_io`, validators centralized in `utils/validators`, and action bar modularized in `utils/action_buttons`.
-    - **Settings Modularization**: The settings logic has been further modularized, with `settings_io.py` merged into `settings_state.py`, and a validator registry added to `validators.py`.
 
 ## ❌ What NOT to do
 - Do not use custom routers, overlays, or state managers outside Flet's built-ins

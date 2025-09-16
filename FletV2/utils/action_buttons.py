@@ -1,0 +1,189 @@
+#!/usr/bin/env python3
+"""
+Reusable action buttons block for the Settings view.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+import flet as ft
+
+from utils.debug_setup import get_logger
+from views.settings_state import EnhancedSettingsState
+from utils.ui_components import create_modern_progress_indicator
+
+logger = get_logger(__name__)
+
+
+def create_enhanced_action_buttons(state: EnhancedSettingsState) -> ft.Column:
+    """Create enhanced action buttons with responsive layout, modern styling and progress indicators."""
+
+    # Progress indicators
+    save_progress = create_modern_progress_indicator("settings_save", state.state_manager)
+    export_progress = create_modern_progress_indicator("settings_export", state.state_manager)
+    import_progress = create_modern_progress_indicator("settings_import", state.state_manager)
+
+    async def save_settings_handler(e):
+        success = await state.save_settings_async()
+        if not success and state.state_manager:
+            state.state_manager.add_notification("Failed to save settings", "error")
+
+    async def export_handler(e):
+        result = await state.export_settings("json")
+        if not result['success'] and state.state_manager:
+            state.state_manager.add_notification(f"Export failed: {result.get('error', 'Unknown error')}", "error")
+
+    async def backup_handler(e):
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_name = f"settings_backup_{timestamp}"
+        result = await state.backup_settings_async(backup_name)
+        if not result['success'] and state.state_manager:
+            state.state_manager.add_notification(f"Backup failed: {result.get('error', 'Unknown error')}", "error")
+
+    def reset_all_settings(e):
+        def confirm_reset(e):
+            state.current_settings = state._load_default_settings()
+            state._update_ui_from_settings()
+            if state.page:
+                state.page.dialog.open = False
+                state.page.dialog.update()
+            if state.state_manager:
+                state.state_manager.add_notification("Settings reset to defaults", "info")
+
+        def cancel_reset(e):
+            if state.page:
+                state.page.dialog.open = False
+                state.page.dialog.update()
+
+        dialog = ft.AlertDialog(
+            title=ft.Text("Reset All Settings"),
+            content=ft.Text(
+                "Are you sure you want to reset all settings to their default values?\n\n"
+                "This action cannot be undone and will affect:\n"
+                "• Server configuration\n"
+                "• User interface preferences\n"
+                "• Monitoring settings\n"
+                "• Security settings\n"
+                "• All other configurations"
+            ),
+            actions=[
+                ft.TextButton(
+                    "Cancel",
+                    icon=ft.Icons.CANCEL,
+                    on_click=cancel_reset,
+                    style=ft.ButtonStyle(color=ft.Colors.ON_SURFACE)
+                ),
+                ft.FilledButton(
+                    "Reset All",
+                    icon=ft.Icons.RESTORE,
+                    on_click=confirm_reset,
+                    style=ft.ButtonStyle(bgcolor=ft.Colors.ERROR)
+                )
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+
+        if state.page:
+            state.page.dialog = dialog
+            dialog.open = True
+            state.page.dialog.update()
+
+    # FilePicker lifecycle management
+    def pick_files_result(e: ft.FilePickerResultEvent):
+        if e.files:
+            state.page.run_task(state.import_settings, e.files[0].path)
+        else:
+            if state.state_manager:
+                state.state_manager.add_notification("Import cancelled", "info")
+
+    # Ensure only one FilePicker per view instance
+    if not hasattr(state, 'file_picker') or state.file_picker is None:
+        state.file_picker = ft.FilePicker(on_result=pick_files_result)
+    file_picker = state.file_picker
+    if state.page and file_picker not in state.page.overlay:
+        state.page.overlay.append(file_picker)
+
+    def import_handler(e):
+        try:
+            state.file_picker.pick_files(
+                allowed_extensions=["json", "ini"],
+                dialog_title="Select Settings File"
+            )
+        except Exception as e:
+            logger.error(f"Error opening file picker: {e}")
+            if state.state_manager:
+                state.state_manager.add_notification("Error opening file picker", "error")
+
+    return ft.Column([
+        ft.ResponsiveRow([
+            ft.Column([
+                ft.FilledButton(
+                    "Save Settings",
+                    icon=ft.Icons.SAVE,
+                    on_click=lambda e: state.page.run_task(save_settings_handler, e),
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.PRIMARY,
+                        color=ft.Colors.ON_PRIMARY,
+                        elevation=2,
+                        shape=ft.RoundedRectangleBorder(radius=8),
+                    ),
+                    expand=True
+                )
+            ], col={"sm": 12, "md": 6, "lg": 2}),
+            ft.Column([
+                ft.OutlinedButton(
+                    "Export Backup",
+                    icon=ft.Icons.DOWNLOAD,
+                    on_click=lambda e: state.page.run_task(export_handler, e),
+                    style=ft.ButtonStyle(
+                        side=ft.BorderSide(2, ft.Colors.PRIMARY),
+                        color=ft.Colors.PRIMARY,
+                        shape=ft.RoundedRectangleBorder(radius=8),
+                    ),
+                    expand=True
+                )
+            ], col={"sm": 12, "md": 6, "lg": 2}),
+            ft.Column([
+                ft.OutlinedButton(
+                    "Create Backup",
+                    icon=ft.Icons.BACKUP,
+                    on_click=lambda e: state.page.run_task(backup_handler, e),
+                    style=ft.ButtonStyle(
+                        side=ft.BorderSide(2, ft.Colors.SECONDARY),
+                        color=ft.Colors.SECONDARY,
+                        shape=ft.RoundedRectangleBorder(radius=8),
+                    ),
+                    expand=True
+                )
+            ], col={"sm": 12, "md": 6, "lg": 2}),
+            ft.Column([
+                ft.TextButton(
+                    "Import Settings",
+                    icon=ft.Icons.UPLOAD,
+                    on_click=import_handler,
+                    style=ft.ButtonStyle(
+                        color=ft.Colors.TERTIARY,
+                        shape=ft.RoundedRectangleBorder(radius=8),
+                    ),
+                    expand=True
+                )
+            ], col={"sm": 12, "md": 6, "lg": 3}),
+            ft.Column([
+                ft.TextButton(
+                    "Reset All",
+                    icon=ft.Icons.RESTORE,
+                    on_click=reset_all_settings,
+                    style=ft.ButtonStyle(
+                        color=ft.Colors.ERROR,
+                        shape=ft.RoundedRectangleBorder(radius=8),
+                    ),
+                    expand=True
+                )
+            ], col={"sm": 12, "md": 12, "lg": 3}),
+        ], spacing=10),
+        ft.ResponsiveRow([
+            ft.Column([save_progress], col={"sm": 12, "md": 4}),
+            ft.Column([export_progress], col={"sm": 12, "md": 4}),
+            ft.Column([import_progress], col={"sm": 12, "md": 4}),
+        ], spacing=20),
+    ], spacing=10)
