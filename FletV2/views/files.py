@@ -16,7 +16,7 @@ from datetime import datetime
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button, themed_metric_card
+from utils.ui_components import themed_card, themed_button, themed_metric_card, create_status_pill
 from utils.user_feedback import show_success_message, show_error_message
 
 logger = get_logger(__name__)
@@ -93,18 +93,20 @@ def create_files_view(
         }
         return type_icons.get(file_type, ft.Icons.INSERT_DRIVE_FILE)
 
-    def get_status_color(status: str) -> str:
-        """Get color for file status."""
-        status_colors = {
-            "complete": ft.Colors.GREEN,
-            "verified": ft.Colors.BLUE,
-            "uploading": ft.Colors.ORANGE,
-            "queued": ft.Colors.PURPLE,
-            "failed": ft.Colors.RED,
+    def get_status_type(status: str) -> str:
+        """Map file status to status pill type."""
+        status_mapping = {
+            "complete": "success",     # Green for completed files
+            "verified": "info",        # Blue for verified files
+            "uploading": "warning",    # Orange for files in progress
+            "queued": "queued",        # Amber for queued files
+            "failed": "error",         # Red for failed files
+            "pending": "queued",       # Amber for pending files
+            "unknown": "unknown"       # Light Blue Grey for unknown states
         }
-        return status_colors.get(status, ft.Colors.GREY)
+        return status_mapping.get(status.lower(), "default")
 
-    # Create DataTable using Flet's built-in functionality
+    # Create DataTable using Flet's built-in functionality with enhanced header
     files_table = ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text("Name")),
@@ -115,7 +117,7 @@ def create_files_view(
             ft.DataColumn(ft.Text("Actions")),
         ],
         rows=[],
-        heading_row_color=ft.Colors.SURFACE_TINT,
+        heading_row_color="#212121",  # Enhanced darker header as specified in document
         border_radius=12,
         expand=True
     )
@@ -168,14 +170,7 @@ def create_files_view(
                         ),
                         ft.DataCell(ft.Text(format_file_size(file.get("size", 0)))),
                         ft.DataCell(ft.Text(file_type.title())),
-                        ft.DataCell(
-                            ft.Container(
-                                content=ft.Text(status, color=ft.Colors.WHITE, size=12),
-                                bgcolor=get_status_color(status),
-                                padding=ft.Padding(8, 4, 8, 4),
-                                border_radius=8
-                            )
-                        ),
+                        ft.DataCell(create_status_pill(status, get_status_type(status))),
                         ft.DataCell(ft.Text(file.get("modified", ""))),
                         ft.DataCell(
                             ft.PopupMenuButton(
@@ -268,7 +263,10 @@ def create_files_view(
                 ft.Text(f"File: {file_name}"),
                 ft.Text(f"Size: {format_file_size(data.get('size', 0))}"),
                 ft.Text(f"Modified: {data.get('modified', 'Unknown')}"),
-                ft.Text(f"Status: {data.get('status', 'Unknown')}"),
+                ft.Row([
+                    ft.Text("Status: "),
+                    create_status_pill(data.get('status', 'Unknown'), get_status_type(data.get('status', 'Unknown')))
+                ], spacing=8),
                 ft.Container(height=10),
                 ft.Text("SHA256 Hash:", weight=ft.FontWeight.BOLD),
                 ft.Container(
@@ -405,22 +403,19 @@ def create_files_view(
             themed_metric_card("Failed", str(failed_files), ft.Icons.ERROR),
         ], spacing=10)
 
+    # Enhanced table with layered card design
+    table_card = themed_card(files_table, "Files", page)
+
     # Main layout
     main_content = ft.Column([
         ft.Text("Files Management", size=28, weight=ft.FontWeight.BOLD),
         update_stats(),
         actions_row,
-        ft.Container(
-            content=files_table,
-            expand=True,
-            padding=10,
-            border_radius=12,
-            bgcolor=ft.Colors.SURFACE
-        )
+        table_card
     ], expand=True, spacing=20)
 
-    # Create the main container
-    files_container = themed_card(main_content, "Files Management")
+    # Create the main container with theme support
+    files_container = themed_card(main_content, None, page)  # No title since we have one in content
 
     def setup_subscriptions():
         """Setup subscriptions and initial data loading after view is added to page."""

@@ -73,20 +73,32 @@ def format_file_size(size_bytes: int) -> str:
 # THEME-AWARE FLET HELPERS (Simple wrappers, not reinventions)
 # ==============================================================================
 
-def themed_card(content: ft.Control, title: Optional[str] = None) -> ft.Card:
-    """Create a card using Flet's built-in theming. 5 lines vs 100+ lines!"""
+def themed_card(content: ft.Control, title: Optional[str] = None, page: Optional[ft.Page] = None) -> ft.Card:
+    """
+    Enhanced card with layered depth and old design styling.
+    Hybrid approach: visually appealing colors that adapt to light/dark themes.
+    """
     card_content = content
 
     if title:
         card_content = ft.Column([
             ft.Text(title, size=18, weight=ft.FontWeight.W_600),
-            ft.Divider(height=1),
+            ft.Divider(height=1, color=ft.Colors.OUTLINE),
             content
         ], spacing=12)
 
+    # Enhanced approach: Let Flet handle theming but add layered depth through elevation and borders
+    # This gives us the visual depth without hardcoded colors that break in light theme
+
     return ft.Card(
-        content=ft.Container(content=card_content, padding=20),
-        elevation=2
+        content=ft.Container(
+            content=card_content,
+            padding=16,  # Consistent internal padding as specified
+            border=ft.border.all(1, ft.Colors.OUTLINE),  # Theme-aware border
+            border_radius=8,  # Rounded corners as specified
+        ),
+        elevation=6,  # Enhanced elevation for layered depth
+        surface_tint_color=ft.Colors.TRANSPARENT  # Prevent Material 3 tinting, keep theme colors
     )
 
 
@@ -144,6 +156,42 @@ def themed_chip(text: str, icon: Optional[str] = None) -> ft.Container:
     )
 
 
+def create_status_pill(text: str, status_type: str) -> ft.Container:
+    """
+    Create compact status pills following old design specifications.
+    Status types: 'success', 'error', 'warning', 'info', 'default'
+    Optimized for smaller, more refined appearance.
+    """
+    # Expanded status colors with distinct colors for each state
+    status_colors = {
+        'success': "#2E7D32",   # Green - as specified in document
+        'error': "#C62828",     # Red - as specified in document
+        'warning': "#EF6C00",   # Orange - as specified in document
+        'info': "#0288D1",      # Blue - as specified in document
+        'registered': "#7B1FA2", # Purple - for registered/enrolled states
+        'offline': "#5D4037",   # Brown - for offline/disconnected states
+        'queued': "#F57C00",    # Amber - for pending/queued operations
+        'debug': "#546E7A",     # Blue Grey - for debug/development info
+        'unknown': "#78909C",   # Light Blue Grey - for unknown states
+        'default': "#424242"    # Dark Grey - fallback only
+    }
+
+    return ft.Container(
+        content=ft.Text(
+            text,
+            color=ft.Colors.WHITE,          # White text as specified
+            size=10,                        # Smaller text for more refined appearance
+            weight=ft.FontWeight.BOLD       # Bold text as specified
+        ),
+        bgcolor=status_colors.get(status_type.lower(), status_colors['default']),
+        border_radius=8,                    # Slightly smaller radius for compact look
+        padding=ft.padding.symmetric(horizontal=6, vertical=2),  # More compact padding
+        alignment=ft.alignment.center,      # Center the text
+        width=None,                         # Let it size naturally to content
+        height=20                           # Fixed height for consistency
+    )
+
+
 # ==============================================================================
 # SMART FIELD BUILDERS (Simplified from the complex registry system)
 # ==============================================================================
@@ -188,7 +236,7 @@ def smart_data_table(columns: List[str], rows: List[List[str]]) -> ft.DataTable:
             ft.DataRow(cells=[ft.DataCell(ft.Text(str(cell))) for cell in row])
             for row in rows
         ],
-        heading_row_color=ft.Colors.SURFACE_VARIANT,
+        heading_row_color=ft.Colors.SURFACE,
         border_radius=12
     )
 
@@ -204,7 +252,7 @@ def smart_file_row(filename: str, status: str, size: int) -> ft.Container:
         ], spacing=12),
         padding=ft.Padding(12, 8, 12, 8),
         border_radius=8,
-        bgcolor=ft.Colors.SURFACE_VARIANT
+        bgcolor=ft.Colors.SURFACE
     )
 
 
@@ -281,7 +329,7 @@ def create_professional_datatable(columns: List[str], rows: List[List[str]], **k
 def get_premium_table_styling() -> Dict[str, Any]:
     """Simple table styling dict - let Flet handle the complexity."""
     return {
-        "heading_row_color": ft.Colors.SURFACE_VARIANT,
+        "heading_row_color": ft.Colors.SURFACE,
         "border_radius": 12,
         "column_spacing": 50,
         "data_row_min_height": 60

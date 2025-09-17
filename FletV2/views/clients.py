@@ -15,7 +15,7 @@ from datetime import datetime
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button, themed_metric_card
+from utils.ui_components import themed_card, themed_button, themed_metric_card, create_status_pill
 from utils.user_feedback import show_success_message, show_error_message
 
 logger = get_logger(__name__)
@@ -69,7 +69,7 @@ def create_clients_view(
 
         update_table()
 
-    # Create DataTable using Flet's built-in functionality
+    # Create DataTable using Flet's built-in functionality with enhanced header
     clients_table = ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text("ID")),
@@ -80,20 +80,23 @@ def create_clients_view(
             ft.DataColumn(ft.Text("Actions")),
         ],
         rows=[],
-        heading_row_color=ft.Colors.SURFACE_TINT,
+        heading_row_color="#212121",  # Enhanced darker header as specified in document
         border_radius=12,
         expand=True
     )
 
-    def get_status_color(status: str) -> str:
-        """Get color for client status."""
-        status_colors = {
-            "connected": ft.Colors.GREEN,
-            "disconnected": ft.Colors.RED,
-            "connecting": ft.Colors.ORANGE,
-            "unknown": ft.Colors.GREY
+    def get_status_type(status: str) -> str:
+        """Map client status to status pill type."""
+        status_mapping = {
+            "connected": "success",     # Green - active connections
+            "disconnected": "error",   # Red - failed connections
+            "connecting": "warning",   # Orange - in progress
+            "registered": "registered", # Purple - enrolled but not connected
+            "offline": "offline",       # Brown - offline clients
+            "error": "error",          # Red - error state
+            "unknown": "unknown"        # Light Blue Grey - unknown states
         }
-        return status_colors.get(status.lower(), ft.Colors.GREY)
+        return status_mapping.get(status.lower(), "default")
 
     def filter_clients():
         """Filter clients based on search and status."""
@@ -131,14 +134,7 @@ def create_clients_view(
                     cells=[
                         ft.DataCell(ft.Text(str(client.get("id", "")))),
                         ft.DataCell(ft.Text(str(client.get("name", "")))),
-                        ft.DataCell(
-                            ft.Container(
-                                content=ft.Text(status, color=ft.Colors.WHITE, size=12),
-                                bgcolor=get_status_color(status),
-                                padding=ft.Padding(8, 4, 8, 4),
-                                border_radius=8
-                            )
-                        ),
+                        ft.DataCell(create_status_pill(status, get_status_type(status))),
                         ft.DataCell(ft.Text(str(client.get("last_seen", "")))),
                         ft.DataCell(ft.Text(str(client.get("files_count", 0)))),
                         ft.DataCell(
@@ -168,7 +164,10 @@ def create_clients_view(
             content=ft.Column([
                 ft.Text(f"ID: {client.get('id', 'N/A')}"),
                 ft.Text(f"Name: {client.get('name', 'N/A')}"),
-                ft.Text(f"Status: {client.get('status', 'N/A')}"),
+                ft.Row([
+                    ft.Text("Status: "),
+                    create_status_pill(client.get('status', 'Unknown'), get_status_type(client.get('status', 'Unknown')))
+                ], spacing=8),
                 ft.Text(f"Last Seen: {client.get('last_seen', 'N/A')}"),
                 ft.Text(f"Files: {client.get('files_count', 'N/A')}"),
                 ft.Text(f"IP Address: {client.get('ip_address', 'N/A')}"),
@@ -362,22 +361,19 @@ def create_clients_view(
         themed_metric_card("Total Files", str(sum(c.get('files_count', 0) for c in clients_data)), ft.Icons.FOLDER),
     ], spacing=10)
 
+    # Enhanced table with layered card design
+    table_card = themed_card(clients_table, "Clients", page)
+
     # Main layout
     main_content = ft.Column([
         ft.Text("Client Management", size=28, weight=ft.FontWeight.BOLD),
         stats_row,
         actions_row,
-        ft.Container(
-            content=clients_table,
-            expand=True,
-            padding=10,
-            border_radius=12,
-            bgcolor=ft.Colors.SURFACE
-        )
+        table_card
     ], expand=True, spacing=20)
 
-    # Create the main container
-    clients_container = themed_card(main_content, "Client Management")
+    # Create the main container with theme support
+    clients_container = themed_card(main_content, None, page)  # No title since we have one in content
 
     def setup_subscriptions():
         """Setup subscriptions and initial data loading after view is added to page."""

@@ -39,7 +39,7 @@ utils/ (18 files, core optimized)    # Framework-aligned utilities
 ├── state_manager.py (887 lines)     # Reactive cross-view state management
 ├── mock_database_simulator.py       # Thread-safe mock backend
 ├── debug_setup.py                   # Enhanced logging with terminal debugging
-├── user_feedback.py                 # Dialogs, snackbars, error handling
+├── user_feedback.py                  # Dialogs, snackbars, error handling
 └── ui_components.py (1,467 lines)   # Reusable Material Design 3 components
 ```
 
@@ -65,7 +65,7 @@ utils/ (18 files, core optimized)    # Framework-aligned utilities
 ### View Lifecycle Management
 - **View disposal:** All views must implement a `dispose()` method to clean up subscriptions, async tasks, and overlays (e.g., remove FilePicker from `page.overlay`). Main app must call dispose before switching views
 - **FilePicker lifecycle:** Only one FilePicker per view instance. Store on state, add to overlay if not present, remove on dispose. Always reference via state object
-- **Control lifecycle:** Controls must be attached to page before updating. Defer subscriptions until view is constructed and added. Views should return a tuple `(content, dispose, setup_subscriptions)`. `setup_subscriptions()` calls must execute **after** the view is updated and attached to the page to prevent "Text Control must be added to the page first" errors.
+- **Control lifecycle:** Controls must be attached to page before updating. Defer subscriptions until view is constructed and added. Views should return a tuple `(content, dispose, setup_subscriptions)`. `setup_subscriptions()` calls must execute **after** the view is updated and attached to the page to prevent "Text Control must be added to the page first" errors. `setup_subscriptions()` calls must execute **after** the view is updated and attached to the page to prevent "Text Control must be added to the page first" errors.
 
 ### State Management & Progress
 - **Progress tracking:** For long-running operations (export, backup), use StateManager's `start_progress`, `update_progress`, and `clear_progress`. UI indicators should bind to progress states for granular feedback
@@ -180,7 +180,7 @@ python performance_benchmark.py         # Full benchmark suite
 
 ## 📝 Examples
 - View skeleton: `views/<name>.py` → `def create_<name>_view(server_bridge, page, state_manager=None) -> ft.Control`
-- Reference: `main.py`, `views/dashboard.py`, `utils/server_bridge.py`, `theme.py`
+- Reference: `main.py`, `views/settings.py`, `views/logs.py`, `utils/server_bridge.py`, `theme.py`
 
 ## 🚀 Recent Enhancements (2025-09)
 - **FilePicker lifecycle**: Only one per view, removed on dispose
@@ -194,6 +194,8 @@ python performance_benchmark.py         # Full benchmark suite
 - **Control Update Fixes**: Modified all view functions to return a tuple `(content, dispose, setup_subscriptions)` instead of calling update methods during construction. Moved `setup_subscriptions()` calls to execute **after** the view is updated and attached to the page.
 - **Icon Fix**: Replaced `ft.Icons.DATABASE` with `ft.Icons.STORAGE` in `database.py`.
 - **Control Lifecycle**: Ensure controls are attached to the page before updating. Views should return a tuple `(content, dispose, setup_subscriptions)`. `setup_subscriptions()` calls must execute **after** the view is updated and attached to the page.
+- **DataTable Column Initialization**: DataTable was initialized with empty columns `columns=[]`, causing Flet to throw "columns must contain at minimum one visible DataColumn". Initialize DataTable with default columns.
+- **Empty Data Handling**: Always ensure at least one column exists in DataTable, even when no data is available.
 
 ## ❌ What NOT to do
 - Do not use custom routers, overlays, or state managers outside Flet's built-ins

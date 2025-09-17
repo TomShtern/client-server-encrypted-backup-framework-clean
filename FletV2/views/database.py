@@ -15,7 +15,7 @@ from datetime import datetime
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button, themed_metric_card
+from utils.ui_components import themed_card, themed_button, themed_metric_card, create_status_pill
 from utils.user_feedback import show_success_message, show_error_message
 
 logger = get_logger(__name__)
@@ -105,7 +105,19 @@ def create_database_view(
 
         update_table()
 
-    # Create DataTable using Flet's built-in functionality
+    def get_status_type(status: str) -> str:
+        """Map database status to status pill type."""
+        status_mapping = {
+            "active": "success",        # Green for active records
+            "connected": "success",     # Green for connected database
+            "inactive": "error",        # Red for inactive records
+            "pending": "warning",       # Orange for pending records
+            "disconnected": "error",    # Red for disconnected database
+            "unknown": "unknown"        # Light Blue Grey for unknown states
+        }
+        return status_mapping.get(status.lower(), "default")
+
+    # Create DataTable using Flet's built-in functionality with enhanced header
     database_table = ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text("No Data")),
@@ -117,7 +129,7 @@ def create_database_view(
                 ft.DataCell(ft.Text(""))
             ])
         ],
-        heading_row_color=ft.Colors.SURFACE_TINT,
+        heading_row_color="#212121",  # Enhanced darker header as specified in document
         border_radius=12,
         expand=True
     )
@@ -147,10 +159,17 @@ def create_database_view(
         # Always add Actions column
         database_table.columns.append(ft.DataColumn(ft.Text("Actions")))
 
-        # Set rows
+        # Set rows with status pill support
         database_table.rows = []
         for row in filtered_data:
-            cells = [ft.DataCell(ft.Text(str(value))) for value in row.values()]
+            cells = []
+            for key, value in row.items():
+                if key.lower() == "status":
+                    # Apply status pill for status columns
+                    cells.append(ft.DataCell(create_status_pill(str(value), get_status_type(str(value)))))
+                else:
+                    # Regular text for other columns
+                    cells.append(ft.DataCell(ft.Text(str(value))))
 
             # Add action button to each row
             cells.append(
@@ -362,22 +381,19 @@ def create_database_view(
         themed_metric_card("Size", db_info["size"], ft.Icons.FOLDER),
     ], spacing=10)
 
+    # Enhanced table with layered card design
+    table_card = themed_card(database_table, "Database Records", page)
+
     # Main layout
     main_content = ft.Column([
         ft.Text("Database Management", size=28, weight=ft.FontWeight.BOLD),
         stats_row,
         actions_row,
-        ft.Container(
-            content=database_table,
-            expand=True,
-            padding=10,
-            border_radius=12,
-            bgcolor=ft.Colors.SURFACE
-        )
+        table_card
     ], expand=True, spacing=20)
 
-    # Create the main container
-    database_container = themed_card(main_content, "Database View")
+    # Create the main container with theme support
+    database_container = themed_card(main_content, None, page)  # No title since we have one in content
 
     def setup_subscriptions():
         """Setup subscriptions and initial data loading after view is added to page."""

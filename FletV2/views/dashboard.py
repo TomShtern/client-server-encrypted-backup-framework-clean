@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button, themed_metric_card
+from utils.ui_components import themed_card, themed_button, themed_metric_card, create_status_pill
 from utils.user_feedback import show_success_message, show_error_message
 
 logger = get_logger(__name__)
@@ -120,9 +120,36 @@ def create_dashboard_view(
 
         return sorted(activities, key=lambda x: x['timestamp'], reverse=True)
 
+    def create_enhanced_summary_card(title: str, icon: str, value_control: ft.Control, accent_color: str = None) -> ft.Container:
+        """Create enhanced summary card matching old dashboard style."""
+        return ft.Container(
+            content=ft.Row([
+                ft.Icon(icon, size=32, color=accent_color or ft.Colors.PRIMARY),
+                ft.Column([
+                    value_control,
+                    ft.Text(title, size=14, color=ft.Colors.ON_SURFACE)
+                ], spacing=4, expand=True)
+            ], spacing=16, alignment=ft.MainAxisAlignment.START),
+            padding=20,
+            bgcolor=ft.Colors.SURFACE,
+            border_radius=12,
+            border=ft.border.all(1, ft.Colors.OUTLINE),
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=8,
+                offset=ft.Offset(0, 2),
+                color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK)
+            )
+        )
+
+    def get_server_status_type(is_running: bool) -> str:
+        """Map server running state to status pill type."""
+        return "success" if is_running else "error"
+
     # UI Controls
-    # Server status displays
+    # Server status displays with status pill
     server_status_text = ft.Text("Unknown", size=16, weight=ft.FontWeight.BOLD)
+    status_pill = ft.Container(content=create_status_pill("Unknown", "default"))
     server_details_text = ft.Text("", size=13)
     last_updated_text = ft.Text("Last updated: Never", size=12)
 
@@ -159,7 +186,7 @@ def create_dashboard_view(
         current_activity = get_activity_data()
         last_updated = datetime.now().strftime("%H:%M:%S")
 
-        # Update server status
+        # Update server status with status pill
         running = current_server_status.get('running', False)
         if running:
             server_status_text.value = "Running"
@@ -170,12 +197,18 @@ def create_dashboard_view(
             server_details_text.value = f"Port: {current_server_status.get('port', 'N/A')} | Uptime: {hours}h {minutes}m"
             start_button.disabled = True
             stop_button.disabled = False
+
+            # Update status pill
+            status_pill.content = create_status_pill("Running", "success")
         else:
             server_status_text.value = "Stopped"
             server_status_text.color = ft.Colors.RED
             server_details_text.value = "Server is not running"
             start_button.disabled = False
             stop_button.disabled = True
+
+            # Update status pill
+            status_pill.content = create_status_pill("Stopped", "error")
 
         # Update metrics
         clients_text.value = str(current_server_status.get('clients_connected', 0))
@@ -202,18 +235,21 @@ def create_dashboard_view(
         # Update last updated
         last_updated_text.value = f"Last updated: {last_updated}"
 
-        # Update all controls
+        # Update all controls (safely check if controls are attached to page)
         controls_to_update = [
             server_status_text, server_details_text, last_updated_text,
             clients_text, files_text, transfers_text, storage_text,
             cpu_progress, memory_progress, disk_progress,
             cpu_text, memory_text, disk_text,
-            start_button, stop_button
+            start_button, stop_button, status_pill
         ]
 
         for control in controls_to_update:
-            if hasattr(control, 'update'):
-                control.update()
+            if hasattr(control, 'update') and hasattr(control, 'page') and control.page:
+                try:
+                    control.update()
+                except Exception as e:
+                    logger.debug(f"Control update failed (expected during initialization): {e}")
 
     def update_activity_list():
         """Update the activity list based on current filter."""
@@ -327,8 +363,26 @@ def create_dashboard_view(
         show_success_message(page, "Dashboard refreshed")
 
     # Create UI components
-    start_button = themed_button("Start Server", start_server, "filled", ft.Icons.PLAY_ARROW)
-    stop_button = themed_button("Stop Server", stop_server, "outlined", ft.Icons.STOP)
+    # Enhanced server control buttons with specific colors
+    start_button = ft.FilledButton(
+        content=ft.Row([ft.Icon(ft.Icons.PLAY_ARROW), ft.Text("Start Server")], spacing=8, tight=True),
+        on_click=start_server,
+        style=ft.ButtonStyle(
+            bgcolor=ft.Colors.GREEN,
+            color=ft.Colors.WHITE,
+            shape=ft.RoundedRectangleBorder(radius=8)
+        )
+    )
+
+    stop_button = ft.FilledButton(
+        content=ft.Row([ft.Icon(ft.Icons.STOP), ft.Text("Stop Server")], spacing=8, tight=True),
+        on_click=stop_server,
+        style=ft.ButtonStyle(
+            bgcolor=ft.Colors.RED,
+            color=ft.Colors.WHITE,
+            shape=ft.RoundedRectangleBorder(radius=8)
+        )
+    )
 
     # Header section
     header_row = ft.Row([
@@ -342,28 +396,36 @@ def create_dashboard_view(
         ], spacing=10)
     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
-    # Server status card
+    # Enhanced server status card with status pill
     server_status_card = themed_card(
         ft.Column([
             ft.Row([
                 ft.Icon(ft.Icons.DNS, size=24, color=ft.Colors.PRIMARY),
-                ft.Text("Server Status", size=18, weight=ft.FontWeight.W_600)
+                ft.Text("Server Control", size=18, weight=ft.FontWeight.W_600)
             ], spacing=12),
             ft.Container(height=12),
-            server_status_text,
+            ft.Row([
+                ft.Text("Status: ", size=16, weight=ft.FontWeight.BOLD),
+                status_pill
+            ], spacing=8),
             server_details_text,
             ft.Container(height=16),
             ft.Row([start_button, stop_button], spacing=10)
-        ], spacing=4)
+        ], spacing=4),
+        None, page
     )
 
-    # Metrics cards
-    metrics_row = ft.Row([
-        themed_metric_card("Active Clients", "", ft.Icons.PEOPLE, clients_text),
-        themed_metric_card("Total Files", "", ft.Icons.FOLDER, files_text),
-        themed_metric_card("Active Transfers", "", ft.Icons.SYNC, transfers_text),
-        themed_metric_card("Storage Used", "", ft.Icons.STORAGE, storage_text),
-    ], spacing=10)
+    # Enhanced summary cards matching old dashboard style
+    metrics_row = ft.ResponsiveRow([
+        ft.Column([create_enhanced_summary_card("Active Clients", ft.Icons.PEOPLE, clients_text, ft.Colors.BLUE)],
+                 col={"sm": 12, "md": 6, "lg": 3}),
+        ft.Column([create_enhanced_summary_card("Total Files", ft.Icons.FOLDER, files_text, ft.Colors.GREEN)],
+                 col={"sm": 12, "md": 6, "lg": 3}),
+        ft.Column([create_enhanced_summary_card("Active Transfers", ft.Icons.SYNC, transfers_text, ft.Colors.ORANGE)],
+                 col={"sm": 12, "md": 6, "lg": 3}),
+        ft.Column([create_enhanced_summary_card("Storage Used", ft.Icons.STORAGE, storage_text, ft.Colors.PURPLE)],
+                 col={"sm": 12, "md": 6, "lg": 3}),
+    ])
 
     # System metrics section
     system_metrics_card = themed_card(

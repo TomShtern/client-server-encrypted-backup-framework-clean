@@ -16,7 +16,7 @@ import random
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button
+from utils.ui_components import themed_card, themed_button, create_status_pill
 from utils.user_feedback import show_success_message
 
 logger = get_logger(__name__)
@@ -98,56 +98,84 @@ def create_logs_view(
 
         update_table()
 
-    # UI Components using Flet built-ins
-    def get_level_color(level: str) -> str:
-        """Simple level color mapping."""
-        colors = {
-            "ERROR": ft.Colors.RED,
-            "WARNING": ft.Colors.ORANGE,
-            "INFO": ft.Colors.BLUE,
-            "DEBUG": ft.Colors.GREY
+    def get_status_type(level: str) -> str:
+        """Map log level to status pill type."""
+        level_mapping = {
+            "error": "error",        # Red for errors
+            "warning": "warning",    # Orange for warnings
+            "info": "info",          # Blue for info
+            "debug": "debug"         # Blue Grey for debug
         }
-        return colors.get(level, ft.Colors.GREY)
+        return level_mapping.get(level.lower(), "default")
 
-    # Create data table using Flet's built-in styling
-    logs_table = ft.DataTable(
-        columns=[
-            ft.DataColumn(ft.Text("Time")),
-            ft.DataColumn(ft.Text("Level")),
-            ft.DataColumn(ft.Text("Component")),
-            ft.DataColumn(ft.Text("Message")),
-        ],
-        rows=[],
-        heading_row_color=ft.Colors.SURFACE_TINT,
-        border_radius=12,
-        expand=True
+    def get_card_background_color(level: str) -> str:
+        """Get transparent background color for log cards based on level."""
+        level_backgrounds = {
+            "ERROR": "rgba(200, 40, 40, 0.1)",    # Transparent red
+            "WARNING": "rgba(239, 108, 0, 0.1)",  # Transparent orange
+            "INFO": "rgba(2, 136, 209, 0.1)",     # Transparent blue
+            "DEBUG": "rgba(66, 66, 66, 0.1)"      # Transparent grey
+        }
+        return level_backgrounds.get(level, "rgba(66, 66, 66, 0.1)")
+
+    def create_filter_chip(text: str, icon: str, is_selected: bool, on_click) -> ft.Container:
+        """Create filter chip with icon and selection state."""
+        return ft.Container(
+            content=ft.Row([
+                ft.Icon(icon, size=16),
+                ft.Text(text, size=12, weight=ft.FontWeight.BOLD)
+            ], spacing=4, tight=True),
+            padding=ft.padding.symmetric(horizontal=12, vertical=6),
+            bgcolor=ft.Colors.PRIMARY if is_selected else ft.Colors.SURFACE,
+            border=ft.border.all(2, ft.Colors.PRIMARY if is_selected else ft.Colors.OUTLINE),
+            border_radius=16,
+            on_click=on_click
+        )
+
+    # Create ListView for card-based log display
+    logs_listview = ft.ListView(
+        expand=True,
+        spacing=8,
+        padding=ft.padding.all(8)
     )
 
+    def create_log_card(log: Dict[str, Any]) -> ft.Container:
+        """Create individual card for each log entry."""
+        level = log["level"]
+
+        return ft.Container(
+            content=ft.Row([
+                # Status pill on the left
+                create_status_pill(level, get_status_type(level)),
+
+                # Log content
+                ft.Column([
+                    ft.Row([
+                        ft.Text(log["timestamp"], size=12, weight=ft.FontWeight.BOLD),
+                        ft.Text(f"[{log['component']}]", size=12, color=ft.Colors.ON_SURFACE),
+                    ], spacing=8),
+                    ft.Text(log["message"], size=13, max_lines=2)
+                ], spacing=4, expand=True)
+            ], spacing=12),
+
+            padding=16,
+            bgcolor=get_card_background_color(level),
+            border_radius=8,
+            border=ft.border.all(1, ft.Colors.OUTLINE)
+        )
+
     def update_table():
-        """Update table using Flet's simple row creation."""
-        logs_table.rows.clear()
+        """Update ListView with log cards."""
+        logs_listview.controls.clear()
 
         for log in filtered_logs[:50]:  # Simple pagination - show first 50
-            logs_table.rows.append(
-                ft.DataRow(
-                    cells=[
-                        ft.DataCell(ft.Text(log["timestamp"], size=12)),
-                        ft.DataCell(
-                            ft.Container(
-                                content=ft.Text(log["level"], size=10, color=ft.Colors.WHITE),
-                                padding=ft.Padding(4, 2, 4, 2),
-                                bgcolor=get_level_color(log["level"]),
-                                border_radius=4
-                            )
-                        ),
-                        ft.DataCell(ft.Text(log["component"], size=12)),
-                        ft.DataCell(ft.Text(log["message"], size=12)),
-                    ]
-                )
-            )
+            logs_listview.controls.append(create_log_card(log))
 
-        if hasattr(logs_table, 'update'):
-            logs_table.update()
+        if hasattr(logs_listview, 'update') and hasattr(logs_listview, 'page') and logs_listview.page:
+            try:
+                logs_listview.update()
+            except Exception as e:
+                logger.debug(f"ListView update failed (expected during initialization): {e}")
 
     # Search functionality (simple TextField)
     def on_search_change(e):
@@ -163,26 +191,41 @@ def create_logs_view(
         width=300
     )
 
-    # Level filter (simple Dropdown)
-    def on_level_filter_change(e):
-        """Simple level filter handler."""
-        nonlocal level_filter
-        level_filter = e.control.value
-        apply_filters()
+    # Filter chips with icons
+    def on_filter_click(filter_level: str):
+        """Handle filter chip click."""
+        def handler(e):
+            nonlocal level_filter
+            level_filter = filter_level
+            apply_filters()
+            update_filter_chips()
+        return handler
 
-    level_dropdown = ft.Dropdown(
-        label="Filter by level",
-        value="ALL",
-        options=[
-            ft.dropdown.Option("ALL"),
-            ft.dropdown.Option("ERROR"),
-            ft.dropdown.Option("WARNING"),
-            ft.dropdown.Option("INFO"),
-            ft.dropdown.Option("DEBUG"),
-        ],
-        on_change=on_level_filter_change,
-        width=150
-    )
+    filter_chips_row = ft.Row(spacing=8)
+
+    def update_filter_chips():
+        """Update filter chips with selection state."""
+        filter_chips_row.controls = [
+            create_filter_chip("ALL", ft.Icons.LIST, level_filter == "ALL", on_filter_click("ALL")),
+            create_filter_chip("INFO", ft.Icons.INFO, level_filter == "INFO", on_filter_click("INFO")),
+            create_filter_chip("ERROR", ft.Icons.ERROR, level_filter == "ERROR", on_filter_click("ERROR")),
+            create_filter_chip("WARNING", ft.Icons.WARNING, level_filter == "WARNING", on_filter_click("WARNING")),
+            create_filter_chip("DEBUG", ft.Icons.BUG_REPORT, level_filter == "DEBUG", on_filter_click("DEBUG")),
+        ]
+        if hasattr(filter_chips_row, 'update') and hasattr(filter_chips_row, 'page') and filter_chips_row.page:
+            try:
+                filter_chips_row.update()
+            except Exception as e:
+                logger.debug(f"Filter chips update failed (expected during initialization): {e}")
+
+    # Initialize filter chips (defer update until after page attachment)
+    filter_chips_row.controls = [
+        create_filter_chip("ALL", ft.Icons.LIST, level_filter == "ALL", on_filter_click("ALL")),
+        create_filter_chip("INFO", ft.Icons.INFO, level_filter == "INFO", on_filter_click("INFO")),
+        create_filter_chip("ERROR", ft.Icons.ERROR, level_filter == "ERROR", on_filter_click("ERROR")),
+        create_filter_chip("WARNING", ft.Icons.WARNING, level_filter == "WARNING", on_filter_click("WARNING")),
+        create_filter_chip("DEBUG", ft.Icons.BUG_REPORT, level_filter == "DEBUG", on_filter_click("DEBUG")),
+    ]
 
     # Statistics (simple display)
     stats_text = ft.Text("", size=14)
@@ -194,8 +237,11 @@ def create_logs_view(
         warnings = len([log for log in filtered_logs if log["level"] == "WARNING"])
 
         stats_text.value = f"Total: {total} | Errors: {errors} | Warnings: {warnings}"
-        if hasattr(stats_text, 'update'):
-            stats_text.update()
+        if hasattr(stats_text, 'update') and hasattr(stats_text, 'page') and stats_text.page:
+            try:
+                stats_text.update()
+            except Exception as e:
+                logger.debug(f"Stats text update failed (expected during initialization): {e}")
 
     # Export functionality (using Flet's FilePicker)
     def save_logs_as_json(e: ft.FilePickerResultEvent):
@@ -237,33 +283,34 @@ def create_logs_view(
         stats_text
     ], spacing=10)
 
-    # Filters row
-    filters_row = ft.Row([
-        search_field,
-        level_dropdown,
-    ], spacing=10)
+    # Enhanced filter controls
+    filters_section = ft.Column([
+        ft.Row([search_field], spacing=10),
+        ft.Container(height=8),  # Spacing
+        filter_chips_row
+    ], spacing=8)
 
-    # Main layout using Flet's simple Column
+    # Enhanced logs display with layered card design
+    logs_card = themed_card(logs_listview, "System Logs", page)
+
+    # Main layout with enhanced styling
     main_content = ft.Column([
-        ft.Text("System Logs", size=28, weight=ft.FontWeight.BOLD),
-        filters_row,
+        ft.Text("Logs Management", size=28, weight=ft.FontWeight.BOLD),
+        filters_section,
         actions_row,
-        ft.Container(
-            content=logs_table,
-            expand=True,
-            padding=10,
-            border_radius=12,
-            bgcolor=ft.Colors.SURFACE
-        )
+        logs_card
     ], expand=True, spacing=20)
 
-    # Create the main container
-    logs_container = themed_card(main_content, "Logs Management")
+    # Create the main container with theme support
+    logs_container = themed_card(main_content, None, page)  # No title since we have one in content
 
     def setup_subscriptions():
         """Setup subscriptions and initial data loading after view is added to page."""
         load_logs()
         update_stats()
+
+        # Update filter chips now that view is attached to page
+        update_filter_chips()
 
         # Override apply_filters to update stats
         nonlocal apply_filters
