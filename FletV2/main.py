@@ -865,10 +865,18 @@ class FletV2App(ft.Row):
         # Set up subscriptions after view is added to page and updated (prevents "Control must be added to page first" error)
         if hasattr(content, '_setup_subscriptions') and content._setup_subscriptions is not None:
             try:
-                content._setup_subscriptions()
-                logger.debug(f"Set up subscriptions for {view_name} view")
+                # Use page.run_task to defer subscription setup to next event loop iteration
+                # This ensures all controls are properly attached to the page hierarchy
+                async def setup_subs():
+                    try:
+                        content._setup_subscriptions()
+                        logger.debug(f"Set up subscriptions for {view_name} view")
+                    except Exception as sub_error:
+                        logger.warning(f"Failed to set up subscriptions for {view_name}: {sub_error}")
+
+                self.page.run_task(setup_subs)
             except Exception as sub_error:
-                logger.warning(f"Failed to set up subscriptions for {view_name}: {sub_error}")
+                logger.warning(f"Failed to schedule subscription setup for {view_name}: {sub_error}")
 
     def _load_view(self, view_name: str):
         """Load view with enhanced infrastructure support and dynamic animated transitions."""

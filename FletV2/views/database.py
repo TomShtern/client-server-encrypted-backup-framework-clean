@@ -107,8 +107,16 @@ def create_database_view(
 
     # Create DataTable using Flet's built-in functionality
     database_table = ft.DataTable(
-        columns=[],
-        rows=[],
+        columns=[
+            ft.DataColumn(ft.Text("No Data")),
+            ft.DataColumn(ft.Text("Actions"))
+        ],
+        rows=[
+            ft.DataRow(cells=[
+                ft.DataCell(ft.Text("Loading...")),
+                ft.DataCell(ft.Text(""))
+            ])
+        ],
         heading_row_color=ft.Colors.SURFACE_TINT,
         border_radius=12,
         expand=True
@@ -117,9 +125,17 @@ def create_database_view(
     def update_table():
         """Update table using Flet's simple patterns."""
         if not filtered_data:
-            database_table.columns = []
-            database_table.rows = []
-            database_table.update()
+            # Always keep at least one column to prevent DataTable errors
+            database_table.columns = [
+                ft.DataColumn(ft.Text("No Data")),
+                ft.DataColumn(ft.Text("Actions"))
+            ]
+            database_table.rows = [
+                ft.DataRow(cells=[
+                    ft.DataCell(ft.Text("No data available")),
+                    ft.DataCell(ft.Text(""))
+                ])
+            ]
             return
 
         # Set columns based on first row
@@ -127,6 +143,9 @@ def create_database_view(
         database_table.columns = [
             ft.DataColumn(ft.Text(str(key).title())) for key in first_row.keys()
         ]
+
+        # Always add Actions column
+        database_table.columns.append(ft.DataColumn(ft.Text("Actions")))
 
         # Set rows
         database_table.rows = []
@@ -267,7 +286,7 @@ def create_database_view(
         page.open(add_dialog)
 
     # Table selector dropdown
-    def on_table_change(_e):
+    def on_table_change(e):
         """Handle table selection change."""
         nonlocal selected_table
         selected_table = e.control.value

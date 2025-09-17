@@ -3,6 +3,10 @@ description: AI rules derived by SpecStory from the project AI interaction histo
 globs: *
 ---
 
+---
+description: AI rules derived by SpecStory from the project AI interaction history
+---
+
 # FletV2 – AI Coding Agent Instructions (December 2025)
 
 ## 🎯 Project Overview
@@ -25,7 +29,7 @@ views/ (8 files, ~1,000 lines each)  # Function-based view creators
 ├── dashboard.py    # Server status, metrics, quick actions
 ├── clients.py      # Client management with real-time updates
 ├── files.py        # File browser, download, verification
-├── database.py     # Database tables and statistics
+├── database.py      # Database tables and statistics
 ├── analytics.py    # Real-time charts and performance metrics
 ├── logs.py         # Log viewer with export and filtering
 └── settings.py      # App configuration (large: 2,319 lines - modularization opportunity)
@@ -48,7 +52,7 @@ utils/ (18 files, core optimized)    # Framework-aligned utilities
 ## ⭐ Golden Patterns
 
 ### Control Updates & Performance
-- **Control updates:** Use `control.update()` for UI changes; only use `page.update()` for themes/dialogs/overlays
+- **Control updates:** Use `control.update()` for UI changes; only use `page.update()` for UI changes; only use `page.update()` for themes/dialogs/overlays
 - **Control access:** Use `ft.Ref` for control references, never deep index chains
 - **Performance hierarchy:** 1. `control.update()` (best), 2. `ft.update_async()` (good), 3. `page.update()` (acceptable only for themes)
 - **Never loop `page.update()`:** Prefer granular control updates; target <16ms for 60fps responsiveness
@@ -61,7 +65,7 @@ utils/ (18 files, core optimized)    # Framework-aligned utilities
 ### View Lifecycle Management
 - **View disposal:** All views must implement a `dispose()` method to clean up subscriptions, async tasks, and overlays (e.g., remove FilePicker from `page.overlay`). Main app must call dispose before switching views
 - **FilePicker lifecycle:** Only one FilePicker per view instance. Store on state, add to overlay if not present, remove on dispose. Always reference via state object
-- **Control lifecycle:** Controls must be attached to page before updating. Defer subscriptions until view is constructed and added
+- **Control lifecycle:** Controls must be attached to page before updating. Defer subscriptions until view is constructed and added. Views should return a tuple `(content, dispose, setup_subscriptions)`. `setup_subscriptions()` calls must execute **after** the view is updated and attached to the page to prevent "Text Control must be added to the page first" errors.
 
 ### State Management & Progress
 - **Progress tracking:** For long-running operations (export, backup), use StateManager's `start_progress`, `update_progress`, and `clear_progress`. UI indicators should bind to progress states for granular feedback
@@ -145,7 +149,7 @@ python performance_benchmark.py         # Full benchmark suite
 ```
 
 ### Debugging Patterns
-- **Control Lifecycle Issues**: Ensure controls attached to page before `.update()`
+- **Control Lifecycle Issues**: Ensure controls attached to page before `.update()`. Views should return a tuple `(content, dispose, setup_subscriptions)`. `setup_subscriptions()` calls must execute **after** the view is updated and attached to the page.
 - **JSON Validation**: `python -m json.tool <file>` to validate config files
 - **Fast Search**: Use `rg` (ripgrep) for pattern searching across codebase
 - **State Issues**: Check `FLET_V2_DEBUG=true` for detailed state change logs
@@ -169,7 +173,7 @@ python performance_benchmark.py         # Full benchmark suite
 
 ## 🐛 Debugging & Search
 - Use ripgrep (rg) for fast code search. For JSON errors, fix structure and validate (`python -m json.tool <file>`)
-- **"Text Control must be added to the page first"**: Flet control lifecycle issue. Defer subscription setup until after view construction
+- **"Text Control must be added to the page first"**: Flet control lifecycle issue. Defer subscription setup until after view construction. Views should return a tuple `(content, dispose, setup_subscriptions)`. `setup_subscriptions()` calls must execute **after** the view is updated and attached to the page.
 - **JSON parsing errors**: Ensure valid structure including opening brace `{` for objects
 - **"Unknown property 'globs' will be ignored"**: Check configuration files for typos
 - **State Manager null checks**: Handle gracefully when `state_manager` is `None`
@@ -187,6 +191,9 @@ python performance_benchmark.py         # Full benchmark suite
 - **`page.update()` → `control.update()` Conversion**: ✅ **COMPLETED** - Codebase already optimized
 - **Settings.py Refactoring**: Settings view is now config-driven, state-heavy logic moved to `settings_state.py`, import/export via `utils/settings_io`, validators centralized in `utils/validators`, and action bar modularized in `utils/action_buttons`.
     - **Settings Modularization**: The settings logic has been further modularized, with `settings_io.py` merged into `settings_state.py`, and a validator registry added to `validators.py`.
+- **Control Update Fixes**: Modified all view functions to return a tuple `(content, dispose, setup_subscriptions)` instead of calling update methods during construction. Moved `setup_subscriptions()` calls to execute **after** the view is updated and attached to the page.
+- **Icon Fix**: Replaced `ft.Icons.DATABASE` with `ft.Icons.STORAGE` in `database.py`.
+- **Control Lifecycle**: Ensure controls are attached to the page before updating. Views should return a tuple `(content, dispose, setup_subscriptions)`. `setup_subscriptions()` calls must execute **after** the view is updated and attached to the page.
 
 ## ❌ What NOT to do
 - Do not use custom routers, overlays, or state managers outside Flet's built-ins
