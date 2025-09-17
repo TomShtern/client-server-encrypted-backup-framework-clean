@@ -10,8 +10,6 @@ Let Flet handle the complexity. We compose, not reinvent.
 import flet as ft
 from typing import List, Dict, Any, Optional
 import json
-import csv
-import tempfile
 from datetime import datetime, timedelta
 import random
 
@@ -27,7 +25,7 @@ logger = get_logger(__name__)
 def create_logs_view(
     server_bridge: Optional[ServerBridge],
     page: ft.Page,
-    state_manager: StateManager
+    _state_manager: StateManager
 ) -> ft.Control:
     """Simple logs view using Flet's built-in components."""
     logger.info("Creating simplified logs view")
@@ -120,7 +118,7 @@ def create_logs_view(
             ft.DataColumn(ft.Text("Message")),
         ],
         rows=[],
-        heading_row_color=ft.Colors.SURFACE_VARIANT,
+        heading_row_color=ft.Colors.SURFACE_TINT,
         border_radius=12,
         expand=True
     )
@@ -259,14 +257,26 @@ def create_logs_view(
         )
     ], expand=True, spacing=20)
 
-    # Initialize data
-    load_logs()
-    update_stats()
+    # Create the main container
+    logs_container = themed_card(main_content, "Logs Management")
 
-    # Override apply_filters to update stats
-    original_apply_filters = apply_filters
-    def apply_filters():
-        original_apply_filters()
+    def setup_subscriptions():
+        """Setup subscriptions and initial data loading after view is added to page."""
+        load_logs()
         update_stats()
 
-    return themed_card(main_content, "Logs Management")
+        # Override apply_filters to update stats
+        nonlocal apply_filters
+        original_apply_filters = apply_filters
+        def apply_filters():
+            original_apply_filters()
+            update_stats()
+
+    def dispose():
+        """Clean up subscriptions and resources."""
+        logger.debug("Disposing logs view")
+        # Remove FilePicker from page overlay
+        if file_picker in page.overlay:
+            page.overlay.remove(file_picker)
+
+    return logs_container, dispose, setup_subscriptions

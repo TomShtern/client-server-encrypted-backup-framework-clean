@@ -28,7 +28,7 @@ views/ (8 files, ~1,000 lines each)  # Function-based view creators
 ├── database.py     # Database tables and statistics
 ├── analytics.py    # Real-time charts and performance metrics
 ├── logs.py         # Log viewer with export and filtering
-└── settings.py     # App configuration (large: 2,319 lines - modularization opportunity)
+└── settings.py      # App configuration (large: 2,319 lines - modularization opportunity)
 
 utils/ (18 files, core optimized)    # Framework-aligned utilities
 ├── server_bridge.py (316 lines)     # ✅ OPTIMIZED: Clean delegation pattern

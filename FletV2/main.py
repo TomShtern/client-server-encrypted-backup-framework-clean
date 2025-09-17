@@ -36,13 +36,13 @@ import contextlib
 import flet as ft
 
 # Local imports - utilities first
-from utils.debug_setup import setup_terminal_debugging, get_logger
+from utils.debug_setup import setup_terminal_debugging
 with contextlib.suppress(ImportError):
     from utils import utf8_patch  # noqa: F401 (side effects only)
 
 # Local imports - application modules
-from theme import setup_modern_theme, toggle_theme_mode
-from utils.server_bridge import ServerBridge, create_server_bridge
+from theme import setup_modern_theme
+from utils.server_bridge import create_server_bridge
 from utils.mock_mode_indicator import create_mock_mode_banner, add_mock_indicator_to_snackbar_message
 
 # Initialize logging and environment
@@ -843,14 +843,6 @@ class FletV2App(ft.Row):
         """Update content area with error handling and fallback strategies."""
         animated_switcher.content = content
 
-        # Set up subscriptions after view is added to page (prevents "Control must be added to page first" error)
-        if hasattr(content, '_setup_subscriptions') and content._setup_subscriptions is not None:
-            try:
-                content._setup_subscriptions()
-                logger.debug(f"Set up subscriptions for {view_name} view")
-            except Exception as sub_error:
-                logger.warning(f"Failed to set up subscriptions for {view_name}: {sub_error}")
-
         # Smart update - check if control is attached to page before updating
         try:
             # Verify AnimatedSwitcher is properly attached to page
@@ -869,6 +861,14 @@ class FletV2App(ft.Row):
                 logger.info(f"Successfully loaded {view_name} view (page update fallback)")
             except Exception as fallback_error:
                 logger.error(f"Page update also failed: {fallback_error}")
+
+        # Set up subscriptions after view is added to page and updated (prevents "Control must be added to page first" error)
+        if hasattr(content, '_setup_subscriptions') and content._setup_subscriptions is not None:
+            try:
+                content._setup_subscriptions()
+                logger.debug(f"Set up subscriptions for {view_name} view")
+            except Exception as sub_error:
+                logger.warning(f"Failed to set up subscriptions for {view_name}: {sub_error}")
 
     def _load_view(self, view_name: str):
         """Load view with enhanced infrastructure support and dynamic animated transitions."""

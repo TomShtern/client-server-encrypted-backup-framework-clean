@@ -132,7 +132,7 @@ def themed_metric_card(title: str, value: str, icon: str) -> ft.Card:
 
 def themed_chip(text: str, icon: Optional[str] = None) -> ft.Container:
     """Create info chip using Flet's Container. Simple & clean!"""
-    content = [ft.Text(text, size=12)]
+    content: List[Union[ft.Text, ft.Icon]] = [ft.Text(text, size=12)]
     if icon:
         content.insert(0, ft.Icon(icon, size=16))
 
@@ -260,7 +260,7 @@ def create_loading_overlay(message: str = "Loading...") -> ft.Container:
         border_radius=12
     )
 
-def create_enhanced_metric_card(title: str, value: Any, icon: str, accent_color: str = None) -> ft.Card:
+def create_enhanced_metric_card(title: str, value: Any, icon: str, accent_color: Optional[str] = None) -> ft.Card:
     """Enhanced metric card compatibility wrapper."""
     return themed_metric_card(title, str(value), icon)
 

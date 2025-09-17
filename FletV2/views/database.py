@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 def create_database_view(
     server_bridge: Optional[ServerBridge],
     page: ft.Page,
-    state_manager: StateManager
+    _state_manager: StateManager
 ) -> ft.Control:
     """Simple database view using Flet's built-in components."""
     logger.info("Creating simplified database view")
@@ -109,7 +109,7 @@ def create_database_view(
     database_table = ft.DataTable(
         columns=[],
         rows=[],
-        heading_row_color=ft.Colors.SURFACE_VARIANT,
+        heading_row_color=ft.Colors.SURFACE_TINT,
         border_radius=12,
         expand=True
     )
@@ -170,7 +170,7 @@ def create_database_view(
                 fields[key] = field
                 field_controls.append(field)
 
-        def save_changes(e):
+        def save_changes(_e):
             """Save edited record."""
             # Update the record with new values
             updated_record = record.copy()
@@ -191,7 +191,7 @@ def create_database_view(
             title=ft.Text("Edit Record"),
             content=ft.Column(field_controls, height=300, scroll=ft.ScrollMode.AUTO),
             actions=[
-                ft.TextButton("Cancel", on_click=lambda e: page.close(edit_dialog)),
+                ft.TextButton("Cancel", on_click=lambda _e: page.close(edit_dialog)),
                 ft.FilledButton("Save", on_click=save_changes),
             ],
         )
@@ -201,7 +201,7 @@ def create_database_view(
     # Delete record dialog using Flet's AlertDialog
     def delete_record(record: Dict[str, Any]):
         """Simple delete confirmation dialog."""
-        def confirm_delete(e):
+        def confirm_delete(_e):
             # Remove from data
             table_data[:] = [row for row in table_data if row.get('id') != record.get('id')]
             apply_search()  # Refresh the view
@@ -212,7 +212,7 @@ def create_database_view(
             title=ft.Text("Confirm Delete"),
             content=ft.Text(f"Are you sure you want to delete this record?\n\nID: {record.get('id', 'N/A')}"),
             actions=[
-                ft.TextButton("Cancel", on_click=lambda e: page.close(delete_dialog)),
+                ft.TextButton("Cancel", on_click=lambda _e: page.close(delete_dialog)),
                 ft.FilledButton("Delete", on_click=confirm_delete, style=ft.ButtonStyle(bgcolor=ft.Colors.RED)),
             ],
         )
@@ -237,7 +237,7 @@ def create_database_view(
                 fields[key] = field
                 field_controls.append(field)
 
-        def save_new_record(e):
+        def save_new_record(_e):
             """Save new record."""
             # Create new record
             new_record = {}
@@ -259,7 +259,7 @@ def create_database_view(
             title=ft.Text("Add New Record"),
             content=ft.Column(field_controls, height=300, scroll=ft.ScrollMode.AUTO),
             actions=[
-                ft.TextButton("Cancel", on_click=lambda e: page.close(add_dialog)),
+                ft.TextButton("Cancel", on_click=lambda _e: page.close(add_dialog)),
                 ft.FilledButton("Add", on_click=save_new_record),
             ],
         )
@@ -267,7 +267,7 @@ def create_database_view(
         page.open(add_dialog)
 
     # Table selector dropdown
-    def on_table_change(e):
+    def on_table_change(_e):
         """Handle table selection change."""
         nonlocal selected_table
         selected_table = e.control.value
@@ -315,7 +315,7 @@ def create_database_view(
     file_picker = ft.FilePicker(on_result=save_as_json)
     page.overlay.append(file_picker)
 
-    def export_data(e):
+    def export_data(_e):
         """Export table data."""
         file_picker.save_file(
             dialog_title="Export Table Data",
@@ -329,15 +329,15 @@ def create_database_view(
         table_dropdown,
         search_field,
         ft.Container(expand=True),  # Spacer
-        themed_button("Add Record", lambda e: add_record(), "filled", ft.Icons.ADD),
+        themed_button("Add Record", lambda _e: add_record(), "filled", ft.Icons.ADD),
         themed_button("Export", export_data, "outlined", ft.Icons.DOWNLOAD),
-        themed_button("Refresh", lambda e: load_data(), "outlined", ft.Icons.REFRESH),
+        themed_button("Refresh", lambda _e: load_data(), "outlined", ft.Icons.REFRESH),
     ], spacing=10)
 
     # Database stats using simple metric cards
     db_info = get_mock_db_info()
     stats_row = ft.Row([
-        themed_metric_card("Status", db_info["status"], ft.Icons.DATABASE),
+        themed_metric_card("Status", db_info["status"], ft.Icons.STORAGE),
         themed_metric_card("Tables", str(db_info["tables"]), ft.Icons.TABLE_CHART),
         themed_metric_card("Records", str(db_info["total_records"]), ft.Icons.STORAGE),
         themed_metric_card("Size", db_info["size"], ft.Icons.FOLDER),
@@ -357,7 +357,16 @@ def create_database_view(
         )
     ], expand=True, spacing=20)
 
-    # Initialize data
-    load_data()
+    # Create the main container
+    database_container = themed_card(main_content, "Database View")
 
-    return themed_card(main_content, "Database View")
+    def setup_subscriptions():
+        """Setup subscriptions and initial data loading after view is added to page."""
+        load_data()
+
+    def dispose():
+        """Clean up subscriptions and resources."""
+        logger.debug("Disposing database view")
+        # No subscriptions to clean up currently
+
+    return database_container, dispose, setup_subscriptions
