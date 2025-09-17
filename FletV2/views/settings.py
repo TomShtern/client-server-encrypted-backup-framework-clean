@@ -464,107 +464,95 @@ def create_settings_view(
             ft.Tab(
                 text="Server",
                 icon=ft.Icons.DNS,
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Text("Server Configuration", size=20, weight=ft.FontWeight.BOLD),
-                        ft.Row([server_port_field, server_host_field], spacing=10),
-                        ft.Row([server_max_clients_field, server_timeout_field], spacing=10),
-                        server_enable_ssl_switch,
-                        ft.Row([server_ssl_cert_field], spacing=10),
-                        ft.Row([server_ssl_key_field], spacing=10),
-                    ], spacing=15, scroll=ft.ScrollMode.AUTO),
-                    padding=20
-                )
+                content=ft.Column([
+                    ft.Text("Server Configuration", size=20, weight=ft.FontWeight.BOLD),
+                    ft.Row([server_port_field, server_host_field], spacing=10),
+                    ft.Row([server_max_clients_field, server_timeout_field], spacing=10),
+                    server_enable_ssl_switch,
+                    ft.Row([server_ssl_cert_field], spacing=10),
+                    ft.Row([server_ssl_key_field], spacing=10),
+                ], spacing=15, scroll=ft.ScrollMode.AUTO)
             ),
             ft.Tab(
                 text="Interface",
                 icon=ft.Icons.PALETTE,
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Text("User Interface Settings", size=20, weight=ft.FontWeight.BOLD),
-                        ft.Row([gui_theme_dropdown, gui_color_dropdown], spacing=10),
-                        gui_auto_refresh_switch,
-                        gui_refresh_interval_field,
-                        gui_auto_resize_switch,
-                    ], spacing=15, scroll=ft.ScrollMode.AUTO),
-                    padding=20
-                )
+                content=ft.Column([
+                    ft.Text("User Interface Settings", size=20, weight=ft.FontWeight.BOLD),
+                    ft.Row([gui_theme_dropdown, gui_color_dropdown], spacing=10),
+                    gui_auto_refresh_switch,
+                    gui_refresh_interval_field,
+                    gui_auto_resize_switch,
+                ], spacing=15, scroll=ft.ScrollMode.AUTO)
             ),
             ft.Tab(
                 text="Monitoring",
                 icon=ft.Icons.MONITOR_HEART,
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Text("System Monitoring", size=20, weight=ft.FontWeight.BOLD),
-                        monitoring_enabled_switch,
-                        monitoring_refresh_field,
-                        ft.Row([monitoring_cpu_field, monitoring_memory_field, monitoring_disk_field], spacing=10),
-                    ], spacing=15, scroll=ft.ScrollMode.AUTO),
-                    padding=20
-                )
+                content=ft.Column([
+                    ft.Text("System Monitoring", size=20, weight=ft.FontWeight.BOLD),
+                    monitoring_enabled_switch,
+                    monitoring_refresh_field,
+                    ft.Row([monitoring_cpu_field, monitoring_memory_field, monitoring_disk_field], spacing=10),
+                ], spacing=15, scroll=ft.ScrollMode.AUTO)
             ),
             ft.Tab(
                 text="Logging",
                 icon=ft.Icons.ARTICLE,
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Text("Logging Configuration", size=20, weight=ft.FontWeight.BOLD),
-                        logging_enabled_switch,
-                        ft.Row([logging_level_dropdown, logging_max_size_field, logging_max_files_field], spacing=10),
-                        logging_file_field,
-                    ], spacing=15, scroll=ft.ScrollMode.AUTO),
-                    padding=20
-                )
+                content=ft.Column([
+                    ft.Text("Logging Configuration", size=20, weight=ft.FontWeight.BOLD),
+                    logging_enabled_switch,
+                    ft.Row([logging_level_dropdown, logging_max_size_field, logging_max_files_field], spacing=10),
+                    logging_file_field,
+                ], spacing=15, scroll=ft.ScrollMode.AUTO)
             ),
             ft.Tab(
                 text="Security",
                 icon=ft.Icons.SECURITY,
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Text("Security Settings", size=20, weight=ft.FontWeight.BOLD),
-                        security_require_auth_switch,
-                        security_api_key_field,
-                        ft.Row([security_max_attempts_field, security_session_timeout_field], spacing=10),
-                    ], spacing=15, scroll=ft.ScrollMode.AUTO),
-                    padding=20
-                )
+                content=ft.Column([
+                    ft.Text("Security Settings", size=20, weight=ft.FontWeight.BOLD),
+                    security_require_auth_switch,
+                    security_api_key_field,
+                    ft.Row([security_max_attempts_field, security_session_timeout_field], spacing=10),
+                ], spacing=15, scroll=ft.ScrollMode.AUTO)
             ),
             ft.Tab(
                 text="Backup",
                 icon=ft.Icons.BACKUP,
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Text("Backup Configuration", size=20, weight=ft.FontWeight.BOLD),
-                        backup_auto_switch,
-                        backup_path_field,
-                        ft.Row([backup_interval_field, backup_retention_field], spacing=10),
-                        backup_compress_switch,
-                    ], spacing=15, scroll=ft.ScrollMode.AUTO),
-                    padding=20
-                )
+                content=ft.Column([
+                    ft.Text("Backup Configuration", size=20, weight=ft.FontWeight.BOLD),
+                    backup_auto_switch,
+                    backup_path_field,
+                    ft.Row([backup_interval_field, backup_retention_field], spacing=10),
+                    backup_compress_switch,
+                ], spacing=15, scroll=ft.ScrollMode.AUTO)
             ),
-        ],
-        expand=True
+        ]
     )
 
-    # Main layout
+    # Main layout with responsive design and scrollbar
     main_content = ft.Column([
-        ft.Row([
-            ft.Icon(ft.Icons.SETTINGS, size=28, color=ft.Colors.PRIMARY),
-            ft.Text("Settings", size=28, weight=ft.FontWeight.BOLD),
-        ], spacing=10),
+        # Responsive header
+        ft.ResponsiveRow([
+            ft.Column([
+                ft.Row([
+                    ft.Icon(ft.Icons.SETTINGS, size=28, color=ft.Colors.PRIMARY),
+                    ft.Text("Settings", size=28, weight=ft.FontWeight.BOLD),
+                ], spacing=10)
+            ], col={"sm": 12, "md": 12, "lg": 12})
+        ]),
         actions_row,
         ft.Container(
             content=settings_tabs,
             expand=True,
             padding=10,
-            border_radius=12,
-            bgcolor=ft.Colors.SURFACE
+            border_radius=12
         )
     ], expand=True, spacing=20)
 
-    # Create the main container
-    settings_container = themed_card(main_content, "Settings Management")
+    # Create the main container - simplified structure
+    settings_container = ft.Container(
+        content=main_content,
+        expand=True
+    )
 
     def setup_subscriptions():
         """Setup subscriptions and initial data loading after view is added to page."""

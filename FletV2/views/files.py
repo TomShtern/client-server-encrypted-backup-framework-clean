@@ -190,6 +190,34 @@ def create_files_view(
             )
 
         files_table.update()
+        update_stats_display()
+
+    def update_stats_display():
+        """Update the stats display with current file data."""
+        total_files = len(files_data)
+        complete_files = len([f for f in files_data if f.get('status') == 'complete'])
+        total_size = sum(f.get('size', 0) for f in files_data)
+        failed_files = len([f for f in files_data if f.get('status') == 'failed'])
+
+        # Update the stat card values
+        if stats_row.controls and len(stats_row.controls) >= 4:
+            # Update Total Files
+            if stats_row.controls[0].controls[0].content:
+                stats_row.controls[0].controls[0].content.content.controls[1].value = str(total_files)
+
+            # Update Complete Files
+            if stats_row.controls[1].controls[0].content:
+                stats_row.controls[1].controls[0].content.content.controls[1].value = str(complete_files)
+
+            # Update Total Size
+            if stats_row.controls[2].controls[0].content:
+                stats_row.controls[2].controls[0].content.content.controls[1].value = format_file_size(total_size)
+
+            # Update Failed Files
+            if stats_row.controls[3].controls[0].content:
+                stats_row.controls[3].controls[0].content.content.controls[1].value = str(failed_files)
+
+            stats_row.update()
 
     # File action handlers
     def download_file(file: Dict[str, Any]):
@@ -389,30 +417,30 @@ def create_files_view(
         themed_button("Refresh", refresh_files, "outlined", ft.Icons.REFRESH),
     ], spacing=10)
 
-    # File stats using simple metric cards
-    def update_stats():
-        total_files = len(files_data)
-        complete_files = len([f for f in files_data if f.get('status') == 'complete'])
-        total_size = sum(f.get('size', 0) for f in files_data)
-        failed_files = len([f for f in files_data if f.get('status') == 'failed'])
-
-        return ft.Row([
-            themed_metric_card("Total Files", str(total_files), ft.Icons.FOLDER),
-            themed_metric_card("Complete", str(complete_files), ft.Icons.CHECK_CIRCLE),
-            themed_metric_card("Total Size", format_file_size(total_size), ft.Icons.STORAGE),
-            themed_metric_card("Failed", str(failed_files), ft.Icons.ERROR),
-        ], spacing=10)
+    # File stats are now handled by update_stats_display() function
 
     # Enhanced table with layered card design
     table_card = themed_card(files_table, "Files", page)
 
-    # Main layout
+    # Initialize stats container for updates
+    stats_row = ft.ResponsiveRow([
+        ft.Column([themed_metric_card("Total Files", "0", ft.Icons.FOLDER)],
+                 col={"sm": 12, "md": 6, "lg": 3}),
+        ft.Column([themed_metric_card("Complete", "0", ft.Icons.CHECK_CIRCLE)],
+                 col={"sm": 12, "md": 6, "lg": 3}),
+        ft.Column([themed_metric_card("Total Size", "0 B", ft.Icons.STORAGE)],
+                 col={"sm": 12, "md": 6, "lg": 3}),
+        ft.Column([themed_metric_card("Failed", "0", ft.Icons.ERROR)],
+                 col={"sm": 12, "md": 6, "lg": 3}),
+    ])
+
+    # Main layout with responsive design and scrollbar
     main_content = ft.Column([
         ft.Text("Files Management", size=28, weight=ft.FontWeight.BOLD),
-        update_stats(),
+        stats_row,
         actions_row,
         table_card
-    ], expand=True, spacing=20)
+    ], expand=True, spacing=20, scroll=ft.ScrollMode.AUTO)
 
     # Create the main container with theme support
     files_container = themed_card(main_content, None, page)  # No title since we have one in content

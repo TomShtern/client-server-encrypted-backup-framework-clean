@@ -196,6 +196,49 @@ PURPLE_DARK_COLORS = {
 }
 
 # ==============================================================================
+# FRAMEWORK-HARMONIOUS DARK THEME - Using Flet's Native System
+# ==============================================================================
+
+def setup_stunning_dark_theme(page: ft.Page):
+    """Professional dark theme using Flet's native ft.ColorScheme - Framework Harmony!"""
+
+    # Use Flet's built-in dark theme with beautiful colors
+    page.theme = ft.Theme(
+        color_scheme_seed=ft.Colors.BLUE,  # Let Flet generate harmonious colors
+        use_material3=True,
+        font_family="Inter"
+    )
+
+    # Enhanced dark theme with professional colors - Framework Harmonious!
+    page.dark_theme = ft.Theme(
+        color_scheme=ft.ColorScheme(
+            # Professional dark colors that work with Material Design 3
+            primary="#3B82F6",           # Beautiful blue
+            on_primary="#FFFFFF",
+            secondary="#10B981",         # Elegant green
+            on_secondary="#FFFFFF",
+            tertiary="#F59E0B",          # Warm orange
+            on_tertiary="#FFFFFF",
+            error="#EF4444",             # Clear red
+            on_error="#FFFFFF",
+            background="#0F172A",        # Deep dark background
+            on_background="#F8FAFC",
+            surface="#1E293B",           # Card surface
+            on_surface="#F8FAFC",
+            surface_variant="#334155",   # Elevated surface
+            on_surface_variant="#CBD5E1",
+            outline="#64748B",
+            outline_variant="#475569"
+        ),
+        use_material3=True,
+        font_family="Inter"
+    )
+
+    # Set to dark mode - let Flet handle everything!
+    page.theme_mode = ft.ThemeMode.DARK
+    page.update()  # Only acceptable page.update() for theme changes
+
+# ==============================================================================
 # SIMPLIFIED THEME CREATION - Framework Harmonious
 # ==============================================================================
 
@@ -482,3 +525,42 @@ def create_gradient_container(
 
 # create_floating_action_button has been consolidated into utils.ui_components
 # Use: from utils.ui_components import create_floating_action_button
+
+# ======================================================================
+# DESIGN TOKENS (Spacing, Radii, Typographic scale) — additive and safe
+# ======================================================================
+
+# 8px-based spacing scale
+SPACING = {
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "xxl": 32,
+}
+
+# Standardized radii
+RADII = {
+    "card": 12,
+    "input": 8,
+    "button": 8,
+    "chip": 12,
+}
+
+# Suggested typography scale (kept simple; actual sizes applied via setup_enhanced_typography)
+TYPE_SCALE = {
+    "h1": 30,
+    "h2": 22,
+    "subtitle": 16,
+    "body": 14,
+    "caption": 12,
+}
+
+def get_design_tokens() -> dict:
+    """Return design tokens for spacing/radii/typography (safe, read-only)."""
+    return {
+        "spacing": SPACING,
+        "radii": RADII,
+        "type": TYPE_SCALE,
+    }

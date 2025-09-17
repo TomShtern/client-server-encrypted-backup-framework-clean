@@ -125,7 +125,7 @@ def create_logs_view(
                 ft.Icon(icon, size=16),
                 ft.Text(text, size=12, weight=ft.FontWeight.BOLD)
             ], spacing=4, tight=True),
-            padding=ft.padding.symmetric(horizontal=12, vertical=6),
+            padding=ft.Padding(left=12, right=12, top=6, bottom=6),
             bgcolor=ft.Colors.PRIMARY if is_selected else ft.Colors.SURFACE,
             border=ft.border.all(2, ft.Colors.PRIMARY if is_selected else ft.Colors.OUTLINE),
             border_radius=16,
@@ -283,9 +283,11 @@ def create_logs_view(
         stats_text
     ], spacing=10)
 
-    # Enhanced filter controls
+    # Enhanced filter controls with responsive design
     filters_section = ft.Column([
-        ft.Row([search_field], spacing=10),
+        ft.ResponsiveRow([
+            ft.Column([search_field], col={"sm": 12, "md": 12, "lg": 12})
+        ]),
         ft.Container(height=8),  # Spacing
         filter_chips_row
     ], spacing=8)
@@ -293,13 +295,16 @@ def create_logs_view(
     # Enhanced logs display with layered card design
     logs_card = themed_card(logs_listview, "System Logs", page)
 
-    # Main layout with enhanced styling
+    # Main layout with enhanced styling and responsive design
     main_content = ft.Column([
         ft.Text("Logs Management", size=28, weight=ft.FontWeight.BOLD),
-        filters_section,
+        # Make filters section responsive
+        ft.ResponsiveRow([
+            ft.Column([filters_section], col={"sm": 12, "md": 12, "lg": 12})
+        ]),
         actions_row,
         logs_card
-    ], expand=True, spacing=20)
+    ], expand=True, spacing=20, scroll=ft.ScrollMode.AUTO)
 
     # Create the main container with theme support
     logs_container = themed_card(main_content, None, page)  # No title since we have one in content

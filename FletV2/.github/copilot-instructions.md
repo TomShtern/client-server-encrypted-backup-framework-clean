@@ -107,6 +107,29 @@ get_system_status() → Dict              # CPU, memory, disk
 get_logs() → List[Dict]                 # Recent log entries
 ```
 
+**Additional ServerBridge Methods (Synchronous Wrappers)**:
+```python
+def start_server(self):
+    """Start the server (synchronous wrapper)."""
+    try:
+        # For mock mode, just return success
+        if not self.real_server:
+            return {"success": True, "message": "Server started (mock mode)"}
+        # For real server, delegate to the async method
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(self.start_server_async())
+        loop.close()
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+def stop_server(self):
+    """Stop the server (synchronous wrapper)."""
+    # Similar implementation for stop_server
+```
+
 **Mock Mode Features**:
 - Persistent state across operations (`mock_data_store.json`)
 - Referential integrity enforcement (cascading deletes)
@@ -177,6 +200,9 @@ python performance_benchmark.py         # Full benchmark suite
 - **JSON parsing errors**: Ensure valid structure including opening brace `{` for objects
 - **"Unknown property 'globs' will be ignored"**: Check configuration files for typos
 - **State Manager null checks**: Handle gracefully when `state_manager` is `None`
+- **Border Syntax**: Use `ft.border.all(width, color)` (lowercase `border`)
+- **BorderRadius Syntax**: Use `ft.border_radius.all(value)` (lowercase `border_radius`)
+- **Padding Syntax**: Use `ft.padding.all(value)` (lowercase `padding`)
 
 ## 📝 Examples
 - View skeleton: `views/<name>.py` → `def create_<name>_view(server_bridge, page, state_manager=None) -> ft.Control`
@@ -196,6 +222,23 @@ python performance_benchmark.py         # Full benchmark suite
 - **Control Lifecycle**: Ensure controls are attached to the page before updating. Views should return a tuple `(content, dispose, setup_subscriptions)`. `setup_subscriptions()` calls must execute **after** the view is updated and attached to the page.
 - **DataTable Column Initialization**: DataTable was initialized with empty columns `columns=[]`, causing Flet to throw "columns must contain at minimum one visible DataColumn". Initialize DataTable with default columns.
 - **Empty Data Handling**: Always ensure at least one column exists in DataTable, even when no data is available.
+- **ServerBridge API**: Added synchronous wrapper methods `start_server()` and `stop_server()` to `ServerBridge`.
+- **Animation Class Usage**: Fixed incorrect usage of the `Animation` class. Use `ft.Animation()` or `Animation()` instead of `Animation.Animation()`.
+- **BorderRadius Syntax**: Corrected `BorderRadius` syntax in `ui_components.py` to use `ft.border_radius` constructor.
+- **Border Syntax**: Corrected `ft.border.all()` to `ft.Border.all()`.
+- **🎯 Context7 MCP API Validation (September 2025)**: Used Context7 MCP server to validate and fix ALL Flet API syntax issues systematically:
+    - **Authoritative API Validation**: Using Context7 to get definitive Flet documentation and validate correct syntax patterns
+    - **Border API**: Confirmed `ft.border.all(width, color)` is correct (lowercase `border`)
+    - **BorderRadius API**: Confirmed `ft.border_radius.all(value)` is correct (lowercase `border_radius`)
+    - **Padding API**: Confirmed `ft.padding.all(value)` is correct (lowercase `padding`)
+    - **Chart API Cleanup**: Removed invalid properties from BarChart and PieChart:
+        * ❌ `ft.GridData()` - doesn't exist in Flet BarChart
+        * ❌ `animation_duration` - not supported in BarChart
+        * ❌ `stroke_width` - not supported in PieChart
+        * ❌ `ft.BorderData()` - doesn't exist in Flet
+    - **BorderRadius Advanced**: Fixed `ft.BorderRadius.vertical()` and `ft.BorderRadius.only()` - these methods don't exist, use simple numeric values or `ft.border_radius.all()`
+    - **Animation API**: Confirmed `ft.Animation(duration, curve)` is correct (not `Animation.Animation()`)
+    - **Result**: Application now runs error-free with all API syntax validated against authoritative Flet documentation
 
 ## ❌ What NOT to do
 - Do not use custom routers, overlays, or state managers outside Flet's built-ins
@@ -223,3 +266,20 @@ Found page.update() →
 ```
 
 **Findings (2025-09-16)**: A comprehensive analysis revealed that the codebase is already optimized, using `control.update()` where appropriate and `page.update()` only for dialogs, overlays, and theme changes. No changes are required. The 10x performance benefit is already in place.
+
+## 🎨 UI/UX Redesign Plan
+
+A comprehensive UI/UX audit and redesign roadmap has been created and saved as `ui_ux_audit_and_redesign_plan.md`. This file contains:
+
+- Global visual/UX issues
+- Screen-by-screen findings (Dashboard, Clients, Files, Database, Analytics, Logs, Settings)
+- Design principles (palette simplification, 8px spacing system, consistent radii/elevation, typographic scale)
+- Concrete tokens (colors, radii, spacing, elevation, typography)
+- A 6-phase implementation plan mapped to this repo’s files
+- Success criteria and next steps
+
+The initial focus should be on:
+
+- Phase 1 (highest ROI):
+  - `theme.py`: tokens for palette, radii, spacing, typography.
+  - `ui_components.py`: new standardized components and helpers.

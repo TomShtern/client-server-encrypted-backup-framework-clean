@@ -384,13 +384,23 @@ def create_database_view(
     # Enhanced table with layered card design
     table_card = themed_card(database_table, "Database Records", page)
 
-    # Main layout
+    # Main layout with responsive design and scrollbar
     main_content = ft.Column([
         ft.Text("Database Management", size=28, weight=ft.FontWeight.BOLD),
-        stats_row,
+        # Responsive stats row
+        ft.ResponsiveRow([
+            ft.Column([themed_metric_card("Status", db_info["status"], ft.Icons.STORAGE)],
+                     col={"sm": 12, "md": 6, "lg": 3}),
+            ft.Column([themed_metric_card("Tables", str(db_info["tables"]), ft.Icons.TABLE_CHART)],
+                     col={"sm": 12, "md": 6, "lg": 3}),
+            ft.Column([themed_metric_card("Records", str(db_info["total_records"]), ft.Icons.STORAGE)],
+                     col={"sm": 12, "md": 6, "lg": 3}),
+            ft.Column([themed_metric_card("Size", db_info["size"], ft.Icons.FOLDER)],
+                     col={"sm": 12, "md": 6, "lg": 3}),
+        ]),
         actions_row,
         table_card
-    ], expand=True, spacing=20)
+    ], expand=True, spacing=20, scroll=ft.ScrollMode.AUTO)
 
     # Create the main container with theme support
     database_container = themed_card(main_content, None, page)  # No title since we have one in content

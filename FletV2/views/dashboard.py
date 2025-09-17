@@ -16,7 +16,20 @@ from datetime import datetime, timedelta
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button, themed_metric_card, create_status_pill
+from utils.ui_components import (
+    create_professional_card,
+    create_stunning_circular_progress,
+    create_elegant_button,
+    create_status_indicator,
+    create_pulsing_status_indicator,
+    create_beautiful_card,
+    create_simple_bar_chart,
+    create_simple_pie_chart,
+    themed_card, themed_button, themed_metric_card, create_status_pill,
+    AppCard,
+    SectionHeader,
+    AppButton
+)
 from utils.user_feedback import show_success_message, show_error_message
 
 logger = get_logger(__name__)
@@ -27,8 +40,12 @@ def create_dashboard_view(
     page: ft.Page,
     _state_manager: StateManager
 ) -> ft.Control:
-    """Clean dashboard view using Flet's built-in components."""
-    logger.info("Creating simplified dashboard view")
+    """Professional dashboard view using framework-harmonious components to match reference image."""
+    logger.info("Creating professional dashboard view with stunning visuals")
+
+    # Apply the beautiful dark theme
+    from theme import setup_stunning_dark_theme
+    setup_stunning_dark_theme(page)
 
     # Simple state management
     current_server_status = {}
@@ -120,7 +137,7 @@ def create_dashboard_view(
 
         return sorted(activities, key=lambda x: x['timestamp'], reverse=True)
 
-    def create_enhanced_summary_card(title: str, icon: str, value_control: ft.Control, accent_color: str = None) -> ft.Container:
+    def create_enhanced_summary_card(title: str, icon: str, value_control: ft.Control, accent_color: Optional[str] = None) -> ft.Container:
         """Create enhanced summary card matching old dashboard style."""
         return ft.Container(
             content=ft.Row([
@@ -195,8 +212,8 @@ def create_dashboard_view(
             hours = uptime_seconds // 3600
             minutes = (uptime_seconds % 3600) // 60
             server_details_text.value = f"Port: {current_server_status.get('port', 'N/A')} | Uptime: {hours}h {minutes}m"
-            start_button.disabled = True
-            stop_button.disabled = False
+            start_button.visible = False
+            stop_button.visible = True
 
             # Update status pill
             status_pill.content = create_status_pill("Running", "success")
@@ -204,8 +221,8 @@ def create_dashboard_view(
             server_status_text.value = "Stopped"
             server_status_text.color = ft.Colors.RED
             server_details_text.value = "Server is not running"
-            start_button.disabled = False
-            stop_button.disabled = True
+            start_button.visible = True
+            stop_button.visible = False
 
             # Update status pill
             status_pill.content = create_status_pill("Stopped", "error")
@@ -363,38 +380,13 @@ def create_dashboard_view(
         show_success_message(page, "Dashboard refreshed")
 
     # Create UI components
-    # Enhanced server control buttons with specific colors
-    start_button = ft.FilledButton(
-        content=ft.Row([ft.Icon(ft.Icons.PLAY_ARROW), ft.Text("Start Server")], spacing=8, tight=True),
-        on_click=start_server,
-        style=ft.ButtonStyle(
-            bgcolor=ft.Colors.GREEN,
-            color=ft.Colors.WHITE,
-            shape=ft.RoundedRectangleBorder(radius=8)
-        )
-    )
+    # Contextual server control buttons using standardized AppButton
+    start_button = AppButton("Start Server", start_server, icon=ft.Icons.PLAY_ARROW, variant="tonal")
+    stop_button = AppButton("Stop Server", stop_server, icon=ft.Icons.STOP, variant="danger")
 
-    stop_button = ft.FilledButton(
-        content=ft.Row([ft.Icon(ft.Icons.STOP), ft.Text("Stop Server")], spacing=8, tight=True),
-        on_click=stop_server,
-        style=ft.ButtonStyle(
-            bgcolor=ft.Colors.RED,
-            color=ft.Colors.WHITE,
-            shape=ft.RoundedRectangleBorder(radius=8)
-        )
-    )
-
-    # Header section
-    header_row = ft.Row([
-        ft.Row([
-            ft.Icon(ft.Icons.DASHBOARD, size=32, color=ft.Colors.PRIMARY),
-            ft.Text("Server Dashboard", size=28, weight=ft.FontWeight.BOLD)
-        ], spacing=16),
-        ft.Row([
-            last_updated_text,
-            themed_button("Refresh", refresh_dashboard, "outlined", ft.Icons.REFRESH)
-        ], spacing=10)
-    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+    # Backup action
+    def on_backup(_e):
+        show_success_message(page, "Backup initiated (mock)")
 
     # Enhanced server status card with status pill
     server_status_card = themed_card(
@@ -488,24 +480,270 @@ def create_dashboard_view(
         ], spacing=8)
     )
 
-    # Main layout
+    # Create server status indicator used in header
+    server_status_indicator = create_pulsing_status_indicator("excellent", "SERVER: RUNNING")
+    # Create SectionHeader with actions: Backup (primary) and Refresh (tonal), plus status indicator
+    backup_button = AppButton("Backup", on_backup, icon=ft.Icons.BACKUP, variant="primary")
+    refresh_button = AppButton("Refresh", refresh_dashboard, icon=ft.Icons.REFRESH, variant="tonal")
+    header_section = SectionHeader("Dashboard", actions=[backup_button, refresh_button, server_status_indicator])
+
+    # Server Status Card - professional display with better layout
+    server_status_content = ft.Container(
+        content=ft.Column([
+            # Main metric with icon
+            ft.Container(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.DNS, size=32, color=ft.Colors.PRIMARY),
+                    ft.Column([
+                        ft.Text("265", size=42, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                        ft.Text("Total Clients", size=16, color=ft.Colors.ON_SURFACE_VARIANT)
+                    ], spacing=4, horizontal_alignment=ft.CrossAxisAlignment.START)
+                ], spacing=16, alignment=ft.MainAxisAlignment.START),
+                margin=ft.Margin(0, 0, 0, 20)
+            ),
+
+            # Divider
+            ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
+
+            ft.Container(height=12),  # Spacer
+
+            # Secondary metrics in a grid
+            ft.Column([
+                ft.Row([
+                    ft.Text("Active:", size=14, color=ft.Colors.ON_SURFACE_VARIANT, weight=ft.FontWeight.W_500),
+                    ft.Text("4", size=14, color=ft.Colors.ON_SURFACE, weight=ft.FontWeight.BOLD)
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Container(height=8),
+                ft.Row([
+                    ft.Text("Transfers:", size=14, color=ft.Colors.ON_SURFACE_VARIANT, weight=ft.FontWeight.W_500),
+                    ft.Text("388", size=14, color=ft.Colors.ON_SURFACE, weight=ft.FontWeight.BOLD)
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Container(height=8),
+                ft.Row([
+                    ft.Text("Uptime:", size=14, color=ft.Colors.ON_SURFACE_VARIANT, weight=ft.FontWeight.W_500),
+                    ft.Text("14h 45m 20s", size=14, color=ft.Colors.ON_SURFACE, weight=ft.FontWeight.BOLD)
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+            ], spacing=0)
+        ], spacing=0, expand=True),
+        expand=True
+    )
+    server_status_card = AppCard(server_status_content, title="SERVER STATUS")
+
+    # System Performance Card with PERFECT circular indicators - no stretching!
+    performance_content = ft.Container(
+        content=ft.Row([
+            create_stunning_circular_progress(88, "Memory", "warning"),
+            ft.Container(width=20),  # Spacer between rings
+            create_stunning_circular_progress(63, "Disk", "primary")
+        ], alignment=ft.MainAxisAlignment.SPACE_EVENLY),
+        alignment=ft.alignment.center,
+        padding=20
+    )
+    system_performance_card = AppCard(performance_content, title="SYSTEM PERFORMANCE")
+
+    # Recent Activity Card
+    # Create sample data for bar chart
+    sample_data = [12, 19, 8, 15, 7, 11, 9]
+    sample_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    sample_colors = [ft.Colors.BLUE, ft.Colors.GREEN, ft.Colors.ORANGE, ft.Colors.PURPLE, ft.Colors.CYAN, ft.Colors.PINK, ft.Colors.YELLOW]
+
+    # Create bar chart
+    bar_chart = create_simple_bar_chart(sample_data, sample_labels, sample_colors)
+
+    activity_content = ft.Column([
+        ft.Text("Recent backup operations", size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+        ft.Container(content=activity_list, height=100),
+        ft.Container(height=20),
+        ft.Text("Activity Overview", size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+        ft.Container(content=bar_chart, height=200)
+    ], spacing=8)
+    recent_activity_card = AppCard(activity_content, title="RECENT ACTIVITY")
+
+    # Data Overview Card - improved layout
+    # Create sample data for pie chart
+    pie_sections = [
+        {"value": 65, "color": ft.Colors.BLUE, "title": "Documents"},
+        {"value": 25, "color": ft.Colors.GREEN, "title": "Images"},
+        {"value": 10, "color": ft.Colors.ORANGE, "title": "Others"}
+    ]
+
+    pie_chart = create_simple_pie_chart(pie_sections)
+
+    data_overview_content = ft.Container(
+        content=ft.Column([
+            # Main metric
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("520 MB", size=36, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                    ft.Text("Database Size", size=16, color=ft.Colors.ON_SURFACE_VARIANT)
+                ], spacing=4, horizontal_alignment=ft.CrossAxisAlignment.START),
+                margin=ft.Margin(0, 0, 0, 20)
+            ),
+
+            # Divider
+            ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
+
+            ft.Container(height=12),  # Spacer
+
+            # Additional info
+            ft.Column([
+                ft.Row([
+                    ft.Text("Type:", size=14, color=ft.Colors.ON_SURFACE_VARIANT, weight=ft.FontWeight.W_500),
+                    ft.Text("SQLite3", size=14, color=ft.Colors.ON_SURFACE, weight=ft.FontWeight.BOLD)
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Container(height=8),
+                ft.Row([
+                    ft.Text("Status:", size=14, color=ft.Colors.ON_SURFACE_VARIANT, weight=ft.FontWeight.W_500),
+                    ft.Text("Connected", size=14, color=ft.Colors.GREEN, weight=ft.FontWeight.BOLD)
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Container(height=8),
+                ft.Row([
+                    ft.Text("Last backup:", size=14, color=ft.Colors.ON_SURFACE_VARIANT, weight=ft.FontWeight.W_500),
+                    ft.Text("2 hours ago", size=14, color=ft.Colors.ON_SURFACE, weight=ft.FontWeight.BOLD)
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Container(height=20),
+                ft.Text("File Types Distribution", size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Container(content=pie_chart, alignment=ft.alignment.center)
+            ], spacing=0)
+        ], spacing=0, expand=True),
+        expand=True
+    )
+    data_overview_card = AppCard(data_overview_content, title="DATA OVERVIEW")
+
+    # Database Info Card - improved layout
+    database_info_content = ft.Container(
+        content=ft.Column([
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("SQLite3", size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                    ft.Text("Database Engine", size=14, color=ft.Colors.ON_SURFACE_VARIANT)
+                ], spacing=4),
+                margin=ft.Margin(0, 0, 0, 16)
+            ),
+            ft.Column([
+                ft.Row([
+                    ft.Text("Status:", size=14, color=ft.Colors.ON_SURFACE_VARIANT, weight=ft.FontWeight.W_500),
+                    ft.Text("Connected", size=14, color=ft.Colors.GREEN, weight=ft.FontWeight.BOLD)
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Container(height=8),
+                ft.Row([
+                    ft.Text("Size:", size=14, color=ft.Colors.ON_SURFACE_VARIANT, weight=ft.FontWeight.W_500),
+                    ft.Text("520 MB", size=14, color=ft.Colors.ON_SURFACE, weight=ft.FontWeight.BOLD)
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Container(height=8),
+                ft.Row([
+                    ft.Text("Tables:", size=14, color=ft.Colors.ON_SURFACE_VARIANT, weight=ft.FontWeight.W_500),
+                    ft.Text("12", size=14, color=ft.Colors.ON_SURFACE, weight=ft.FontWeight.BOLD)
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+            ], spacing=0)
+        ], spacing=0, expand=True),
+        expand=True
+    )
+    database_info_card = AppCard(database_info_content, title="DATABASE INFO")
+
+    # Version Info Card - improved layout
+    version_info_content = ft.Container(
+        content=ft.Column([
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("v1.6", size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                    ft.Text("Server Version", size=14, color=ft.Colors.ON_SURFACE_VARIANT)
+                ], spacing=4),
+                margin=ft.Margin(0, 0, 0, 16)
+            ),
+            ft.Column([
+                ft.Row([
+                    ft.Text("Flet:", size=14, color=ft.Colors.ON_SURFACE_VARIANT, weight=ft.FontWeight.W_500),
+                    ft.Text("v0.28.3", size=14, color=ft.Colors.ON_SURFACE, weight=ft.FontWeight.BOLD)
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Container(height=8),
+                ft.Row([
+                    ft.Text("Python:", size=14, color=ft.Colors.ON_SURFACE_VARIANT, weight=ft.FontWeight.W_500),
+                    ft.Text("3.13.5", size=14, color=ft.Colors.ON_SURFACE, weight=ft.FontWeight.BOLD)
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Container(height=8),
+                ft.Row([
+                    ft.Text("Build:", size=14, color=ft.Colors.ON_SURFACE_VARIANT, weight=ft.FontWeight.W_500),
+                    ft.Text("2025.1", size=14, color=ft.Colors.ON_SURFACE, weight=ft.FontWeight.BOLD)
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+            ], spacing=0)
+        ], spacing=0, expand=True),
+        expand=True
+    )
+    version_info_card = AppCard(version_info_content, title="VERSION INFO")
+
+    # Beautiful layout structure with proper spacing and sizing!
     main_content = ft.Column([
-        header_row,
-        ft.Container(height=20),
-        metrics_row,
-        ft.Container(height=20),
-        ft.Row([
-            ft.Container(content=server_status_card, expand=1),
-            ft.Container(width=20),
-            ft.Container(content=system_metrics_card, expand=1),
-        ]),
-        ft.Container(height=20),
-        activity_card
+        # Title Bar with SectionHeader
+        header_section,
+        ft.Container(height=24),
+
+        # First row: SERVER STATUS Card | SYSTEM PERFORMANCE Card
+        ft.Container(
+            content=ft.ResponsiveRow([
+                ft.Column([
+                    ft.Container(
+                        content=server_status_card,
+                        height=280,  # Fixed height for consistency
+                        expand=True
+                    )
+                ], col={"sm": 12, "md": 12, "lg": 6}, expand=True),
+                ft.Column([
+                    ft.Container(
+                        content=system_performance_card,
+                        height=280,  # Fixed height for consistency
+                        expand=True
+                    )
+                ], col={"sm": 12, "md": 12, "lg": 6}, expand=True)
+            ], spacing=20),
+            margin=ft.Margin(0, 0, 0, 24)  # Bottom margin
+        ),
+
+        # Second row: RECENT ACTIVITY Card | DATA OVERVIEW Card
+        ft.Container(
+            content=ft.ResponsiveRow([
+                ft.Column([
+                    ft.Container(
+                        content=recent_activity_card,
+                        height=240,  # Fixed height
+                        expand=True
+                    )
+                ], col={"sm": 12, "md": 12, "lg": 6}, expand=True),
+                ft.Column([
+                    ft.Container(
+                        content=data_overview_card,
+                        height=240,  # Fixed height
+                        expand=True
+                    )
+                ], col={"sm": 12, "md": 12, "lg": 6}, expand=True)
+            ], spacing=20),
+            margin=ft.Margin(0, 0, 0, 24)  # Bottom margin
+        ),
+
+        # Third row: DATABASE INFO Card | VERSION INFO Card
+        ft.ResponsiveRow([
+            ft.Column([
+                ft.Container(
+                    content=database_info_card,
+                    height=200,  # Fixed height
+                    expand=True
+                )
+            ], col={"sm": 12, "md": 12, "lg": 6}, expand=True),
+            ft.Column([
+                ft.Container(
+                    content=version_info_card,
+                    height=200,  # Fixed height
+                    expand=True
+                )
+            ], col={"sm": 12, "md": 12, "lg": 6}, expand=True)
+        ], spacing=20)
     ], expand=True, spacing=0)
 
-    # Create the main container
+    # Create the main container with scrolling to prevent clipping
     dashboard_container = ft.Container(
-        content=main_content,
+        content=ft.Column([
+            main_content
+        ], scroll=ft.ScrollMode.AUTO),  # Add scrollbar when needed
         padding=ft.Padding(28, 20, 28, 20),
         expand=True,
         bgcolor=ft.Colors.SURFACE

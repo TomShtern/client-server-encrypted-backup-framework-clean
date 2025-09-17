@@ -286,9 +286,41 @@ class ServerBridge:
         """Start the server."""
         return await self._call_real_or_mock_async('start_server_async')
 
+    def start_server(self):
+        """Start the server (synchronous wrapper)."""
+        try:
+            # For mock mode, just return success
+            if not self.real_server:
+                return {"success": True, "message": "Server started (mock mode)"}
+            # For real server, delegate to the async method
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self.start_server_async())
+            loop.close()
+            return result
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     async def stop_server_async(self):
         """Stop the server."""
         return await self._call_real_or_mock_async('stop_server_async')
+
+    def stop_server(self):
+        """Stop the server (synchronous wrapper)."""
+        try:
+            # For mock mode, just return success
+            if not self.real_server:
+                return {"success": True, "message": "Server stopped (mock mode)"}
+            # For real server, delegate to the async method
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self.stop_server_async())
+            loop.close()
+            return result
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def test_connection(self):
         """Test server connection."""

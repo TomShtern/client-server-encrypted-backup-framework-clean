@@ -335,27 +335,33 @@ def create_analytics_view(
     # Main layout
     main_content = ft.Column([
         ft.Text("System Analytics", size=28, weight=ft.FontWeight.BOLD),
-        system_info_row,
+        # Make system info responsive
+        ft.ResponsiveRow([
+            ft.Column([system_info_row], col={"sm": 12, "md": 12, "lg": 12})
+        ]),
         actions_row,
         ft.Container(height=20),
 
-        # Two-column layout for progress and charts
-        ft.Row([
-            ft.Container(
-                content=progress_section,
-                expand=1,
-                padding=20,
-                border_radius=12,
-                bgcolor=ft.Colors.SURFACE
-            ),
-            ft.Container(width=20),
-            ft.Container(
-                content=charts_section,
-                expand=1,
-            ),
-        ], expand=True),
+        # Responsive two-column layout for progress and charts
+        ft.ResponsiveRow([
+            ft.Column([
+                ft.Container(
+                    content=progress_section,
+                    padding=20,
+                    border_radius=12,
+                    bgcolor=ft.Colors.SURFACE,
+                    expand=True
+                )
+            ], col={"sm": 12, "md": 12, "lg": 6}),
+            ft.Column([
+                ft.Container(
+                    content=charts_section,
+                    expand=True
+                )
+            ], col={"sm": 12, "md": 12, "lg": 6}),
+        ]),
 
-    ], expand=True, spacing=20)
+    ], expand=True, spacing=20, scroll=ft.ScrollMode.AUTO)
 
     # Create the main container
     analytics_container = themed_card(main_content, "System Analytics Dashboard")

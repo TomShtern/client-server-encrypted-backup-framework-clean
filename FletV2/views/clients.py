@@ -354,23 +354,28 @@ def create_clients_view(
     ], spacing=10)
 
     # Client stats using simple metric cards
-    stats_row = ft.Row([
-        themed_metric_card("Total Clients", str(len(clients_data)), ft.Icons.PEOPLE),
-        themed_metric_card("Connected", str(len([c for c in clients_data if c.get('status', '').lower() == 'connected'])), ft.Icons.WIFI),
-        themed_metric_card("Disconnected", str(len([c for c in clients_data if c.get('status', '').lower() == 'disconnected'])), ft.Icons.WIFI_OFF),
-        themed_metric_card("Total Files", str(sum(c.get('files_count', 0) for c in clients_data)), ft.Icons.FOLDER),
-    ], spacing=10)
+    # Responsive stats row for all screen sizes
+    stats_row = ft.ResponsiveRow([
+        ft.Column([themed_metric_card("Total Clients", str(len(clients_data)), ft.Icons.PEOPLE)],
+                 col={"sm": 12, "md": 6, "lg": 3}),
+        ft.Column([themed_metric_card("Connected", str(len([c for c in clients_data if c.get('status', '').lower() == 'connected'])), ft.Icons.WIFI)],
+                 col={"sm": 12, "md": 6, "lg": 3}),
+        ft.Column([themed_metric_card("Disconnected", str(len([c for c in clients_data if c.get('status', '').lower() == 'disconnected'])), ft.Icons.WIFI_OFF)],
+                 col={"sm": 12, "md": 6, "lg": 3}),
+        ft.Column([themed_metric_card("Total Files", str(sum(c.get('files_count', 0) for c in clients_data)), ft.Icons.FOLDER)],
+                 col={"sm": 12, "md": 6, "lg": 3}),
+    ])
 
     # Enhanced table with layered card design
     table_card = themed_card(clients_table, "Clients", page)
 
-    # Main layout
+    # Main layout with scrollbar for long client lists
     main_content = ft.Column([
         ft.Text("Client Management", size=28, weight=ft.FontWeight.BOLD),
         stats_row,
         actions_row,
         table_card
-    ], expand=True, spacing=20)
+    ], expand=True, spacing=20, scroll=ft.ScrollMode.AUTO)
 
     # Create the main container with theme support
     clients_container = themed_card(main_content, None, page)  # No title since we have one in content
