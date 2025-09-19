@@ -371,61 +371,166 @@ def get_current_theme_colors(page: ft.Page) -> dict:
     }
 
 # ==============================================================================
+# 2025 SEMANTIC COLOR SYSTEM - STATUS & DATA STORYTELLING
+# ==============================================================================
+
+# Semantic status colors for data visualization and user feedback
+SEMANTIC_COLORS = {
+    "excellent": {
+        "bg": ft.Colors.GREEN_50,
+        "accent": ft.Colors.GREEN_400,
+        "text": ft.Colors.GREEN_800,
+        "description": "Optimal performance, healthy status"
+    },
+    "good": {
+        "bg": ft.Colors.BLUE_50,
+        "accent": ft.Colors.BLUE_400,
+        "text": ft.Colors.BLUE_800,
+        "description": "Normal operation, informational"
+    },
+    "warning": {
+        "bg": ft.Colors.AMBER_50,
+        "accent": ft.Colors.AMBER_400,
+        "text": ft.Colors.AMBER_800,
+        "description": "Attention needed, caution advised"
+    },
+    "critical": {
+        "bg": ft.Colors.RED_50,
+        "accent": ft.Colors.RED_400,
+        "text": ft.Colors.RED_800,
+        "description": "Immediate action required"
+    },
+    "neutral": {
+        "bg": ft.Colors.GREY_50,
+        "accent": ft.Colors.GREY_400,
+        "text": ft.Colors.GREY_800,
+        "description": "Inactive or unknown status"
+    }
+}
+
+# Dark theme semantic colors
+DARK_SEMANTIC_COLORS = {
+    "excellent": {
+        "bg": ft.Colors.with_opacity(0.1, ft.Colors.GREEN_400),
+        "accent": ft.Colors.GREEN_400,
+        "text": ft.Colors.GREEN_200,
+        "description": "Optimal performance, healthy status"
+    },
+    "good": {
+        "bg": ft.Colors.with_opacity(0.1, ft.Colors.BLUE_400),
+        "accent": ft.Colors.BLUE_400,
+        "text": ft.Colors.BLUE_200,
+        "description": "Normal operation, informational"
+    },
+    "warning": {
+        "bg": ft.Colors.with_opacity(0.1, ft.Colors.AMBER_400),
+        "accent": ft.Colors.AMBER_400,
+        "text": ft.Colors.AMBER_200,
+        "description": "Attention needed, caution advised"
+    },
+    "critical": {
+        "bg": ft.Colors.with_opacity(0.1, ft.Colors.RED_400),
+        "accent": ft.Colors.RED_400,
+        "text": ft.Colors.RED_200,
+        "description": "Immediate action required"
+    },
+    "neutral": {
+        "bg": ft.Colors.with_opacity(0.1, ft.Colors.GREY_400),
+        "accent": ft.Colors.GREY_400,
+        "text": ft.Colors.GREY_200,
+        "description": "Inactive or unknown status"
+    }
+}
+
+def get_semantic_colors(status: str, is_dark: bool = False) -> dict:
+    """Get semantic color scheme for status visualization."""
+    colors = DARK_SEMANTIC_COLORS if is_dark else SEMANTIC_COLORS
+    return colors.get(status, colors["neutral"])
+
+def get_memory_status(percentage: int) -> str:
+    """Determine memory status based on usage percentage."""
+    if percentage < 70:
+        return "excellent"
+    elif percentage < 85:
+        return "warning"
+    else:
+        return "critical"
+
+def get_disk_status(percentage: int) -> str:
+    """Determine disk status based on usage percentage."""
+    if percentage < 80:
+        return "excellent"
+    elif percentage < 90:
+        return "warning"
+    else:
+        return "critical"
+
+# ==============================================================================
 # 2025 MODERN UI ENHANCEMENTS - VIBRANT EFFECTS & LAYERING
 # ==============================================================================
 
 def setup_modern_theme(page: ft.Page) -> None:
     """
     Set up 2025 modern theme with vibrant colors, enhanced depth, and layering effects.
-    Enhanced version of setup_default_theme with 2025 design trends.
+    Optimized for dashboard visual hierarchy and semantic color storytelling.
     """
-    # Enhanced light theme with vibrant color system
+    # Enhanced light theme with modern Material Design 3 approach
     page.theme = ft.Theme(
-        color_scheme=ft.ColorScheme(
-            primary=BRAND_COLORS["primary"],
-            primary_container=BRAND_COLORS["surface_container"],
-            secondary=BRAND_COLORS["secondary"],
-            secondary_container=BRAND_COLORS["surface_elevated"],
-            tertiary=BRAND_COLORS["accent_emerald"],
-            surface=BRAND_COLORS["surface_elevated"],
-            surface_variant=BRAND_COLORS["surface_variant"],
-            background=BRAND_COLORS["surface_elevated"],
-            error=BRAND_COLORS["error"],
-            on_primary=ft.Colors.WHITE,
-            on_secondary=ft.Colors.WHITE,
-            on_surface=ft.Colors.GREY_900,
-            on_background=ft.Colors.GREY_900,
-        ),
+        color_scheme_seed=ft.Colors.BLUE,  # Let Flet generate harmonious colors
         font_family="Inter",
         visual_density=ft.VisualDensity.COMPACT,
         use_material3=True
     )
 
-    # Enhanced dark theme with vibrant colors
+    # Enhanced dark theme with professional dashboard colors
     page.dark_theme = ft.Theme(
         color_scheme=ft.ColorScheme(
-            primary=DARK_BRAND_COLORS["primary"],
-            primary_container=DARK_BRAND_COLORS["surface_container"],
-            secondary=DARK_BRAND_COLORS["secondary"],
-            secondary_container=DARK_BRAND_COLORS["surface_elevated"],
-            tertiary=DARK_BRAND_COLORS["accent_emerald"],
-            surface=DARK_BRAND_COLORS["surface_elevated"],
-            surface_variant=DARK_BRAND_COLORS["surface_variant"],
-            background=DARK_BRAND_COLORS["surface_elevated"],
-            error=DARK_BRAND_COLORS["error"],
-            on_primary=ft.Colors.GREY_900,
-            on_secondary=ft.Colors.GREY_900,
-            on_surface=ft.Colors.GREY_100,
-            on_background=ft.Colors.GREY_100,
+            # Professional dark colors optimized for data visualization
+            primary="#60A5FA",              # Bright blue for dark mode
+            on_primary="#1E3A8A",
+            primary_container="#1E40AF",
+            on_primary_container="#DBEAFE",
+
+            secondary="#34D399",            # Emerald for secondary actions
+            on_secondary="#064E3B",
+            secondary_container="#065F46",
+            on_secondary_container="#D1FAE5",
+
+            tertiary="#FBBF24",             # Amber for warnings/highlights
+            on_tertiary="#92400E",
+            tertiary_container="#B45309",
+            on_tertiary_container="#FEF3C7",
+
+            error="#F87171",               # Clear error state
+            on_error="#7F1D1D",
+            error_container="#991B1B",
+            on_error_container="#FEE2E2",
+
+            background="#0F172A",          # Deep dark background
+            on_background="#F8FAFC",
+            surface="#1E293B",             # Card surfaces
+            on_surface="#F8FAFC",
+            surface_variant="#334155",     # Elevated surfaces
+            on_surface_variant="#CBD5E1",
+
+            outline="#64748B",
+            outline_variant="#475569",
+            shadow="#000000",
+            scrim="#000000",
+
+            inverse_surface="#F8FAFC",
+            on_inverse_surface="#1E293B",
+            inverse_primary="#3B82F6"
         ),
         font_family="Inter",
         visual_density=ft.VisualDensity.COMPACT,
         use_material3=True
     )
 
-    page.theme_mode = ft.ThemeMode.SYSTEM
+    # Set theme mode for optimal dashboard viewing
+    page.theme_mode = ft.ThemeMode.DARK  # Dashboard typically better in dark mode
 
-    # Apply enhanced typography
+    # Apply enhanced typography for dashboard hierarchy
     setup_enhanced_typography(page)
 
 def get_shadow_style(style_name: str, is_dark: bool = False) -> ft.BoxShadow:
@@ -564,3 +669,94 @@ def get_design_tokens() -> dict:
         "radii": RADII,
         "type": TYPE_SCALE,
     }
+
+# ==============================================================================
+# MODERN COMPONENT FACTORY FUNCTIONS - FLET 0.28.3 OPTIMIZED
+# ==============================================================================
+
+def create_modern_card_container(
+    content: ft.Control,
+    title: str = "",
+    elevation: str = "soft",
+    status: str = "neutral",
+    is_dark: bool = False
+) -> ft.Container:
+    """Create modern card container with proper elevation and semantic colors."""
+    semantic_colors = get_semantic_colors(status, is_dark)
+    shadow = get_shadow_style(elevation, is_dark)
+
+    card_content = content
+    if title:
+        card_content = ft.Column([
+            ft.Text(title, size=18, weight=ft.FontWeight.W_600),
+            ft.Container(height=16),
+            content
+        ], spacing=0)
+
+    return ft.Container(
+        content=card_content,
+        bgcolor=semantic_colors["bg"] if status != "neutral" else ft.Colors.SURFACE,
+        border_radius=20,
+        padding=24,
+        shadow=shadow,
+        animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT)
+    )
+
+def create_trend_indicator(value: str, is_positive: bool = True) -> ft.Container:
+    """Create trend indicator badge with proper colors."""
+    return ft.Container(
+        content=ft.Text(
+            value,
+            size=12,
+            weight=ft.FontWeight.W_600,
+            color=ft.Colors.WHITE
+        ),
+        bgcolor=ft.Colors.GREEN_400 if is_positive else ft.Colors.RED_400,
+        border_radius=8,
+        padding=ft.Padding(6, 3, 6, 3)
+    )
+
+def create_status_ring(
+    percentage: int,
+    label: str,
+    size: int = 120,
+    auto_status: bool = True
+) -> ft.Container:
+    """Create status ring with automatic color coding."""
+    # Auto-determine status or use provided
+    if auto_status:
+        if "memory" in label.lower():
+            status = get_memory_status(percentage)
+        elif "disk" in label.lower():
+            status = get_disk_status(percentage)
+        else:
+            status = "excellent" if percentage < 80 else "warning" if percentage < 95 else "critical"
+    else:
+        status = "good"
+
+    colors = get_semantic_colors(status)
+
+    return ft.Stack([
+        # Background ring
+        ft.Container(
+            width=size, height=size,
+            border_radius=size // 2,
+            border=ft.border.all(8, ft.Colors.with_opacity(0.2, colors["accent"]))
+        ),
+        # Progress ring (simulated)
+        ft.Container(
+            width=size, height=size,
+            border_radius=size // 2,
+            border=ft.border.all(8, colors["accent"])
+        ),
+        # Center content
+        ft.Container(
+            content=ft.Column([
+                ft.Text(f"{percentage}%", size=24, weight=ft.FontWeight.BOLD, color=colors["text"]),
+                ft.Text(label, size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+            ], alignment=ft.MainAxisAlignment.CENTER,
+               horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            width=size, height=size,
+            alignment=ft.alignment.center
+        )
+    ])

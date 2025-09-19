@@ -63,5 +63,6 @@
         "copilot/grok-code-fast-1"
       ]
     }
-  }
+  },
+  "github.copilot.nextEditSuggestions.enabled": true
 }
