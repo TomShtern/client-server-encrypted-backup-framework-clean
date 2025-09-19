@@ -46,7 +46,7 @@ utils/ (18 files, core optimized)    # Framework-aligned utilities
 ### Data Flow & Integration Points
 1. **Server Integration**: `ServerBridge` → real server OR mock database (seamless fallback)
 2. **State Propagation**: `StateManager` → reactive updates across views
-3. **UI Updates**: `control.update()` for UI changes; only use `page.update()` for themes/dialogs/overlays
+3. **UI Updates**: `control.update()` for UI changes; only use `page.update()` for UI changes; only use `page.update()` for themes/dialogs/overlays
 4. **Async Operations**: `page.run_task()` for background work, `aiofiles` for I/O
 
 ## ⭐ Golden Patterns
@@ -249,6 +249,23 @@ python performance_benchmark.py         # Full benchmark suite
 ## 📚 References
 - See `main.py`, `views/settings.py`, `views/logs.py`, `utils/server_bridge.py`, `theme.py` for canonical patterns
 
+## 🎨 UI/UX Redesign Plan
+
+A comprehensive UI/UX audit and redesign roadmap has been created and saved as `ui_ux_audit_and_redesign_plan.md`. This file contains:
+
+- Global visual/UX issues
+- Screen-by-screen findings (Dashboard, Clients, Files, Database, Analytics, Logs, Settings)
+- Design principles (palette simplification, 8px spacing system, consistent radii/elevation, typographic scale)
+- Concrete tokens (colors, radii, spacing, elevation, typography)
+- A 6-phase implementation plan mapped to this repo’s files
+- Success criteria and next steps
+
+The initial focus should be on:
+
+- Phase 1 (highest ROI):
+  - `theme.py`: tokens for palette, radii, spacing, typography.
+  - `ui_components.py`: new standardized components and helpers.
+
 ## 🎯 Performance Optimization Summary
 
 **Status**: ✅ **ACHIEVED** - The codebase has already been optimized. All instances of `page.update()` are used correctly for dialog creation, overlay additions, theme changes, snackbar operations, and error fallbacks. The development team has correctly implemented `control.update()` for performance-critical operations and strategically used `page.update()` only when necessary.
@@ -266,20 +283,3 @@ Found page.update() →
 ```
 
 **Findings (2025-09-16)**: A comprehensive analysis revealed that the codebase is already optimized, using `control.update()` where appropriate and `page.update()` only for dialogs, overlays, and theme changes. No changes are required. The 10x performance benefit is already in place.
-
-## 🎨 UI/UX Redesign Plan
-
-A comprehensive UI/UX audit and redesign roadmap has been created and saved as `ui_ux_audit_and_redesign_plan.md`. This file contains:
-
-- Global visual/UX issues
-- Screen-by-screen findings (Dashboard, Clients, Files, Database, Analytics, Logs, Settings)
-- Design principles (palette simplification, 8px spacing system, consistent radii/elevation, typographic scale)
-- Concrete tokens (colors, radii, spacing, elevation, typography)
-- A 6-phase implementation plan mapped to this repo’s files
-- Success criteria and next steps
-
-The initial focus should be on:
-
-- Phase 1 (highest ROI):
-  - `theme.py`: tokens for palette, radii, spacing, typography.
-  - `ui_components.py`: new standardized components and helpers.

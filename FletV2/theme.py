@@ -54,6 +54,58 @@ DARK_BRAND_COLORS = {
     "info": "#60A5FA",
 }
 
+# 2025 Typography System - Professional enterprise typography
+TYPOGRAPHY_SCALE = {
+    # Display typography for major headings
+    "display_large": {"size": 64, "weight": ft.FontWeight.W_900, "letter_spacing": -1.5},
+    "display_medium": {"size": 48, "weight": ft.FontWeight.W_800, "letter_spacing": -1.0},
+    "display_small": {"size": 36, "weight": ft.FontWeight.W_700, "letter_spacing": -0.5},
+
+    # Headline typography for section headers
+    "headline_large": {"size": 28, "weight": ft.FontWeight.BOLD, "letter_spacing": 0},
+    "headline_medium": {"size": 24, "weight": ft.FontWeight.BOLD, "letter_spacing": 0},
+    "headline_small": {"size": 20, "weight": ft.FontWeight.W_600, "letter_spacing": 0.1},
+
+    # Title typography for card headers
+    "title_large": {"size": 18, "weight": ft.FontWeight.W_600, "letter_spacing": 0.1},
+    "title_medium": {"size": 16, "weight": ft.FontWeight.W_600, "letter_spacing": 0.15},
+    "title_small": {"size": 14, "weight": ft.FontWeight.W_600, "letter_spacing": 0.2},
+
+    # Body typography for content
+    "body_large": {"size": 16, "weight": ft.FontWeight.W_400, "letter_spacing": 0.25},
+    "body_medium": {"size": 14, "weight": ft.FontWeight.W_400, "letter_spacing": 0.25},
+    "body_small": {"size": 12, "weight": ft.FontWeight.W_400, "letter_spacing": 0.4},
+
+    # Label typography for buttons and inputs
+    "label_large": {"size": 14, "weight": ft.FontWeight.W_500, "letter_spacing": 0.5},
+    "label_medium": {"size": 12, "weight": ft.FontWeight.W_500, "letter_spacing": 0.5},
+    "label_small": {"size": 10, "weight": ft.FontWeight.W_500, "letter_spacing": 0.8},
+}
+
+# Professional spacing system for consistent layouts
+SPACING_SCALE = {
+    "xs": 4,   # Micro spacing
+    "sm": 8,   # Small spacing
+    "md": 16,  # Medium spacing
+    "lg": 24,  # Large spacing
+    "xl": 32,  # Extra large spacing
+    "2xl": 48, # Double extra large
+    "3xl": 64, # Triple extra large
+    "4xl": 96, # Massive spacing
+}
+
+# Border radius scale for consistent curves
+BORDER_RADIUS_SCALE = {
+    "none": 0,
+    "sm": 4,
+    "md": 8,
+    "lg": 12,
+    "xl": 16,
+    "2xl": 20,
+    "3xl": 24,
+    "full": 1000,  # Perfect circle
+}
+
 # 2025 Shadow System - Enhanced depth and layering
 SHADOW_STYLES = {
     "subtle": ft.BoxShadow(
@@ -760,3 +812,137 @@ def create_status_ring(
             alignment=ft.alignment.center
         )
     ])
+
+
+# ==============================================================================
+# DESIGN TOKEN UTILITY FUNCTIONS - EASY APPLICATION OF PROFESSIONAL STANDARDS
+# ==============================================================================
+
+def apply_typography(text_type: str, **kwargs) -> dict:
+    """Apply typography tokens to text components for consistent styling."""
+    typography = TYPOGRAPHY_SCALE.get(text_type, TYPOGRAPHY_SCALE["body_medium"])
+
+    # Merge typography tokens with any additional kwargs
+    text_props = {
+        "size": typography["size"],
+        "weight": typography["weight"],
+    }
+
+    # Add letter spacing if specified
+    if "letter_spacing" in typography:
+        text_props["letter_spacing"] = typography["letter_spacing"]
+
+    # Override with any custom properties
+    text_props.update(kwargs)
+
+    return text_props
+
+def get_spacing(size: str) -> int:
+    """Get consistent spacing value from the spacing scale."""
+    return SPACING_SCALE.get(size, SPACING_SCALE["md"])
+
+def get_border_radius(size: str) -> int:
+    """Get consistent border radius value from the radius scale."""
+    return BORDER_RADIUS_SCALE.get(size, BORDER_RADIUS_SCALE["md"])
+
+def create_text_with_typography(text: str, typography_type: str, color: str = None, **kwargs) -> ft.Text:
+    """Create Text component with professional typography applied."""
+    text_props = apply_typography(typography_type, **kwargs)
+
+    if color:
+        text_props["color"] = color
+
+    return ft.Text(text, **text_props)
+
+def create_professional_container(
+    content: ft.Control,
+    spacing_size: str = "lg",
+    radius_size: str = "lg",
+    elevation: str = "soft",
+    **kwargs
+) -> ft.Container:
+    """Create container with professional spacing, radius, and shadows."""
+    return ft.Container(
+        content=content,
+        padding=get_spacing(spacing_size),
+        border_radius=get_border_radius(radius_size),
+        shadow=SHADOW_STYLES.get(elevation, SHADOW_STYLES["soft"]),
+        **kwargs
+    )
+
+def create_section_header(title: str, subtitle: str = None) -> ft.Column:
+    """Create consistent section header with professional typography."""
+    header_components = [
+        create_text_with_typography(title, "headline_medium", ft.Colors.ON_SURFACE)
+    ]
+
+    if subtitle:
+        header_components.append(
+            ft.Container(height=get_spacing("xs"))
+        )
+        header_components.append(
+            create_text_with_typography(subtitle, "body_medium", ft.Colors.ON_SURFACE_VARIANT)
+        )
+
+    return ft.Column(header_components, spacing=0)
+
+def create_metric_display(
+    value: str,
+    label: str,
+    trend: str = None,
+    status: str = "neutral"
+) -> ft.Column:
+    """Create professional metric display with consistent typography."""
+    semantic_colors = get_semantic_colors(status)
+
+    components = [
+        create_text_with_typography(value, "display_small", semantic_colors["text"]),
+        ft.Container(height=get_spacing("xs")),
+        create_text_with_typography(label, "body_medium", ft.Colors.ON_SURFACE_VARIANT)
+    ]
+
+    if trend:
+        components.append(ft.Container(height=get_spacing("sm")))
+        components.append(
+            create_trend_indicator(trend, trend.startswith("+"))
+        )
+
+    return ft.Column(components, spacing=0, horizontal_alignment=ft.CrossAxisAlignment.START)
+
+def create_professional_card_layout(
+    header: str,
+    content: ft.Control,
+    footer: ft.Control = None,
+    status: str = "neutral"
+) -> ft.Container:
+    """Create professional card layout with consistent spacing and typography."""
+    semantic_colors = get_semantic_colors(status)
+
+    card_components = [
+        create_section_header(header),
+        ft.Container(height=get_spacing("lg")),
+        content
+    ]
+
+    if footer:
+        card_components.extend([
+            ft.Container(height=get_spacing("lg")),
+            footer
+        ])
+
+    return create_professional_container(
+        content=ft.Column(card_components, spacing=0),
+        spacing_size="xl",
+        radius_size="xl",
+        elevation="medium",
+        bgcolor=semantic_colors["bg"] if status != "neutral" else ft.Colors.SURFACE,
+        border=ft.border.all(1, ft.Colors.with_opacity(0.1, semantic_colors["accent"])) if status != "neutral" else None
+    )
+
+# Export commonly used design tokens for direct access
+__all__ = [
+    "TYPOGRAPHY_SCALE", "SPACING_SCALE", "BORDER_RADIUS_SCALE", "SHADOW_STYLES",
+    "apply_typography", "get_spacing", "get_border_radius",
+    "create_text_with_typography", "create_professional_container",
+    "create_section_header", "create_metric_display", "create_professional_card_layout"
+]

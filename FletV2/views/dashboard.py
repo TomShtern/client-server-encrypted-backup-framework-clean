@@ -137,116 +137,227 @@ def create_dashboard_view(
 
         return sorted(activities, key=lambda x: x['timestamp'], reverse=True)
 
-    def create_hero_metric_card(value: str, label: str, trend: str = "", status: str = "healthy") -> ft.Container:
-        """Create modern hero metric card with visual hierarchy and status indication."""
-        # Status colors based on semantic meaning
-        status_colors = {
-            "healthy": {"bg": ft.Colors.GREEN_50, "accent": ft.Colors.GREEN_400, "text": ft.Colors.GREEN_800},
-            "warning": {"bg": ft.Colors.AMBER_50, "accent": ft.Colors.AMBER_400, "text": ft.Colors.AMBER_800},
-            "critical": {"bg": ft.Colors.RED_50, "accent": ft.Colors.RED_400, "text": ft.Colors.RED_800},
-            "info": {"bg": ft.Colors.BLUE_50, "accent": ft.Colors.BLUE_400, "text": ft.Colors.BLUE_800}
+    def create_premium_hero_card(value: str, label: str, trend: str = "", card_type: str = "primary") -> ft.Container:
+        """Create premium hero metric card with sophisticated gradients and visual hierarchy."""
+
+        # Premium gradient schemes for different card types
+        gradient_schemes = {
+            "primary": {
+                "gradient": ["#667eea", "#764ba2"],
+                "trend_color": "#4ade80",
+                "text_color": ft.Colors.WHITE,
+                "accent_color": "#f97316"
+            },
+            "success": {
+                "gradient": ["#11998e", "#38ef7d"],
+                "trend_color": "#22c55e",
+                "text_color": ft.Colors.WHITE,
+                "accent_color": "#06b6d4"
+            },
+            "info": {
+                "gradient": ["#3b82f6", "#1d4ed8"],
+                "trend_color": "#10b981",
+                "text_color": ft.Colors.WHITE,
+                "accent_color": "#f59e0b"
+            }
         }
 
-        colors = status_colors.get(status, status_colors["healthy"])
+        scheme = gradient_schemes.get(card_type, gradient_schemes["primary"])
 
-        # Trend indicator if provided
+        # Premium trend indicator
         trend_widget = None
         if trend:
-            trend_color = ft.Colors.GREEN_400 if trend.startswith("+") else ft.Colors.RED_400
+            is_positive = trend.startswith("+")
             trend_widget = ft.Container(
-                content=ft.Text(trend, size=12, weight=ft.FontWeight.W_600, color=ft.Colors.WHITE),
-                bgcolor=trend_color,
-                border_radius=8,
-                padding=ft.Padding(6, 3, 6, 3)
+                content=ft.Row([
+                    ft.Icon(
+                        ft.Icons.TRENDING_UP if is_positive else ft.Icons.TRENDING_DOWN,
+                        size=16,
+                        color=ft.Colors.WHITE
+                    ),
+                    ft.Text(trend, size=14, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
+                ], spacing=4),
+                bgcolor=scheme["trend_color"],
+                border_radius=20,
+                padding=ft.Padding(12, 6, 12, 6),
+                shadow=ft.BoxShadow(
+                    blur_radius=8,
+                    offset=ft.Offset(0, 2),
+                    color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK)
+                )
             )
 
         return ft.Container(
             content=ft.Column([
+                # Top row with value and trend
                 ft.Row([
-                    ft.Text(value, size=42, weight=ft.FontWeight.W_900, color=ft.Colors.ON_SURFACE),
+                    ft.Text(
+                        value,
+                        size=56,
+                        weight=ft.FontWeight.W_900,
+                        color=scheme["text_color"]
+                    ),
                     trend_widget if trend_widget else ft.Container()
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                ft.Text(label, size=14, color=ft.Colors.ON_SURFACE_VARIANT),
-                # Mini visual indicator bar
+
+                ft.Container(height=8),
+
+                # Label with premium styling
+                ft.Text(
+                    label,
+                    size=16,
+                    weight=ft.FontWeight.W_500,
+                    color=ft.Colors.with_opacity(0.9, scheme["text_color"])
+                ),
+
+                ft.Container(height=12),
+
+                # Premium accent bar with glow effect
                 ft.Container(
-                    height=3,
-                    width=120,
-                    bgcolor=colors["accent"],
+                    height=4,
+                    width=140,
+                    bgcolor=scheme["accent_color"],
                     border_radius=2,
-                    margin=ft.Margin(0, 8, 0, 0)
+                    shadow=ft.BoxShadow(
+                        blur_radius=12,
+                        offset=ft.Offset(0, 0),
+                        color=ft.Colors.with_opacity(0.6, scheme["accent_color"])
+                    )
                 )
-            ], spacing=8),
-            bgcolor=colors["bg"],
-            border_radius=20,
-            padding=24,
-            shadow=ft.BoxShadow(
-                blur_radius=20,
-                spread_radius=0,
-                offset=ft.Offset(0, 8),
-                color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
+            ], spacing=0),
+            gradient=ft.LinearGradient(
+                colors=scheme["gradient"],
+                begin=ft.alignment.top_left,
+                end=ft.alignment.bottom_right
             ),
-            animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT)
+            border_radius=24,
+            padding=32,
+            shadow=ft.BoxShadow(
+                blur_radius=32,
+                spread_radius=0,
+                offset=ft.Offset(0, 16),
+                color=ft.Colors.with_opacity(0.25, ft.Colors.BLACK)
+            ),
+            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT)
         )
 
-    def create_modern_performance_gauge(percentage: int, label: str, context: str = "") -> ft.Container:
-        """Create modern performance gauge with semantic colors and context."""
-        # Determine status and colors based on performance
+    def create_premium_gauge(percentage: int, label: str, context: str = "") -> ft.Container:
+        """Create premium performance gauge with sophisticated design and glowing effects."""
+
+        # Premium color schemes based on performance
         if percentage < 70:
-            status_color = ft.Colors.GREEN_400
-            bg_color = ft.Colors.GREEN_50
-            text_color = ft.Colors.GREEN_800
-            ring_color = ft.Colors.GREEN_200
+            gradient_colors = ["#10b981", "#059669"]
+            glow_color = "#10b981"
+            ring_colors = ["#d1fae5", "#10b981"]
+            status_icon = ft.Icons.CHECK_CIRCLE
+            bg_gradient = ["#ecfdf5", "#f0fdf4"]
         elif percentage < 85:
-            status_color = ft.Colors.AMBER_400
-            bg_color = ft.Colors.AMBER_50
-            text_color = ft.Colors.AMBER_800
-            ring_color = ft.Colors.AMBER_200
+            gradient_colors = ["#f59e0b", "#d97706"]
+            glow_color = "#f59e0b"
+            ring_colors = ["#fef3c7", "#f59e0b"]
+            status_icon = ft.Icons.WARNING
+            bg_gradient = ["#fffbeb", "#fefce8"]
         else:
-            status_color = ft.Colors.RED_400
-            bg_color = ft.Colors.RED_50
-            text_color = ft.Colors.RED_800
-            ring_color = ft.Colors.RED_200
+            gradient_colors = ["#ef4444", "#dc2626"]
+            glow_color = "#ef4444"
+            ring_colors = ["#fee2e2", "#ef4444"]
+            status_icon = ft.Icons.ERROR
+            bg_gradient = ["#fef2f2", "#fef2f2"]
 
         return ft.Container(
             content=ft.Column([
-                ft.Stack([
-                    # Background ring
-                    ft.Container(
-                        width=120, height=120,
-                        border_radius=60,
-                        border=ft.border.all(8, ring_color)
+                # Premium gauge with glow effect
+                ft.Container(
+                    content=ft.Stack([
+                        # Outer glow ring
+                        ft.Container(
+                            width=140, height=140,
+                            border_radius=70,
+                            shadow=ft.BoxShadow(
+                                blur_radius=20,
+                                offset=ft.Offset(0, 0),
+                                color=ft.Colors.with_opacity(0.3, glow_color)
+                            )
+                        ),
+
+                        # Background ring
+                        ft.Container(
+                            width=130, height=130,
+                            border_radius=65,
+                            border=ft.border.all(8, ring_colors[0])
+                        ),
+
+                        # Progress ring with gradient effect
+                        ft.Container(
+                            width=130, height=130,
+                            border_radius=65,
+                            border=ft.border.all(8, ring_colors[1])
+                        ),
+
+                        # Center content with icon and percentage
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Icon(status_icon, size=28, color=ring_colors[1]),
+                                ft.Container(height=4),
+                                ft.Text(
+                                    f"{percentage}%",
+                                    size=28,
+                                    weight=ft.FontWeight.BOLD,
+                                    color=ring_colors[1]
+                                ),
+                                ft.Text(
+                                    label,
+                                    size=13,
+                                    weight=ft.FontWeight.W_500,
+                                    color=ft.Colors.GREY_700
+                                )
+                            ],
+                            alignment=ft.MainAxisAlignment.CENTER,
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            spacing=0
+                            ),
+                            width=130, height=130,
+                            alignment=ft.alignment.center
+                        )
+                    ]),
+                    width=140, height=140
+                ),
+
+                ft.Container(height=8),
+
+                # Context with enhanced styling
+                ft.Container(
+                    content=ft.Text(
+                        context,
+                        size=12,
+                        weight=ft.FontWeight.W_500,
+                        color=ft.Colors.GREY_600,
+                        text_align=ft.TextAlign.CENTER
                     ),
-                    # Progress ring - simulated with border
-                    ft.Container(
-                        width=120, height=120,
-                        border_radius=60,
-                        border=ft.border.all(8, status_color)
-                    ),
-                    # Center content
-                    ft.Container(
-                        content=ft.Column([
-                            ft.Text(f"{percentage}%", size=24, weight=ft.FontWeight.BOLD, color=text_color),
-                            ft.Text(label, size=12, color=ft.Colors.ON_SURFACE_VARIANT)
-                        ], alignment=ft.MainAxisAlignment.CENTER,
-                           horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                        width=120, height=120,
-                        alignment=ft.alignment.center
-                    )
-                ]),
-                ft.Text(context, size=11, color=ft.Colors.ON_SURFACE_VARIANT, text_align=ft.TextAlign.CENTER) if context else ft.Container()
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
-            bgcolor=bg_color,
-            border_radius=16,
-            padding=20,
+                    bgcolor=ft.Colors.with_opacity(0.1, ring_colors[1]),
+                    border_radius=12,
+                    padding=ft.Padding(12, 6, 12, 6)
+                ) if context else ft.Container()
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=0
+            ),
+            gradient=ft.LinearGradient(
+                colors=bg_gradient,
+                begin=ft.alignment.top_center,
+                end=ft.alignment.bottom_center
+            ),
+            border_radius=20,
+            padding=24,
             shadow=ft.BoxShadow(
-                blur_radius=12,
-                offset=ft.Offset(0, 4),
+                blur_radius=16,
+                offset=ft.Offset(0, 8),
                 color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK)
             )
         )
 
-    def create_activity_stream_card() -> ft.Container:
-        """Create engaging activity stream with visual storytelling."""
+    def create_premium_activity_stream() -> ft.Container:
+        """Create premium activity stream with sophisticated visual design."""
         activities = [
             {"type": "success", "icon": ft.Icons.CLOUD_UPLOAD, "text": "Backup completed", "detail": "1.2GB in 3m 45s", "time": "2m ago"},
             {"type": "info", "icon": ft.Icons.PERSON_ADD, "text": "New client connected", "detail": "192.168.1.175", "time": "5m ago"},
@@ -254,50 +365,431 @@ def create_dashboard_view(
         ]
 
         activity_widgets = []
-        for activity in activities:
-            # Status colors
+        for i, activity in enumerate(activities):
+            # Premium gradient schemes for different activity types
             if activity["type"] == "success":
-                icon_bg = ft.Colors.GREEN_400
+                gradient_colors = ["#10b981", "#059669"]
+                bg_gradient = ["#ecfdf5", "#d1fae5"]
             elif activity["type"] == "warning":
-                icon_bg = ft.Colors.AMBER_400
+                gradient_colors = ["#f59e0b", "#d97706"]
+                bg_gradient = ["#fffbeb", "#fef3c7"]
             else:
-                icon_bg = ft.Colors.BLUE_400
+                gradient_colors = ["#3b82f6", "#2563eb"]
+                bg_gradient = ["#eff6ff", "#dbeafe"]
 
             activity_widgets.append(
                 ft.Container(
                     content=ft.Row([
+                        # Premium icon with gradient and glow
                         ft.Container(
-                            content=ft.Icon(activity["icon"], size=16, color=ft.Colors.WHITE),
-                            width=32, height=32,
-                            border_radius=16,
-                            bgcolor=icon_bg,
-                            alignment=ft.alignment.center
+                            content=ft.Icon(activity["icon"], size=20, color=ft.Colors.WHITE),
+                            width=44, height=44,
+                            border_radius=22,
+                            gradient=ft.LinearGradient(
+                                colors=gradient_colors,
+                                begin=ft.alignment.top_left,
+                                end=ft.alignment.bottom_right
+                            ),
+                            alignment=ft.alignment.center,
+                            shadow=ft.BoxShadow(
+                                blur_radius=12,
+                                offset=ft.Offset(0, 4),
+                                color=ft.Colors.with_opacity(0.3, gradient_colors[0])
+                            )
                         ),
+
+                        ft.Container(width=16),
+
+                        # Content with enhanced typography
                         ft.Column([
-                            ft.Text(activity["text"], size=14, weight=ft.FontWeight.W_500),
-                            ft.Text(activity["detail"], size=12, color=ft.Colors.ON_SURFACE_VARIANT)
-                        ], spacing=2, expand=True),
-                        ft.Text(activity["time"], size=11, color=ft.Colors.ON_SURFACE_VARIANT)
-                    ], spacing=12),
-                    padding=ft.Padding(16, 12, 16, 12),
-                    border_radius=12,
-                    bgcolor=ft.Colors.SURFACE,
-                    animate_scale=ft.Animation(300, ft.AnimationCurve.EASE_OUT)
+                            ft.Text(
+                                activity["text"],
+                                size=15,
+                                weight=ft.FontWeight.W_600,
+                                color=ft.Colors.GREY_800
+                            ),
+                            ft.Text(
+                                activity["detail"],
+                                size=13,
+                                weight=ft.FontWeight.W_400,
+                                color=ft.Colors.GREY_600
+                            )
+                        ], spacing=4, expand=True),
+
+                        # Premium time badge
+                        ft.Container(
+                            content=ft.Text(
+                                activity["time"],
+                                size=11,
+                                weight=ft.FontWeight.W_500,
+                                color=ft.Colors.GREY_600
+                            ),
+                            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.GREY_400),
+                            border_radius=12,
+                            padding=ft.Padding(8, 4, 8, 4)
+                        )
+                    ], spacing=0, alignment=ft.MainAxisAlignment.START),
+                    gradient=ft.LinearGradient(
+                        colors=bg_gradient,
+                        begin=ft.alignment.center_left,
+                        end=ft.alignment.center_right
+                    ),
+                    border_radius=16,
+                    padding=ft.Padding(20, 16, 20, 16),
+                    margin=ft.Margin(0, 0, 0, 12),
+                    shadow=ft.BoxShadow(
+                        blur_radius=8,
+                        offset=ft.Offset(0, 2),
+                        color=ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
+                    ),
+                    animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT)
                 )
             )
 
         return ft.Container(
             content=ft.Column([
-                ft.Text("Live Activity", size=18, weight=ft.FontWeight.W_600),
-                ft.Column(activity_widgets, spacing=8)
-            ], spacing=16),
-            bgcolor=ft.Colors.SURFACE,
-            border_radius=20,
-            padding=24,
+                # Premium header with icon
+                ft.Row([
+                    ft.Icon(ft.Icons.TIMELINE, size=24, color=ft.Colors.PURPLE_600),
+                    ft.Container(width=8),
+                    ft.Text(
+                        "Live Activity",
+                        size=20,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.GREY_800
+                    )
+                ]),
+
+                ft.Container(height=16),
+
+                ft.Column(activity_widgets, spacing=0)
+            ], spacing=0),
+            gradient=ft.LinearGradient(
+                colors=["#f8fafc", "#f1f5f9"],
+                begin=ft.alignment.top_center,
+                end=ft.alignment.bottom_center
+            ),
+            border_radius=24,
+            padding=28,
             shadow=ft.BoxShadow(
-                blur_radius=16,
-                offset=ft.Offset(0, 4),
-                color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK)
+                blur_radius=24,
+                offset=ft.Offset(0, 12),
+                color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
+            )
+        )
+
+    def create_server_control_panel() -> ft.Container:
+        """Create professional server control panel with connection management."""
+        return ft.Container(
+            content=ft.Column([
+                # Header with status indicator
+                ft.Row([
+                    ft.Icon(ft.Icons.ROUTER, size=24, color=ft.Colors.BLUE_600),
+                    ft.Container(width=8),
+                    ft.Text(
+                        "Server Control",
+                        size=20,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.GREY_800
+                    ),
+                    ft.Container(expand=True),
+                    ft.Container(
+                        content=ft.Row([
+                            ft.Container(
+                                width=8, height=8,
+                                border_radius=4,
+                                bgcolor="#10b981",
+                                animate_scale=ft.Animation(1000, ft.AnimationCurve.EASE_IN_OUT)
+                            ),
+                            ft.Container(width=6),
+                            ft.Text("Online", size=12, weight=ft.FontWeight.W_600, color="#10b981")
+                        ]),
+                        bgcolor=ft.Colors.with_opacity(0.1, "#10b981"),
+                        border_radius=12,
+                        padding=ft.Padding(8, 4, 8, 4)
+                    )
+                ]),
+
+                ft.Container(height=20),
+
+                # Connection info
+                ft.Container(
+                    content=ft.Column([
+                        ft.Row([
+                            ft.Text("Server Address:", size=14, color=ft.Colors.GREY_600),
+                            ft.Container(expand=True),
+                            ft.Text("192.168.1.100:8080", size=14, weight=ft.FontWeight.W_600)
+                        ]),
+                        ft.Container(height=8),
+                        ft.Row([
+                            ft.Text("Protocol:", size=14, color=ft.Colors.GREY_600),
+                            ft.Container(expand=True),
+                            ft.Text("TCP/TLS", size=14, weight=ft.FontWeight.W_600)
+                        ]),
+                        ft.Container(height=8),
+                        ft.Row([
+                            ft.Text("Last Connected:", size=14, color=ft.Colors.GREY_600),
+                            ft.Container(expand=True),
+                            ft.Text("2m ago", size=14, weight=ft.FontWeight.W_600)
+                        ])
+                    ]),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.BLUE_400),
+                    border_radius=12,
+                    padding=16,
+                    border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.BLUE_400))
+                ),
+
+                ft.Container(height=20),
+
+                # Control buttons
+                ft.Row([
+                    ft.Container(
+                        content=ft.ElevatedButton(
+                            content=ft.Row([
+                                ft.Icon(ft.Icons.STOP, size=18, color=ft.Colors.WHITE),
+                                ft.Container(width=8),
+                                ft.Text("Disconnect", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.WHITE)
+                            ], alignment=ft.MainAxisAlignment.CENTER),
+                            bgcolor="#ef4444",
+                            color=ft.Colors.WHITE,
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=12),
+                                elevation=4
+                            ),
+                            width=140,
+                            height=44
+                        ),
+                        expand=True
+                    ),
+                    ft.Container(width=12),
+                    ft.Container(
+                        content=ft.ElevatedButton(
+                            content=ft.Row([
+                                ft.Icon(ft.Icons.REFRESH, size=18, color=ft.Colors.WHITE),
+                                ft.Container(width=8),
+                                ft.Text("Reconnect", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.WHITE)
+                            ], alignment=ft.MainAxisAlignment.CENTER),
+                            bgcolor="#3b82f6",
+                            color=ft.Colors.WHITE,
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=12),
+                                elevation=4
+                            ),
+                            width=140,
+                            height=44
+                        ),
+                        expand=True
+                    )
+                ])
+            ], spacing=0),
+            gradient=ft.LinearGradient(
+                colors=["#f8fafc", "#f1f5f9"],
+                begin=ft.alignment.top_center,
+                end=ft.alignment.bottom_center
+            ),
+            border_radius=24,
+            padding=28,
+            shadow=ft.BoxShadow(
+                blur_radius=24,
+                offset=ft.Offset(0, 12),
+                color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
+            )
+        )
+
+    def create_network_metrics_panel() -> ft.Container:
+        """Create professional network metrics with real-time data visualization."""
+        return ft.Container(
+            content=ft.Column([
+                # Header
+                ft.Row([
+                    ft.Icon(ft.Icons.NETWORK_CHECK, size=24, color=ft.Colors.CYAN_600),
+                    ft.Container(width=8),
+                    ft.Text(
+                        "Network Activity",
+                        size=20,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.GREY_800
+                    )
+                ]),
+
+                ft.Container(height=20),
+
+                # Real-time metrics
+                ft.Column([
+                    # Upload/Download rates
+                    ft.Row([
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Row([
+                                    ft.Icon(ft.Icons.UPLOAD, size=20, color="#10b981"),
+                                    ft.Container(width=8),
+                                    ft.Text("Upload", size=14, color=ft.Colors.GREY_600)
+                                ]),
+                                ft.Container(height=8),
+                                ft.Text("2.4 MB/s", size=24, weight=ft.FontWeight.BOLD, color="#10b981"),
+                                ft.Container(
+                                    height=4, width=120,
+                                    bgcolor="#10b981",
+                                    border_radius=2,
+                                    shadow=ft.BoxShadow(
+                                        blur_radius=8,
+                                        color=ft.Colors.with_opacity(0.3, "#10b981")
+                                    )
+                                )
+                            ]),
+                            bgcolor=ft.Colors.with_opacity(0.05, "#10b981"),
+                            border_radius=16,
+                            padding=20,
+                            expand=True
+                        ),
+                        ft.Container(width=16),
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Row([
+                                    ft.Icon(ft.Icons.DOWNLOAD, size=20, color="#3b82f6"),
+                                    ft.Container(width=8),
+                                    ft.Text("Download", size=14, color=ft.Colors.GREY_600)
+                                ]),
+                                ft.Container(height=8),
+                                ft.Text("1.8 MB/s", size=24, weight=ft.FontWeight.BOLD, color="#3b82f6"),
+                                ft.Container(
+                                    height=4, width=120,
+                                    bgcolor="#3b82f6",
+                                    border_radius=2,
+                                    shadow=ft.BoxShadow(
+                                        blur_radius=8,
+                                        color=ft.Colors.with_opacity(0.3, "#3b82f6")
+                                    )
+                                )
+                            ]),
+                            bgcolor=ft.Colors.with_opacity(0.05, "#3b82f6"),
+                            border_radius=16,
+                            padding=20,
+                            expand=True
+                        )
+                    ]),
+
+                    ft.Container(height=20),
+
+                    # Connection stats
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Text("Connection Statistics", size=16, weight=ft.FontWeight.W_600),
+                            ft.Container(height=12),
+                            ft.Row([
+                                ft.Column([
+                                    ft.Text("Active Connections", size=12, color=ft.Colors.GREY_600),
+                                    ft.Text("24", size=20, weight=ft.FontWeight.BOLD)
+                                ], expand=True),
+                                ft.Column([
+                                    ft.Text("Packets/sec", size=12, color=ft.Colors.GREY_600),
+                                    ft.Text("1,247", size=20, weight=ft.FontWeight.BOLD)
+                                ], expand=True),
+                                ft.Column([
+                                    ft.Text("Latency", size=12, color=ft.Colors.GREY_600),
+                                    ft.Text("12ms", size=20, weight=ft.FontWeight.BOLD, color="#10b981")
+                                ], expand=True)
+                            ])
+                        ]),
+                        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.GREY_400),
+                        border_radius=12,
+                        padding=16
+                    )
+                ], spacing=0)
+            ], spacing=0),
+            gradient=ft.LinearGradient(
+                colors=["#f8fafc", "#f1f5f9"],
+                begin=ft.alignment.top_center,
+                end=ft.alignment.bottom_center
+            ),
+            border_radius=24,
+            padding=28,
+            shadow=ft.BoxShadow(
+                blur_radius=24,
+                offset=ft.Offset(0, 12),
+                color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
+            )
+        )
+
+    def create_storage_breakdown_panel() -> ft.Container:
+        """Create detailed storage usage breakdown with visual indicators."""
+        storage_items = [
+            {"type": "Documents", "size": "1.2 GB", "percentage": 45, "color": "#3b82f6"},
+            {"type": "Images", "size": "800 MB", "percentage": 30, "color": "#10b981"},
+            {"type": "Videos", "size": "400 MB", "percentage": 15, "color": "#f59e0b"},
+            {"type": "Other", "size": "267 MB", "percentage": 10, "color": "#8b5cf6"}
+        ]
+
+        storage_widgets = []
+        for item in storage_items:
+            storage_widgets.append(
+                ft.Container(
+                    content=ft.Row([
+                        ft.Container(
+                            width=12, height=12,
+                            border_radius=6,
+                            bgcolor=item["color"]
+                        ),
+                        ft.Container(width=12),
+                        ft.Column([
+                            ft.Text(item["type"], size=14, weight=ft.FontWeight.W_600),
+                            ft.Text(item["size"], size=12, color=ft.Colors.GREY_600)
+                        ], spacing=2, expand=True),
+                        ft.Text(f"{item['percentage']}%", size=14, weight=ft.FontWeight.BOLD)
+                    ]),
+                    padding=ft.Padding(0, 8, 0, 8)
+                )
+            )
+
+        return ft.Container(
+            content=ft.Column([
+                # Header
+                ft.Row([
+                    ft.Icon(ft.Icons.PIE_CHART, size=24, color=ft.Colors.ORANGE_600),
+                    ft.Container(width=8),
+                    ft.Text(
+                        "Storage Breakdown",
+                        size=20,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.GREY_800
+                    )
+                ]),
+
+                ft.Container(height=20),
+
+                # Total storage summary
+                ft.Container(
+                    content=ft.Row([
+                        ft.Column([
+                            ft.Text("Total Used", size=14, color=ft.Colors.GREY_600),
+                            ft.Text("2.67 GB", size=28, weight=ft.FontWeight.BOLD)
+                        ]),
+                        ft.Container(width=20),
+                        ft.Column([
+                            ft.Text("Available", size=14, color=ft.Colors.GREY_600),
+                            ft.Text("47.33 GB", size=28, weight=ft.FontWeight.BOLD, color="#10b981")
+                        ])
+                    ]),
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.BLUE_400),
+                    border_radius=16,
+                    padding=20,
+                    margin=ft.Margin(0, 0, 0, 20)
+                ),
+
+                # Storage breakdown list
+                ft.Column(storage_widgets, spacing=0)
+            ], spacing=0),
+            gradient=ft.LinearGradient(
+                colors=["#f8fafc", "#f1f5f9"],
+                begin=ft.alignment.top_center,
+                end=ft.alignment.bottom_center
+            ),
+            border_radius=24,
+            padding=28,
+            shadow=ft.BoxShadow(
+                blur_radius=24,
+                offset=ft.Offset(0, 12),
+                color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
             )
         )
 
@@ -549,21 +1041,21 @@ def create_dashboard_view(
         None, page
     )
 
-    # Modern asymmetric dashboard grid with visual hierarchy
+    # Premium asymmetric dashboard grid with sophisticated visual hierarchy
     hero_metrics_section = ft.ResponsiveRow([
-        # Hero metric takes visual prominence
+        # Hero metric takes visual prominence with primary gradient
         ft.Column([
-            create_hero_metric_card("265", "Total Clients", "+12", "healthy")
+            create_premium_hero_card("265", "Total Clients", "+12", "primary")
         ], col={"sm": 12, "md": 8, "lg": 6}),
-        # Secondary metrics cluster
+        # Secondary metrics cluster with different gradient schemes
         ft.Column([
             ft.Column([
-                create_hero_metric_card("388", "Active Transfers", "+5", "info"),
-                ft.Container(height=16),  # Spacing
-                create_hero_metric_card("14h 45m", "Server Uptime", "", "healthy")
+                create_premium_hero_card("388", "Active Transfers", "+5", "success"),
+                ft.Container(height=20),  # Premium spacing
+                create_premium_hero_card("14h 45m", "Server Uptime", "", "info")
             ], spacing=0)
         ], col={"sm": 12, "md": 4, "lg": 6})
-    ], spacing=24)
+    ], spacing=28)
 
     # System metrics section
     system_metrics_card = themed_card(
@@ -818,78 +1310,658 @@ def create_dashboard_view(
     )
     version_info_card = AppCard(version_info_content, title="VERSION INFO")
 
-    # Beautiful layout structure with proper spacing and sizing!
+    def create_enterprise_server_control() -> ft.Container:
+        """Create sophisticated enterprise server control with glassmorphism and advanced status."""
+        return ft.Container(
+            content=ft.Column([
+                # Enhanced status header with real-time indicators
+                ft.Container(
+                    content=ft.Row([
+                        # Sophisticated status indicator
+                        ft.Container(
+                            content=ft.Stack([
+                                # Outer pulse ring
+                                ft.Container(
+                                    width=28, height=28,
+                                    border_radius=14,
+                                    border=ft.border.all(2, ft.Colors.with_opacity(0.3, "#10b981")),
+                                    animate_scale=ft.Animation(2000, ft.AnimationCurve.EASE_IN_OUT)
+                                ),
+                                # Inner status dot
+                                ft.Container(
+                                    width=16, height=16,
+                                    border_radius=8,
+                                    bgcolor="#10b981",
+                                    shadow=ft.BoxShadow(
+                                        blur_radius=8,
+                                        color=ft.Colors.with_opacity(0.4, "#10b981")
+                                    )
+                                )
+                            ])
+                        ),
+                        ft.Container(width=16),
+
+                        # Enhanced status information
+                        ft.Column([
+                            ft.Row([
+                                ft.Text("SERVER STATUS", size=11, color=ft.Colors.with_opacity(0.8, ft.Colors.WHITE),
+                                       weight=ft.FontWeight.W_700),
+                                ft.Container(width=12),
+                                ft.Container(
+                                    content=ft.Text("ONLINE", size=10, weight=ft.FontWeight.BOLD, color="#10b981"),
+                                    bgcolor=ft.Colors.with_opacity(0.15, "#10b981"),
+                                    border_radius=8,
+                                    padding=ft.Padding(8, 3, 8, 3),
+                                    border=ft.border.all(1, ft.Colors.with_opacity(0.3, "#10b981"))
+                                )
+                            ]),
+                            ft.Container(height=4),
+                            ft.Text("Connected & Operational", size=20, weight=ft.FontWeight.BOLD,
+                                   color=ft.Colors.WHITE)
+                        ], spacing=0),
+
+                        ft.Container(expand=True),
+
+                        # Connection details panel
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Text("CONNECTION INFO", size=10, color=ft.Colors.with_opacity(0.7, ft.Colors.WHITE),
+                                       weight=ft.FontWeight.W_600),
+                                ft.Container(height=8),
+                                ft.Text("192.168.1.100:8080", size=14, color=ft.Colors.WHITE,
+                                       weight=ft.FontWeight.W_600),
+                                ft.Text("Connected 2m ago", size=11, color=ft.Colors.with_opacity(0.8, ft.Colors.WHITE)),
+                                ft.Container(height=8),
+                                ft.Row([
+                                    ft.Icon(ft.Icons.NETWORK_CHECK, size=14, color="#10b981"),
+                                    ft.Container(width=4),
+                                    ft.Text("12ms latency", size=11, color="#10b981", weight=ft.FontWeight.W_600)
+                                ])
+                            ], spacing=2),
+                            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.WHITE),
+                            border_radius=12,
+                            padding=16,
+                            border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
+                        )
+                    ], alignment=ft.MainAxisAlignment.CENTER),
+                    padding=ft.Padding(32, 24, 32, 24)
+                ),
+
+                ft.Container(height=20),
+
+                # Premium action buttons with sophisticated styling
+                ft.Container(
+                    content=ft.Row([
+                        # Disconnect button with warning styling
+                        ft.Container(
+                            content=ft.ElevatedButton(
+                                content=ft.Row([
+                                    ft.Icon(ft.Icons.POWER_SETTINGS_NEW, size=22, color=ft.Colors.WHITE),
+                                    ft.Container(width=10),
+                                    ft.Column([
+                                        ft.Text("DISCONNECT", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                                        ft.Text("Stop Server", size=10, color=ft.Colors.with_opacity(0.9, ft.Colors.WHITE))
+                                    ], spacing=1, horizontal_alignment=ft.CrossAxisAlignment.START)
+                                ], alignment=ft.MainAxisAlignment.CENTER),
+                                bgcolor="#ef4444",
+                                style=ft.ButtonStyle(
+                                    shape=ft.RoundedRectangleBorder(radius=16),
+                                    elevation={
+                                        ft.ControlState.DEFAULT: 6,
+                                        ft.ControlState.HOVERED: 12
+                                    },
+                                    shadow_color=ft.Colors.with_opacity(0.3, "#ef4444"),
+                                    overlay_color={
+                                        ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.WHITE)
+                                    }
+                                ),
+                                width=180,
+                                height=60
+                            ),
+                            animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT)
+                        ),
+
+                        ft.Container(width=20),
+
+                        # Reconnect button with primary styling
+                        ft.Container(
+                            content=ft.ElevatedButton(
+                                content=ft.Row([
+                                    ft.Icon(ft.Icons.REFRESH, size=22, color=ft.Colors.WHITE),
+                                    ft.Container(width=10),
+                                    ft.Column([
+                                        ft.Text("RECONNECT", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                                        ft.Text("Restart Connection", size=10, color=ft.Colors.with_opacity(0.9, ft.Colors.WHITE))
+                                    ], spacing=1, horizontal_alignment=ft.CrossAxisAlignment.START)
+                                ], alignment=ft.MainAxisAlignment.CENTER),
+                                bgcolor="#3b82f6",
+                                style=ft.ButtonStyle(
+                                    shape=ft.RoundedRectangleBorder(radius=16),
+                                    elevation={
+                                        ft.ControlState.DEFAULT: 6,
+                                        ft.ControlState.HOVERED: 12
+                                    },
+                                    shadow_color=ft.Colors.with_opacity(0.3, "#3b82f6"),
+                                    overlay_color={
+                                        ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ft.Colors.WHITE)
+                                    }
+                                ),
+                                width=180,
+                                height=60
+                            ),
+                            animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT)
+                        ),
+
+                        ft.Container(width=20),
+
+                        # Settings button
+                        ft.Container(
+                            content=ft.ElevatedButton(
+                                content=ft.Icon(ft.Icons.SETTINGS, size=24, color=ft.Colors.WHITE),
+                                bgcolor=ft.Colors.with_opacity(0.2, ft.Colors.WHITE),
+                                style=ft.ButtonStyle(
+                                    shape=ft.RoundedRectangleBorder(radius=16),
+                                    elevation=4
+                                ),
+                                width=60,
+                                height=60
+                            ),
+                            animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT)
+                        )
+                    ], alignment=ft.MainAxisAlignment.CENTER),
+                    padding=ft.Padding(32, 0, 32, 24)
+                )
+            ], spacing=0),
+
+            # Enhanced glassmorphism background
+            gradient=ft.LinearGradient(
+                colors=["#667eea", "#764ba2", "#f093fb"],
+                begin=ft.alignment.top_left,
+                end=ft.alignment.bottom_right
+            ),
+            border_radius=24,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.WHITE)),
+            shadow=ft.BoxShadow(
+                blur_radius=40,
+                offset=ft.Offset(0, 20),
+                color=ft.Colors.with_opacity(0.25, ft.Colors.BLACK)
+            )
+        )
+
+    def create_enhanced_metrics_dashboard() -> ft.ResponsiveRow:
+        """Create sophisticated metrics dashboard with advanced visualizations."""
+        return ft.ResponsiveRow([
+            # Primary metric with trend chart
+            ft.Column([
+                ft.Container(
+                    content=ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.PEOPLE, size=28, color=ft.Colors.WHITE),
+                            ft.Container(expand=True),
+                            ft.Container(
+                                content=ft.Row([
+                                    ft.Icon(ft.Icons.TRENDING_UP, size=16, color="#4ade80"),
+                                    ft.Container(width=4),
+                                    ft.Text("+12", size=12, weight=ft.FontWeight.BOLD, color="#4ade80")
+                                ]),
+                                bgcolor=ft.Colors.with_opacity(0.15, "#4ade80"),
+                                border_radius=12,
+                                padding=ft.Padding(8, 4, 8, 4)
+                            )
+                        ]),
+                        ft.Container(height=8),
+                        ft.Text("265", size=48, weight=ft.FontWeight.W_900, color=ft.Colors.WHITE),
+                        ft.Text("Total Clients", size=14, color=ft.Colors.with_opacity(0.9, ft.Colors.WHITE),
+                               weight=ft.FontWeight.W_500),
+                        ft.Container(height=16),
+                        # Mini trend visualization
+                        ft.Container(
+                            content=ft.Row([
+                                ft.Container(height=20, width=4, bgcolor=ft.Colors.with_opacity(0.5, ft.Colors.WHITE), border_radius=2),
+                                ft.Container(width=2),
+                                ft.Container(height=25, width=4, bgcolor=ft.Colors.with_opacity(0.7, ft.Colors.WHITE), border_radius=2),
+                                ft.Container(width=2),
+                                ft.Container(height=30, width=4, bgcolor=ft.Colors.WHITE, border_radius=2),
+                                ft.Container(width=2),
+                                ft.Container(height=35, width=4, bgcolor="#4ade80", border_radius=2),
+                                ft.Container(width=2),
+                                ft.Container(height=40, width=4, bgcolor="#4ade80", border_radius=2)
+                            ], alignment=ft.MainAxisAlignment.CENTER),
+                            height=45
+                        )
+                    ]),
+                    gradient=ft.LinearGradient(
+                        colors=["#3b82f6", "#1d4ed8"],
+                        begin=ft.alignment.top_left,
+                        end=ft.alignment.bottom_right
+                    ),
+                    border_radius=20,
+                    padding=24,
+                    shadow=ft.BoxShadow(
+                        blur_radius=20,
+                        offset=ft.Offset(0, 10),
+                        color=ft.Colors.with_opacity(0.3, "#3b82f6")
+                    ),
+                    border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
+                )
+            ], col={"sm": 12, "md": 4}),
+
+            # Transfer rate with real-time indicator
+            ft.Column([
+                ft.Container(
+                    content=ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.SYNC, size=28, color=ft.Colors.WHITE),
+                            ft.Container(expand=True),
+                            ft.Container(
+                                content=ft.Row([
+                                    ft.Container(
+                                        width=8, height=8, border_radius=4,
+                                        bgcolor="#4ade80",
+                                        animate_scale=ft.Animation(1000, ft.AnimationCurve.EASE_IN_OUT)
+                                    ),
+                                    ft.Container(width=6),
+                                    ft.Text("LIVE", size=10, weight=ft.FontWeight.BOLD, color="#4ade80")
+                                ]),
+                                bgcolor=ft.Colors.with_opacity(0.15, "#4ade80"),
+                                border_radius=12,
+                                padding=ft.Padding(8, 4, 8, 4)
+                            )
+                        ]),
+                        ft.Container(height=8),
+                        ft.Text("2.4", size=48, weight=ft.FontWeight.W_900, color=ft.Colors.WHITE),
+                        ft.Text("MB/s Transfer Rate", size=14, color=ft.Colors.with_opacity(0.9, ft.Colors.WHITE)),
+                        ft.Container(height=16),
+                        # Transfer activity indicator
+                        ft.Container(
+                            content=ft.Row([
+                                ft.Text("↑ 388 files", size=12, color=ft.Colors.WHITE),
+                                ft.Container(expand=True),
+                                ft.Text("↓ 124 files", size=12, color=ft.Colors.WHITE)
+                            ]),
+                            bgcolor=ft.Colors.with_opacity(0.2, ft.Colors.WHITE),
+                            border_radius=12,
+                            padding=ft.Padding(12, 8, 12, 8)
+                        )
+                    ]),
+                    gradient=ft.LinearGradient(
+                        colors=["#10b981", "#059669"],
+                        begin=ft.alignment.top_left,
+                        end=ft.alignment.bottom_right
+                    ),
+                    border_radius=20,
+                    padding=24,
+                    shadow=ft.BoxShadow(
+                        blur_radius=20,
+                        offset=ft.Offset(0, 10),
+                        color=ft.Colors.with_opacity(0.3, "#10b981")
+                    ),
+                    border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
+                )
+            ], col={"sm": 12, "md": 4}),
+
+            # Uptime with reliability indicator
+            ft.Column([
+                ft.Container(
+                    content=ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.TIMER, size=28, color=ft.Colors.WHITE),
+                            ft.Container(expand=True),
+                            ft.Container(
+                                content=ft.Text("99.9%", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                                bgcolor=ft.Colors.with_opacity(0.2, ft.Colors.WHITE),
+                                border_radius=12,
+                                padding=ft.Padding(8, 4, 8, 4)
+                            )
+                        ]),
+                        ft.Container(height=8),
+                        ft.Text("14h 45m", size=48, weight=ft.FontWeight.W_900, color=ft.Colors.WHITE),
+                        ft.Text("Server Uptime", size=14, color=ft.Colors.with_opacity(0.9, ft.Colors.WHITE)),
+                        ft.Container(height=16),
+                        # Reliability metrics
+                        ft.Column([
+                            ft.Row([
+                                ft.Text("Last restart:", size=11, color=ft.Colors.with_opacity(0.8, ft.Colors.WHITE)),
+                                ft.Container(expand=True),
+                                ft.Text("6 days ago", size=11, color=ft.Colors.WHITE, weight=ft.FontWeight.W_600)
+                            ]),
+                            ft.Container(height=4),
+                            ft.Row([
+                                ft.Text("Reliability:", size=11, color=ft.Colors.with_opacity(0.8, ft.Colors.WHITE)),
+                                ft.Container(expand=True),
+                                ft.Text("Excellent", size=11, color="#4ade80", weight=ft.FontWeight.W_600)
+                            ])
+                        ])
+                    ]),
+                    gradient=ft.LinearGradient(
+                        colors=["#f59e0b", "#d97706"],
+                        begin=ft.alignment.top_left,
+                        end=ft.alignment.bottom_right
+                    ),
+                    border_radius=20,
+                    padding=24,
+                    shadow=ft.BoxShadow(
+                        blur_radius=20,
+                        offset=ft.Offset(0, 10),
+                        color=ft.Colors.with_opacity(0.3, "#f59e0b")
+                    ),
+                    border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
+                )
+            ], col={"sm": 12, "md": 4})
+        ], spacing=24)
+
+    def create_advanced_system_monitoring() -> ft.ResponsiveRow:
+        """Create advanced system monitoring with real-time performance indicators."""
+        return ft.ResponsiveRow([
+            # Enhanced Performance Dashboard
+            ft.Column([
+                ft.Container(
+                    content=ft.Column([
+                        # Header with real-time indicator
+                        ft.Row([
+                            ft.Icon(ft.Icons.MONITOR_HEART, size=26, color="#6366f1"),
+                            ft.Container(width=10),
+                            ft.Column([
+                                ft.Text("System Performance", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_800),
+                                ft.Text("Real-time monitoring", size=12, color=ft.Colors.GREY_600)
+                            ], spacing=2),
+                            ft.Container(expand=True),
+                            ft.Container(
+                                content=ft.Row([
+                                    ft.Container(
+                                        width=6, height=6, border_radius=3,
+                                        bgcolor="#10b981",
+                                        animate_scale=ft.Animation(1500, ft.AnimationCurve.EASE_IN_OUT)
+                                    ),
+                                    ft.Container(width=6),
+                                    ft.Text("LIVE", size=10, weight=ft.FontWeight.BOLD, color="#10b981")
+                                ]),
+                                bgcolor=ft.Colors.with_opacity(0.1, "#10b981"),
+                                border_radius=8,
+                                padding=ft.Padding(8, 4, 8, 4)
+                            )
+                        ]),
+                        ft.Container(height=24),
+
+                        # Advanced performance gauges
+                        ft.Row([
+                            # Memory with detailed info
+                            ft.Container(
+                                content=ft.Column([
+                                    create_premium_gauge(88, "Memory", "High usage detected"),
+                                    ft.Container(height=12),
+                                    ft.Container(
+                                        content=ft.Column([
+                                            ft.Row([
+                                                ft.Text("Used:", size=11, color=ft.Colors.GREY_600),
+                                                ft.Container(expand=True),
+                                                ft.Text("14.2 GB", size=11, weight=ft.FontWeight.W_600)
+                                            ]),
+                                            ft.Container(height=4),
+                                            ft.Row([
+                                                ft.Text("Available:", size=11, color=ft.Colors.GREY_600),
+                                                ft.Container(expand=True),
+                                                ft.Text("2.1 GB", size=11, weight=ft.FontWeight.W_600)
+                                            ])
+                                        ]),
+                                        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.GREY_400),
+                                        border_radius=8,
+                                        padding=12
+                                    )
+                                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                                expand=True
+                            ),
+
+                            ft.Container(width=32),
+
+                            # Disk with trend
+                            ft.Container(
+                                content=ft.Column([
+                                    create_premium_gauge(63, "Storage", "Normal usage"),
+                                    ft.Container(height=12),
+                                    ft.Container(
+                                        content=ft.Column([
+                                            ft.Row([
+                                                ft.Text("Used:", size=11, color=ft.Colors.GREY_600),
+                                                ft.Container(expand=True),
+                                                ft.Text("315 GB", size=11, weight=ft.FontWeight.W_600)
+                                            ]),
+                                            ft.Container(height=4),
+                                            ft.Row([
+                                                ft.Text("Free:", size=11, color=ft.Colors.GREY_600),
+                                                ft.Container(expand=True),
+                                                ft.Text("185 GB", size=11, weight=ft.FontWeight.W_600, color="#10b981")
+                                            ])
+                                        ]),
+                                        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.GREY_400),
+                                        border_radius=8,
+                                        padding=12
+                                    )
+                                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                                expand=True
+                            )
+                        ])
+                    ]),
+                    bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.BLUE_400),
+                    border_radius=20,
+                    padding=28,
+                    border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.BLUE_400)),
+                    shadow=ft.BoxShadow(
+                        blur_radius=16,
+                        offset=ft.Offset(0, 8),
+                        color=ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
+                    )
+                )
+            ], col={"sm": 12, "md": 8}),
+
+            # Operations Control Panel
+            ft.Column([
+                ft.Container(
+                    content=ft.Column([
+                        # Control panel header
+                        ft.Row([
+                            ft.Icon(ft.Icons.ADMIN_PANEL_SETTINGS, size=26, color="#8b5cf6"),
+                            ft.Container(width=10),
+                            ft.Text("Operations Control", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_800)
+                        ]),
+                        ft.Container(height=20),
+
+                        # Key metrics summary
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Row([
+                                    ft.Column([
+                                        ft.Text("520 MB", size=20, weight=ft.FontWeight.BOLD, color="#8b5cf6"),
+                                        ft.Text("Database", size=11, color=ft.Colors.GREY_600)
+                                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                                    ft.Container(width=20),
+                                    ft.Column([
+                                        ft.Text("15,847", size=20, weight=ft.FontWeight.BOLD, color="#3b82f6"),
+                                        ft.Text("Records", size=11, color=ft.Colors.GREY_600)
+                                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+                                ], alignment=ft.MainAxisAlignment.SPACE_EVENLY),
+                                ft.Container(height=16),
+                                ft.Row([
+                                    ft.Column([
+                                        ft.Text("12ms", size=20, weight=ft.FontWeight.BOLD, color="#10b981"),
+                                        ft.Text("Latency", size=11, color=ft.Colors.GREY_600)
+                                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                                    ft.Container(width=20),
+                                    ft.Column([
+                                        ft.Text("99.9%", size=20, weight=ft.FontWeight.BOLD, color="#f59e0b"),
+                                        ft.Text("Uptime", size=11, color=ft.Colors.GREY_600)
+                                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+                                ], alignment=ft.MainAxisAlignment.SPACE_EVENLY)
+                            ]),
+                            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PURPLE_400),
+                            border_radius=12,
+                            padding=20,
+                            border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.PURPLE_400))
+                        ),
+
+                        ft.Container(height=20),
+
+                        # Action buttons
+                        ft.Column([
+                            ft.ElevatedButton(
+                                content=ft.Row([
+                                    ft.Icon(ft.Icons.BACKUP, size=20, color=ft.Colors.WHITE),
+                                    ft.Container(width=10),
+                                    ft.Text("Start Backup", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.WHITE)
+                                ], alignment=ft.MainAxisAlignment.CENTER),
+                                bgcolor="#10b981",
+                                style=ft.ButtonStyle(
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                    elevation=4,
+                                    shadow_color=ft.Colors.with_opacity(0.3, "#10b981")
+                                ),
+                                width=240,
+                                height=48
+                            ),
+                            ft.Container(height=12),
+                            ft.Row([
+                                ft.ElevatedButton(
+                                    content=ft.Icon(ft.Icons.SETTINGS, size=18, color="#6366f1"),
+                                    bgcolor=ft.Colors.with_opacity(0.1, "#6366f1"),
+                                    style=ft.ButtonStyle(
+                                        shape=ft.RoundedRectangleBorder(radius=12),
+                                        elevation=2
+                                    ),
+                                    width=50,
+                                    height=40
+                                ),
+                                ft.Container(width=8),
+                                ft.ElevatedButton(
+                                    content=ft.Icon(ft.Icons.ANALYTICS, size=18, color="#8b5cf6"),
+                                    bgcolor=ft.Colors.with_opacity(0.1, "#8b5cf6"),
+                                    style=ft.ButtonStyle(
+                                        shape=ft.RoundedRectangleBorder(radius=12),
+                                        elevation=2
+                                    ),
+                                    width=50,
+                                    height=40
+                                ),
+                                ft.Container(width=8),
+                                ft.ElevatedButton(
+                                    content=ft.Icon(ft.Icons.HISTORY, size=18, color="#f59e0b"),
+                                    bgcolor=ft.Colors.with_opacity(0.1, "#f59e0b"),
+                                    style=ft.ButtonStyle(
+                                        shape=ft.RoundedRectangleBorder(radius=12),
+                                        elevation=2
+                                    ),
+                                    width=50,
+                                    height=40
+                                ),
+                                ft.Container(width=8),
+                                ft.ElevatedButton(
+                                    content=ft.Icon(ft.Icons.HELP, size=18, color="#6b7280"),
+                                    bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.GREY_400),
+                                    style=ft.ButtonStyle(
+                                        shape=ft.RoundedRectangleBorder(radius=12),
+                                        elevation=2
+                                    ),
+                                    width=50,
+                                    height=40
+                                )
+                            ], alignment=ft.MainAxisAlignment.CENTER)
+                        ])
+                    ]),
+                    bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.PURPLE_400),
+                    border_radius=20,
+                    padding=28,
+                    border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.PURPLE_400)),
+                    shadow=ft.BoxShadow(
+                        blur_radius=16,
+                        offset=ft.Offset(0, 8),
+                        color=ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
+                    )
+                )
+            ], col={"sm": 12, "md": 4})
+        ], spacing=24)
+
+    # Clean, organized layout structure
     main_content = ft.Column([
-        # Title Bar with SectionHeader
+        # Header
         header_section,
         ft.Container(height=24),
 
-        # Hero metrics section with asymmetric layout
-        hero_metrics_section,
-        ft.Container(height=32),  # Generous spacing
+        # PRIMARY: Enterprise Server Control (Most Important)
+        create_enterprise_server_control(),
+        ft.Container(height=40),
 
-        # Performance and activity section
+        # SECONDARY: Enhanced Metrics Dashboard
+        create_enhanced_metrics_dashboard(),
+        ft.Container(height=32),
+
+        # TERTIARY: Advanced System Monitoring
+        create_advanced_system_monitoring(),
+        ft.Container(height=40),
+
+        # QUATERNARY: Activity Stream & Final Summary
         ft.ResponsiveRow([
             ft.Column([
+                create_premium_activity_stream()
+            ], col={"sm": 12, "md": 8}),
+            ft.Column([
+                # Quick access panel
                 ft.Container(
                     content=ft.Column([
-                        ft.Text("System Performance", size=18, weight=ft.FontWeight.W_600),
+                        ft.Row([
+                            ft.Icon(ft.Icons.DASHBOARD, size=24, color="#374151"),
+                            ft.Container(width=8),
+                            ft.Text("Quick Access", size=16, weight=ft.FontWeight.BOLD, color="#374151")
+                        ]),
                         ft.Container(height=16),
-                        ft.Row([
-                            create_modern_performance_gauge(88, "Memory", "High usage detected"),
-                            ft.Container(width=24),  # Spacing
-                            create_modern_performance_gauge(63, "Disk", "Normal usage")
-                        ], alignment=ft.MainAxisAlignment.SPACE_EVENLY)
-                    ], spacing=0),
-                    bgcolor=ft.Colors.SURFACE,
-                    border_radius=20,
-                    padding=24,
-                    shadow=ft.BoxShadow(
-                        blur_radius=16,
-                        offset=ft.Offset(0, 4),
-                        color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK)
-                    )
-                )
-            ], col={"sm": 12, "md": 7}),
-            ft.Column([
-                create_activity_stream_card()
-            ], col={"sm": 12, "md": 5})
-        ], spacing=24),
-
-        ft.Container(height=32),  # Spacing
-
-        # Data overview section with modern styling
-        ft.ResponsiveRow([
-            ft.Column([
-                ft.Container(
-                    content=ft.Column([
-                        ft.Text("Data Overview", size=18, weight=ft.FontWeight.W_600),
-                        ft.Container(height=24),
-                        ft.Row([
-                            ft.Column([
-                                ft.Text("520 MB", size=36, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                                ft.Text("Database Size", size=14, color=ft.Colors.ON_SURFACE_VARIANT)
-                            ], spacing=4),
-                            ft.Container(width=32),
-                            ft.Column([
-                                ft.Text("SQLite3", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.GREEN_600),
-                                ft.Text("Connected", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
-                            ], spacing=4)
-                        ], alignment=ft.MainAxisAlignment.START)
+                        ft.Column([
+                            ft.Container(
+                                content=ft.Row([
+                                    ft.Icon(ft.Icons.FOLDER, size=18, color="#6366f1"),
+                                    ft.Container(width=8),
+                                    ft.Text("File Explorer", size=14, color="#374151")
+                                ]),
+                                bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.BLUE_400),
+                                border_radius=8,
+                                padding=12,
+                                animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT)
+                            ),
+                            ft.Container(height=8),
+                            ft.Container(
+                                content=ft.Row([
+                                    ft.Icon(ft.Icons.PEOPLE, size=18, color="#10b981"),
+                                    ft.Container(width=8),
+                                    ft.Text("Client Manager", size=14, color="#374151")
+                                ]),
+                                bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.GREEN_400),
+                                border_radius=8,
+                                padding=12,
+                                animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT)
+                            ),
+                            ft.Container(height=8),
+                            ft.Container(
+                                content=ft.Row([
+                                    ft.Icon(ft.Icons.ANALYTICS, size=18, color="#f59e0b"),
+                                    ft.Container(width=8),
+                                    ft.Text("Analytics", size=14, color="#374151")
+                                ]),
+                                bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ORANGE_400),
+                                border_radius=8,
+                                padding=12,
+                                animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT)
+                            )
+                        ])
                     ]),
-                    bgcolor=ft.Colors.SURFACE,
-                    border_radius=20,
-                    padding=24,
+                    bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.GREY_400),
+                    border_radius=16,
+                    padding=20,
+                    border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.GREY_400)),
                     shadow=ft.BoxShadow(
-                        blur_radius=16,
+                        blur_radius=12,
                         offset=ft.Offset(0, 4),
-                        color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK)
+                        color=ft.Colors.with_opacity(0.05, ft.Colors.BLACK)
                     )
                 )
-            ], col={"sm": 12, "lg": 12})
-        ]),
-
-        # Remove the old third row entirely - simplified modern design
+            ], col={"sm": 12, "md": 4})
+        ], spacing=24)
     ], expand=True, spacing=0, scroll=ft.ScrollMode.AUTO)
 
     # Create the main container with scrolling to prevent clipping
