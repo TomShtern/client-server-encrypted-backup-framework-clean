@@ -9,7 +9,7 @@ Clean, maintainable dashboard that preserves all user-facing functionality.
 
 from .common_imports import *
 import contextlib
-from typing import Tuple, TypedDict, Literal, Union, Iterator
+from typing import Optional, Dict, Any, List, Tuple, TypedDict, Literal, Union, Iterator, Callable
 from collections import deque
 from functools import lru_cache
 import psutil
@@ -90,7 +90,7 @@ def create_dashboard_view(
     server_bridge: Optional[ServerBridge],
     page: ft.Page,
     _state_manager: StateManager
-) -> ft.Control:
+) -> Tuple[ft.Control, Callable, Callable]:
     """Modern 2025 dashboard with visual hierarchy, semantic colors, and engaging data storytelling."""
     logger.info("Creating modern dashboard with enhanced visual appeal")
 
@@ -116,6 +116,70 @@ def create_dashboard_view(
     cpu_history: deque[float] = deque(maxlen=MAX_HISTORY_POINTS)
     memory_history: deque[float] = deque(maxlen=MAX_HISTORY_POINTS)
     disk_history: deque[float] = deque(maxlen=MAX_HISTORY_POINTS)
+
+    # Event handlers
+    def on_backup(e):
+        show_success_message(page, "Backup initiated (mock)")
+
+    def start_server(e):
+        """Start the server."""
+        if server_bridge:
+            try:
+                result = server_bridge.start_server()
+                if result.get('success'):
+                    show_success_message(page, "Server started successfully")
+                    update_all_displays()
+                else:
+                    show_error_message(page, f"Failed to start server: {result.get('error', 'Unknown error')}")
+            except Exception as ex:
+                show_error_message(page, f"Error starting server: {ex}")
+        else:
+            # Mock success
+            show_success_message(page, "Server started (mock mode)")
+            update_all_displays()
+
+    def stop_server(e):
+        """Stop the server."""
+        if server_bridge:
+            try:
+                result = server_bridge.stop_server()
+                if result.get('success'):
+                    show_success_message(page, "Server stopped successfully")
+                    update_all_displays()
+                else:
+                    show_error_message(page, f"Failed to stop server: {result.get('error', 'Unknown error')}")
+            except Exception as ex:
+                show_error_message(page, f"Error stopping server: {ex}")
+        else:
+            # Mock success
+            show_success_message(page, "Server stopped (mock mode)")
+            update_all_displays()
+
+    def refresh_dashboard(e):
+        """Refresh all dashboard data (async to avoid blocking UI)."""
+        try:
+            async def _manual_refresh():
+                await _update_all_displays_async('manual')
+            page.run_task(_manual_refresh)
+        except Exception:
+            # Fallback to sync update
+            update_all_displays()
+        show_success_message(page, "Dashboard refreshed")
+
+    # Define UI controls that are used in update_all_displays
+    # Dynamic hero metric value controls for live updates
+    hero_total_clients_text = ft.Text("0", size=48, weight=ft.FontWeight.BOLD, color=ft.Colors.PRIMARY)
+    hero_active_transfers_text = ft.Text("0", size=48, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN)
+    hero_uptime_text = ft.Text("0h 0m", size=48, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE)
+    
+    # Define buttons that are used in update_all_displays
+    backup_button = themed_button("Backup", on_backup, variant="filled", icon=ft.Icons.BACKUP)
+    refresh_button = themed_button("Refresh", refresh_dashboard, variant="outlined", icon=ft.Icons.REFRESH)
+    connect_button = themed_button("Connect", start_server, variant="filled", icon=ft.Icons.PLAY_ARROW)
+    disconnect_button = themed_button("Disconnect", stop_server, variant="outlined", icon=ft.Icons.STOP)
+    
+    # Define server status indicator container
+    server_status_indicator_container = ft.Container()
 
     # Simplified action group using Flet's native styling
     def create_action_group(buttons: List[ft.Control], group_type: str = "primary", spacing: int = 8) -> ft.Container:
@@ -945,65 +1009,11 @@ def create_dashboard_view(
                 clients_list.controls.append(item)
 
     # Server control actions
-    def start_server(e):
-        """Start the server."""
-        if server_bridge:
-            try:
-                result = server_bridge.start_server()
-                if result.get('success'):
-                    show_success_message(page, "Server started successfully")
-                    update_all_displays()
-                else:
-                    show_error_message(page, f"Failed to start server: {result.get('error', 'Unknown error')}")
-            except Exception as ex:
-                show_error_message(page, f"Error starting server: {ex}")
-        else:
-            # Mock success
-            show_success_message(page, "Server started (mock mode)")
-            update_all_displays()
-
-    def stop_server(e):
-        """Stop the server."""
-        if server_bridge:
-            try:
-                result = server_bridge.stop_server()
-                if result.get('success'):
-                    show_success_message(page, "Server stopped successfully")
-                    update_all_displays()
-                else:
-                    show_error_message(page, f"Failed to stop server: {result.get('error', 'Unknown error')}")
-            except Exception as ex:
-                show_error_message(page, f"Error stopping server: {ex}")
-        else:
-            # Mock success
-            show_success_message(page, "Server stopped (mock mode)")
-            update_all_displays()
-
-
-    # Refresh handler
-    def refresh_dashboard(e):
-        """Refresh all dashboard data (async to avoid blocking UI)."""
-        try:
-            async def _manual_refresh():
-                await _update_all_displays_async('manual')
-            page.run_task(_manual_refresh)
-        except Exception:
-            # Fallback to sync update
-            update_all_displays()
-        show_success_message(page, "Dashboard refreshed")
+    # Server and refresh handlers moved to event handlers section
 
     # Create UI components (header actions only)
 
-    # Backup action
-    def on_backup(e):
-        show_success_message(page, "Backup initiated (mock)")
-
-    # Removed unused legacy Server Control card (replaced by header actions)
-
-    # Dynamic hero metric value controls for live updates
-    hero_total_clients_text = ft.Text("0", size=48, weight=ft.FontWeight.BOLD, color=ft.Colors.PRIMARY)
-    hero_active_transfers_text = ft.Text("0", size=48, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN)
-    hero_uptime_text = ft.Text("0h 0m", size=48, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE)
+    # Backup action (moved to event handlers section)
 
     # Premium asymmetric dashboard grid with sophisticated visual hierarchy
     hero_metrics_section = ft.ResponsiveRow([
@@ -1049,12 +1059,7 @@ def create_dashboard_view(
     )
 
     # Create server status indicator used in header (dynamic)
-    server_status_indicator_container = ft.Container()
     # Slim top bar: integrates status + actions in one compact bar
-    backup_button = themed_button("Backup", on_backup, variant="filled", icon=ft.Icons.BACKUP)
-    refresh_button = themed_button("Refresh", refresh_dashboard, variant="outlined", icon=ft.Icons.REFRESH)
-    connect_button = themed_button("Connect", start_server, variant="filled", icon=ft.Icons.PLAY_ARROW)
-    disconnect_button = themed_button("Disconnect", stop_server, variant="outlined", icon=ft.Icons.STOP)
     def on_live_toggle(e: ft.ControlEvent):
         nonlocal auto_refresh_enabled
         auto_refresh_enabled = bool(e.control.value)
@@ -1235,7 +1240,7 @@ def create_dashboard_view(
         content=ft.Column([
             main_content
         ], scroll=ft.ScrollMode.AUTO),  # Add scrollbar when needed
-    padding=ft.padding.only(left=28, top=20, right=28, bottom=20),
+        padding=ft.padding.only(left=28, top=20, right=28, bottom=20),
         expand=True,
         bgcolor=ft.Colors.SURFACE,
         opacity=0.0,
