@@ -4,8 +4,10 @@
 		{
 			"label": "FletV2 - Quick syntax & import check",
 			"type": "shell",
-			"command": "python - << 'PY'\nimport sys, importlib\nfiles = [\n    'views/dashboard.py',\n]\nerrs = 0\nfor f in files:\n    try:\n        compile(open(f, 'rb').read(), f, 'exec')\n        print(f'OK: {f}')\n    except Exception as e:\n        print(f'ERR: {f}: {e}')\n        errs += 1\nprint('DONE with', errs, 'errors')\nPY",
-			"args": [],
+			"command": "python",
+			"args": [
+				"scripts/quick_syntax_check.py"
+			],
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "build"
