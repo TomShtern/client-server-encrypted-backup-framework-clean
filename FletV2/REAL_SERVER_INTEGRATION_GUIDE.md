@@ -1,5 +1,5 @@
 # FletV2 Real Server Integration Guide
-
+written in 20.09.2025
 **Complete implementation guide for integrating a real SQLite3-backed server with FletV2 GUI**
 
 ---

@@ -45,6 +45,15 @@ from theme import setup_modern_theme
 from utils.server_bridge import create_server_bridge
 from utils.mock_mode_indicator import create_mock_mode_banner, add_mock_indicator_to_snackbar_message
 
+# Import the real server adapter for production use
+try:
+    from server_adapter import create_fletv2_server, FletV2ServerAdapter
+    REAL_SERVER_AVAILABLE = True
+    logger.info("✅ Real server adapter imported successfully")
+except ImportError as e:
+    logger.warning(f"⚠️ Real server adapter not available: {e}")
+    REAL_SERVER_AVAILABLE = False
+
 # Initialize logging and environment
 logger = setup_terminal_debugging(logger_name="FletV2.main")
 os.environ.setdefault("PYTHONUTF8", "1")
@@ -54,9 +63,13 @@ project_root = os.path.dirname(__file__)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Application constants
-BRIDGE_TYPE = "Unified Server Bridge (with built-in mock fallback)"
-logger.info("Using Unified Server Bridge with built-in mock fallback.")
+# Application constants - dynamic based on server availability
+if REAL_SERVER_AVAILABLE:
+    BRIDGE_TYPE = "Real Server Integration (with fallback capability)"
+    logger.info("🚀 Real server integration available - production mode enabled")
+else:
+    BRIDGE_TYPE = "Mock Server Development Mode"
+    logger.info("🧪 Using mock server for development")
 
 
 class FletV2App(ft.Row):
@@ -77,8 +90,24 @@ class FletV2App(ft.Row):
 
         # Window configuration moved to main() function for proper timing
 
-        # Initialize server bridge synchronously for immediate availability
-        self.server_bridge = create_server_bridge()  # Direct synchronous initialization
+        # Initialize server bridge - use real server if available
+        if REAL_SERVER_AVAILABLE:
+            try:
+                # Create real server instance
+                real_server = create_fletv2_server()
+                if real_server.is_connected():
+                    self.server_bridge = create_server_bridge(real_server=real_server)
+                    logger.info("🎉 Real server connected successfully!")
+                else:
+                    logger.warning("⚠️ Real server not responding - falling back to mock mode")
+                    self.server_bridge = create_server_bridge()
+            except Exception as e:
+                logger.error(f"❌ Real server initialization failed: {e}")
+                logger.info("🔄 Falling back to mock mode for development")
+                self.server_bridge = create_server_bridge()
+        else:
+            self.server_bridge = create_server_bridge()  # Mock mode
+
         logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
 
         # Initialize state manager for reactive UI updates - after server bridge is ready

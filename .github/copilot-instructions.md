@@ -776,5 +776,4 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
 
 ### **Theme System (SOURCE OF TRUTH)**
 
-```python
-# theme.
+### Flask Blueprint fixes and type
