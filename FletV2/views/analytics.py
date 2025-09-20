@@ -7,20 +7,9 @@ Core Principle: Use Flet's built-in charts and progress components.
 Real system metrics with clean, maintainable code.
 """
 
-import flet as ft
-from typing import Optional, Dict, Any
+from .common_imports import *
 import psutil
-import json
-import asyncio
-from datetime import datetime
-
-from utils.debug_setup import get_logger
-from utils.server_bridge import ServerBridge
-from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button, themed_metric_card
-from utils.user_feedback import show_success_message, show_error_message
-
-logger = get_logger(__name__)
+from utils.ui_components import themed_metric_card
 
 
 def create_analytics_view(
@@ -210,7 +199,7 @@ def create_analytics_view(
         show_success_message(page, "Metrics refreshed")
 
     # Export functionality using FilePicker
-    def save_analytics_data(e: ft.FilePickerResultEvent):
+    async def save_analytics_data(e: ft.FilePickerResultEvent):
         """Export analytics data as JSON."""
         if e.path:
             try:
@@ -224,14 +213,18 @@ def create_analytics_view(
                     }
                 }
 
-                with open(e.path, 'w') as f:
-                    json.dump(export_data, f, indent=2)
+                async with aiofiles.open(e.path, 'w') as f:
+                    await f.write(json.dumps(export_data, indent=2))
 
                 show_success_message(page, f"Analytics exported to {e.path}")
             except Exception as ex:
                 show_error_message(page, f"Export failed: {ex}")
 
-    file_picker = ft.FilePicker(on_result=save_analytics_data)
+    def handle_file_picker_result(e):
+        """Wrapper to handle async file picker result."""
+        page.run_task(save_analytics_data, e)
+
+    file_picker = ft.FilePicker(on_result=handle_file_picker_result)
     page.overlay.append(file_picker)
 
     def export_analytics(e):

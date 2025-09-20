@@ -7,18 +7,8 @@ Core Principle: Use Flet's built-in Tabs, TextField, Switch, and Dropdown.
 Clean settings management with server integration and simple validation.
 """
 
-import flet as ft
-from typing import Optional, Dict, Any
-import json
-
-from utils.debug_setup import get_logger
-from utils.server_bridge import ServerBridge
-from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button
-from utils.user_feedback import show_success_message, show_error_message
+from .common_imports import *
 from config import SETTINGS_FILE
-
-logger = get_logger(__name__)
 
 
 def create_settings_view(
@@ -82,7 +72,7 @@ def create_settings_view(
         }
 
     # Load settings from server or file
-    def load_settings():
+    async def load_settings():
         """Load settings using server bridge or local file."""
         nonlocal current_settings
 
@@ -99,8 +89,9 @@ def create_settings_view(
             # Load from local file
             try:
                 if SETTINGS_FILE.exists():
-                    with open(SETTINGS_FILE, 'r') as f:
-                        loaded = json.load(f)
+                    async with aiofiles.open(SETTINGS_FILE, 'r') as f:
+                        content = await f.read()
+                        loaded = json.loads(content)
                         current_settings = {**get_default_settings(), **loaded}
                 else:
                     current_settings = get_default_settings()
@@ -110,7 +101,7 @@ def create_settings_view(
         update_ui_from_settings()
 
     # Save settings to server or file
-    def save_settings():
+    async def save_settings():
         """Save settings using server bridge or local file."""
         # Validate first
         validation_errors = validate_settings()
@@ -131,8 +122,9 @@ def create_settings_view(
             # Save to local file
             try:
                 SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-                with open(SETTINGS_FILE, 'w') as f:
-                    json.dump(current_settings, f, indent=2)
+                async with aiofiles.open(SETTINGS_FILE, 'w') as f:
+                    content = json.dumps(current_settings, indent=2)
+                    await f.write(content)
                 show_success_message(page, "Settings saved locally")
             except Exception as ex:
                 show_error_message(page, f"Error saving settings: {ex}")
@@ -388,14 +380,14 @@ def create_settings_view(
         return True
 
     # Action handlers
-    def on_save_click(_e):
+    async def on_save_click(_e):
         """Handle save button click."""
         if update_settings_from_ui():
-            save_settings()
+            await save_settings()
 
-    def on_load_click(_e):
+    async def on_load_click(_e):
         """Handle load button click."""
-        load_settings()
+        await load_settings()
         show_success_message(page, "Settings loaded")
 
     def on_reset_click(_e):
@@ -407,12 +399,13 @@ def create_settings_view(
 
     def on_export_click(_e):
         """Handle export button click."""
-        def save_export(e: ft.FilePickerResultEvent):
+        async def save_export(e: ft.FilePickerResultEvent):
             if e.path:
                 try:
                     update_settings_from_ui()
-                    with open(e.path, 'w') as f:
-                        json.dump(current_settings, f, indent=2)
+                    async with aiofiles.open(e.path, 'w') as f:
+                        content = json.dumps(current_settings, indent=2)
+                        await f.write(content)
                     show_success_message(page, f"Settings exported to {e.path}")
                 except Exception as ex:
                     show_error_message(page, f"Export failed: {ex}")
@@ -428,11 +421,12 @@ def create_settings_view(
 
     def on_import_click(_e):
         """Handle import button click."""
-        def load_import(e: ft.FilePickerResultEvent):
+        async def load_import(e: ft.FilePickerResultEvent):
             if e.files:
                 try:
-                    with open(e.files[0].path, 'r') as f:
-                        imported = json.load(f)
+                    async with aiofiles.open(e.files[0].path, 'r') as f:
+                        content = await f.read()
+                        imported = json.loads(content)
 
                     # Merge with defaults
                     current_settings.update(imported)
@@ -554,9 +548,9 @@ def create_settings_view(
         expand=True
     )
 
-    def setup_subscriptions():
+    async def setup_subscriptions():
         """Setup subscriptions and initial data loading after view is added to page."""
-        load_settings()
+        await load_settings()
 
     def dispose():
         """Clean up subscriptions and resources."""

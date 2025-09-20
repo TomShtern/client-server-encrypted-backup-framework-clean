@@ -7,18 +7,9 @@ Core Principle: Use Flet's built-in DataTable, AlertDialog, and TextField.
 Clean client management with server integration and graceful fallbacks.
 """
 
-import flet as ft
-from typing import Optional, Dict, Any, List
+from .common_imports import *
 import uuid
-from datetime import datetime
-
-from utils.debug_setup import get_logger
-from utils.server_bridge import ServerBridge
-from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button, themed_metric_card, create_status_pill
-from utils.user_feedback import show_success_message, show_error_message
-
-logger = get_logger(__name__)
+from utils.ui_components import themed_metric_card, create_status_pill
 
 
 def create_clients_view(

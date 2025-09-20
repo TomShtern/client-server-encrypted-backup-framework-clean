@@ -7,19 +7,10 @@ Core Principle: Use Flet's built-in DataTable, AlertDialog, and FilePicker.
 Clean file management with server integration and graceful fallbacks.
 """
 
-import flet as ft
-from typing import Optional, Dict, Any, List
+from .common_imports import *
 import os
 import hashlib
-from datetime import datetime
-
-from utils.debug_setup import get_logger
-from utils.server_bridge import ServerBridge
-from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button, themed_metric_card, create_status_pill
-from utils.user_feedback import show_success_message, show_error_message
-
-logger = get_logger(__name__)
+from utils.ui_components import themed_metric_card, create_status_pill
 
 
 def create_files_view(
@@ -222,7 +213,7 @@ def create_files_view(
     # File action handlers
     def download_file(file: Dict[str, Any]):
         """Download file using FilePicker."""
-        def save_file(e: ft.FilePickerResultEvent):
+        async def save_file(e: ft.FilePickerResultEvent):
             if e.path:
                 try:
                     if server_bridge:
@@ -237,11 +228,11 @@ def create_files_view(
                             show_error_message(page, f"Download failed: {result.get('error', 'Unknown error')}")
                     else:
                         # Mock download - create a simple text file
-                        with open(e.path, 'w') as f:
-                            f.write(f"Mock file content for {file.get('name')}\n")
-                            f.write(f"Size: {format_file_size(file.get('size', 0))}\n")
-                            f.write(f"Type: {file.get('type', 'unknown')}\n")
-                            f.write(f"Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                        async with aiofiles.open(e.path, 'w') as f:
+                            await f.write(f"Mock file content for {file.get('name')}\n")
+                            await f.write(f"Size: {format_file_size(file.get('size', 0))}\n")
+                            await f.write(f"Type: {file.get('type', 'unknown')}\n")
+                            await f.write(f"Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                         show_success_message(page, f"Downloaded {file.get('name')} (mock mode)")
                 except Exception as ex:
                     show_error_message(page, f"Download error: {ex}")

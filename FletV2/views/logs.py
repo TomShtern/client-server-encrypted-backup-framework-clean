@@ -7,19 +7,10 @@ Core Principle: Use Flet's built-in DataTable, TextField, and FilePicker.
 Let Flet handle the complexity. We compose, not reinvent.
 """
 
-import flet as ft
-from typing import List, Dict, Any, Optional
-import json
-from datetime import datetime, timedelta
+from .common_imports import *
+from datetime import timedelta
 import random
-
-from utils.debug_setup import get_logger
-from utils.server_bridge import ServerBridge
-from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button, create_status_pill
-from utils.user_feedback import show_success_message
-
-logger = get_logger(__name__)
+from utils.ui_components import create_status_pill
 
 
 def create_logs_view(
@@ -262,12 +253,12 @@ def create_logs_view(
                     logger.error("Stats text is in an invalid state - navigation may be broken")
 
     # Export functionality (using Flet's FilePicker)
-    def save_logs_as_json(e: ft.FilePickerResultEvent):
+    async def save_logs_as_json(e: ft.FilePickerResultEvent):
         """Simple JSON export using FilePicker."""
         if e.path:
             try:
-                with open(e.path, 'w') as f:
-                    json.dump(filtered_logs, f, indent=2)
+                async with aiofiles.open(e.path, 'w') as f:
+                    await f.write(json.dumps(filtered_logs, indent=2))
                 show_success_message(page, f"Logs exported to {e.path}")
             except Exception as ex:
                 page.snack_bar = ft.SnackBar(ft.Text(f"Export failed: {ex}"))

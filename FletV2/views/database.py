@@ -7,18 +7,8 @@ Core Principle: Use Flet's built-in DataTable, AlertDialog, and TextField.
 Let Flet handle CRUD operations with simple, clean patterns.
 """
 
-import flet as ft
-from typing import Dict, Any, List, Optional
-import json
-from datetime import datetime
-
-from utils.debug_setup import get_logger
-from utils.server_bridge import ServerBridge
-from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button, themed_metric_card, create_status_pill
-from utils.user_feedback import show_success_message, show_error_message
-
-logger = get_logger(__name__)
+from .common_imports import *
+from utils.ui_components import themed_metric_card, create_status_pill
 
 
 def create_database_view(
@@ -356,12 +346,12 @@ def create_database_view(
     )
 
     # Export functionality using FilePicker
-    def save_as_json(e: ft.FilePickerResultEvent):
+    async def save_as_json(e: ft.FilePickerResultEvent):
         """Export table data as JSON."""
         if e.path:
             try:
-                with open(e.path, 'w') as f:
-                    json.dump(filtered_data, f, indent=2)
+                async with aiofiles.open(e.path, 'w') as f:
+                    await f.write(json.dumps(filtered_data, indent=2))
                 show_success_message(page, f"Data exported to {e.path}")
             except Exception as ex:
                 show_error_message(page, f"Export failed: {ex}")
