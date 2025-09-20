@@ -378,7 +378,21 @@ class FletV2App(ft.Row):
         """Switch to a specific view by index."""
         # Access NavigationRail through container content
         nav_rail_control = self.nav_rail.content
+        # Bound index to available destinations
+        try:
+            total = len(nav_rail_control.destinations or [])
+            if total and (index < 0 or index >= total):
+                index = 0
+        except Exception:
+            pass
+
         nav_rail_control.selected_index = index
+        # Ensure the visual selection indicator updates immediately (control + container)
+        with contextlib.suppress(Exception):
+            nav_rail_control.update()
+        with contextlib.suppress(Exception):
+            self.nav_rail.update()
+        # Trigger the standard change handler to load the view
         self._on_navigation_change(type('Event', (), {'control': nav_rail_control})())
 
     def _create_navigation_rail(self):
@@ -842,25 +856,34 @@ class FletV2App(ft.Row):
     def _update_content_area(self, animated_switcher, content, view_name: str):
         """Update content area with error handling and fallback strategies."""
         animated_switcher.content = content
+        update_success = False
 
         # Smart update - check if control is attached to page before updating
         try:
             # Verify AnimatedSwitcher is properly attached to page
             if hasattr(animated_switcher, 'page') and animated_switcher.page is not None:
                 animated_switcher.update()
+                update_success = True
                 logger.info(f"Successfully loaded {view_name} view")
             else:
                 # Control not yet attached, use page update as fallback
                 logger.debug("AnimatedSwitcher not yet attached to page, using page update")
                 self.page.update()
+                update_success = True
                 logger.info(f"Successfully loaded {view_name} view (page update fallback)")
         except Exception as update_error:
-            logger.warning(f"AnimatedSwitcher update failed, using page update: {update_error}")
+            logger.warning(f"AnimatedSwitcher update failed for {view_name}: {update_error}")
             try:
                 self.page.update()
+                update_success = True
                 logger.info(f"Successfully loaded {view_name} view (page update fallback)")
             except Exception as fallback_error:
-                logger.error(f"Page update also failed: {fallback_error}")
+                logger.error(f"Page update also failed for {view_name}: {fallback_error}")
+                update_success = False
+
+        if not update_success:
+            logger.error(f"Failed to load {view_name} view - UI update failed")
+            return False
 
         # Set up subscriptions after view is added to page and updated (prevents "Control must be added to page first" error)
         if hasattr(content, '_setup_subscriptions') and content._setup_subscriptions is not None:
@@ -877,6 +900,8 @@ class FletV2App(ft.Row):
                 self.page.run_task(setup_subs)
             except Exception as sub_error:
                 logger.warning(f"Failed to schedule subscription setup for {view_name}: {sub_error}")
+
+        return True
 
     def _load_view(self, view_name: str):
         """Load view with enhanced infrastructure support and dynamic animated transitions."""
@@ -907,7 +932,18 @@ class FletV2App(ft.Row):
 
             # Update content area using AnimatedSwitcher for smooth transitions
             animated_switcher = self.content_area.content
-            self._update_content_area(animated_switcher, content, view_name)
+            update_success = self._update_content_area(animated_switcher, content, view_name)
+
+            if not update_success:
+                logger.error(f"View loading failed for {view_name} - falling back to error view")
+                # Clean up if update failed
+                if self._current_view_dispose:
+                    try:
+                        self._current_view_dispose()
+                    except Exception as cleanup_error:
+                        logger.warning(f"Failed to cleanup after failed view load: {cleanup_error}")
+                self._current_view_dispose = None
+                self._current_view_name = None
 
         except Exception as e:
             logger.error(f"Failed to load view {view_name}: {e}")
@@ -916,6 +952,7 @@ class FletV2App(ft.Row):
                 animated_switcher = self.content_area.content
                 animated_switcher.content = self._create_error_view(str(e))
                 animated_switcher.update()
+                logger.warning(f"Showing error view for {view_name}")
             except Exception as fallback_error:
                 logger.error(f"Error view display failed: {fallback_error}")
                 # Last resort
@@ -927,18 +964,26 @@ class FletV2App(ft.Row):
         try:
             # All views now require state_manager as per Phase 2 refactor
             result = view_function(self.server_bridge, self.page, self.state_manager)
+            logger.debug(f"View function returned: {type(result)} for {view_name}")
 
             # Comment 12: Check if view returned dispose function and subscription setup (new pattern)
             if isinstance(result, tuple):
+                logger.debug(f"Tuple length: {len(result)} for {view_name}")
                 if len(result) == 3:
                     content, dispose_func, setup_subscriptions_func = result
                     # Store setup function for later execution
                     content._setup_subscriptions = setup_subscriptions_func
+                    logger.debug(f"Successfully processed 3-tuple for {view_name}")
                     return content, dispose_func
                 elif len(result) == 2:
                     content, dispose_func = result
+                    logger.debug(f"Successfully processed 2-tuple for {view_name}")
                     return content, dispose_func
+                else:
+                    logger.error(f"Unexpected tuple length {len(result)} for {view_name}")
+                    return self._create_error_view(f"Invalid tuple length for {view_name}"), lambda: None
             else:
+                logger.debug(f"Non-tuple result for {view_name}, creating auto-dispose")
                 # Backward compatibility: create auto-dispose function
                 # Track subscriptions for automatic cleanup
                 dispose_func = self._create_auto_dispose_for_view(view_name)
@@ -999,6 +1044,9 @@ async def main(page: ft.Page):
 
         # Create and add the simple desktop app with mock mode banner
         app = FletV2App(page)
+        # Expose app instance on page for programmatic navigation from views (lightweight glue)
+        with contextlib.suppress(Exception):
+            page.app_ref = app  # Used by views to call app._switch_to_view(index)
 
         # Add mock mode banner if in mock mode
         from utils.mock_mode_indicator import create_mock_mode_banner
@@ -1040,4 +1088,7 @@ async def main(page: ft.Page):
 
 if __name__ == "__main__":
     # Simple launch - let Flet handle the complexity
-    asyncio.run(ft.app_async(target=main, view=ft.AppView.FLET_APP))
+    # Run in web mode for UI analysis
+    import os as _os
+    _port = int(_os.getenv("FLET_SERVER_PORT", "8000"))
+    asyncio.run(ft.app_async(target=main, view=ft.AppView.WEB_BROWSER, port=_port))

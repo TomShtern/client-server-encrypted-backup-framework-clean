@@ -270,43 +270,32 @@ def create_analytics_view(
     # Progress indicators section
     progress_section = ft.Column([
         ft.Text("System Usage", size=20, weight=ft.FontWeight.BOLD),
-        ft.Container(height=10),
 
         # CPU progress
         ft.Row([
             ft.Icon(ft.Icons.DEVELOPER_BOARD, color=ft.Colors.BLUE),
-            ft.Container(width=10),
             ft.Column([cpu_text, cpu_progress], spacing=5),
-        ]),
-
-        ft.Container(height=10),
+        ], spacing=10),
 
         # Memory progress
         ft.Row([
             ft.Icon(ft.Icons.MEMORY, color=ft.Colors.GREEN),
-            ft.Container(width=10),
             ft.Column([memory_text, memory_progress], spacing=5),
-        ]),
-
-        ft.Container(height=10),
+        ], spacing=10),
 
         # Disk progress
         ft.Row([
             ft.Icon(ft.Icons.STORAGE, color=ft.Colors.PURPLE),
-            ft.Container(width=10),
             ft.Column([disk_text, disk_progress], spacing=5),
-        ]),
-
-        ft.Container(height=10),
+        ], spacing=10),
 
         # Network info
         ft.Row([
             ft.Icon(ft.Icons.NETWORK_CHECK, color=ft.Colors.ORANGE),
-            ft.Container(width=10),
             network_text,
-        ]),
+        ], spacing=10),
 
-    ], spacing=5)
+    ], spacing=10)
 
     # Charts section
     charts_section = ft.Row([

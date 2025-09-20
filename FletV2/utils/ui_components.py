@@ -767,6 +767,7 @@ def AppCard(
     title: Optional[str] = None,
     actions: Optional[List[ft.Control]] = None,
     padding: Optional[int] = None,
+    tooltip: Optional[str] = None,
 ) -> ft.Container:
     """Unified card: subtle border + elevation, consistent padding & radius."""
     pad = padding if padding is not None else _SP["xl"]
@@ -791,6 +792,11 @@ def AppCard(
         border_radius=_RD["card"],
         shadow=ft.BoxShadow(spread_radius=0, blur_radius=14, offset=ft.Offset(0, 6), color=ft.Colors.with_opacity(0.12, ft.Colors.BLACK)),
         bgcolor=ft.Colors.SURFACE,
+        # Micro-interactions
+        animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
+        animate_scale=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
+        on_hover=lambda e: (setattr(e.control, 'scale', 1.01 if e.data == 'true' else 1.0), e.control.update()),
+        tooltip=tooltip,
     )
 
 
@@ -798,7 +804,7 @@ def AppButton(
     text: str,
     on_click: Callable,
     icon: Optional[str] = None,
-    variant: str = "primary",  # primary | tonal | outline | danger
+    variant: str = "primary",  # primary | tonal | outline | danger | success
 ) -> ft.Control:
     """Unified button with consistent shape, padding and states."""
     content = ft.Row([
@@ -815,6 +821,8 @@ def AppButton(
         return ft.FilledTonalButton(content=content, on_click=on_click, style=ft.ButtonStyle(shape=shape, padding=padding))
     if variant == "danger":
         return ft.FilledButton(content=content, on_click=on_click, style=ft.ButtonStyle(shape=shape, padding=padding, bgcolor=ft.Colors.RED, color=ft.Colors.WHITE))
+    if variant == "success":
+        return ft.FilledButton(content=content, on_click=on_click, style=ft.ButtonStyle(shape=shape, padding=padding, bgcolor=ft.Colors.GREEN, color=ft.Colors.WHITE))
     # default primary
     return ft.FilledButton(content=content, on_click=on_click, style=ft.ButtonStyle(shape=shape, padding=padding))
 

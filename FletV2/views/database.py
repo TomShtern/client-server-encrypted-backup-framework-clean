@@ -281,8 +281,24 @@ def create_database_view(
             new_record = {}
 
             # Generate new ID
-            max_id = max([row.get('id', 0) for row in table_data], default=0)
-            new_record['id'] = max_id + 1
+            try:
+                # Handle both string and integer IDs
+                ids = []
+                for row in table_data:
+                    row_id = row.get('id', 0)
+                    if isinstance(row_id, str):
+                        try:
+                            ids.append(int(row_id))
+                        except ValueError:
+                            ids.append(0)
+                    else:
+                        ids.append(int(row_id) if row_id else 0)
+                max_id = max(ids, default=0)
+                new_record['id'] = max_id + 1
+            except Exception as e:
+                # Fallback: use timestamp-based ID
+                import time
+                new_record['id'] = int(time.time() * 1000) % 1000000
 
             # Add field values
             for key, field in fields.items():

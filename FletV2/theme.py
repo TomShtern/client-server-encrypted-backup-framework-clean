@@ -741,9 +741,8 @@ def create_modern_card_container(
     if title:
         card_content = ft.Column([
             ft.Text(title, size=18, weight=ft.FontWeight.W_600),
-            ft.Container(height=16),
             content
-        ], spacing=0)
+        ], spacing=16)
 
     return ft.Container(
         content=card_content,

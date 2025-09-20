@@ -500,13 +500,17 @@ class MockDatabase:
         """Get server status."""
         with self._lock:
             connected_clients = sum(1 for c in self._clients.values() if c.status == "connected")
+            total_storage_bytes = sum(f.size for f in self._files.values())
+            storage_used_gb = total_storage_bytes / (1024 * 1024 * 1024)  # Convert to GB
             return {
                 "server_running": True,
                 "uptime": "72:15:33",
                 "clients_connected": connected_clients,
                 "total_clients": len(self._clients),
                 "total_files": len(self._files),
-                "total_storage": sum(f.size for f in self._files.values()),
+                "total_transfers": random.randint(5, 25),  # Add missing field
+                "storage_used_gb": round(storage_used_gb, 1),  # Convert and format
+                "total_storage": total_storage_bytes,  # Keep original for compatibility
                 "last_backup": datetime.now().isoformat()
             }
 

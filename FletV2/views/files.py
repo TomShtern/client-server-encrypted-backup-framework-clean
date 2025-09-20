@@ -248,6 +248,7 @@ def create_files_view(
 
         file_picker = ft.FilePicker(on_result=save_file)
         page.overlay.append(file_picker)
+        file_picker.update()  # Ensure FilePicker is properly attached before use
         file_picker.save_file(
             dialog_title="Save File",
             file_name=file.get('name', 'file.txt')
@@ -265,11 +266,28 @@ def create_files_view(
                 return
             try:
                 result = server_bridge.verify_file(file_id)
-                if result.get('success'):
-                    verification_data = result.get('data', {})
-                    show_verification_dialog(file_name, verification_data, "Server")
+
+                # Handle both normalized dict format and raw boolean return
+                if isinstance(result, bool):
+                    # Direct boolean return from mock
+                    if result:
+                        verification_data = {
+                            'size': file.get('size', 0),
+                            'modified': file.get('modified', 'Unknown'),
+                            'status': 'verified'
+                        }
+                        show_verification_dialog(file_name, verification_data, "Server")
+                    else:
+                        show_error_message(page, "File verification failed")
+                elif isinstance(result, dict):
+                    # Normalized return format
+                    if result.get('success'):
+                        verification_data = result.get('data', {})
+                        show_verification_dialog(file_name, verification_data, "Server")
+                    else:
+                        show_error_message(page, f"Verification failed: {result.get('error', 'Unknown error')}")
                 else:
-                    show_error_message(page, f"Verification failed: {result.get('error', 'Unknown error')}")
+                    show_error_message(page, f"Unexpected verification result type: {type(result)}")
             except Exception as ex:
                 show_error_message(page, f"Verification error: {ex}")
         else:
@@ -295,7 +313,6 @@ def create_files_view(
                     ft.Text("Status: "),
                     create_status_pill(data.get('status', 'Unknown'), get_status_type(data.get('status', 'Unknown')))
                 ], spacing=8),
-                ft.Container(height=10),
                 ft.Text("SHA256 Hash:", weight=ft.FontWeight.BOLD),
                 ft.Container(
                     content=ft.Text(data.get('hash', 'N/A'), selectable=True, size=12),
@@ -303,7 +320,7 @@ def create_files_view(
                     padding=8,
                     border_radius=4
                 ),
-            ], height=250, scroll=ft.ScrollMode.AUTO),
+            ], spacing=10, height=250, scroll=ft.ScrollMode.AUTO),
             actions=[
                 ft.TextButton("Close", on_click=lambda _e: page.close(verification_dialog))
             ],

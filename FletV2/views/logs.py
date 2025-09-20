@@ -175,7 +175,13 @@ def create_logs_view(
             try:
                 logs_listview.update()
             except Exception as e:
-                logger.debug(f"ListView update failed (expected during initialization): {e}")
+                logger.warning(f"ListView update failed - this may prevent navigation: {e}")
+                # Try to re-attach the ListView if it got detached
+                try:
+                    if logs_listview.page is None:
+                        logger.error("ListView lost page reference - navigation may be broken")
+                except:
+                    logger.error("ListView is in an invalid state - navigation may be broken")
 
     # Search functionality (simple TextField)
     def on_search_change(e):
@@ -216,7 +222,13 @@ def create_logs_view(
             try:
                 filter_chips_row.update()
             except Exception as e:
-                logger.debug(f"Filter chips update failed (expected during initialization): {e}")
+                logger.warning(f"Filter chips update failed - this may prevent navigation: {e}")
+                # Try to re-attach if it got detached
+                try:
+                    if filter_chips_row.page is None:
+                        logger.error("Filter chips lost page reference - navigation may be broken")
+                except:
+                    logger.error("Filter chips are in an invalid state - navigation may be broken")
 
     # Initialize filter chips (defer update until after page attachment)
     filter_chips_row.controls = [
@@ -241,7 +253,13 @@ def create_logs_view(
             try:
                 stats_text.update()
             except Exception as e:
-                logger.debug(f"Stats text update failed (expected during initialization): {e}")
+                logger.warning(f"Stats text update failed - this may prevent navigation: {e}")
+                # Try to re-attach if it got detached
+                try:
+                    if stats_text.page is None:
+                        logger.error("Stats text lost page reference - navigation may be broken")
+                except:
+                    logger.error("Stats text is in an invalid state - navigation may be broken")
 
     # Export functionality (using Flet's FilePicker)
     def save_logs_as_json(e: ft.FilePickerResultEvent):
@@ -328,7 +346,29 @@ def create_logs_view(
         """Clean up subscriptions and resources."""
         logger.debug("Disposing logs view")
         # Remove FilePicker from page overlay
-        if file_picker in page.overlay:
-            page.overlay.remove(file_picker)
+        try:
+            if file_picker in page.overlay:
+                page.overlay.remove(file_picker)
+                logger.debug("FilePicker removed from page overlay")
+            else:
+                logger.debug("FilePicker was not in page overlay during disposal")
+        except Exception as e:
+            logger.warning(f"Failed to remove FilePicker from page overlay: {e}")
+
+        # Clear any lingering references
+        try:
+            logs_listview.controls.clear()
+            filter_chips_row.controls.clear()
+            logger.debug("Cleared logs view controls")
+        except Exception as e:
+            logger.warning(f"Failed to clear logs view controls: {e}")
+
+        # Force update of page overlay to ensure FilePicker is really gone
+        try:
+            if hasattr(page, 'update') and page.update:
+                page.update()
+                logger.debug("Updated page after logs view disposal")
+        except Exception as e:
+            logger.warning(f"Failed to update page after logs view disposal: {e}")
 
     return logs_container, dispose, setup_subscriptions
