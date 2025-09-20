@@ -20,6 +20,12 @@ GITHUB_PERSONAL_ACCESS_TOKEN = os.environ.get('GITHUB_PERSONAL_ACCESS_TOKEN')
 SERVER_API_KEY = os.environ.get('SERVER_API_KEY')
 DATABASE_PASSWORD = os.environ.get('DATABASE_PASSWORD')
 
+# Real server configuration
+REAL_SERVER_URL = os.environ.get('REAL_SERVER_URL')  # e.g., https://backup.example.com/api
+BACKUP_SERVER_TOKEN = os.environ.get('BACKUP_SERVER_TOKEN') or os.environ.get('BACKUP_SERVER_API_KEY')
+REQUEST_TIMEOUT = float(os.environ.get('REQUEST_TIMEOUT', '10'))
+VERIFY_TLS = os.environ.get('VERIFY_TLS', 'true').lower() == 'true'
+
 # Optional: Validate critical secrets in debug mode
 if DEBUG_MODE:
     if not GITHUB_PERSONAL_ACCESS_TOKEN:
@@ -28,6 +34,12 @@ if DEBUG_MODE:
         print("Warning: SERVER_API_KEY not set")
     if not DATABASE_PASSWORD:
         print("Warning: DATABASE_PASSWORD not set")
+    if not REAL_SERVER_URL:
+        print("Info: REAL_SERVER_URL not set - running in mock mode unless a real server is injected")
+    if REAL_SERVER_URL and not REAL_SERVER_URL.startswith(('https://', 'http://')):
+        print("Warning: REAL_SERVER_URL should start with https:// or http://")
+    if not BACKUP_SERVER_TOKEN:
+        print("Info: BACKUP_SERVER_TOKEN not set - endpoints requiring auth will fail in real mode")
 
 # Mock data visibility - when False, mock data is only used when server is unavailable
 SHOW_MOCK_DATA = DEBUG_MODE

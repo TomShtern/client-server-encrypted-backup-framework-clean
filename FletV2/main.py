@@ -1091,4 +1091,26 @@ if __name__ == "__main__":
     # Run in web mode for UI analysis
     import os as _os
     _port = int(_os.getenv("FLET_SERVER_PORT", "8000"))
-    asyncio.run(ft.app_async(target=main, view=ft.AppView.WEB_BROWSER, port=_port))
+    # Proactively check if the desired port is available; if not, use an ephemeral port.
+    def _port_available(port: int) -> bool:
+        import socket
+        # Check IPv4
+        try:
+            s4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s4.bind(("0.0.0.0", port))
+            s4.close()
+        except OSError:
+            return False
+        # Check IPv6 if supported
+        try:
+            s6 = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            s6.bind(("::", port))
+            s6.close()
+        except OSError:
+            return False
+        return True
+
+    _chosen_port = _port if _port == 0 or _port_available(_port) else 0
+    if _chosen_port == 0 and _port != 0:
+        print(f"Port {_port} is busy; starting on a random available port instead.")
+    asyncio.run(ft.app_async(target=main, view=ft.AppView.WEB_BROWSER, port=_chosen_port))

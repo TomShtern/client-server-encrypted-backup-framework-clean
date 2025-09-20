@@ -216,7 +216,7 @@ def toggle_theme_mode(page: ft.Page):
         page.theme_mode = ft.ThemeMode.LIGHT
     page.update()
 
-def create_section_divider(title: str = None) -> ft.Container:
+def create_section_divider(title: Optional[str] = None) -> ft.Container:
     """Create section divider with optional title."""
     if title:
         return ft.Container(

@@ -9,7 +9,7 @@ Clean, maintainable dashboard that preserves all user-facing functionality.
 
 from .common_imports import *
 import contextlib
-from typing import Optional, Dict, Any, List, Tuple, TypedDict, Literal, Union, Iterator, Callable
+from typing import Optional, Dict, Any, List, Tuple, Literal, Union, Iterator, Callable
 from collections import deque
 from functools import lru_cache
 import psutil
@@ -21,25 +21,10 @@ ActivityType = Literal['info', 'warning', 'error', 'success']
 CardType = Literal['primary', 'success', 'info']
 UpdateSource = Literal['auto', 'manual', 'initial']
 
-class ActivityEntry(TypedDict):
-    id: int
-    type: ActivityType
-    message: str
-    timestamp: Union[datetime, str]
-
-class ServerStatus(TypedDict):
-    running: bool
-    port: int
-    uptime_seconds: int
-    clients_connected: int
-    total_files: int
-    total_transfers: int
-    storage_used_gb: float
-
-class SystemMetrics(TypedDict):
-    cpu_percent: float
-    memory_percent: float
-    disk_percent: float
+# Simple dict types instead of TypedDict for better compatibility
+ActivityEntry = Dict[str, Any]
+ServerStatus = Dict[str, Any]
+SystemMetrics = Dict[str, Any]
 
 # Constants for configuration
 MAX_HISTORY_POINTS = 30
@@ -66,6 +51,87 @@ SIGNIFICANT_DELTA_THRESHOLDS = {
 JOB_KEYWORDS = ['start', 'running', 'upload', 'transfer']
 BACKUP_KEYWORDS = ['backup', 'completed']
 
+# -------------------------
+# Normalization helpers
+# -------------------------
+def _parse_uptime_to_seconds(uptime_value: Any) -> int:
+    """Parse uptime value from various formats to seconds.
+    Supports:
+    - int/float seconds
+    - HH:MM:SS string
+    - dict-like with hours/minutes/seconds
+    """
+    try:
+        if isinstance(uptime_value, (int, float)):
+            return int(uptime_value)
+        s = str(uptime_value)
+        if ":" in s:
+            parts = s.split(":")
+            if len(parts) == 3:
+                h, m, sec = [int(x) for x in parts]
+                return h * 3600 + m * 60 + sec
+        # dict-like {"hours": 1, "minutes": 2, "seconds": 3}
+        if isinstance(uptime_value, dict):
+            h = int(uptime_value.get("hours", 0))
+            m = int(uptime_value.get("minutes", 0))
+            sec = int(uptime_value.get("seconds", 0))
+            return h * 3600 + m * 60 + sec
+    except Exception:
+        pass
+    return 0
+
+def _normalize_server_status_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize server status dict to the keys the dashboard expects."""
+    if not isinstance(payload, dict):
+        return {}
+    try:
+        running = bool(payload.get("running", payload.get("server_running", payload.get("is_running", True))))
+        uptime_seconds = _parse_uptime_to_seconds(
+            payload.get("uptime_seconds", payload.get("uptime", payload.get("server_uptime", 0)))
+        )
+        return {
+            "running": running,
+            "clients_connected": int(payload.get("clients_connected", payload.get("active_clients", payload.get("total_clients", 0))))
+                if isinstance(payload.get("clients_connected", None), (int, float)) or payload.get("clients_connected") is not None else 0,
+            "total_files": int(payload.get("total_files", payload.get("files_count", 0))),
+            "total_transfers": int(payload.get("total_transfers", payload.get("transfers", 0))),
+            "storage_used_gb": float(payload.get("storage_used_gb", payload.get("storage_used", 0.0))),
+            "uptime_seconds": uptime_seconds,
+        }
+    except Exception:
+        # Graceful fallback
+        return {}
+
+# Cached helper functions for better performance
+@lru_cache(maxsize=32)
+def get_activity_icon(activity_type: ActivityType) -> str:
+    """Get icon for activity type with caching."""
+    icon_map = {
+        'success': ft.Icons.CHECK_CIRCLE_OUTLINE,
+        'error': ft.Icons.ERROR_OUTLINE,
+        'warning': ft.Icons.WARNING_AMBER,
+        'info': ft.Icons.INFO_OUTLINE
+    }
+    return icon_map.get(activity_type, ft.Icons.INFO_OUTLINE)
+
+@lru_cache(maxsize=32)
+def get_activity_color(activity_type: ActivityType) -> str:
+    """Get color for activity type with caching."""
+    color_map = {
+        'success': ft.Colors.GREEN,
+        'error': ft.Colors.RED,
+        'warning': ft.Colors.ORANGE,
+        'info': ft.Colors.BLUE
+    }
+    return color_map.get(activity_type, ft.Colors.BLUE)
+
+def normalize_activity_type(level: str) -> ActivityType:
+    """Normalize activity level to valid ActivityType."""
+    normalized = level.lower()
+    if normalized in {'info', 'warning', 'error', 'success'}:
+        return normalized  # type: ignore
+    return 'info'
+
 # Enhanced components using Flet native features
 def create_status_pill(text: str, status: str) -> ft.Container:
     """Modern status pill using Flet's native styling."""
@@ -84,12 +150,33 @@ def create_status_pill(text: str, status: str) -> ft.Container:
         padding=ft.padding.symmetric(horizontal=16, vertical=6)
     )
 
+def create_action_group(buttons: List[ft.Control], group_type: str = "primary", spacing: int = 8) -> ft.Container:
+    """Create action button group using Flet's native styling."""
+    bgcolor = ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY) if group_type == "primary" else ft.Colors.with_opacity(0.03, ft.Colors.OUTLINE)
+
+    return ft.Container(
+        content=ft.Row(buttons, spacing=spacing),
+        padding=ft.padding.symmetric(horizontal=8, vertical=4),
+        border_radius=8,
+        bgcolor=bgcolor,
+        animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT)
+    )
+
+def safe_server_call(method, *args, **kwargs) -> Optional[Dict[str, Any]]:
+    """Standardized error handling for server bridge calls."""
+    try:
+        result = method(*args, **kwargs)
+        return result if isinstance(result, dict) and result.get('success') else None
+    except Exception as e:
+        logger.debug(f"Server call failed: {e}")
+        return None
+
 
 
 def create_dashboard_view(
     server_bridge: Optional[ServerBridge],
     page: ft.Page,
-    _state_manager: StateManager
+    _state_manager: Optional[StateManager]
 ) -> Tuple[ft.Control, Callable, Callable]:
     """Modern 2025 dashboard with visual hierarchy, semantic colors, and engaging data storytelling."""
     logger.info("Creating modern dashboard with enhanced visual appeal")
@@ -98,10 +185,10 @@ def create_dashboard_view(
     from theme import setup_modern_theme
     setup_modern_theme(page)
 
-    # Simple state management
-    current_server_status = {}
-    current_system_metrics = {}
-    current_activity = []
+    # Simple state management with proper initialization
+    current_server_status: Dict[str, Any] = {}
+    current_system_metrics: Dict[str, Any] = {}
+    current_activity: List[Dict[str, Any]] = []
     current_clients: List[Dict[str, Any]] = []
     refresh_task = None
     _stop_polling = False
@@ -113,9 +200,9 @@ def create_dashboard_view(
     last_significant_toast_time: Optional[datetime] = None
 
     # Memory-efficient history buffers using deque with fixed size
-    cpu_history: deque[float] = deque(maxlen=MAX_HISTORY_POINTS)
-    memory_history: deque[float] = deque(maxlen=MAX_HISTORY_POINTS)
-    disk_history: deque[float] = deque(maxlen=MAX_HISTORY_POINTS)
+    cpu_history: deque = deque(maxlen=MAX_HISTORY_POINTS)
+    memory_history: deque = deque(maxlen=MAX_HISTORY_POINTS)
+    disk_history: deque = deque(maxlen=MAX_HISTORY_POINTS)
 
     # Event handlers
     def on_backup(e):
@@ -171,76 +258,80 @@ def create_dashboard_view(
     hero_total_clients_text = ft.Text("0", size=48, weight=ft.FontWeight.BOLD, color=ft.Colors.PRIMARY)
     hero_active_transfers_text = ft.Text("0", size=48, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN)
     hero_uptime_text = ft.Text("0h 0m", size=48, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE)
-    
+
     # Define buttons that are used in update_all_displays
     backup_button = themed_button("Backup", on_backup, variant="filled", icon=ft.Icons.BACKUP)
     refresh_button = themed_button("Refresh", refresh_dashboard, variant="outlined", icon=ft.Icons.REFRESH)
     connect_button = themed_button("Connect", start_server, variant="filled", icon=ft.Icons.PLAY_ARROW)
     disconnect_button = themed_button("Disconnect", stop_server, variant="outlined", icon=ft.Icons.STOP)
-    
+
     # Define server status indicator container
     server_status_indicator_container = ft.Container()
 
-    # Simplified action group using Flet's native styling
-    def create_action_group(buttons: List[ft.Control], group_type: str = "primary", spacing: int = 8) -> ft.Container:
-        """Create action button group using Flet's native styling."""
-        bgcolor = ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY) if group_type == "primary" else ft.Colors.with_opacity(0.03, ft.Colors.OUTLINE)
-
-        return ft.Container(
-            content=ft.Row(buttons, spacing=spacing),
-            padding=ft.padding.symmetric(horizontal=8, vertical=4),
-            border_radius=8,
-            bgcolor=bgcolor,
-            animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT)
-        )
-
-    # Standardized error handling helper
-    def safe_server_call(method, *args, **kwargs) -> Optional[Dict[str, Any]]:
-        """Standardized error handling for server bridge calls."""
-        try:
-            result = method(*args, **kwargs)
-            return result if isinstance(result, dict) and result.get('success') else None
-        except Exception as e:
-            logger.debug(f"Server call failed: {e}")
-            return None
-
     # Get server status data with improved type safety
-    def get_server_status() -> ServerStatus:
-        """Get server status using server bridge or mock data."""
+    def get_server_status() -> Dict[str, Any]:
+        """Get server status using server bridge or mock data, normalized."""
         if server_bridge and (result := safe_server_call(server_bridge.get_server_status)):
-            return result.get('data', {})
+            raw = result.get('data', {})
+            logger.debug(f"Raw server status from bridge: {raw}")
+            normalized = _normalize_server_status_payload(raw)
+            logger.debug(f"Normalized server status: {normalized}")
+            if normalized:
+                return normalized
+            # Fall back to raw if normalization yielded empty (unknown shape)
+            if isinstance(raw, dict):
+                return raw
 
-        # Type-safe mock data fallback
-        return ServerStatus(
-            running=True,
-            port=8080,
-            uptime_seconds=3600 + random.randint(0, 7200),
-            clients_connected=random.randint(0, 15),
-            total_files=random.randint(50, 200),
-            total_transfers=random.randint(0, 10),
-            storage_used_gb=round(random.uniform(1.5, 25.8), 1)
-        )
+        # Type-safe mock data fallback (already in expected shape)
+        fallback_data = {
+            'running': True,
+            'port': 8080,
+            'uptime_seconds': 3600 + random.randint(0, 7200),
+            'clients_connected': random.randint(3, 15),
+            'total_files': random.randint(50, 200),
+            'total_transfers': random.randint(1, 10),
+            'storage_used_gb': round(random.uniform(1.5, 25.8), 1)
+        }
+        logger.debug(f"Using fallback server status: {fallback_data}")
+        return fallback_data
 
     # Get system metrics using psutil with type safety
-    def get_system_metrics() -> SystemMetrics:
-        """Get real system metrics using psutil."""
+    def get_system_metrics() -> Dict[str, Any]:
+        """Prefer server-reported system metrics; fall back to psutil."""
+        # Try server metrics first
         try:
-            cpu_percent = psutil.cpu_percent(interval=0.1)
+            if server_bridge and (res := safe_server_call(server_bridge.get_system_status)):
+                data = res.get('data', {})
+                # Typical fields: cpu_percent, memory_percent, disk_percent
+                if isinstance(data, dict) and any(k in data for k in ('cpu_percent', 'memory_percent', 'disk_percent')):
+                    cpu_p = float(data.get('cpu_percent', 0.0))
+                    mem_p = float(data.get('memory_percent', data.get('mem_percent', 0.0)))
+                    disk_p = float(data.get('disk_percent', data.get('storage_percent', 0.0)))
+                    return {
+                        'cpu_percent': cpu_p,
+                        'memory_percent': mem_p,
+                        'disk_percent': disk_p
+                    }
+        except Exception:
+            pass
+
+        # Fallback to psutil
+        try:
+            cpu_percent = psutil.cpu_percent(interval=0.05)
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
-
-            return SystemMetrics(
-                cpu_percent=cpu_percent,
-                memory_percent=memory.percent,
-                disk_percent=(disk.used / disk.total) * 100
-            )
+            return {
+                'cpu_percent': float(cpu_percent),
+                'memory_percent': float(memory.percent),
+                'disk_percent': float((disk.used / disk.total) * 100)
+            }
         except Exception as e:
             logger.warning(f"Failed to get system metrics: {e}")
-            return SystemMetrics(
-                cpu_percent=45.0,
-                memory_percent=68.0,
-                disk_percent=35.0
-            )
+            return {
+                'cpu_percent': 0.0,
+                'memory_percent': 0.0,
+                'disk_percent': 0.0
+            }
 
     # Cached helper functions for better performance
     @lru_cache(maxsize=32)
@@ -285,12 +376,12 @@ def create_dashboard_view(
                 msg = str(entry.get('message', entry.get('msg', '')))
                 ts = entry.get('timestamp', entry.get('time', datetime.now()))
 
-                activities.append(ActivityEntry(
-                    id=i + 1,
-                    type=level,
-                    message=msg,
-                    timestamp=ts
-                ))
+                activities.append({
+                    'id': i + 1,
+                    'type': level,
+                    'message': msg,
+                    'timestamp': ts
+                })
             return sorted(activities, key=lambda x: x['timestamp'], reverse=True)
 
         # Type-safe mock activity data
@@ -310,15 +401,15 @@ def create_dashboard_view(
         activities: List[ActivityEntry] = []
         for i in range(20):
             time_offset = timedelta(minutes=random.randint(0, 120))
-            activities.append(ActivityEntry(
-                id=i + 1,
-                type=random.choice(activity_types),
-                message=random.choice(messages).format(
+            activities.append({
+                'id': i + 1,
+                'type': random.choice(activity_types),
+                'message': random.choice(messages).format(
                     ip=random.randint(100, 199),
                     filename=f"document_{random.randint(1, 100)}.pdf"
                 ),
-                timestamp=datetime.now() - time_offset
-            ))
+                'timestamp': datetime.now() - time_offset
+            })
 
         return sorted(activities, key=lambda x: x['timestamp'], reverse=True)
 
@@ -367,24 +458,6 @@ def create_dashboard_view(
 
     def create_premium_activity_stream() -> ft.Card:
         """Create activity stream using Flet's native components and real data."""
-        # Helper functions for activity display
-        def get_activity_icon(activity_type: str) -> str:
-            icon_map = {
-                "success": ft.Icons.CHECK_CIRCLE_OUTLINE,
-                "error": ft.Icons.ERROR_OUTLINE,
-                "warning": ft.Icons.WARNING_AMBER,
-                "info": ft.Icons.INFO_OUTLINE
-            }
-            return icon_map.get(activity_type.lower(), ft.Icons.INFO_OUTLINE)
-
-        def get_activity_color(activity_type: str) -> str:
-            color_map = {
-                "success": ft.Colors.GREEN,
-                "error": ft.Colors.RED,
-                "warning": ft.Colors.ORANGE,
-                "info": ft.Colors.BLUE
-            }
-            return color_map.get(activity_type.lower(), ft.Colors.BLUE)
 
         # Get real activity data from the dashboard context
         activities = current_activity[:10] if current_activity else []
@@ -393,8 +466,9 @@ def create_dashboard_view(
         activity_controls = []
         for activity in activities:
             activity_type = str(activity.get('type', 'info')).lower()
-            icon = get_activity_icon(activity_type)
-            color = get_activity_color(activity_type)
+            # Reuse top-level cached helpers for consistency
+            icon = get_activity_icon(activity_type)  # type: ignore[arg-type]
+            color = get_activity_color(activity_type)  # type: ignore[arg-type]
             timestamp = activity.get('timestamp', datetime.now())
 
             # Format timestamp
@@ -701,8 +775,13 @@ def create_dashboard_view(
 
         # Update KPI values
         try:
+            print(f"[DEBUG] Updating KPI values with server status: {current_server_status}")
+            logger.debug(f"Updating KPI values with server status: {current_server_status}")
+
             # Total clients
             total_clients_val = current_server_status.get('clients_connected', len(current_clients))
+            print(f"[DEBUG] Setting total clients to: {total_clients_val}")
+            logger.debug(f"Setting total clients to: {total_clients_val}")
             kpi_total_clients_text.value = str(total_clients_val)
             hero_total_clients_text.value = str(total_clients_val)
 
@@ -718,6 +797,7 @@ def create_dashboard_view(
                     recent = True
                 if recent and any(k in str(a.get('message', '')).lower() for k in keywords):
                     active_jobs += 1
+            logger.debug(f"Setting active jobs to: {active_jobs}")
             kpi_active_jobs_text.value = str(active_jobs)
 
             # Errors 24h
@@ -729,10 +809,13 @@ def create_dashboard_view(
                     within = (now_dt - ts) <= timedelta(hours=24)
                 if within and str(a.get('type', 'info')).lower() == 'error':
                     err24 += 1
+            logger.debug(f"Setting errors 24h to: {err24}")
             kpi_errors_24h_text.value = str(err24)
 
             # Storage used
-            kpi_storage_used_text.value = f"{current_server_status.get('storage_used_gb', 0):.1f} GB"
+            storage_val = current_server_status.get('storage_used_gb', 0)
+            logger.debug(f"Setting storage used to: {storage_val}")
+            kpi_storage_used_text.value = f"{storage_val:.1f} GB"
 
             # Active transfers and uptime hero metrics
             hero_active_transfers_text.value = str(current_server_status.get('total_transfers', 0))
@@ -771,10 +854,26 @@ def create_dashboard_view(
 
         # Simplified update pattern using Flet's efficient update system
         try:
+            # Explicitly update each KPI control
+            kpi_total_clients_text.update()
+            kpi_active_jobs_text.update()
+            kpi_errors_24h_text.update()
+            kpi_storage_used_text.update()
+            hero_total_clients_text.update()
+            hero_active_transfers_text.update()
+            hero_uptime_text.update()
+
             # Use control.update() for 10x performance improvement over page.update()
             dashboard_container.update()
+            logger.debug("Dashboard container updated successfully")
         except Exception as e:
             logger.debug(f"Update failed: {e}")
+            # Fallback to page update if control update fails
+            try:
+                page.update()
+                logger.debug("Fallback page update completed")
+            except Exception as e2:
+                logger.error(f"Both control and page updates failed: {e2}")
 
     async def _update_all_displays_async(source: str = 'auto'):
         """Async version of update_all_displays."""
@@ -799,14 +898,20 @@ def create_dashboard_view(
             # Add clients task if server bridge available
             if server_bridge:
                 tasks.append(loop.run_in_executor(None, server_bridge.get_all_clients_from_db))
-
             # Execute all data fetching concurrently
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Process results with proper type safety
+            # Process results with proper type safety - use async results, not re-call functions
             current_server_status = results[0] if not isinstance(results[0], Exception) else get_server_status()
             current_system_metrics = results[1] if not isinstance(results[1], Exception) else get_system_metrics()
-            current_activity = results[2] if not isinstance(results[2], Exception) and isinstance(results[2], list) else get_activity_data()
+
+            # Handle activity data
+            if isinstance(results[2], Exception):
+                current_activity = []
+            elif isinstance(results[2], list):
+                current_activity = results[2]
+            else:
+                current_activity = []
 
             # Handle clients result if server bridge was used
             if server_bridge and len(results) > 3:
@@ -818,63 +923,12 @@ def create_dashboard_view(
                 else:
                     current_clients = []
 
-            # Determine if significant change occurred (auto refresh only, not initial/manual)
-            try:
-                if source == 'auto' and isinstance(prev_server_snapshot, dict) and prev_server_snapshot:
-                    deltas: List[str] = []
-                    try:
-                        pc = int(current_server_status.get('clients_connected', 0))
-                        pp = int(prev_server_snapshot.get('clients_connected', 0))
-                        d = pc - pp
-                        if abs(d) >= 2:
-                            deltas.append(f"Clients {'+' if d>=0 else ''}{d}")
-                    except Exception:
-                        pass
-                    try:
-                        tc = int(current_server_status.get('total_transfers', 0))
-                        tp = int(prev_server_snapshot.get('total_transfers', 0))
-                        d = tc - tp
-                        if abs(d) >= 2:
-                            deltas.append(f"Transfers {'+' if d>=0 else ''}{d}")
-                    except Exception:
-                        pass
-                    try:
-                        sc = float(current_server_status.get('storage_used_gb', 0.0))
-                        sp = float(prev_server_snapshot.get('storage_used_gb', 0.0))
-                        d = sc - sp
-                        if abs(d) >= 1.0:
-                            deltas.append(f"Storage {'+' if d>=0 else ''}{d:.1f} GB")
-                    except Exception:
-                        pass
-                    try:
-                        fc = int(current_server_status.get('total_files', 0))
-                        fp = int(prev_server_snapshot.get('total_files', 0))
-                        d = fc - fp
-                        if abs(d) >= 10:
-                            deltas.append(f"Files {'+' if d>=0 else ''}{d}")
-                    except Exception:
-                        pass
-
-                    # Toast if any significant deltas and cooldown passed
-                    if deltas:
-                        show_toast = True
-                        try:
-                            if last_significant_toast_time is not None:
-                                show_toast = (datetime.now() - last_significant_toast_time).total_seconds() >= 90
-                        except Exception:
-                            pass
-                        if show_toast:
-                            msg = "Updated – " + ", ".join(deltas[:3])
-                            try:
-                                show_success_message(page, msg)
-                                last_significant_toast_time = datetime.now()
-                            except Exception:
-                                pass
-            except Exception:
-                pass
-
+            # Update displays with fetched data
             last_updated = datetime.now().strftime("%H:%M:%S")
-            update_all_displays()
+            try:
+                update_all_displays()
+            except Exception as e:
+                logger.debug(f"update_all_displays() failed: {e}")
 
         except Exception as e:
             logger.debug(f"Async display update failed: {e}")
@@ -1175,31 +1229,29 @@ def create_dashboard_view(
             safe_activity, BACKUP_KEYWORDS
         ))[:MAX_OPERATIONS_DISPLAY]
 
-        # Update running jobs with pattern matching-style logic
+        # Update running jobs (simple conditional to reduce analyzer noise)
         running_jobs_list.controls.clear()
-        match running_jobs:
-            case [] if not running_jobs:
-                running_jobs_list.controls.append(
-                    ft.Text("All clear – no running jobs", size=12, color=ft.Colors.OUTLINE)
-                )
-            case jobs:
-                running_jobs_list.controls.extend(
-                    create_operation_item(job, ft.Icons.SYNC, ft.Colors.BLUE, "Running")
-                    for job in jobs
-                )
+        if not running_jobs:
+            running_jobs_list.controls.append(
+                ft.Text("All clear – no running jobs", size=12, color=ft.Colors.OUTLINE)
+            )
+        else:
+            running_jobs_list.controls.extend(
+                create_operation_item(job, ft.Icons.SYNC, ft.Colors.BLUE, "Running")
+                for job in running_jobs
+            )
 
-        # Update recent backups
+        # Update recent backups (simple conditional to reduce analyzer noise)
         recent_backups_list.controls.clear()
-        match recent_backups:
-            case [] if not recent_backups:
-                recent_backups_list.controls.append(
-                    ft.Text("No recent backups", size=12, color=ft.Colors.OUTLINE)
-                )
-            case backups:
-                recent_backups_list.controls.extend(
-                    create_operation_item(backup, ft.Icons.BACKUP, ft.Colors.GREEN)
-                    for backup in backups
-                )
+        if not recent_backups:
+            recent_backups_list.controls.append(
+                ft.Text("No recent backups", size=12, color=ft.Colors.OUTLINE)
+            )
+        else:
+            recent_backups_list.controls.extend(
+                create_operation_item(backup, ft.Icons.BACKUP, ft.Colors.GREEN)
+                for backup in recent_backups
+            )
 
     # Wrap operations panels into cards
     running_jobs_card = themed_card(content=running_jobs_list, title="RUNNING JOBS", page=page)
@@ -1254,22 +1306,27 @@ def create_dashboard_view(
         # Defer heavy initial data loading to avoid blocking UI
         async def _deferred_initial_load():
             try:
+                print("[DEBUG] Starting deferred initial load")
                 # Small delay to let UI settle
                 await asyncio.sleep(0.1)
 
                 # Update displays asynchronously
+                print("[DEBUG] Calling _update_all_displays_async('initial')")
                 await _update_all_displays_async('initial')
 
                 # Update operations panels asynchronously
                 await _update_operations_panels_async()
 
             except Exception as e:
+                print(f"[DEBUG] Deferred initial load failed: {e}")
                 logger.debug(f"Deferred initial load failed: {e}")
                 # Fallback to synchronous loading if async fails
                 try:
+                    print("[DEBUG] Falling back to synchronous update_all_displays()")
                     update_all_displays()
                     _update_operations_panels()
                 except Exception as e2:
+                    print(f"[DEBUG] Fallback loading also failed: {e2}")
                     logger.debug(f"Fallback loading also failed: {e2}")
 
         # Start deferred initial loading
@@ -1285,6 +1342,7 @@ def create_dashboard_view(
         # Start lightweight periodic refresh in background using constants
         async def _poll_loop():
             nonlocal _stop_polling
+            operations_update_counter = 0
             try:
                 while not _stop_polling:
                     await asyncio.sleep(POLLING_INTERVAL)
@@ -1293,12 +1351,8 @@ def create_dashboard_view(
                         try:
                             await _update_all_displays_async('auto')
                             # Only update operations panels every other cycle to reduce load
-                            if hasattr(_poll_loop, '_operations_update_counter'):
-                                _poll_loop._operations_update_counter += 1
-                            else:
-                                _poll_loop._operations_update_counter = 1
-
-                            if _poll_loop._operations_update_counter % OPERATIONS_UPDATE_CYCLE == 0:
+                            operations_update_counter += 1
+                            if operations_update_counter % OPERATIONS_UPDATE_CYCLE == 0:
                                 await _update_operations_panels_async()
                         except Exception as e:
                             logger.debug(f"Async update failed: {e}")

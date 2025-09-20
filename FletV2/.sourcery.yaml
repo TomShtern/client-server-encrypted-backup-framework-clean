@@ -1,0 +1,6 @@
+# Sourcery configuration - Disable all suggestions
+rule_settings:
+  disable:
+    - default
+github:
+  request_review: false

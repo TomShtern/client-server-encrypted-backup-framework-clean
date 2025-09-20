@@ -213,7 +213,7 @@ python performance_benchmark.py         # Full benchmark suite
 - **Fix FilePicker issue**: Use `file_picker.update()` instead of `page.update()` to ensure proper attachment and performance.
 - **Files View Verification Error**: There's a verification function in the files view that's trying to call `.get()` on a boolean value instead of a dictionary.
 - **Data Loading Issues:** If the application shows empty/zero values for all metrics, investigate issues with data loading or the mock data system.
-- **Dashboard Display Issues:** If the dashboard displays empty or zero values despite successful data loading, ensure that:
+- **Dashboard Display Issues:** If the application displays empty or zero values despite successful data loading, ensure that:
   - The UI controls are being properly updated after the data is fetched.
   - The `update_control_group()` function is being called at the end of the `update_all_displays()` function.
 - **Running in a Browser**: Use context to launch the desktop app in a browser for debugging.
@@ -233,6 +233,7 @@ python performance_benchmark.py         # Full benchmark suite
 - Do not include animation or fade-in logic that adds bloat and complexity. Remove such over-engineering.
 - Do not include unused code or functions (dead code).
 - **Do not use `create_card` or `create_button`; use `themed_card` and `themed_button` from `ui_components.py` instead.**
+- **Do not make incremental edits that introduce more errors. Instead, take a comprehensive approach to fix all issues at once.**
 
 ## 📝 Examples
 - View skeleton: `views/<name>.py` → `def create_<name>_view(server_bridge, page, state_manager=None) -> ft.Control`
@@ -324,6 +325,7 @@ Batch control updates and optimize rendering to improve UI responsiveness.
 - Prefer simplifying complex async functions and removing animation logic when possible.
 - **Before fixing removed visual features (hover effects, micro animations, interactions), consolidate, simplify, change, adjust, improve, deduplicate, and remove redundancies. Preserve the design and features, look for long implementations that are framework-fighting anti-patterns.**
 - **Framework-fighting anti-patterns**: Look for long implementations that fight the framework and replace them with Flet's built-in functionalities.
+- **Analyze the whole dashboard file, find coding anti-patterns and Flet fighting implementations. Prefer Flet native built in functions and features. Remove duplication and remove redundancies. Make sure to not remove features, and keep the design.**
 
 ## 📝 Further Instructions
 
@@ -337,10 +339,12 @@ Batch control updates and optimize rendering to improve UI responsiveness.
 - **When designing UI, preserve features and enhance/improve them.**
 - **Your flow should be to take a screenshot, analyze it, write/change code, then see the result with another screenshot, and act upon it. Use ultrathink.**
 - **Keep on improving the UI/UX with Playwright. Always take screenshots and analyze them.**
+- **When making sweeping changes, avoid incremental edits that introduce more errors. Instead, take a comprehensive approach to fix all issues at once.**
+- **Flet version is 0.28.3 and Python version is 3.13.5.**
 
 ## 🐛 Debugging & Search
 - **Data Loading Issues:** If the application shows empty/zero values for all metrics, investigate issues with data loading or the mock data system.
-- **Dashboard Display Issues:** If the dashboard displays empty or zero values despite successful data loading, ensure that:
+- **Dashboard Display Issues:** If the application displays empty or zero values despite successful data loading, ensure that:
   - The UI controls are being properly updated after the data is fetched.
   - The `update_control_group()` function is being called at the end of the `update_all_displays()` function.
 - **If the application exhibits excessive loading or blocking behavior after initial load, ensure that:**
@@ -348,16 +352,15 @@ Batch control updates and optimize rendering to improve UI responsiveness.
   - UI updates are batched and performed using `control.update()` where possible, avoiding unnecessary calls to `page.update()`\.
   - Long-running tasks do not block the main UI thread.
   - Consider using skeleton loaders or progress indicators to provide feedback during loading.
-- **If the application restarts unexpectedly, examine the logs for any unhandled exceptions or errors. Ensure that all resources are properly released when views are switched or the application is closed.**
+- **App Restart Issues**: If the application restarts unexpectedly, examine the logs for any unhandled exceptions or errors. Ensure that all resources are properly released when views are switched or the application is closed.
 - **Syntax Errors**: Check for syntax errors such as `positional argument follows keyword argument`.
 - **Undefined Function Errors**: Ensure all functions are defined and imported correctly. Use `themed_card` and `themed_button` from `utils.ui_components`.
 - **Function Name Conflicts**: Avoid local function definitions that override imported functions with incompatible signatures.
-
-## 🐞 Known Issues
 - **Dashboard Layout Issues:** After aggressive optimization, the dashboard might exhibit layout issues such as a missing top bar. This requires further investigation and fixes to ensure the visual design is preserved.
 - **`type object 'Colors' has no attribute 'SURFACE_VARIANT'`**: This error occurs because `SURFACE_VARIANT` is not available in the current Flet version. Replace all instances of `SURFACE_VARIANT` with a compatible color.
 - **module 'flet' has no attribute 'Positioned'**: This error occurs because `ft.Positioned` is not available in the current Flet version. Replace all instances of `ft.Positioned` with `expand=True` on the filling overlay and interactive layers within the Stack.
 - **Navigation bar selection does not update** after pressing hero cards and moving to a different view.
+- **High Error Count in VS Code**: A high error count in VS Code (e.g., 11K, 15K, 8K) does not necessarily mean the application is broken. These errors can include type checker warnings and linting suggestions across all files in the workspace. Focus on fixing blocking errors that prevent the application from running.
 
 ## 💻 Platform & Testing
 
@@ -370,13 +373,17 @@ Batch control updates and optimize rendering to improve UI responsiveness.
 - **Error Resolution**: Fix all errors observed when starting and using the app.
 - **Ultrathink**: Use `ultrathink` for problem-solving.
 - **If an error is displayed in the GUI, take a screenshot to confirm it and fix it.**
+- **Address minor code quality suggestions (e.g., from linters) after resolving blocking errors.**
+- **When addressing errors, prioritize fixing blocking errors that prevent the application from running.**
+- **If you see a high error count (e.g., 10K+) in VS Code, inspect the type checker configuration and run the existing quick syntax check task to validate whether the app truly has blocking issues versus noisy editor diagnostics.**
 
 ## 🎨 UI/UX Design Workflow
 - **Process:** Capture a screenshot of the dashboard with Playwright MCP, analyze it, write/change code, then see the result with another screenshot, and act upon it.
 - **Preserve design and features:** When making UI/UX enhancements, preserve existing features and improve upon them.
 - **Implement improvements in small, precise patches.**
-- **Iterate:** Continue improving the UI/UX with Playwright, always taking screenshots and analyzing them.
+- **Iterate:** Continue improving the UI/UX with Playwright, always taking screenshots
 - **Sequential Thinking:** Use sequential thinking for enhanced reasoning.
+- **When making sweeping changes, avoid incremental edits that introduce more errors. Instead, take a comprehensive approach to fix all issues at once.**
 
 ## 📝 Code Style & Refactoring
 - **Analyze the whole dashboard file, find coding anti-patterns and Flet fighting implementations. Prefer Flet native built in functions and features. Remove duplication and remove redundancies. Make sure to not remove features, and keep the design.**
@@ -386,128 +393,7 @@ Batch control updates and optimize rendering to improve UI responsiveness.
 - **Always prefer Flet built-in functions** instead of long custom ones.
 - **Do not recreate files from scratch; edit them** in place to fix duplication.
 - Do not add excessive spacing containers; instead, use Flet's built-in spacing parameters in Rows and Columns.
-- Do not use `ft.Container()` for conditional content; prefer Flet's built-in conditional rendering.
-- Do not include animation or fade-in logic that adds bloat and complexity. Remove such over-engineering.
-- When optimizing, focus on removing duplication, excessive containers, dead code, and over-engineered functions.
-- Aim for significant line count reductions while preserving functionality and visual appearance.
-- Prefer simplifying complex async functions and removing animation logic when possible.
-
-## 📝 Further Instructions
-- After making changes, always run the application to capture its output and check for errors.
-- **If an error is displayed in the GUI, take a screenshot to confirm it and fix it.**
-- If errors are found, fix them immediately.
-- If no errors are found, think harder about how to consolidate, simplify, enhance, or replace code with Flet native built-in functions.
-- Present the changes that should be made and what their impact will be.
-- **Fix the errors first. You can get them from VS diagnostics.**
-- **Use `themed_card` instead of `create_card` and `themed_button` instead of `create_button`.**
-- **Use Playwright MCP to capture screenshots for UI design and validation.**
-- **When designing UI, preserve features and enhance/improve them.**
-- **Your flow should be to take a screenshot, analyze it, write/change code, then see the result with another screenshot, and act upon it. Use ultrathink.**
-- **Keep on improving the UI/UX with Playwright. Always take screenshots and analyze them.**
-
-## 🎨 UI/UX Design Workflow (Enhanced)
-- **Process:** Capture a screenshot of the dashboard with Playwright MCP, analyze it, write/change code, then see the result with another screenshot, and act upon it.
-- **Preserve design and features:** When making UI/UX enhancements, preserve existing features and improve upon them.
-- **Implement improvements in small, precise patches.**
-- **Iterate:** Continue improving the UI/UX with Playwright, always taking screenshots and analyzing them.
-
-## 📝 Further UI/UX Suggestions (Implemented/Pending)
-- **Implemented:**
-  - Make KPI cards clickable (Total Clients → Clients view, Storage Used → Files/Database view).
-  - Add a subtle pressed visual for the KPI cards (e.g., brief scale and overlay) for extra feedback.
-  - Make hero cards clickable too (e.g., Active Transfers → Files, Server Uptime → Logs).
-  - Minor spacing/consistency polish (Reduce small vertical gaps to follow the 8px grid consistently. Ensure all dividers and borders use theme-appropriate colors (OUTLINE vs OUTLINE_VARIANT)).
-  - Add a live refresh indicator (slim progress bar) during async refreshes.
-  - Add an empty-state message to the activity list when no activity is available.
-  - Make the other hero cards clickable (e.g., Active Transfers → Files, Server Uptime → Logs).
-  - Add a light “ripple” overlay on list item clicks (implemented via brief background tint pulse) for activity, clients, running jobs, and recent backups list items.
-  - Add tasteful hover/press interactions to the action groups and list items, plus a subtle entrance fade for the dashboard container.
-  - Add the same pressed microinteraction to the hero cards’ labels/rows (not just container) for a slightly stronger feedback, or extend clickability to the entire hero row area.
-  - Show a subtle “updated” toast when auto-refresh updates values significantly.
-  - Add a gentle pressed overlay to hero cards that aligns with your brand tint and theme mode.
-  - Add the same pressed microinteraction to the hero cards’ labels/rows (not just container) for a slightly stronger feedback, or extend clickability to the entire hero row area.
-- Pending:
-  - Analyze the current dashboard layout and suggest improvements that align with Flet best practices and modern UI/UX principles.
-  - Loading/empty states: add skeletons for hero metrics, capacity pie, and activity list during the brief initial async load.
-  - Unify skeleton loaders for first render in each section.
-  - Add an “Updated just now” snackbar or subtle toast on auto-refresh completion when values change significantly (optional).
-  - Make the UI and layout more visually pleasing and appealing to the human eye. Add small micro interactions and microanimations, and hover affects, and a polish to the UI/UX. Use all the tools at your disposal, ensuring harmony with the Flet framework by avoiding anti-patterns and preferring Flet's native built-in functions. Context7 or web search can be used for assistance.
-  - Show a subtle “updated” toast when auto-refresh updates values significantly.
-  - Add a gentle pressed overlay to hero cards that aligns with your brand tint and theme mode.
-  - Add the same pressed microinteraction to the hero cards’ labels/rows (not just container) for a slightly stronger feedback, or extend clickability to the entire hero row area.
-
-## 9. Loading States and Empty States
-
-### What it does:
-Loading states show skeleton placeholders while data is being fetched, and empty states provide meaningful messages when there's no data to display.
-
-### Why we need it:
-- **User Experience**: Prevents users from seeing blank screens or wondering if the app is broken
-- **Professional Feel**: Makes the app feel polished and responsive
-- **Performance Perception**: Skeleton loaders make the app feel faster by providing immediate visual feedback
-- **Error Prevention**: Empty states guide users when there's no data, preventing confusion
-
-## 7. Action Button Grouping
-
-### What it does:
-Groups related buttons together logically and provides a cleaner, more organized interface.
-
-### Why we need it:
-- **Cognitive Load**: Reduces decision fatigue by grouping related actions
-- **Visual Hierarchy**: Makes it easier to find the right action at the right time
-- **Mobile Friendly**: Better for touch interfaces and smaller screens
-- **Professional UX**: Follows modern design patterns used by successful apps
-
-## 8. Color Palette Simplification
-
-### What it does:
-Replaces complex gradients and custom colors with a consistent, theme-based color system.
-
-### Why we need it:
-- **Accessibility**: Ensures proper contrast ratios for readability
-- **Theme Consistency**: Works with light/dark mode switching
-- **Maintenance**: Easier to update colors globally
-- **Performance**: Reduces complex rendering of gradients
-- **Professional Look**: Follows Material Design 3 standards
-
-## 10. Performance Optimization
-
-### What it does:
-Batch control updates and optimize rendering to improve UI responsiveness.
-
-### Why we need it:
-- **Smooth UI**: Prevents stuttering during data updates
-- **Battery Life**: Reduces CPU usage on mobile devices
-- **Scalability**: Handles larger datasets without performance degradation
-- **User Experience**: Maintains 60fps responsiveness
-
-## 💻 Platform & Testing
-- **Running in a Browser**: Use context to launch the desktop app in a browser for debugging.
-- **Playwright MCP**: Use Playwright MCP to get actual output displayed on the screen for testing and validation. Use Playwright MCP to get actual output displayed on the screen for testing and validation. Use Playwright MCP to get actual output displayed on the screen for testing and validation.
-- **CanvasKit Rendering**: Note that Flet's web renderer uses CanvasKit, so browser "visible text" scraping is empty; screenshots are the reliable validation artifact here.
-- **CanvasKit Limitation:** Automated clicking via Playwright won’t “hit” Flutter widgets due to the canvas layer. Manual clicks work fine.
-
-## 🛠️ Error Handling & Debugging
-- **Error Resolution**: Fix all errors observed when starting and using the app.
-- **Ultrathink**: Use `ultrathink` for problem-solving.
-- **If an error is displayed in the GUI, take a screenshot to confirm it and fix it.**
-
-## 🎨 UI/UX Design Workflow
-- **Process:** Capture a screenshot of the dashboard with Playwright MCP, analyze it, write/change code, then see the result with another screenshot, and act upon it.
-- **Preserve design and features:** When making UI/UX enhancements, preserve existing features and improve upon them.
-- **Implement improvements in small, precise patches.**
-- **Iterate:** Continue improving the UI/UX with Playwright, always taking screenshots and analyzing them.
-- **Sequential Thinking:** Use sequential thinking for enhanced reasoning.
-
-## 📝 Code Style & Refactoring
-- **Analyze the whole dashboard file, find coding anti-patterns and Flet fighting implementations. Prefer Flet native built in functions and features. Remove duplication and remove redundancies. Make sure to not remove features, and keep the design.**
-- **Preserve design and features:** When refactoring, **do not remove features** and ensure the application **looks visually the same** without changing the layout or the visuals. If visual features like hover effects, micro animations, and interactions are removed during optimization, they must be restored, but only **after** consolidating, simplifying, changing, adjusting, improving, deduplicating, and removing redundancies.
-- Use `ultrathink` for problem-solving.
-- **Remove duplication and redundancies** in code.
-- **Always prefer Flet built-in functions** instead of long custom ones.
-- **Do not recreate files from scratch; edit them** in place to fix duplication.
-- Do not add excessive spacing containers; instead, use Flet's built-in spacing parameters in Rows and Columns.
-- Do not use `ft.Container()` for conditional content; prefer Flet's built-in conditional rendering.
+- Do not use `ft.Container()` for conditional content; prefer Flet's built-in rendering.
 - Do not include animation or fade-in logic that adds bloat and complexity. Remove such over-engineering.
 - When optimizing, focus on removing duplication, excessive containers, dead code, and over-engineered functions.
 - Aim for significant line count reductions while preserving functionality and visual appearance.
@@ -531,3 +417,92 @@ Batch control updates and optimize rendering to improve UI responsiveness.
 - **Preserve design and features:** When making UI/UX enhancements, preserve existing features and improve upon them.
 - **Implement improvements in small, precise patches.**
 - **Iterate:** Continue improving the UI/UX with Playwright, always taking screenshots
+- **When making sweeping changes, avoid incremental edits that introduce more errors. Instead, take a comprehensive approach to fix all issues at once.**
+
+## 📝 Error Handling & Debugging
+- When addressing errors, prioritize fixing blocking errors that prevent the application from running.
+- Address minor code quality suggestions (e.g., from linters) after resolving blocking errors.
+- The large number of errors seen in VS Code may include type checker warnings and linting suggestions across all files, not just blocking errors.
+- Remember that the application can run successfully even if there are a large number of non-blocking errors.
+- To ensure that the dashboard file has no errors, simplify complex TypedDict to regular Dict types compatible with Python 3.13.5.
+- Fix code quality issues suggested by Sourcery, such as removing unnecessary `str()` casts, using set instead of list for membership checks, and improving if/else branch ordering.
+- Extract helper functions to the module level to improve code structure.
+- Simplify variable declarations and reduce complexity to improve variable scoping.
+
+## ⚙️ Sourcery Configuration
+
+To ensure correct Sourcery configuration:
+
+- **Invalid Keys**: Do not use invalid keys in the `.sourcery.yaml` file. For example, `require_approval` is not a valid key under the `github` section and should be removed.
+- **Rule Settings**: Use the correct syntax for disabling rules and suggestions. The correct format for disabling all Sourcery rules is:
+```yaml
+rule_settings:
+  disable:
+    - default
+```
+- **Conflicting Keys**: Do not use both `rule_settings` and `refactor` keys together. Use `rule_settings` only. Remove the conflicting `refactor` key from the Sourcery configuration file if it exists.
+
+## 📝 Connecting to the Real Server: Preflight Checklist
+
+Before connecting the Flet GUI to the real server, ensure the following:
+
+1.  **Requirements Check:**
+    *   Use `httpx` for async HTTP and streaming: pinned in `requirements.txt` (>=0.27.2,<0.28).
+    *   Ensure `aiofiles` (streaming downloads) and `python-dotenv` (local env) are installed.
+    *   Review `requirements.txt` for necessary libraries (e.g., HTTP client). Add any missing dependencies.
+
+2.  **Server Bridge Configuration:**
+    *   `create_server_bridge()` now auto-detects a real server when `REAL_SERVER_URL` is set and `/health` responds. If not reachable, it automatically falls back to mock mode (no app breakage).
+    *   The UI continues using the same `ServerBridge` API with normalized responses: `{success, data, error}`.
+    *   Inspect `server_bridge.py` for real/mock detection logic.
+    *   Verify HTTP call implementation for interacting with the server.
+    *   Ensure proper error normalization for server responses.
+
+3.  **Configuration and Environment Variables:**
+    *   Required env vars:
+        *   `REAL_SERVER_URL`: `https://<host>/api` (or your base API path)
+        *   `BACKUP_SERVER_TOKEN` (or `BACKUP_SERVER_API_KEY`): Bearer token
+        *    Optional env vars:
+            *   `REQUEST_TIMEOUT` (seconds, default 10)
+            *   `VERIFY_TLS` (true/false, default true)
+            *   `FLET_V2_DEBUG` (true for verbose logs)
+    *   Examine `config.py` for handling configuration and environment variables.
+    *   Identify and address any gaps in authentication mechanisms.
+    *   Define server URLs and endpoints in `config.py`.
+    *   Implement health check endpoints for server status verification.
+
+4.  **API contract mapping (adjust paths as needed)**
+    *   Clients: `/clients`, `/clients/{id}`, `POST /clients`, `DELETE /clients/{id}`, `POST /clients/{id}/disconnect`
+    *   Files: `/files`, `/clients/{id}/files`, `POST /files/{id}/verify`, `GET /files/{id}/download`, `DELETE /files/{id}`
+    *   Database: `/database/info`, `/database/tables/{table}`, `PATCH /database/tables/{table}/{id}`, `DELETE /database/tables/{table}/{id}`
+    *   Logs: `/logs`, `DELETE /logs`, `POST /logs/export`, `/logs/stats`
+    *   Status/Analytics: `/status`, `/system`, `/analytics`, `/dashboard/summary`, `/status/stats`
+    *   Server control: `POST /server/start`, `POST /server/stop`
+    *   Settings: `GET/POST /settings`, `POST /settings/validate`, `/settings/backup`, `/settings/restore`, `/settings/defaults`
+
+5.  **Auth and headers**
+    *   Bearer token
+
+## 🐛 Debugging & Search
+- **VS Code Diagnostics**: If you see 10K+ problems in VS Code, it's likely due to the analyzers scanning the entire workspace.
+    - **Cause**: Whole-repo analysis + suggestion-level diagnostics + conflicting settings.
+    - **Fix**: Scope Pylance to open files, exclude non-source directories, remove conflicting settings.
+    - **Outcome**: Problems count should drop from 10K+ to a manageable set focused on open files and true issues.
+- **Data Loading Issues:** If the application shows empty/zero values for all metrics, investigate issues with data loading or the mock data system.
+- **Dashboard Display Issues:** If the application displays empty or zero values despite successful data loading, ensure that:
+  - The UI controls are being properly updated after the data is fetched.
+  - The `update_control_group()` function is being called at the end of the `update_all_displays()` function.
+- **If the application exhibits excessive loading or blocking behavior after initial load, ensure that:**
+  - Data fetching is performed asynchronously using `page.run_task()`.
+  - UI updates are batched and performed using `control.update()` where possible, avoiding unnecessary calls to `page.update()`\.
+  - Long-running tasks do not block the main UI thread.
+  - Consider using skeleton loaders or progress indicators to provide feedback during loading.
+- **If the application restarts unexpectedly, examine the logs for any unhandled exceptions or errors. Ensure that all resources are properly released when views are switched or the application is closed.**
+- **Syntax Errors**: Check for syntax errors such as `positional argument follows keyword argument`.
+- **Undefined Function Errors**: Ensure all functions are defined and imported correctly. Use `themed_card` and `themed_button` from `utils.ui_components`.
+- **Function Name Conflicts**: Avoid local function definitions that override imported functions with incompatible signatures.
+- **Dashboard Layout Issues:** After aggressive optimization, the dashboard might exhibit layout issues such as a missing top bar. This requires further investigation and fixes to ensure the visual design is preserved.
+- **`type object 'Colors' has no attribute 'SURFACE_VARIANT'`**: This error occurs because `SURFACE_VARIANT` is not available in the current Flet version. Replace all instances of `SURFACE_VARIANT` with a compatible color.
+- **module 'flet' has no attribute 'Positioned'**: This error occurs because `ft.Positioned` is not available in the current Flet version. Replace all instances of `ft.Positioned` with `expand=True` on the filling overlay and interactive layers within the Stack.
+- **Navigation bar selection does not update** after pressing hero cards and moving to a different view.
+- **High Error Count in VS Code**: A high error count in VS Code (e.g., 11K, 15K, 8K) does not necessarily mean the application is broken. These

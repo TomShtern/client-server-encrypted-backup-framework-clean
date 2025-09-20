@@ -12,11 +12,11 @@ Reduces complexity from 2,743 lines to ~500 lines by:
 
 import asyncio
 import logging
-import time
-from typing import Any, Dict, Optional, Union, List
-from pathlib import Path
+from typing import Any, Dict, Optional, List, Callable
 
 from .mock_database_simulator import MockDatabase, get_mock_database
+from .real_server_client import RealServerClient
+import config
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ class ServerBridge:
     Maintains 100% compatibility with existing views while being dramatically simpler.
     """
 
-    def __init__(self, real_server=None):
+    def __init__(self, real_server: Any | None = None):
         """
         Initialize ServerBridge with optional real server instance.
 
@@ -36,8 +36,9 @@ class ServerBridge:
             real_server: Real server instance with methods like get_clients(), delete_file(), etc.
                         If None, uses MockDatabase for development/testing.
         """
+        # Instance attributes
         self.real_server = real_server
-        self._mock_db = get_mock_database() if not real_server else None
+        self._mock_db = get_mock_database() if real_server is None else None
         self._connection_status = "connected" if real_server else "mock_mode"
 
         logger.info(f"ServerBridge initialized in {'production' if real_server else 'mock'} mode")
@@ -51,7 +52,7 @@ class ServerBridge:
     def _call_real_or_mock(self, method_name: str, *args, **kwargs) -> Dict[str, Any]:
         """Helper to call real server method or fall back to mock."""
         try:
-            if self.real_server and hasattr(self.real_server, method_name):
+            if self.real_server is not None and hasattr(self.real_server, method_name):
                 result = getattr(self.real_server, method_name)(*args, **kwargs)
                 # Normalize result format
                 if isinstance(result, dict) and 'success' in result:
@@ -59,7 +60,7 @@ class ServerBridge:
                 return {'success': True, 'data': result, 'error': None}
             else:
                 # Use mock database
-                mock_method = getattr(self._mock_db, method_name, None)
+                mock_method = getattr(self._mock_db, method_name, None) if self._mock_db is not None else None
                 if mock_method:
                     result = mock_method(*args, **kwargs)
                     return {'success': True, 'data': result, 'error': None}
@@ -73,7 +74,7 @@ class ServerBridge:
     async def _call_real_or_mock_async(self, method_name: str, *args, **kwargs) -> Dict[str, Any]:
         """Async version of _call_real_or_mock."""
         try:
-            if self.real_server and hasattr(self.real_server, method_name):
+            if self.real_server is not None and hasattr(self.real_server, method_name):
                 result = await getattr(self.real_server, method_name)(*args, **kwargs)
                 # Normalize result format
                 if isinstance(result, dict) and 'success' in result:
@@ -81,15 +82,15 @@ class ServerBridge:
                 return {'success': True, 'data': result, 'error': None}
             else:
                 # Use mock database async method
-                async_method_name = f"{method_name}_async" if not method_name.endswith('_async') else method_name
-                mock_method = getattr(self._mock_db, async_method_name, None)
+                async_method_name = method_name if method_name.endswith('_async') else f"{method_name}_async"
+                mock_method = getattr(self._mock_db, async_method_name, None) if self._mock_db is not None else None
                 if mock_method:
                     result = await mock_method(*args, **kwargs)
                     return {'success': True, 'data': result, 'error': None}
                 else:
                     # Try sync version
                     sync_method_name = method_name.replace('_async', '')
-                    mock_method = getattr(self._mock_db, sync_method_name, None)
+                    mock_method = getattr(self._mock_db, sync_method_name, None) if self._mock_db is not None else None
                     if mock_method:
                         result = mock_method(*args, **kwargs)
                         return {'success': True, 'data': result, 'error': None}
@@ -246,11 +247,11 @@ class ServerBridge:
         """Get log statistics."""
         return await self._call_real_or_mock_async('get_log_statistics_async')
 
-    async def stream_logs_async(self, callback):
+    async def stream_logs_async(self, callback: Callable[[Dict[str, Any]], None]):
         """Stream logs in real-time."""
         return await self._call_real_or_mock_async('stream_logs_async', callback)
 
-    async def stop_log_stream_async(self, streaming_task):
+    async def stop_log_stream_async(self, streaming_task: Any):
         """Stop log streaming."""
         return await self._call_real_or_mock_async('stop_log_stream_async', streaming_task)
 
@@ -419,7 +420,7 @@ class ServerBridge:
 # FACTORY FUNCTIONS (for compatibility with existing code)
 # ============================================================================
 
-def create_server_bridge(real_server=None):
+def create_server_bridge(real_server: Any | None = None):
     """
     Factory function to create ServerBridge instance.
 
@@ -429,10 +430,37 @@ def create_server_bridge(real_server=None):
     Returns:
         ServerBridge instance configured for production or development
     """
+    # Auto-detect real server from environment if not explicitly provided
+    if real_server is None and config.REAL_SERVER_URL:
+        try:
+            client: RealServerClient = RealServerClient(
+                base_url=config.REAL_SERVER_URL,
+                token=config.BACKUP_SERVER_TOKEN,
+                verify_tls=config.VERIFY_TLS,
+                timeout=config.REQUEST_TIMEOUT,
+            )
+            # Lightweight async health check
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            health: Dict[str, Any] = loop.run_until_complete(client.test_connection_async())
+            loop.close()
+            if health.get("success"):
+                logger.info("Using RealServerClient based on REAL_SERVER_URL")
+                return ServerBridge(real_server=client)
+            else:
+                logger.warning("Real server health check failed; falling back to mock mode: %s", health.get("error"))
+        except Exception as e:
+            logger.warning("Failed to initialize RealServerClient; falling back to mock mode: %s", e)
+
     return ServerBridge(real_server)
 
-def get_server_bridge():
+# Module-level singleton to avoid function attribute access diagnostics
+_SERVER_BRIDGE_INSTANCE: Optional[ServerBridge] = None
+
+def get_server_bridge() -> ServerBridge:
     """Get or create a singleton ServerBridge instance for development."""
-    if not hasattr(get_server_bridge, '_instance'):
-        get_server_bridge._instance = ServerBridge()
-    return get_server_bridge._instance
+    global _SERVER_BRIDGE_INSTANCE
+    if _SERVER_BRIDGE_INSTANCE is None:
+        _SERVER_BRIDGE_INSTANCE = ServerBridge()
+    return _SERVER_BRIDGE_INSTANCE

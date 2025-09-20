@@ -2,6 +2,6 @@
 flet>=0.28.3
 requests>=2.32.4
 psutil>=5.9.0
-httpx
+httpx>=0.27.2,<0.28
 aiofiles>=24.1.0
 python-dotenv>=1.0.0

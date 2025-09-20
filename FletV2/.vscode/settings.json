@@ -4,13 +4,7 @@
   "python.linting.enabled": false,
   "python.linting.pylintEnabled": false,
   "python.linting.flake8Enabled": false,
-  "python.analysis.extraPaths": [
-    "${workspaceFolder}\\..",
-    "${workspaceFolder}\\..\\Shared",
-    "${workspaceFolder}\\utils",
-    "${workspaceFolder}\\views",
-    "${workspaceFolder}"
-  ],
+  // extraPaths controlled by pyrightconfig.json
   "python.autoComplete.extraPaths": [
     "${workspaceFolder}\\..",
     "${workspaceFolder}\\..\\Shared",
@@ -18,20 +12,9 @@
     "${workspaceFolder}\\views",
     "${workspaceFolder}"
   ],
-  "python.analysis.autoSearchPaths": true,
-  "python.analysis.useLibraryCodeForTypes": true,
-  "python.analysis.autoImportCompletions": true,
-  "python.analysis.diagnosticMode": "workspace",
+  // analysis behavior is configured in pyrightconfig.json
   "python.terminal.useEnvFile": true,
-  "python.analysis.typeCheckingMode": "off",
-  "python.analysis.reportAttributeAccessIssue": "none",
-  "python.analysis.reportOptionalMemberAccess": "none",
-  "python.analysis.reportUnknownMemberType": "none",
-  "python.analysis.inlayHints.functionReturnTypes": true,
-  "python.analysis.stubPath": "./stubs",
-  "python.analysis.typeshedPaths": [],
-  "python.analysis.ignore": ["**/flet/**"],
-  "pylance.openFilesOnly": false,
+  "pylance.openFilesOnly": true,
   "terminal.integrated.env.windows": {
     "PYTHONPATH": "${workspaceFolder}\\..;${workspaceFolder}\\..\\Shared;${env:PYTHONPATH}"
   },
