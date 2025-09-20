@@ -349,7 +349,7 @@ Batch control updates and optimize rendering to improve UI responsiveness.
   - The `update_control_group()` function is being called at the end of the `update_all_displays()` function.
 - **If the application exhibits excessive loading or blocking behavior after initial load, ensure that:**
   - Data fetching is performed asynchronously using `page.run_task()`.
-  - UI updates are batched and performed using `control.update()` where possible, avoiding unnecessary calls to `page.update()`\.
+  - UI updates are batched and performed using `control.update()`\.
   - Long-running tasks do not block the main UI thread.
   - Consider using skeleton loaders or progress indicators to provide feedback during loading.
 - **App Restart Issues**: If the application restarts unexpectedly, examine the logs for any unhandled exceptions or errors. Ensure that all resources are properly released when views are switched or the application is closed.
@@ -483,26 +483,39 @@ Before connecting the Flet GUI to the real server, ensure the following:
 5.  **Auth and headers**
     *   Bearer token
 
-## 🐛 Debugging & Search
-- **VS Code Diagnostics**: If you see 10K+ problems in VS Code, it's likely due to the analyzers scanning the entire workspace.
-    - **Cause**: Whole-repo analysis + suggestion-level diagnostics + conflicting settings.
-    - **Fix**: Scope Pylance to open files, exclude non-source directories, remove conflicting settings.
-    - **Outcome**: Problems count should drop from 10K+ to a manageable set focused on open files and true issues.
-- **Data Loading Issues:** If the application shows empty/zero values for all metrics, investigate issues with data loading or the mock data system.
-- **Dashboard Display Issues:** If the application displays empty or zero values despite successful data loading, ensure that:
-  - The UI controls are being properly updated after the data is fetched.
-  - The `update_control_group()` function is being called at the end of the `update_all_displays()` function.
-- **If the application exhibits excessive loading or blocking behavior after initial load, ensure that:**
-  - Data fetching is performed asynchronously using `page.run_task()`.
-  - UI updates are batched and performed using `control.update()` where possible, avoiding unnecessary calls to `page.update()`\.
-  - Long-running tasks do not block the main UI thread.
-  - Consider using skeleton loaders or progress indicators to provide feedback during loading.
-- **If the application restarts unexpectedly, examine the logs for any unhandled exceptions or errors. Ensure that all resources are properly released when views are switched or the application is closed.**
-- **Syntax Errors**: Check for syntax errors such as `positional argument follows keyword argument`.
-- **Undefined Function Errors**: Ensure all functions are defined and imported correctly. Use `themed_card` and `themed_button` from `utils.ui_components`.
-- **Function Name Conflicts**: Avoid local function definitions that override imported functions with incompatible signatures.
-- **Dashboard Layout Issues:** After aggressive optimization, the dashboard might exhibit layout issues such as a missing top bar. This requires further investigation and fixes to ensure the visual design is preserved.
-- **`type object 'Colors' has no attribute 'SURFACE_VARIANT'`**: This error occurs because `SURFACE_VARIANT` is not available in the current Flet version. Replace all instances of `SURFACE_VARIANT` with a compatible color.
-- **module 'flet' has no attribute 'Positioned'**: This error occurs because `ft.Positioned` is not available in the current Flet version. Replace all instances of `ft.Positioned` with `expand=True` on the filling overlay and interactive layers within the Stack.
-- **Navigation bar selection does not update** after pressing hero cards and moving to a different view.
-- **High Error Count in VS Code**: A high error count in VS Code (e.g., 11K, 15K, 8K) does not necessarily mean the application is broken. These
+### 📝 Connecting to the Real Server: Preflight Checklist (Enhanced)
+
+Before connecting the Flet GUI to the real server, ensure the following:
+
+1.  **Requirements Check:**
+    *   Use `httpx` for async HTTP and streaming: pinned in `requirements.txt` (>=0.27.2,<0.28).
+    *   Ensure `aiofiles` (streaming downloads) and `python-dotenv` (local env) are installed.
+    *   Review `requirements.txt` for necessary libraries (e.g., HTTP client). Add any missing dependencies.
+
+2.  **Server Bridge Configuration:**
+    *   `create_server_bridge()` now auto-detects a real server when `REAL_SERVER_URL` is set and `/health` responds. If not reachable, it automatically falls back to mock mode (no app breakage).
+    *   The UI continues using the same `ServerBridge` API with normalized responses: `{success, data, error}`.
+    *   Inspect `server_bridge.py` for real/mock detection logic.
+    *   Verify HTTP call implementation for interacting with the server.
+    *   Ensure proper error normalization for server responses.
+
+3.  **Configuration and Environment Variables:**
+    *   Required env vars:
+        *   `REAL_SERVER_URL`: `https://<host>/api` (or your base API path)
+        *   `BACKUP_SERVER_TOKEN` (or `BACKUP_SERVER_API_KEY`): Bearer token
+        *    Optional env vars:
+            *   `REQUEST_TIMEOUT` (seconds, default 10)
+            *   `VERIFY_TLS` (true/false, default true)
+            *   `FLET_V2_DEBUG` (true for verbose logs)
+    *   Examine `config.py` for handling configuration and environment variables.
+    *   Identify and address any gaps in authentication mechanisms.
+    *   Define server URLs and endpoints in `config.py`.
+    *   Implement health check endpoints for server status verification.
+
+4.  **API contract mapping (adjust paths as needed)**
+    *   Clients: `/clients`, `/clients/{id}`, `POST /clients`, `DELETE /clients/{id}`, `POST /clients/{id}/disconnect`
+    *   Files: `/files`, `/clients/{id}/files`, `POST /files/{id}/verify`, `GET /files/{id}/download`, `DELETE /files/{id}`
+    *   Database: `/database/info`, `/database/tables/{table}`, `PATCH /database/tables/{table}/{id}`, `DELETE /database/tables/{table}/{id}`
+    *   Logs: `/logs`, `DELETE /logs`, `POST /logs/export`, `/logs/stats`
+    *   Status/Analytics: `/status`, `/system`, `/analytics`, `/dashboard/summary`, `/status/stats`
+    *   Server control: `POST /server/start`, `POST
