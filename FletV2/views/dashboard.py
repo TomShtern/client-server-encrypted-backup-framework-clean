@@ -10,7 +10,9 @@ Clean, maintainable dashboard that preserves all user-facing functionality.
 import flet as ft
 import asyncio
 import contextlib
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List, Tuple, TypedDict, Literal, Union, Iterator
+from collections import deque
+from functools import lru_cache
 import psutil
 import random
 from datetime import datetime, timedelta
@@ -20,38 +22,74 @@ from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
 from utils.ui_components import themed_card, themed_button
 
-# Enhanced components using proper themed functions
+# Type definitions for better type safety
+ActivityType = Literal['info', 'warning', 'error', 'success']
+CardType = Literal['primary', 'success', 'info']
+UpdateSource = Literal['auto', 'manual', 'initial']
+
+class ActivityEntry(TypedDict):
+    id: int
+    type: ActivityType
+    message: str
+    timestamp: Union[datetime, str]
+
+class ServerStatus(TypedDict):
+    running: bool
+    port: int
+    uptime_seconds: int
+    clients_connected: int
+    total_files: int
+    total_transfers: int
+    storage_used_gb: float
+
+class SystemMetrics(TypedDict):
+    cpu_percent: float
+    memory_percent: float
+    disk_percent: float
+
+# Constants for configuration
+MAX_HISTORY_POINTS = 30
+AUTO_REFRESH_INTERVAL = 30  # seconds
+POLLING_INTERVAL = 30  # seconds
+OPERATIONS_UPDATE_CYCLE = 2  # every 60 seconds (30 * 2)
+CLICK_PROXIMITY = 20
+SOCKET_TIMEOUT = 10
+STATUS_TOAST_COOLDOWN = 90  # seconds
+ACTIVITY_TIME_WINDOW = 10  # minutes for running jobs
+MAX_ACTIVITY_DISPLAY = 10
+MAX_CLIENTS_DISPLAY = 8
+MAX_OPERATIONS_DISPLAY = 5
+
+# Significant change thresholds for toast notifications
+SIGNIFICANT_DELTA_THRESHOLDS = {
+    'clients': 2,
+    'transfers': 2,
+    'storage_gb': 1.0,
+    'files': 10
+}
+
+# Activity filter keywords
+JOB_KEYWORDS = ['start', 'running', 'upload', 'transfer']
+BACKUP_KEYWORDS = ['backup', 'completed']
+
+# Enhanced components using Flet native features
 def create_status_pill(text: str, status: str) -> ft.Container:
-    """Modern status pill with gradients and better styling."""
-    if status == "success":
-        color = ft.Colors.GREEN
-        bg_color = ft.Colors.with_opacity(0.1, ft.Colors.GREEN)
-    elif status == "error":
-        color = ft.Colors.ERROR
-        bg_color = ft.Colors.with_opacity(0.1, ft.Colors.ERROR)
-    elif status == "warning":
-        color = ft.Colors.ORANGE
-        bg_color = ft.Colors.with_opacity(0.1, ft.Colors.ORANGE)
-    else:
-        color = ft.Colors.PRIMARY
-        bg_color = ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY)
+    """Modern status pill using Flet's native styling."""
+    color_map = {
+        "success": ft.Colors.GREEN,
+        "error": ft.Colors.ERROR,
+        "warning": ft.Colors.ORANGE
+    }
+    color = color_map.get(status, ft.Colors.PRIMARY)
 
     return ft.Container(
-        content=ft.Text(
-            text,
-            color=color,
-            size=12,
-            weight=ft.FontWeight.W_600
-        ),
-        bgcolor=bg_color,
+        content=ft.Text(text, color=color, size=12, weight=ft.FontWeight.W_600),
+        bgcolor=ft.Colors.with_opacity(0.1, color),
         border=ft.border.all(1, color),
         border_radius=16,
         padding=ft.padding.symmetric(horizontal=16, vertical=6)
     )
 
-"""
-Removed unused helper create_modern_metric_card to reduce dead code and duplication.
-"""
 from utils.user_feedback import show_success_message, show_error_message
 
 logger = get_logger(__name__)
@@ -83,121 +121,125 @@ def create_dashboard_view(
     prev_server_snapshot: Optional[Dict[str, Any]] = None
     last_significant_toast_time: Optional[datetime] = None
 
-    # Mini charts history buffers (keep last 30 samples)
-    cpu_history: List[float] = []
-    memory_history: List[float] = []
-    disk_history: List[float] = []
+    # Memory-efficient history buffers using deque with fixed size
+    cpu_history: deque[float] = deque(maxlen=MAX_HISTORY_POINTS)
+    memory_history: deque[float] = deque(maxlen=MAX_HISTORY_POINTS)
+    disk_history: deque[float] = deque(maxlen=MAX_HISTORY_POINTS)
 
-    # Action Button Grouping Helper Function
-    def create_action_group(buttons: List[ft.Control],
-                           group_type: str = "primary",
-                           spacing: int = 8) -> ft.Container:
-        """
-        Create a visually grouped set of action buttons.
+    # Simplified action group using Flet's native styling
+    def create_action_group(buttons: List[ft.Control], group_type: str = "primary", spacing: int = 8) -> ft.Container:
+        """Create action button group using Flet's native styling."""
+        bgcolor = ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY) if group_type == "primary" else ft.Colors.with_opacity(0.03, ft.Colors.OUTLINE)
 
-        Args:
-            buttons: List of button controls to group
-            group_type: "primary" for main actions, "secondary" for less frequent actions
-            spacing: Space between buttons
-        """
-        if group_type == "primary":
-            bgcolor = ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY)
-        else:
-            bgcolor = ft.Colors.with_opacity(0.03, ft.Colors.OUTLINE)
-
-        # Subtle hover elevation & tint
-        hover_bg = ft.Colors.with_opacity(0.08, ft.Colors.PRIMARY) if group_type == "primary" else ft.Colors.with_opacity(0.05, ft.Colors.OUTLINE)
-        cont = ft.Container(
+        return ft.Container(
             content=ft.Row(buttons, spacing=spacing),
             padding=ft.padding.symmetric(horizontal=8, vertical=4),
             border_radius=8,
             bgcolor=bgcolor,
-            animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
-            animate_opacity=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
+            animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT)
         )
-        def _on_hover(e: ft.HoverEvent):
-            try:
-                e.control.bgcolor = hover_bg if e.data == 'true' else bgcolor
-                e.control.opacity = 1.0 if e.data == 'true' else 0.98
-                e.control.update()
-            except Exception:
-                pass
-        cont.on_hover = _on_hover
-        return cont
 
-    # Get server status data
-    def get_server_status() -> Dict[str, Any]:
+    # Standardized error handling helper
+    def safe_server_call(method, *args, **kwargs) -> Optional[Dict[str, Any]]:
+        """Standardized error handling for server bridge calls."""
+        try:
+            result = method(*args, **kwargs)
+            return result if isinstance(result, dict) and result.get('success') else None
+        except Exception as e:
+            logger.debug(f"Server call failed: {e}")
+            return None
+
+    # Get server status data with improved type safety
+    def get_server_status() -> ServerStatus:
         """Get server status using server bridge or mock data."""
-        if server_bridge:
-            try:
-                result = server_bridge.get_server_status()
-                if result.get('success'):
-                    return result.get('data', {})
-            except Exception as e:
-                logger.warning(f"Server bridge failed: {e}")
+        if server_bridge and (result := safe_server_call(server_bridge.get_server_status)):
+            return result.get('data', {})
 
-        # Mock data fallback
-        return {
-            'running': True,
-            'port': 8080,
-            'uptime_seconds': 3600 + random.randint(0, 7200),
-            'clients_connected': random.randint(0, 15),
-            'total_files': random.randint(50, 200),
-            'total_transfers': random.randint(0, 10),
-            'storage_used_gb': round(random.uniform(1.5, 25.8), 1)
-        }
+        # Type-safe mock data fallback
+        return ServerStatus(
+            running=True,
+            port=8080,
+            uptime_seconds=3600 + random.randint(0, 7200),
+            clients_connected=random.randint(0, 15),
+            total_files=random.randint(50, 200),
+            total_transfers=random.randint(0, 10),
+            storage_used_gb=round(random.uniform(1.5, 25.8), 1)
+        )
 
-    # Get system metrics using psutil
-    def get_system_metrics() -> Dict[str, Any]:
+    # Get system metrics using psutil with type safety
+    def get_system_metrics() -> SystemMetrics:
         """Get real system metrics using psutil."""
         try:
             cpu_percent = psutil.cpu_percent(interval=0.1)
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
 
-            return {
-                'cpu_percent': cpu_percent,
-                'memory_percent': memory.percent,
-                'disk_percent': (disk.used / disk.total) * 100
-            }
+            return SystemMetrics(
+                cpu_percent=cpu_percent,
+                memory_percent=memory.percent,
+                disk_percent=(disk.used / disk.total) * 100
+            )
         except Exception as e:
             logger.warning(f"Failed to get system metrics: {e}")
-            return {
-                'cpu_percent': 45.0,
-                'memory_percent': 68.0,
-                'disk_percent': 35.0
-            }
+            return SystemMetrics(
+                cpu_percent=45.0,
+                memory_percent=68.0,
+                disk_percent=35.0
+            )
 
-    # Get activity data
-    def get_activity_data() -> List[Dict[str, Any]]:
+    # Cached helper functions for better performance
+    @lru_cache(maxsize=32)
+    def get_activity_icon(activity_type: ActivityType) -> str:
+        """Get icon for activity type with caching."""
+        icon_map = {
+            'success': ft.Icons.CHECK_CIRCLE_OUTLINE,
+            'error': ft.Icons.ERROR_OUTLINE,
+            'warning': ft.Icons.WARNING_AMBER,
+            'info': ft.Icons.INFO_OUTLINE
+        }
+        return icon_map.get(activity_type, ft.Icons.INFO_OUTLINE)
+
+    @lru_cache(maxsize=32)
+    def get_activity_color(activity_type: ActivityType) -> str:
+        """Get color for activity type with caching."""
+        color_map = {
+            'success': ft.Colors.GREEN,
+            'error': ft.Colors.RED,
+            'warning': ft.Colors.ORANGE,
+            'info': ft.Colors.BLUE
+        }
+        return color_map.get(activity_type, ft.Colors.BLUE)
+
+    def normalize_activity_type(level: str) -> ActivityType:
+        """Normalize activity level to valid ActivityType."""
+        normalized = str(level).lower()
+        return normalized if normalized in ['info', 'warning', 'error', 'success'] else 'info'
+
+    # Get activity data with improved type safety
+    def get_activity_data() -> List[ActivityEntry]:
         """Get recent activity data using logs as canonical source, with mock fallback."""
-        if server_bridge:
-            try:
-                logs_result = server_bridge.get_logs()
-                if isinstance(logs_result, dict) and logs_result.get('success'):
-                    entries = logs_result.get('data', [])
-                else:
-                    entries = logs_result if isinstance(logs_result, list) else []
+        if server_bridge and (logs_result := safe_server_call(server_bridge.get_logs)):
+            entries = logs_result.get('data', [])
+            if not isinstance(entries, list):
+                entries = []
 
-                activities: List[Dict[str, Any]] = []
-                for i, entry in enumerate(entries):
-                    # Normalize fields
-                    level = str(entry.get('level', entry.get('severity', 'info'))).lower()
-                    msg = entry.get('message', entry.get('msg', ''))
-                    ts = entry.get('timestamp', entry.get('time', datetime.now()))
-                    activities.append({
-                        'id': i + 1,
-                        'type': level if level in ['info', 'warning', 'error', 'success'] else 'info',
-                        'message': msg,
-                        'timestamp': ts,
-                    })
-                return sorted(activities, key=lambda x: x['timestamp'], reverse=True)
-            except Exception as e:
-                logger.debug(f"Falling back to mock activity due to logs error: {e}")
+            activities: List[ActivityEntry] = []
+            for i, entry in enumerate(entries):
+                # Normalize fields with type safety
+                level = normalize_activity_type(entry.get('level', entry.get('severity', 'info')))
+                msg = str(entry.get('message', entry.get('msg', '')))
+                ts = entry.get('timestamp', entry.get('time', datetime.now()))
 
-        # Mock activity data
-        activities = []
-        activity_types = ["info", "error", "warning", "success"]
+                activities.append(ActivityEntry(
+                    id=i + 1,
+                    type=level,
+                    message=msg,
+                    timestamp=ts
+                ))
+            return sorted(activities, key=lambda x: x['timestamp'], reverse=True)
+
+        # Type-safe mock activity data
+        activity_types: List[ActivityType] = ['info', 'error', 'warning', 'success']
         messages = [
             "Client connected from 192.168.1.{ip}",
             "File backup completed: {filename}",
@@ -210,34 +252,32 @@ def create_dashboard_view(
             "Network connection restored"
         ]
 
+        activities: List[ActivityEntry] = []
         for i in range(20):
             time_offset = timedelta(minutes=random.randint(0, 120))
-            activities.append({
-                'id': i + 1,
-                'type': random.choice(activity_types),
-                'message': random.choice(messages).format(
+            activities.append(ActivityEntry(
+                id=i + 1,
+                type=random.choice(activity_types),
+                message=random.choice(messages).format(
                     ip=random.randint(100, 199),
                     filename=f"document_{random.randint(1, 100)}.pdf"
                 ),
-                'timestamp': datetime.now() - time_offset
-            })
+                timestamp=datetime.now() - time_offset
+            ))
 
         return sorted(activities, key=lambda x: x['timestamp'], reverse=True)
 
     def create_premium_hero_card(value: str, label: str, trend: str = "", card_type: str = "primary", value_control: Optional[ft.Text] = None, on_click=None) -> ft.Card:
-        """Create premium hero metric card using Flet's Card component.
-
-        If value_control is provided, it's used for dynamic updates.
-        """
+        """Create hero metric card using Flet's native Card with built-in animations."""
         # Use Flet's semantic color system
-        if card_type == "success":
-            color = ft.Colors.GREEN
-        elif card_type == "info":
-            color = ft.Colors.BLUE
-        else:  # primary
-            color = ft.Colors.PRIMARY
+        color_map = {
+            "success": ft.Colors.GREEN,
+            "info": ft.Colors.BLUE,
+            "primary": ft.Colors.PRIMARY
+        }
+        color = color_map.get(card_type, ft.Colors.PRIMARY)
 
-        # Trend indicator
+        # Trend indicator using native Flet components
         trend_widget = None
         if trend:
             is_positive = trend.startswith("+")
@@ -249,140 +289,79 @@ def create_dashboard_view(
         value_text = value_control or ft.Text(value, size=48, weight=ft.FontWeight.BOLD, color=color)
         label_text = ft.Text(label, size=16, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE)
 
-        # Base content row (value + trend)
-        header_row = ft.Row([
-            value_text,
-            trend_widget or ft.Container()
-        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-           animate_scale=ft.Animation(100, ft.AnimationCurve.EASE_OUT))
-
-        # Overlay for pressed/hover tint (Stacked above base content)
-        is_dark = False
-        try:
-            is_dark = (getattr(page, "theme_mode", None) == ft.ThemeMode.DARK)
-        except Exception:
-            pass
-        # Overlay opacities (keep inside function scope for correctness)
-        overlay_hover_opacity = 0.08 if is_dark else 0.06
-        overlay_pressed_opacity = 0.12 if is_dark else 0.08
-        overlay = ft.Container(
-            bgcolor=ft.Colors.with_opacity(overlay_hover_opacity, color),
-            border_radius=16,
-            opacity=0.0,
-        )
-
-        # Subtle pressed feedback wrapper (applies to entire hero card area and header/label subparts)
-        def _handle_click(e):
-            if on_click is None:
-                return
-            try:
-                # Brief press effect: scale down and show overlay
-                header_row.scale = 0.985
-                label_text.opacity = 0.95
-                overlay.opacity = overlay_pressed_opacity
-                # Update affected controls
-                try:
-                    header_row.update()
-                    label_text.update()
-                    overlay.update()
-                except Exception:
-                    pass
-
-                async def _reset_and_invoke():
-                    try:
-                        await asyncio.sleep(0.08)
-                        header_row.scale = 1.0
-                        label_text.opacity = 1.0
-                        overlay.opacity = 0.0
-                        try:
-                            header_row.update()
-                            label_text.update()
-                            overlay.update()
-                        except Exception:
-                            pass
-                    except Exception:
-                        pass
-                    # Invoke original handler
-                    try:
-                        on_click(e)
-                    except Exception:
-                        pass
-
-                page.run_task(_reset_and_invoke)
-            except Exception:
-                # On any failure, still try to invoke original handler
-                try:
-                    on_click(e)
-                except Exception:
-                    pass
-
-        # Base card container
-        base_container = ft.Container(
+        # Native Flet Card with built-in hover and animation support
+        card_content = ft.Container(
             content=ft.Column([
-                header_row,
-                label_text,
+                ft.Row([value_text, trend_widget or ft.Container()],
+                      alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                label_text
             ], spacing=8),
             padding=24,
-            bgcolor=ft.Colors.with_opacity(0.05, color),
-            border_radius=16,
+            on_click=on_click,
+            animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
+            animate_scale=ft.Animation(100, ft.AnimationCurve.EASE_OUT)
         )
 
-        # Top interactive layer covering the whole card area
-        interactive_layer = ft.Container(
-            border_radius=16,
-            on_click=_handle_click if on_click else None,
-        )
-
-        def _on_hover(e: ft.HoverEvent):
-            try:
-                if e.data == 'true':
-                    header_row.scale = 1.01
-                    overlay.opacity = overlay_hover_opacity
-                else:
-                    header_row.scale = 1.0
-                    overlay.opacity = 0.0
-                header_row.update()
-                overlay.update()
-            except Exception:
-                pass
-        interactive_layer.on_hover = _on_hover
-
-        # Flet compatibility: Replace Positioned.fill with expand containers in Stack
-        overlay.expand = True
-        interactive_layer.expand = True
-        base_container.expand = True
         return ft.Card(
-            content=ft.Stack(
-                controls=[
-                    base_container,
-                    overlay,
-                    interactive_layer,
-                ]
-            ),
-            elevation=4
+            content=card_content,
+            elevation=4,
+            color=ft.Colors.with_opacity(0.05, color),
+            surface_tint_color=color
         )
 
-    def create_premium_gauge(percentage: int, label: str, context: str = "") -> ft.Card:
-        """Deprecated: previously used to render a gauge; kept as a safe stub (unused)."""
-        return ft.Card()
 
     def create_premium_activity_stream() -> ft.Card:
-        """Create activity stream using Flet's ListView."""
-        activities = [
-            {"type": "success", "icon": ft.Icons.CLOUD_UPLOAD, "text": "Backup completed", "detail": "1.2GB in 3m 45s", "time": "2m ago"},
-            {"type": "info", "icon": ft.Icons.PERSON_ADD, "text": "New client connected", "detail": "192.168.1.175", "time": "5m ago"},
-            {"type": "warning", "icon": ft.Icons.WARNING, "text": "High memory usage", "detail": "88% for 10 minutes", "time": "8m ago"}
-        ]
+        """Create activity stream using Flet's native components and real data."""
+        # Helper functions for activity display
+        def get_activity_icon(activity_type: str) -> str:
+            icon_map = {
+                "success": ft.Icons.CHECK_CIRCLE_OUTLINE,
+                "error": ft.Icons.ERROR_OUTLINE,
+                "warning": ft.Icons.WARNING_AMBER,
+                "info": ft.Icons.INFO_OUTLINE
+            }
+            return icon_map.get(activity_type.lower(), ft.Icons.INFO_OUTLINE)
 
-        activity_list = []
+        def get_activity_color(activity_type: str) -> str:
+            color_map = {
+                "success": ft.Colors.GREEN,
+                "error": ft.Colors.RED,
+                "warning": ft.Colors.ORANGE,
+                "info": ft.Colors.BLUE
+            }
+            return color_map.get(activity_type.lower(), ft.Colors.BLUE)
+
+        # Get real activity data from the dashboard context
+        activities = current_activity[:10] if current_activity else []
+
+        # Create activity list using native Flet ListView with better performance
+        activity_controls = []
         for activity in activities:
-            color = ft.Colors.GREEN if activity["type"] == "success" else ft.Colors.ORANGE if activity["type"] == "warning" else ft.Colors.BLUE
-            activity_list.append(
+            activity_type = str(activity.get('type', 'info')).lower()
+            icon = get_activity_icon(activity_type)
+            color = get_activity_color(activity_type)
+            timestamp = activity.get('timestamp', datetime.now())
+
+            # Format timestamp
+            if isinstance(timestamp, datetime):
+                time_ago = datetime.now() - timestamp
+                if time_ago.days > 0:
+                    time_str = f"{time_ago.days}d ago"
+                elif time_ago.seconds > 3600:
+                    time_str = f"{time_ago.seconds // 3600}h ago"
+                elif time_ago.seconds > 60:
+                    time_str = f"{time_ago.seconds // 60}m ago"
+                else:
+                    time_str = "Just now"
+            else:
+                time_str = str(timestamp)
+
+            activity_controls.append(
                 ft.ListTile(
-                    leading=ft.Icon(activity["icon"], color=color),
-                    title=ft.Text(activity["text"], weight=ft.FontWeight.W_600),
-                    subtitle=ft.Text(activity["detail"]),
-                    trailing=ft.Text(activity["time"], size=12, color=ft.Colors.OUTLINE)
+                    leading=ft.Icon(icon, color=color, size=20),
+                    title=ft.Text(activity.get('message', ''), size=13, weight=ft.FontWeight.W_500),
+                    subtitle=ft.Text(time_str, size=11, color=ft.Colors.OUTLINE),
+                    dense=True
                 )
             )
 
@@ -393,20 +372,22 @@ def create_dashboard_view(
                         ft.Icon(ft.Icons.TIMELINE, size=24, color=ft.Colors.PURPLE_600),
                         ft.Text("Live Activity", size=20, weight=ft.FontWeight.BOLD)
                     ], spacing=8),
-                    *activity_list
+                    ft.ListView(
+                        controls=activity_controls,
+                        height=200,
+                        spacing=4
+                    ) if activity_controls else ft.Container(
+                        content=ft.Text("No recent activity", color=ft.Colors.OUTLINE),
+                        alignment=ft.alignment.center,
+                        height=100
+                    )
                 ], spacing=8),
                 padding=20
             ),
             elevation=2
         )
 
-    def create_server_control_panel() -> ft.Container:
-        """Deprecated: previously a server control panel; kept as a safe stub (unused)."""
-        return ft.Container()
 
-    # Removed nested function: def create_network_metrics_panel() -> ft.Container:
-    # Removed nested function: def create_storage_breakdown_panel() -> ft.Container:
-    # Removed nested function: def get_server_status_type(is_running: bool) -> str:
     # UI Controls
     # Header metadata
     last_updated_text = ft.Text("Last updated: Never", size=12)
@@ -448,36 +429,7 @@ def create_dashboard_view(
     kpi_storage_used_text = ft.Text("0 GB", size=28, weight=ft.FontWeight.BOLD)
 
     def _kpi_card(value_control: ft.Text, label: str, icon: str, color, on_click=None) -> ft.Container:
-        # Subtle hover/press interactions and tooltip on the card
-        def _handle_click(e):
-            if on_click is None:
-                return
-            try:
-                # Brief press effect: scale + deepen bg
-                e.control.scale = 0.98
-                e.control.bgcolor = ft.Colors.with_opacity(0.10, color)
-                e.control.update()
-
-                async def _reset_and_invoke():
-                    try:
-                        await asyncio.sleep(0.08)
-                        e.control.scale = 1.0
-                        e.control.bgcolor = ft.Colors.with_opacity(0.06, color)
-                        e.control.update()
-                    except Exception:
-                        pass
-                    try:
-                        on_click(e)
-                    except Exception:
-                        pass
-
-                page.run_task(_reset_and_invoke)
-            except Exception:
-                try:
-                    on_click(e)
-                except Exception:
-                    pass
-
+        """Simplified KPI card using Flet's native features."""
         return ft.Container(
             content=ft.Column([
                 ft.Row([
@@ -498,27 +450,26 @@ def create_dashboard_view(
             bgcolor=ft.Colors.with_opacity(0.06, color),
             animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
             animate_scale=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
-            on_hover=lambda e: (setattr(e.control, 'scale', 1.02 if e.data == 'true' else 1.0), e.control.update()),
-            on_click=_handle_click if on_click else None,
+            on_click=on_click,
             tooltip=label,
         )
 
     # Navigation helpers using the app_ref exposed on page
-    def _go_to_clients(_e=None):
+    def _go_to_clients(e=None):
         try:
             if hasattr(page, 'app_ref') and hasattr(page.app_ref, '_switch_to_view'):
                 page.app_ref._switch_to_view(1)  # Clients
         except Exception:
             pass
 
-    def _go_to_files(_e=None):
+    def _go_to_files(e=None):
         try:
             if hasattr(page, 'app_ref') and hasattr(page.app_ref, '_switch_to_view'):
                 page.app_ref._switch_to_view(2)  # Files
         except Exception:
             pass
 
-    def _go_to_logs(_e=None):
+    def _go_to_logs(e=None):
         try:
             if hasattr(page, 'app_ref') and hasattr(page.app_ref, '_switch_to_view'):
                 page.app_ref._switch_to_view(5)  # Logs
@@ -532,67 +483,56 @@ def create_dashboard_view(
         ft.Column([_kpi_card(kpi_storage_used_text, "Storage Used", ft.Icons.STORAGE, ft.Colors.PURPLE, on_click=_go_to_files)], col={"sm": 6, "md": 3, "lg": 3}),
     ], spacing=12)
 
-    # Live system sparkline charts
-    def _create_sparkline(color) -> ft.BarChart:
-        return ft.BarChart(
-            bar_groups=[],
-            interactive=False,
-            max_y=100,
+    # Live system sparkline charts using native LineChart for better performance
+    def _create_sparkline(color) -> ft.LineChart:
+        return ft.LineChart(
+            data_series=[ft.LineChartData(
+                data_points=[],
+                color=color,
+                stroke_width=2,
+                curved=True,
+                prevent_curve_over_shooting=True
+            )],
             min_y=0,
+            max_y=100,
             width=220,
             height=70,
+            interactive=False,
             bgcolor=ft.Colors.TRANSPARENT,
-            border=ft.border.all(1, ft.Colors.OUTLINE),
+            border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE)),
+            horizontal_grid_lines=ft.ChartGridLines(
+                color=ft.Colors.with_opacity(0.1, color),
+                width=1
+            ),
+            vertical_grid_lines=ft.ChartGridLines(
+                color=ft.Colors.with_opacity(0.1, color),
+                width=1
+            )
         )
 
     cpu_spark = _create_sparkline(ft.Colors.BLUE)
     mem_spark = _create_sparkline(ft.Colors.GREEN)
     disk_spark = _create_sparkline(ft.Colors.PURPLE)
 
-    def _update_spark(chart: ft.BarChart, values: List[float], color) -> None:
-        groups: List[ft.BarChartGroup] = []
-        for i, v in enumerate(values[-30:]):
-            groups.append(
-                ft.BarChartGroup(
-                    x=i,
-                    bar_rods=[ft.BarChartRod(to_y=float(v), color=color, width=4, border_radius=2)]
-                )
-            )
-        chart.bar_groups = groups
+    def _update_spark(chart: ft.LineChart, values: List[float], color) -> None:
+        """Update sparkline with efficient LineChart data points using modern Python."""
+        # Use walrus operator and generator expression for efficiency
+        if not (limited_values := values[-MAX_HISTORY_POINTS:]):
+            return
 
-    # Reusable microinteraction helper to avoid duplication across lists
-    def apply_hover_click_effects(container: ft.Container, base_color: str,
-                                  hover_opacity: float = 0.04,
-                                  pressed_opacity: float = 0.12,
-                                  hover_scale: float = 1.01) -> None:
-        """Attach consistent hover and click effects to a container.
-        Keeps existing background when hover ends; safe if bgcolor is None.
-        """
-        def _on_hover(e: ft.HoverEvent, c=container, base=base_color):
-            try:
-                c.bgcolor = ft.Colors.with_opacity(hover_opacity, base) if e.data == 'true' else c.bgcolor
-                c.scale = hover_scale if e.data == 'true' else 1.0
-                c.update()
-            except Exception:
-                pass
+        data_points = [
+            ft.LineChartDataPoint(x=i, y=max(0.0, min(100.0, float(v))))
+            for i, v in enumerate(limited_values)
+        ]
 
-        def _on_click(e, c=container, base=base_color):
-            try:
-                c.bgcolor = ft.Colors.with_opacity(pressed_opacity, base)
-                c.update()
-                async def _reset():
-                    try:
-                        await asyncio.sleep(0.10)
-                        c.bgcolor = ft.Colors.with_opacity(hover_opacity, base)
-                        c.update()
-                    except Exception:
-                        pass
-                page.run_task(_reset)
-            except Exception:
-                pass
+        chart.data_series = [ft.LineChartData(
+            data_points=data_points,
+            color=color,
+            stroke_width=2,
+            curved=True,
+            prevent_curve_over_shooting=True
+        )]
 
-        container.on_hover = _on_hover
-        container.on_click = _on_click
 
     # Update all displays
     def _compute_server_status_label(running: bool) -> Tuple[str, str]:
@@ -660,20 +600,17 @@ def create_dashboard_view(
         memory_text.value = f"Memory: {memory_percent:.1f}%"
         disk_text.value = f"Disk: {disk_percent:.1f}%"
 
-        # Update history and sparklines
+        # Update history and sparklines with memory-efficient deque
         try:
             cpu_history.append(float(cpu_percent))
             memory_history.append(float(memory_percent))
             disk_history.append(float(disk_percent))
-            if len(cpu_history) > 30:
-                cpu_history = cpu_history[-30:]
-                memory_history = memory_history[-30:]
-                disk_history = disk_history[-30:]
-            _update_spark(cpu_spark, cpu_history, ft.Colors.BLUE)
-            _update_spark(mem_spark, memory_history, ft.Colors.GREEN)
-            _update_spark(disk_spark, disk_history, ft.Colors.PURPLE)
-        except Exception as _:
-            pass
+            # Deque automatically maintains maxlen, no manual truncation needed
+            _update_spark(cpu_spark, list(cpu_history), ft.Colors.BLUE)
+            _update_spark(mem_spark, list(memory_history), ft.Colors.GREEN)
+            _update_spark(disk_spark, list(disk_history), ft.Colors.PURPLE)
+        except Exception as e:
+            logger.debug(f"Failed to update sparklines: {e}")
 
     # Update activity list
         update_activity_list()
@@ -777,64 +714,12 @@ def create_dashboard_view(
         # Update last updated
         last_updated_text.value = f"Last updated: {last_updated}"
 
-        # Performance-optimized batched updates with priority grouping
-        # High priority: Critical status and user-facing indicators
-        high_priority_controls = [
-            server_status_indicator_container,
-            kpi_total_clients_text, kpi_active_jobs_text, kpi_errors_24h_text, kpi_storage_used_text,
-            hero_total_clients_text, hero_active_transfers_text, hero_uptime_text,
-            connect_button, disconnect_button
-        ]
-
-        # Medium priority: System metrics and progress indicators
-        medium_priority_controls = [
-            cpu_text, memory_text, disk_text,
-            cpu_spark, mem_spark, disk_spark,
-            used_text, free_text, forecast_text, capacity_pie
-        ]
-
-        # Low priority: Secondary information and details
-        low_priority_controls = [
-            last_updated_text,
-            activity_list, clients_list
-        ]
-
-        def update_control_group(controls, delay_ms=0):
-            """Update a group of controls with optional delay for performance"""
-            async def update_group():
-                if delay_ms > 0:
-                    await asyncio.sleep(delay_ms / 1000.0)
-
-                # Prefer granular control updates for better performance and fewer lifecycle issues
-                for control in controls:
-                    if hasattr(control, 'update') and getattr(control, 'page', None) is not None:
-                        with contextlib.suppress(Exception):
-                            control.update()
-
-            if delay_ms > 0:
-                page.run_task(update_group)
-            else:
-                # Immediate granular updates
-                for control in controls:
-                    if hasattr(control, 'update') and getattr(control, 'page', None) is not None:
-                        with contextlib.suppress(Exception):
-                            control.update()
-
-        # Actually call the update functions with priority groups
+        # Simplified update pattern using Flet's efficient update system
         try:
-            # High priority updates (immediate)
-            update_control_group(high_priority_controls, 0)
-            # Medium priority updates (small delay)
-            update_control_group(medium_priority_controls, 50)
-            # Low priority updates (larger delay)
-            update_control_group(low_priority_controls, 100)
+            # Use page.update() for overlays/dialogs or control.update() for specific controls
+            page.update()
         except Exception as e:
-            logger.debug(f"Control group updates failed: {e}")
-            # Fallback to simple page update
-            try:
-                page.update()
-            except Exception as e2:
-                logger.debug(f"Fallback page update also failed: {e2}")
+            logger.debug(f"Update failed: {e}")
 
     async def _update_all_displays_async(source: str = 'auto'):
         """Async version of update_all_displays."""
@@ -849,19 +734,34 @@ def create_dashboard_view(
             import asyncio
             loop = asyncio.get_event_loop()
 
-            # Get fresh data
-            current_server_status = await loop.run_in_executor(None, get_server_status)
-            current_system_metrics = await loop.run_in_executor(None, get_system_metrics)
-            current_activity = await loop.run_in_executor(None, get_activity_data)
+            # Concurrent data fetching for better performance
+            tasks = [
+                loop.run_in_executor(None, get_server_status),
+                loop.run_in_executor(None, get_system_metrics),
+                loop.run_in_executor(None, get_activity_data)
+            ]
 
-            # Get clients
+            # Add clients task if server bridge available
             if server_bridge:
-                # Use documented API for compatibility
-                clients_result = await loop.run_in_executor(None, server_bridge.get_all_clients_from_db)
+                tasks.append(loop.run_in_executor(None, server_bridge.get_all_clients_from_db))
+
+            # Execute all data fetching concurrently
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Process results with proper type safety
+            current_server_status = results[0] if not isinstance(results[0], Exception) else get_server_status()
+            current_system_metrics = results[1] if not isinstance(results[1], Exception) else get_system_metrics()
+            current_activity = results[2] if not isinstance(results[2], Exception) and isinstance(results[2], list) else get_activity_data()
+
+            # Handle clients result if server bridge was used
+            if server_bridge and len(results) > 3:
+                clients_result = results[3] if not isinstance(results[3], Exception) else []
                 if isinstance(clients_result, dict) and clients_result.get('success'):
                     current_clients = clients_result.get('data', [])
                 elif isinstance(clients_result, list):
                     current_clients = clients_result
+                else:
+                    current_clients = []
 
             # Determine if significant change occurred (auto refresh only, not initial/manual)
             try:
@@ -945,13 +845,13 @@ def create_dashboard_view(
         """Update the activity list."""
         activity_list.controls.clear()
 
-        # Filter activities
-        filtered_activities = current_activity
-        if activity_filter != "All":
-            filtered_activities = [
-                activity for activity in current_activity
-                if activity.get('type', '').lower() == activity_filter.lower()
-            ]
+        # Filter activities with type safety
+        safe_activity = current_activity if isinstance(current_activity, list) else []
+        filtered_activities = (
+            safe_activity if activity_filter == "All" else
+            [activity for activity in safe_activity
+             if activity.get('type', '').lower() == activity_filter.lower()]
+        )
 
         # Empty state messaging
         if not filtered_activities:
@@ -998,7 +898,7 @@ def create_dashboard_view(
                 else:
                     time_str = "Just now"
 
-            # List item with hover microinteraction
+            # Simplified list item with native Flet hover
             tile = ft.Container(
                 content=ft.ListTile(
                     leading=ft.Icon(icon, color=color, size=20),
@@ -1009,7 +909,6 @@ def create_dashboard_view(
                 animate=ft.Animation(100, ft.AnimationCurve.EASE_OUT),
                 padding=ft.padding.only(left=4, top=2, right=4, bottom=2)
             )
-            apply_hover_click_effects(tile, color, hover_opacity=0.04)
             activity_list.controls.append(tile)
 
         try:
@@ -1050,13 +949,12 @@ def create_dashboard_view(
                     padding=ft.padding.only(left=8, top=6, right=8, bottom=6),
                     border_radius=8,
                     bgcolor=ft.Colors.with_opacity(0.04, status_color),
-                    animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
+                    animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT)
                 )
-                apply_hover_click_effects(item, status_color, hover_opacity=0.06)
                 clients_list.controls.append(item)
 
     # Server control actions
-    def start_server(_e):
+    def start_server(e):
         """Start the server."""
         if server_bridge:
             try:
@@ -1073,7 +971,7 @@ def create_dashboard_view(
             show_success_message(page, "Server started (mock mode)")
             update_all_displays()
 
-    def stop_server(_e):
+    def stop_server(e):
         """Stop the server."""
         if server_bridge:
             try:
@@ -1090,15 +988,9 @@ def create_dashboard_view(
             show_success_message(page, "Server stopped (mock mode)")
             update_all_displays()
 
-    # Activity filter handler
-    def on_filter_change(e):
-        """Handle activity filter change."""
-        nonlocal activity_filter
-        activity_filter = e.control.value
-        update_activity_list()
 
     # Refresh handler
-    def refresh_dashboard(_e):
+    def refresh_dashboard(e):
         """Refresh all dashboard data (async to avoid blocking UI)."""
         try:
             async def _manual_refresh():
@@ -1112,7 +1004,7 @@ def create_dashboard_view(
     # Create UI components (header actions only)
 
     # Backup action
-    def on_backup(_e):
+    def on_backup(e):
         show_success_message(page, "Backup initiated (mock)")
 
     # Removed unused legacy Server Control card (replaced by header actions)
@@ -1137,9 +1029,6 @@ def create_dashboard_view(
         ], col={"sm": 12, "md": 4, "lg": 6})
     ], spacing=28)
 
-    # Removed unused system_metrics_card (live_system_metrics_card is used instead)
-
-    # Removed unused activity card with filter (premium stream is used in layout)
 
     # Capacity & Forecast card
     capacity_content = ft.Row([
@@ -1223,12 +1112,6 @@ def create_dashboard_view(
         opacity=1.0,  # Fixed: was 0.0 making header invisible!
     )
 
-    # Removed unused server_status_card duplicate (header + hero metrics cover this info)
-
-    # System Performance Card with simple progress indicators
-    # Removed unused system performance demo card
-
-    # Removed unused recent activity bar chart placeholder
 
     # Live System Metrics card with sparklines
     live_metrics_content = ft.Row([
@@ -1247,61 +1130,85 @@ def create_dashboard_view(
     running_jobs_list = ft.ListView(expand=True, spacing=6, padding=ft.padding.all(10), height=160)
     recent_backups_list = ft.ListView(expand=True, spacing=6, padding=ft.padding.all(10), height=160)
 
-    def _update_operations_panels():
-        # Running jobs derived from activity
-        running_jobs_list.controls.clear()
-        now_dt = datetime.now()
-        jobs = []
-        for a in current_activity:
-            ts = a.get('timestamp', now_dt)
-            if isinstance(ts, datetime) and (now_dt - ts) <= timedelta(minutes=10):
-                msg = str(a.get('message', '')).lower()
-                if any(k in msg for k in ["start", "running", "upload", "transfer"]):
-                    jobs.append(a)
-        if not jobs:
-            running_jobs_list.controls.append(ft.Text("All clear – no running jobs", size=12, color=ft.Colors.OUTLINE))
-        else:
-            for j in jobs[:5]:
-                job = ft.Container(
-                    content=ft.ListTile(
-                        leading=ft.Icon(ft.Icons.SYNC, color=ft.Colors.BLUE, size=18),
-                        title=ft.Text(str(j.get('message', 'Job')), size=13),
-                        subtitle=ft.Text("Running", size=11, color=ft.Colors.OUTLINE)
-                    ),
-                    border_radius=8,
-                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.BLUE),
-                    animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
-                )
-                apply_hover_click_effects(job, ft.Colors.BLUE, hover_opacity=0.07)
-                running_jobs_list.controls.append(job)
+    def filter_activities_by_keywords(
+        activities: List[ActivityEntry],
+        keywords: List[str],
+        time_window_minutes: Optional[int] = None
+    ) -> Iterator[ActivityEntry]:
+        """Efficient activity filtering using generator and modern Python patterns."""
+        now = datetime.now()
+        time_threshold = timedelta(minutes=time_window_minutes) if time_window_minutes else None
 
-        # Recent backups derived from activity
-        recent_backups_list.controls.clear()
-        backups = [a for a in current_activity if 'backup' in str(a.get('message', '')).lower() or 'completed' in str(a.get('message', '')).lower()]
-        if not backups:
-            recent_backups_list.controls.append(ft.Text("No recent backups", size=12, color=ft.Colors.OUTLINE))
-        else:
-            for b in backups[:5]:
-                ts = b.get('timestamp', now_dt)
-                when = ts.strftime("%H:%M") if isinstance(ts, datetime) else str(ts)
-                backup = ft.Container(
-                    content=ft.ListTile(
-                        leading=ft.Icon(ft.Icons.BACKUP, color=ft.Colors.GREEN, size=18),
-                        title=ft.Text(str(b.get('message', 'Backup')), size=13),
-                        subtitle=ft.Text(f"at {when}", size=11, color=ft.Colors.OUTLINE)
-                    ),
-                    border_radius=8,
-                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.GREEN),
-                    animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
+        return (
+            activity for activity in activities
+            if any(keyword in activity['message'].lower() for keyword in keywords) and
+               (not time_threshold or
+                (isinstance(activity['timestamp'], datetime) and
+                 (now - activity['timestamp']) <= time_threshold))
+        )
+
+    def create_operation_item(activity: ActivityEntry, icon: str, color: str, status_text: Optional[str] = None) -> ft.Container:
+        """Create operation item with type safety."""
+        timestamp = activity['timestamp']
+        time_display = timestamp.strftime("%H:%M") if isinstance(timestamp, datetime) else str(timestamp)
+        subtitle = status_text or f"at {time_display}"
+
+        return ft.Container(
+            content=ft.ListTile(
+                leading=ft.Icon(icon, color=color, size=18),
+                title=ft.Text(activity['message'], size=13),
+                subtitle=ft.Text(subtitle, size=11, color=ft.Colors.OUTLINE),
+                dense=True
+            ),
+            border_radius=8,
+            bgcolor=ft.Colors.with_opacity(0.05, color),
+            animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT)
+        )
+
+    def _update_operations_panels():
+        """Optimized operations panel update using modern Python patterns."""
+        # Ensure current_activity is a proper list for type safety
+        safe_activity = current_activity if isinstance(current_activity, list) else []
+
+        # Use constants and functional approach
+        running_jobs = list(filter_activities_by_keywords(
+            safe_activity, JOB_KEYWORDS, ACTIVITY_TIME_WINDOW
+        ))[:MAX_OPERATIONS_DISPLAY]
+
+        recent_backups = list(filter_activities_by_keywords(
+            safe_activity, BACKUP_KEYWORDS
+        ))[:MAX_OPERATIONS_DISPLAY]
+
+        # Update running jobs with pattern matching-style logic
+        running_jobs_list.controls.clear()
+        match running_jobs:
+            case [] if not running_jobs:
+                running_jobs_list.controls.append(
+                    ft.Text("All clear – no running jobs", size=12, color=ft.Colors.OUTLINE)
                 )
-                apply_hover_click_effects(backup, ft.Colors.GREEN, hover_opacity=0.07)
-                recent_backups_list.controls.append(backup)
+            case jobs:
+                running_jobs_list.controls.extend(
+                    create_operation_item(job, ft.Icons.SYNC, ft.Colors.BLUE, "Running")
+                    for job in jobs
+                )
+
+        # Update recent backups
+        recent_backups_list.controls.clear()
+        match recent_backups:
+            case [] if not recent_backups:
+                recent_backups_list.controls.append(
+                    ft.Text("No recent backups", size=12, color=ft.Colors.OUTLINE)
+                )
+            case backups:
+                recent_backups_list.controls.extend(
+                    create_operation_item(backup, ft.Icons.BACKUP, ft.Colors.GREEN)
+                    for backup in backups
+                )
 
     # Wrap operations panels into cards
     running_jobs_card = themed_card(content=running_jobs_list, title="RUNNING JOBS", page=page)
     recent_backups_card = themed_card(content=recent_backups_list, title="RECENT BACKUPS", page=page)
 
-    # Removed unused data/database/version info demo cards
 
     # Clean, organized layout structure (streamlined, no redundant big sections)
     main_content = ft.Column([
@@ -1309,14 +1216,10 @@ def create_dashboard_view(
         header_section,
         refresh_indicator,
         ft.Container(height=16),
-
-        # KPI row (enhanced small cards)
         kpi_row,
-    ft.Container(height=16),
-
-        # Live system metrics
+        ft.Container(height=16),
         live_system_metrics_card,
-    ft.Container(height=16),
+        ft.Container(height=16),
 
         # QUATERNARY: Activity Stream & Capacity/Clients Snapshot + Ops panels
         ft.ResponsiveRow([
@@ -1383,23 +1286,23 @@ def create_dashboard_view(
         except Exception:
             pass
 
-        # Start lightweight periodic refresh in background
+        # Start lightweight periodic refresh in background using constants
         async def _poll_loop():
             nonlocal _stop_polling
             try:
                 while not _stop_polling:
-                    await asyncio.sleep(30)  # Increased from 15 to 30 seconds for better performance
+                    await asyncio.sleep(POLLING_INTERVAL)
                     if auto_refresh_enabled:
                         # Fetch & update asynchronously to prevent UI blocking
                         try:
                             await _update_all_displays_async('auto')
-                            # Only update operations panels every other cycle (every 60s) to reduce load
+                            # Only update operations panels every other cycle to reduce load
                             if hasattr(_poll_loop, '_operations_update_counter'):
                                 _poll_loop._operations_update_counter += 1
                             else:
                                 _poll_loop._operations_update_counter = 1
 
-                            if _poll_loop._operations_update_counter % 2 == 0:
+                            if _poll_loop._operations_update_counter % OPERATIONS_UPDATE_CYCLE == 0:
                                 await _update_operations_panels_async()
                         except Exception as e:
                             logger.debug(f"Async update failed: {e}")
