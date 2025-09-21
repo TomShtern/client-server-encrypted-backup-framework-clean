@@ -1,21 +1,6 @@
 #!/usr/bin/env python3
 """
-FletV2 - Clean Desktop Ap    def __init__(self, page: ft.Page):
-        super().__init__()
-        self.page = page
-        self.expand = True
-
-        # Performance optimization: lazy view loading
-        self._loaded_views = {}  # Cache for loaded views
-        self._background_tasks = set()  # Track background tasks
-
-        # Window configuration moved to main() function for proper timing
-
-        # Initialize server bridge synchronously for immediate availability
-        self.server_bridge = create_server_bridge()  # Direct synchronous initialization
-        logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
-
-        # Create optimized content area with fast transitions for better performanceerly implemented Flet desktop application following best practices.
+FletV2 - Clean Desktop Application - Properly implemented Flet desktop application following best practices.
 
 This demonstrates the clean architecture:
 - Uses Flet built-ins exclusively (no framework fighting)
@@ -31,44 +16,45 @@ import asyncio
 import os
 import sys
 import contextlib
+from typing import Any, Optional, Callable, Tuple, Dict, Set, cast
 
 # Third-party imports
-import flet as ft
+import flet as ft  # type: ignore[import-untyped]
 
 # Local imports - utilities first
 from utils.debug_setup import setup_terminal_debugging
-with contextlib.suppress(ImportError):
-    from utils import utf8_patch  # noqa: F401 (side effects only)
+# ALWAYS import this in any Python file that deals with subprocess or console I/O
+# Import for side effects (UTF-8 configuration)
+import utils.utf8_solution as _  # Import for UTF-8 side effects
+
+# Initialize logging and environment BEFORE any logger usage
+logger = setup_terminal_debugging(logger_name="FletV2.main")
+os.environ.setdefault("PYTHONUTF8", "1")
 
 # Local imports - application modules
-from theme import setup_modern_theme
+from theme import setup_modern_theme, toggle_theme_mode
 from utils.server_bridge import create_server_bridge
-from utils.mock_mode_indicator import create_mock_mode_banner, add_mock_indicator_to_snackbar_message
 
 # Import the real server adapter for production use
 try:
-    from server_adapter import create_fletv2_server, FletV2ServerAdapter
-    REAL_SERVER_AVAILABLE = True
+    from server_adapter import create_fletv2_server
+    real_server_available = True
     logger.info("✅ Real server adapter imported successfully")
 except ImportError as e:
     logger.warning(f"⚠️ Real server adapter not available: {e}")
-    REAL_SERVER_AVAILABLE = False
-
-# Initialize logging and environment
-logger = setup_terminal_debugging(logger_name="FletV2.main")
-os.environ.setdefault("PYTHONUTF8", "1")
+    real_server_available = False
+    create_fletv2_server = None  # Define for type checking
 
 # Ensure project root is in path for direct execution
 project_root = os.path.dirname(__file__)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Application constants - dynamic based on server availability
-if REAL_SERVER_AVAILABLE:
-    BRIDGE_TYPE = "Real Server Integration (with fallback capability)"
+# Application bridge type - dynamic based on server availability
+bridge_type = "Real Server Integration (with fallback capability)" if real_server_available else "Mock Server Development Mode"
+if real_server_available:
     logger.info("🚀 Real server integration available - production mode enabled")
 else:
-    BRIDGE_TYPE = "Mock Server Development Mode"
     logger.info("🧪 Using mock server for development")
 
 
@@ -83,40 +69,47 @@ class FletV2App(ft.Row):
     - Uses theme.py for styling
     """
 
-    def __init__(self, page: ft.Page):
-        super().__init__()
-        self.page = page
+    def __init__(self, page: ft.Page) -> None:
+        super().__init__()  # type: ignore[call-arg]
+        self.page: ft.Page = page  # Ensure page is never None
         self.expand = True
 
-        # Window configuration moved to main() function for proper timing
+        # Type annotations for key attributes
+        self.server_bridge: Any = None
+        self.state_manager: Optional[Any] = None
+        self.content_area: ft.Container = ft.Container()
+        self.nav_rail: ft.Container = ft.Container()
+        self.nav_rail_extended: bool = True
+        self._loaded_views: Dict[str, ft.Control] = {}
+        self._background_tasks: Set[Any] = set()
 
-        # Initialize server bridge - use real server if available
-        if REAL_SERVER_AVAILABLE:
-            try:
-                # Create real server instance
+        # Initialize server bridge - prefer real server if available
+        try:
+            if real_server_available and create_fletv2_server is not None:
                 real_server = create_fletv2_server()
-                if real_server.is_connected():
+                is_connected = False
+                with contextlib.suppress(Exception):
+                    is_connected = bool(getattr(real_server, "is_connected", lambda: False)())
+                if is_connected:
                     self.server_bridge = create_server_bridge(real_server=real_server)
                     logger.info("🎉 Real server connected successfully!")
                 else:
                     logger.warning("⚠️ Real server not responding - falling back to mock mode")
                     self.server_bridge = create_server_bridge()
-            except Exception as e:
-                logger.error(f"❌ Real server initialization failed: {e}")
-                logger.info("🔄 Falling back to mock mode for development")
+            else:
                 self.server_bridge = create_server_bridge()
-        else:
-            self.server_bridge = create_server_bridge()  # Mock mode
+        except Exception as bridge_ex:
+            logger.error(f"❌ Server bridge initialization failed: {bridge_ex}")
+            self.server_bridge = create_server_bridge()
 
-        logger.info(f"Server bridge initialized: {BRIDGE_TYPE}")
+        logger.info(f"Server bridge initialized: {bridge_type}")
 
         # Initialize state manager for reactive UI updates - after server bridge is ready
-        self.state_manager = None
         self._initialize_state_manager()
 
         # Comment 12: Track current view dispose function for proper StateManager cleanup
-        self._current_view_dispose = None
-        self._current_view_name = None
+        self._current_view_dispose: Optional[Callable[[], None]] = None
+        self._current_view_name: Optional[str] = None
 
         # Create optimized content area with modern Material Design 3 styling and fast transitions
         self.content_area = ft.Container(
@@ -199,19 +192,19 @@ class FletV2App(ft.Row):
             logger.error(f"Failed to load initial dashboard view: {ex}", exc_info=True)
             # Fallback: show error in content area
             try:
-                self.content_area.content.content = ft.Container(
+                self.content_area.content.content = ft.Container(  # type: ignore[attr-defined]
                     content=ft.Text(f"Failed to load dashboard: {ex}", color=ft.Colors.ERROR),
                     padding=20,
                     expand=True
                 )
-                self.content_area.content.update()
+                self.content_area.content.update()  # type: ignore[attr-defined]
             except Exception as fallback_ex:
                 logger.error(f"Even fallback failed: {fallback_ex}")
 
-    def _initialize_state_manager(self):
+    def _initialize_state_manager(self) -> None:
         """Initialize state manager with server bridge integration for reactive UI updates"""
         try:
-            from utils.state_manager import create_state_manager
+            from utils.state_manager import create_state_manager  # type: ignore[attr-defined]
             # Pass server_bridge for enhanced server-mediated operations
             self.state_manager = create_state_manager(self.page, self.server_bridge)
 
@@ -226,23 +219,23 @@ class FletV2App(ft.Row):
             logger.error(f"Failed to initialize state manager: {e}")
             self.state_manager = None
 
-    def _setup_cross_view_reactivity(self):
+    def _setup_cross_view_reactivity(self) -> None:
         """Set up global state listeners for cross-view reactive updates"""
         if not self.state_manager:
             return
 
         # Global listener for all state changes
-        def global_state_change_handler(key: str, new_value, old_value):
+        def global_state_change_handler(key: str, new_value: Any, old_value: Any) -> None:
             """Handle state changes that affect multiple views"""
             try:
                 # Update navigation indicators based on state
-                if key == "connection_status":
+                if key in {"connection_status"}:
                     self._update_connection_indicator(new_value)
                 elif key == "server_status":
                     self._update_server_status_indicator(new_value)
                 elif key == "notifications":
                     self._handle_notifications_update(new_value)
-                elif key in ["clients", "files", "database_info"]:
+                elif key in {"clients", "files", "database_info"}:
                     # Data changes that might affect multiple views
                     self._handle_data_update(key, new_value)
 
@@ -257,7 +250,7 @@ class FletV2App(ft.Row):
         # Set up specific cross-view subscriptions
         self._setup_view_specific_subscriptions()
 
-    def _setup_view_specific_subscriptions(self):
+    def _setup_view_specific_subscriptions(self) -> None:
         """Set up view-specific cross-view subscriptions"""
         if not self.state_manager:
             return
@@ -271,91 +264,97 @@ class FletV2App(ft.Row):
         # When files change, update file-related displays
         self.state_manager.subscribe("files", self._on_files_changed)
 
-    def _update_connection_indicator(self, status: str):
+    def _update_connection_indicator(self, status: str) -> None:
         """Update connection status indicator in navigation"""
         # This could update a visual indicator in the navigation rail
         pass
 
-    def _update_server_status_indicator(self, status: dict):
+    def _update_server_status_indicator(self, status: dict[str, Any]) -> None:
         """Update server status indicator"""
         # This could update server status displays across views
         pass
 
-    def _handle_notifications_update(self, notifications: list):
+    def _handle_notifications_update(self, notifications: list[Any]) -> None:
         """Handle notifications display updates"""
         # This could show/hide notification indicators
         pass
 
-    def _handle_data_update(self, data_type: str, new_data):
+    def _handle_data_update(self, data_type: str, new_data: Any) -> None:
         """Handle data updates that affect multiple views"""
         # This could trigger view refreshes or update counters
-        logger.debug(f"Data update received: {data_type} with {len(new_data) if isinstance(new_data, list) else 'N/A'} items")
+        logger.debug(f"Data update received: {data_type} with {len(new_data) if isinstance(new_data, list) else 'N/A'} items")  # type: ignore[arg-type]
 
-    def _on_clients_changed(self, new_clients, old_clients):
+    def _on_clients_changed(self, new_clients: Any, old_clients: Any) -> None:
         """Handle clients data changes"""
         # Could update client count displays, refresh client-dependent views
-        if isinstance(new_clients, list) and isinstance(old_clients, list):
-            if len(new_clients) != len(old_clients):
-                logger.info(f"Client count changed: {len(old_clients)} -> {len(new_clients)}")
+        if isinstance(new_clients, list) and isinstance(old_clients, list) and len(new_clients) != len(old_clients):  # type: ignore[arg-type]
+                logger.info(f"Client count changed: {len(old_clients)} -> {len(new_clients)}")  # type: ignore[arg-type]
 
-    def _on_server_status_changed(self, new_status, old_status):
+    def _on_server_status_changed(self, new_status: Any, old_status: Any) -> None:
         """Handle server status changes"""
         # Could update server indicators, enable/disable buttons
-        if isinstance(new_status, dict) and new_status.get('server_running') != (old_status or {}).get('server_running'):
-            logger.info(f"Server running state changed: {new_status.get('server_running')}")
+        if isinstance(new_status, dict) and new_status.get('server_running') != (old_status or {}).get('server_running'):  # type: ignore[attr-defined]
+            logger.info(f"Server running state changed: {new_status.get('server_running')}")  # type: ignore[attr-defined]
 
-    def _on_files_changed(self, new_files, old_files):
+    def _on_files_changed(self, new_files: Any, old_files: Any) -> None:
         """Handle files data changes"""
         # Could update file count displays, refresh file-dependent views
-        if isinstance(new_files, list) and isinstance(old_files, list):
-            if len(new_files) != len(old_files):
-                logger.info(f"Files count changed: {len(old_files)} -> {len(new_files)}")
+        if isinstance(new_files, list) and isinstance(old_files, list) and len(new_files) != len(old_files):  # type: ignore[arg-type]
+            logger.info(f"Files count changed: {len(old_files)} -> {len(new_files)}")  # type: ignore[arg-type]
 
-    def _on_page_connect(self, e):
+    def _on_page_connect(self, e: ft.ControlEvent) -> None:
         """Called when page is connected - handle reconnection scenarios."""
         logger.info("Page connected event received")
         # Dashboard is already loaded in constructor, but we can refresh if needed
         try:
             # Check if we need to refresh the current view
             animated_switcher = self.content_area.content
-            if hasattr(animated_switcher, 'content') and animated_switcher.content:
-                current_content = animated_switcher.content
-                if hasattr(current_content, '_on_page_connect'):
-                    current_content._on_page_connect()
+            if hasattr(animated_switcher, 'content') and animated_switcher.content:  # type: ignore[attr-defined]
+                current_content = animated_switcher.content  # type: ignore[attr-defined]
+                if hasattr(current_content, '_on_page_connect'):  # type: ignore[arg-type]
+                    current_content._on_page_connect()  # type: ignore[attr-defined]
                     logger.info("Current view page connect callback executed")
-        except Exception as callback_error:
-            logger.debug(f"Could not call view page connect callback: {callback_error}")
-
-    def _configure_desktop_window(self):
-        """Configure window for desktop application."""
+        except Exception as fallback_error:
+            logger.error(f"Error view display failed: {fallback_error}")
+            # Last resort
+            with contextlib.suppress(Exception):
+                self.page.update()  # type: ignore[call-arg]
         # Window settings - Updated to requested size 1730x1425
-        self.page.window_min_width = 1200  # Slightly larger minimum for better UX
-        self.page.window_min_height = 900
-        self.page.window_width = 1730      # User requested size
-        self.page.window_height = 1425     # User requested size
-        self.page.window_resizable = True
+        if hasattr(self.page, 'window_min_width'):
+            self.page.window_min_width = 1200  # type: ignore[attr-defined] # Slightly larger minimum for better UX
+        if hasattr(self.page, 'window_min_height'):
+            self.page.window_min_height = 900  # type: ignore[attr-defined]
+        if hasattr(self.page, 'window_width'):
+            self.page.window_width = 1730  # type: ignore[attr-defined] # User requested size
+        if hasattr(self.page, 'window_height'):
+            self.page.window_height = 1425  # type: ignore[attr-defined] # User requested size
+        if hasattr(self.page, 'window_resizable'):
+            self.page.window_resizable = True  # type: ignore[attr-defined]
         self.page.title = "Backup Server Management"
 
         # Apply 2025 modern theme with vibrant colors and enhanced effects
         setup_modern_theme(self.page)
 
         # Add performance optimizations - Visual Density for reduced spacing
-        self.page.theme.visual_density = ft.VisualDensity.COMPACT
+        if getattr(self.page, "theme", None) is not None:
+            # Guard against None to satisfy type checker
+            self.page.theme.visual_density = ft.VisualDensity.COMPACT  # type: ignore[attr-defined]
 
         # Set desktop-appropriate padding (reduced for more content space)
         self.page.padding = ft.Padding(0, 0, 0, 0)
 
         # Set up keyboard shortcuts
-        self.page.on_keyboard_event = self._on_keyboard_event
+        if hasattr(self.page, 'on_keyboard_event'):
+            self.page.on_keyboard_event = self._on_keyboard_event
 
-    def _on_keyboard_event(self, e: ft.KeyboardEvent):
+    def _on_keyboard_event(self, e: ft.KeyboardEvent) -> None:
         """Handle keyboard shortcuts for navigation and actions."""
         # Only handle key down events
         if e.key not in ["R", "D", "C", "F", "B", "A", "L", "S"]:
             return
 
         # Check for Ctrl modifier
-        if not e.ctrl:
+        if not hasattr(e, 'ctrl') or not e.ctrl:
             return
 
         # Handle shortcuts
@@ -392,39 +391,42 @@ class FletV2App(ft.Row):
             logger.info("Keyboard shortcut: Switch to settings")
             self._switch_to_view(6)
 
-    def _refresh_current_view(self):
+    def _refresh_current_view(self) -> None:
         """Refresh the currently active view."""
         # Access NavigationRail through container content
         nav_rail_control = self.nav_rail.content
-        current_index = nav_rail_control.selected_index
-        view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
-        if current_index < len(view_names):
-            current_view = view_names[current_index]
-            logger.info(f"Refreshing view: {current_view}")
-            self._load_view(current_view)
+        if hasattr(nav_rail_control, 'selected_index'):
+            current_index = nav_rail_control.selected_index  # type: ignore[attr-defined]
+            view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
+            if current_index is not None and current_index < len(view_names):
+                current_view = view_names[current_index]  # type: ignore[assignment]
+                logger.info(f"Refreshing view: {current_view}")
+                self._load_view(current_view)  # type: ignore[arg-type]
 
-    def _switch_to_view(self, index: int):
+    def _switch_to_view(self, index: int) -> None:
         """Switch to a specific view by index."""
         # Access NavigationRail through container content
         nav_rail_control = self.nav_rail.content
         # Bound index to available destinations
-        try:
-            total = len(nav_rail_control.destinations or [])
-            if total and (index < 0 or index >= total):
-                index = 0
-        except Exception:
-            pass
+        with contextlib.suppress(Exception):
+            if hasattr(nav_rail_control, 'destinations'):
+                total = len(nav_rail_control.destinations or [])  # type: ignore[attr-defined]
+                if total and (index < 0 or index >= total):
+                    index = 0
 
-        nav_rail_control.selected_index = index
+        if hasattr(nav_rail_control, 'selected_index'):
+            nav_rail_control.selected_index = index  # type: ignore[attr-defined]
         # Ensure the visual selection indicator updates immediately (control + container)
         with contextlib.suppress(Exception):
-            nav_rail_control.update()
+            if hasattr(nav_rail_control, 'update'):
+                nav_rail_control.update()  # type: ignore[attr-defined]
         with contextlib.suppress(Exception):
             self.nav_rail.update()
         # Trigger the standard change handler to load the view
-        self._on_navigation_change(type('Event', (), {'control': nav_rail_control})())
+        mock_event = type('Event', (), {'control': nav_rail_control})()
+        self._on_navigation_change(mock_event)  # type: ignore[arg-type]
 
-    def _create_navigation_rail(self):
+    def _create_navigation_rail(self) -> ft.Container:
         """Create enhanced collapsible navigation rail with modern 2025 UI styling and performance optimizations."""
         return ft.Container(
             content=ft.NavigationRail(
@@ -567,25 +569,31 @@ class FletV2App(ft.Row):
             border_radius=ft.BorderRadius(0, 12, 12, 0),  # Smaller radius for speed
         )
 
-    def _toggle_navigation_rail(self, e=None):
+    def _toggle_navigation_rail(self, e: Optional[ft.ControlEvent] = None) -> None:
         """Toggle navigation rail with modern UI feedback and optimized performance animations."""
         self.nav_rail_extended = not self.nav_rail_extended
 
         # Update the navigation rail extended state
         nav_rail_control = self.nav_rail.content
-        nav_rail_control.extended = self.nav_rail_extended
+        if hasattr(nav_rail_control, 'extended'):
+            nav_rail_control.extended = self.nav_rail_extended  # type: ignore[attr-defined]
 
         # Update the toggle button with modern floating action button styling
-        toggle_btn = nav_rail_control.leading.content
-        toggle_btn.icon = ft.Icons.MENU_ROUNDED if self.nav_rail_extended else ft.Icons.MENU_OPEN_ROUNDED
+        toggle_btn: Any = None
+        if hasattr(nav_rail_control, 'leading') and hasattr(nav_rail_control.leading, 'content'):  # type: ignore[attr-defined]
+            toggle_btn = cast(Any, nav_rail_control.leading.content)  # type: ignore[attr-defined]
+            with contextlib.suppress(Exception):
+                toggle_btn.icon = (
+                    ft.Icons.MENU_ROUNDED if self.nav_rail_extended else ft.Icons.MENU_OPEN_ROUNDED
+                )
 
-        # Add modern scale animation feedback for better UX
-        toggle_btn.scale = 0.95
-        toggle_btn.animate_scale = ft.Animation(80, ft.AnimationCurve.EASE_OUT)
-
-        # Modern rotation animation with cubic curves
-        toggle_btn.rotate = ft.Rotate(0.25 if self.nav_rail_extended else 0)
-        toggle_btn.animate_rotation = ft.Animation(140, ft.AnimationCurve.EASE_OUT_CUBIC)
+        # Add modern scale/rotation animation feedback for better UX (only if button resolved)
+        if toggle_btn is not None:
+            with contextlib.suppress(Exception):
+                toggle_btn.scale = 0.95  # type: ignore[attr-defined]
+                toggle_btn.animate_scale = ft.Animation(80, ft.AnimationCurve.EASE_OUT)  # type: ignore[attr-defined]
+                toggle_btn.rotate = ft.Rotate(0.25 if self.nav_rail_extended else 0)  # type: ignore[attr-defined]
+                toggle_btn.animate_rotation = ft.Animation(140, ft.AnimationCurve.EASE_OUT_CUBIC)  # type: ignore[attr-defined]
 
         # Optimized animation for the navigation rail with modern curves
         self.nav_rail.animate = ft.Animation(160, ft.AnimationCurve.EASE_OUT_CUBIC)
@@ -612,30 +620,40 @@ class FletV2App(ft.Row):
             shape=ft.RoundedRectangleBorder(radius=12),
             elevation=3,
         )
-        self.page.overlay.append(nav_snack)
-        nav_snack.open = True
-        self.page.update()
+        if hasattr(self.page, 'overlay'):
+            self.page.overlay.append(nav_snack)
+            nav_snack.open = True
+            self.page.update()  # type: ignore[call-arg]
 
         # Reset scale after animation for smooth feel
         async def reset_scale_async():
             try:
                 await asyncio.sleep(0.08)
-                toggle_btn.scale = 1.0
-                toggle_btn.animate_scale = ft.Animation(80, ft.AnimationCurve.EASE_OUT)
-                toggle_btn.update()
+                if toggle_btn is not None:
+                    toggle_btn.scale = 1.0  # type: ignore[attr-defined]
+                    toggle_btn.animate_scale = ft.Animation(80, ft.AnimationCurve.EASE_OUT)  # type: ignore[attr-defined]
+                    with contextlib.suppress(Exception):
+                        toggle_btn.update()  # type: ignore[call-arg]
             except Exception as e:
                 logger.debug(f"Scale reset completed: {e}")
 
         # Use asyncio for proper async timing (replaces threading.Timer)
-        self.page.run_task(reset_scale_async)
+        if hasattr(self.page, 'run_task'):
+            self.page.run_task(reset_scale_async)
 
         logger.info(f"Navigation rail {'extended' if self.nav_rail_extended else 'collapsed'} with modern UI feedback")
 
-    def _on_navigation_change(self, e):
+    def _on_navigation_change(self, e: ft.ControlEvent) -> None:
         """Optimized navigation callback with lazy loading."""
         # Map index to view names
         view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
-        selected_view = view_names[e.control.selected_index] if e.control.selected_index < len(view_names) else "dashboard"
+
+        # Safe access to selected_index
+        selected_index = 0  # Default to dashboard
+        if hasattr(e, 'control') and hasattr(e.control, 'selected_index') and e.control.selected_index is not None:  # type: ignore[attr-defined]
+            selected_index = e.control.selected_index  # type: ignore[attr-defined]
+
+        selected_view = view_names[selected_index] if selected_index < len(view_names) else "dashboard"
 
         logger.info(f"Navigation switching to: {selected_view} (optimized)")
 
@@ -643,23 +661,25 @@ class FletV2App(ft.Row):
         # Load view with lazy loading optimization
         self._load_view(selected_view)
 
-    async def _on_theme_toggle(self, e):
+    async def _on_theme_toggle(self, e: ft.ControlEvent) -> None:
         """Handle theme toggle button click with modern UI animations and feedback."""
         try:
-            from theme import toggle_theme_mode
             toggle_theme_mode(self.page)
 
             # Add modern animation feedback to the toggle button
-            toggle_btn = e.control
-            original_icon = toggle_btn.icon
+            toggle_btn = e.control  # type: ignore[assignment]
+            if hasattr(toggle_btn, 'icon'):  # type: ignore[arg-type]
+                _ = toggle_btn.icon  # Track for visual feedback  # type: ignore[attr-defined]
 
-            # Modern bounce-scale animation for visual feedback
-            toggle_btn.scale = 0.85
-            toggle_btn.animate_scale = ft.Animation(100, ft.AnimationCurve.EASE_OUT_BACK)
-            toggle_btn.update()
+            if hasattr(toggle_btn, 'scale'):  # type: ignore[arg-type]
+                toggle_btn.scale = 0.85  # type: ignore[attr-defined]
+            if hasattr(toggle_btn, 'animate_scale'):  # type: ignore[arg-type]
+                toggle_btn.animate_scale = ft.Animation(100, ft.AnimationCurve.EASE_OUT_BACK)  # type: ignore[attr-defined]
+            if hasattr(toggle_btn, 'update'):  # type: ignore[arg-type]
+                toggle_btn.update()  # type: ignore[call-arg]
 
             # Modern theme feedback with enhanced SnackBar
-            current_theme = "Dark" if self.page.theme_mode == ft.ThemeMode.DARK else "Light"
+            current_theme = "Dark" if hasattr(self.page, 'theme_mode') and self.page.theme_mode == ft.ThemeMode.DARK else "Light"
             snack_bar = ft.SnackBar(
                 content=ft.Row([
                     ft.Icon(
@@ -681,28 +701,31 @@ class FletV2App(ft.Row):
                 shape=ft.RoundedRectangleBorder(radius=12),
                 elevation=4,
             )
-            self.page.overlay.append(snack_bar)
-            snack_bar.open = True
-            self.page.update()
+            if hasattr(self.page, 'overlay'):
+                self.page.overlay.append(snack_bar)
+                snack_bar.open = True
+                self.page.update()  # type: ignore[call-arg]
 
             # Reset scale after animation using asyncio.sleep for proper timing
-            import asyncio
             await asyncio.sleep(0.1)  # 100ms delay
 
-            def reset_scale():
+            def reset_scale() -> None:
                 try:
-                    toggle_btn.scale = 1.0
-                    toggle_btn.animate_scale = ft.Animation(120, ft.AnimationCurve.EASE_OUT_BACK)
-                    toggle_btn.update()
-                except Exception as scale_error:
+                    if hasattr(toggle_btn, 'scale'):  # type: ignore[arg-type]
+                        toggle_btn.scale = 1.0  # type: ignore[attr-defined]
+                    if hasattr(toggle_btn, 'animate_scale'):  # type: ignore[arg-type]
+                        toggle_btn.animate_scale = ft.Animation(120, ft.AnimationCurve.EASE_OUT_BACK)  # type: ignore[attr-defined]
+                    if hasattr(toggle_btn, 'update'):  # type: ignore[arg-type]
+                        toggle_btn.update()  # type: ignore[call-arg]
+                except Exception as scale_error:  # type: ignore[assignment]
                     logger.debug(f"Theme toggle scale reset: {scale_error}")
 
             reset_scale()
 
             logger.info(f"Theme toggled to {current_theme} with modern UI feedback")
 
-        except Exception as e:
-            logger.error(f"Theme toggle failed: {e}")
+        except Exception as ex:  # use different name to avoid shadowing parameter type
+            logger.error(f"Theme toggle failed: {ex}")
             # Show error feedback with modern SnackBar
             error_snack = ft.SnackBar(
                 content=ft.Row([
@@ -713,11 +736,12 @@ class FletV2App(ft.Row):
                 duration=3000,
                 behavior=ft.SnackBarBehavior.FLOATING,
             )
-            self.page.overlay.append(error_snack)
-            error_snack.open = True
-            self.page.update()
+            if hasattr(self.page, 'overlay'):
+                self.page.overlay.append(error_snack)
+                error_snack.open = True
+                self.page.update()  # type: ignore[call-arg]
 
-    def _show_loading_indicator(self):
+    def _show_loading_indicator(self) -> None:
         """Show modern loading indicator with enhanced UI components during view transitions."""
         try:
             # Create a modern loading overlay with cards and visual enhancements
@@ -777,13 +801,15 @@ class FletV2App(ft.Row):
 
             # Temporarily show loading indicator
             animated_switcher = self.content_area.content
-            animated_switcher.content = loading_content
+            if hasattr(animated_switcher, 'content'):  # type: ignore[arg-type]
+                animated_switcher.content = loading_content  # type: ignore[attr-defined]
 
             # Defensive update for loading indicator with modern error handling
             try:
                 if hasattr(self.page, 'controls') and self.page.controls:
-                    animated_switcher.update()
-                    logger.debug("Modern loading indicator updated via AnimatedSwitcher")
+                    if hasattr(animated_switcher, 'update'):  # type: ignore[arg-type]
+                        animated_switcher.update()  # type: ignore[call-arg]
+                        logger.debug("Modern loading indicator updated via AnimatedSwitcher")
                 else:
                     logger.debug("Page not ready for loading indicator update")
             except Exception as update_error:
@@ -799,73 +825,115 @@ class FletV2App(ft.Row):
                     expand=True,
                     alignment=ft.alignment.center
                 )
-                self.content_area.content.content = simple_loading
-                self.content_area.content.update()
+                if hasattr(self.content_area.content, 'content'):  # type: ignore[arg-type]
+                    self.content_area.content.content = simple_loading  # type: ignore[attr-defined]
+                if hasattr(self.content_area.content, 'update'):  # type: ignore[arg-type]
+                    self.content_area.content.update()  # type: ignore[call-arg]
 
-    def _set_animation_for_view(self, view_name: str):
+    def _set_animation_for_view(self, view_name: str) -> None:
         """Dynamically set animation type and parameters based on view for enhanced UX."""
         animated_switcher = self.content_area.content
+        if animated_switcher is None:
+            return
 
         # Different animation styles for different views
         if view_name == "dashboard":
             # Dashboard: Scale with bounce for welcoming feel
-            animated_switcher.transition = ft.AnimatedSwitcherTransition.SCALE
-            animated_switcher.duration = 450
-            animated_switcher.reverse_duration = 350
-            animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT_BACK
-            animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN_OUT
+            if hasattr(animated_switcher, 'transition'):  # type: ignore[arg-type]
+                animated_switcher.transition = ft.AnimatedSwitcherTransition.SCALE  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'duration'):  # type: ignore[arg-type]
+                animated_switcher.duration = 450  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'reverse_duration'):  # type: ignore[arg-type]
+                animated_switcher.reverse_duration = 350  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'switch_in_curve'):  # type: ignore[arg-type]
+                animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT_BACK  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'switch_out_curve'):  # type: ignore[arg-type]
+                animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN_OUT  # type: ignore[attr-defined]
 
         elif view_name == "clients":
             # Clients: Slide from right for data flow feel
-            animated_switcher.transition = ft.AnimatedSwitcherTransition.SCALE
-            animated_switcher.duration = 400
-            animated_switcher.reverse_duration = 300
-            animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT_CUBIC
-            animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN_CUBIC
+            if hasattr(animated_switcher, 'transition'):  # type: ignore[arg-type]
+                animated_switcher.transition = ft.AnimatedSwitcherTransition.SCALE  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'duration'):  # type: ignore[arg-type]
+                animated_switcher.duration = 400  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'reverse_duration'):  # type: ignore[arg-type]
+                animated_switcher.reverse_duration = 300  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'switch_in_curve'):  # type: ignore[arg-type]
+                animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT_CUBIC  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'switch_out_curve'):  # type: ignore[arg-type]
+                animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN_CUBIC  # type: ignore[attr-defined]
 
         elif view_name == "files":
             # Files: Fade with elastic for file browsing feel
-            animated_switcher.transition = ft.AnimatedSwitcherTransition.FADE
-            animated_switcher.duration = 350
-            animated_switcher.reverse_duration = 250
-            animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT
-            animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN
+            if hasattr(animated_switcher, 'transition'):  # type: ignore[arg-type]
+                animated_switcher.transition = ft.AnimatedSwitcherTransition.FADE  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'duration'):  # type: ignore[arg-type]
+                animated_switcher.duration = 350  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'reverse_duration'):  # type: ignore[arg-type]
+                animated_switcher.reverse_duration = 250  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'switch_in_curve'):  # type: ignore[arg-type]
+                animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'switch_out_curve'):  # type: ignore[arg-type]
+                animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN  # type: ignore[attr-defined]
 
         elif view_name == "database":
             # Database: Scale with smooth curves for data stability
-            animated_switcher.transition = ft.AnimatedSwitcherTransition.SCALE
-            animated_switcher.duration = 500
-            animated_switcher.reverse_duration = 400
-            animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT_QUART
-            animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN_QUART
+            if hasattr(animated_switcher, 'transition'):  # type: ignore[arg-type]
+                animated_switcher.transition = ft.AnimatedSwitcherTransition.SCALE  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'duration'):  # type: ignore[arg-type]
+                animated_switcher.duration = 500  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'reverse_duration'):  # type: ignore[arg-type]
+                animated_switcher.reverse_duration = 400  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'switch_in_curve'):  # type: ignore[arg-type]
+                animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT_QUART  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'switch_out_curve'):  # type: ignore[arg-type]
+                animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN_QUART  # type: ignore[attr-defined]
 
         elif view_name == "analytics":
             # Analytics: Scale with bounce for dynamic data visualization
-            animated_switcher.transition = ft.AnimatedSwitcherTransition.SCALE
-            animated_switcher.duration = 420
-            animated_switcher.reverse_duration = 320
-            animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT_BACK
-            animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN_BACK
+            if hasattr(animated_switcher, 'transition'):  # type: ignore[arg-type]
+                animated_switcher.transition = ft.AnimatedSwitcherTransition.SCALE  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'duration'):  # type: ignore[arg-type]
+                animated_switcher.duration = 420  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'reverse_duration'):  # type: ignore[arg-type]
+                animated_switcher.reverse_duration = 320  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'switch_in_curve'):  # type: ignore[arg-type]
+                animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT_BACK  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'switch_out_curve'):  # type: ignore[arg-type]
+                animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN_BACK  # type: ignore[attr-defined]
 
         elif view_name == "logs":
             # Logs: Fade for quick transitions in log viewing
-            animated_switcher.transition = ft.AnimatedSwitcherTransition.FADE
-            animated_switcher.duration = 300
-            animated_switcher.reverse_duration = 200
-            animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT
-            animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN
+            if hasattr(animated_switcher, 'transition'):  # type: ignore[arg-type]
+                animated_switcher.transition = ft.AnimatedSwitcherTransition.FADE  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'duration'):  # type: ignore[arg-type]
+                animated_switcher.duration = 300  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'reverse_duration'):  # type: ignore[arg-type]
+                animated_switcher.reverse_duration = 200  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'switch_in_curve'):  # type: ignore[arg-type]
+                animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'switch_out_curve'):  # type: ignore[arg-type]
+                animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN  # type: ignore[attr-defined]
 
         elif view_name == "settings":
             # Settings: Scale with smooth transition for configuration feel
-            animated_switcher.transition = ft.AnimatedSwitcherTransition.SCALE
-            animated_switcher.duration = 380
-            animated_switcher.reverse_duration = 280
-            animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT_CUBIC
-            animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN_CUBIC
+            if hasattr(animated_switcher, 'transition'):  # type: ignore[arg-type]
+                animated_switcher.transition = ft.AnimatedSwitcherTransition.SCALE  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'duration'):  # type: ignore[arg-type]
+                animated_switcher.duration = 380  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'reverse_duration'):  # type: ignore[arg-type]
+                animated_switcher.reverse_duration = 280  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'switch_in_curve'):  # type: ignore[arg-type]
+                animated_switcher.switch_in_curve = ft.AnimationCurve.EASE_OUT_CUBIC  # type: ignore[attr-defined]
+            if hasattr(animated_switcher, 'switch_out_curve'):  # type: ignore[arg-type]
+                animated_switcher.switch_out_curve = ft.AnimationCurve.EASE_IN_CUBIC  # type: ignore[attr-defined]
 
-        logger.debug(f"Set animation for {view_name}: {animated_switcher.transition}, duration={animated_switcher.duration}ms")
+        # Safe logging of animation settings
+        transition = getattr(animated_switcher, 'transition', 'unknown')
+        duration = getattr(animated_switcher, 'duration', 'unknown')
+        logger.debug(f"Set animation for {view_name}: {transition}, duration={duration}ms")
 
-    def _get_view_config(self, view_name: str):
+    def _get_view_config(self, view_name: str) -> Tuple[str, str, str]:
         """Get view configuration for the specified view name."""
         view_configs = {
             "dashboard": ("views.dashboard", "create_dashboard_view"),
@@ -882,28 +950,30 @@ class FletV2App(ft.Row):
         actual_view_name = view_name if view_name in view_configs else "dashboard"
         return module_name, function_name, actual_view_name
 
-    def _update_content_area(self, animated_switcher, content, view_name: str):
+    def _update_content_area(self, animated_switcher: Any, content: Any, view_name: str) -> bool:
         """Update content area with error handling and fallback strategies."""
-        animated_switcher.content = content
+        if hasattr(animated_switcher, 'content'):
+            animated_switcher.content = content
         update_success = False
 
         # Smart update - check if control is attached to page before updating
         try:
             # Verify AnimatedSwitcher is properly attached to page
             if hasattr(animated_switcher, 'page') and animated_switcher.page is not None:
-                animated_switcher.update()
+                if hasattr(animated_switcher, 'update'):
+                    animated_switcher.update()
                 update_success = True
                 logger.info(f"Successfully loaded {view_name} view")
             else:
                 # Control not yet attached, use page update as fallback
                 logger.debug("AnimatedSwitcher not yet attached to page, using page update")
-                self.page.update()
+                self.page.update()  # type: ignore[call-arg]
                 update_success = True
                 logger.info(f"Successfully loaded {view_name} view (page update fallback)")
         except Exception as update_error:
             logger.warning(f"AnimatedSwitcher update failed for {view_name}: {update_error}")
             try:
-                self.page.update()
+                self.page.update()  # type: ignore[call-arg]
                 update_success = True
                 logger.info(f"Successfully loaded {view_name} view (page update fallback)")
             except Exception as fallback_error:
@@ -919,14 +989,15 @@ class FletV2App(ft.Row):
             try:
                 # Use page.run_task to defer subscription setup to next event loop iteration
                 # This ensures all controls are properly attached to the page hierarchy
-                async def setup_subs():
+                async def setup_subs() -> None:
                     try:
                         content._setup_subscriptions()
                         logger.debug(f"Set up subscriptions for {view_name} view")
                     except Exception as sub_error:
                         logger.warning(f"Failed to set up subscriptions for {view_name}: {sub_error}")
 
-                self.page.run_task(setup_subs)
+                if hasattr(self.page, 'run_task'):
+                    self.page.run_task(setup_subs)
             except Exception as sub_error:
                 logger.warning(f"Failed to schedule subscription setup for {view_name}: {sub_error}")
 
@@ -979,16 +1050,23 @@ class FletV2App(ft.Row):
             # Simple error fallback
             try:
                 animated_switcher = self.content_area.content
-                animated_switcher.content = self._create_error_view(str(e))
-                animated_switcher.update()
-                logger.warning(f"Showing error view for {view_name}")
+                error_view = self._create_error_view(str(e))
+                if hasattr(animated_switcher, 'content') and animated_switcher is not None:
+                    animated_switcher.content = error_view  # type: ignore[attr-defined]
+                    with contextlib.suppress(Exception):
+                        animated_switcher.update()  # type: ignore[call-arg]
+                    logger.warning(f"Showing error view for {view_name}")
+                else:
+                    # Fallback: replace entire content area content
+                    self.content_area.content = error_view
+                    self.content_area.update()
             except Exception as fallback_error:
                 logger.error(f"Error view display failed: {fallback_error}")
                 # Last resort
                 with contextlib.suppress(Exception):
-                    self.page.update()
+                    self.page.update()  # type: ignore[call-arg]
 
-    def _create_enhanced_view(self, view_function, view_name: str):
+    def _create_enhanced_view(self, view_function: Callable[..., Any], view_name: str) -> Tuple[Any, Optional[Callable[[], None]]]:
         """Create view with state manager integration - now required for all views."""
         try:
             # All views now require state_manager as per Phase 2 refactor
@@ -997,19 +1075,23 @@ class FletV2App(ft.Row):
 
             # Comment 12: Check if view returned dispose function and subscription setup (new pattern)
             if isinstance(result, tuple):
-                logger.debug(f"Tuple length: {len(result)} for {view_name}")
-                if len(result) == 3:
-                    content, dispose_func, setup_subscriptions_func = result
+                result_t = cast(Tuple[Any, ...], result)
+                logger.debug(f"Tuple length: {len(result_t)} for {view_name}")
+                if len(result_t) == 3:
+                    content = result_t[0]
+                    dispose_func = cast(Optional[Callable[[], None]], result_t[1])
+                    setup_subscriptions_func = cast(Callable[..., Any], result_t[2])
                     # Store setup function for later execution
                     content._setup_subscriptions = setup_subscriptions_func
                     logger.debug(f"Successfully processed 3-tuple for {view_name}")
                     return content, dispose_func
-                elif len(result) == 2:
-                    content, dispose_func = result
+                elif len(result_t) == 2:
+                    content = result_t[0]
+                    dispose_func = cast(Optional[Callable[[], None]], result_t[1])
                     logger.debug(f"Successfully processed 2-tuple for {view_name}")
                     return content, dispose_func
                 else:
-                    logger.error(f"Unexpected tuple length {len(result)} for {view_name}")
+                    logger.error(f"Unexpected tuple length {len(result_t)} for {view_name}")
                     return self._create_error_view(f"Invalid tuple length for {view_name}"), lambda: None
             else:
                 logger.debug(f"Non-tuple result for {view_name}, creating auto-dispose")
@@ -1047,39 +1129,51 @@ class FletV2App(ft.Row):
 
 
 # Simple application entry point
-async def main(page: ft.Page):
+async def main(page: ft.Page) -> None:
     """Simple main function - no complex initialization."""
-    def on_window_event(e):
+    def on_window_event(e: ft.ControlEvent) -> None:
         """Handle window events to force sizing."""
-        if e.data in ("focus", "ready"):
-            page.window_width = 1730
-            page.window_height = 1425
-            page.window_center = True
-            page.update()
-            logger.info(f"Window resized via event: {page.window_width}x{page.window_height}")
+        if hasattr(e, 'data') and e.data in ("focus", "ready"):
+            _p = cast(Any, page)
+            with contextlib.suppress(Exception):
+                _p.window_width = 1730
+                _p.window_height = 1425
+                _p.window_center = True
+            page.update()  # type: ignore[call-arg]
+            width = getattr(page, 'window_width', 'unknown')
+            height = getattr(page, 'window_height', 'unknown')
+            logger.info(f"Window resized via event: {width}x{height}")
 
     try:
         # Set up window event handler
-        page.on_window_event = on_window_event
+        _p = cast(Any, page)
+        with contextlib.suppress(Exception):
+            _p.on_window_event = on_window_event
 
         # Initial window configuration
-        page.window_width = 1730
-        page.window_height = 1425
-        page.window_min_width = 1200
-        page.window_min_height = 900
-        page.window_resizable = True
-        page.window_center = True
+        with contextlib.suppress(Exception):
+            _p.window_width = 1730
+            _p.window_height = 1425
+            _p.window_min_width = 1200
+            _p.window_min_height = 900
+            _p.window_resizable = True
+            _p.window_center = True
         page.title = "Backup Server Management"
 
         # Create and add the simple desktop app with mock mode banner
         app = FletV2App(page)
         # Expose app instance on page for programmatic navigation from views (lightweight glue)
         with contextlib.suppress(Exception):
-            page.app_ref = app  # Used by views to call app._switch_to_view(index)
+            if hasattr(page, '__dict__'):
+                _p.app_ref = app  # type: ignore[attr-defined]
 
-        # Add mock mode banner if in mock mode
-        from utils.mock_mode_indicator import create_mock_mode_banner
-        mock_banner = create_mock_mode_banner(app.server_bridge)
+        # Add mock mode banner if in mock mode - import at point of use to avoid unused import warnings
+        try:
+            from utils.mock_mode_indicator import create_mock_mode_banner  # type: ignore[import-not-found]
+            mock_banner = cast(ft.Control, cast(Any, create_mock_mode_banner)(app.server_bridge))
+        except (ImportError, AttributeError):
+            logger.warning("Mock mode indicator not available, continuing without banner")
+            mock_banner = ft.Container(height=0)  # Empty container as fallback
 
         # Create main layout with banner and app
         main_layout = ft.Column([
@@ -1091,13 +1185,16 @@ async def main(page: ft.Page):
 
         # Additional attempts to force window size
         await asyncio.sleep(0.2)
-        page.window_width = 1730
-        page.window_height = 1425
-        page.update()
+        with contextlib.suppress(Exception):
+            _p.window_width = 1730
+            _p.window_height = 1425
+        page.update()  # type: ignore[call-arg]
 
-        logger.info(f"Window configured multiple attempts: {page.window_width}x{page.window_height}")
+        width = getattr(page, 'window_width', 'unknown')
+        height = getattr(page, 'window_height', 'unknown')
+        logger.info(f"Window configured multiple attempts: {width}x{height}")
 
-        logger.info(f"FletV2 App started - {BRIDGE_TYPE} active")
+        logger.info(f"FletV2 App started - {bridge_type} active")
 
     except Exception as e:
         logger.critical(f"Failed to start application: {e}", exc_info=True)
@@ -1106,13 +1203,16 @@ async def main(page: ft.Page):
         page.add(error_text)
 
         # Show error in snackbar as well
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text(f"Application failed to start: {str(e)}"),
-            bgcolor=ft.Colors.RED,
-            duration=3000
-        )
-        page.snack_bar.open = True
-        page.update()
+        if hasattr(page, '__dict__'):  # Check if we can set attributes
+            _p = cast(Any, page)
+            _p.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Application failed to start: {str(e)}"),
+                bgcolor=ft.Colors.RED,
+                duration=3000
+            )
+            with contextlib.suppress(Exception):
+                _p.snack_bar.open = True
+        page.update()  # type: ignore[call-arg]
 
 
 if __name__ == "__main__":
@@ -1142,4 +1242,5 @@ if __name__ == "__main__":
     _chosen_port = _port if _port == 0 or _port_available(_port) else 0
     if _chosen_port == 0 and _port != 0:
         print(f"Port {_port} is busy; starting on a random available port instead.")
-    asyncio.run(ft.app_async(target=main, view=ft.AppView.WEB_BROWSER, port=_chosen_port))
+    # Launch async Flet app
+    asyncio.run(ft.app_async(target=main, view=ft.AppView.WEB_BROWSER, port=_chosen_port))  # type: ignore[attr-defined]

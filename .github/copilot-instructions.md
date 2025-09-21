@@ -31,7 +31,7 @@ When creating a new workspace, especially in VS Code, focus on the `FletV2/` dir
 
 **Recommended Workspace Structure:**
 
-Include only the `FletV2` folder as the workspace root:
+Include only the `FletV2/` folder as the workspace root:
 
 -   `FletV2/` (This is the only folder that MUST be included in the workspace.)
 
@@ -215,6 +215,25 @@ Imports should become resolved and the massive error flood will vanish.
 
 *   If packages export CLI tools, add `entry_points` in `setup.py` or `pyproject.toml`.
 
+#### Addressing Type Checking Issues (Pylance/Pyright)
+
+Due to incomplete type stubs in the Flet package, you might encounter numerous "unknown type" errors. While a proper solution involves contributing to or awaiting updates from the Flet project, a temporary workaround is to disable type checking within the `FletV2` workspace. This does not resolve the underlying type issues but prevents the error flood, allowing for continued development.
+
+**Steps:**
+
+1.  **Edit `pyrightconfig.json`:**
+    -   Ensure `"extraPaths"` only includes local paths (e.g., `"./utils"`, `"./views"`) and *excludes* any external or parent paths (e.g., `".."`, `"../Shared"`). **This is a MUST**.
+    -   Consider setting `"typeCheckingMode"` to `"off"` in `pyrightconfig.json` to globally disable type checking within the workspace.
+
+2.  **Suppress Specific Errors (If Needed):**
+    -   Use `# type: ignore` on specific lines or blocks of code where type errors persist and cannot be immediately resolved. This should be used sparingly and with caution.
+
+**Important Considerations:**
+
+-   Disabling type checking is a temporary measure. Re-enable it once Flet provides comprehensive type stubs.
+-   Be mindful of potential runtime type errors. Thoroughly test your code even with type checking disabled.
+-   Prioritize resolving import errors by following the "Resolving Imports from Outside FletV2" guidelines.
+
 ## 🎯 CORE PRINCIPLES: Framework Harmony
 
 ### **The FletV2 Way - Work WITH Flet, Not Against It**
@@ -395,7 +414,35 @@ class FletV2App(ft.Row):
         from utils.server_bridge import create_server_bridge
         
         # Initialize debug setup to avoid errors
-        from utils.debug_setup import setup_terminal_debugging, get_logger
+        from utils.debug_setup import setup_terminal_debugging
+        # ALWAYS import this in any Python file that deals with subprocess or console I/O
+        # Import for side effects (UTF-8 configuration)
+        import Shared.utils.utf8_solution as _  # Import for UTF-8 side effects
+
+        # Initialize logging and environment BEFORE any logger usage
+        logger = setup_terminal_debugging(logger_name="FletV2.main")
+        os.environ.setdefault("PYTHONUTF8", "1")
+        
+        # Local imports - application modules
+        from theme import setup_modern_theme
+        from utils.server_bridge import create_server_bridge
+
+        # Import the real server adapter for production use
+        try:
+            from server_adapter import create_fletv2_server
+            real_server_available = True
+            logger.info("✅ Real server adapter imported successfully")
+        except ImportError as e:
+            logger.warning(f"⚠️ Real server adapter not available: {e}")
+            real_server_available = False
+
+        # Application constants - dynamic based on server availability
+        if real_server_available:
+            BRIDGE_TYPE = "Real Server Integration (with fallback capability)"
+            logger.info("🚀 Real server integration available - production mode enabled")
+        else:
+            BRIDGE_TYPE = "Mock Server Development Mode"
+            logger.info("🧪 Using mock server for development")
         
         self.server_bridge = create_server_bridge()
         
@@ -705,75 +752,4 @@ def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[
             create_status_card(
                 "Server Status", 
                 "Running" if status.get('server_running') else "Stopped", 
-                ft.Icons.CLOUD, 
-                ft.Colors.GREEN if status.get('server_running') else ft.Colors.RED,
-                "Current server state"
-            )
-        ], col={"sm": 12, "md": 6, "lg": 3}),
-        
-        ft.Column([
-            create_status_card(
-                "CPU Usage", 
-                "45%", 
-                ft.Icons.MEMORY, 
-                ft.Colors.ORANGE,
-                "System resource usage"
-            )
-        ], col={"sm": 12, "md": 6, "lg": 3}),
-    ], spacing=16)
-    
-    # Enhanced control buttons with modern styling
-    control_buttons = ft.Row([
-        ft.FilledButton(
-            "Start Server",
-            icon=ft.Icons.PLAY_ARROW,
-            style=create_modern_button_style("primary", "filled"),
-            on_click=on_start_server,
-            ref=start_server_button_ref
-        ),
-        ft.OutlinedButton(
-            "Stop Server",
-            icon=ft.Icons.STOP,
-            style=create_modern_button_style("error", "outlined"),
-        ),
-        ft.TextButton(
-            "Refresh",
-            icon=ft.Icons.REFRESH,
-            style=create_modern_button_style("primary", "text"),
-        ),
-    ], spacing=12)
-    
-    # Return enhanced dashboard with modern layout
-    return ft.Column([
-        # Header with modern typography
-        ft.Container(
-            content=ft.Column([
-                ft.Text("Server Dashboard", size=28, weight=ft.FontWeight.BOLD),
-                ft.Text("Monitor and control your backup server", 
-                       size=16, color=ft.Colors.ON_SURFACE_VARIANT),
-            ], spacing=4),
-            padding=ft.Padding(0, 0, 0, 24)
-        ),
-        
-        # System monitoring cards
-        system_cards,
-        
-        # Control panel
-        create_modern_card(
-            content=ft.Column([
-                ft.Text("Server Controls", size=18, weight=ft.FontWeight.W_600),
-                control_buttons,
-            ], spacing=16),
-            elevation="medium",
-            padding=24
-        ),
-        
-        # Real-time updates integration
-        ft.Container(height=20),  # Spacer
-        
-    ], expand=True, scroll=ft.ScrollMode.AUTO, spacing=20)
-```
-
-### **Theme System (SOURCE OF TRUTH)**
-
-### Flask Blueprint fixes and type
+                ft.Icons
