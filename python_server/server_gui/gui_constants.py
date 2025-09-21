@@ -14,7 +14,7 @@ class Fonts:
     """Defines the typographic scale for the application."""
     UI_FONT = "Segoe UI"
     CODE_FONT = "Consolas"
-    
+
     # --- Semantic Font Sizes ---
     Display = (UI_FONT, 18, "bold")
     Headline = (UI_FONT, 16, "bold")
@@ -29,14 +29,14 @@ class Dimensions:
     PADDING_SM = 5
     PADDING_MD = 10
     PADDING_LG = 20
-    
+
     CORNER_RADIUS = 8
-    
+
     SCROLLBAR_WIDTH = 10
 
 class CustomStyles:
     """Defines custom ttkstyle names used throughout the application."""
-    
+
     # --- Custom Style Names ---
     # These names are used in code, e.g., style='Pill.TEntry'
     PILL_ENTRY = "Pill.TEntry"
@@ -56,7 +56,7 @@ class Icons:
         "DATABASE": "database-fill",
         "LOGS": "file-text-fill",
         "SETTINGS": "gear-fill",
-        
+
         # Actions
         "START": "play-circle-fill",
         "STOP": "stop-circle-fill",
@@ -67,7 +67,7 @@ class Icons:
         "COPY": "clipboard",
         "BROWSE": "folder2-open",
         "SEARCH": "search",
-        
+
         # Indicators & Placeholders
         "SERVER_STATUS": "power",
         "UPTIME": "clock-history",
@@ -79,4 +79,4 @@ class Icons:
         "PLACEHOLDER_CHART": "graph-up-arrow",
         "VERIFIED": "check-circle-fill",
         "NOT_VERIFIED": "x-circle-fill",
-    }    C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\kivy_venv_new\Scripts\activate.bat
+    }

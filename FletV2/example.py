@@ -10,7 +10,9 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '.'))
 
 import flet as ft
-from theme import setup_default_theme
+import contextlib
+from typing import Any, cast
+from theme import setup_modern_theme as setup_default_theme
 from utils.server_bridge import create_server_bridge
 from views.dashboard import create_dashboard_view
 from views.clients import create_clients_view
@@ -20,8 +22,11 @@ def main(page: ft.Page):
     """Main application function."""
     # Configure the page
     page.title = "FletV2 Example"
-    page.window_width = 1200
-    page.window_height = 800
+    # Page layout attributes may not be statically known to the type checker; set at runtime
+    _p = cast(Any, page)
+    with contextlib.suppress(Exception):
+        _p.window_width = 1200
+        _p.window_height = 800
 
     # Set up theme
     setup_default_theme(page)
@@ -29,9 +34,18 @@ def main(page: ft.Page):
     # Create server bridge
     server_bridge = create_server_bridge()
 
-    # Create views
-    dashboard_view = create_dashboard_view(server_bridge, page)
-    clients_view = create_clients_view(server_bridge, page)
+    # Create views (call factories and unwrap tuple results if present)
+    dashboard_result = cast(Any, create_dashboard_view)(server_bridge, page, None)
+    if isinstance(dashboard_result, tuple):
+        dashboard_view = dashboard_result[0]
+    else:
+        dashboard_view = dashboard_result
+
+    clients_result = cast(Any, create_clients_view)(server_bridge, page, None)
+    if isinstance(clients_result, tuple):
+        clients_view = clients_result[0]
+    else:
+        clients_view = clients_result
 
     # Create navigation
     def on_nav_change(e):

@@ -42,7 +42,7 @@ from typing import Optional, Set, Dict, Any, Callable, cast
 
 # CRITICAL: Set up paths and UTF-8 encoding before any other imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-import Shared.utils.utf8_solution  # Enable UTF-8 console encoding for emoji logging
+import Shared.utils.utf8_solution as _  # Enable UTF-8 console encoding for emoji logging
 
 # Third-party imports
 from flask import Flask, request, jsonify, g, Response, send_file, send_from_directory, session
@@ -118,24 +118,24 @@ def force_connection_close(response: Response) -> Response:
 def limit_connections_per_ip():
     """Limit the number of concurrent connections per IP address"""
     client_ip = request.remote_addr or '127.0.0.1'
-    
+
     # Track connection count per IP (simplified tracking)
     current_count = ip_connection_counts.get(client_ip, 0)
-    
+
     # Allow static file requests and essential endpoints with more lenient limits
     if request.endpoint in ['serve_client', 'serve_client_assets']:
         max_allowed = MAX_CONNECTIONS_PER_IP + 4  # Allow more connections for assets
     else:
         max_allowed = MAX_CONNECTIONS_PER_IP
-    
+
     if current_count >= max_allowed:
         logger.warning(f"Connection limit exceeded for IP {client_ip}: {current_count}/{max_allowed}")
         return jsonify({'error': 'Too many concurrent connections'}), 429
-        
+
     # Increment counter
     ip_connection_counts[client_ip] = current_count + 1
 
-@app.after_request  
+@app.after_request
 def decrement_ip_connections(response: Response) -> Response:
     """Decrement connection count after request completes"""
     client_ip = request.remote_addr or '127.0.0.1'
@@ -147,7 +147,7 @@ def decrement_ip_connections(response: Response) -> Response:
 # Initialize SocketIO with aggressive connection management
 api_port = get_config('api.port', 9090)
 socketio: SocketIO = SocketIO(
-    app, 
+    app,
     cors_allowed_origins=[f"http://localhost:{api_port}", f"http://127.0.0.1:{api_port}"],
     ping_interval=10,  # More frequent pings to detect disconnections faster
     ping_timeout=20,   # Shorter timeout to close dead connections quickly
@@ -180,7 +180,7 @@ if SENTRY_INITIALIZED:
             "error": "Internal server error",
             "message": "An error occurred while processing your request"
         }), 500
-    
+
     @app.errorhandler(Exception)
     def handle_unexpected_error(error):
         """Handle unexpected errors with Sentry"""
@@ -207,12 +207,12 @@ perf_monitor: Any = get_performance_monitor()
 # --- CallbackMultiplexer for concurrent request handling ---
 class CallbackMultiplexer:
     """Thread-safe callback multiplexer to prevent race conditions in concurrent requests."""
-    
+
     def __init__(self) -> None:
         self._job_callbacks: Dict[str, Callable[[str, Any], None]] = {}
         self._lock = threading.Lock()
         self._registered_executor: Optional['RealBackupExecutor'] = None
-    
+
     def register_job_callback(self, job_id: str, callback: Callable[[str, Any], None]) -> None:
         """Register a callback for a specific job."""
         with self._lock:
@@ -220,30 +220,30 @@ class CallbackMultiplexer:
             # If this is the first callback and no executor registered yet, set up the multiplexer
             if self._registered_executor is None and len(self._job_callbacks) == 1:
                 self._setup_global_callback()
-    
+
     def remove_job_callback(self, job_id: str) -> None:
         """Remove callback for a specific job."""
         with self._lock:
             self._job_callbacks.pop(job_id, None)
-    
+
     def route_callback(self, phase: str, data: Any) -> None:
         """Route callback to all active jobs (used as the global callback)."""
         callbacks_copy = {}
         with self._lock:
             callbacks_copy = self._job_callbacks.copy()
-        
+
         # Call all registered callbacks
         for job_id, callback in callbacks_copy.items():
             try:
                 callback(phase, data)
             except Exception as e:
                 print(f"[CALLBACK_ERROR] Error in callback for job {job_id}: {e}")
-    
+
     def set_executor(self, executor: 'RealBackupExecutor') -> None:
         """Set the backup executor for callback registration."""
         with self._lock:
             self._registered_executor = executor
-    
+
     def _setup_global_callback(self) -> None:
         """Set up the global callback on the registered executor."""
         if self._registered_executor:
@@ -340,7 +340,7 @@ def handle_connect():
     if len(connected_clients) >= MAX_CONNECTIONS:
         print(f"[WEBSOCKET] Connection rejected - limit reached ({MAX_CONNECTIONS})")
         return False  # Reject connection
-    
+
     # Generate a unique client ID and store it in the session
     import uuid as uuid_lib
     client_id = str(uuid_lib.uuid4())
@@ -444,7 +444,7 @@ cleanup_thread = None
 def start_websocket_cleanup_thread():
     """Start the WebSocket cleanup thread after full initialization"""
     global cleanup_thread_name, cleanup_thread
-    
+
     def cleanup_websocket_resources():
         """Cleanup function for WebSocket resources"""
         logger.info("Performing WebSocket resource cleanup...")
@@ -454,14 +454,14 @@ def start_websocket_cleanup_thread():
             logger.info("WebSocket resources cleaned up successfully")
         except Exception as e:
             logger.error(f"Error during WebSocket cleanup: {e}")
-    
+
     try:
         # Import thread manager for proper shutdown coordination
         import sys
         import os
         sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'Shared', 'utils'))
         from Shared.utils.thread_manager import create_managed_thread
-        
+
         # Create managed cleanup thread
         cleanup_thread_name = create_managed_thread(
             target=cleanup_stale_connections,
@@ -471,14 +471,14 @@ def start_websocket_cleanup_thread():
             cleanup_callback=cleanup_websocket_resources,
             auto_start=True
         )
-        
+
         if cleanup_thread_name:
             logger.info(f"WebSocket cleanup thread registered as: {cleanup_thread_name}")
         else:
             logger.warning("Failed to register WebSocket cleanup thread with thread manager, falling back to basic thread")
             cleanup_thread = threading.Thread(target=cleanup_stale_connections, daemon=True)
             cleanup_thread.start()
-            
+
     except ImportError:
         logger.warning("Thread manager not available, using basic thread management")
         cleanup_thread = threading.Thread(target=cleanup_stale_connections, daemon=True)
@@ -492,11 +492,11 @@ def serve_client():
         # Use absolute path to handle working directory issues
         # Get the absolute path to this file, then go up to api_server, then up to project root
         html_path = os.path.join(CLIENT_GUI_PATH, 'NewGUIforClient.html')
-        
+
         # Debug logging
         logger.debug(f"HTML path: {html_path}")
         logger.debug(f"HTML exists: {os.path.exists(html_path)}")
-        
+
         return send_file(html_path)
     except FileNotFoundError as e:
         logger.error(f"HTML file not found: {e}")
@@ -511,50 +511,47 @@ def serve_client_assets(filename: str):
     # Don't serve the main HTML file through this route
     if filename in {'NewGUIforClient.html', 'index.html'}:
         return "<h1>Not Found</h1><p>The requested URL was not found on the server.</p>", 404
-        
+
     try:
         # Handle favicon requests specially - check both locations
-        if (filename.startswith('favicon_stuff/') or 
-            filename.startswith('favicon') or 
-            filename.endswith('.ico') or 
+        if (filename.startswith('favicon_stuff/') or
+            filename.startswith('favicon') or
+            filename.endswith('.ico') or
             filename.endswith('.svg') or
             'favicon' in filename):
-            
-            # If it's a favicon_stuff path, extract just the filename
+
+            # Centralize favicon lookup to avoid duplicated logic
+            favicon_dir = os.path.join(PROJECT_ROOT, 'favicon_stuff')
             if filename.startswith('favicon_stuff/'):
-                actual_filename = filename.replace('favicon_stuff/', '')
-                favicon_dir = os.path.join(PROJECT_ROOT, 'favicon_stuff')
-                favicon_path = os.path.join(favicon_dir, actual_filename)
-                if os.path.exists(favicon_path):
-                    logger.debug(f"Serving favicon {actual_filename} from favicon_stuff")
-                    return send_from_directory(favicon_dir, actual_filename)
+                actual_filename = filename[len('favicon_stuff/'):]
             else:
-                # First try favicon_stuff directory (project root)
-                favicon_dir = os.path.join(PROJECT_ROOT, 'favicon_stuff')
-                favicon_path = os.path.join(favicon_dir, filename)
-                if os.path.exists(favicon_path):
-                    logger.debug(f"Serving favicon {filename} from favicon_stuff")
-                    return send_from_directory(favicon_dir, filename)
-            
+                actual_filename = filename
+
+            # First try project-level favicon_stuff directory
+            favicon_path = os.path.join(favicon_dir, actual_filename)
+            if os.path.exists(favicon_path):
+                logger.debug(f"Serving favicon {actual_filename} from favicon_stuff")
+                return send_from_directory(favicon_dir, actual_filename)
+
             # Then try client directory
             client_path = os.path.join(CLIENT_GUI_PATH, filename)
             if os.path.exists(client_path):
                 logger.debug(f"Serving favicon {filename} from client-gui")
                 return send_from_directory(CLIENT_GUI_PATH, filename)
-            
+
             # If not found, return a proper 404 without logging as error
             logger.debug(f"Favicon not found: {filename}")
             return "", 404  # Return 404 instead of 204 for missing favicons
-        
+
         # Use absolute path to handle working directory issues
         client_dir = CLIENT_GUI_PATH
-        
+
         # Security check: ensure the requested file is within the client directory
         requested_path = os.path.join(client_dir, filename)
         if not os.path.abspath(requested_path).startswith(os.path.abspath(client_dir)):
             logger.error(f"Attempt to access file outside client directory: {filename}")
             return "<h1>Forbidden</h1><p>Access denied</p>", 403
-            
+
         logger.debug(f"Serving asset {filename} from {client_dir}")
         return send_from_directory(client_dir, filename)
     except FileNotFoundError:
@@ -567,24 +564,17 @@ def serve_client_assets(filename: str):
 @app.route('/progress_config.json')
 def serve_progress_config():
     """Serve the progress configuration file"""
-    try:
-        # Check for progress_config.json in python_server directory first
-        progress_config_path = os.path.join(PYTHON_SERVER_PATH, 'progress_config.json')
-        if os.path.exists(progress_config_path):
-            return send_file(progress_config_path)
-        
-        # Then check project root directory
-        root_config_path = os.path.join(PROJECT_ROOT, 'progress_config.json')
-        if os.path.exists(root_config_path):
-            return send_file(root_config_path)
-        
-        # Fallback to current directory
-        if os.path.exists('progress_config.json'):
-            return send_file('progress_config.json')
-            
-    except FileNotFoundError:
-        pass
-        
+    # Check several locations for a progress_config.json and serve the first that exists.
+    # Use contextlib.suppress to avoid race conditions where a file disappears between exists() and send_file().
+    progress_config_path = os.path.join(PYTHON_SERVER_PATH, 'progress_config.json')
+    root_config_path = os.path.join(PROJECT_ROOT, 'progress_config.json')
+    candidate_paths = [progress_config_path, root_config_path, os.path.join(os.getcwd(), 'progress_config.json')]
+
+    for p in candidate_paths:
+        with contextlib.suppress(Exception):
+            if os.path.exists(p):
+                return send_file(p)
+
     return jsonify({'error': 'progress_config.json not found'}), 404
 
 @app.route('/favicon.ico')
@@ -593,7 +583,7 @@ def serve_favicon():
     try:
         # Try to serve favicon from Client-gui directory if it exists
         favicon_path = os.path.join(CLIENT_GUI_PATH, 'favicon.ico')
-        
+
         # Return favicon if it exists, otherwise return 204
         return send_file(favicon_path) if os.path.exists(favicon_path) else ('', 204)
     except Exception as e:
@@ -612,7 +602,7 @@ def api_test():
 def api_status():
     """Get current backup status with proper connection state management and timeout protection"""
     global connection_established
-    
+
     job_id = request.args.get('job_id')
     status = None
 
@@ -624,7 +614,7 @@ def api_status():
                 events_to_send = status.get('events', [])
                 active_backup_jobs[job_id]['events'] = []
                 status['events'] = events_to_send
-    
+
     if status is None:
         # No job_id provided or job_id not found, return general server status
         with server_status_lock:
@@ -636,7 +626,7 @@ def api_status():
     if server_reachable and not connection_established:
         connection_established = True
         logger.info("Connection to backup server established via /api/status")
-    
+
     status['connected'] = server_reachable and connection_established
     status['isConnected'] = status['connected']
 
@@ -649,7 +639,7 @@ def health_check():
     try:
         # Quick health check with timeout protection
         server_running = check_backup_server_status()
-        
+
         # Get system metrics
         try:
             cpu_usage = psutil.cpu_percent(interval=0.1)
@@ -657,7 +647,7 @@ def health_check():
             active_connections = len(connected_clients) if 'connected_clients' in globals() else 0
         except Exception:
             cpu_usage = memory_usage = active_connections = 0
-        
+
         with active_backup_jobs_lock:
             active_jobs_count = len(active_backup_jobs)
 
@@ -722,7 +712,7 @@ def api_connect():
 
         # Validate required fields
         required_fields = ['host', 'port', 'username']
-        
+
         if missing_fields := [field for field in required_fields if field not in config or not config[field]]:
             return jsonify({
                 'success': False,
@@ -737,7 +727,7 @@ def api_connect():
 
         # Test if backup server is reachable
         server_reachable = check_backup_server_status(server_config['host'], server_config['port'])
-        
+
         message = ''
         if server_reachable:
             connection_established = True

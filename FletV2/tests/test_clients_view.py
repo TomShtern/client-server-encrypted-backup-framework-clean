@@ -6,6 +6,7 @@ Unit tests for the clients view.
 import unittest
 import sys
 import os
+from contextlib import suppress
 from unittest.mock import Mock, patch, MagicMock
 
 # Add the FletV2 directory to the path
@@ -24,11 +25,11 @@ class TestClientsView(unittest.TestCase):
         """Set up test fixtures before each test method."""
         # Create mock server bridge
         self.mock_server_bridge = Mock()
-        
+
         # Create mock page
         self.mock_page = Mock()
         self.mock_page.run_task = Mock()
-        
+
         # Mock clients data
         self.mock_server_bridge.get_clients.return_value = [
             {
@@ -51,13 +52,12 @@ class TestClientsView(unittest.TestCase):
         """Test that the clients view is created correctly."""
         # This test would require more complex mocking of flet components
         # For now, we'll just verify the function can be called without error
-        try:
-            view = create_clients_view(self.mock_server_bridge, self.mock_page)
+        with suppress(Exception):
+            # Create a mock state manager
+            mock_state_manager = Mock()
+            view = create_clients_view(self.mock_server_bridge, self.mock_page, mock_state_manager)
             # If we get here without exception, the function executed
             self.assertIsNotNone(view)
-        except Exception as e:
-            # This is expected since we're mocking flet
-            pass
 
     def test_get_clients_data_with_server_bridge(self):
         """Test getting clients data with server bridge."""

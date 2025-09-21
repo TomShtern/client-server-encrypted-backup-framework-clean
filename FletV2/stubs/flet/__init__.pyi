@@ -213,7 +213,7 @@ class ProgressBar(Control):
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
 
 class SnackBar(Control):
-    content: 'Control'
+    content: Optional['Control']
     action: Optional[str]
     on_action: Optional[Callable[[], None]]
     bgcolor: Optional[str]
@@ -461,8 +461,8 @@ def run(target: Callable[[Page], None] | Callable[[Page], Any], **kwargs: Any) -
 
 # Type aliases
 AppView = Any
-    DARK_MODE: str
-    LIGHT_MODE: str
+DARK_MODE: str
+LIGHT_MODE: str
 class MainAxisAlignment:
     START: 'MainAxisAlignment'
     CENTER: 'MainAxisAlignment'

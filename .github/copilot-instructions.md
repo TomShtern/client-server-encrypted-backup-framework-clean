@@ -217,22 +217,237 @@ Imports should become resolved and the massive error flood will vanish.
 
 #### Addressing Type Checking Issues (Pylance/Pyright)
 
-Due to incomplete type stubs in the Flet package, you might encounter numerous "unknown type" errors. While a proper solution involves contributing to or awaiting updates from the Flet project, a temporary workaround is to disable type checking within the `FletV2` workspace. This does not resolve the underlying type issues but prevents the error flood, allowing for continued development.
+Due to incomplete type stubs in the Flet package, you might encounter numerous "unknown type" errors. While a proper solution involves contributing to or awaiting updates from the Flet project, a temporary workaround is to adjust the `typeCheckingMode` within the `FletV2` workspace. This will enable basic error detection (e.g., undefined names, import issues) while suppressing advanced checks that often trigger false positives with Flet.
 
 **Steps:**
 
 1.  **Edit `pyrightconfig.json`:**
     -   Ensure `"extraPaths"` only includes local paths (e.g., `"./utils"`, `"./views"`) and *excludes* any external or parent paths (e.g., `".."`, `"../Shared"`). **This is a MUST**.
-    -   Consider setting `"typeCheckingMode"` to `"off"` in `pyrightconfig.json` to globally disable type checking within the workspace.
+    -   Set `"typeCheckingMode"` to `"basic"` to enable basic error detection and suppress advanced checks.
+    -   Add the following paths to `extraPaths`: `"./", "./FletV2", "./Shared", "./python_server", "./api_server"`
+    -   Add `"reportGeneralTypeIssues": false`, `"reportUnknownMemberType": false`, `"reportUntypedFunctionDecorator": false` to suppress noisy type errors.
 
-2.  **Suppress Specific Errors (If Needed):**
-    -   Use `# type: ignore` on specific lines or blocks of code where type errors persist and cannot be immediately resolved. This should be used sparingly and with caution.
+    ```json
+    {
+      "include": [
+        "."
+      ],
+      "exclude": [
+        "**/node_modules",
+        "**/__pycache__",
+        "**/flet_venv",
+        "logs",
+        "**/*.log",
+        "tests/**",
+        "important_docs/**",
+        "docs/**",
+        "Flet_Documentation_From_Context7_&_web/**",
+        "storage/**",
+        "**/build/**",
+        "**/dist/**",
+        "**/theme_original_backup.py",
+        "scripts/**"
+      ],
+      "stubPath": "./stubs",
+      "typeCheckingMode": "basic",
+      "extraPaths": ["./", "./FletV2", "./Shared", "./python_server", "./api_server"],
+      "reportGeneralTypeIssues": false,
+      "reportUnknownMemberType": false,
+      "reportUntypedFunctionDecorator": false
+    }
+    ```
+
+2.  **Create a minimal local type stub for Flet:**
+    - Create a folder named `stubs` at the root of your project.
+    - Inside the `stubs` folder, create a file named `flet.pyi`.
+
+    ```python
+    # stubs/flet.pyi
+    from typing import Any, Optional, Tuple, Callable, List, Dict
+
+    Page = Any
+    Control = Any
+    Text = Any
+    Icon = Any
+    Row = Any
+    Column = Any
+    Chip = Any
+    Padding = Any
+    BorderRadius = Any
+    AnimatedSwitcher = Any
+    AnimationCurve = Any
+    BoxShadow = Any
+    SnackBar = Any
+    ThemeMode = Any
+    NavigationRail = Any
+    NavigationRailDestination = Any
+    FloatingActionButton = Any
+    Container = Any
+    IconButton = Any
+    Icons = Any
+    Theme = Any
+    Colors = Any
+    VerticalDivider = Any
+    Animation = Any
+    ControlEvent = Any
+    KeyboardEvent = Any
+    NavigationRailLabelType = Any
+    AnimatedSwitcherTransition = Any
+    SafeArea = Any
+    Optional = Any
+
+    class ServerBridge:
+        def add_client(self, *args: Any, **kwargs: Any) -> Any: ...
+        def load_settings(self, *args: Any, **kwargs: Any) -> Any: ...
+        def save_settings( *args: Any, **kwargs: Any) -> Any: ...
+        def disconnect_client(self, *args: Any, **kwargs: Any) -> Any: ...
+        def delete_client(self, *args: Any, **kwargs: Any) -> Any: ...
+        def download_file(self, *args: Any, **kwargs: Any) -> Any: ...
+        def get_table_data(self, *args: Any, **kwargs: Any) -> Any: ...
+        def get_logs(self, *args: Any, **kwargs: Any) -> Any: ...
+        def get_files(self, *args: Any, **kwargs: Any) -> Any: ...
+        def get_clients(self, *args: Any, **kwargs: Any) -> Any: ...
+        def get_client_files(self, *args: Any, **kwargs: Any) -> Any: ...
+        def delete_file(self, *args: Any, **kwargs: Any) -> Any: ...
+        def get_database_info(self, *args: Any, **kwargs: Any) -> Any: ...
+        def is_connected(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    class StateManager:
+        def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+        def set_progress(self, *args: Any, **kwargs: Any) -> Any: ...
+        def subscribe_settings(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def run_task(self, *args: Any, **kwargs: Any) -> Any: ...
+    """Flet stub file."""
+
+    """
+    This is a minimal stub file for the Flet library. It is intended to silence type errors
+    caused by missing type hints in the Flet library. It is not a complete type definition
+    for Flet, and should not be used as such.
+    """
+
+3.  **Suppress Specific Errors (If Needed):**
+    -   Use `# type: ignore` on specific lines or blocks of code where type errors persist and cannot be immediately resolved. This should be used sparingly and with caution (e.g., `# type: ignore[unknown-member]`).
+
+**Additional Recommendations:**
+
+-   **Monitor and Iterate**: After applying, write or edit a small file (e.g., a view in `views/`) and check Pyright's output. If it's still too noisy, we can tweak further (e.g., set more reports to "none").
+-   **Best Practices**: Always run `ruff check .` and `mypy .` (as per AGENTS.md) alongside Pyright for complementary linting. Test on a minimal window size (800x600) to catch responsive issues early.
 
 **Important Considerations:**
 
--   Disabling type checking is a temporary measure. Re-enable it once Flet provides comprehensive type stubs.
+-   Switching to `"basic"` type checking mode is intended to provide a more productive experience.
 -   Be mindful of potential runtime type errors. Thoroughly test your code even with type checking disabled.
 -   Prioritize resolving import errors by following the "Resolving Imports from Outside FletV2" guidelines.
+
+#### Linter Configuration (Pylance/Pyright/MyPy/Ruff)
+
+To ensure consistent code quality, configure your linters to exclude unnecessary directories and focus only on your Python code.
+
+**Recommended Configuration:**
+
+*   **Exclusions**: Exclude `.git` files, `vcpkg` directories, and other irrelevant directories from linting.
+*   **Inclusions**: Include `FletV2`, `Shared`, and `api_server` directories for linting.
+
+**Example configurations:**
+
+*   **`.vscode/settings.json`**:
+    ```json
+    {
+        "files.exclude": {
+            "**/.git": true,
+            "**/__pycache__": true,
+            "**/vcpkg": true,
+            "**/*.py[cod]": true,
+            "**/.mypy_cache": true,
+            "**/build": true,
+            "**/dist": true,
+            "**/.venv": true,
+            "**/flet_venv": true,
+            "**/node_modules": true,
+            "**/logs": true,
+            "**/*.log": true,
+            "**/tests": true,
+            "**/important_docs": true,
+            "**/docs": true,
+            "**/Flet_Documentation_From_Context7_&_web": true,
+            "**/storage": true,
+            "**/build": true,
+            "**/dist": true,
+            "**/theme_original_backup.py": true,
+            "**/scripts": true,
+            "**/*.git": true
+        },
+        "search.exclude": {
+            "**/.git": true,
+            "**/__pycache__": true,
+            "**/vcpkg": true,
+            "**/*.py[cod]": true,
+            "**/.mypy_cache": true,
+            "**/build": true,
+            "**/dist": true,
+            "**/flet_venv": true,
+            "**/node_modules": true,
+            "**/logs": true,
+            "**/*.log": true,
+            "**/tests": true,
+            "**/important_docs": true,
+            "**/docs": true,
+            "**/Flet_Documentation_From_Context7_&_web": true,
+            "**/storage": true,
+            "**/build": true,
+            "**/dist": true,
+            "**/theme_original_backup.py": true,
+            "**/scripts": true,
+            "**/*.git": true
+        },
+        "python.analysis.extraPaths": [
+            "./FletV2",
+            "./Shared",
+            "./api_server"
+        ]
+    }
+    ```
+
+*   **`pyproject.toml` (Ruff configuration)**:
+    ```toml
+    [tool.ruff]
+    line-length = 110
+    select = ["ALL"]
+    ignore = [
+        "D203", # One-line docstring should have one blank line before and after
+        "D212", # Multi-line docstring summary should start at the first line
+        "D213", # Multi-line docstring summary should start at the second line
+        "D400", # First line should end with a period
+        "D401", # First line should be in imperative mood
+        "D403", # First word of the docstring should be properly capitalized
+        "E501",
+    ]
+    exclude = [
+        ".git",
+        "__pycache__",
+        "vcpkg",
+        "*.py[cod]",
+        ".mypy_cache",
+        "build",
+        "dist",
+        ".venv",
+        "flet_venv",
+        "node_modules",
+        "logs",
+        "*.log",
+        "tests",
+        "important_docs",
+        "docs",
+        "Flet_Documentation_From_Context7_&_web",
+        "storage",
+        "build",
+        "dist",
+        "theme_original_backup.py",
+        "scripts",
+        "*.git"
+    ]
+    ```
 
 ## 🎯 CORE PRINCIPLES: Framework Harmony
 
@@ -252,6 +467,9 @@ Work WITH the framework, not AGAINST it. If your solution feels complex, verbose
 - Can `control.update()` replace `page.update()`?
 - Does a standard Flet control already do 90% of what you need?
 
+### Error Handling Philosophy
+
+When encountering errors, prioritize fixing them directly without introducing new issues. Avoid removing code as a primary solution; instead, focus on understanding the root cause and implementing a fix that preserves functionality. Utilize sequential thinking, context7 mcp, and web search to aid in problem-solving.
 
 ### Redundant File Analysis Protocol (CRITICAL FOR DEVELOPMENT)
 **Before deleting any file that appears redundant, ALWAYS follow this process**:
@@ -273,6 +491,37 @@ Work WITH the framework, not AGAINST it. If your solution feels complex, verbose
 **Why this matters**: "Simple" or "mock" files often contain valuable utilities, edge case handling, or configuration details that aren't obvious at first glance. Premature deletion can result in lost functionality and regression bugs.
 
 **Example**: A "simple" client management component might contain useful date formatting functions or error message templates that the "comprehensive" version lacks.
+
+### Identifying and Handling .git files
+
+Filenames ending with ".git" (like files.py.git) are usually leftover patch/backup files created by a tool (merge/patch export, editor/IDE backup, or someone accidentally saved a downloaded git patch). They are not the repository .git directory.
+
+How to identify and handle them (Windows / PowerShell):
+
+- Peek at the start of the file — patch headers look like "diff --git a/… b/…" or "From <hash>".
+- See if Git tracks it or it’s untracked.
+- If it’s just a backup/patch you don’t need, move it out or delete it after verifying.
+
+Commands:
+````powershell
+# show first 40 lines
+Get-Content .\path\to\files.py.git -TotalCount 40
+
+# search for patch markers
+Select-String -Path .\path\to\files.py.git -Pattern "diff --git","From ","Index:","***" -SimpleMatch
+
+# check git status for that file
+git status --porcelain | Select-String "files.py.git"
+
+# list untracked ignored files
+git ls-files --others --exclude-standard | Select-String "files.py.git"
+
+# move to a safe temp folder before deleting
+New-Item -ItemType Directory -Path .\temp_backups -Force
+Move-Item .\path\to\files.py.git .\temp_backups\
+````
+
+If the file looks like a patch and you want to apply it, open it and inspect contents first. If it’s binary or unknown, keep a copy before deleting.
 
 ### When going through massive logs:
 On-Disk + Grep/Awk Tools
@@ -417,7 +666,7 @@ class FletV2App(ft.Row):
         from utils.debug_setup import setup_terminal_debugging
         # ALWAYS import this in any Python file that deals with subprocess or console I/O
         # Import for side effects (UTF-8 configuration)
-        import Shared.utils.utf8_solution as _  # Import for UTF-8 side effects
+        import Shared.utils.utf8_solution as _  # Import for UTF-8 side effects # noqa: F401
 
         # Initialize logging and environment BEFORE any logger usage
         logger = setup_terminal_debugging(logger_name="FletV2.main")
@@ -435,13 +684,12 @@ class FletV2App(ft.Row):
         except ImportError as e:
             logger.warning(f"⚠️ Real server adapter not available: {e}")
             real_server_available = False
-
+        
         # Application constants - dynamic based on server availability
+        bridge_type = "Real Server Integration (with fallback capability)" if real_server_available else "Mock Server Development Mode"
         if real_server_available:
-            BRIDGE_TYPE = "Real Server Integration (with fallback capability)"
             logger.info("🚀 Real server integration available - production mode enabled")
         else:
-            BRIDGE_TYPE = "Mock Server Development Mode"
             logger.info("🧪 Using mock server for development")
         
         self.server_bridge = create_server_bridge()
@@ -484,8 +732,8 @@ class FletV2App(ft.Row):
         # Load initial dashboard view immediately
         self._load_view("dashboard")
     
-    def _create_navigation_rail(self):
-        """Create enhanced collapsible navigation rail with modern styling."""
+    def _create_navigation_rail(self) -> ft.Container:
+        """Create enhanced collapsible navigation rail with modern UI styling and performance optimizations."""
         return ft.Container(
             content=ft.NavigationRail(
                 selected_index=0,
@@ -493,263 +741,19 @@ class FletV2App(ft.Row):
                 group_alignment=-0.8,
                 min_width=68,  # Collapsed width
                 min_extended_width=240,  # Extended width
-                extended=self.nav_rail_extended,
-                bgcolor=ft.Colors.with_opacity(0.98, ft.Colors.SURFACE),
-                indicator_color=ft.Colors.with_opacity(0.2, ft.Colors.PRIMARY),
-                indicator_shape=ft.RoundedRectangleBorder(radius=24),
-                elevation=6,
+                extended=self.nav_rail_extended,  # Collapsible functionality
+                bgcolor=ft.Colors.with_opacity(0.98, ft.Colors.SURFACE),  # Material Design 3 compatible surface
+                indicator_color=ft.Colors.with_opacity(0.2, ft.Colors.PRIMARY),  # Enhanced visibility with optimal opacity
+                indicator_shape=ft.RoundedRectangleBorder(radius=24),  # Material Design 3 rounded corners
+                elevation=6,  # Enhanced depth for modern layering without performance impact
                 destinations=[
                     ft.NavigationRailDestination(
-                        icon=ft.Icon(ft.Icons.DASHBOARD_OUTLINED, size=22,
+                        icon=ft.Icon(getattr(ft.Icons, "DASHBOARD_OUTLINED", ft.Icons.WARNING_OUTLINED), size=22,
                                    badge=ft.Badge(small_size=8, bgcolor=ft.Colors.GREEN)),
-                        selected_icon=ft.Icon(ft.Icons.DASHBOARD, color=ft.Colors.PRIMARY, size=24),
+                        selected_icon=ft.Icon(getattr(ft.Icons, "DASHBOARD", ft.Icons.WARNING), color=ft.Colors.PRIMARY, size=24),
                         label="Dashboard"
                     ),
                     ft.NavigationRailDestination(
-                        icon=ft.Icon(ft.Icons.PEOPLE_OUTLINE, size=22),
-                        selected_icon=ft.Icon(ft.Icons.PEOPLE, color=ft.Colors.PRIMARY, size=24),
+                        icon=ft.Icon(getattr(ft.Icons, "PEOPLE_OUTLINE", ft.Icons.WARNING_OUTLINED), size=22),
+                        selected_icon=ft.Icon(getattr(ft.Icons, "PEOPLE", ft.Icons.WARNING), color=ft.Colors.PRIMARY, size=24),
                         label="Clients"
-                    ),
-                    ft.NavigationRailDestination(
-                        icon=ft.Icon(ft.Icons.FOLDER_OUTLINED, size=22),
-                        selected_icon=ft.Icon(ft.Icons.FOLDER, color=ft.Colors.PRIMARY, size=24),
-                        label="Files"
-                    ),
-                    ft.NavigationRailDestination(
-                        icon=ft.Icon(ft.Icons.STORAGE_OUTLINED, size=22),
-                        selected_icon=ft.Icon(ft.Icons.STORAGE, color=ft.Colors.PRIMARY, size=24),
-                        label="Database"
-                    ),
-                    ft.NavigationRailDestination(
-                        icon=ft.Icon(ft.Icons.AUTO_GRAPH_OUTLINED, size=22),
-                        selected_icon=ft.Icon(ft.Icons.AUTO_GRAPH, color=ft.Colors.PRIMARY, size=24),
-                        label="Analytics"
-                    ),
-                    ft.NavigationRailDestination(
-                        icon=ft.Icon(ft.Icons.ARTICLE_OUTLINED, size=22),
-                        selected_icon=ft.Icon(ft.Icons.ARTICLE, color=ft.Colors.PRIMARY, size=24),
-                        label="Logs"
-                    ),
-                    ft.NavigationRailDestination(
-                        icon=ft.Icon(ft.Icons.SETTINGS_OUTLINED, size=22),
-                        selected_icon=ft.Icon(ft.Icons.SETTINGS, color=ft.Colors.PRIMARY, size=24),
-                        label="Settings"
-                    ),
-                ],
-                on_change=self._on_navigation_change,
-                leading=ft.Container(
-                    content=ft.FloatingActionButton(
-                        icon=ft.Icons.MENU_ROUNDED if self.nav_rail_extended else ft.Icons.MENU_OPEN_ROUNDED,
-                        mini=True,
-                        tooltip="Toggle Navigation Menu",
-                        on_click=self._toggle_navigation_rail,
-                    ),
-                    padding=ft.Padding(8, 16, 8, 8),
-                ),
-                trailing=ft.Container(
-                    content=ft.IconButton(
-                        icon=ft.Icons.BRIGHTNESS_6_ROUNDED,
-                        tooltip="Toggle Dark/Light Theme",
-                        on_click=self._on_theme_toggle,
-                    ),
-                    padding=ft.Padding(8, 8, 8, 16),
-                )
-            ),
-            shadow=ft.BoxShadow(
-                spread_radius=0, blur_radius=8,
-                color=ft.Colors.with_opacity(0.08, ft.Colors.BLACK),
-                offset=ft.Offset(2, 0),
-            ),
-            animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
-            border_radius=ft.BorderRadius(0, 12, 12, 0),
-        )
-    
-    def _on_navigation_change(self, e):
-        """Enhanced navigation with lazy loading and caching."""
-        view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
-        selected_view = view_names[e.control.selected_index] if e.control.selected_index < len(view_names) else "dashboard"
-        
-        logger.info(f"Navigation switching to: {selected_view}")
-        self._load_view(selected_view)
-    
-    def _load_view(self, view_name: str):
-        """Load view with lazy loading, caching, and enhanced error handling."""
-        try:
-            # Dynamic view loading with state manager integration
-            if view_name == "dashboard":
-                from views.dashboard import create_dashboard_view
-                content = self._create_enhanced_view(create_dashboard_view, view_name)
-            elif view_name == "clients":
-                from views.clients import create_clients_view
-                content = self._create_enhanced_view(create_clients_view, view_name)
-            # ... other views following the same pattern
-            else:
-                # Fallback to dashboard
-                from views.dashboard import create_dashboard_view
-                content = self._create_enhanced_view(create_dashboard_view, "dashboard")
-            
-            # Update content using AnimatedSwitcher for smooth transitions
-            animated_switcher = self.content_area.content
-            animated_switcher.content = content
-            animated_switcher.update()  # Precise update, not page.update()
-            
-        except Exception as e:
-            logger.error(f"Failed to load view {view_name}: {e}")
-            # Show error view as fallback
-            animated_switcher = self.content_area.content
-            animated_switcher.content = self._create_error_view(str(e))
-            animated_switcher.update()
-    
-    def _create_enhanced_view(self, view_function, view_name: str):
-        """Create view with state manager integration."""
-        try:
-            # Try with state_manager first
-            return view_function(self.server_bridge, self.page, state_manager=self.state_manager)
-        except TypeError:
-            # Fallback without state_manager for backward compatibility
-            return view_function(self.server_bridge, self.page)
-    
-    def _on_keyboard_event(self, e: ft.KeyboardEvent):
-        """Handle keyboard shortcuts for navigation."""
-        if not e.ctrl:
-            return
-        
-        shortcuts = {
-            "D": 0, "C": 1, "F": 2, "B": 3, "A": 4, "L": 5, "S": 6
-        }
-        
-        if e.key in shortcuts:
-            nav_rail = self.nav_rail.content
-            nav_rail.selected_index = shortcuts[e.key]
-            self._on_navigation_change(type('Event', (), {'control': nav_rail})())
-```
-
-### **View Creation Pattern (MANDATORY)**
-
-```python
-# views/dashboard.py - Enhanced view pattern with state management and modern styling
-def create_dashboard_view(server_bridge, page: ft.Page, state_manager: Optional[StateManager] = None) -> ft.Control:
-    """
-    Create dashboard view with enhanced infrastructure support and modern styling.
-    
-    Features:
-    - State manager integration for reactive updates
-    - Modern 2025 styling with enhanced cards and animations  
-    - Sophisticated hover effects and micro-interactions
-    - Enhanced error handling and user feedback
-    - Real-time data updates when available
-    """
-    
-    from utils.user_feedback import show_success_message, show_error_message
-    from theme import create_modern_card, create_modern_button_style
-    
-    # Essential refs for dynamic styling and interactions
-    cpu_progress_bar_ref = ft.Ref[ft.ProgressBar]()
-    server_status_text_ref = ft.Ref[ft.Text]()
-    start_server_button_ref = ft.Ref[ft.FilledButton]()
-    
-    # Enhanced data loading with state management integration
-    def get_server_status():
-        if server_bridge:
-            try:
-                return server_bridge.get_server_status()
-            except Exception as e:
-                logger.warning(f"Server bridge failed: {e}")
-        return {"server_running": True, "clients": 3, "files": 72}  # Mock fallback
-    
-    # Modern hover effects with sophisticated animations  
-    def handle_card_hover(e, accent_color):
-        """Enhanced card hover with depth and shadow animations."""
-        try:
-            is_hover = e.data == "true"
-            e.control.scale = 1.02 if is_hover else 1.0
-            e.control.animate_scale = ft.Animation(
-                duration=200, 
-                curve=ft.AnimationCurve.EASE_OUT_CUBIC
-            )
-            
-            # Enhanced shadow depth
-            if hasattr(e.control, 'shadow'):
-                e.control.shadow.blur_radius = 16 if is_hover else 8
-                
-            e.control.update()
-        except Exception as ex:
-            logger.debug(f"Card hover effect failed: {ex}")
-    
-    # Enhanced async event handlers with modern UI feedback
-    async def on_start_server(e):
-        """Start server with enhanced feedback and state management."""
-        try:
-            # Show immediate visual feedback
-            if start_server_button_ref.current:
-                start_server_button_ref.current.disabled = True
-                start_server_button_ref.current.update()
-            
-            logger.info("Start server clicked")
-            
-            # Server operation (simplified for demo)
-            result = await asyncio.sleep(1)  # Simulate async operation
-            
-            # Update state if state manager available
-            if state_manager:
-                await state_manager.update_state("server_status", {"running": True})
-            
-            # Show success feedback
-            show_success_message(page, "Server started successfully")
-            
-        except Exception as ex:
-            logger.error(f"Start server failed: {ex}")
-            show_error_message(page, f"Failed to start server: {ex}")
-        finally:
-            # Re-enable button
-            if start_server_button_ref.current:
-                start_server_button_ref.current.disabled = False
-                start_server_button_ref.current.update()
-    
-    # Get current server status
-    status = get_server_status()
-    
-    # Create modern cards with enhanced styling
-    def create_status_card(title, value, icon, color, description=""):
-        return create_modern_card(
-            content=ft.Column([
-                ft.Row([
-                    ft.Icon(icon, size=32, color=color),
-                    ft.Column([
-                        ft.Text(title, size=14, weight=ft.FontWeight.W_500),
-                        ft.Text(str(value), size=24, weight=ft.FontWeight.BOLD),
-                    ], spacing=2, expand=True)
-                ], spacing=16),
-                ft.Text(description, size=12, color=ft.Colors.ON_SURFACE_VARIANT) if description else ft.Container(),
-            ], spacing=8),
-            elevation="soft",
-            hover_effect=True
-        )
-    
-    # Create system monitoring cards
-    system_cards = ft.ResponsiveRow([
-        ft.Column([
-            create_status_card(
-                "Active Clients", 
-                status.get('clients', 0), 
-                ft.Icons.PEOPLE, 
-                ft.Colors.BLUE,
-                "Currently connected"
-            )
-        ], col={"sm": 12, "md": 6, "lg": 3}),
-        
-        ft.Column([
-            create_status_card(
-                "Total Files", 
-                status.get('files', 0), 
-                ft.Icons.FOLDER, 
-                ft.Colors.GREEN,
-                "Successfully backed up"
-            )
-        ], col={"sm": 12, "md": 6, "lg": 3}),
-        
-        ft.Column([
-            create_status_card(
-                "Server Status", 
-                "Running" if status.get('server_running') else "Stopped", 
-                ft.Icons

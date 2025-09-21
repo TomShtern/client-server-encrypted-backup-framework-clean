@@ -7,7 +7,23 @@ Core Principle: Use Flet's built-in DataTable, AlertDialog, and FilePicker.
 Clean file management with server integration and graceful fallbacks.
 """
 
-from .common_imports import *
+# Explicit imports instead of star import for better static analysis
+import flet as ft
+from typing import Optional, Dict, Any, List
+from datetime import datetime
+import json
+import asyncio
+import aiofiles
+
+from utils.debug_setup import get_logger
+from utils.server_bridge import ServerBridge
+from utils.state_manager import StateManager
+from utils.ui_components import themed_card, themed_button
+from utils.user_feedback import show_success_message, show_error_message
+
+logger = get_logger(__name__)
+
+# Additional imports specific to files
 import os
 import hashlib
 from utils.ui_components import themed_metric_card, create_status_pill
@@ -16,8 +32,8 @@ from utils.ui_components import themed_metric_card, create_status_pill
 def create_files_view(
     server_bridge: Optional[ServerBridge],
     page: ft.Page,
-    _state_manager: StateManager
-) -> ft.Control:
+    _state_manager: Optional[StateManager] = None
+) -> Any:
     """Simple files view using Flet's built-in components."""
     logger.info("Creating simplified files view")
 
@@ -46,17 +62,14 @@ def create_files_view(
         ]
 
     # Load file data from server or use mock
-    def load_files_data():
+    def load_files_data() -> None:
         """Load file data using server bridge or mock."""
         nonlocal files_data
 
         if server_bridge:
             try:
                 result = server_bridge.get_files()
-                if result.get('success'):
-                    files_data = result.get('data', [])
-                else:
-                    files_data = get_mock_files()
+                files_data = result if isinstance(result, list) else get_mock_files()
             except Exception:
                 files_data = get_mock_files()
         else:
@@ -113,7 +126,7 @@ def create_files_view(
         expand=True
     )
 
-    def filter_files():
+    def filter_files() -> List[Dict[str, Any]]:
         """Filter files based on search and filters."""
         filtered = files_data.copy()
 
@@ -141,7 +154,7 @@ def create_files_view(
 
         return filtered
 
-    def update_table():
+    def update_table() -> None:
         """Update table using Flet's simple patterns."""
         filtered_files = filter_files()
         files_table.rows.clear()
@@ -183,7 +196,7 @@ def create_files_view(
         files_table.update()
         update_stats_display()
 
-    def update_stats_display():
+    def update_stats_display() -> None:
         """Update the stats display with current file data."""
         total_files = len(files_data)
         complete_files = len([f for f in files_data if f.get('status') == 'complete'])
@@ -211,31 +224,32 @@ def create_files_view(
             stats_row.update()
 
     # File action handlers
-    def download_file(file: Dict[str, Any]):
+    def download_file(file: Dict[str, Any]) -> None:
         """Download file using FilePicker."""
-        async def save_file(e: ft.FilePickerResultEvent):
-            if e.path:
-                try:
-                    if server_bridge:
-                        file_id = file.get('id')
-                        if not file_id or not isinstance(file_id, str):
-                            show_error_message(page, "Invalid file ID")
-                            return
-                        result = server_bridge.download_file(file_id, e.path)
-                        if result.get('success'):
-                            show_success_message(page, f"Downloaded {file.get('name')} to {e.path}")
-                        else:
-                            show_error_message(page, f"Download failed: {result.get('error', 'Unknown error')}")
+        async def save_file(e: ft.FilePickerResultEvent) -> None:
+            if not e.path:
+                return
+            try:
+                if server_bridge:
+                    file_id = file.get('id')
+                    if not file_id or not isinstance(file_id, str):
+                        show_error_message(page, "Invalid file ID")
+                        return
+                    result = server_bridge.download_file(file_id, e.path)
+                    if result.get('success'):
+                        show_success_message(page, f"Downloaded {file.get('name')} to {e.path}")
                     else:
-                        # Mock download - create a simple text file
-                        async with aiofiles.open(e.path, 'w') as f:
-                            await f.write(f"Mock file content for {file.get('name')}\n")
-                            await f.write(f"Size: {format_file_size(file.get('size', 0))}\n")
-                            await f.write(f"Type: {file.get('type', 'unknown')}\n")
-                            await f.write(f"Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                        show_success_message(page, f"Downloaded {file.get('name')} (mock mode)")
-                except Exception as ex:
-                    show_error_message(page, f"Download error: {ex}")
+                        show_error_message(page, f"Download failed: {result.get('error', 'Unknown error')}")
+                else:
+                    # Mock download - create a simple text file
+                    async with aiofiles.open(e.path, 'w') as f:
+                        await f.write(f"Mock file content for {file.get('name')}\n")
+                        await f.write(f"Size: {format_file_size(file.get('size', 0))}\n")
+                        await f.write(f"Type: {file.get('type', 'unknown')}\n")
+                        await f.write(f"Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    show_success_message(page, f"Downloaded {file.get('name')} (mock mode)")
+            except Exception as ex:
+                show_error_message(page, f"Download error: {ex}")
 
         file_picker = ft.FilePicker(on_result=save_file)
         page.overlay.append(file_picker)
@@ -245,7 +259,7 @@ def create_files_view(
             file_name=file.get('name', 'file.txt')
         )
 
-    def verify_file(file: Dict[str, Any]):
+    def verify_file(file: Dict[str, Any]) -> None:
         """Verify file integrity."""
         file_name = file.get('name', 'Unknown')
         file_path = file.get('path', '')
@@ -292,7 +306,7 @@ def create_files_view(
             }
             show_verification_dialog(file_name, verification_data, "Mock")
 
-    def show_verification_dialog(file_name: str, data: Dict[str, Any], mode: str):
+    def show_verification_dialog(file_name: str, data: Dict[str, Any], mode: str) -> None:
         """Show verification results dialog."""
         verification_dialog = ft.AlertDialog(
             title=ft.Text(f"Verification Results - {mode}"),
@@ -318,9 +332,9 @@ def create_files_view(
         )
         page.open(verification_dialog)
 
-    def delete_file(file: Dict[str, Any]):
+    def delete_file(file: Dict[str, Any]) -> None:
         """Delete file with confirmation."""
-        def confirm_delete(_e):
+        def confirm_delete(_e: ft.ControlEvent) -> None:
             if server_bridge:
                 file_id = file.get('id')
                 if not file_id or not isinstance(file_id, str):
@@ -337,8 +351,7 @@ def create_files_view(
                     show_error_message(page, f"Error: {ex}")
             else:
                 # Mock success - remove from local data
-                global files_data
-                files_data = [f for f in files_data if f.get('id') != file.get('id')]
+                files_data[:] = [f for f in files_data if f.get('id') != file.get('id')]
                 show_success_message(page, f"File {file.get('name')} deleted (mock mode)")
                 update_table()
 
@@ -355,25 +368,25 @@ def create_files_view(
         page.open(delete_dialog)
 
     # Search and filter handlers
-    def on_search_change(e):
+    def on_search_change(e: ft.ControlEvent) -> None:
         """Handle search input."""
         nonlocal search_query
         search_query = e.control.value
         update_table()
 
-    def on_status_filter_change(e):
+    def on_status_filter_change(e: ft.ControlEvent) -> None:
         """Handle status filter change."""
         nonlocal status_filter
         status_filter = e.control.value
         update_table()
 
-    def on_type_filter_change(e):
+    def on_type_filter_change(e: ft.ControlEvent) -> None:
         """Handle type filter change."""
         nonlocal type_filter
         type_filter = e.control.value
         update_table()
 
-    def refresh_files(_e):
+    def refresh_files(_e: ft.ControlEvent) -> None:
         """Refresh files list."""
         load_files_data()
         show_success_message(page, "Files refreshed")
@@ -453,11 +466,11 @@ def create_files_view(
     # Create the main container with theme support
     files_container = themed_card(main_content, None, page)  # No title since we have one in content
 
-    def setup_subscriptions():
+    def setup_subscriptions() -> None:
         """Setup subscriptions and initial data loading after view is added to page."""
         load_files_data()
 
-    def dispose():
+    def dispose() -> None:
         """Clean up subscriptions and resources."""
         logger.debug("Disposing files view")
         # No subscriptions to clean up currently

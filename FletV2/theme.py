@@ -7,7 +7,7 @@ Reduced from 947 lines to ~250 lines while maintaining all functionality.
 """
 
 import flet as ft
-from typing import Optional
+from typing import Optional, cast
 
 # Core brand colors - simplified palette
 BRAND_COLORS = {
@@ -102,7 +102,8 @@ def create_modern_card(
             offset=ft.Offset(0, 2),
             color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK)
         ),
-        animate=ft.animation.Animation(150) if hover_effect else None
+        # Use ft.Animation (public symbol) rather than ft.animation.Animation
+        animate=ft.Animation(150) if hover_effect else None
     )
 
 def themed_button(
@@ -120,9 +121,10 @@ def themed_button(
             icon=icon,
             on_click=on_click,
             disabled=disabled,
-            style=ft.ButtonStyle(
+                style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=12),
-                elevation={"": 2, ft.ControlState.HOVERED: 6}
+                # pyright expects ControlState-keyed dict; cast to satisfy type checker
+                elevation=cast(dict, {ft.ControlState.DEFAULT: 2, ft.ControlState.HOVERED: 6})
             )
         )
     elif variant == "outlined":
@@ -180,13 +182,13 @@ def create_status_badge(status: str, variant: str = "filled") -> ft.Container:
     """Create status badge using Flet's semantic colors."""
 
     # Use Flet's built-in status colors
-    if status.lower() in ["active", "online", "success"]:
+    if status.lower() in {"active", "online", "success"}:
         color = ft.Colors.GREEN
         bg_color = ft.Colors.with_opacity(0.1, ft.Colors.GREEN)
-    elif status.lower() in ["warning", "pending"]:
+    elif status.lower() in {"warning", "pending"}:
         color = ft.Colors.ORANGE
         bg_color = ft.Colors.with_opacity(0.1, ft.Colors.ORANGE)
-    elif status.lower() in ["error", "offline", "failed"]:
+    elif status.lower() in {"error", "offline", "failed"}:
         color = ft.Colors.RED
         bg_color = ft.Colors.with_opacity(0.1, ft.Colors.RED)
     else:
@@ -221,9 +223,10 @@ def create_section_divider(title: Optional[str] = None) -> ft.Container:
     if title:
         return ft.Container(
             content=ft.Row([
-                ft.Divider(height=1, expand=True),
+                # Divider has no 'expand' param in some stubs; wrap in Container for expansion
+                ft.Container(content=ft.Divider(height=1), expand=True),
                 ft.Text(title, style=ft.TextThemeStyle.LABEL_LARGE, color=ft.Colors.OUTLINE),
-                ft.Divider(height=1, expand=True)
+                ft.Container(content=ft.Divider(height=1), expand=True)
             ], alignment=ft.MainAxisAlignment.CENTER),
             margin=ft.margin.symmetric(vertical=16)
         )

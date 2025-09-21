@@ -54,7 +54,7 @@ Core usage examples:
         # Text width and alignment (uses wcwidth when available)
         width = utf8.get_text_width("🎉 שלום 🌍")  # Accurate width calculation
         padded = utf8.pad_text("Hello", 10, align='center')  # "  Hello   "
-        
+
         # Table formatting with proper alignment
         utf8.format_table_row(["Name", "🎉 Status", "שלום"], [10, 15, 12])
 
@@ -82,7 +82,7 @@ import os
 import sys
 import subprocess
 import locale
-from typing import Dict, Optional, Any, Union, List, TextIO, BinaryIO
+from typing import Dict, Optional, Any, Union, List, TextIO, BinaryIO, IO, cast
 
 # Import ctypes with proper error handling for Windows
 try:
@@ -133,11 +133,11 @@ class UTF8Support:
     Public API surface purposely tiny: ``setup`` (implicit via ``get_env``),
     ``get_env``, ``restore_console``. All other helpers are internal.
     """
-    
+
     _initialized: bool = False
     _original_console_cp: Optional[int] = None
     _original_console_output_cp: Optional[int] = None
-    
+
     @classmethod
     def setup(cls) -> bool:
         """Setup UTF-8 support for current process and subprocesses.
@@ -148,21 +148,21 @@ class UTF8Support:
         """
         if cls._initialized:
             return True
-        
+
         try:
             # Set environment variables that propagate to subprocesses
             os.environ['PYTHONIOENCODING'] = 'utf-8'
             os.environ['PYTHONUTF8'] = '1'
-            
+
             # Configure Windows console if available
             cls._setup_windows_console()
-            
+
             # Fix console streams encoding
             cls._fix_console_streams()
-            
+
             # Auto-configure environment if needed
             cls._auto_configure_environment()
-            
+
             cls._initialized = True
             return True
         except (OSError, AttributeError, RuntimeError) as e:
@@ -172,7 +172,7 @@ class UTF8Support:
         except Exception as e:  # noqa: BLE001 (want to log unexpected issue once)
             logger.exception("Unexpected UTF8Support.setup failure: %s", e)
             return False
-    
+
     @classmethod
     def _setup_windows_console(cls) -> None:
         """Configure Windows console for UTF-8 (best effort, Windows only)."""
@@ -230,10 +230,10 @@ class UTF8Support:
     def get_env(cls, base_env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         """
         Get environment with UTF-8 settings for subprocess calls.
-        
+
         Args:
             base_env: Base environment (default: os.environ)
-        
+
         Returns:
             Environment dictionary with UTF-8 configuration
         """
@@ -254,7 +254,7 @@ class UTF8Support:
                 'PYTHONIOENCODING': 'utf-8',
                 'PYTHONUTF8': '1'
             }
-    
+
     @classmethod
     def restore_console(cls) -> None:
         """Restore original console code pages (best effort)."""
@@ -278,20 +278,20 @@ def is_hebrew_char(char: str) -> bool:
 def process_bidirectional_text(text: str) -> str:
     """
     Process text with proper bidirectional handling.
-    
+
     When python-bidi is available, uses the proper Unicode BiDi algorithm for
     accurate text processing. Falls back to simple Hebrew/English segmentation
     when the library is not available.
-    
+
     Args:
         text: Input text that may contain mixed Hebrew/English
-        
+
     Returns:
         Processed text with proper bidirectional handling for visual display
     """
     if not text:
         return text
-        
+
     # Use python-bidi for proper Unicode BiDi algorithm if available
     if HAS_BIDI and get_display is not None:
         try:
@@ -300,16 +300,16 @@ def process_bidirectional_text(text: str) -> str:
         except Exception as e:
             logger.debug("bidi.get_display failed, falling back to simple algorithm: %s", e)
             # Fall through to simple algorithm
-    
+
     # Fallback: Simple segmentation approach (original implementation)
     # Split text into segments of the same script
     segments = []
     current_segment = ""
     current_type = None  # None, 'hebrew', 'non_hebrew'
-    
+
     for char in text:
         char_type = 'hebrew' if is_hebrew_char(char) else 'non_hebrew'
-        
+
         if current_type is None:
             current_type = char_type
             current_segment = char
@@ -320,11 +320,11 @@ def process_bidirectional_text(text: str) -> str:
             segments.append((current_type, current_segment))
             current_type = char_type
             current_segment = char
-    
+
     # Don't forget the last segment
     if current_segment:
         segments.append((current_type, current_segment))
-    
+
     # Process segments: reverse Hebrew segments for visual order, keep non-Hebrew as-is
     processed_segments = []
     for seg_type, segment in segments:
@@ -334,7 +334,7 @@ def process_bidirectional_text(text: str) -> str:
         else:
             # For non-Hebrew, keep as-is (LTR order)
             processed_segments.append(segment)
-    
+
     # Join all segments
     return ''.join(processed_segments)
 
@@ -345,7 +345,7 @@ def safe_print(message: str) -> None:
     When rich is available, uses rich console for superior Unicode handling.
     Falls back to direct buffer writing when rich is not available.
     Never raises exceptions - graceful degradation in all cases.
-    
+
     Args:
         message: Text to print (may contain emojis, Hebrew, etc.)
     """
@@ -357,7 +357,7 @@ def safe_print(message: str) -> None:
         except Exception as e:
             logger.debug("rich console print failed, falling back: %s", e)
             # Fall through to buffer writing
-    
+
     # Fallback path: direct buffer writing (original implementation)
     line = f"{message}\n"
     buf = getattr(sys.stdout, 'buffer', None)
@@ -447,7 +447,7 @@ def ensure_initialized(verify_child: bool = False, timeout: int = 5) -> bool:
 def run_utf8(cmd: Union[str, List[str]], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
     """
     Run subprocess with UTF-8 support.
-    
+
     This is a convenience wrapper that automatically sets up UTF-8 environment
     and encoding parameters for subprocess.run calls.
     """
@@ -458,32 +458,32 @@ def run_utf8(cmd: Union[str, List[str]], **kwargs: Any) -> subprocess.CompletedP
         # Add error handling for invalid UTF-8 bytes from C++ client
         if 'errors' not in kwargs:
             kwargs['errors'] = 'replace'  # Replace invalid bytes with replacement character
-    
+
     # Ensure UTF-8 environment
     if 'env' not in kwargs:
         kwargs['env'] = get_env()
-    
+
     return subprocess.run(cmd, **kwargs)
 
 def Popen_utf8(cmd: Union[str, List[str]], **kwargs: Any) -> subprocess.Popen[str]:
     """
     Create Popen with UTF-8 support.
-    
+
     This is a convenience wrapper that automatically sets up UTF-8 environment
     and encoding parameters for subprocess.Popen calls.
     """
     # Set UTF-8 defaults only if not explicitly provided
     if 'encoding' not in kwargs and 'text' not in kwargs:
-        kwargs['encoding'] = 'utf-8' 
+        kwargs['encoding'] = 'utf-8'
         kwargs['text'] = True
         # Add error handling for invalid UTF-8 bytes from C++ client
         if 'errors' not in kwargs:
             kwargs['errors'] = 'replace'  # Replace invalid bytes with replacement character
-    
+
     # Ensure UTF-8 environment
     if 'env' not in kwargs:
         kwargs['env'] = get_env()
-    
+
     return subprocess.Popen(cmd, **kwargs)
 
 def test_utf8() -> bool:
@@ -503,26 +503,26 @@ def test_utf8() -> bool:
         return False
 
 # === ENHANCED FILE OPERATIONS ===
-def open_utf8(file: Union[str, bytes, int], mode: str = 'r', **kwargs: Any) -> Union[TextIO, BinaryIO]:
+def open_utf8(file: Union[str, bytes, int], mode: str = 'r', **kwargs: Any) -> IO[Any]:
     """
     Enhanced open function with automatic UTF-8 handling.
-    
+
     This function automatically sets UTF-8 encoding and robust error handling
     for all file operations.
-    
+
     Args:
         file: File path or file descriptor
         mode: File mode ('r', 'w', 'a', etc.)
         **kwargs: Additional arguments passed to open()
-    
+
     Returns:
         File object with UTF-8 support
-        
+
     Usage:
         # Read UTF-8 file
         with utf8.open_utf8('test.txt', 'r') as f:
             content = f.read()
-            
+
         # Write UTF-8 file
         with utf8.open_utf8('output.txt', 'w') as f:
             f.write('Hello 🌍 שלום עולם ✅')
@@ -530,27 +530,27 @@ def open_utf8(file: Union[str, bytes, int], mode: str = 'r', **kwargs: Any) -> U
     # Set default encoding to UTF-8 if not specified
     if 'encoding' not in kwargs and ('b' not in mode):
         kwargs['encoding'] = 'utf-8'
-    
+
     # Set default error handling for robustness
     if 'errors' not in kwargs:
         kwargs['errors'] = 'replace'
-    
+
     return open(file, mode, **kwargs)
 
 def read_file(filepath: Union[str, bytes], encoding: Optional[str] = None, errors: Optional[str] = None) -> Optional[str]:
     """
     Read file with UTF-8 support.
-    
+
     This function reads a file with proper UTF-8 encoding and error handling.
-    
+
     Args:
         filepath: Path to the file to read
         encoding: Encoding to use (default: utf-8)
         errors: Error handling strategy (default: replace)
-    
+
     Returns:
         File content as string, or None if error occurs
-        
+
     Usage:
         content = utf8.read_file('test.txt')
         if content:
@@ -560,7 +560,8 @@ def read_file(filepath: Union[str, bytes], encoding: Optional[str] = None, error
         enc = encoding or 'utf-8'
         err = errors or 'replace'
         with open_utf8(filepath, 'r', encoding=enc, errors=err) as f:
-            return f.read()
+            # f.read() is expected to return str when opened in text mode
+            return cast(str, f.read())
     except Exception as e:
         safe_print(f"Error reading file {filepath}: {e}")
         return None
@@ -568,18 +569,18 @@ def read_file(filepath: Union[str, bytes], encoding: Optional[str] = None, error
 def write_file(filepath: Union[str, bytes], content: str, encoding: Optional[str] = None, errors: Optional[str] = None) -> bool:
     """
     Write file with UTF-8 support.
-    
+
     This function writes content to a file with proper UTF-8 encoding and error handling.
-    
+
     Args:
         filepath: Path to the file to write
         content: Content to write
         encoding: Encoding to use (default: utf-8)
         errors: Error handling strategy (default: replace)
-    
+
     Returns:
         True if successful, False if error occurs
-        
+
     Usage:
         success = utf8.write_file('output.txt', 'Hello 🌍 שלום עולם ✅')
         if success:
@@ -588,7 +589,9 @@ def write_file(filepath: Union[str, bytes], content: str, encoding: Optional[str
     try:
         enc = encoding or 'utf-8'
         err = errors or 'replace'
-        with open_utf8(filepath, 'w', encoding=enc, errors=err) as f:
+        # Cast to TextIO because open_utf8 may return BinaryIO for binary modes;
+        # here we pass a text encoding so it is safe to treat as TextIO.
+        with cast(TextIO, open_utf8(filepath, 'w', encoding=enc, errors=err)) as f:
             f.write(content)
         return True
     except Exception as e:
@@ -598,24 +601,24 @@ def write_file(filepath: Union[str, bytes], content: str, encoding: Optional[str
 # === TEXT WIDTH AND FORMATTING FUNCTIONS ===
 def get_text_width(text: str) -> int:
     """Get the display width of text, accounting for Unicode characters.
-    
+
     Uses wcwidth when available for accurate width calculation of Unicode
     characters including emojis and wide characters. Falls back to len()
     when wcwidth is not available.
-    
+
     Args:
         text: Text to measure
-        
+
     Returns:
         Display width of the text
-        
+
     Usage:
         width = utf8.get_text_width("🎉 שלום 🌍")  # Accurate width with wcwidth
         width = utf8.get_text_width("Hello")       # Works without wcwidth too
     """
     if not text:
         return 0
-        
+
     if HAS_WCWIDTH and wcwidth is not None:
         try:
             # Use wcwidth for accurate Unicode width calculation
@@ -633,39 +636,39 @@ def get_text_width(text: str) -> int:
         except Exception as e:
             logger.debug("wcwidth calculation failed, falling back to len(): %s", e)
             # Fall through to len() fallback
-    
+
     # Fallback: use character count (not always accurate for Unicode)
     return len(text)
 
 def pad_text(text: str, width: int, align: str = 'left', fill_char: str = ' ') -> str:
     """Pad text to specified width with proper Unicode width handling.
-    
+
     Uses wcwidth when available for accurate padding of Unicode text.
     Supports left, right, and center alignment.
-    
+
     Args:
         text: Text to pad
         width: Target width
         align: Alignment ('left', 'right', 'center')
         fill_char: Character to use for padding
-        
+
     Returns:
         Padded text
-        
+
     Usage:
         padded = utf8.pad_text("Hello", 10, align='center')  # "  Hello   "
         padded = utf8.pad_text("🎉", 5, align='right')       # "   🎉"
     """
     if not text:
         return fill_char * width
-        
+
     text_width = get_text_width(text)
-    
+
     if text_width >= width:
         return text
-    
+
     padding_needed = width - text_width
-    
+
     if align == 'right':
         return fill_char * padding_needed + text
     elif align == 'center':
@@ -677,63 +680,63 @@ def pad_text(text: str, width: int, align: str = 'left', fill_char: str = ' ') -
 
 def truncate_text(text: str, width: int, suffix: str = '...') -> str:
     """Truncate text to specified width with proper Unicode width handling.
-    
+
     Uses wcwidth when available for accurate truncation of Unicode text.
     Adds suffix when text is truncated.
-    
+
     Args:
         text: Text to truncate
         width: Maximum width
         suffix: Suffix to add when truncating
-        
+
     Returns:
         Truncated text
-        
+
     Usage:
         short = utf8.truncate_text("Hello World 🌍", 10)  # "Hello W..."
         short = utf8.truncate_text("שלום עולם", 8)        # "שלום..."
     """
     if not text:
         return text
-        
+
     text_width = get_text_width(text)
-    
+
     if text_width <= width:
         return text
-    
+
     suffix_width = get_text_width(suffix)
     target_width = width - suffix_width
-    
+
     if target_width <= 0:
         return suffix[:width] if width > 0 else ''
-    
+
     # Find the truncation point
     current_width = 0
     truncate_pos = 0
-    
+
     for i, char in enumerate(text):
         char_width = get_text_width(char)
         if current_width + char_width > target_width:
             break
         current_width += char_width
         truncate_pos = i + 1
-    
+
     return text[:truncate_pos] + suffix
 
 def format_table_row(columns: List[str], widths: List[int], sep: str = ' | ', align: str = 'left') -> str:
     """Format a table row with proper Unicode width alignment.
-    
+
     Uses wcwidth when available for accurate column alignment with Unicode text.
-    
+
     Args:
         columns: List of column texts
         widths: List of column widths
         sep: Column separator
         align: Default alignment for all columns
-        
+
     Returns:
         Formatted table row
-        
+
     Usage:
         row = utf8.format_table_row(["Name", "🎉 Status", "שלום"], [10, 15, 12])
         # "Name      | 🎉 Status     | שלום        "
@@ -743,27 +746,27 @@ def format_table_row(columns: List[str], widths: List[int], sep: str = ' | ', al
         min_len = min(len(columns), len(widths))
         columns = columns[:min_len]
         widths = widths[:min_len]
-    
+
     formatted_columns = []
     for column, width in zip(columns, widths):
         formatted_columns.append(pad_text(column, width, align=align))
-    
+
     return sep.join(formatted_columns)
 
 def wrap_text(text: str, width: int, indent: str = '', subsequent_indent: str = '') -> List[str]:
     """Wrap text to specified width with proper Unicode width handling.
-    
+
     Uses wcwidth when available for accurate text wrapping with Unicode characters.
-    
+
     Args:
         text: Text to wrap
         width: Maximum line width
         indent: Indent for first line
         subsequent_indent: Indent for continuation lines
-        
+
     Returns:
         List of wrapped lines
-        
+
     Usage:
         lines = utf8.wrap_text("Hello World 🌍 שלום עולם", 10)
         for line in lines:
@@ -771,22 +774,22 @@ def wrap_text(text: str, width: int, indent: str = '', subsequent_indent: str = 
     """
     if not text:
         return ['']
-    
+
     # Simple word-based wrapping with Unicode width awareness
     words = text.split()
     lines = []
     current_line = indent
     current_width = get_text_width(current_line)
-    
+
     for word in words:
         word_width = get_text_width(word)
         space_width = get_text_width(' ')
-        
+
         # Check if adding this word would exceed width
         needed_width = word_width
         if current_line.strip():  # If there's already content, add space
             needed_width += space_width
-        
+
         if current_width + needed_width <= width:
             # Word fits on current line
             if current_line.strip():
@@ -800,11 +803,11 @@ def wrap_text(text: str, width: int, indent: str = '', subsequent_indent: str = 
                 lines.append(current_line)
             current_line = subsequent_indent + word
             current_width = get_text_width(current_line)
-    
+
     # Add the last line if it has content
     if current_line.strip():
         lines.append(current_line)
-    
+
     return lines if lines else ['']
 
 # === CONTEXT MANAGERS ===
@@ -817,13 +820,13 @@ def wrap_text(text: str, width: int, indent: str = '', subsequent_indent: str = 
 def diagnose_utf8_environment() -> Dict[str, Any]:
     """
     Provide detailed UTF-8 environment diagnosis including optional library status.
-    
+
     This function returns detailed information about the current UTF-8
     environment configuration and optional library availability for debugging.
-    
+
     Returns:
         Dictionary with environment diagnosis information including library status
-        
+
     Usage:
         diagnosis = utf8.diagnose_utf8_environment()
         utf8.safe_print(f"UTF-8 test: {diagnosis['utf8_test']}")
@@ -853,7 +856,7 @@ def diagnose_utf8_environment() -> Dict[str, Any]:
             'unicode_width_calculation': HAS_WCWIDTH
         }
     }
-    
+
     try:
         diagnosis['utf8_test'] = test_utf8()
         env = get_env()
@@ -861,7 +864,7 @@ def diagnose_utf8_environment() -> Dict[str, Any]:
             'PYTHONUTF8': env.get('PYTHONUTF8', 'NOT SET'),
             'PYTHONIOENCODING': env.get('PYTHONIOENCODING', 'NOT SET')
         }
-        
+
         # Test optional library functionality
         if HAS_BIDI:
             try:
@@ -869,17 +872,17 @@ def diagnose_utf8_environment() -> Dict[str, Any]:
                 diagnosis['bidi_test'] = {'success': True, 'result': test_bidi}
             except Exception as e:
                 diagnosis['bidi_test'] = {'success': False, 'error': str(e)}
-        
+
         if HAS_WCWIDTH:
             try:
                 test_width = get_text_width("🎉 שלום 🌍")
                 diagnosis['wcwidth_test'] = {'success': True, 'width': test_width}
             except Exception as e:
                 diagnosis['wcwidth_test'] = {'success': False, 'error': str(e)}
-                
+
     except Exception as e:
         diagnosis['utf8_test_error'] = str(e)
-    
+
     return diagnosis
 
 ########################################

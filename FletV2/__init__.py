@@ -14,16 +14,12 @@ if package_dir not in sys.path:
 # Import main application components
 from .main import FletV2App, main
 from .theme import (
-    setup_default_theme, 
-    toggle_theme_mode, 
-    apply_theme_variant,
-    get_available_themes,
-    get_current_theme_colors,
     setup_modern_theme,
-    get_shadow_style,
-    get_brand_color,
+    toggle_theme_mode,
     create_modern_button_style,
-    create_gradient_container
+    create_modern_card_container,
+    create_trend_indicator,
+    get_design_tokens
 )
 
 # Import views package
@@ -36,16 +32,12 @@ from . import utils
 __all__ = [
     "FletV2App",
     "main",
-    "setup_default_theme",
-    "toggle_theme_mode", 
-    "apply_theme_variant",
-    "get_available_themes",
-    "get_current_theme_colors",
+    "toggle_theme_mode",
     "setup_modern_theme",
-    "get_shadow_style",
-    "get_brand_color",
     "create_modern_button_style",
-    "create_gradient_container",
+    "create_modern_card_container",
+    "create_trend_indicator",
+    "get_design_tokens",
     "views",
     "utils"
 ]

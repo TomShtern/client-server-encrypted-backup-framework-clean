@@ -20,7 +20,7 @@ class DialogManager:
     Centralized dialog management with automatic cleanup and standardized patterns.
     Replaces the repeated AlertDialog creation patterns found across view files.
     """
-    
+
     @staticmethod
     def create_confirmation_dialog(
         page: ft.Page,
@@ -35,7 +35,7 @@ class DialogManager:
     ) -> ft.AlertDialog:
         """
         Create standardized confirmation dialog.
-        
+
         Args:
             page: Flet page instance
             title: Dialog title
@@ -50,14 +50,14 @@ class DialogManager:
         def close_dialog():
             dialog.open = False
             page.update()  # Use page.update() for consistency
-        
+
         def handle_confirm(e):
             try:
                 if on_confirm:
                     # Check if callback is async and run it appropriately
                     import asyncio
                     import inspect
-                    
+
                     if inspect.iscoroutinefunction(on_confirm):
                         # Run async callback using page.run_task()
                         page.run_task(lambda: on_confirm(e))
@@ -68,7 +68,7 @@ class DialogManager:
             except Exception as ex:
                 logger.error(f"Dialog confirm action failed: {ex}")
                 close_dialog()
-        
+
         def handle_cancel(e):
             try:
                 if on_cancel:
@@ -77,20 +77,20 @@ class DialogManager:
             except Exception as ex:
                 logger.error(f"Dialog cancel action failed: {ex}")
                 close_dialog()
-        
+
         # Use destructive styling for dangerous actions
         if is_destructive:
             confirm_color = ft.Colors.ERROR
-        
+
         actions = [
             ft.TextButton(cancel_text, on_click=handle_cancel),
             ft.FilledButton(
-                confirm_text, 
+                confirm_text,
                 on_click=handle_confirm,
                 style=ft.ButtonStyle(bgcolor=confirm_color)
             )
         ]
-        
+
         dialog = ft.AlertDialog(
             modal=True,
             title=ft.Text(title, weight=ft.FontWeight.BOLD),
@@ -98,15 +98,15 @@ class DialogManager:
             actions=actions,
             actions_alignment=ft.MainAxisAlignment.END
         )
-        
+
         # Auto-manage dialog lifecycle
         page.overlay.append(dialog)
         dialog.open = True
         page.update()  # Use page.update() instead of dialog.update() to avoid page attachment issues
-        
+
         return dialog
-    
-    @staticmethod 
+
+    @staticmethod
     def create_info_dialog(
         page: ft.Page,
         title: str,
@@ -117,7 +117,7 @@ class DialogManager:
     ) -> ft.AlertDialog:
         """
         Create standardized information dialog.
-        
+
         Args:
             page: Flet page instance
             title: Dialog title
@@ -129,16 +129,16 @@ class DialogManager:
         def close_dialog():
             dialog.open = False
             page.update()  # Use page.update() for consistency
-        
+
         def handle_ok(e):
             close_dialog()
-        
+
         # Handle both string and control content
         if isinstance(content, str):
             content_control = ft.Text(content, size=14, selectable=True)
         else:
             content_control = content
-        
+
         dialog = ft.AlertDialog(
             modal=True,
             title=ft.Text(title, weight=ft.FontWeight.BOLD),
@@ -151,13 +151,13 @@ class DialogManager:
             actions=[ft.FilledButton(ok_text, on_click=handle_ok)],
             actions_alignment=ft.MainAxisAlignment.END
         )
-        
+
         page.overlay.append(dialog)
         dialog.open = True
         page.update()  # Use page.update() instead of dialog.update()
-        
+
         return dialog
-    
+
     @staticmethod
     def create_input_dialog(
         page: ft.Page,
@@ -174,7 +174,7 @@ class DialogManager:
     ) -> ft.AlertDialog:
         """
         Create standardized input dialog with text field.
-        
+
         Args:
             page: Flet page instance
             title: Dialog title
@@ -191,7 +191,7 @@ class DialogManager:
         def close_dialog():
             dialog.open = False
             page.update()  # Use page.update() for consistency
-        
+
         def handle_submit(e):
             try:
                 value = input_field.value or ""
@@ -201,7 +201,7 @@ class DialogManager:
             except Exception as ex:
                 logger.error(f"Dialog submit action failed: {ex}")
                 close_dialog()
-        
+
         def handle_cancel(e):
             try:
                 if on_cancel:
@@ -210,7 +210,7 @@ class DialogManager:
             except Exception as ex:
                 logger.error(f"Dialog cancel action failed: {ex}")
                 close_dialog()
-        
+
         # Create appropriate input field
         input_kwargs = {
             "label": input_label,
@@ -218,24 +218,24 @@ class DialogManager:
             "multiline": multiline,
             "on_submit": handle_submit  # Enter key submits
         }
-        
+
         if input_type == "password":
             input_kwargs["password"] = True
         elif input_type == "number":
             input_kwargs["keyboard_type"] = ft.KeyboardType.NUMBER
-        
+
         input_field = ft.TextField(**input_kwargs)
-        
+
         dialog_content = ft.Column([
             ft.Text(content, size=14),
             input_field
         ], spacing=16, tight=True)
-        
+
         actions = [
             ft.TextButton(cancel_text, on_click=handle_cancel),
             ft.FilledButton(submit_text, on_click=handle_submit)
         ]
-        
+
         dialog = ft.AlertDialog(
             modal=True,
             title=ft.Text(title, weight=ft.FontWeight.BOLD),
@@ -243,15 +243,15 @@ class DialogManager:
             actions=actions,
             actions_alignment=ft.MainAxisAlignment.END
         )
-        
+
         page.overlay.append(dialog)
         dialog.open = True
         page.update()  # Use page.update() instead of dialog.update()
-        
+
         # Auto-focus input field
         input_field.focus()
         # Remove input_field.update() as it might cause issues - focus() handles display
-        
+
         return dialog
 
 
@@ -265,14 +265,14 @@ def show_confirmation(
 ) -> ft.AlertDialog:
     """
     Quick confirmation dialog factory function.
-    
+
     Example:
         def delete_item():
             print("Item deleted")
-        
+
         show_confirmation(
-            page, 
-            "Delete Item", 
+            page,
+            "Delete Item",
             "Are you sure you want to delete this item?",
             delete_item,
             confirm_text="Delete",
@@ -280,7 +280,7 @@ def show_confirmation(
         )
     """
     return DialogManager.create_confirmation_dialog(
-        page, title, message, on_confirm, 
+        page, title, message, on_confirm,
         confirm_text=confirm_text, is_destructive=is_destructive
     )
 
@@ -293,7 +293,7 @@ def show_info(
 ) -> ft.AlertDialog:
     """
     Quick info dialog factory function.
-    
+
     Example:
         show_info(page, "File Details", file_details_text, width=400)
     """
@@ -310,11 +310,11 @@ def show_input(
 ) -> ft.AlertDialog:
     """
     Quick input dialog factory function.
-    
+
     Example:
         def handle_rename(new_name):
             print(f"Renamed to: {new_name}")
-        
+
         show_input(
             page,
             "Rename File",
@@ -333,10 +333,10 @@ def show_input(
 def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, action_label: Optional[str] = None) -> None:
     """
     Show centralized user feedback using Flet's SnackBar.
-    
+
     This is the ONLY acceptable use of page.update() in the application -
     for system-level feedback like SnackBar, which requires page-level updates.
-    
+
     Args:
         page: Flet page instance
         message: Message to display to user
@@ -347,14 +347,14 @@ def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, acti
         page.snack_bar = ft.SnackBar(
             content=ft.Text(message),
             bgcolor=ft.Colors.ERROR if is_error else ft.Colors.BLUE,
-            action=action_label if action_label else "DISMISS",
+            action=action_label or "DISMISS",
             duration=4000  # 4 seconds
         )
         page.snack_bar.open = True
         page.update()  # ONLY acceptable page.update() use case
-        
+
         logger.info(f"User feedback shown: {'ERROR' if is_error else 'INFO'} - {message}")
-        
+
     except Exception as e:
         logger.error(f"Failed to show user feedback: {e}")
 
@@ -368,18 +368,18 @@ def show_success_message(page: ft.Page, message: str, action_label: Optional[str
             display_message = f"{MOCK_PREFIX}{message}"
         elif mode == 'real':
             display_message = f"{REAL_PREFIX}{message}"
-        
+
         page.snack_bar = ft.SnackBar(
             content=ft.Text(display_message),
             bgcolor=ft.Colors.ORANGE if mode == 'mock' else ft.Colors.GREEN,
-            action=action_label if action_label else "DISMISS",
+            action=action_label or "DISMISS",
             duration=5000 if mode == 'mock' else 4000  # Longer for mock messages
         )
         page.snack_bar.open = True
         page.update()  # ONLY acceptable page.update() use case
-        
+
         logger.info(f"User feedback shown: SUCCESS - {message}")
-        
+
     except Exception as e:
         logger.error(f"Failed to show user feedback: {e}")
 
@@ -397,19 +397,19 @@ def show_info_message(page: ft.Page, message: str, action_label: Optional[str] =
         display_message = f"{MOCK_PREFIX}{message}"
     elif mode == 'real':
         display_message = f"{REAL_PREFIX}{message}"
-    
+
     try:
         page.snack_bar = ft.SnackBar(
             content=ft.Text(display_message),
             bgcolor=ft.Colors.ORANGE if mode == 'mock' else ft.Colors.BLUE,
-            action=action_label if action_label else "DISMISS",
+            action=action_label or "DISMISS",
             duration=5000 if mode == 'mock' else 4000  # Longer for mock messages
         )
         page.snack_bar.open = True
         page.update()
-        
+
         logger.info(f"Info message shown ({mode or 'standard'} mode): {display_message}")
-        
+
     except Exception as e:
         logger.error(f"Failed to show info message: {e}")
 
@@ -420,13 +420,13 @@ def show_warning_message(page: ft.Page, message: str, action_label: Optional[str
         page.snack_bar = ft.SnackBar(
             content=ft.Text(message),
             bgcolor=ft.Colors.BLUE,
-            action=action_label if action_label else "DISMISS",
+            action=action_label or "DISMISS",
             duration=4000  # 4 seconds
         )
         page.snack_bar.open = True
         page.update()  # ONLY acceptable page.update() use case
-        
+
         logger.info(f"User feedback shown: WARNING - {message}")
-        
+
     except Exception as e:
         logger.error(f"Failed to show user feedback: {e}")

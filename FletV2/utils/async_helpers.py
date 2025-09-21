@@ -74,12 +74,12 @@ def async_event_handler(
         
     Example:
         @async_event_handler("File downloaded successfully", "Download failed")
-        async def on_download_file(e):
+        async def on_download_file(e: ft.ControlEvent) -> None:
             await download_operation()
     """
     def decorator(func: Callable[[Any], Awaitable[Any]]):
         @wraps(func)
-        async def wrapper(e):
+        async def wrapper(e: ft.ControlEvent) -> Any:
             page = getattr(e, 'page', None) or getattr(e.control, 'page', None)
             context = log_context or func.__name__
             
@@ -296,17 +296,17 @@ class SafeOperation:
         self.error_prefix = error_prefix
         self.success = False
 
-    def __enter__(self):
+    def __enter__(self) -> 'SafeOperation':
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         if exc_type is not None:
             error_msg = f"{self.error_prefix}: {str(exc_val)}"
             show_error_message(self.page, error_msg)
             logger.debug(f"SafeOperation failed: {exc_val}")
         return True  # Suppress exception
 
-    def mark_success(self, message: str):
+    def mark_success(self, message: str) -> None:
         """Mark operation as successful with message."""
         self.success = True
         show_success_message(self.page, message)

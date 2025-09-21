@@ -34,14 +34,14 @@ from .performance import (
 __all__ = [
     "setup_terminal_debugging",
     "get_logger",
-    "ServerBridge", 
+    "ServerBridge",
     "create_server_bridge",
     "create_mock_mode_banner",
     "add_mock_indicator_to_snackbar_message",
     "create_state_manager",
     "FletDatabaseManager",
     "create_database_manager",
-    "MockDataGenerator",
+    # "MockDataGenerator",  # removed - not present in this module
     "create_modern_card",
     "create_floating_action_button",
     "show_user_feedback",

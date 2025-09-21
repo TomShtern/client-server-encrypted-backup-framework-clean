@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Motion System Integration Example
 Shows how to integrate M3 Motion System with existing Flet GUI components.

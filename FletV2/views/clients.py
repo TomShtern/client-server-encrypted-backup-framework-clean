@@ -7,7 +7,23 @@ Core Principle: Use Flet's built-in DataTable, AlertDialog, and TextField.
 Clean client management with server integration and graceful fallbacks.
 """
 
-from .common_imports import *
+# Explicit imports instead of star import for better static analysis
+import flet as ft
+from typing import Optional, Dict, Any, List
+from datetime import datetime
+import json
+import asyncio
+import aiofiles
+
+from utils.debug_setup import get_logger
+from utils.server_bridge import ServerBridge
+from utils.state_manager import StateManager
+from utils.ui_components import themed_card, themed_button
+from utils.user_feedback import show_success_message, show_error_message
+
+logger = get_logger(__name__)
+
+# Additional imports specific to clients
 import uuid
 from utils.ui_components import themed_metric_card, create_status_pill
 
@@ -16,7 +32,7 @@ def create_clients_view(
     server_bridge: Optional[ServerBridge],
     page: ft.Page,
     _state_manager: StateManager
-) -> ft.Control:
+) -> Any:
     """Simple clients view using Flet's built-in components."""
     logger.info("Creating simplified clients view")
 
@@ -42,17 +58,14 @@ def create_clients_view(
         ]
 
     # Load client data from server or use mock
-    def load_clients_data():
+    def load_clients_data() -> None:
         """Load client data using server bridge or mock."""
         nonlocal clients_data
 
         if server_bridge:
             try:
                 result = server_bridge.get_clients()
-                if result.get('success'):
-                    clients_data = result.get('data', [])
-                else:
-                    clients_data = get_mock_clients()
+                clients_data = result if isinstance(result, list) else get_mock_clients()
             except Exception:
                 clients_data = get_mock_clients()
         else:
@@ -89,7 +102,7 @@ def create_clients_view(
         }
         return status_mapping.get(status.lower(), "default")
 
-    def filter_clients():
+    def filter_clients() -> List[Dict[str, Any]]:
         """Filter clients based on search and status."""
         filtered = clients_data.copy()
 
@@ -112,7 +125,7 @@ def create_clients_view(
 
         return filtered
 
-    def update_table():
+    def update_table() -> None:
         """Update table using Flet's simple patterns."""
         filtered_clients = filter_clients()
         clients_table.rows.clear()
@@ -148,7 +161,7 @@ def create_clients_view(
         clients_table.update()
 
     # Client action handlers
-    def view_client_details(client: Dict[str, Any]):
+    def view_client_details(client: Dict[str, Any]) -> None:
         """View client details using AlertDialog."""
         details_dialog = ft.AlertDialog(
             title=ft.Text("Client Details"),
@@ -169,9 +182,9 @@ def create_clients_view(
         )
         page.open(details_dialog)
 
-    def disconnect_client(client: Dict[str, Any]):
+    def disconnect_client(client: Dict[str, Any]) -> None:
         """Disconnect client with confirmation."""
-        def confirm_disconnect(_e):
+        def confirm_disconnect(_e: ft.ControlEvent) -> None:
             if server_bridge:
                 client_id = client.get('id')
                 if not client_id or not isinstance(client_id, str):
@@ -203,9 +216,10 @@ def create_clients_view(
         )
         page.open(confirm_dialog)
 
-    def delete_client(client: Dict[str, Any]):
+    def delete_client(client: Dict[str, Any]) -> None:
         """Delete client with confirmation."""
-        def confirm_delete(_e):
+        def confirm_delete(_e: ft.ControlEvent) -> None:
+            nonlocal clients_data
             if server_bridge:
                 client_id = client.get('id')
                 if not client_id or not isinstance(client_id, str):
@@ -222,7 +236,6 @@ def create_clients_view(
                     show_error_message(page, f"Error: {ex}")
             else:
                 # Mock success - remove from local data
-                global clients_data
                 clients_data = [c for c in clients_data if c.get('id') != client.get('id')]
                 show_success_message(page, f"Client {client.get('name')} deleted (mock mode)")
                 update_table()
@@ -239,8 +252,9 @@ def create_clients_view(
         )
         page.open(delete_dialog)
 
-    def add_client():
+    def add_client() -> None:
         """Add new client dialog."""
+        nonlocal clients_data
         name_field = ft.TextField(label="Client Name", hint_text="Enter client name")
         ip_field = ft.TextField(label="IP Address", hint_text="Enter IP address")
         status_dropdown = ft.Dropdown(
@@ -253,7 +267,7 @@ def create_clients_view(
             ]
         )
 
-        def save_client(_e):
+        def save_client(_e: ft.ControlEvent) -> None:
             if not name_field.value or not name_field.value.strip():
                 show_error_message(page, "Client name is required")
                 return
@@ -279,7 +293,6 @@ def create_clients_view(
                     show_error_message(page, f"Error: {ex}")
             else:
                 # Mock success - add to local data
-                global clients_data
                 clients_data.append(new_client)
                 show_success_message(page, f"Client {new_client['name']} added (mock mode)")
                 update_table()
@@ -297,19 +310,19 @@ def create_clients_view(
         page.open(add_dialog)
 
     # Search and filter handlers
-    def on_search_change(e):
+    def on_search_change(e: ft.ControlEvent) -> None:
         """Handle search input."""
         nonlocal search_query
         search_query = e.control.value
         update_table()
 
-    def on_status_filter_change(e):
+    def on_status_filter_change(e: ft.ControlEvent) -> None:
         """Handle status filter change."""
         nonlocal status_filter
         status_filter = e.control.value
         update_table()
 
-    def refresh_clients(_e):
+    def refresh_clients(_e: ft.ControlEvent) -> None:
         """Refresh clients list."""
         load_clients_data()
         show_success_message(page, "Clients refreshed")
@@ -371,11 +384,11 @@ def create_clients_view(
     # Create the main container with theme support
     clients_container = themed_card(main_content, None, page)  # No title since we have one in content
 
-    def setup_subscriptions():
+    def setup_subscriptions() -> None:
         """Setup subscriptions and initial data loading after view is added to page."""
         load_clients_data()
 
-    def dispose():
+    def dispose() -> None:
         """Clean up subscriptions and resources."""
         logger.debug("Disposing clients view")
         # No subscriptions to clean up currently

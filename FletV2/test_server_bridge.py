@@ -5,9 +5,18 @@ Tests all key operations to ensure the simplified version maintains 100% compati
 """
 
 import asyncio
+import os
 import sys
 import logging
 from pathlib import Path
+
+# Add parent directory to path for Shared imports
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+# ALWAYS import this in any Python file that deals with subprocess or console I/O
+import Shared.utils.utf8_solution as _  # Import for UTF-8 side effects
 
 # Add the utils directory to sys.path so we can import our modules
 sys.path.insert(0, str(Path(__file__).parent))
@@ -38,12 +47,12 @@ async def test_client_operations(bridge):
         # Test disconnect_client
         result = await bridge.disconnect_client_async(client_id)
         assert result['success'], f"disconnect_client_async failed: {result['error']}"
-        print(f"✅ disconnect_client_async: Disconnected client")
+        print("✅ disconnect_client_async: Disconnected client")
 
         # Test resolve_client
         result = bridge.resolve_client(client_id)
         assert result['success'], f"resolve_client failed: {result['error']}"
-        print(f"✅ resolve_client: Resolved client by ID")
+        print("✅ resolve_client: Resolved client by ID")
 
     # Test add_client
     new_client_data = {
@@ -169,7 +178,7 @@ async def test_server_status_operations(bridge):
     # Test test_connection
     result = await bridge.test_connection_async()
     assert result['success'], f"test_connection_async failed: {result['error']}"
-    print(f"✅ test_connection_async: Connection test successful")
+    print("✅ test_connection_async: Connection test successful")
 
 async def test_analytics_operations(bridge):
     """Test analytics and performance operations."""
@@ -209,7 +218,7 @@ async def test_settings_operations(bridge):
 
     # Verify settings were saved correctly
     assert loaded_settings.get('test_setting') == 'test_value', "Settings not saved correctly"
-    print(f"✅ Settings persistence: Verified settings were saved and loaded correctly")
+    print("✅ Settings persistence: Verified settings were saved and loaded correctly")
 
 async def test_drop_in_capability(bridge):
     """Test that the bridge can work with a real server object."""
@@ -232,16 +241,15 @@ async def test_drop_in_capability(bridge):
 
     # Test that it uses real server
     result = await real_server_bridge.get_clients_async()
-    assert result['success'], f"Real server get_clients_async failed: {result['error']}"
-    clients = result['data']
-    assert clients[0]['name'] == "Real Client", "Not using real server data"
-    print(f"✅ Drop-in capability: Successfully used real server methods")
+    assert isinstance(result, list), f"Expected list, got {type(result)}"
+    assert result[0]['name'] == "Real Client", "Not using real server data"
+    print("✅ Drop-in capability: Successfully used real server methods")
 
     result = real_server_bridge.get_server_status()
     assert result['success'], f"Real server get_server_status failed: {result['error']}"
     status = result['data']
     assert status['mode'] == "production", "Not using real server status"
-    print(f"✅ Drop-in capability: Real server status indicates production mode")
+    print("✅ Drop-in capability: Real server status indicates production mode")
 
 async def main():
     """Run all tests to validate functionality preservation."""

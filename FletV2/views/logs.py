@@ -7,17 +7,29 @@ Core Principle: Use Flet's built-in DataTable, TextField, and FilePicker.
 Let Flet handle the complexity. We compose, not reinvent.
 """
 
-from .common_imports import *
-from datetime import timedelta
+# Explicit imports instead of star import for better static analysis
+import flet as ft
+from typing import Optional, Dict, Any, List, Callable
+from datetime import datetime, timedelta
+import json
+import asyncio
+import aiofiles
 import random
-from utils.ui_components import create_status_pill
+
+from utils.debug_setup import get_logger
+from utils.server_bridge import ServerBridge
+from utils.state_manager import StateManager
+from utils.ui_components import themed_card, themed_button, create_status_pill
+from utils.user_feedback import show_success_message, show_error_message
+
+logger = get_logger(__name__)
 
 
 def create_logs_view(
     server_bridge: Optional[ServerBridge],
     page: ft.Page,
-    _state_manager: StateManager
-) -> ft.Control:
+    _state_manager: Optional[StateManager] = None
+) -> Any:
     """Simple logs view using Flet's built-in components."""
     logger.info("Creating simplified logs view")
 
@@ -49,7 +61,7 @@ def create_logs_view(
         return sorted(logs, key=lambda x: x["id"], reverse=True)
 
     # Load logs data
-    def load_logs():
+    def load_logs() -> None:
         """Load logs using server bridge or mock data."""
         nonlocal logs_data, filtered_logs
 
@@ -69,7 +81,7 @@ def create_logs_view(
         update_table()
 
     # Filter logs (simple & clean)
-    def apply_filters():
+    def apply_filters() -> None:
         """Simple filtering using Python built-ins."""
         nonlocal filtered_logs
 
@@ -155,7 +167,7 @@ def create_logs_view(
             border=ft.border.all(1, ft.Colors.OUTLINE)
         )
 
-    def update_table():
+    def update_table() -> None:
         """Update ListView with log cards."""
         logs_listview.controls.clear()
 
@@ -171,11 +183,11 @@ def create_logs_view(
                 try:
                     if logs_listview.page is None:
                         logger.error("ListView lost page reference - navigation may be broken")
-                except:
+                except Exception:
                     logger.error("ListView is in an invalid state - navigation may be broken")
 
     # Search functionality (simple TextField)
-    def on_search_change(e):
+    def on_search_change(e: ft.ControlEvent) -> None:
         """Simple search handler."""
         nonlocal search_query
         search_query = e.control.value
@@ -189,9 +201,9 @@ def create_logs_view(
     )
 
     # Filter chips with icons
-    def on_filter_click(filter_level: str):
+    def on_filter_click(filter_level: str) -> Callable[[ft.ControlEvent], None]:
         """Handle filter chip click."""
-        def handler(e):
+        def handler(e: ft.ControlEvent) -> None:
             nonlocal level_filter
             level_filter = filter_level
             apply_filters()
@@ -200,7 +212,7 @@ def create_logs_view(
 
     filter_chips_row = ft.Row(spacing=8)
 
-    def update_filter_chips():
+    def update_filter_chips() -> None:
         """Update filter chips with selection state."""
         filter_chips_row.controls = [
             create_filter_chip("ALL", ft.Icons.LIST, level_filter == "ALL", on_filter_click("ALL")),
@@ -218,7 +230,7 @@ def create_logs_view(
                 try:
                     if filter_chips_row.page is None:
                         logger.error("Filter chips lost page reference - navigation may be broken")
-                except:
+                except Exception:
                     logger.error("Filter chips are in an invalid state - navigation may be broken")
 
     # Initialize filter chips (defer update until after page attachment)
@@ -233,7 +245,7 @@ def create_logs_view(
     # Statistics (simple display)
     stats_text = ft.Text("", size=14)
 
-    def update_stats():
+    def update_stats() -> None:
         """Simple stats calculation."""
         total = len(filtered_logs)
         errors = len([log for log in filtered_logs if log["level"] == "ERROR"])
@@ -249,11 +261,11 @@ def create_logs_view(
                 try:
                     if stats_text.page is None:
                         logger.error("Stats text lost page reference - navigation may be broken")
-                except:
+                except Exception:
                     logger.error("Stats text is in an invalid state - navigation may be broken")
 
     # Export functionality (using Flet's FilePicker)
-    async def save_logs_as_json(e: ft.FilePickerResultEvent):
+    async def save_logs_as_json(e: ft.FilePickerResultEvent) -> None:
         """Simple JSON export using FilePicker."""
         if e.path:
             try:
@@ -268,7 +280,7 @@ def create_logs_view(
     file_picker = ft.FilePicker(on_result=save_logs_as_json)
     page.overlay.append(file_picker)
 
-    def export_logs(e):
+    def export_logs(e: ft.ControlEvent) -> None:
         """Export logs using Flet's FilePicker."""
         file_picker.save_file(
             dialog_title="Export Logs",
@@ -278,7 +290,7 @@ def create_logs_view(
         )
 
     # Refresh functionality
-    def refresh_logs(e):
+    def refresh_logs(e: ft.ControlEvent) -> None:
         """Simple refresh handler."""
         load_logs()
         update_stats()
@@ -318,7 +330,7 @@ def create_logs_view(
     # Create the main container with theme support
     logs_container = themed_card(main_content, None, page)  # No title since we have one in content
 
-    def setup_subscriptions():
+    def setup_subscriptions() -> None:
         """Setup subscriptions and initial data loading after view is added to page."""
         load_logs()
         update_stats()
@@ -329,11 +341,11 @@ def create_logs_view(
         # Override apply_filters to update stats
         nonlocal apply_filters
         original_apply_filters = apply_filters
-        def apply_filters():
+        def apply_filters() -> None:
             original_apply_filters()
             update_stats()
 
-    def dispose():
+    def dispose() -> None:
         """Clean up subscriptions and resources."""
         logger.debug("Disposing logs view")
         # Remove FilePicker from page overlay

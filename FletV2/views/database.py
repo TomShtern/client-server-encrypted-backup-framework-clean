@@ -7,15 +7,28 @@ Core Principle: Use Flet's built-in DataTable, AlertDialog, and TextField.
 Let Flet handle CRUD operations with simple, clean patterns.
 """
 
-from .common_imports import *
-from utils.ui_components import themed_metric_card, create_status_pill
+# Explicit imports instead of star import for better static analysis
+import flet as ft
+from typing import Optional, Dict, Any, List
+from datetime import datetime
+import json
+import asyncio
+import aiofiles
+
+from utils.debug_setup import get_logger
+from utils.server_bridge import ServerBridge
+from utils.state_manager import StateManager
+from utils.ui_components import themed_card, themed_button, themed_metric_card, create_status_pill
+from utils.user_feedback import show_success_message, show_error_message
+
+logger = get_logger(__name__)
 
 
 def create_database_view(
     server_bridge: Optional[ServerBridge],
     page: ft.Page,
-    _state_manager: StateManager
-) -> ft.Control:
+    _state_manager: Optional[StateManager] = None
+) -> Any:
     """Simple database view using Flet's built-in components."""
     logger.info("Creating simplified database view")
 
@@ -26,7 +39,7 @@ def create_database_view(
     search_query = ""
 
     # Mock database info for demonstration
-    def get_mock_db_info():
+    def get_mock_db_info() -> Dict[str, Any]:
         """Simple database info generator."""
         return {
             "status": "Connected",
@@ -60,7 +73,7 @@ def create_database_view(
             ]
 
     # Load data from server or use mock
-    def load_data():
+    def load_data() -> None:
         """Load database data using server bridge or mock."""
         nonlocal table_data, filtered_data
 
@@ -80,7 +93,7 @@ def create_database_view(
         update_table()
 
     # Apply search filter
-    def apply_search():
+    def apply_search() -> None:
         """Simple search filtering."""
         nonlocal filtered_data
 
@@ -124,7 +137,7 @@ def create_database_view(
         expand=True
     )
 
-    def update_table():
+    def update_table() -> None:
         """Update table using Flet's simple patterns."""
         if not filtered_data:
             # Always keep at least one column to prevent DataTable errors
@@ -183,7 +196,7 @@ def create_database_view(
         database_table.update()
 
     # Edit record dialog using Flet's AlertDialog
-    def edit_record(record: Dict[str, Any]):
+    def edit_record(record: Dict[str, Any]) -> None:
         """Simple edit dialog using AlertDialog."""
         fields = {}
 
@@ -198,7 +211,7 @@ def create_database_view(
                 fields[key] = field
                 field_controls.append(field)
 
-        def save_changes(_e):
+        def save_changes(_e: ft.ControlEvent) -> None:
             """Save edited record."""
             # Update the record with new values
             updated_record = record.copy()
@@ -213,7 +226,7 @@ def create_database_view(
 
             apply_search()  # Refresh the view
             page.close(edit_dialog)
-            show_success_message(page, f"Record updated successfully")
+            show_success_message(page, "Record updated successfully")
 
         edit_dialog = ft.AlertDialog(
             title=ft.Text("Edit Record"),
@@ -227,14 +240,14 @@ def create_database_view(
         page.open(edit_dialog)
 
     # Delete record dialog using Flet's AlertDialog
-    def delete_record(record: Dict[str, Any]):
+    def delete_record(record: Dict[str, Any]) -> None:
         """Simple delete confirmation dialog."""
-        def confirm_delete(_e):
+        def confirm_delete(_e: ft.ControlEvent) -> None:
             # Remove from data
             table_data[:] = [row for row in table_data if row.get('id') != record.get('id')]
             apply_search()  # Refresh the view
             page.close(delete_dialog)
-            show_success_message(page, f"Record deleted successfully")
+            show_success_message(page, "Record deleted successfully")
 
         delete_dialog = ft.AlertDialog(
             title=ft.Text("Confirm Delete"),
@@ -248,7 +261,7 @@ def create_database_view(
         page.open(delete_dialog)
 
     # Add new record dialog
-    def add_record():
+    def add_record() -> None:
         """Simple add record dialog."""
         if not table_data:
             show_error_message(page, "No table selected")
@@ -265,7 +278,7 @@ def create_database_view(
                 fields[key] = field
                 field_controls.append(field)
 
-        def save_new_record(_e):
+        def save_new_record(_e: ft.ControlEvent) -> None:
             """Save new record."""
             # Create new record
             new_record = {}
@@ -297,7 +310,7 @@ def create_database_view(
             table_data.append(new_record)
             apply_search()  # Refresh the view
             page.close(add_dialog)
-            show_success_message(page, f"Record added successfully")
+            show_success_message(page, "Record added successfully")
 
         add_dialog = ft.AlertDialog(
             title=ft.Text("Add New Record"),
@@ -311,7 +324,7 @@ def create_database_view(
         page.open(add_dialog)
 
     # Table selector dropdown
-    def on_table_change(e):
+    def on_table_change(e: ft.ControlEvent) -> None:
         """Handle table selection change."""
         nonlocal selected_table
         selected_table = e.control.value
@@ -332,7 +345,7 @@ def create_database_view(
     )
 
     # Search field
-    def on_search_change(e):
+    def on_search_change(e: ft.ControlEvent) -> None:
         """Handle search input."""
         nonlocal search_query
         search_query = e.control.value
@@ -346,7 +359,7 @@ def create_database_view(
     )
 
     # Export functionality using FilePicker
-    async def save_as_json(e: ft.FilePickerResultEvent):
+    async def save_as_json(e: ft.FilePickerResultEvent) -> None:
         """Export table data as JSON."""
         if e.path:
             try:
@@ -359,7 +372,7 @@ def create_database_view(
     file_picker = ft.FilePicker(on_result=save_as_json)
     page.overlay.append(file_picker)
 
-    def export_data(_e):
+    def export_data(_e: ft.ControlEvent) -> None:
         """Export table data."""
         file_picker.save_file(
             dialog_title="Export Table Data",
@@ -411,11 +424,11 @@ def create_database_view(
     # Create the main container with theme support
     database_container = themed_card(main_content, None, page)  # No title since we have one in content
 
-    def setup_subscriptions():
+    def setup_subscriptions() -> None:
         """Setup subscriptions and initial data loading after view is added to page."""
         load_data()
 
-    def dispose():
+    def dispose() -> None:
         """Clean up subscriptions and resources."""
         logger.debug("Disposing database view")
         # No subscriptions to clean up currently

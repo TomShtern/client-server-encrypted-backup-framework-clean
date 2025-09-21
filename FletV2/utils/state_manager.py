@@ -33,10 +33,11 @@ Enhanced for server integration with:
 import flet as ft
 import asyncio
 import time
+import contextlib
 from typing import Dict, Any, Callable, Optional, List, Union
-from utils.debug_setup import get_logger
+from .debug_setup import setup_terminal_debugging
 
-logger = get_logger(__name__)
+logger = setup_terminal_debugging(logger_name="FletV2.state_manager")
 
 
 class StateManager:
@@ -148,13 +149,11 @@ class StateManager:
         """Check if callback should be notified based on deduplication rules (Comment 10)"""
         # For now, use simple heuristic: if callback has a __name__ or __qualname__ attribute
         # indicating it comes from a view, check if it's the same source triggering again
-        try:
+        with contextlib.suppress(Exception):
             callback_name = getattr(callback, '__name__', '') or getattr(callback, '__qualname__', '')
             if callback_name and source != "manual" and (source.lower() in callback_name.lower() or callback_name.lower() in source.lower()):
                 logger.debug(f"Skipping callback {callback_name} for {key} (source: {source}) - preventing re-entry")
                 return False
-        except Exception:
-            pass  # Fall through to normal notification
         return True
 
     async def update_async(self, key: str, value: Any, source: str = "async"):
@@ -321,13 +320,26 @@ class StateManager:
         loading_states = self.get("loading_states", {})
         return loading_states.get(operation, False)
 
+    def set_progress(self, operation: str, progress: float, message: str = ""):
+        """Set progress for a specific operation"""
+        progress_states = self.get("progress_states", {})
+        progress_states[operation] = {
+            "progress": max(0, min(100, progress)),  # Clamp between 0-100
+            "message": message,
+            "timestamp": time.time()
+        }
+        self.update("progress_states", progress_states, source="progress")
+
+    def subscribe_settings(self, callback: Callable, control: Optional[ft.Control] = None):
+        """Subscribe to settings changes"""
+        self.subscribe("settings", callback, control)
+
     async def server_mediated_update(self, key: str, value: Any, server_operation: str | None = None, *args, **kwargs):
         """Update state through server bridge for persistence"""
         if self.server_bridge and server_operation:
             try:
                 # Call server operation if specified
-                server_method = getattr(self.server_bridge, server_operation, None)
-                if server_method:
+                if server_method := getattr(self.server_bridge, server_operation, None):
                     logger.debug(f"Calling server method: {server_operation}")
                     # Pass the arguments to the server method
                     if asyncio.iscoroutinefunction(server_method):
@@ -551,7 +563,6 @@ class StateManager:
 
                 if result.get('success'):
                     self.add_notification(f"Logs exported as {format.upper()} ({result.get('mode', 'server')})", "success")
-                    return result
                 else:
                     self.add_notification(f"Export failed: {result.get('error', 'Unknown error')}", "error")
                     # set retry state for export
@@ -559,7 +570,7 @@ class StateManager:
                     retry_info["logs_export"] = retry_info.get("logs_export", {"attempts": 0, "last_error": None})
                     retry_info["logs_export"]["last_error"] = result.get("error")
                     self.update("retry_states", retry_info, source="set_retry")
-                    return result
+                return result
             else:
                 self.add_notification("No server bridge available for export", "warning")
                 return {'success': False, 'error': 'No server bridge'}
@@ -590,7 +601,7 @@ class StateManager:
         """Update settings data with validation and server integration"""
         try:
             # Basic optimistic versioning for conflict resolution
-            incoming_version = settings_data.get("_version", None)
+            incoming_version = settings_data.get("_version")
             async with self._settings_lock:
                 current_settings = self.get("settings_data", {}) or {}
                 self._settings_version += 1
@@ -698,11 +709,10 @@ class StateManager:
                     self.add_notification(f"Settings backup '{backup_name}' created ({result.get('mode', 'server')})", "success")
                     # Broadcast event
                     self.broadcast_settings_event("settings_backup_created", {"name": backup_name})
-                    return result
                 else:
                     self.add_notification(f"Backup failed: {result.get('error', 'Unknown error')}", "error")
                     self.set_error_state("settings_backup", result.get('error', 'Unknown'))
-                    return result
+                return result
             else:
                 self.add_notification("No server bridge available for backup", "warning")
                 return {'success': False, 'error': 'No server bridge'}
@@ -729,16 +739,14 @@ class StateManager:
                 )
 
                 if result.get('success'):
-                    restored_settings = result.get('data', {}).get('restored_settings', settings_data)
-                    if restored_settings:
+                    if restored_settings := result.get('data', {}).get('restored_settings', settings_data):
                         await self.update_settings_async(restored_settings, "restore")
                         self.add_notification(f"Settings restored from backup ({result.get('mode', 'server')})", "success")
                         self.broadcast_settings_event("settings_restored", {"file": backup_file})
-                    return result
                 else:
                     self.add_notification(f"Restore failed: {result.get('error', 'Unknown error')}", "error")
                     self.set_error_state("settings_restore", result.get('error', 'Unknown'))
-                    return result
+                return result
             else:
                 # Local restore fallback
                 if settings_data:
@@ -795,8 +803,7 @@ class StateManager:
 
         # Update theme immediately if theme-related setting changed
         if event_type == "theme_change" and self.page:
-            theme_mode = event_data.get('theme_mode')
-            if theme_mode:
+            if theme_mode := event_data.get('theme_mode'):
                 try:
                     self.page.theme_mode = ft.ThemeMode.LIGHT if theme_mode == "light" else ft.ThemeMode.DARK
                     self.page.update()
@@ -875,10 +882,7 @@ class StateManager:
             self.start_progress(operation, total_steps=step or 1, message=message or "")
             p = self.get("progress_states", {}).get(operation)
 
-        if step is not None:
-            p["current_step"] = step
-        else:
-            p["current_step"] = p.get("current_step", 0) + 1
+        p["current_step"] = step if step is not None else p.get("current_step", 0) + 1
 
         total = p.get("total_steps", 1) or 1
         p["percentage"] = min(100.0, (p["current_step"] / total) * 100.0)

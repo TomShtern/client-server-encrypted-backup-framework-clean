@@ -13,6 +13,14 @@ import sys
 import sqlite3
 import logging
 import asyncio
+
+# Add project root to path for Shared imports
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# ALWAYS import this in any Python file that deals with subprocess or console I/O
+import Shared.utils.utf8_solution as _  # Import for UTF-8 side effects
 import threading
 import time
 import uuid
@@ -31,21 +39,30 @@ try:
     from python_server.server.client_manager import ClientManager, Client
     from python_server.server.config import DATABASE_NAME, FILE_STORAGE_DIR
     from api_server.real_backup_executor import RealBackupExecutor
+    _REAL_SERVER_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Could not import server modules: {e}")
     print("Creating basic fallback implementation...")
+    _REAL_SERVER_AVAILABLE = False
 
-    # Basic fallback classes if imports fail
-    class DatabaseManager:
+    # Basic fallback classes if imports fail - use different names to avoid conflicts
+    class _FallbackDatabaseManager:
         def __init__(self, *args, **kwargs): pass
         def init_database(self): pass
         def get_database_health(self): return {"status": "fallback"}
 
-    class ClientManager:
+    class _FallbackClientManager:
+        def __init__(self, db_manager=None, *args, **kwargs): pass
+
+    class _FallbackBackupExecutor:
         def __init__(self, *args, **kwargs): pass
 
-    class RealBackupExecutor:
-        def __init__(self, *args, **kwargs): pass
+    # Assign fallback classes to expected names
+    DatabaseManager = _FallbackDatabaseManager  # type: ignore
+    ClientManager = _FallbackClientManager  # type: ignore
+    RealBackupExecutor = _FallbackBackupExecutor  # type: ignore
+    DATABASE_NAME = "fallback.db"
+    FILE_STORAGE_DIR = "fallback_storage"
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -75,7 +92,7 @@ class FletV2ServerAdapter:
         try:
             self.db_manager = DatabaseManager(use_pool=True)
             self.db_manager.init_database()
-            self.client_manager = ClientManager()
+            self.client_manager = ClientManager(self.db_manager)  # type: ignore
             self.backup_executor = RealBackupExecutor()
             self._connected = True
             logger.info("FletV2ServerAdapter initialized with real server components")
@@ -103,7 +120,8 @@ class FletV2ServerAdapter:
         try:
             # Quick database health check
             health = self.db_manager.get_database_health()
-            return health.get('integrity_check', False)
+            integrity_check = health.get('integrity_check', False)
+            return bool(integrity_check)
         except Exception:
             return False
 
@@ -117,17 +135,17 @@ class FletV2ServerAdapter:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
 
-                # Count connected clients
+                # Count connected clients (use legacy schema - no status column)
                 clients_connected = conn.execute(
-                    "SELECT COUNT(*) FROM clients WHERE status = 'Connected'"
+                    "SELECT COUNT(*) FROM clients"
                 ).fetchone()[0]
 
                 # Count total files
                 total_files = conn.execute("SELECT COUNT(*) FROM files").fetchone()[0]
 
-                # Calculate total storage used
+                # Calculate total storage used (use correct column name)
                 total_size = conn.execute(
-                    "SELECT COALESCE(SUM(size), 0) FROM files"
+                    "SELECT COALESCE(SUM(FileSize), 0) FROM files"
                 ).fetchone()[0]
 
                 # Count active transfers (if transfers table exists)
@@ -190,9 +208,8 @@ class FletV2ServerAdapter:
                         ORDER BY last_seen DESC
                     """).fetchall()
 
-                    clients = []
-                    for row in rows:
-                        clients.append({
+                    return [
+                        {
                             "id": row["id"],
                             "client_id": row["client_id"] or row["id"],
                             "name": row["name"],
@@ -202,9 +219,9 @@ class FletV2ServerAdapter:
                             "total_size": row["total_size"] or 0,
                             "ip_address": row["ip_address"] or "",
                             "created_at": row["created_at"] or row["last_seen"]
-                        })
-
-                    return clients
+                        }
+                        for row in rows
+                    ]
 
                 except sqlite3.OperationalError:
                     # Fall back to old schema
@@ -297,7 +314,7 @@ class FletV2ServerAdapter:
         """Add new client."""
         try:
             if not self.db_manager:
-                raise Exception("Database manager not available")
+                raise RuntimeError("Database manager not available")
 
             client_id = client_data.get("client_id") or str(uuid.uuid4())
 
@@ -408,9 +425,8 @@ class FletV2ServerAdapter:
                     ORDER BY f.uploaded_at DESC
                 """).fetchall()
 
-                files = []
-                for row in rows:
-                    files.append({
+                return [
+                    {
                         "id": row["id"],
                         "filename": row["filename"],
                         "size": row["size"],
@@ -419,9 +435,9 @@ class FletV2ServerAdapter:
                         "uploaded_at": row["uploaded_at"],
                         "verified": bool(row["verified"]),
                         "checksum": row["checksum"]
-                    })
-
-                return files
+                    }
+                    for row in rows
+                ]
 
         except Exception as e:
             logger.error(f"Error getting files: {e}")
@@ -642,7 +658,7 @@ class FletV2ServerAdapter:
                     return False
 
                 # Build UPDATE query dynamically
-                set_clause = ", ".join([f"{k} = ?" for k in data.keys()])
+                set_clause = ", ".join([f"{k} = ?" for k in data])
                 values = list(data.values()) + [row_id]
 
                 conn.execute(f"""

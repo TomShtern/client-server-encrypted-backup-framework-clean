@@ -23,25 +23,25 @@ def create_enhanced_action_buttons(state: EnhancedSettingsState) -> ft.Column:
     export_progress = create_modern_progress_indicator("settings_export", state.state_manager)
     import_progress = create_modern_progress_indicator("settings_import", state.state_manager)
 
-    async def save_settings_handler(e):
+    async def save_settings_handler(e: ft.ControlEvent) -> None:
         success = await state.save_settings_async()
         if not success and state.state_manager:
             state.state_manager.add_notification("Failed to save settings", "error")
 
-    async def export_handler(e):
+    async def export_handler(e: ft.ControlEvent) -> None:
         result = await state.export_settings("json")
         if not result['success'] and state.state_manager:
             state.state_manager.add_notification(f"Export failed: {result.get('error', 'Unknown error')}", "error")
 
-    async def backup_handler(e):
+    async def backup_handler(e: ft.ControlEvent) -> None:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         backup_name = f"settings_backup_{timestamp}"
         result = await state.backup_settings_async(backup_name)
         if not result['success'] and state.state_manager:
             state.state_manager.add_notification(f"Backup failed: {result.get('error', 'Unknown error')}", "error")
 
-    def reset_all_settings(e):
-        def confirm_reset(e):
+    def reset_all_settings(e: ft.ControlEvent) -> None:
+        def confirm_reset(e: ft.ControlEvent) -> None:
             state.current_settings = state._load_default_settings()
             state._update_ui_from_settings()
             if state.page:
@@ -50,7 +50,7 @@ def create_enhanced_action_buttons(state: EnhancedSettingsState) -> ft.Column:
             if state.state_manager:
                 state.state_manager.add_notification("Settings reset to defaults", "info")
 
-        def cancel_reset(e):
+        def cancel_reset(e: ft.ControlEvent) -> None:
             if state.page:
                 state.page.dialog.open = False
                 state.page.dialog.update()
@@ -89,7 +89,7 @@ def create_enhanced_action_buttons(state: EnhancedSettingsState) -> ft.Column:
             state.page.dialog.update()
 
     # FilePicker lifecycle management
-    def pick_files_result(e: ft.FilePickerResultEvent):
+    def pick_files_result(e: ft.FilePickerResultEvent) -> None:
         if e.files:
             state.page.run_task(state.import_settings, e.files[0].path)
         else:
@@ -103,7 +103,7 @@ def create_enhanced_action_buttons(state: EnhancedSettingsState) -> ft.Column:
     if state.page and file_picker not in state.page.overlay:
         state.page.overlay.append(file_picker)
 
-    def import_handler(e):
+    def import_handler(e: ft.ControlEvent) -> None:
         try:
             state.file_picker.pick_files(
                 allowed_extensions=["json", "ini"],

@@ -109,14 +109,14 @@ FILE_TYPES = {
     "zip": "ARCHIVE"
 }
 
-def is_debug_mode():
+def is_debug_mode() -> bool:
     """Check if debug mode is enabled."""
     return DEBUG_MODE
 
-def show_mock_data():
+def show_mock_data() -> bool:
     """Check if mock data should be shown."""
     return SHOW_MOCK_DATA
 
-def get_status_color(status):
+def get_status_color(status: str) -> str:
     """Get color for status."""
     return STATUS_COLORS.get(status, "ON_SURFACE")

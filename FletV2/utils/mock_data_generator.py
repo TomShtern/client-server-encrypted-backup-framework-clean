@@ -550,49 +550,6 @@ class MockDataGenerator:
             'last_incident': (datetime.now() - timedelta(hours=random.randint(0, 100))).isoformat() if random.random() > 0.7 else None
         }
 
-    # Async versions - RESTORED because server_bridge.py depends on them
-    async def get_analytics_data_async(self) -> Dict[str, Any]:
-        """Async version of get_analytics_data."""
-        await asyncio.sleep(0.01)  # Simulate async operation
-        return self.get_analytics_data()
-
-    async def get_performance_metrics_async(self) -> Dict[str, Any]:
-        """Async version of get_performance_metrics."""
-        await asyncio.sleep(0.01)  # Simulate async operation
-        return self.get_performance_metrics()
-
-    async def get_historical_data_async(self, metric: str, hours: int = 24) -> List[Dict[str, Any]]:
-        """Async version of get_historical_data."""
-        await asyncio.sleep(0.01)  # Simulate async operation
-        return self.get_historical_data(metric, hours)
-
-    async def get_dashboard_summary_async(self) -> Dict[str, Any]:
-        """Async version of get_dashboard_summary."""
-        await asyncio.sleep(0.01)  # Simulate async operation
-        return self.get_dashboard_summary()
-
-    async def get_server_statistics_async(self) -> Dict[str, Any]:
-        """Async version of get_server_statistics."""
-        await asyncio.sleep(0.01)  # Simulate async operation
-        return self.get_server_statistics()
-
-    async def get_server_health_async(self) -> Dict[str, Any]:
-        """Async version of get_server_health."""
-        await asyncio.sleep(0.01)  # Simulate async operation
-        return self.get_server_health()
-
-    def get_database_info(self) -> Dict[str, Any]:
-        """Get database information"""
-        total_records = len(self.clients) + len(self.files) + random.randint(500, 1000)
-        size_mb = (total_records * 0.5) + random.uniform(10, 50)
-
-        return {
-            "status": "Connected",
-            "tables": 6,
-            "records": total_records,
-            "size": f"{size_mb:.1f} MB"
-        }
-
     def get_logs(self) -> List[Dict[str, Any]]:
         """Get mock log entries"""
         log_levels = ["INFO", "WARNING", "ERROR", "DEBUG"]
@@ -843,9 +800,8 @@ class MockDataGenerator:
             # Cascading delete: remove all client files
             client_files = self._client_file_index.get(client_id, set()).copy()
             deleted_files = sum(
-                1
+                self._delete_file_internal(file_id)
                 for file_id in client_files
-                if self._delete_file_internal(file_id)
             )
             # Delete client
             del self._clients[client_id]
@@ -900,6 +856,12 @@ class MockDataGenerator:
                 listener(change_type, data)
             except Exception as e:
                 logger.error(f"Change listener failed: {e}")
+
+    def _record_server_action(self, activity_type: str, message: str, action: str):
+        """Record server action with activity logging, persistence, and notification."""
+        self._add_activity(activity_type, message)
+        self._save_to_disk()
+        self._notify_change("server", {"action": action})
 
     def _save_to_disk(self):
         """Save current state to disk"""
@@ -1035,9 +997,7 @@ class MockDataGenerator:
             if not self._server_status["running"]:
                 self._server_status["running"] = True
                 self._server_status["start_time"] = datetime.now()
-                self._add_activity("server_start", "Backup server started")
-                self._save_to_disk()
-                self._notify_change("server", {"action": "start"})
+                self._record_server_action("server_start", "Backup server started", "start")
                 return {"success": True, "message": "Server started successfully"}
             return {"success": False, "message": "Server is already running"}
 
@@ -1052,9 +1012,7 @@ class MockDataGenerator:
                         client.status = "disconnected"
                         client.last_seen = datetime.now()
 
-                self._add_activity("server_stop", "Backup server stopped")
-                self._save_to_disk()
-                self._notify_change("server", {"action": "stop"})
+                self._record_server_action("server_stop", "Backup server stopped", "stop")
                 return {"success": True, "message": "Server stopped successfully"}
             return {"success": False, "message": "Server is not running"}
 
@@ -1365,43 +1323,6 @@ class MockDataGenerator:
         except Exception as e:
             logger.error(f"MockDataGenerator integrity validation error: {e}")
             return {'valid': False, 'issues': [f"Validation error: {str(e)}"]}
-
-
-    # Async versions - RESTORED because server_bridge.py depends on them
-    async def get_analytics_data_async(self) -> Dict[str, Any]:
-        """Async version of get_analytics_data."""
-        await asyncio.sleep(0.01)  # Simulate async operation
-        return self.get_analytics_data()
-
-    async def get_performance_metrics_async(self) -> Dict[str, Any]:
-        """Async version of get_performance_metrics."""
-        await asyncio.sleep(0.01)  # Simulate async operation
-        return self.get_performance_metrics()
-
-    async def get_historical_data_async(self, metric: str, hours: int = 24) -> List[Dict[str, Any]]:
-        """Async version of get_historical_data."""
-        await asyncio.sleep(0.01)  # Simulate async operation
-        return self.get_historical_data(metric, hours)
-
-    async def get_dashboard_summary_async(self) -> Dict[str, Any]:
-        """Async version of get_dashboard_summary."""
-        await asyncio.sleep(0.01)  # Simulate async operation
-        return self.get_dashboard_summary()
-
-    async def get_server_statistics_async(self) -> Dict[str, Any]:
-        """Async version of get_server_statistics."""
-        await asyncio.sleep(0.01)  # Simulate async operation
-        return self.get_server_statistics()
-
-    async def get_server_health_async(self) -> Dict[str, Any]:
-        """Async version of get_server_health."""
-        await asyncio.sleep(0.01)  # Simulate async operation
-        return self.get_server_health()
-
-    async def get_recent_activity_async(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """Async version of get_recent_activity."""
-        await asyncio.sleep(0.01)  # Simulate async operation
-        return self.get_recent_activity(limit)
 
 
 # Global singleton instances for backward compatibility

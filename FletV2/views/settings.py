@@ -7,15 +7,29 @@ Core Principle: Use Flet's built-in Tabs, TextField, Switch, and Dropdown.
 Clean settings management with server integration and simple validation.
 """
 
-from .common_imports import *
+# Explicit imports instead of star import for better static analysis
+import flet as ft
+from typing import Optional, Dict, Any, List
+from datetime import datetime
+import json
+import asyncio
+import aiofiles
+
+from utils.debug_setup import get_logger
+from utils.server_bridge import ServerBridge
+from utils.state_manager import StateManager
+from utils.ui_components import themed_card, themed_button
+from utils.user_feedback import show_success_message, show_error_message
 from config import SETTINGS_FILE
+
+logger = get_logger(__name__)
 
 
 def create_settings_view(
     server_bridge: Optional[ServerBridge],
     page: ft.Page,
-    _state_manager: StateManager
-) -> ft.Control:
+    _state_manager: Optional[StateManager] = None
+) -> Any:
     """Simple settings view using Flet's built-in components."""
     logger.info("Creating simplified settings view")
 
@@ -72,7 +86,7 @@ def create_settings_view(
         }
 
     # Load settings from server or file
-    async def load_settings():
+    async def load_settings() -> None:
         """Load settings using server bridge or local file."""
         nonlocal current_settings
 
@@ -101,7 +115,7 @@ def create_settings_view(
         update_ui_from_settings()
 
     # Save settings to server or file
-    async def save_settings():
+    async def save_settings() -> None:
         """Save settings using server bridge or local file."""
         # Validate first
         validation_errors = validate_settings()
@@ -247,7 +261,7 @@ def create_settings_view(
     backup_compress_switch = ft.Switch(label="Compress Backups", value=True)
 
     # Update UI from settings
-    def update_ui_from_settings():
+    def update_ui_from_settings() -> None:
         """Update UI controls from current settings."""
         server = current_settings.get("server", {})
         server_port_field.value = str(server.get("port", 1256))
@@ -323,8 +337,8 @@ def create_settings_view(
             return default
 
     # Update settings from UI
-    def update_settings_from_ui():
-        """Update current settings from UI controls."""
+    def update_settings_from_ui() -> bool:
+        """Update current settings from UI controls. Returns True if successful."""
         try:
             current_settings["server"] = {
                 "port": safe_int(server_port_field.value, 8080),
@@ -380,26 +394,26 @@ def create_settings_view(
         return True
 
     # Action handlers
-    async def on_save_click(_e):
+    async def on_save_click(_e: ft.ControlEvent) -> None:
         """Handle save button click."""
         if update_settings_from_ui():
             await save_settings()
 
-    async def on_load_click(_e):
+    async def on_load_click(_e: ft.ControlEvent) -> None:
         """Handle load button click."""
         await load_settings()
         show_success_message(page, "Settings loaded")
 
-    def on_reset_click(_e):
+    def on_reset_click(_e: ft.ControlEvent) -> None:
         """Handle reset button click."""
         nonlocal current_settings
         current_settings = get_default_settings()
         update_ui_from_settings()
         show_success_message(page, "Settings reset to defaults")
 
-    def on_export_click(_e):
+    def on_export_click(_e: ft.ControlEvent) -> None:
         """Handle export button click."""
-        async def save_export(e: ft.FilePickerResultEvent):
+        async def save_export(e: ft.FilePickerResultEvent) -> None:
             if e.path:
                 try:
                     update_settings_from_ui()
@@ -419,9 +433,9 @@ def create_settings_view(
             allowed_extensions=["json"]
         )
 
-    def on_import_click(_e):
+    def on_import_click(_e: ft.ControlEvent) -> None:
         """Handle import button click."""
-        async def load_import(e: ft.FilePickerResultEvent):
+        async def load_import(e: ft.FilePickerResultEvent) -> None:
             if e.files:
                 try:
                     async with aiofiles.open(e.files[0].path, 'r') as f:
@@ -548,11 +562,11 @@ def create_settings_view(
         expand=True
     )
 
-    async def setup_subscriptions():
+    async def setup_subscriptions() -> None:
         """Setup subscriptions and initial data loading after view is added to page."""
         await load_settings()
 
-    def dispose():
+    def dispose() -> None:
         """Clean up subscriptions and resources."""
         logger.debug("Disposing settings view")
         # No subscriptions to clean up currently

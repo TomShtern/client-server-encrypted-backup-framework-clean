@@ -1,4 +1,4 @@
-﻿"""
+"""
 Purpose: Advanced system integration and monitoring tools
 Logic: File integrity checks, session management, system monitoring
 No Direct UI: Core business logic only, UI components call these methods

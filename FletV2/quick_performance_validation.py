@@ -4,10 +4,24 @@ FletV2 Quick Performance Validation
 Simple command-line tool to validate UI performance patterns.
 """
 
+import os
+import sys
 import time
 import statistics
 import logging
 from typing import Dict, List
+
+# Add parent directory to path for Shared imports
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+# ALWAYS import this in any Python file that deals with subprocess or console I/O
+import Shared.utils.utf8_solution as _
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger(__name__)
 
 # Mock Flet classes for testing patterns
 class MockControl:
@@ -33,10 +47,10 @@ class MockPage:
 
 def benchmark_control_updates(iterations: int = 100) -> Dict[str, float]:
     """Benchmark control.update() patterns."""
-    print(f"🔄 Testing control.update() patterns ({iterations} iterations)...")
+    logger.info(f"🔄 Testing control.update() patterns ({iterations} iterations)...")
 
     control = MockControl("test_control")
-    times = []
+    times: List[float] = []
 
     for i in range(iterations):
         start = time.perf_counter()
@@ -52,16 +66,16 @@ def benchmark_control_updates(iterations: int = 100) -> Dict[str, float]:
         "median": statistics.median(times)
     }
 
-    print(f"  ✅ Average: {results['avg']:.2f}ms")
-    print(f"  📊 Range: {results['min']:.2f}ms - {results['max']:.2f}ms")
+    logger.info(f"  ✅ Average: {results['avg']:.2f}ms")
+    logger.info(f"  📊 Range: {results['min']:.2f}ms - {results['max']:.2f}ms")
     return results
 
 def benchmark_page_updates(iterations: int = 50) -> Dict[str, float]:
     """Benchmark page.update() patterns (appropriate usage)."""
-    print(f"🎨 Testing page.update() patterns ({iterations} iterations)...")
+    logger.info(f"🎨 Testing page.update() patterns ({iterations} iterations)...")
 
     page = MockPage()
-    times = []
+    times: List[float] = []
 
     for i in range(iterations):
         start = time.perf_counter()
@@ -78,13 +92,13 @@ def benchmark_page_updates(iterations: int = 50) -> Dict[str, float]:
         "median": statistics.median(times)
     }
 
-    print(f"  ✅ Average: {results['avg']:.2f}ms")
-    print(f"  📊 Range: {results['min']:.2f}ms - {results['max']:.2f}ms")
+    logger.info(f"  ✅ Average: {results['avg']:.2f}ms")
+    logger.info(f"  📊 Range: {results['min']:.2f}ms - {results['max']:.2f}ms")
     return results
 
-def validate_performance_patterns(control_results: Dict, page_results: Dict) -> Dict[str, bool]:
+def validate_performance_patterns(control_results: Dict[str, float], page_results: Dict[str, float]) -> Dict[str, bool]:
     """Validate that performance meets optimal standards."""
-    validation = {}
+    validation: Dict[str, bool] = {}
 
     # Control updates should be very fast (< 5ms)
     validation["control_fast"] = control_results["avg"] < 5.0
@@ -105,7 +119,7 @@ def validate_performance_patterns(control_results: Dict, page_results: Dict) -> 
 
 def analyze_fletv2_patterns():
     """Analyze the patterns found in FletV2 codebase."""
-    print("\n📋 FletV2 Codebase Pattern Analysis:")
+    logger.info("\n📋 FletV2 Codebase Pattern Analysis:")
 
     patterns = {
         "control_update_usage": "Extensive usage in views/analytics.py and other view files",
@@ -116,15 +130,15 @@ def analyze_fletv2_patterns():
         "error_fallbacks": "✅ Intelligent hierarchy: control.update() → page.update()"
     }
 
-    for pattern, status in patterns.items():
-        print(f"  {status}")
+    for status in patterns.values():
+        logger.info(f"  {status}")
 
-    print("\n🏆 Pattern Assessment: OPTIMAL IMPLEMENTATION")
+    logger.info("\n🏆 Pattern Assessment: OPTIMAL IMPLEMENTATION")
     return True
 
-def generate_quick_report(control_results: Dict, page_results: Dict, validation: Dict) -> str:
+def generate_quick_report(control_results: Dict[str, float], page_results: Dict[str, float], validation: Dict[str, bool]) -> str:
     """Generate a quick performance report."""
-    report = []
+    report: List[str] = []
     report.append("# FletV2 Quick Performance Validation Report")
     report.append(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     report.append("")
@@ -155,8 +169,8 @@ def generate_quick_report(control_results: Dict, page_results: Dict, validation:
 
 def main():
     """Run the quick performance validation."""
-    print("🚀 FletV2 Quick Performance Validation")
-    print("=" * 50)
+    logger.info("🚀 FletV2 Quick Performance Validation")
+    logger.info("=" * 50)
 
     # Run benchmarks
     control_results = benchmark_control_updates(100)
@@ -169,22 +183,22 @@ def main():
     fletv2_optimal = analyze_fletv2_patterns()
 
     # Generate summary
-    print("\n📊 Performance Summary:")
-    print(f"  Control Updates: {control_results['avg']:.2f}ms avg {'✅' if validation['control_fast'] else '⚠️'}")
-    print(f"  Page Updates: {page_results['avg']:.2f}ms avg {'✅' if validation['page_strategic'] else '⚠️'}")
-    print(f"  Pattern Ratio: {page_results['avg']/control_results['avg']:.1f}x {'✅' if validation['optimal_ratio'] else '⚠️'}")
-    print(f"  Overall Status: {'✅ OPTIMAL' if validation['overall_optimal'] else '⚠️ NEEDS WORK'}")
+    logger.info("\n📊 Performance Summary:")
+    logger.info(f"  Control Updates: {control_results['avg']:.2f}ms avg {'✅' if validation['control_fast'] else '⚠️'}")
+    logger.info(f"  Page Updates: {page_results['avg']:.2f}ms avg {'✅' if validation['page_strategic'] else '⚠️'}")
+    logger.info(f"  Pattern Ratio: {page_results['avg']/control_results['avg']:.1f}x {'✅' if validation['optimal_ratio'] else '⚠️'}")
+    logger.info(f"  Overall Status: {'✅ OPTIMAL' if validation['overall_optimal'] else '⚠️ NEEDS WORK'}")
 
     # FletV2 specific assessment
-    print(f"\n🎯 FletV2 Assessment: {'✅ EXCELLENT IMPLEMENTATION' if fletv2_optimal else '⚠️ NEEDS OPTIMIZATION'}")
+    logger.info(f"\n🎯 FletV2 Assessment: {'✅ EXCELLENT IMPLEMENTATION' if fletv2_optimal else '⚠️ NEEDS OPTIMIZATION'}")
 
     # Generate report
     report = generate_quick_report(control_results, page_results, validation)
-    with open("FLETV2_QUICK_PERFORMANCE_VALIDATION.md", "w", encoding="utf-8") as f:
+    with open("FletV2_QUICK_PERFORMANCE_VALIDATION.md", "w", encoding="utf-8") as f:
         f.write(report)
 
-    print(f"\n📄 Report saved: FLETV2_QUICK_PERFORMANCE_VALIDATION.md")
-    print("\n🎉 Validation complete!")
+    logger.info(f"\n📄 Report saved: FletV2_QUICK_PERFORMANCE_VALIDATION.md")
+    logger.info("\n🎉 Validation complete!")
 
 if __name__ == "__main__":
     main()

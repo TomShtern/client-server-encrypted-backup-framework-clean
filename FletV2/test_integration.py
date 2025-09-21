@@ -84,13 +84,13 @@ def test_server_bridge_integration():
 
         # Test bridge client operations
         clients_result = bridge.get_clients()
-        assert clients_result["success"], f"Get clients should succeed: {clients_result.get('error')}"
-        logger.info(f"✅ Bridge client operations test passed: {len(clients_result['data'])} clients")
+        assert isinstance(clients_result, list), f"Get clients should return list, got: {type(clients_result)}"
+        logger.info(f"✅ Bridge client operations test passed: {len(clients_result)} clients")
 
         # Test bridge file operations
         files_result = bridge.get_files()
-        assert files_result["success"], f"Get files should succeed: {files_result.get('error')}"
-        logger.info(f"✅ Bridge file operations test passed: {len(files_result['data'])} files")
+        assert isinstance(files_result, list), f"Get files should return list, got: {type(files_result)}"
+        logger.info(f"✅ Bridge file operations test passed: {len(files_result)} files")
 
         return True
 

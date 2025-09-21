@@ -7,16 +7,29 @@ Core Principle: Use Flet's built-in charts and progress components.
 Real system metrics with clean, maintainable code.
 """
 
-from .common_imports import *
+# Explicit imports instead of star import for better static analysis
+import flet as ft
+from typing import Optional, Dict, Any, List
+from datetime import datetime
+import json
+import asyncio
+import aiofiles
 import psutil
-from utils.ui_components import themed_metric_card
+
+from utils.debug_setup import get_logger
+from utils.server_bridge import ServerBridge
+from utils.state_manager import StateManager
+from utils.ui_components import themed_card, themed_button, themed_metric_card
+from utils.user_feedback import show_success_message, show_error_message
+
+logger = get_logger(__name__)
 
 
 def create_analytics_view(
     server_bridge: Optional[ServerBridge],
     page: ft.Page,
-    _state_manager: StateManager
-) -> ft.Control:
+    _state_manager: Optional[StateManager] = None
+) -> Any:
     """Simple analytics view with real system metrics."""
     logger.info("Creating simplified analytics view")
 
@@ -122,7 +135,7 @@ def create_analytics_view(
     )
 
     # Update all displays with new metrics
-    def update_displays():
+    def update_displays() -> None:
         """Update all UI components with current metrics."""
         nonlocal current_metrics
         current_metrics = get_system_metrics()
@@ -163,7 +176,7 @@ def create_analytics_view(
                 control.update()
 
     # Auto-refresh functionality
-    async def auto_refresh_loop():
+    async def auto_refresh_loop() -> None:
         """Simple auto-refresh loop using asyncio."""
         while auto_refresh_enabled:
             try:
@@ -173,7 +186,7 @@ def create_analytics_view(
                 logger.error(f"Auto-refresh error: {e}")
                 break
 
-    def toggle_auto_refresh(e):
+    def toggle_auto_refresh(e: ft.ControlEvent) -> None:
         """Toggle auto-refresh on/off."""
         nonlocal auto_refresh_enabled, refresh_task
 
@@ -193,13 +206,13 @@ def create_analytics_view(
             auto_refresh_button.update()
 
     # Manual refresh
-    def refresh_now(e):
+    def refresh_now(e: ft.ControlEvent) -> None:
         """Manual refresh of metrics."""
         update_displays()
         show_success_message(page, "Metrics refreshed")
 
     # Export functionality using FilePicker
-    async def save_analytics_data(e: ft.FilePickerResultEvent):
+    async def save_analytics_data(e: ft.FilePickerResultEvent) -> None:
         """Export analytics data as JSON."""
         if e.path:
             try:
@@ -220,14 +233,14 @@ def create_analytics_view(
             except Exception as ex:
                 show_error_message(page, f"Export failed: {ex}")
 
-    def handle_file_picker_result(e):
+    def handle_file_picker_result(e: ft.FilePickerResultEvent) -> None:
         """Wrapper to handle async file picker result."""
         page.run_task(save_analytics_data, e)
 
     file_picker = ft.FilePicker(on_result=handle_file_picker_result)
     page.overlay.append(file_picker)
 
-    def export_analytics(e):
+    def export_analytics(e: ft.ControlEvent) -> None:
         """Export analytics data."""
         file_picker.save_file(
             dialog_title="Export Analytics Data",
@@ -348,11 +361,11 @@ def create_analytics_view(
     # Create the main container
     analytics_container = themed_card(main_content, "System Analytics Dashboard")
 
-    def setup_subscriptions():
+    def setup_subscriptions() -> None:
         """Setup subscriptions and initial data loading after view is added to page."""
         update_displays()
 
-    def dispose():
+    def dispose() -> None:
         """Clean up subscriptions and resources."""
         logger.debug("Disposing analytics view")
         # Remove FilePicker from page overlay

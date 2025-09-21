@@ -36,32 +36,32 @@ async def test_web_interface():
             else:
                 print(f"[ERROR] Web interface: HTTP {response.status_code}")
             return False
-    except Exception as e:
-        print(f"[ERROR] Web interface: {str(e)}")
-        return False
+        except Exception as e:
+            print(f"[ERROR] Web interface: {str(e)}")
+            return False
 
 def test_file_transfer_setup():
     """Test if file transfer components are ready"""
     print("\n[INFO] Testing file transfer setup...")
-    
+
     # Check C++ client
     client_paths = [
         "build/Release/EncryptedBackupClient.exe",
-        "build/EncryptedBackupClient.exe", 
+        "build/EncryptedBackupClient.exe",
         "Client/EncryptedBackupClient.exe"
     ]
-    
+
     client_found = False
     for path in client_paths:
         if Path(path).exists():
             print(f"[OK] C++ client found: {path}")
             client_found = True
             break
-    
+
     if not client_found:
         print("[WARNING] C++ client not found - file transfers may not work")
         print("[INFO] Build with: cmake --build build --config Release")
-    
+
     # Check received_files directory
     received_dir = Path("received_files")
     if received_dir.exists():
@@ -69,14 +69,14 @@ def test_file_transfer_setup():
         print(f"[OK] Received files directory exists ({len(files)} files)")
     else:
         print("[INFO] Received files directory will be created automatically")
-    
+
     return client_found
 
 def create_test_file():
     """Create a test file for transfer testing"""
     test_file = Path("test_upload.txt")
     content = f"Test file created for CyberBackup transfer test\nTimestamp: {str(datetime.now())}\nThis file tests the complete transfer chain."
-    
+
     try:
         with open(test_file, 'w', encoding='utf-8') as f:
             f.write(content)
@@ -89,48 +89,48 @@ def create_test_file():
 async def main():
     print("System Status Check - CyberBackup 3.0")
     print("=" * 50)
-    
+
     # Test servers
     backup_running = test_port(1256, "Backup Server")
     api_running = test_port(9090, "API Server")
-    
+
     # Test web interface
     web_working = await test_web_interface()
-    
+
     # Test file transfer setup
     client_ready = test_file_transfer_setup()
-    
+
     print("\n" + "=" * 50)
     print("SYSTEM STATUS SUMMARY")
     print("=" * 50)
-    
+
     if backup_running and api_running and web_working:
         print("[SUCCESS] All core components are operational!")
         print("")
         print("System Status:")
         print("  - Backup Server: [OK] Running on port 1256")
-        print("  - API Server: [OK] Running on port 9090") 
+        print("  - API Server: [OK] Running on port 9090")
         print("  - Web Interface: [OK] Accessible at http://127.0.0.1:9090/")
-        
+
         if client_ready:
             print("  - C++ Client: [OK] Ready for file transfers")
         else:
             print("  - C++ Client: [WARNING] Not found - build required")
-        
+
         print("")
         print("Next Steps:")
         print("1. Open http://127.0.0.1:9090/ in your browser")
         print("2. Register a username")
         print("3. Upload a file to test the complete system")
         print("4. Check received_files/ directory for transferred files")
-        
+
         if not client_ready:
             print("5. Build C++ client: cmake --build build --config Release")
-        
+
         print("")
         print("[SUCCESS] The Unicode/emoji fixes resolved the startup issues!")
         print("[SUCCESS] Your canonical launcher is now working properly!")
-        
+
     else:
         print("[ERROR] System has issues:")
         if not backup_running:
@@ -139,7 +139,7 @@ async def main():
             print("  - API Server: [ERROR] Not responding")
         if not web_working:
             print("  - Web Interface: [ERROR] Not accessible")
-            
+
         print("")
         print("Troubleshooting:")
         print("1. Check console windows for error messages")

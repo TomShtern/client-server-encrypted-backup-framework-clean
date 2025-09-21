@@ -7,9 +7,37 @@ Core Principle: Use Flet's built-in components for metrics, progress bars, and c
 Clean, maintainable dashboard that preserves all user-facing functionality.
 """
 
-from .common_imports import *
+# Standard library imports
+import os
+import sys
+
+# Add parent directory to path for Shared imports
+parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+# Explicit imports instead of star import for better static analysis
+import flet as ft
+from typing import Optional, Dict, Any, List
+from datetime import datetime
+import json
+import asyncio
+import aiofiles
+
+# ALWAYS import this in any Python file that deals with subprocess or console I/O
+import Shared.utils.utf8_solution as _  # Import for UTF-8 side effects
+
+from utils.debug_setup import get_logger
+from utils.server_bridge import ServerBridge
+from utils.state_manager import StateManager
+from utils.ui_components import themed_card, themed_button
+from utils.user_feedback import show_success_message, show_error_message
+
+logger = get_logger(__name__)
+
+# Additional imports specific to dashboard
 import contextlib
-from typing import Optional, Dict, Any, List, Tuple, Literal, Union, Iterator, Callable
+from typing import Tuple, Literal, Union, Iterator, Callable  # Extending base typing imports
 from collections import deque
 from functools import lru_cache
 import psutil
@@ -61,7 +89,7 @@ def _parse_uptime_to_seconds(uptime_value: Any) -> int:
     - HH:MM:SS string
     - dict-like with hours/minutes/seconds
     """
-    try:
+    with contextlib.suppress(Exception):
         if isinstance(uptime_value, (int, float)):
             return int(uptime_value)
         s = str(uptime_value)
@@ -76,8 +104,6 @@ def _parse_uptime_to_seconds(uptime_value: Any) -> int:
             m = int(uptime_value.get("minutes", 0))
             sec = int(uptime_value.get("seconds", 0))
             return h * 3600 + m * 60 + sec
-    except Exception:
-        pass
     return 0
 
 def _normalize_server_status_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -92,7 +118,7 @@ def _normalize_server_status_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "running": running,
             "clients_connected": int(payload.get("clients_connected", payload.get("active_clients", payload.get("total_clients", 0))))
-                if isinstance(payload.get("clients_connected", None), (int, float)) or payload.get("clients_connected") is not None else 0,
+                if isinstance(payload.get("clients_connected"), (int, float)) or payload.get("clients_connected") is not None else 0,
             "total_files": int(payload.get("total_files", payload.get("files_count", 0))),
             "total_transfers": int(payload.get("total_transfers", payload.get("transfers", 0))),
             "storage_used_gb": float(payload.get("storage_used_gb", payload.get("storage_used", 0.0))),
@@ -205,10 +231,10 @@ def create_dashboard_view(
     disk_history: deque = deque(maxlen=MAX_HISTORY_POINTS)
 
     # Event handlers
-    def on_backup(e):
+    def on_backup(e: ft.ControlEvent) -> None:
         show_success_message(page, "Backup initiated (mock)")
 
-    def start_server(e):
+    def start_server(e: ft.ControlEvent) -> None:
         """Start the server."""
         if server_bridge:
             try:
@@ -225,7 +251,7 @@ def create_dashboard_view(
             show_success_message(page, "Server started (mock mode)")
             update_all_displays()
 
-    def stop_server(e):
+    def stop_server(e: ft.ControlEvent) -> None:
         """Stop the server."""
         if server_bridge:
             try:
@@ -242,10 +268,10 @@ def create_dashboard_view(
             show_success_message(page, "Server stopped (mock mode)")
             update_all_displays()
 
-    def refresh_dashboard(e):
+    def refresh_dashboard(e: ft.ControlEvent) -> None:
         """Refresh all dashboard data (async to avoid blocking UI)."""
         try:
-            async def _manual_refresh():
+            async def _manual_refresh() -> None:
                 await _update_all_displays_async('manual')
             page.run_task(_manual_refresh)
         except Exception:
@@ -359,7 +385,10 @@ def create_dashboard_view(
     def normalize_activity_type(level: str) -> ActivityType:
         """Normalize activity level to valid ActivityType."""
         normalized = str(level).lower()
-        return normalized if normalized in ['info', 'warning', 'error', 'success'] else 'info'
+        from typing import cast
+        if normalized in ['info', 'warning', 'error', 'success']:
+            return cast(ActivityType, normalized)
+        return 'info'
 
     # Get activity data with improved type safety
     def get_activity_data() -> List[ActivityEntry]:
@@ -584,21 +613,21 @@ def create_dashboard_view(
         )
 
     # Navigation helpers using the app_ref exposed on page
-    def _go_to_clients(e=None):
+    def _go_to_clients(e: Optional[ft.ControlEvent] = None) -> None:
         try:
             if hasattr(page, 'app_ref') and hasattr(page.app_ref, '_switch_to_view'):
                 page.app_ref._switch_to_view(1)  # Clients
         except Exception:
             pass
 
-    def _go_to_files(e=None):
+    def _go_to_files(e: Optional[ft.ControlEvent] = None) -> None:
         try:
             if hasattr(page, 'app_ref') and hasattr(page.app_ref, '_switch_to_view'):
                 page.app_ref._switch_to_view(2)  # Files
         except Exception:
             pass
 
-    def _go_to_logs(e=None):
+    def _go_to_logs(e: Optional[ft.ControlEvent] = None) -> None:
         try:
             if hasattr(page, 'app_ref') and hasattr(page.app_ref, '_switch_to_view'):
                 page.app_ref._switch_to_view(5)  # Logs
@@ -687,7 +716,7 @@ def create_dashboard_view(
         except Exception:
             return (label, severity)
 
-    def update_all_displays():
+    def update_all_displays() -> None:
         """Update all dashboard displays with current data."""
         nonlocal current_server_status, current_system_metrics, current_activity, current_clients, last_updated, cpu_history, memory_history, disk_history
 
@@ -875,7 +904,7 @@ def create_dashboard_view(
             except Exception as e2:
                 logger.error(f"Both control and page updates failed: {e2}")
 
-    async def _update_all_displays_async(source: str = 'auto'):
+    async def _update_all_displays_async(source: str = 'auto') -> None:
         """Async version of update_all_displays."""
         nonlocal current_server_status, current_system_metrics, current_activity, current_clients, last_updated, prev_server_snapshot, last_significant_toast_time
 
@@ -902,8 +931,8 @@ def create_dashboard_view(
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Process results with proper type safety - use async results, not re-call functions
-            current_server_status = results[0] if not isinstance(results[0], Exception) else get_server_status()
-            current_system_metrics = results[1] if not isinstance(results[1], Exception) else get_system_metrics()
+            current_server_status = results[0] if (not isinstance(results[0], Exception) and isinstance(results[0], dict)) else get_server_status()
+            current_system_metrics = results[1] if (not isinstance(results[1], Exception) and isinstance(results[1], dict)) else get_system_metrics()
 
             # Handle activity data
             if isinstance(results[2], Exception):
@@ -915,7 +944,7 @@ def create_dashboard_view(
 
             # Handle clients result if server bridge was used
             if server_bridge and len(results) > 3:
-                clients_result = results[3] if not isinstance(results[3], Exception) else []
+                clients_result = [] if isinstance(results[3], Exception) else results[3]
                 if isinstance(clients_result, dict) and clients_result.get('success'):
                     current_clients = clients_result.get('data', [])
                 elif isinstance(clients_result, list):
@@ -943,14 +972,14 @@ def create_dashboard_view(
             with contextlib.suppress(Exception):
                 refresh_indicator.update()
 
-    async def _update_operations_panels_async():
+    async def _update_operations_panels_async() -> None:
         """Async version of operations panels update."""
         try:
             await asyncio.get_event_loop().run_in_executor(None, _update_operations_panels)
         except Exception as e:
             logger.debug(f"Async operations panels update failed: {e}")
 
-    def update_activity_list():
+    def update_activity_list() -> None:
         """Update the activity list."""
         activity_list.controls.clear()
 
@@ -1025,14 +1054,14 @@ def create_dashboard_view(
         except Exception:
             pass
 
-    def update_clients_list():
+    def update_clients_list() -> None:
         """Update clients snapshot list from current_clients."""
         clients_list.controls.clear()
         if not current_clients:
             clients_list.controls.append(clients_empty)
         else:
             # Sort by last_seen desc when available
-            def _parse_ts(v):
+            def _parse_ts(v: Any) -> datetime:
                 try:
                     if isinstance(v, datetime):
                         return v
@@ -1114,7 +1143,7 @@ def create_dashboard_view(
 
     # Create server status indicator used in header (dynamic)
     # Slim top bar: integrates status + actions in one compact bar
-    def on_live_toggle(e: ft.ControlEvent):
+    def on_live_toggle(e: ft.ControlEvent) -> None:
         nonlocal auto_refresh_enabled
         auto_refresh_enabled = bool(e.control.value)
         show_success_message(page, "Live refresh enabled" if auto_refresh_enabled else "Live refresh paused")
@@ -1215,7 +1244,7 @@ def create_dashboard_view(
             animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT)
         )
 
-    def _update_operations_panels():
+    def _update_operations_panels() -> None:
         """Optimized operations panel update using modern Python patterns."""
         # Ensure current_activity is a proper list for type safety
         safe_activity = current_activity if isinstance(current_activity, list) else []
@@ -1299,12 +1328,12 @@ def create_dashboard_view(
         animate_opacity=ft.Animation(200, ft.AnimationCurve.EASE_OUT)
     )
 
-    def setup_subscriptions():
+    def setup_subscriptions() -> None:
         """Setup subscriptions and initial data loading after view is added to page."""
         nonlocal refresh_task, _stop_polling
 
         # Defer heavy initial data loading to avoid blocking UI
-        async def _deferred_initial_load():
+        async def _deferred_initial_load() -> None:
             try:
                 print("[DEBUG] Starting deferred initial load")
                 # Small delay to let UI settle
@@ -1340,7 +1369,7 @@ def create_dashboard_view(
             pass
 
         # Start lightweight periodic refresh in background using constants
-        async def _poll_loop():
+        async def _poll_loop() -> None:
             nonlocal _stop_polling
             operations_update_counter = 0
             try:
@@ -1365,7 +1394,7 @@ def create_dashboard_view(
         except Exception as e:
             logger.debug(f"Failed to start polling task: {e}")
 
-    def dispose():
+    def dispose() -> None:
         """Clean up subscriptions and resources."""
         nonlocal _stop_polling, refresh_task
         logger.debug("Disposing dashboard view")

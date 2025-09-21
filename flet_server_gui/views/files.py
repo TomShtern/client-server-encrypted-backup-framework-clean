@@ -1,4 +1,4 @@
-﻿"""
+"""
 Purpose: File management view
 Logic: File listing, filtering, and management operations
 UI: File table, action buttons, and file details

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Purpose: Analytics & charts view
 Logic: Data aggregation and metrics calculation

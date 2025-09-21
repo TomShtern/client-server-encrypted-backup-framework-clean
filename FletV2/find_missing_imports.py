@@ -2,10 +2,19 @@
 # Save in your workspace root and run: python find_missing_imports.py
 import ast, sys, os
 from collections import defaultdict
+from typing import Dict, Set
+
+# Add parent directory to path for Shared imports
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+# ALWAYS import this in any Python file that deals with subprocess or console I/O
+import Shared.utils.utf8_solution as _  # Import for UTF-8 side effects
 
 root = os.getcwd()
-ignore_dirs = {"venv", ".venv", "__pycache__", ".git", "flet_venv", "dist", "build"}
-imports = defaultdict(set)
+ignore_dirs = {"venv", ".venv", "__pycache__", ".git", "dist", "build"}
+imports: Dict[str, Set[str]] = defaultdict(set)
 
 def add_import(name, fn):
     top = name.split('.')[0]

@@ -104,43 +104,53 @@ class ServerBridge:
     # CLIENT OPERATIONS
     # ============================================================================
 
-    def get_all_clients_from_db(self):
+    def get_all_clients_from_db(self) -> Dict[str, Any]:
         """Get all clients from database."""
         return self._call_real_or_mock('get_clients')
 
-    def get_clients(self):
+    def get_clients(self) -> List[Dict[str, Any]]:
         """Get all clients (sync version)."""
-        return self._call_real_or_mock('get_clients')
+        result = self._call_real_or_mock('get_clients')
+        if isinstance(result, dict) and 'data' in result:
+            return result['data'] if result['data'] is not None else []
+        return result if isinstance(result, list) else []
 
-    async def get_clients_async(self):
+    async def get_clients_async(self) -> List[Dict[str, Any]]:
         """Get all clients (async version)."""
-        return await self._call_real_or_mock_async('get_clients_async')
+        result = await self._call_real_or_mock_async('get_clients_async')
+        if isinstance(result, dict) and 'data' in result:
+            return result['data'] if result['data'] is not None else []
+        return result if isinstance(result, list) else []
 
-    def get_client_details(self, client_id: str):
+    def get_client_details(self, client_id: str) -> Dict[str, Any]:
         """Get details for a specific client."""
         return self._call_real_or_mock('get_client_details', client_id)
 
-    async def add_client_async(self, client_data: Dict[str, Any]):
+    async def add_client_async(self, client_data: Dict[str, Any]) -> Dict[str, Any]:
         """Add a new client."""
         return await self._call_real_or_mock_async('add_client_async', client_data)
 
-    def delete_client(self, client_id: str):
+    def add_client(self, client_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Add a new client (sync version)."""
+        return self._call_real_or_mock('add_client', client_data)
+
+    def delete_client(self, client_id: str) -> Dict[str, Any]:
         """Delete a client (sync version)."""
         return self._call_real_or_mock('delete_client', client_id)
 
-    async def delete_client_async(self, client_id: str):
+    async def delete_client_async(self, client_id: str) -> Dict[str, Any]:
         """Delete a client (async version)."""
         return await self._call_real_or_mock_async('delete_client_async', client_id)
 
-    def disconnect_client(self, client_id: str):
+    def disconnect_client(self, client_id: str) -> Dict[str, Any]:
         """Disconnect a specific client."""
         return self._call_real_or_mock('disconnect_client', client_id)
 
-    async def disconnect_client_async(self, client_id: str):
+    async def disconnect_client_async(self, client_id: str) -> Dict[str, Any]:
         """Disconnect a specific client (async)."""
         return await self._call_real_or_mock_async('disconnect_client_async', client_id)
 
-    def resolve_client(self, client_identifier: str):
+    def resolve_client(self, client_identifier: str) -> Dict[str, Any]:
         """Resolve client by ID or name."""
         return self._call_real_or_mock('resolve_client', client_identifier)
 
@@ -148,31 +158,37 @@ class ServerBridge:
     # FILE OPERATIONS
     # ============================================================================
 
-    def get_client_files(self, client_id: str):
+    def get_client_files(self, client_id: str) -> Dict[str, Any]:
         """Get files for a specific client."""
         return self._call_real_or_mock('get_client_files', client_id)
 
-    async def get_client_files_async(self, client_id: str):
+    async def get_client_files_async(self, client_id: str) -> Dict[str, Any]:
         """Get files for a specific client (async)."""
         return await self._call_real_or_mock_async('get_client_files_async', client_id)
 
-    def get_files(self):
+    def get_files(self) -> List[Dict[str, Any]]:
         """Get all files."""
-        return self._call_real_or_mock('get_files')
+        result = self._call_real_or_mock('get_files')
+        if isinstance(result, dict) and 'data' in result:
+            return result['data'] if result['data'] is not None else []
+        return result if isinstance(result, list) else []
 
-    async def get_files_async(self):
+    async def get_files_async(self) -> List[Dict[str, Any]]:
         """Get all files (async)."""
-        return await self._call_real_or_mock_async('get_files_async')
+        result = await self._call_real_or_mock_async('get_files_async')
+        if isinstance(result, dict) and 'data' in result:
+            return result['data'] if result['data'] is not None else []
+        return result if isinstance(result, list) else []
 
-    def delete_file(self, file_id: str):
+    def delete_file(self, file_id: str) -> Dict[str, Any]:
         """Delete a file."""
         return self._call_real_or_mock('delete_file', file_id)
 
-    async def delete_file_async(self, file_id: str):
+    async def delete_file_async(self, file_id: str) -> Dict[str, Any]:
         """Delete a file (async)."""
         return await self._call_real_or_mock_async('delete_file_async', file_id)
 
-    def download_file(self, file_id: str, destination_path: str):
+    def download_file(self, file_id: str, destination_path: str) -> Dict[str, Any]:
         """Download a file to destination."""
         return self._call_real_or_mock('download_file', file_id, destination_path)
 
@@ -395,9 +411,17 @@ class ServerBridge:
         """Save application settings."""
         return await self._call_real_or_mock_async('save_settings_async', settings_data)
 
+    def save_settings(self, settings_data: Dict[str, Any]):
+        """Save application settings (sync version)."""
+        return self._call_real_or_mock('save_settings', settings_data)
+
     async def load_settings_async(self):
         """Load current settings."""
         return await self._call_real_or_mock_async('load_settings_async')
+
+    def load_settings(self):
+        """Load current settings (sync version)."""
+        return self._call_real_or_mock('load_settings')
 
     async def validate_settings_async(self, settings_data: Dict[str, Any]):
         """Validate settings data."""

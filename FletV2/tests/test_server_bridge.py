@@ -14,7 +14,7 @@ os.environ['FLET_V2_DEBUG'] = 'true'
 # Add the FletV2 directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from utils.server_bridge import ServerBridge, create_server_bridge, ModularServerBridge
+from utils.server_bridge import ServerBridge, create_server_bridge
 
 
 class TestSimpleServerBridge(unittest.TestCase):
@@ -28,7 +28,7 @@ class TestSimpleServerBridge(unittest.TestCase):
     def test_initialization(self):
         """Test that the bridge initializes correctly."""
         self.assertIsInstance(self.bridge, ServerBridge)
-        self.assertTrue(self.bridge.connected)
+        self.assertTrue(self.bridge.is_connected())
 
     def test_get_clients(self):
         """Test getting client data."""
@@ -38,7 +38,7 @@ class TestSimpleServerBridge(unittest.TestCase):
 
         # Check structure of first client
         if clients:
-            client = clients[0]
+            client = clients[0]  # clients is a list, accessing first element
             required_keys = ['client_id', 'address', 'status', 'connected_at', 'last_activity']
             for key in required_keys:
                 self.assertIn(key, client)
@@ -50,7 +50,7 @@ class TestSimpleServerBridge(unittest.TestCase):
 
         # Check structure of first file
         if files:
-            file_data = files[0]
+            file_data = files[0]  # files is a list, accessing first element
             required_keys = ['file_id', 'filename', 'size', 'uploaded_at', 'client_id']
             for key in required_keys:
                 self.assertIn(key, file_data)
@@ -84,51 +84,6 @@ class TestSimpleServerBridge(unittest.TestCase):
         with patch('utils.simple_server_bridge.logger'):
             bridge = create_server_bridge()
             self.assertIsInstance(bridge, ServerBridge)
-
-
-class TestModularServerBridge(unittest.TestCase):
-    """Test cases for the ModularServerBridge."""
-
-    @patch('utils.server_bridge.requests.Session')
-    @patch('utils.server_bridge.logger')
-    def test_initialization_with_connection(self, mock_logger, mock_session_class):
-        """Test that the bridge initializes correctly with a successful connection."""
-        # Mock successful connection
-        mock_session = Mock()
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_session.get.return_value = mock_response
-        mock_session_class.return_value = mock_session
-
-        bridge = ModularServerBridge()
-
-        self.assertIsInstance(bridge, ModularServerBridge)
-        # Note: The bridge might not be connected if the connection test fails
-        # We'll just check that it was instantiated correctly
-        mock_session.get.assert_called_once()
-
-    @patch('utils.server_bridge.requests.Session')
-    @patch('utils.server_bridge.logger')
-    def test_initialization_with_failed_connection(self, mock_logger, mock_session_class):
-        """Test that the bridge initializes correctly with a failed connection."""
-        # Mock failed connection
-        mock_session = Mock()
-        mock_session.get.side_effect = Exception("Connection failed")
-        mock_session_class.return_value = mock_session
-
-        bridge = ModularServerBridge()
-
-        self.assertIsInstance(bridge, ModularServerBridge)
-        self.assertFalse(bridge.connected)
-
-    def test_is_connected(self):
-        """Test checking connection status."""
-        with patch('utils.server_bridge.requests.Session'), \
-             patch('utils.server_bridge.logger'):
-            bridge = ModularServerBridge()
-            bridge.connected = True
-            result = bridge.is_connected()
-            self.assertTrue(result)
 
 
 if __name__ == '__main__':

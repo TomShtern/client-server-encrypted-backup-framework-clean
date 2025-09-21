@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Purpose: Main dashboard view matching the screenshot layout
 Logic: Aggregates data from various sources for display

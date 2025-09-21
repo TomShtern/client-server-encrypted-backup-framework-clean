@@ -23,13 +23,13 @@ class FletDatabaseManager:
     """
     Database manager for FletV2 that works with MockaBase as a drop-in replacement.
     """
-    
+
     def __init__(self, database_path: str = "MockaBase.db"):
         """Initialize database manager with database path."""
         self.database_path = database_path
         self.connection = None
         logger.info(f"Initialized FletDatabaseManager with database: {database_path}")
-    
+
     def connect(self) -> bool:
         """Connect to the database."""
         try:
@@ -44,19 +44,19 @@ class FletDatabaseManager:
         except Exception as e:
             logger.error(f"Failed to connect to database: {e}")
             return False
-    
-    def disconnect(self):
+
+    def disconnect(self) -> None:
         """Disconnect from the database."""
         if self.connection:
             self.connection.close()
             self.connection = None
             logger.info("Disconnected from database")
-    
+
     def get_table_names(self) -> List[str]:
         """Get list of table names in the database."""
         if not self.connection:
             return []
-        
+
         try:
             cursor = self.connection.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
@@ -65,24 +65,24 @@ class FletDatabaseManager:
         except Exception as e:
             logger.error(f"Failed to get table names: {e}")
             return []
-    
+
     def get_table_data(self, table_name: str) -> Dict[str, Any]:
         """Get table data including columns and rows."""
         if not self.connection:
             return {"columns": [], "rows": []}
-        
+
         try:
             cursor = self.connection.cursor()
-            
+
             # Get column information
             cursor.execute(f"PRAGMA table_info({table_name})")
             columns_info = cursor.fetchall()
             columns = [row[1] for row in columns_info]  # Column names
-            
+
             # Get row data
             cursor.execute(f"SELECT * FROM {table_name}")
             rows = [dict(row) for row in cursor.fetchall()]
-            
+
             # Convert binary data to hex strings for display
             processed_rows = []
             for row in rows:
@@ -93,7 +93,7 @@ class FletDatabaseManager:
                     else:
                         processed_row[key] = value
                 processed_rows.append(processed_row)
-            
+
             return {
                 "columns": columns,
                 "rows": processed_rows
@@ -101,28 +101,28 @@ class FletDatabaseManager:
         except Exception as e:
             logger.error(f"Failed to get table data for {table_name}: {e}")
             return {"columns": [], "rows": []}
-    
+
     def get_database_stats(self) -> Dict[str, Any]:
         """Get database statistics."""
         if not self.connection:
             return {}
-        
+
         try:
             cursor = self.connection.cursor()
-            
+
             # Get table names
             tables = self.get_table_names()
-            
+
             # Get record counts for each table
             total_records = 0
             table_stats = {}
-            
+
             for table in tables:
                 cursor.execute(f"SELECT COUNT(*) FROM {table}")
                 count = cursor.fetchone()[0]
                 table_stats[table] = count
                 total_records += count
-            
+
             # Get database size
             if os.path.exists(self.database_path):
                 size_bytes = os.path.getsize(self.database_path)
@@ -130,7 +130,7 @@ class FletDatabaseManager:
                 size_str = f"{size_mb:.1f} MB"
             else:
                 size_str = "Unknown"
-            
+
             return {
                 "status": "Connected",
                 "tables": len(tables),
@@ -141,22 +141,22 @@ class FletDatabaseManager:
         except Exception as e:
             logger.error(f"Failed to get database stats: {e}")
             return {}
-    
+
     def get_clients(self) -> List[Dict[str, Any]]:
         """Get all clients from the database."""
         if not self.connection:
             return []
-        
+
         try:
             cursor = self.connection.cursor()
             cursor.execute("""
-                SELECT ID, Name, LastSeen, 
+                SELECT ID, Name, LastSeen,
                        CASE WHEN PublicKey IS NOT NULL THEN 1 ELSE 0 END as HasPublicKey,
                        CASE WHEN AESKey IS NOT NULL THEN 1 ELSE 0 END as HasAESKey
                 FROM clients
                 ORDER BY LastSeen DESC
             """)
-            
+
             clients = []
             for row in cursor.fetchall():
                 client = {
@@ -167,27 +167,27 @@ class FletDatabaseManager:
                     "has_aes_key": bool(row["HasAESKey"])
                 }
                 clients.append(client)
-            
+
             return clients
         except Exception as e:
             logger.error(f"Failed to get clients: {e}")
             return []
-    
+
     def get_files(self) -> List[Dict[str, Any]]:
         """Get all files from the database."""
         if not self.connection:
             return []
-        
+
         try:
             cursor = self.connection.cursor()
             cursor.execute("""
-                SELECT f.ID, f.FileName, f.PathName, f.Verified, f.FileSize, 
+                SELECT f.ID, f.FileName, f.PathName, f.Verified, f.FileSize,
                        f.ModificationDate, f.CRC, f.ClientID, c.Name as ClientName
                 FROM files f
                 LEFT JOIN clients c ON f.ClientID = c.ID
                 ORDER BY f.ModificationDate DESC
             """)
-            
+
             files = []
             for row in cursor.fetchall():
                 file = {
@@ -202,45 +202,45 @@ class FletDatabaseManager:
                     "client_name": row["ClientName"] or "Unknown"
                 }
                 files.append(file)
-            
+
             return files
         except Exception as e:
             logger.error(f"Failed to get files: {e}")
             return []
-    
+
     def update_row(self, table_name: str, row_id: str, update_data: Dict[str, Any]) -> bool:
         """Update a row in a table."""
         if not self.connection:
             return False
-        
+
         try:
             cursor = self.connection.cursor()
-            
+
             # Build update query
             set_clause = ", ".join([f"{key} = ?" for key in update_data.keys()])
             values = list(update_data.values())
             values.append(bytes.fromhex(row_id) if isinstance(row_id, str) else row_id)
-            
+
             query = f"UPDATE {table_name} SET {set_clause} WHERE ID = ?"
             cursor.execute(query, values)
-            
+
             self.connection.commit()
             logger.info(f"Updated row in {table_name} with ID {row_id}")
             return True
         except Exception as e:
             logger.error(f"Failed to update row in {table_name}: {e}")
             return False
-    
+
     def delete_row(self, table_name: str, row_id: str) -> bool:
         """Delete a row from a table."""
         if not self.connection:
             return False
-        
+
         try:
             cursor = self.connection.cursor()
             query = f"DELETE FROM {table_name} WHERE ID = ?"
             cursor.execute(query, (bytes.fromhex(row_id) if isinstance(row_id, str) else row_id,))
-            
+
             self.connection.commit()
             logger.info(f"Deleted row from {table_name} with ID {row_id}")
             return True
@@ -249,13 +249,13 @@ class FletDatabaseManager:
             return False
 
 
-def create_database_manager(database_path: str = "MockaBase.db") -> FletDatabaseManager:
+def create_database_manager(database_path: str = "MockaBase.db") -> Optional[FletDatabaseManager]:
     """
     Factory function to create a database manager.
-    
+
     Args:
         database_path (str): Path to the database file
-        
+
     Returns:
         FletDatabaseManager: Instance of database manager
     """

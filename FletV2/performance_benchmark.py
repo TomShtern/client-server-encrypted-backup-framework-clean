@@ -20,8 +20,9 @@ class PerformanceBenchmark:
     """Benchmark suite to validate FletV2's optimal UI performance patterns."""
 
     def __init__(self):
+        from typing import Optional
         self.results: Dict[str, List[float]] = {}
-        self.page: ft.Page = None
+        self.page: Optional[ft.Page] = None
 
     @contextmanager
     def measure_time(self, operation_name: str):
