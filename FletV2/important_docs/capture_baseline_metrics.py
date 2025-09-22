@@ -22,7 +22,7 @@ def capture_baseline_metrics():
     try:
         # Import the performance metrics utility
         try:
-            from utils.perf_metrics import get_metrics, reset_metrics
+            from utils.perf_metrics import get_metrics, reset_metrics  # type: ignore
         except ImportError:
             print("Warning: utils.perf_metrics not available, using mock metrics")
             def get_metrics(): return {}

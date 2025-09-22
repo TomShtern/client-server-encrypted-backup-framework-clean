@@ -190,15 +190,13 @@ class UTF8Support:
                 kernel32.SetConsoleOutputCP(65001)
 
             # Enable virtual terminal processing (not critical if fails)
-            try:
+            with contextlib.suppress(Exception):
                 STD_OUTPUT_HANDLE = -11
-                ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
                 handle = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
                 mode = ctypes.c_ulong()
                 if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+                    ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
                     kernel32.SetConsoleMode(handle, mode.value | ENABLE_VIRTUAL_TERMINAL_PROCESSING)
-            except Exception:  # noqa: BLE001
-                pass
         except (AttributeError, OSError) as e:
             logger.debug("Windows console setup skipped: %s", e)
             cls._original_console_cp = None
@@ -207,24 +205,20 @@ class UTF8Support:
     @classmethod
     def _fix_console_streams(cls) -> None:
         """Attempt to reconfigure stdout/stderr to UTF-8 (non-fatal)."""
-        try:
+        with contextlib.suppress(Exception):
             if hasattr(sys.stdout, 'reconfigure') and hasattr(sys.stderr, 'reconfigure'):
                 sys.stdout.reconfigure(encoding='utf-8')  # type: ignore[attr-defined]
                 sys.stderr.reconfigure(encoding='utf-8')  # type: ignore[attr-defined]
-        except Exception:  # noqa: BLE001
-            pass
 
     @classmethod
     def _auto_configure_environment(cls) -> None:
         """Lightweight heuristics for terminals (PowerShell / Windows Terminal)."""
-        try:
+        with contextlib.suppress(Exception):
             if sys.platform == 'win32' and (
                 'PSModulePath' in os.environ or 'WT_SESSION' in os.environ
             ) and hasattr(sys.stdout, 'reconfigure') and hasattr(sys.stderr, 'reconfigure'):
                 sys.stdout.reconfigure(encoding='utf-8')  # type: ignore[attr-defined]
                 sys.stderr.reconfigure(encoding='utf-8')  # type: ignore[attr-defined]
-        except Exception:  # noqa: BLE001
-            pass
 
     @classmethod
     def get_env(cls, base_env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
@@ -241,13 +235,10 @@ class UTF8Support:
         cls.setup()
 
         try:
-            # Use dict.update() for Python 3.8+ compatibility instead of | operator
-            base_dict = dict(os.environ) if base_env is None else dict(base_env)
-            base_dict.update({
+            return (dict(os.environ) if base_env is None else dict(base_env)) | {
                 'PYTHONIOENCODING': 'utf-8',
                 'PYTHONUTF8': '1',
-            })
-            return base_dict
+            }
         except (OSError, AttributeError, KeyError):
             # Fallback to minimal environment for specific errors
             return {
@@ -296,7 +287,7 @@ def process_bidirectional_text(text: str) -> str:
     if HAS_BIDI and get_display is not None:
         try:
             # The get_display function implements the full Unicode BiDi algorithm
-            return get_display(text)
+            return str(get_display(text))
         except Exception as e:
             logger.debug("bidi.get_display failed, falling back to simple algorithm: %s", e)
             # Fall through to simple algorithm
@@ -373,7 +364,7 @@ def safe_print(message: str) -> None:
         return
     except (UnicodeEncodeError, UnicodeDecodeError):
         # Attempt ASCII replacement then retry
-        try:
+        with contextlib.suppress(Exception):
             safe_line = f"{message.encode('ascii', errors='replace').decode('ascii')}\n"
             if buf is not None:
                 buf.write(safe_line.encode('utf-8'))
@@ -382,13 +373,11 @@ def safe_print(message: str) -> None:
                 sys.stdout.write(safe_line)
                 sys.stdout.flush()
             return
-        except Exception:  # noqa: BLE001
-            pass
     except Exception:  # noqa: BLE001
         pass
 
     # Ultimate silent fallback
-    try:
+    with contextlib.suppress(Exception):
         err_buf = getattr(sys.stderr, 'buffer', None)
         if err_buf is not None:
             err_buf.write(b"UTF-8 safe_print failure\n")
@@ -396,8 +385,6 @@ def safe_print(message: str) -> None:
         else:
             sys.stderr.write("UTF-8 safe_print failure\n")
             sys.stderr.flush()
-    except Exception:  # noqa: BLE001
-        pass
 
 def rtl_print(message: str) -> None:
     """Print message after best‑effort Hebrew visual ordering.
@@ -625,11 +612,8 @@ def get_text_width(text: str) -> int:
             total_width = 0
             for char in text:
                 char_width = wcwidth.wcwidth(char)
-                if char_width is None:
+                if char_width is None or char_width < 0:
                     # Control characters and some Unicode have None width
-                    char_width = 0
-                elif char_width < 0:
-                    # Some characters have negative width (combining chars)
                     char_width = 0
                 total_width += char_width
             return total_width
@@ -747,10 +731,10 @@ def format_table_row(columns: List[str], widths: List[int], sep: str = ' | ', al
         columns = columns[:min_len]
         widths = widths[:min_len]
 
-    formatted_columns = []
-    for column, width in zip(columns, widths):
-        formatted_columns.append(pad_text(column, width, align=align))
-
+    formatted_columns = [
+        pad_text(column, width, align=align)
+        for column, width in zip(columns, widths)
+    ]
     return sep.join(formatted_columns)
 
 def wrap_text(text: str, width: int, indent: str = '', subsequent_indent: str = '') -> List[str]:
@@ -808,7 +792,7 @@ def wrap_text(text: str, width: int, indent: str = '', subsequent_indent: str = 
     if current_line.strip():
         lines.append(current_line)
 
-    return lines if lines else ['']
+    return lines or ['']
 
 # === CONTEXT MANAGERS ===
 ########################################

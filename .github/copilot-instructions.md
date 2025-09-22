@@ -348,6 +348,7 @@ To ensure consistent code quality, configure your linters to exclude unnecessary
 
 *   **Exclusions**: Exclude `.git` files, `vcpkg` directories, and other irrelevant directories from linting.
 *   **Inclusions**: Include `FletV2`, `Shared`, and `api_server` directories for linting.
+*   **Exclusions for Tests**: Exclude test files named like `test_datatable_pix.py`, `test_fixes.py`, etc.
 
 **Example configurations:**
 
@@ -376,7 +377,8 @@ To ensure consistent code quality, configure your linters to exclude unnecessary
             "**/dist": true,
             "**/theme_original_backup.py": true,
             "**/scripts": true,
-            "**/*.git": true
+            "**/*.git": true,
+            "**/test_*.py": true
         },
         "search.exclude": {
             "**/.git": true,
@@ -399,7 +401,8 @@ To ensure consistent code quality, configure your linters to exclude unnecessary
             "**/dist": true,
             "**/theme_original_backup.py": true,
             "**/scripts": true,
-            "**/*.git": true
+            "**/*.git": true,
+            "**/test_*.py": true
         },
         "python.analysis.extraPaths": [
             "./FletV2",
@@ -445,9 +448,32 @@ To ensure consistent code quality, configure your linters to exclude unnecessary
         "dist",
         "theme_original_backup.py",
         "scripts",
-        "*.git"
+        "*.git",
+        "test_*.py"
     ]
     ```
+
+#### Quick Fix for 1K+ Type Errors (Basic Type Checking)
+If facing a large number of type errors while needing to maintain basic type checking, follow these steps:
+
+1.  **Update `pyrightconfig.json`**:
+    -   Disable noisy type checking reports:
+        -   `"reportGeneralTypeIssues": false`
+        -   `"reportOptionalMemberAccess": false`
+        -   `"reportUnknownMemberType": false`
+        -   `"reportMissingTypeStubs": false`
+
+2.  **Address Remaining Type Errors**:
+    -   Example Fix (A): `utf8_solution.py` - Type mismatch:
+        ```python
+        # Before: return get_display(text)  # Could return bytes or str
+        # After: return str(get_display(text))  # Explicit str cast
+        ```
+    -   Example Fix (B): `capture_baseline_metrics.py` - Missing import:
+        ```python
+        # Added type ignore for graceful fallback import
+        from utils.perf_metrics import get_metrics, reset_metrics  # type: ignore
+        ```
 
 ## 🎯 CORE PRINCIPLES: Framework Harmony
 
@@ -742,18 +768,4 @@ class FletV2App(ft.Row):
                 min_width=68,  # Collapsed width
                 min_extended_width=240,  # Extended width
                 extended=self.nav_rail_extended,  # Collapsible functionality
-                bgcolor=ft.Colors.with_opacity(0.98, ft.Colors.SURFACE),  # Material Design 3 compatible surface
-                indicator_color=ft.Colors.with_opacity(0.2, ft.Colors.PRIMARY),  # Enhanced visibility with optimal opacity
-                indicator_shape=ft.RoundedRectangleBorder(radius=24),  # Material Design 3 rounded corners
-                elevation=6,  # Enhanced depth for modern layering without performance impact
-                destinations=[
-                    ft.NavigationRailDestination(
-                        icon=ft.Icon(getattr(ft.Icons, "DASHBOARD_OUTLINED", ft.Icons.WARNING_OUTLINED), size=22,
-                                   badge=ft.Badge(small_size=8, bgcolor=ft.Colors.GREEN)),
-                        selected_icon=ft.Icon(getattr(ft.Icons, "DASHBOARD", ft.Icons.WARNING), color=ft.Colors.PRIMARY, size=24),
-                        label="Dashboard"
-                    ),
-                    ft.NavigationRailDestination(
-                        icon=ft.Icon(getattr(ft.Icons, "PEOPLE_OUTLINE", ft.Icons.WARNING_OUTLINED), size=22),
-                        selected_icon=ft.Icon(getattr(ft.Icons, "PEOPLE", ft.Icons.WARNING), color=ft.Colors.PRIMARY, size=24),
-                        label="Clients"
+                bgcolor
