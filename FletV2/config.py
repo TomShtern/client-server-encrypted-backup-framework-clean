@@ -6,6 +6,7 @@ Configuration and Constants for FletV2.
 import os
 from pathlib import Path
 from contextlib import suppress
+from typing import Dict, Any
 
 # Load environment variables from .env file if it exists
 with suppress(ImportError):
@@ -42,7 +43,7 @@ if DEBUG_MODE:
         print("Info: BACKUP_SERVER_TOKEN not set - endpoints requiring auth will fail in real mode")
 
 # Mock data visibility - when False, mock data is only used when server is unavailable
-SHOW_MOCK_DATA = DEBUG_MODE
+SHOW_MOCK_DATA = os.environ.get('FLET_V2_SHOW_MOCK_DATA', 'false').lower() == 'true'
 
 # Async operation delays for simulation
 ASYNC_DELAY = 0.5  # seconds
@@ -71,6 +72,20 @@ MAX_MAX_CLIENTS = 1000
 # Paths
 PROJECT_ROOT = Path(__file__).parent
 RECEIVED_FILES_DIR = PROJECT_ROOT.parent / "received_files"
+
+# Database Configuration - Points to BackupServer's database
+# This ensures FletV2 GUI uses the same database as the production server
+BACKUP_SERVER_ROOT = PROJECT_ROOT.parent / "python_server"
+DATABASE_PATH = PROJECT_ROOT.parent / "defensive.db"  # Database is in project root, not python_server subdirectory
+DATABASE_NAME = "defensive.db"  # For compatibility with BackupServer config
+FILE_STORAGE_DIR = PROJECT_ROOT.parent / "received_files"  # Shared file storage
+
+# Database connection settings (matching BackupServer defaults)
+DATABASE_CONNECTION_POOL_ENABLED = True
+DATABASE_CONNECTION_POOL_SIZE = 5
+DATABASE_TIMEOUT = 10.0
+DATABASE_MAX_CONNECTION_AGE = 3600.0  # 1 hour
+DATABASE_CLEANUP_INTERVAL = 300.0     # 5 minutes
 
 # Settings persistence path with proper directory structure
 CONFIG_DIR = PROJECT_ROOT / "data"
@@ -120,3 +135,32 @@ def show_mock_data() -> bool:
 def get_status_color(status: str) -> str:
     """Get color for status."""
     return STATUS_COLORS.get(status, "ON_SURFACE")
+
+def get_database_path() -> Path:
+    """Get the path to the BackupServer database."""
+    return DATABASE_PATH
+
+def get_database_name() -> str:
+    """Get the database filename for compatibility."""
+    return DATABASE_NAME
+
+def get_file_storage_dir() -> Path:
+    """Get the shared file storage directory."""
+    return FILE_STORAGE_DIR
+
+def is_database_available() -> bool:
+    """Check if the BackupServer database file exists."""
+    return DATABASE_PATH.exists()
+
+def get_database_config() -> Dict[str, Any]:
+    """Get complete database configuration for ServerBridge."""
+    return {
+        'database_path': str(DATABASE_PATH),
+        'database_name': DATABASE_NAME,
+        'file_storage_dir': str(FILE_STORAGE_DIR),
+        'connection_pool_enabled': DATABASE_CONNECTION_POOL_ENABLED,
+        'connection_pool_size': DATABASE_CONNECTION_POOL_SIZE,
+        'timeout': DATABASE_TIMEOUT,
+        'max_connection_age': DATABASE_MAX_CONNECTION_AGE,
+        'cleanup_interval': DATABASE_CLEANUP_INTERVAL
+    }

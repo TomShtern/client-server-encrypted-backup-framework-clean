@@ -572,6 +572,710 @@ class BackupServer:
         self.running = False
         logger.info("Server has been stopped.")
 
+    # ============================================================================
+    # ServerBridge Integration Layer - Wrapper Methods
+    # ============================================================================
+
+    def _format_response(self, success: bool, data: Any = None, error: str = "") -> Dict[str, Any]:
+        """Helper method to format responses in ServerBridge expected format."""
+        return {
+            'success': success,
+            'data': data,
+            'error': error
+        }
+
+    # --- Client Operations ---
+
+    def get_clients(self) -> Dict[str, Any]:
+        """Get all clients - delegates to db_manager.get_all_clients()."""
+        try:
+            clients_data = self.db_manager.get_all_clients()
+            return self._format_response(True, clients_data)
+        except Exception as e:
+            logger.error(f"Failed to get clients: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def get_clients_async(self) -> Dict[str, Any]:
+        """Async version of get_clients()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_clients)
+
+    def get_client_details(self, client_id: str) -> Dict[str, Any]:
+        """Get details for a specific client by ID."""
+        try:
+            client_id_bytes = bytes.fromhex(client_id)
+            client_data = self.db_manager.get_client_by_id(client_id_bytes)
+            if client_data:
+                return self._format_response(True, {
+                    'id': client_id_bytes.hex(),
+                    'name': client_data[1],
+                    'last_seen': client_data[3],
+                    'public_key_size': len(client_data[2]) if client_data[2] else 0
+                })
+            else:
+                return self._format_response(False, error=f"Client with ID {client_id} not found")
+        except Exception as e:
+            logger.error(f"Failed to get client details for {client_id}: {e}")
+            return self._format_response(False, error=str(e))
+
+    def add_client(self, client_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Add a new client using existing client creation logic."""
+        try:
+            import uuid
+            client_id = uuid.uuid4().bytes
+            name = client_data.get('name', '')
+
+            if not name:
+                return self._format_response(False, error="Client name is required")
+
+            # Check if client name already exists
+            with self.clients_lock:
+                if name in self.clients_by_name:
+                    return self._format_response(False, error=f"Client name '{name}' already exists")
+
+            # Create new client
+            client = self.create_client(client_id, name)
+
+            # Add to in-memory store
+            with self.clients_lock:
+                self.clients[client_id] = client
+                self.clients_by_name[name] = client_id
+
+            # Save to database
+            self._save_client_to_db(client)
+
+            return self._format_response(True, {
+                'id': client_id.hex(),
+                'name': name,
+                'created': True
+            })
+        except Exception as e:
+            logger.error(f"Failed to add client: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def add_client_async(self, client_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Async version of add_client()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.add_client, client_data)
+
+    def delete_client(self, client_id: str) -> Dict[str, Any]:
+        """Delete a client - delegates to db_manager.delete_client()."""
+        try:
+            client_id_bytes = bytes.fromhex(client_id)
+
+            # Remove from in-memory store
+            with self.clients_lock:
+                client = self.clients.pop(client_id_bytes, None)
+                if client:
+                    self.clients_by_name.pop(client.name, None)
+
+            # Delete from database
+            success = self.db_manager.delete_client(client_id_bytes)
+
+            if success:
+                return self._format_response(True, {'deleted': True})
+            else:
+                return self._format_response(False, error="Failed to delete client from database")
+        except Exception as e:
+            logger.error(f"Failed to delete client {client_id}: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def delete_client_async(self, client_id: str) -> Dict[str, Any]:
+        """Async version of delete_client()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.delete_client, client_id)
+
+    def disconnect_client(self, client_id: str) -> Dict[str, Any]:
+        """Disconnect a client (remove from in-memory store only)."""
+        try:
+            client_id_bytes = bytes.fromhex(client_id)
+
+            with self.clients_lock:
+                client = self.clients.pop(client_id_bytes, None)
+                if client:
+                    self.clients_by_name.pop(client.name, None)
+                    logger.info(f"Client '{client.name}' disconnected")
+                    return self._format_response(True, {'disconnected': True})
+                else:
+                    return self._format_response(False, error="Client not found in active connections")
+        except Exception as e:
+            logger.error(f"Failed to disconnect client {client_id}: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def disconnect_client_async(self, client_id: str) -> Dict[str, Any]:
+        """Async version of disconnect_client()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.disconnect_client, client_id)
+
+    # --- File Operations ---
+
+    def get_files(self) -> Dict[str, Any]:
+        """Get all files - delegates to db_manager.get_all_files()."""
+        try:
+            files_data = self.db_manager.get_all_files()
+            return self._format_response(True, files_data)
+        except Exception as e:
+            logger.error(f"Failed to get files: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def get_files_async(self) -> Dict[str, Any]:
+        """Async version of get_files()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_files)
+
+    def get_client_files(self, client_id: str) -> Dict[str, Any]:
+        """Get files for a specific client - delegates to db_manager.get_files_for_client()."""
+        try:
+            client_id_bytes = bytes.fromhex(client_id)
+            files_data = self.db_manager.get_files_for_client(client_id_bytes)
+            return self._format_response(True, files_data)
+        except Exception as e:
+            logger.error(f"Failed to get files for client {client_id}: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def get_client_files_async(self, client_id: str) -> Dict[str, Any]:
+        """Async version of get_client_files()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_client_files, client_id)
+
+    def delete_file(self, file_id: str) -> Dict[str, Any]:
+        """Delete a file - delegates to db_manager.delete_file()."""
+        try:
+            # Note: The file_id format needs to be clarified based on the actual database schema
+            # For now, assuming it's in format "client_id:filename" or similar
+            if ':' in file_id:
+                client_id_str, filename = file_id.split(':', 1)
+                client_id_bytes = bytes.fromhex(client_id_str)
+                success = self.db_manager.delete_file(client_id_bytes, filename)
+            else:
+                # Fallback: try to parse as a single identifier
+                return self._format_response(False, error="Invalid file_id format. Expected 'client_id:filename'")
+
+            if success:
+                return self._format_response(True, {'deleted': True})
+            else:
+                return self._format_response(False, error="Failed to delete file")
+        except Exception as e:
+            logger.error(f"Failed to delete file {file_id}: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def delete_file_async(self, file_id: str) -> Dict[str, Any]:
+        """Async version of delete_file()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.delete_file, file_id)
+
+    def download_file(self, file_id: str, destination_path: str) -> Dict[str, Any]:
+        """Download a file (placeholder implementation)."""
+        try:
+            # This would require implementation of actual file download logic
+            # For now, returning a placeholder response
+            logger.info(f"Download requested for file {file_id} to {destination_path}")
+            return self._format_response(False, error="Download functionality not yet implemented")
+        except Exception as e:
+            logger.error(f"Failed to download file {file_id}: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def download_file_async(self, file_id: str, destination_path: str) -> Dict[str, Any]:
+        """Async version of download_file()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.download_file, file_id, destination_path)
+
+    def verify_file(self, file_id: str) -> Dict[str, Any]:
+        """Verify a file's integrity (placeholder implementation)."""
+        try:
+            # This would require implementation of actual file verification logic
+            logger.info(f"Verification requested for file {file_id}")
+            return self._format_response(False, error="File verification functionality not yet implemented")
+        except Exception as e:
+            logger.error(f"Failed to verify file {file_id}: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def verify_file_async(self, file_id: str) -> Dict[str, Any]:
+        """Async version of verify_file()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.verify_file, file_id)
+
+    # --- Database Operations ---
+
+    def get_database_info(self) -> Dict[str, Any]:
+        """Get database information - delegates to db_manager.get_database_stats()."""
+        try:
+            db_stats = self.db_manager.get_database_stats()
+            return self._format_response(True, db_stats)
+        except Exception as e:
+            logger.error(f"Failed to get database info: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def get_database_info_async(self) -> Dict[str, Any]:
+        """Async version of get_database_info()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_database_info)
+
+    def get_table_data(self, table_name: str) -> Dict[str, Any]:
+        """Get data from a specific table (basic implementation)."""
+        try:
+            # This is a basic implementation - in a real system you'd want more sophisticated querying
+            if table_name.lower() == 'clients':
+                data = self.db_manager.get_all_clients()
+            elif table_name.lower() == 'files':
+                data = self.db_manager.get_all_files()
+            else:
+                return self._format_response(False, error=f"Table '{table_name}' not supported")
+
+            return self._format_response(True, data)
+        except Exception as e:
+            logger.error(f"Failed to get table data for {table_name}: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def get_table_data_async(self, table_name: str) -> Dict[str, Any]:
+        """Async version of get_table_data()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_table_data, table_name)
+
+    def update_row(self, table_name: str, row_id: str, updated_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a row in a table (placeholder implementation)."""
+        try:
+            # This would require more sophisticated implementation based on the actual schema
+            logger.info(f"Update requested for table {table_name}, row {row_id}")
+            return self._format_response(False, error="Row update functionality not yet implemented")
+        except Exception as e:
+            logger.error(f"Failed to update row {row_id} in table {table_name}: {e}")
+            return self._format_response(False, error=str(e))
+
+    def delete_row(self, table_name: str, row_id: str) -> Dict[str, Any]:
+        """Delete a row from a table (placeholder implementation)."""
+        try:
+            # This would require more sophisticated implementation based on the actual schema
+            logger.info(f"Delete requested for table {table_name}, row {row_id}")
+            return self._format_response(False, error="Row deletion functionality not yet implemented")
+        except Exception as e:
+            logger.error(f"Failed to delete row {row_id} from table {table_name}: {e}")
+            return self._format_response(False, error=str(e))
+
+    # --- Server Status & Monitoring ---
+
+    def is_connected(self) -> bool:
+        """Check if server is connected and operational - required by ServerBridge."""
+        try:
+            # Server is considered connected if it's running and has a healthy database connection
+            if not self.running:
+                return False
+
+            # Check database health if available
+            if hasattr(self, 'db_manager') and self.db_manager:
+                try:
+                    # Quick database health check
+                    health = self.db_manager.get_database_health()
+                    return health.get('integrity_check', False) if isinstance(health, dict) else False
+                except Exception:
+                    return False
+
+            # If no database manager, just check if server is running
+            return self.running
+
+        except Exception as e:
+            logger.debug(f"is_connected check failed: {e}")
+            return False
+
+    def get_server_status(self) -> Dict[str, Any]:
+        """Get current server status including running state, port, uptime."""
+        try:
+            uptime = time.time() - self.network_server.start_time if self.running else 0
+            status_data = {
+                'running': self.running,
+                'port': self.port,
+                'host': getattr(self.network_server, 'host', '0.0.0.0'),
+                'uptime_seconds': uptime,
+                'uptime_formatted': f"{int(uptime//3600)}h {int((uptime%3600)//60)}m {int(uptime%60)}s",
+                'version': SERVER_VERSION if 'SERVER_VERSION' in globals() else 'Unknown',
+                'last_error': getattr(self.network_server, 'last_error', '') or ''
+            }
+            return self._format_response(True, status_data)
+        except Exception as e:
+            logger.error(f"Failed to get server status: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def get_server_status_async(self) -> Dict[str, Any]:
+        """Async version of get_server_status()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_server_status)
+
+    def get_detailed_server_status(self) -> Dict[str, Any]:
+        """Get comprehensive server metrics including connection stats."""
+        try:
+            basic_status = self.get_server_status()['data']
+
+            # Get connection statistics
+            connection_stats = self.network_server.get_connection_stats() if hasattr(self.network_server, 'get_connection_stats') else {}
+
+            # Get client statistics
+            with self.clients_lock:
+                connected_clients = len(self.clients)
+
+            total_clients = self.db_manager.get_total_clients_count()
+
+            detailed_data = {
+                **basic_status,
+                'connections': {
+                    'active_connections': connection_stats.get('active_connections', connected_clients),
+                    'total_connections': connection_stats.get('total_connections', 0),
+                    'peak_connections': connection_stats.get('peak_connections', 0)
+                },
+                'clients': {
+                    'connected': connected_clients,
+                    'total_registered': total_clients
+                },
+                'database': {
+                    'total_files': len(self.db_manager.get_all_files()) if hasattr(self.db_manager, 'get_all_files') else 0
+                }
+            }
+
+            return self._format_response(True, detailed_data)
+        except Exception as e:
+            logger.error(f"Failed to get detailed server status: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def get_detailed_server_status_async(self) -> Dict[str, Any]:
+        """Async version of get_detailed_server_status()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_detailed_server_status)
+
+    def get_server_health(self) -> Dict[str, Any]:
+        """Get server health metrics."""
+        try:
+            health_data = {
+                'status': 'healthy' if self.running else 'stopped',
+                'database_accessible': True,  # Basic check
+                'network_server_running': hasattr(self.network_server, 'running') and getattr(self.network_server, 'running', False),
+                'gui_manager_ready': self.gui_manager.is_gui_ready() if hasattr(self.gui_manager, 'is_gui_ready') else False,
+                'errors': []
+            }
+
+            # Perform basic health checks
+            try:
+                self.db_manager.get_total_clients_count()
+            except Exception as e:
+                health_data['database_accessible'] = False
+                health_data['errors'].append(f"Database error: {str(e)}")
+                health_data['status'] = 'unhealthy'
+
+            return self._format_response(True, health_data)
+        except Exception as e:
+            logger.error(f"Failed to get server health: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def get_server_health_async(self) -> Dict[str, Any]:
+        """Async version of get_server_health()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_server_health)
+
+    def start_server(self) -> Dict[str, Any]:
+        """Start the server (wrapper for existing start method)."""
+        try:
+            if self.running:
+                return self._format_response(False, error="Server is already running")
+
+            self.start()
+            return self._format_response(True, {'started': True})
+        except Exception as e:
+            logger.error(f"Failed to start server: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def start_server_async(self) -> Dict[str, Any]:
+        """Async version of start_server()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.start_server)
+
+    def stop_server(self) -> Dict[str, Any]:
+        """Stop the server (wrapper for existing stop method)."""
+        try:
+            if not self.running:
+                return self._format_response(False, error="Server is not running")
+
+            self.stop()
+            return self._format_response(True, {'stopped': True})
+        except Exception as e:
+            logger.error(f"Failed to stop server: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def stop_server_async(self) -> Dict[str, Any]:
+        """Async version of stop_server()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.stop_server)
+
+    def test_connection(self) -> Dict[str, Any]:
+        """Test server connection status."""
+        try:
+            test_data = {
+                'server_accessible': self.running,
+                'database_accessible': True,
+                'response_time_ms': 0  # Placeholder
+            }
+
+            # Basic database connectivity test
+            start_time = time.time()
+            try:
+                self.db_manager.get_total_clients_count()
+                test_data['response_time_ms'] = (time.time() - start_time) * 1000
+            except Exception as e:
+                test_data['database_accessible'] = False
+                test_data['database_error'] = str(e)
+
+            return self._format_response(True, test_data)
+        except Exception as e:
+            logger.error(f"Failed to test connection: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def test_connection_async(self) -> Dict[str, Any]:
+        """Async version of test_connection()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.test_connection)
+
+    # --- Analytics & System ---
+
+    def get_system_status(self) -> Dict[str, Any]:
+        """Get system-level status information."""
+        try:
+            import psutil
+            system_data = {
+                'cpu_percent': psutil.cpu_percent(interval=1),
+                'memory_percent': psutil.virtual_memory().percent,
+                'disk_usage_percent': psutil.disk_usage('/').percent if os.name != 'nt' else psutil.disk_usage('C:\\').percent,
+                'python_version': sys.version.split()[0],
+                'platform': sys.platform
+            }
+            return self._format_response(True, system_data)
+        except ImportError:
+            # Fallback if psutil is not available
+            system_data = {
+                'python_version': sys.version.split()[0],
+                'platform': sys.platform,
+                'note': 'Limited system info available (psutil not installed)'
+            }
+            return self._format_response(True, system_data)
+        except Exception as e:
+            logger.error(f"Failed to get system status: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def get_system_status_async(self) -> Dict[str, Any]:
+        """Async version of get_system_status()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_system_status)
+
+    def get_analytics_data(self) -> Dict[str, Any]:
+        """Get analytics information."""
+        try:
+            analytics_data = {
+                'total_clients': self.db_manager.get_total_clients_count(),
+                'total_files': len(self.db_manager.get_all_files()) if hasattr(self.db_manager, 'get_all_files') else 0,
+                'server_uptime_seconds': time.time() - self.network_server.start_time if self.running else 0,
+                'database_stats': self.db_manager.get_database_stats() if hasattr(self.db_manager, 'get_database_stats') else {}
+            }
+            return self._format_response(True, analytics_data)
+        except Exception as e:
+            logger.error(f"Failed to get analytics data: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def get_analytics_data_async(self) -> Dict[str, Any]:
+        """Async version of get_analytics_data()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_analytics_data)
+
+    def get_performance_metrics(self) -> Dict[str, Any]:
+        """Get performance data."""
+        try:
+            metrics_data = {
+                'active_connections': len(self.clients),
+                'database_response_time_ms': 0,  # Placeholder
+                'memory_usage_mb': 0,  # Placeholder
+                'cpu_usage_percent': 0  # Placeholder
+            }
+
+            # Test database response time
+            start_time = time.time()
+            try:
+                self.db_manager.get_total_clients_count()
+                metrics_data['database_response_time_ms'] = (time.time() - start_time) * 1000
+            except Exception:
+                metrics_data['database_response_time_ms'] = -1
+
+            return self._format_response(True, metrics_data)
+        except Exception as e:
+            logger.error(f"Failed to get performance metrics: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def get_performance_metrics_async(self) -> Dict[str, Any]:
+        """Async version of get_performance_metrics()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_performance_metrics)
+
+    def get_dashboard_summary(self) -> Dict[str, Any]:
+        """Get dashboard data."""
+        try:
+            dashboard_data = {
+                'server_status': 'running' if self.running else 'stopped',
+                'total_clients': self.db_manager.get_total_clients_count(),
+                'connected_clients': len(self.clients),
+                'total_files': len(self.db_manager.get_all_files()) if hasattr(self.db_manager, 'get_all_files') else 0,
+                'server_version': SERVER_VERSION if 'SERVER_VERSION' in globals() else 'Unknown',
+                'uptime': time.time() - self.network_server.start_time if self.running else 0
+            }
+            return self._format_response(True, dashboard_data)
+        except Exception as e:
+            logger.error(f"Failed to get dashboard summary: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def get_dashboard_summary_async(self) -> Dict[str, Any]:
+        """Async version of get_dashboard_summary()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_dashboard_summary)
+
+    def get_server_statistics(self) -> Dict[str, Any]:
+        """Get detailed statistics."""
+        try:
+            stats_data = {
+                'server': {
+                    'version': SERVER_VERSION if 'SERVER_VERSION' in globals() else 'Unknown',
+                    'running': self.running,
+                    'uptime_seconds': time.time() - self.network_server.start_time if self.running else 0,
+                    'port': self.port
+                },
+                'clients': {
+                    'total_registered': self.db_manager.get_total_clients_count(),
+                    'currently_connected': len(self.clients)
+                },
+                'files': {
+                    'total_files': len(self.db_manager.get_all_files()) if hasattr(self.db_manager, 'get_all_files') else 0
+                },
+                'database': self.db_manager.get_database_stats() if hasattr(self.db_manager, 'get_database_stats') else {}
+            }
+            return self._format_response(True, stats_data)
+        except Exception as e:
+            logger.error(f"Failed to get server statistics: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def get_server_statistics_async(self) -> Dict[str, Any]:
+        """Async version of get_server_statistics()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_server_statistics)
+
+    # --- Log Operations ---
+
+    def get_logs(self) -> Dict[str, Any]:
+        """Get system logs (basic implementation)."""
+        try:
+            # This is a basic implementation - in a production system you'd want proper log aggregation
+            log_data = {
+                'logs': [],
+                'note': 'Log retrieval functionality requires implementation of log storage/retrieval system'
+            }
+
+            # Try to read recent log entries if log file exists
+            try:
+                if hasattr(self, 'backup_log_file') and os.path.exists(backup_log_file):
+                    with open(backup_log_file, 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+                        # Get last 100 lines
+                        recent_lines = lines[-100:] if len(lines) > 100 else lines
+                        log_data['logs'] = [line.strip() for line in recent_lines]
+                elif os.path.exists('server.log'):
+                    with open('server.log', 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+                        # Get last 100 lines
+                        recent_lines = lines[-100:] if len(lines) > 100 else lines
+                        log_data['logs'] = [line.strip() for line in recent_lines]
+            except Exception as read_error:
+                log_data['read_error'] = str(read_error)
+
+            return self._format_response(True, log_data)
+        except Exception as e:
+            logger.error(f"Failed to get logs: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def get_logs_async(self) -> Dict[str, Any]:
+        """Async version of get_logs()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_logs)
+
+    async def clear_logs_async(self) -> Dict[str, Any]:
+        """Clear system logs (placeholder implementation)."""
+        try:
+            # This would require careful implementation to avoid disrupting active logging
+            return self._format_response(False, error="Log clearing functionality not yet implemented for safety")
+        except Exception as e:
+            logger.error(f"Failed to clear logs: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def export_logs_async(self, export_format: str, filters: Dict[str, Any]) -> Dict[str, Any]:
+        """Export logs with filtering (placeholder implementation)."""
+        try:
+            return self._format_response(False, error="Log export functionality not yet implemented")
+        except Exception as e:
+            logger.error(f"Failed to export logs: {e}")
+            return self._format_response(False, error=str(e))
+
+    # --- Settings Management ---
+
+    def save_settings(self, settings_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Save settings (placeholder implementation)."""
+        try:
+            # This would require implementation of a settings storage system
+            logger.info("Settings save requested")
+            return self._format_response(False, error="Settings save functionality not yet implemented")
+        except Exception as e:
+            logger.error(f"Failed to save settings: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def save_settings_async(self, settings_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Async version of save_settings()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.save_settings, settings_data)
+
+    def load_settings(self) -> Dict[str, Any]:
+        """Load settings (placeholder implementation)."""
+        try:
+            # This would require implementation of a settings storage system
+            default_settings = {
+                'server_port': self.port,
+                'max_clients': MAX_CONCURRENT_CLIENTS if 'MAX_CONCURRENT_CLIENTS' in globals() else 50,
+                'log_level': 'INFO',
+                'note': 'Settings load functionality requires implementation of settings storage system'
+            }
+            return self._format_response(True, default_settings)
+        except Exception as e:
+            logger.error(f"Failed to load settings: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def load_settings_async(self) -> Dict[str, Any]:
+        """Async version of load_settings()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.load_settings)
+
 
 # --- Main Execution Guard ---
 if __name__ == "__main__":

@@ -12,8 +12,4 @@ ignore:
   - "**/build/**"
   - "**/dist/**"
   - "**/node_modules/**"
-  - "FletV2/main.py"
-  - "FletV2/server_adapter.py"
-  - "FletV2/test_integration.py"
-  - "FletV2/utils/mock_data_generator.py"
   - "final_emoji_test.py"

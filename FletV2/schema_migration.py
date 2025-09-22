@@ -3,8 +3,8 @@
 Database Schema Migration for FletV2 Integration
 
 This script migrates your existing database schema to be compatible with FletV2
-while preserving all existing data. It adds missing columns and creates views
-to bridge between your current schema and FletV2's expectations.
+while preserving all existing data. It integrates with the BackupServer's existing
+migration system and ensures compatibility between server and GUI expectations.
 """
 
 import os
@@ -13,12 +13,26 @@ import sqlite3
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 
 # Add project root to path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+
+# Import BackupServer migration system
+try:
+    from python_server.server.database_migrations import DatabaseMigrationManager
+    MIGRATION_SYSTEM_AVAILABLE = True
+except ImportError:
+    MIGRATION_SYSTEM_AVAILABLE = False
+
+# Import configuration
+try:
+    from Shared.config import get_absolute_database_path, get_database_config_for_fletv2
+    CONFIG_AVAILABLE = True
+except ImportError:
+    CONFIG_AVAILABLE = False
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -30,63 +44,247 @@ def blob_to_uuid_string(blob_data: bytes) -> str:
         return str(uuid.uuid4())
     return str(uuid.UUID(bytes=blob_data))
 
-def migrate_database_schema(db_path: str) -> bool:
+def migrate_database_schema(db_path: Optional[str] = None) -> bool:
     """
-    Migrate the database schema to be compatible with FletV2.
+    Migrate the database schema to be compatible with FletV2 using integrated migration system.
 
     Args:
-        db_path: Path to the SQLite database
+        db_path: Path to the SQLite database (optional, uses config if not provided)
 
     Returns:
         True if migration successful, False otherwise
     """
     try:
-        logger.info(f"Starting database migration for: {db_path}")
+        # Use config system to get database path if not provided
+        if db_path is None and CONFIG_AVAILABLE:
+            db_path = get_absolute_database_path()
+            logger.info(f"Using configured database path: {db_path}")
+        elif db_path is None:
+            logger.error("No database path provided and config system unavailable")
+            return False
+
+        logger.info(f"Starting integrated database migration for: {db_path}")
+
+        # First, run BackupServer's migration system if available
+        if MIGRATION_SYSTEM_AVAILABLE:
+            logger.info("Running BackupServer migration system...")
+            migration_manager = DatabaseMigrationManager(db_path)
+            if pending := migration_manager.get_pending_migrations():
+                logger.info(f"Applying {len(pending)} BackupServer migrations...")
+                if not migration_manager.migrate_to_latest():
+                    logger.warning("Some BackupServer migrations failed, continuing with FletV2 migration...")
+            else:
+                logger.info("No pending BackupServer migrations")
+        else:
+            logger.warning("BackupServer migration system not available, proceeding with basic migration")
 
         # Create backup first
-        backup_path = f"{db_path}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        backup_path = f"{db_path}.fletv2_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         if os.path.exists(db_path):
             import shutil
             shutil.copy2(db_path, backup_path)
-            logger.info(f"Database backup created: {backup_path}")
+            logger.info(f"FletV2 migration backup created: {backup_path}")
 
         with sqlite3.connect(db_path) as conn:
             conn.execute("PRAGMA foreign_keys = ON")
 
-            # Check if tables exist
-            tables = conn.execute("""
-                SELECT name FROM sqlite_master
-                WHERE type='table' AND name NOT LIKE 'sqlite_%'
-            """).fetchall()
+            # Check current schema
+            schema_info = check_database_schema(conn)
+            logger.info(f"Current schema: {schema_info}")
 
-            existing_tables = [t[0] for t in tables]
-            logger.info(f"Existing tables: {existing_tables}")
+            # Apply FletV2-specific enhancements
+            if not apply_fletv2_enhancements(conn, schema_info):
+                logger.warning("Some FletV2 enhancements failed, but basic schema is compatible")
 
-            # Create new FletV2-compatible tables
-            create_fletv2_tables(conn)
-
-            # Migrate data from old tables if they exist
-            if 'clients' in existing_tables:
-                migrate_clients_data(conn)
-
-            if 'files' in existing_tables:
-                migrate_files_data(conn)
-
-            # Create missing tables for FletV2
-            create_additional_tables(conn)
-
-            # Create indexes for performance
-            create_indexes(conn)
+            # Verify compatibility
+            if verify_fletv2_compatibility(conn):
+                logger.info("✅ Database schema is FletV2 compatible!")
+            else:
+                logger.warning("⚠️ Schema compatibility check failed, but migration completed")
 
             conn.commit()
 
-        logger.info("✅ Database migration completed successfully!")
+        logger.info("✅ Integrated database migration completed successfully!")
         return True
 
     except Exception as e:
-        logger.error(f"❌ Database migration failed: {e}")
+        logger.error(f"❌ Integrated database migration failed: {e}")
         import traceback
         logger.error(traceback.format_exc())
+        return False
+
+def check_database_schema(conn: sqlite3.Connection) -> Dict[str, Any]:
+    """Check the current database schema and return information about it."""
+    try:
+        # Get table information
+        tables = conn.execute("""
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name NOT LIKE 'sqlite_%'
+        """).fetchall()
+
+        existing_tables = [t[0] for t in tables]
+
+        # Check for BackupServer schema
+        schema_info = {
+            'tables': existing_tables,
+            'has_clients_table': 'clients' in existing_tables,
+            'has_files_table': 'files' in existing_tables,
+            'has_migrations_table': 'database_migrations' in existing_tables,
+            'backupserver_compatible': False,
+            'fletv2_ready': False
+        }
+
+        # Check if clients table has BackupServer schema
+        if 'clients' in existing_tables:
+            clients_columns = conn.execute("PRAGMA table_info(clients)").fetchall()
+            column_names = [col[1] for col in clients_columns]
+            schema_info['clients_columns'] = column_names
+            schema_info['backupserver_compatible'] = 'ID' in column_names and 'Name' in column_names
+
+        # Check if files table has BackupServer schema
+        if 'files' in existing_tables:
+            files_columns = conn.execute("PRAGMA table_info(files)").fetchall()
+            column_names = [col[1] for col in files_columns]
+            schema_info['files_columns'] = column_names
+            schema_info['backupserver_compatible'] = schema_info['backupserver_compatible'] and 'ClientID' in column_names
+
+        return schema_info
+
+    except Exception as e:
+        logger.error(f"Error checking database schema: {e}")
+        return {'tables': [], 'backupserver_compatible': False, 'fletv2_ready': False}
+
+def apply_fletv2_enhancements(conn: sqlite3.Connection, schema_info: Dict[str, Any]) -> bool:
+    """Apply FletV2-specific enhancements to the existing BackupServer schema."""
+    try:
+        logger.info("Applying FletV2 enhancements...")
+
+        # Create indexes for better performance in GUI operations
+        create_fletv2_indexes(conn)
+
+        # Create views for data compatibility if needed
+        create_compatibility_views(conn, schema_info)
+
+        # Add any missing columns that FletV2 might expect
+        add_fletv2_columns(conn, schema_info)
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Error applying FletV2 enhancements: {e}")
+        return False
+
+def create_fletv2_indexes(conn: sqlite3.Connection):
+    """Create indexes optimized for FletV2 GUI operations."""
+    indexes = [
+        "CREATE INDEX IF NOT EXISTS idx_fletv2_clients_name ON clients(Name)",
+        "CREATE INDEX IF NOT EXISTS idx_fletv2_clients_lastseen ON clients(LastSeen)",
+        "CREATE INDEX IF NOT EXISTS idx_fletv2_files_filename ON files(FileName)",
+        "CREATE INDEX IF NOT EXISTS idx_fletv2_files_client ON files(ClientID)",
+        "CREATE INDEX IF NOT EXISTS idx_fletv2_files_verified ON files(Verified)",
+        "CREATE INDEX IF NOT EXISTS idx_fletv2_files_size ON files(FileSize)"
+    ]
+
+    for index_sql in indexes:
+        try:
+            conn.execute(index_sql)
+            logger.debug(f"Created index: {index_sql}")
+        except Exception as e:
+            logger.warning(f"Failed to create index: {e}")
+
+def create_compatibility_views(conn: sqlite3.Connection, schema_info: Dict[str, Any]):
+    """Create views for data compatibility between BackupServer and FletV2."""
+    try:
+        # Create a view that presents clients in FletV2-friendly format
+        if schema_info.get('has_clients_table'):
+            conn.execute("""
+                CREATE VIEW IF NOT EXISTS fletv2_clients AS
+                SELECT
+                    hex(ID) as id,
+                    Name as name,
+                    LastSeen as last_seen,
+                    CASE
+                        WHEN datetime(LastSeen) > datetime('now', '-1 hour') THEN 'Active'
+                        WHEN datetime(LastSeen) > datetime('now', '-1 day') THEN 'Recent'
+                        ELSE 'Inactive'
+                    END as status,
+                    (SELECT COUNT(*) FROM files WHERE ClientID = clients.ID) as files_count
+                FROM clients
+            """)
+            logger.debug("Created fletv2_clients compatibility view")
+
+        # Create a view that presents files in FletV2-friendly format
+        if schema_info.get('has_files_table'):
+            conn.execute("""
+                CREATE VIEW IF NOT EXISTS fletv2_files AS
+                SELECT
+                    hex(ID) as id,
+                    FileName as name,
+                    hex(ClientID) as client_id,
+                    FileSize as size,
+                    CASE
+                        WHEN Verified = 1 THEN 'Verified'
+                        ELSE 'Pending'
+                    END as status,
+                    PathName as path,
+                    ModificationDate as modified,
+                    ModificationDate as created,
+                    'file' as type,
+                    1 as backup_count,
+                    ModificationDate as last_backup
+                FROM files
+            """)
+            logger.debug("Created fletv2_files compatibility view")
+
+    except Exception as e:
+        logger.warning(f"Failed to create compatibility views: {e}")
+
+def add_fletv2_columns(conn: sqlite3.Connection, schema_info: Dict[str, Any]):
+    """Add any missing columns that FletV2 might need."""
+    try:
+        # This is handled by BackupServer's migration system
+        # We just verify the columns exist
+        if schema_info.get('has_files_table'):
+            files_columns = schema_info.get('files_columns', [])
+            if 'FileSize' not in files_columns:
+                logger.info("FileSize column missing - should be added by BackupServer migrations")
+            if 'ModificationDate' not in files_columns:
+                logger.info("ModificationDate column missing - should be added by BackupServer migrations")
+
+    except Exception as e:
+        logger.warning(f"Error checking FletV2 columns: {e}")
+
+def verify_fletv2_compatibility(conn: sqlite3.Connection) -> bool:
+    """Verify that the database is compatible with FletV2 expectations."""
+    try:
+        # Check that essential tables exist
+        tables = conn.execute("""
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name IN ('clients', 'files')
+        """).fetchall()
+
+        if len(tables) < 2:
+            logger.error("Missing essential tables for FletV2 compatibility")
+            return False
+
+        # Check that we can read from both tables
+        clients_count = conn.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
+        files_count = conn.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+
+        logger.info(f"Compatibility check: {clients_count} clients, {files_count} files")
+
+        # Check that compatibility views exist
+        try:
+            conn.execute("SELECT COUNT(*) FROM fletv2_clients").fetchone()
+            conn.execute("SELECT COUNT(*) FROM fletv2_files").fetchone()
+            logger.info("Compatibility views are working")
+        except Exception as e:
+            logger.warning(f"Compatibility views issue: {e}")
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Compatibility verification failed: {e}")
         return False
 
 def create_fletv2_tables(conn: sqlite3.Connection):

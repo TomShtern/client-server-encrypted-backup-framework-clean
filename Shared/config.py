@@ -260,6 +260,16 @@ def get_database_path() -> str:
     """Get database file path."""
     return get_server_config().database_path
 
+def get_absolute_database_path() -> str:
+    """Get absolute path to the database file for cross-module access."""
+    import os
+    from pathlib import Path
+
+    # Get the project root (where this file's parent's parent is)
+    project_root = Path(__file__).parent.parent
+    db_path = project_root / get_server_config().database_path
+    return str(db_path.resolve())
+
 
 def get_received_files_dir() -> str:
     """Get received files directory path."""
@@ -314,3 +324,59 @@ def reset_config():
     """Reset global configuration (mainly for testing)."""
     global _config_manager
     _config_manager = None
+
+
+# Database Integration Functions for FletV2 Compatibility
+
+def get_database_config_for_fletv2() -> Dict[str, Any]:
+    """
+    Get database configuration optimized for FletV2 GUI integration.
+
+    Returns:
+        Dictionary with all database configuration needed by FletV2
+    """
+    return {
+        'database_path': get_absolute_database_path(),
+        'database_name': get_server_config().database_path,
+        'file_storage_dir': get_received_files_dir(),
+        'connection_pool_enabled': True,
+        'connection_pool_size': 5,
+        'timeout': 10.0,
+        'max_connection_age': 3600.0,
+        'cleanup_interval': 300.0,
+        # Additional compatibility settings
+        'use_blob_uuids': True,  # BackupServer uses BLOB UUIDs
+        'schema_version': 'backupserver_v3',
+        'migration_enabled': True
+    }
+
+def is_database_compatible() -> bool:
+    """
+    Check if the database exists and is accessible.
+
+    Returns:
+        True if database file exists and is readable
+    """
+    import os
+    try:
+        db_path = get_absolute_database_path()
+        return os.path.exists(db_path) and os.access(db_path, os.R_OK)
+    except Exception:
+        return False
+
+def get_database_schema_info() -> Dict[str, Any]:
+    """
+    Get information about the database schema for compatibility checking.
+
+    Returns:
+        Dictionary with schema information
+    """
+    return {
+        'version': 3,
+        'tables': ['clients', 'files'],
+        'id_format': 'blob_uuid',  # BackupServer uses BLOB UUIDs
+        'client_id_column': 'ID',  # BackupServer column name
+        'file_client_ref': 'ClientID',  # BackupServer foreign key column
+        'supports_migrations': True,
+        'pool_compatible': True
+    }

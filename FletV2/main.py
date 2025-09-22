@@ -45,31 +45,19 @@ from utils.server_bridge import create_server_bridge  # noqa: E402
 REAL_SERVER_AVAILABLE = False
 BRIDGE_TYPE = "Mock Server Development Mode"
 
-# Import the real server adapter for production use
-try:
-    from server_adapter import create_fletv2_server
-    real_server_available = True
-    logger.info("✅ Real server adapter imported successfully")
-except ImportError as e:
-    logger.warning(f"⚠️ Real server adapter not available: {e}")
-    real_server_available = False
-    create_fletv2_server = None  # Define for type checking
+# Direct server integration support (no adapter layer needed)
+# The BackupServer has built-in ServerBridge compatibility
+real_server_available = False  # Will be set to True when server is injected
+create_fletv2_server = None  # Legacy - not needed for direct integration
 
 # Ensure project root is in path for direct execution
 project_root = os.path.dirname(__file__)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Application bridge type - dynamic based on server availability
-bridge_type = (
-    "Real Server Integration (with fallback capability)"
-    if real_server_available
-    else "Mock Server Development Mode"
-)
-if real_server_available:
-    logger.info("🚀 Real server integration available - production mode enabled")
-else:
-    logger.info("🧪 Using mock server for development")
+# Application bridge type - will be updated when real server is injected
+bridge_type = "Mock Server Development Mode"
+logger.info("🧪 Using mock server for development (real server can be injected)")
 
 
 class FletV2App(ft.Row):
@@ -83,7 +71,7 @@ class FletV2App(ft.Row):
     - Uses theme.py for styling
     """
 
-    def __init__(self, page: ft.Page) -> None:
+    def __init__(self, page: ft.Page, real_server: Optional[Any] = None) -> None:
         super().__init__()
         self.page: ft.Page = page  # Ensure page is never None
         self.expand = True
@@ -97,21 +85,26 @@ class FletV2App(ft.Row):
         self._loaded_views: Dict[str, ft.Control] = {}
         self._background_tasks: Set[Any] = set()
 
-        # Initialize server bridge - prefer real server if available
+        # Initialize server bridge - prefer injected real server
+        global bridge_type, real_server_available
         try:
-            if real_server_available and create_fletv2_server:
-                real_server = create_fletv2_server()
+            if real_server is not None:
+                # Direct server injection (from integrated startup script)
                 is_connected = False
                 with contextlib.suppress(Exception):
                     is_connected = bool(getattr(real_server, "is_connected", lambda: False)())
                 if is_connected:
                     self.server_bridge = create_server_bridge(real_server=real_server)
-                    logger.info("🎉 Real server connected successfully!")
+                    bridge_type = "Direct BackupServer Integration"
+                    real_server_available = True
+                    logger.info("🎉 Direct BackupServer integration successful!")
                 else:
-                    logger.warning("⚠️ Real server not responding - falling back to mock mode")
+                    logger.warning("⚠️ Injected server not responding - falling back to mock mode")
                     self.server_bridge = create_server_bridge()
             else:
+                # Standard mock mode for development
                 self.server_bridge = create_server_bridge()
+                logger.info("🧪 No real server injected - using mock mode")
         except Exception as bridge_ex:
             logger.error(f"❌ Server bridge initialization failed: {bridge_ex}")
             self.server_bridge = create_server_bridge()
@@ -1205,8 +1198,8 @@ class FletV2App(ft.Row):
 
 
 # Simple application entry point
-async def main(page: ft.Page) -> None:
-    """Simple main function - no complex initialization."""
+async def main(page: ft.Page, real_server: Optional[Any] = None) -> None:
+    """Simple main function - supports optional real server injection."""
     def on_window_event(e: ft.ControlEvent) -> None:
         """Handle window events to force sizing."""
         if hasattr(e, 'data') and e.data in ("focus", "ready"):
@@ -1236,8 +1229,8 @@ async def main(page: ft.Page) -> None:
             _p.window_center = True
         page.title = "Backup Server Management"
 
-        # Create and add the simple desktop app with mock mode banner
-        app = FletV2App(page)
+        # Create and add the simple desktop app with optional real server injection
+        app = FletV2App(page, real_server=real_server)
         # Expose app instance on page for programmatic navigation from views (lightweight glue)
         with contextlib.suppress(Exception):
             if hasattr(page, '__dict__'):
