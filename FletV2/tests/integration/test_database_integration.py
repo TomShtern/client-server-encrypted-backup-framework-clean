@@ -5,10 +5,10 @@ import os
 import sys
 import unittest
 
-import flet as ft
-
 # Ensure FletV2 root is on sys.path for `utils`, `views`, etc.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+
+import flet as ft
 
 os.environ.setdefault("FLET_V2_DEBUG", "true")
 

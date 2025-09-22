@@ -150,7 +150,7 @@ class ServerBridge:
                     if mock_method:
                         result = mock_method(*args, **kwargs)
                         return {'success': True, 'data': result, 'error': None}
-                
+
                 # Return empty data when mock is disabled or not available
                 return {'success': True, 'data': [], 'error': None}
 
@@ -161,20 +161,57 @@ class ServerBridge:
     def _convert_backupserver_result(self, method_name: str, result: Any) -> Any:
         """Convert BackupServer results to FletV2 compatible format."""
         try:
-            # Handle different method types that need conversion
-            if 'client' in method_name.lower():
-                if isinstance(result, list):
-                    return [convert_backupserver_client_to_fletv2(item) for item in result]
-                elif isinstance(result, dict):
-                    return convert_backupserver_client_to_fletv2(result)
-            elif 'file' in method_name.lower():
-                if isinstance(result, list):
-                    return [convert_backupserver_file_to_fletv2(item) for item in result]
-                elif isinstance(result, dict):
-                    return convert_backupserver_file_to_fletv2(result)
+            # If result is a BackupServer response dict with 'success' and 'data' fields
+            if isinstance(result, dict) and 'success' in result and 'data' in result:
+                if not result.get('success', False):
+                    # Return error as-is
+                    return result
 
-            # For other methods, return as-is
-            return result
+                # Extract the actual data from BackupServer response
+                data = result['data']
+
+                # Convert the data based on method type
+                if 'client' in method_name.lower():
+                    if isinstance(data, list):
+                        converted_data = [convert_backupserver_client_to_fletv2(item) for item in data]
+                    elif isinstance(data, dict):
+                        converted_data = convert_backupserver_client_to_fletv2(data)
+                    else:
+                        converted_data = data
+                elif 'file' in method_name.lower():
+                    if isinstance(data, list):
+                        converted_data = [convert_backupserver_file_to_fletv2(item) for item in data]
+                    elif isinstance(data, dict):
+                        converted_data = convert_backupserver_file_to_fletv2(data)
+                    else:
+                        converted_data = data
+                else:
+                    # For other methods, keep data as-is
+                    converted_data = data
+
+                # Return in same format as BackupServer response
+                return {
+                    'success': result['success'],
+                    'data': converted_data,
+                    'error': result.get('error', '')
+                }
+
+            # Handle legacy direct data (not wrapped in success/data format)
+            else:
+                if 'client' in method_name.lower():
+                    if isinstance(result, list):
+                        return [convert_backupserver_client_to_fletv2(item) for item in result]
+                    elif isinstance(result, dict):
+                        return convert_backupserver_client_to_fletv2(result)
+                elif 'file' in method_name.lower():
+                    if isinstance(result, list):
+                        return [convert_backupserver_file_to_fletv2(item) for item in result]
+                    elif isinstance(result, dict):
+                        return convert_backupserver_file_to_fletv2(result)
+
+                # For other methods, return as-is
+                return result
+
         except Exception as e:
             logger.warning(f"Data conversion error for {method_name}: {e}")
             return result
@@ -207,7 +244,7 @@ class ServerBridge:
                         if mock_method:
                             result = mock_method(*args, **kwargs)
                             return {'success': True, 'data': result, 'error': None}
-                
+
                 # Return empty data when mock is disabled or not available
                 return {'success': True, 'data': [], 'error': None}
 
@@ -302,6 +339,14 @@ class ServerBridge:
     async def delete_file_async(self, file_id: str) -> Dict[str, Any]:
         """Delete a file (async)."""
         return await self._call_real_or_mock_async('delete_file_async', file_id)
+
+    def delete_file_by_client_and_name(self, client_id: str, filename: str) -> Dict[str, Any]:
+        """Delete a file by client ID and filename."""
+        return self._call_real_or_mock('delete_file_by_client_and_name', client_id, filename)
+
+    async def delete_file_by_client_and_name_async(self, client_id: str, filename: str) -> Dict[str, Any]:
+        """Delete a file by client ID and filename (async)."""
+        return await self._call_real_or_mock_async('delete_file_by_client_and_name_async', client_id, filename)
 
     def download_file(self, file_id: str, destination_path: str) -> Dict[str, Any]:
         """Download a file to destination."""

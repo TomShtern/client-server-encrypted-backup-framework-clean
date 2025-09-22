@@ -27,7 +27,19 @@ import aiofiles
 # ALWAYS import this in any Python file that deals with subprocess or console I/O
 import Shared.utils.utf8_solution as _  # Import for UTF-8 side effects
 
-from utils.debug_setup import get_logger
+try:
+    from utils.debug_setup import get_logger
+except ImportError:
+    # Fallback for when utils.debug_setup is not available
+    import logging
+    def get_logger(name=None):
+        logger = logging.getLogger(name or __name__)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+            logger.addHandler(handler)
+            logger.setLevel(logging.INFO)
+        return logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
 from utils.ui_components import themed_card, themed_button
@@ -807,10 +819,10 @@ def create_dashboard_view(
             print(f"[DEBUG] Updating KPI values with server status: {current_server_status}")
             logger.debug(f"Updating KPI values with server status: {current_server_status}")
 
-            # Total clients
-            total_clients_val = current_server_status.get('clients_connected', len(current_clients))
-            print(f"[DEBUG] Setting total clients to: {total_clients_val}")
-            logger.debug(f"Setting total clients to: {total_clients_val}")
+            # Total clients - prefer database count over active connections
+            total_clients_val = len(current_clients) if current_clients else current_server_status.get('clients_connected', 0)
+            print(f"[DEBUG] Setting total clients to: {total_clients_val} (from {'database' if current_clients else 'server_status'})")
+            logger.debug(f"Setting total clients to: {total_clients_val} (from {'database' if current_clients else 'server_status'})")
             kpi_total_clients_text.value = str(total_clients_val)
             hero_total_clients_text.value = str(total_clients_val)
 

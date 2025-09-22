@@ -1082,7 +1082,7 @@ class DatabaseManager:
         """Retrieves all files from the database."""
         try:
             files = self.execute("""
-                SELECT f.FileName, f.PathName, f.Verified, c.Name, f.FileSize, f.ModificationDate
+                SELECT f.FileName, f.PathName, f.Verified, c.Name, f.FileSize, f.ModificationDate, f.ClientID
                 FROM files f JOIN clients c ON f.ClientID = c.ID
             """, fetchall=True)
             if files:
@@ -1092,7 +1092,8 @@ class DatabaseManager:
                     'verified': bool(row[2]),
                     'client': row[3],
                     'size': row[4],
-                    'date': row[5]
+                    'date': row[5],
+                    'client_id': row[6]  # bytes
                 } for row in files]
             return []
         except Exception as e:

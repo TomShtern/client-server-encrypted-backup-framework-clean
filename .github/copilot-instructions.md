@@ -784,6 +784,10 @@ To ensure the stability and functionality of the FletV2 application, the followi
 - **Error Handling Tests**: Implement tests for error handling and graceful degradation scenarios to ensure the application behaves predictably under various failure conditions. Ensure the application behaves predictably under various failure conditions.
 - **Relevant Files**: `@views`, `@tests`, `@main.py`
 
+To address the `ModuleNotFoundError: No module named 'utils'` errors in the integration tests, the following pattern MUST be followed:
+
+- Add `sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))` to the beginning of each integration test file. This ensures that the `utils` module can be found.
+
 #### Integration Test Example - Logs View
 
 ```python
@@ -831,6 +835,94 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
+#### Fix: ImportError "No module named 'utils.debug_setup'" when launching FletV2
+```markdown
+Problem
+- The app crashes on startup with: No module named 'utils.debug_setup'.
+- Cause: The sys.path bootstrap in one or more entry files points to the wrong directory level (it goes too far up), so Python can’t see FletV2/utils.
+
+Why this happens
+- The project uses an import like:
+  from utils.debug_setup import setup_terminal_debugging
+- This requires FletV2 (the folder that contains utils/) to be on sys.path before imports run.
+- Some files use a “two-levels up” pattern:
+  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+  In top-level files (directly under FletV2/), that resolves to the repo root’s parent, dropping FletV2 from sys.path and breaking utils.* imports.
+
+Resolution (precise steps)
+
+1) Fix the sys.path setup in entry modules
+- In every file directly under FletV2/ that imports utils.* (e.g., FletV2/main.py, FletV2/app.py, any launcher), replace the two-level pattern with this exact snippet at the very top (before any other imports):
+
+```python
+import os
+import sys
+
+# Ensure FletV2 root is on sys.path (works for files in FletV2/ and its subfolders)
+_here = os.path.abspath(__file__)
+_base = os.path.dirname(_here)
+if os.path.basename(_base) == "FletV2":
+    flet_v2_root = _base
+else:
+    flet_v2_root = os.path.dirname(_base)  # if file is in a subfolder
+
+if flet_v2_root not in sys.path:
+    sys.path.insert(0, flet_v2_root)
+
+# Optional: enable Shared.* imports if Shared is a sibling of FletV2
+repo_root = os.path.dirname(flet_v2_root)
+if os.path.isdir(os.path.join(repo_root, "Shared")) and repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+```
+
+- Do not remove the import order you already follow; keep the imports exactly as documented after this snippet.
+
+2) Verify utils package structure
+- Ensure these paths exist:
+  - FletV2/utils/__init__.py (can be empty; ensures package import across environments)
+  - FletV2/utils/debug_setup.py (must define setup_terminal_debugging)
+
+If FletV2/utils/debug_setup.py is missing, create it with:
+
+```python
+# filepath: c:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\utils\debug_setup.py
+import logging
+import sys
+
+def setup_terminal_debugging(logger_name: str = "app", level: int = logging.INFO) -> logging.Logger:
+    logger = logging.getLogger(logger_name)
+    if not logger.handlers:
+        handler = logging.StreamHandler(stream=sys.stdout)
+        formatter = logging.Formatter("[%(asctime)s] %(levelname)s %(name)s: %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    logger.setLevel(level)
+    return logger
+```
+
+3) Keep the documented import order
+- After the path snippet, follow the project’s strict import order, including:
+  - from utils.debug_setup import setup_terminal_debugging
+  - import Shared.utils.utf8_solution as _  # if you use Shared
+  - logger = setup_terminal_debugging(logger_name="module_name")
+
+4) Find and fix all affected files
+- In VS Code, search for these to locate offenders:
+  - Query: from utils.debug_setup
+  - Query: os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+- Apply Step 1 to each file that’s directly under FletV2/ or that fails to import utils.*
+
+5) Validate
+- From the repo root in Terminal (Windows):
+  - python -V  (ensure ≥ 3.9)
+  - python .\FletV2\main.py  (or your actual launcher)
+- Expected: App starts; no ImportError for utils.debug_setup.
+
+Notes
+- If your Shared package is located inside FletV2 (FletV2/Shared), you do not need the repo_root insertion; the snippet above supports both layouts safely.
+- sys.path.insert(0, ...) ensures project imports win over similarly named external packages (like a pip-installed utils).
+```
+
 ### Performance Optimization Patterns
 
 **CRITICAL**: Use performance-optimized patterns for smooth UI and efficient data handling.
@@ -838,104 +930,4 @@ if __name__ == "__main__":
 #### ListView Virtualization for Large Datasets
 ```python
 def create_efficient_data_list(items: List[Dict[str, Any]]) -> ft.Control:
-    """Create high-performance list for large datasets using virtualization."""
-    return ft.Container(
-        content=ft.ListView(
-            controls=[
-                create_list_item(item) for item in items
-            ],
-            expand=True,
-            spacing=8,
-            semantic_child_count=len(items),  # Performance optimization
-            cache_extent=100  # Cache additional items for smooth scrolling
-        ),
-        height=400  # Fixed height enables virtualization
-    )
-```
-
-#### Async Data Loading with Threading
-```python
-import concurrent.futures
-
-async def load_data_async(page: ft.Page, server_bridge: ServerBridge):
-    """Load data asynchronously without blocking UI."""
-    # Show loading state
-    loading_indicator.visible = True
-    page.update()
-
-    try:
-        # Run blocking operation in thread pool
-        def fetch_data():
-            return server_bridge.get_files()  # Blocking call
-
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            result = await asyncio.get_event_loop().run_in_executor(
-                None, fetch_data
-            )
-
-        # Update UI with results
-        update_data_display(result)
-        show_success_message(page, f"Loaded {len(result)} items")
-
-    except Exception as ex:
-        logger.error(f"Data loading failed: {ex}")
-        show_error_message(page, f"Failed to load data: {str(ex)}")
-
-    finally:
-        # Hide loading state
-        loading_indicator.visible = False
-        page.update()
-```
-
-#### Background Tasks with Proper Lifecycle Management
-```python
-def start_monitoring_task(page: ft.Page, server_bridge: ServerBridge):
-    """Start background monitoring with proper cleanup."""
-    monitoring_active = True
-
-    async def monitoring_loop():
-        while monitoring_active:
-            try:
-                # Perform monitoring
-                status = await server_bridge.get_status()
-                update_status_display(status)
-
-                # Wait before next check
-                await asyncio.sleep(5)
-
-            except Exception as ex:
-                logger.error(f"Monitoring error: {ex}")
-                break
-
-    # Start the task
-    page.run_task(monitoring_loop)
-
-    # Return cleanup function
-    def stop_monitoring():
-        nonlocal monitoring_active
-        monitoring_active = False
-
-    return stop_monitoring
-```
-
-#### Control Updates for Performance
-```python
-def update_control_efficiently(control: ft.Control, new_data: Dict[str, Any]):
-    """Update control efficiently without full page updates."""
-    # Update individual properties
-    if hasattr(control, 'text'):
-        control.text = new_data.get('text', control.text)
-    if hasattr(control, 'value'):
-        control.value = new_data.get('value', control.value)
-
-    # Update only this control for better performance
-    control.update()
-```
-
-#### Performance Anti-Patterns (AVOID)
-```python
-# ❌ WRONG: Synchronous data loading in UI thread
-def bad_data_loading(e):
-    data = server_bridge.get_files()  # BLOCKS UI!
-    update_data_display(data)  # UI stutters and freezes
-```
+    """Create high-performance list for

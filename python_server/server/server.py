@@ -319,6 +319,9 @@ class BackupServer:
         self.db_manager.ensure_storage_dir() # Ensure 'received_files' directory exists
         self.db_manager.init_database()      # Initialize SQLite database and tables
 
+        # Set backup_log_file instance attribute to enable enhanced log reading
+        self.backup_log_file = backup_log_file
+
         # Note: Signal handlers are now managed by NetworkServer
         # but we keep a reference for main server coordination
         # Port is already set during NetworkServer initialization
@@ -331,6 +334,39 @@ class BackupServer:
         """Resolves a client object from the in-memory store by client ID."""
         with self.clients_lock:
             return self.clients.get(client_id)
+
+    def resolve_client(self, client_identifier: str) -> Dict[str, Any]:
+        """Resolve client by ID or name - compatible with ServerBridge signature."""
+        try:
+            # First try to resolve by client ID (hex string)
+            if client_identifier in self.clients_by_name:
+                # Found by name
+                client_id_bytes = self.clients_by_name[client_identifier]
+                client = self.clients.get(client_id_bytes)
+                if client:
+                    return self._format_response(True, {
+                        'id': client.id.hex(),
+                        'name': client.name,
+                        'public_key_size': len(client.public_key_bytes) if client.public_key_bytes else 0
+                    })
+            
+            # Try to resolve by hex ID
+            try:
+                client_id_bytes = bytes.fromhex(client_identifier)
+                client = self.clients.get(client_id_bytes)
+                if client:
+                    return self._format_response(True, {
+                        'id': client.id.hex(),
+                        'name': client.name,
+                        'public_key_size': len(client.public_key_bytes) if client.public_key_bytes else 0
+                    })
+            except ValueError:
+                pass  # Not a valid hex string
+            
+            return self._format_response(False, error=f"Client '{client_identifier}' not found")
+        except Exception as e:
+            logger.error(f"Failed to resolve client {client_identifier}: {e}")
+            return self._format_response(False, error=str(e))
 
     def send_response(self, sock: socket.socket, code: int, payload: bytes = b''):
         """Delegates sending a response to the network server."""
@@ -717,6 +753,10 @@ class BackupServer:
         """Get all files - delegates to db_manager.get_all_files()."""
         try:
             files_data = self.db_manager.get_all_files()
+            # Normalize client_id to hex string if it's bytes
+            for file_data in files_data:
+                if 'client_id' in file_data and isinstance(file_data['client_id'], bytes):
+                    file_data['client_id'] = file_data['client_id'].hex()
             return self._format_response(True, files_data)
         except Exception as e:
             logger.error(f"Failed to get files: {e}")
@@ -731,8 +771,11 @@ class BackupServer:
     def get_client_files(self, client_id: str) -> Dict[str, Any]:
         """Get files for a specific client - delegates to db_manager.get_files_for_client()."""
         try:
-            client_id_bytes = bytes.fromhex(client_id)
-            files_data = self.db_manager.get_files_for_client(client_id_bytes)
+            # Pass the hex string directly to db_manager.get_files_for_client
+            files_data = self.db_manager.get_files_for_client(client_id)
+            # Attach client_id to each file entry
+            for file_data in files_data:
+                file_data['client_id'] = client_id
             return self._format_response(True, files_data)
         except Exception as e:
             logger.error(f"Failed to get files for client {client_id}: {e}")
@@ -751,8 +794,8 @@ class BackupServer:
             # For now, assuming it's in format "client_id:filename" or similar
             if ':' in file_id:
                 client_id_str, filename = file_id.split(':', 1)
-                client_id_bytes = bytes.fromhex(client_id_str)
-                success = self.db_manager.delete_file(client_id_bytes, filename)
+                # Pass client_id_str (hex string) directly to db_manager.delete_file instead of converting to bytes
+                success = self.db_manager.delete_file(client_id_str, filename)
             else:
                 # Fallback: try to parse as a single identifier
                 return self._format_response(False, error="Invalid file_id format. Expected 'client_id:filename'")
@@ -765,11 +808,29 @@ class BackupServer:
             logger.error(f"Failed to delete file {file_id}: {e}")
             return self._format_response(False, error=str(e))
 
+    def delete_file_by_client_and_name(self, client_id: str, filename: str) -> Dict[str, Any]:
+        """Delete a file by client ID and filename."""
+        try:
+            success = self.db_manager.delete_file(client_id, filename)
+            if success:
+                return self._format_response(True, {'deleted': True})
+            else:
+                return self._format_response(False, error="Failed to delete file")
+        except Exception as e:
+            logger.error(f"Failed to delete file {client_id}:{filename}: {e}")
+            return self._format_response(False, error=str(e))
+
     async def delete_file_async(self, file_id: str) -> Dict[str, Any]:
         """Async version of delete_file()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.delete_file, file_id)
+
+    async def delete_file_by_client_and_name_async(self, client_id: str, filename: str) -> Dict[str, Any]:
+        """Async version of delete_file_by_client_and_name()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.delete_file_by_client_and_name, client_id, filename)
 
     def download_file(self, file_id: str, destination_path: str) -> Dict[str, Any]:
         """Download a file (placeholder implementation)."""
@@ -1181,6 +1242,48 @@ class BackupServer:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_server_statistics)
 
+    def get_historical_data(self, metric: str = "connections", hours: int = 24) -> Dict[str, Any]:
+        """Get historical data for metrics."""
+        try:
+            # Generate mock historical data points
+            import random
+            from datetime import datetime, timedelta
+            
+            points = []
+            now = datetime.now()
+            
+            # Generate data points for the specified time range
+            for i in range(hours):
+                timestamp = now - timedelta(hours=i)
+                # Generate mock values based on metric type
+                if metric == "connections":
+                    value = random.randint(0, 50)
+                elif metric == "files":
+                    value = random.randint(0, 100)
+                elif metric == "bandwidth":
+                    value = random.randint(0, 1000)
+                else:
+                    value = random.randint(0, 100)
+                    
+                points.append({
+                    'timestamp': timestamp.isoformat(),
+                    'value': value
+                })
+            
+            # Reverse to show oldest first
+            points.reverse()
+            
+            return self._format_response(True, {'points': points})
+        except Exception as e:
+            logger.error(f"Failed to get historical data: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def get_historical_data_async(self, metric: str = "connections", hours: int = 24) -> Dict[str, Any]:
+        """Async version of get_historical_data()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_historical_data, metric, hours)
+
     # --- Log Operations ---
 
     def get_logs(self) -> Dict[str, Any]:
@@ -1194,7 +1297,14 @@ class BackupServer:
 
             # Try to read recent log entries if log file exists
             try:
-                if hasattr(self, 'backup_log_file') and os.path.exists(backup_log_file):
+                # Check self.backup_log_file first, then module variable, then fallback to server.log
+                if hasattr(self, 'backup_log_file') and os.path.exists(self.backup_log_file):
+                    with open(self.backup_log_file, 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+                        # Get last 100 lines
+                        recent_lines = lines[-100:] if len(lines) > 100 else lines
+                        log_data['logs'] = [line.strip() for line in recent_lines]
+                elif os.path.exists(backup_log_file):  # Fallback to module variable
                     with open(backup_log_file, 'r', encoding='utf-8') as f:
                         lines = f.readlines()
                         # Get last 100 lines

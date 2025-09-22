@@ -36,12 +36,17 @@ class FakePage:
     def run_task(self, fn_or_coro: Callable[..., Any] | Awaitable[Any] | Coroutine[Any, Any, Any], *args: Any, **kwargs: Any) -> None:
         """Execute a function with args or a coroutine synchronously for tests."""
         try:
+            # If a coroutine instance was passed
             if asyncio.iscoroutine(fn_or_coro):
-                asyncio.run(fn_or_coro)  # type: ignore[arg-type]
-            elif callable(fn_or_coro):
+                asyncio.run(fn_or_coro)
+                return
+
+            # If a callable was passed, call it with args/kwargs
+            if callable(fn_or_coro):
                 result = fn_or_coro(*args, **kwargs)
                 if asyncio.iscoroutine(result):
                     asyncio.run(result)
+                return
         except RuntimeError:
             # If there's an event loop already running (e.g., in some environments), use a new loop
             loop = asyncio.new_event_loop()
@@ -51,8 +56,8 @@ class FakePage:
                     result = fn_or_coro(*args, **kwargs)
                     if asyncio.iscoroutine(result):
                         loop.run_until_complete(result)
-                else:
-                    loop.run_until_complete(fn_or_coro)  # type: ignore[arg-type]
+                elif asyncio.iscoroutine(fn_or_coro):
+                    loop.run_until_complete(fn_or_coro)
             finally:
                 loop.close()
 

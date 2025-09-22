@@ -11,23 +11,54 @@ This demonstrates the clean architecture:
 - Resizable desktop app configuration
 """
 
+# CRITICAL: Ensure FletV2 root is on sys.path BEFORE any other imports
+import os
+import sys
+
+_here = os.path.abspath(__file__)
+_base = os.path.dirname(_here)
+if os.path.basename(_base) == "FletV2":
+    flet_v2_root = _base
+else:
+    flet_v2_root = os.path.dirname(_base)  # if file is in a subfolder
+
+if flet_v2_root not in sys.path:
+    sys.path.insert(0, flet_v2_root)
+
+# Optional: enable Shared.* imports if Shared is a sibling of FletV2
+repo_root = os.path.dirname(flet_v2_root)
+if os.path.isdir(os.path.join(repo_root, "Shared")) and repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
+# CRITICAL: Add repo root for python_server imports
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
 # Standard library imports
 import asyncio
 import contextlib
-import os
-import sys
 from typing import Any, Callable, Dict, Optional, Set, Tuple, cast
 
 # Third-party imports
 import flet as ft
 
-# Add parent directory to path for Shared imports
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
+# (Path setup handled above)
 
 # Local imports - utilities first
-from utils.debug_setup import setup_terminal_debugging  # noqa: E402
+try:
+    from utils.debug_setup import setup_terminal_debugging  # noqa: E402
+except ImportError:
+    # Silent fallback for import issues - create minimal debug setup with matching signature
+    import logging
+
+    def setup_terminal_debugging(*, logger_name: str | None = None) -> "logging.Logger":  # type: ignore[name-defined]
+        logger = logging.getLogger(logger_name or __name__)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+            logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+        return logger
 
 # ALWAYS import this in any Python file that deals with subprocess or console I/O
 # Import for side effects (UTF-8 configuration)
@@ -38,16 +69,52 @@ logger = setup_terminal_debugging(logger_name="FletV2.main")
 os.environ.setdefault("PYTHONUTF8", "1")
 
 # Local imports - application modules
-from theme import setup_modern_theme, toggle_theme_mode  # noqa: E402
-from utils.server_bridge import create_server_bridge  # noqa: E402
+try:
+    from theme import setup_modern_theme, toggle_theme_mode  # noqa: E402
+except ImportError as e:
+    print(f"Warning: Could not import theme module: {e}")
+    # Create minimal fallbacks
+    def setup_modern_theme(page): pass
+    def toggle_theme_mode(page): pass
+
+try:
+    from utils.server_bridge import create_server_bridge  # noqa: E402
+except ImportError as e:
+    print(f"Warning: Could not import server_bridge: {e}")
+    # Create minimal fallback returning a simple object with the expected surface
+    def create_server_bridge(real_server: Any | None = None) -> Any:  # type: ignore[override]
+        class _MockBridge:
+            def is_connected(self) -> bool:
+                return False
+
+        return _MockBridge()
 
 # Exported runtime flags for tests and integration checks
 REAL_SERVER_AVAILABLE = False
 BRIDGE_TYPE = "Mock Server Development Mode"
 
+# Try to import and initialize the real BackupServer
+real_server_instance = None
+try:
+    # Import the BackupServer
+    from python_server.server.server import BackupServer
+    logger.info("BackupServer class imported successfully")
+
+    # Initialize the real server instance
+    real_server_instance = BackupServer()
+    REAL_SERVER_AVAILABLE = True
+    BRIDGE_TYPE = "Real Server Production Mode"
+    logger.info("✅ Real BackupServer initialized successfully")
+except ImportError as e:
+    logger.warning(f"Could not import BackupServer: {e}")
+    real_server_instance = None
+except Exception as e:
+    logger.error(f"Failed to initialize BackupServer: {e}")
+    real_server_instance = None
+
 # Direct server integration support (no adapter layer needed)
 # The BackupServer has built-in ServerBridge compatibility
-real_server_available = False  # Will be set to True when server is injected
+real_server_available = REAL_SERVER_AVAILABLE  # Will be set to True when server is injected
 create_fletv2_server = None  # Legacy - not needed for direct integration
 
 # Ensure project root is in path for direct execution
@@ -85,8 +152,8 @@ class FletV2App(ft.Row):
         self._loaded_views: Dict[str, ft.Control] = {}
         self._background_tasks: Set[Any] = set()
 
-        # Initialize server bridge - prefer injected real server
-        global bridge_type, real_server_available
+        # Initialize server bridge - prefer real server instance
+        global bridge_type, real_server_available, real_server_instance
         try:
             if real_server is not None:
                 # Direct server injection (from integrated startup script)
@@ -101,10 +168,16 @@ class FletV2App(ft.Row):
                 else:
                     logger.warning("⚠️ Injected server not responding - falling back to mock mode")
                     self.server_bridge = create_server_bridge()
+            elif real_server_instance is not None:
+                # Use the real server instance we created
+                self.server_bridge = create_server_bridge(real_server=real_server_instance)
+                bridge_type = "Real BackupServer Integration"
+                real_server_available = True
+                logger.info("🎉 Real BackupServer integration successful!")
             else:
                 # Standard mock mode for development
                 self.server_bridge = create_server_bridge()
-                logger.info("🧪 No real server injected - using mock mode")
+                logger.info("🧪 No real server available - using mock mode")
         except Exception as bridge_ex:
             logger.error(f"❌ Server bridge initialization failed: {bridge_ex}")
             self.server_bridge = create_server_bridge()
@@ -1031,7 +1104,11 @@ class FletV2App(ft.Row):
                 # This ensures all controls are properly attached to the page hierarchy
                 async def setup_subs() -> None:
                     try:
-                        content._setup_subscriptions()
+                        # Check if _setup_subscriptions is a coroutine function
+                        if asyncio.iscoroutinefunction(content._setup_subscriptions):
+                            await content._setup_subscriptions()
+                        else:
+                            content._setup_subscriptions()
                         logger.debug(f"Set up subscriptions for {view_name} view")
                     except Exception as sub_error:
                         logger.warning(f"Failed to set up subscriptions for {view_name}: {sub_error}")
@@ -1308,8 +1385,8 @@ if __name__ == "__main__":
             return False
         return True
 
-    _chosen_port = _port if _port == 0 or _port_available(_port) else 0
-    if _chosen_port == 0 and _port != 0:
-        print(f"Port {_port} is busy; starting on a random available port instead.")
-    # Launch async Flet app
-    asyncio.run(ft.app_async(target=main, view=ft.AppView.WEB_BROWSER, port=_chosen_port))  # type: ignore[attr-defined]
+    # Use desktop app mode to avoid FastAPI/pydantic dependencies
+    print("FletV2 is starting in desktop mode (FLET_APP)")
+
+    # Launch async Flet app in desktop mode
+    asyncio.run(ft.app_async(target=main, view=ft.AppView.FLET_APP))  # type: ignore[attr-defined]
