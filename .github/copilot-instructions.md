@@ -3,6 +3,7 @@ description: AI rules derived by SpecStory from the project AI interaction histo
 globs: *
 ---
 
+```markdown
 ---
 description: AI rules derived by SpecStory from the project AI interaction history
 ---
@@ -754,7 +755,7 @@ class TestDashboardIntegration:
             nonlocal update_called
             update_called = True
 
-        state_manager.subscribe_settings('test', on_update)
+        state_manager.set_settings('test', on_update)
 
         # Trigger state change
         state_manager.set_settings('test', {'value': 'new'})
@@ -933,4 +934,4 @@ Notes
 
 ### Configuration - Virtual Environment
 
-**CRITICAL**: The `flet_venv` virtual environment MUST be used as the default. Ensure that
+**CRITICAL**: The `flet_venv` virtual environment MUST be used as the default

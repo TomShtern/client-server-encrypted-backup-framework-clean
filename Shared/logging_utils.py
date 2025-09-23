@@ -104,30 +104,18 @@ CODE_MAPS: Dict[str, List[Dict[str, str]]] = {
         {'code': '504', 'text': 'Gateway Timeout', 'emoji': Emojis.ERROR, 'level': 'error'},
     ],
     'backup': [
-        {'section': 'PROTOCOL & TRANSFER'},
-        {'code': 'PROTOCOL', 'text': 'Protocol Version 3', 'emoji': Emojis.ROCKET, 'level': 'info'},
-        {'section': 'REQUEST CODES (client->server)'},
-        {'code': 'REQ_REGISTER (1025)', 'text': 'Register client with server', 'emoji': Emojis.ROCKET, 'level': 'info'},
-        {'code': 'REQ_SEND_PUBLIC_KEY (1026)', 'text': "Send client's public key to server", 'emoji': Emojis.GEAR, 'level': 'info'},
-        {'code': 'REQ_SEND_FILE (1028)', 'text': 'Begin encrypted file transfer', 'emoji': Emojis.ROCKET, 'level': 'success'},
-        {'section': 'RESPONSE CODES (server->client)'},
-        {'code': 'RESP_REG_OK (1600)', 'text': 'Registration OK', 'emoji': Emojis.SUCCESS, 'level': 'success'},
-        {'code': 'RESP_PUBKEY_AES_SENT (1602)', 'text': 'AES key encrypted with RSA sent', 'emoji': Emojis.GEAR, 'level': 'info'},
-        {'code': 'RESP_FILE_CRC (1603)', 'text': 'File CRC / transfer verification', 'emoji': Emojis.INFO, 'level': 'info'},
-        {'section': 'TRANSFER / ERROR CONDITIONS'},
-        {'code': 'CRC_MISMATCH', 'text': 'CRC mismatch on received file', 'emoji': Emojis.ERROR, 'level': 'error'},
-        {'code': 'FILE_WRITE_ERROR', 'text': 'Server failed to write file to disk', 'emoji': Emojis.ERROR, 'level': 'error'},
+        {'section': 'PROTOCOL CODES'},
+        {'code': 'PROTOCOL', 'text': 'Version 3', 'emoji': Emojis.ROCKET, 'level': 'info'},
+        {'code': 'REQ_REGISTER (1025)', 'text': 'Client registration', 'emoji': Emojis.ROCKET, 'level': 'info'},
+        {'code': 'REQ_SEND_FILE (1028)', 'text': 'File transfer start', 'emoji': Emojis.SUCCESS, 'level': 'success'},
+        {'code': 'RESP_REG_OK (1600)', 'text': 'Registration success', 'emoji': Emojis.SUCCESS, 'level': 'success'},
+        {'code': 'RESP_FILE_CRC (1603)', 'text': 'Transfer verification', 'emoji': Emojis.INFO, 'level': 'info'},
+        {'section': 'ERROR CODES'},
+        {'code': 'CRC_MISMATCH', 'text': 'File integrity error', 'emoji': Emojis.ERROR, 'level': 'error'},
         {'code': 'AUTH_FAIL', 'text': 'Authentication failed', 'emoji': Emojis.WARNING, 'level': 'warning'},
-        {'code': 'AES_DECRYPT_FAIL', 'text': 'AES decryption failed', 'emoji': Emojis.ERROR, 'level': 'error'},
-        {'code': 'DISK_FULL', 'text': 'Insufficient disk space on server', 'emoji': Emojis.WARNING, 'level': 'warning'},
-        {'code': 'PERMISSION_DENIED', 'text': 'Filesystem permission denied', 'emoji': Emojis.WARNING, 'level': 'warning'},
-        {'code': 'TRANSFER_RETRY', 'text': 'Transfer will be retried', 'emoji': Emojis.ROCKET, 'level': 'info'},
-        {'code': 'PARTIAL_UPLOAD', 'text': 'Partial upload received (incomplete)', 'emoji': Emojis.WARNING, 'level': 'warning'},
-        {'section': 'SECURITY & TRANSFER NOTES'},
-        {'note': 'RSA-1024 used for key exchange (OAEP)'},
-        {'note': 'AES-256-CBC used for file encryption (32-byte keys)'},
-        {'note': 'FIXED IV currently used — consider rotating IV per file (security risk)', 'level': 'warning'},
-        {'note': 'CRC32 is used for integrity but not authentication — consider HMAC'},
+        {'code': 'DISK_FULL', 'text': 'Storage full', 'emoji': Emojis.WARNING, 'level': 'warning'},
+        {'section': 'SECURITY'},
+        {'note': 'RSA-1024 + AES-256 encryption'},
     ],
 }
 
@@ -154,7 +142,7 @@ def setup_dual_logging(
     """
     Set up dual logging: console and file output with different levels.
     Now with enhanced emoji and color support!
-    
+
     Args:
         logger_name: Name for the logger
         server_type: Type of server (e.g., "backup-server", "api-server")
@@ -164,49 +152,57 @@ def setup_dual_logging(
         file_format: Format string for file messages (defaults to console_format)
         log_dir: Directory to store log files
         enable_enhanced_output: Enable emoji and color output (default: True)
-        
+
     Returns:
         Tuple of (logger, log_file_path)
     """
     if file_format is None:
         file_format = console_format
-        
+
+    # Check environment variable to disable enhanced output for cleaner terminal output
+    import os
+    disable_code_map = os.environ.get('DISABLE_CODE_MAP', '').lower() in ('true', '1', 'yes')
+    fletv2_context = 'FletV2' in os.getcwd() or os.path.basename(os.getcwd()) == 'FletV2'
+
+    if disable_code_map or fletv2_context:
+        enable_enhanced_output = False
+
     # Create logger
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.DEBUG)  # Set to lowest level, handlers will filter
-    
+
     # Clear any existing handlers to avoid duplicates
     logger.handlers.clear()
-    
+
     # Create log directory if it doesn't exist
     os.makedirs(log_dir, exist_ok=True)
-    
+
     # Generate log file name with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_filename = f"{server_type}_{timestamp}.log"
     log_file_path = os.path.join(log_dir, log_filename)
-    
+
     # Console handler with enhanced output support
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(console_level)
     console_formatter = logging.Formatter(console_format)
     console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
-    
+
     # Enhance logger with emoji and color support if available and enabled
     if enable_enhanced_output and ENHANCED_OUTPUT_AVAILABLE and enhance_existing_logger is not None:
         with contextlib.suppress(Exception):
             # Disable emojis on Windows to prevent Unicode encoding errors with cp1255
             use_emojis = sys.platform != 'win32'
             enhance_existing_logger(logger, use_colors=True, use_emojis=use_emojis)
-    
+
     # File handler
     file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
     file_handler.setLevel(file_level)
     file_formatter = logging.Formatter(file_format)
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
-    
+
     # Plain startup messages that will be logged to file (no ANSI/color sequences)
     file_startup_messages = [
         f"=== {server_type.upper()} LOGGING INITIALIZED ===",
@@ -255,7 +251,7 @@ def setup_dual_logging(
     console_lines.append("")
     console_lines.append(Colors.debug("=" * 60))
     console_lines.append(Colors.debug(f"Live Monitoring: Get-Content {log_file_path} -Wait -Tail 50"))
-    
+
     # Print the colorful console-only banner (keeps file logs plain)
     try:
         for line in console_lines:
@@ -269,18 +265,18 @@ def setup_dual_logging(
     # Log startup messages to file (plain text)
     for msg in file_startup_messages:
         logger.info(msg)
-    
+
     return logger, log_file_path
 
 
 def create_log_monitor_info(server_type: str, log_file_path: str) -> Dict[str, Any]:
     """
     Create monitoring information for log files.
-    
+
     Args:
         server_type: Type of server
         log_file_path: Path to the log file
-        
+
     Returns:
         Dictionary with monitoring information
     """
@@ -300,48 +296,48 @@ class EnhancedLogger:
     """
     Enhanced logger wrapper that provides structured logging capabilities.
     """
-    
+
     def __init__(self, component: str, base_logger: logging.Logger):
         self.component = component
         self.base_logger = base_logger
         self._context: Dict[str, Any] = {}
-    
+
     def set_context(self, **kwargs: Any) -> None:
         """Set context variables for this logger."""
         self._context.update(kwargs)
-    
+
     def clear_context(self) -> None:
         """Clear all context variables."""
         self._context.clear()
-    
+
     def _log_structured(self, level: int, message: str, **kwargs: Any) -> None:
         """Log a structured message with context."""
         context = self._context.copy()
         context.update(kwargs)
-        
+
         # Log as human-readable for console with context information
         structured_msg = f"[{self.component}] {message}"
         if context:
             structured_msg += f" | Context: {context}"
-            
+
         self.base_logger.log(level, structured_msg)
-    
+
     def debug(self, message: str, **kwargs: Any) -> None:
         """Log debug message with context."""
         self._log_structured(logging.DEBUG, message, **kwargs)
-    
+
     def info(self, message: str, **kwargs: Any) -> None:
         """Log info message with context."""
         self._log_structured(logging.INFO, message, **kwargs)
-    
+
     def warning(self, message: str, **kwargs: Any) -> None:
         """Log warning message with context."""
         self._log_structured(logging.WARNING, message, **kwargs)
-    
+
     def error(self, message: str, **kwargs: Any) -> None:
         """Log error message with context."""
         self._log_structured(logging.ERROR, message, **kwargs)
-    
+
     def critical(self, message: str, **kwargs: Any) -> None:
         """Log critical message with context."""
         self._log_structured(logging.CRITICAL, message, **kwargs)
@@ -350,11 +346,11 @@ class EnhancedLogger:
 def create_enhanced_logger(component: str, base_logger: logging.Logger) -> EnhancedLogger:
     """
     Create an enhanced logger with structured logging capabilities.
-    
+
     Args:
         component: Component name for logging context
         base_logger: Base Python logger to wrap
-        
+
     Returns:
         Enhanced logger instance
     """
@@ -364,7 +360,7 @@ def create_enhanced_logger(component: str, base_logger: logging.Logger) -> Enhan
 def log_performance_metrics(logger: logging.Logger, operation: str, duration_ms: float, success: bool = True, **kwargs: Any) -> None:
     """
     Log performance metrics for operations.
-    
+
     Args:
         logger: Logger to use
         operation: Operation name
@@ -378,7 +374,7 @@ def log_performance_metrics(logger: logging.Logger, operation: str, duration_ms:
         "success": success,
         "performance_metric": True
     }
-    
+
     status = "completed" if success else "failed"
     logger.info(f"⚡ Performance: {operation} {status} in {duration_ms:.2f}ms", extra=context)
 
@@ -386,10 +382,10 @@ def log_performance_metrics(logger: logging.Logger, operation: str, duration_ms:
 def get_logger(name: str) -> logging.Logger:
     """
     Get a logger with standard configuration.
-    
+
     Args:
         name: Logger name
-        
+
     Returns:
         Configured logger
     """
@@ -399,7 +395,7 @@ def get_logger(name: str) -> logging.Logger:
 def configure_root_logger(level: int = logging.INFO):
     """
     Configure the root logger with basic settings.
-    
+
     Args:
         level: Logging level
     """
@@ -416,11 +412,11 @@ def configure_root_logger(level: int = logging.INFO):
 def quick_console_logger(name: str, level: int = logging.INFO) -> logging.Logger:
     """
     Quickly create a console-only logger.
-    
+
     Args:
         name: Logger name
         level: Logging level
-        
+
     Returns:
         Console logger
     """
@@ -438,12 +434,12 @@ def quick_console_logger(name: str, level: int = logging.INFO) -> logging.Logger
 def quick_file_logger(name: str, filename: str, level: int = logging.DEBUG) -> logging.Logger:
     """
     Quickly create a file-only logger.
-    
+
     Args:
         name: Logger name
         filename: Log file name
         level: Logging level
-        
+
     Returns:
         File logger
     """
@@ -461,7 +457,7 @@ def quick_file_logger(name: str, filename: str, level: int = logging.DEBUG) -> l
 if __name__ == "__main__":
     # Test the logging utilities
     print("Testing logging utilities...")
-    
+
     # Test dual logging setup
     logger, log_file = setup_dual_logging(
         logger_name="test_logger",
@@ -469,18 +465,18 @@ if __name__ == "__main__":
         console_level=logging.INFO,
         file_level=logging.DEBUG
     )
-    
+
     # Test enhanced logger
     enhanced = create_enhanced_logger("test-component", logger)
     enhanced.set_context(user_id="test_user", session_id="test_session")
-    
+
     # Test logging
     logger.info("Standard logger test message")
     enhanced.info("Enhanced logger test message")
     enhanced.error("Test error message", error_code="TEST_001")
-    
+
     # Test performance logging
     log_performance_metrics(logger, "test_operation", 123.45, status="success")
-    
+
     print("Logging utilities test completed!")
     print(f"Log file created: {log_file}")

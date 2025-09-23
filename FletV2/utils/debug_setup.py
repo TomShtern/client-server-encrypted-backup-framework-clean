@@ -54,14 +54,14 @@ def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: Optiona
     # Import DEBUG_MODE here to avoid circular imports
     try:
         from config import DEBUG_MODE
-        # Override log_level based on DEBUG_MODE
+        # In debug mode, allow INFO and above, but suppress specific noisy components
         if DEBUG_MODE:
-            log_level = logging.DEBUG
+            log_level = logging.INFO  # Allow INFO level but suppress specific noisy loggers
         else:
             log_level = logging.WARNING  # Only show warnings and errors when not in debug mode
     except ImportError:
         # Fallback if config is not available
-        pass
+        log_level = logging.WARNING
 
     if not _debug_setup_done:
         # Create enhanced formatter
@@ -77,6 +77,49 @@ def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: Optiona
         root_logger = logging.getLogger()
         root_logger.setLevel(log_level)
         root_logger.addHandler(handler)
+
+        # Configure third-party library loggers to reduce noise (applied regardless of DEBUG_MODE)
+        # matplotlib produces hundreds of font scanning debug logs
+        logging.getLogger('matplotlib').setLevel(logging.ERROR)
+        logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
+
+        # PIL produces debug logs for every plugin import
+        logging.getLogger('PIL').setLevel(logging.ERROR)
+        logging.getLogger('PIL.Image').setLevel(logging.ERROR)
+
+        # Flet produces many internal debug events, keep at INFO for useful logs
+        logging.getLogger('flet').setLevel(logging.WARNING)
+
+        # Python server components - reduce database connection spam
+        logging.getLogger('python_server.server.database').setLevel(logging.ERROR)  # Only show errors
+        logging.getLogger('python_server.server.database').propagate = False  # Prevent duplication
+        logging.getLogger('python_server.server.server').setLevel(logging.WARNING)  # Reduce server debug logs
+        logging.getLogger('python_server.server.server').propagate = False
+        logging.getLogger('observability').setLevel(logging.ERROR)  # Reduce structured logging noise
+        logging.getLogger('Shared.utils.thread_manager').setLevel(logging.ERROR)  # Reduce thread management logs
+        logging.getLogger('Shared.utils.process_monitor').setLevel(logging.WARNING)  # Reduce process monitor logs
+        logging.getLogger('Shared.utils.process_monitor_gui').setLevel(logging.WARNING)
+
+        # Application-specific loggers - reduce verbosity for cleaner output
+        logging.getLogger('views.dashboard').setLevel(logging.ERROR)  # Suppress ALL dashboard debug logs
+        logging.getLogger('views').setLevel(logging.WARNING)  # Suppress all view debug logs
+        logging.getLogger('FletV2.main').setLevel(logging.WARNING)  # Reduce main app logs to warnings only
+        logging.getLogger('utils.server_bridge').setLevel(logging.WARNING)  # Reduce bridge logs
+        logging.getLogger('FletV2.state_manager').setLevel(logging.ERROR)  # Suppress state manager debug logs
+
+        # Suppress verbose server initialization logs
+        logging.getLogger('python_server.server.database_migrations').setLevel(logging.WARNING)
+        logging.getLogger('python_server.server.file_transfer').setLevel(logging.WARNING)
+        logging.getLogger('python_server.server.gui_integration').setLevel(logging.WARNING)
+        logging.getLogger('Shared.sentry_config').setLevel(logging.WARNING)
+
+        # Suppress code map and verbose initialization output from server components
+        logging.getLogger('Shared.logging_utils').setLevel(logging.ERROR)  # Suppress code map output
+        logging.getLogger('api_server.cyberbackup_api_server').setLevel(logging.WARNING)  # Reduce API server logs
+        logging.getLogger('python_server.server.server').setLevel(logging.WARNING)  # Reduce backup server logs
+
+        # Suppress GUI thread initialization details
+        logging.getLogger('MainThread').setLevel(logging.WARNING)  # Suppress thread-related logs
 
         # Implement global exception hook with enhanced context
         def custom_exception_hook(exc_type, exc_value, exc_traceback):
@@ -132,17 +175,18 @@ def get_logger(name: str) -> logging.Logger:
     Returns:
         logging.Logger: Configured logger instance with enhanced context
     """
-    # Import DEBUG_MODE here to avoid circular imports
-    try:
-        from config import DEBUG_MODE
-        log_level = logging.DEBUG if DEBUG_MODE else logging.WARNING
-    except ImportError:
-        log_level = logging.WARNING  # Default to WARNING if config not available
-
     logger = logging.getLogger(name)
 
-    # Set the logger level based on DEBUG_MODE
-    logger.setLevel(log_level)
+    # Only set level if not already configured (respect levels set in setup_terminal_debugging)
+    if logger.level == logging.NOTSET:
+        # Import DEBUG_MODE here to avoid circular imports
+        try:
+            from config import DEBUG_MODE
+            log_level = logging.INFO if DEBUG_MODE else logging.WARNING
+        except ImportError:
+            log_level = logging.WARNING  # Default to WARNING if config not available
+
+        logger.setLevel(log_level)
 
     # Ensure the logger has the enhanced formatter
     if logger.handlers:
@@ -162,7 +206,6 @@ def get_logger(name: str) -> logging.Logger:
             )
         )
         logger.addHandler(handler)
-        logger.setLevel(log_level)
 
     return logger
 
