@@ -11,6 +11,7 @@ repo_root = os.path.dirname(os.path.abspath('.'))
 sys.path.insert(0, repo_root)
 
 # Import required modules
+from typing import List, Dict, Any
 from python_server.server.server import BackupServer
 from FletV2.utils.server_bridge import create_server_bridge
 
@@ -98,19 +99,23 @@ def test_bridge():
         clients_result = real_server.get_clients()
         print(f"   Direct get_clients result: {clients_result}")
         print(f"   Result type: {type(clients_result)}")
-        if isinstance(clients_result, list):
-            print(f"   Number of clients: {len(clients_result)}")
-            if clients_result:
-                print(f"   First client: {clients_result[0]}")
+        if isinstance(clients_result, dict) and 'data' in clients_result:
+            clients_data = clients_result['data']
+            if isinstance(clients_data, list):
+                print(f"   Number of clients: {len(clients_data)}")
+                if clients_data:
+                    print(f"   First client: {clients_data[0]}")
 
         # Also test get_files
         files_result = real_server.get_files()
         print(f"   Direct get_files result: {files_result}")
         print(f"   Files result type: {type(files_result)}")
-        if isinstance(files_result, list):
-            print(f"   Number of files: {len(files_result)}")
-            if files_result:
-                print(f"   First file: {files_result[0]}")
+        if isinstance(files_result, dict) and 'data' in files_result:
+            files_data = files_result['data']
+            if isinstance(files_data, list):
+                print(f"   Number of files: {len(files_data)}")
+                if files_data:
+                    print(f"   First file: {files_data[0]}")
 
     except Exception as e:
         print(f"   Direct server error: {e}")

@@ -83,11 +83,8 @@ cmake --build build --config Release
 
 ### Virtual Environment Management
 ```powershell
-# Activate Flet environment (required for desktop GUI)
+# Activate unified environment (contains all dependencies)
 & .\flet_venv\Scripts\Activate.ps1
-
-# Activate main environment (for other components)
-& .\venv\Scripts\Activate.ps1
 ```
 
 ## 🧪 Testing & Verification Protocols

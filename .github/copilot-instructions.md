@@ -3,6 +3,15 @@ description: AI rules derived by SpecStory from the project AI interaction histo
 globs: *
 ---
 
+```markdown
+---
+description: AI rules derived by SpecStory from the project AI interaction history
+---
+
+---
+description: AI rules derived by SpecStory from the project AI interaction history
+---
+
 ---
 description: AI rules derived by SpecStory from the project AI interaction history
 ---
@@ -858,7 +867,7 @@ Resolution (precise steps)
 import os
 import sys
 
-# Ensure FletV2 root is on sys.path (works for files in FletV2/ and its subfolders)
+# Ensure FletV2 root is on sys.path (works for files for files in FletV2/ and its subfolders)
 _here = os.path.abspath(__file__)
 _base = os.path.dirname(_here)
 if os.path.basename(_base) == "FletV2":
@@ -927,7 +936,4 @@ Notes
 
 **CRITICAL**: Use performance-optimized patterns for smooth UI and efficient data handling.
 
-#### ListView Virtualization for Large Datasets
-```python
-def create_efficient_data_list(items: List[Dict[str, Any]]) -> ft.Control:
-    """Create high-performance list for
+#### ListView

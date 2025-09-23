@@ -50,14 +50,15 @@ try:
 except ImportError:
     # Silent fallback for import issues - create minimal debug setup with matching signature
     import logging
+    from typing import Optional
 
-    def setup_terminal_debugging(*, logger_name: str | None = None) -> "logging.Logger":  # type: ignore[name-defined]
+    def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: Optional[str] = None) -> logging.Logger:
         logger = logging.getLogger(logger_name or __name__)
         if not logger.handlers:
             handler = logging.StreamHandler()
             handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
             logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
+        logger.setLevel(log_level)
         return logger
 
 # ALWAYS import this in any Python file that deals with subprocess or console I/O
@@ -100,8 +101,34 @@ try:
     from python_server.server.server import BackupServer
     logger.info("BackupServer class imported successfully")
 
-    # Initialize the real server instance
+    # Use the main repository database file (go up one level from FletV2/)
+    main_db_path = os.path.join(os.path.dirname(os.getcwd()), "defensive.db")
+    logger.info(f"Using main database file: {main_db_path}")
+
+    # Check if the main database exists and has data
+    if os.path.exists(main_db_path):
+        import sqlite3
+        conn = sqlite3.connect(main_db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM clients")
+        client_count = cursor.fetchone()[0]
+        conn.close()
+        logger.info(f"Main database contains {client_count} clients")
+    else:
+        logger.warning(f"Main database file not found: {main_db_path}")
+
+    # Initialize the real server instance with the correct database path
+    # We need to modify the DatabaseManager after initialization since BackupServer() doesn't accept db_name
     real_server_instance = BackupServer()
+
+    # Override the database path to use the main repository database
+    real_server_instance.db_manager.db_name = main_db_path
+    if real_server_instance.db_manager.connection_pool:
+        # If using connection pool, we need to recreate it with the new path
+        from python_server.server.database import DatabaseConnectionPool
+        real_server_instance.db_manager.connection_pool = DatabaseConnectionPool(main_db_path)
+        logger.info(f"DatabaseManager connection pool redirected to: {main_db_path}")
+
     REAL_SERVER_AVAILABLE = True
     BRIDGE_TYPE = "Real Server Production Mode"
     logger.info("✅ Real BackupServer initialized successfully")

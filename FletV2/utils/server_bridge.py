@@ -122,7 +122,7 @@ class ServerBridge:
         self._mock_db = get_mock_database() if self._use_mock_data else None
         self._connection_status = "connected" if real_server else "mock_mode"
 
-        logger.info(f"ServerBridge initialized in {'production' if real_server else 'mock'} mode")
+        logger.debug(f"ServerBridge initialized in {'production' if real_server else 'mock'} mode")
 
     def is_connected(self) -> bool:
         """Check if server is connected."""
@@ -363,41 +363,6 @@ class ServerBridge:
     async def verify_file_async(self, file_id: str):
         """Verify file integrity (async)."""
         return await self._call_real_or_mock_async('verify_file_async', file_id)
-
-    # ============================================================================
-    # DATABASE OPERATIONS
-    # ============================================================================
-
-    def get_database_info(self):
-        """Get database information."""
-        return self._call_real_or_mock('get_database_info')
-
-    async def get_database_info_async(self):
-        """Get database information (async)."""
-        return await self._call_real_or_mock_async('get_database_info_async')
-
-    def get_table_data(self, table_name: str):
-        """Get data from a specific table."""
-        return self._call_real_or_mock('get_table_data', table_name)
-
-    async def get_table_data_async(self, table_name: str):
-        """Get data from a specific table (async)."""
-        return await self._call_real_or_mock_async('get_table_data_async', table_name)
-
-    def update_row(self, table_name: str, row_id: str, updated_data: Dict[str, Any]):
-        """Update a specific row."""
-        return self._call_real_or_mock('update_row', table_name, row_id, updated_data)
-
-    def delete_row(self, table_name: str, row_id: str):
-        """Delete a specific row."""
-        return self._call_real_or_mock('delete_row', table_name, row_id)
-
-    @property
-    def db_manager(self):
-        """Database manager property for compatibility."""
-        if self.real_server and hasattr(self.real_server, 'db_manager'):
-            return self.real_server.db_manager
-        return self._mock_db
 
     # ============================================================================
     # LOG OPERATIONS
@@ -756,7 +721,7 @@ def create_server_bridge(real_server: Any | None = None):
             health: Dict[str, Any] = loop.run_until_complete(client.test_connection_async())
             loop.close()
             if health.get("success"):
-                logger.info("Using RealServerClient based on REAL_SERVER_URL")
+                logger.debug("Using RealServerClient based on REAL_SERVER_URL")
                 return ServerBridge(real_server=client)
             else:
                 logger.warning("Real server health check failed; falling back to mock mode: %s", health.get("error"))

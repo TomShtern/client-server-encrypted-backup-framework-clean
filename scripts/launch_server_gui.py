@@ -55,7 +55,7 @@ def main():
     print(f"   Working Directory: {project_root}")
     
     # Use the virtual environment Python
-    venv_python = project_root / ".venv" / "Scripts" / "python.exe"
+    venv_python = project_root / "flet_venv" / "Scripts" / "python.exe"
     if not venv_python.exists():
         venv_python = sys.executable  # Fallback to current Python
     

@@ -40,7 +40,7 @@
     "python-envs.pythonProjects": [
       {
         "path": "",
-        "envManager": "ms-python.python:venv",
+        "envManager": "ms-python.python:flet_venv",
         "packageManager": "ms-python.python:pip"
       }
     ],
@@ -63,5 +63,6 @@
   "inlineChat.notebookAgent": true,
   "chat.agentSessionsViewLocation": "view",
   "chat.mcp.serverSampling": {
+    "enabled": {}
   }
 }

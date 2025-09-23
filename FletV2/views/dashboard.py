@@ -32,13 +32,15 @@ try:
 except ImportError:
     # Fallback for when utils.debug_setup is not available
     import logging
-    def get_logger(name=None):
+    from config import DEBUG_MODE
+    def get_logger(name: str) -> logging.Logger:
         logger = logging.getLogger(name or __name__)
         if not logger.handlers:
             handler = logging.StreamHandler()
             handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
             logger.addHandler(handler)
-            logger.setLevel(logging.INFO)
+            # Set level based on DEBUG_MODE
+            logger.setLevel(logging.DEBUG if DEBUG_MODE else logging.WARNING)
         return logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
@@ -816,12 +818,11 @@ def create_dashboard_view(
 
         # Update KPI values
         try:
-            print(f"[DEBUG] Updating KPI values with server status: {current_server_status}")
             logger.debug(f"Updating KPI values with server status: {current_server_status}")
 
             # Total clients - prefer database count over active connections
+            logger.debug(f"KPI calculation - current_clients has {len(current_clients)} items")
             total_clients_val = len(current_clients) if current_clients else current_server_status.get('clients_connected', 0)
-            print(f"[DEBUG] Setting total clients to: {total_clients_val} (from {'database' if current_clients else 'server_status'})")
             logger.debug(f"Setting total clients to: {total_clients_val} (from {'database' if current_clients else 'server_status'})")
             kpi_total_clients_text.value = str(total_clients_val)
             hero_total_clients_text.value = str(total_clients_val)
@@ -1347,27 +1348,25 @@ def create_dashboard_view(
         # Defer heavy initial data loading to avoid blocking UI
         async def _deferred_initial_load() -> None:
             try:
-                print("[DEBUG] Starting deferred initial load")
+                logger.debug("Starting deferred initial load")
                 # Small delay to let UI settle
                 await asyncio.sleep(0.1)
 
                 # Update displays asynchronously
-                print("[DEBUG] Calling _update_all_displays_async('initial')")
+                logger.debug("Calling _update_all_displays_async('initial')")
                 await _update_all_displays_async('initial')
 
                 # Update operations panels asynchronously
                 await _update_operations_panels_async()
 
             except Exception as e:
-                print(f"[DEBUG] Deferred initial load failed: {e}")
                 logger.debug(f"Deferred initial load failed: {e}")
                 # Fallback to synchronous loading if async fails
                 try:
-                    print("[DEBUG] Falling back to synchronous update_all_displays()")
+                    logger.debug("Falling back to synchronous update_all_displays()")
                     update_all_displays()
                     _update_operations_panels()
                 except Exception as e2:
-                    print(f"[DEBUG] Fallback loading also failed: {e2}")
                     logger.debug(f"Fallback loading also failed: {e2}")
 
         # Start deferred initial loading

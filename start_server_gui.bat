@@ -12,7 +12,7 @@ set "PYTHONPATH=C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_
 echo Starting Server GUI...
 echo.
 
-".venv\Scripts\python.exe" "python_server\server_gui\ServerGUI.py"
+"flet_venv\Scripts\python.exe" "python_server\server_gui\ServerGUI.py"
 
 echo.
 echo Server GUI has closed.

@@ -144,7 +144,7 @@ class MockDataGenerator:
         if persist_to_disk and self.data_file and self.data_file.exists():
             self._load_from_disk()
 
-        logger.info(f"Enhanced mock data generator initialized with {len(self._clients)} clients and {len(self._files)} files")
+        logger.debug(f"Enhanced mock data generator initialized with {len(self._clients)} clients and {len(self._files)} files")
 
     def _generate_base_data(self):
         """Generate base mock data that remains consistent"""
@@ -614,7 +614,7 @@ class MockDataGenerator:
                 # In a real implementation, this would clear the log storage
                 # For mock purposes, we just log the action
                 self._add_activity("logs_clear", "All logs have been cleared")
-                logger.info("MockDataGenerator: Logs cleared (mock operation)")
+                logger.debug("MockDataGenerator: Logs cleared (mock operation)")
                 return True
             except Exception as e:
                 logger.error(f"MockDataGenerator: Failed to clear logs: {e}")
@@ -736,7 +736,7 @@ class MockDataGenerator:
                 self._add_activity("file_delete", f"Deleted file {file_obj.name}")
                 self._save_to_disk()
                 self._notify_change("files", {"action": "delete", "file_id": file_id})
-                logger.info(f"MockDataGenerator: Successfully deleted file {file_id}")
+                logger.debug(f"MockDataGenerator: Successfully deleted file {file_id}")
                 return True
             return False
 
@@ -785,7 +785,7 @@ class MockDataGenerator:
         self._save_to_disk()
         self._notify_change("clients", {"action": "add", "client_id": client_id})
 
-        logger.info(f"MockDataGenerator: Successfully added client {client_id} ({new_client.name})")
+        logger.debug(f"MockDataGenerator: Successfully added client {client_id} ({new_client.name})")
         return new_client.to_dict()
 
     def delete_client(self, client_id: str) -> bool:
@@ -815,7 +815,7 @@ class MockDataGenerator:
 
             self._save_to_disk()
             self._notify_change("clients", {"action": "delete", "client_id": client_id})
-            logger.info(f"MockDataGenerator: Successfully deleted client {client_id} with {deleted_files} associated files")
+            logger.debug(f"MockDataGenerator: Successfully deleted client {client_id} with {deleted_files} associated files")
             return True
 
     def _delete_file_internal(self, file_id: str) -> bool:
@@ -894,7 +894,7 @@ class MockDataGenerator:
 
             with self._lock:
                 self._extracted_from__load_from_disk_11(data)
-            logger.info(f"Mock data loaded from {self.data_file}")
+            logger.debug(f"Mock data loaded from {self.data_file}")
         except Exception as e:
             logger.error(f"Failed to load mock data: {e}")
 

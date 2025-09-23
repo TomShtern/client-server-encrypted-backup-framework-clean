@@ -30,9 +30,10 @@ class EnhancedFormatter(logging.Formatter):
         # Add stack trace for errors and warnings
         if record.levelno >= logging.WARNING and hasattr(record, 'exc_info') and record.exc_info:
             # Add stack trace for better debugging
-            tb_lines = traceback.format_exception(*record.exc_info)
-            tb_text = ''.join(tb_lines)
-            log_message += f"\nStack Trace:\n{tb_text}"
+            if record.exc_info != (None, None, None):
+                tb_lines = traceback.format_exception(record.exc_info[0], record.exc_info[1], record.exc_info[2])
+                tb_text = ''.join(tb_lines)
+                log_message += f"\nStack Trace:\n{tb_text}"
 
         return log_message
 
@@ -42,13 +43,25 @@ def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: Optiona
     Set up centralized terminal debugging for FletV2 with enhanced context.
 
     Args:
-        log_level: Logging level (default: DEBUG)
+        log_level: Logging level (default: INFO, but will be overridden by DEBUG_MODE)
         logger_name: Name for the logger (default: calling module name)
 
     Returns:
         Configured logger instance
     """
     global _debug_setup_done
+
+    # Import DEBUG_MODE here to avoid circular imports
+    try:
+        from config import DEBUG_MODE
+        # Override log_level based on DEBUG_MODE
+        if DEBUG_MODE:
+            log_level = logging.DEBUG
+        else:
+            log_level = logging.WARNING  # Only show warnings and errors when not in debug mode
+    except ImportError:
+        # Fallback if config is not available
+        pass
 
     if not _debug_setup_done:
         # Create enhanced formatter
@@ -119,7 +132,17 @@ def get_logger(name: str) -> logging.Logger:
     Returns:
         logging.Logger: Configured logger instance with enhanced context
     """
+    # Import DEBUG_MODE here to avoid circular imports
+    try:
+        from config import DEBUG_MODE
+        log_level = logging.DEBUG if DEBUG_MODE else logging.WARNING
+    except ImportError:
+        log_level = logging.WARNING  # Default to WARNING if config not available
+
     logger = logging.getLogger(name)
+
+    # Set the logger level based on DEBUG_MODE
+    logger.setLevel(log_level)
 
     # Ensure the logger has the enhanced formatter
     if logger.handlers:
@@ -130,6 +153,16 @@ def get_logger(name: str) -> logging.Logger:
                         '%(asctime)s - %(name)s - %(levelname)s - [%(location)s:%(function)s] - %(message)s'
                     )
                 )
+    else:
+        # Create handler if none exist
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(
+            EnhancedFormatter(
+                '%(asctime)s - %(name)s - %(levelname)s - [%(location)s:%(function)s] - %(message)s'
+            )
+        )
+        logger.addHandler(handler)
+        logger.setLevel(log_level)
 
     return logger
 

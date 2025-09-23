@@ -9,7 +9,7 @@ To get started with Flet, you need Python 3.9 or above and the `flet` package. I
 
 1.  **Using `venv` (recommended for most users):**
     *   Create a project directory: `mkdir first-flet-app && cd first-flet-app`
-    *   Create and activate a virtual environment: `python3 -m venv .venv && source .venv/bin/activate` (or `.\.venv\Scripts\activate` on Windows)
+    *   Create and activate a virtual environment: `python3 -m venv flet_venv && source flet_venv/bin/activate` (or `.\flet_venv\Scripts\activate` on Windows)
     *   Install Flet: `pip install 'flet[all]'`
     *   Verify installation: `flet --version`
 

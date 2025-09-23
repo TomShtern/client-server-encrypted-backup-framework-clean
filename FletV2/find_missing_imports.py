@@ -13,7 +13,7 @@ if parent_dir not in sys.path:
 import Shared.utils.utf8_solution as _  # Import for UTF-8 side effects
 
 root = os.getcwd()
-ignore_dirs = {"venv", ".venv", "__pycache__", ".git", "dist", "build"}
+ignore_dirs = {"flet_venv", ".venv", "__pycache__", ".git", "dist", "build"}
 imports: Dict[str, Set[str]] = defaultdict(set)
 
 def add_import(name, fn):

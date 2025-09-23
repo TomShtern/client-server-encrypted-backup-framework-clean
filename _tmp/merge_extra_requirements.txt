@@ -1,0 +1,7 @@
+-e git+https://github.com/TomShtern/client-server-encrypted-backup-framework.git@313e28437deb179192c959f764b12414c3baa243#egg=python_server&subdirectory=python_server
+-e git+https://github.com/TomShtern/client-server-encrypted-backup-framework.git@313e28437deb179192c959f764b12414c3baa243#egg=shared&subdirectory=shared
+aiosqlite==0.21.0
+black==25.9.0
+emoji==2.14.1
+pytokens==0.1.10
+sourcery==1.37.0

@@ -5,12 +5,12 @@ import os
 import sys
 import unittest
 
-# Ensure FletV2 root is on sys.path for `utils`, `views`, etc., without shadowing test discovery
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+# Ensure FletV2 root is on sys.path for `utils`, `views`, etc.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 import flet as ft
 
-os.environ.setdefault("FLET_V2_DEBUG", "true")
+os.environ.setdefault("FLET_V2_DEBUG", "false")
 
 from utils.server_bridge import create_server_bridge
 from utils.state_manager import StateManager
