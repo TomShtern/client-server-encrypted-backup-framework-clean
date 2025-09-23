@@ -17,7 +17,8 @@ from typing import Any, Dict, Optional, List, Callable
 
 from .mock_database_simulator import MockDatabase, get_mock_database
 from .real_server_client import RealServerClient
-import config
+
+# Import config locally when needed to avoid global import conflicts
 
 logger = logging.getLogger(__name__)
 
@@ -117,12 +118,12 @@ class ServerBridge:
         """
         # Instance attributes
         self.real_server = real_server
-        # Only use mock database when no real server is provided AND mock data is enabled
-        self._use_mock_data = not bool(real_server) or config.SHOW_MOCK_DATA
+        # CRITICAL CHANGE: When real server is provided, NEVER use mock data
+        self._use_mock_data = not bool(real_server)
         self._mock_db = get_mock_database() if self._use_mock_data else None
         self._connection_status = "connected" if real_server else "mock_mode"
 
-        logger.debug(f"ServerBridge initialized in {'production' if real_server else 'mock'} mode")
+        logger.info(f"ServerBridge initialized in {'PRODUCTION' if real_server else 'MOCK'} mode")
 
     def is_connected(self) -> bool:
         """Check if server is connected."""
@@ -705,28 +706,45 @@ def create_server_bridge(real_server: Any | None = None):
     Returns:
         ServerBridge instance configured for production or development
     """
-    # Auto-detect real server from environment if not explicitly provided
-    if real_server is None and config.REAL_SERVER_URL:
+    # Local config import to avoid global module conflicts
+    try:
+        from .. import config
+    except ImportError:
         try:
-            client: RealServerClient = RealServerClient(
-                base_url=config.REAL_SERVER_URL,
-                token=config.BACKUP_SERVER_TOKEN,
-                verify_tls=config.VERIFY_TLS,
-                timeout=config.REQUEST_TIMEOUT,
-            )
-            # Lightweight async health check
-            import asyncio
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            health: Dict[str, Any] = loop.run_until_complete(client.test_connection_async())
-            loop.close()
-            if health.get("success"):
-                logger.debug("Using RealServerClient based on REAL_SERVER_URL")
-                return ServerBridge(real_server=client)
-            else:
-                logger.warning("Real server health check failed; falling back to mock mode: %s", health.get("error"))
-        except Exception as e:
-            logger.warning("Failed to initialize RealServerClient; falling back to mock mode: %s", e)
+            import config
+        except ImportError:
+            config = None
+
+    # If real_server is provided directly, use it immediately
+    if real_server is not None:
+        logger.info("Using directly provided real server instance")
+        return ServerBridge(real_server=real_server)
+
+    # Auto-detect real server from environment if not explicitly provided
+    try:
+        if config and config.REAL_SERVER_URL:
+            try:
+                client: RealServerClient = RealServerClient(
+                    base_url=config.REAL_SERVER_URL,
+                    token=config.BACKUP_SERVER_TOKEN,
+                    verify_tls=config.VERIFY_TLS,
+                    timeout=config.REQUEST_TIMEOUT,
+                )
+                # Lightweight async health check
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                health: Dict[str, Any] = loop.run_until_complete(client.test_connection_async())
+                loop.close()
+                if health.get("success"):
+                    logger.debug("Using RealServerClient based on REAL_SERVER_URL")
+                    return ServerBridge(real_server=client)
+                else:
+                    logger.warning("Real server health check failed; falling back to mock mode: %s", health.get("error"))
+            except Exception as e:
+                logger.warning("Failed to initialize RealServerClient; falling back to mock mode: %s", e)
+    except (ImportError, AttributeError) as e:
+        logger.warning("Config import failed, using mock mode: %s", e)
 
     return ServerBridge(real_server)
 

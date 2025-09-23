@@ -4,6 +4,7 @@
 
 import logging
 import sys
+from pathlib import Path
 
 # --- Server Configuration Constants ---
 SERVER_VERSION = 3
@@ -13,7 +14,7 @@ DEFAULT_PORT = 1256
 # Define version compatibility matrix for flexible client-server communication
 # This fixes the rigid version checking that prevents client-server communication
 MIN_SUPPORTED_CLIENT_VERSION = 2  # Minimum client version supported (enable backward compatibility)
-MAX_SUPPORTED_CLIENT_VERSION = 4  # Maximum client version supported  
+MAX_SUPPORTED_CLIENT_VERSION = 4  # Maximum client version supported
 COMPATIBLE_VERSIONS = [3]  # List of explicitly compatible versions
 ALLOW_BACKWARD_COMPATIBILITY = True  # Allow clients with older compatible versions
 VERSION_TOLERANCE_ENABLED = True  # Enable flexible version checking
@@ -42,6 +43,11 @@ MAX_FILENAME_FIELD_SIZE = 255  # Size of the filename field in protocol
 MAX_ACTUAL_FILENAME_LENGTH = 250  # Practical limit for actual filename within the field
 RSA_PUBLIC_KEY_SIZE = 160  # Bytes, X.509 format (for 1024-bit RSA - per protocol specification)
 AES_KEY_SIZE_BYTES = 32  # 256-bit AES
+
+# Compatibility with FletV2 GUI (for when python_server config is imported instead of FletV2 config)
+# This ensures that FletV2 GUI can work even when this config module is loaded first
+DEBUG_MODE = True  # Default for server debug mode
+SETTINGS_FILE = Path("config") / "flet_server_gui_settings.json"  # Fallback settings file path
 
 # Logging Configuration
 LOG_FORMAT = '%(asctime)s - %(threadName)s - %(levelname)s - %(message)s'

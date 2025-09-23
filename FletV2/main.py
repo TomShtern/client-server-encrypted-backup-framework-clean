@@ -184,17 +184,12 @@ class FletV2App(ft.Row):
         try:
             if real_server is not None:
                 # Direct server injection (from integrated startup script)
-                is_connected = False
-                with contextlib.suppress(Exception):
-                    is_connected = bool(getattr(real_server, "is_connected", lambda: False)())
-                if is_connected:
-                    self.server_bridge = create_server_bridge(real_server=real_server)
-                    bridge_type = "Direct BackupServer Integration"
-                    real_server_available = True
-                    logger.info("🎉 Direct BackupServer integration successful!")
-                else:
-                    logger.warning("⚠️ Injected server not responding - falling back to mock mode")
-                    self.server_bridge = create_server_bridge()
+                # Skip connectivity check - if server is provided, use it directly
+                logger.info("🎯 Using directly provided real server (skipping connectivity check)")
+                self.server_bridge = create_server_bridge(real_server=real_server)
+                bridge_type = "Direct BackupServer Integration"
+                real_server_available = True
+                logger.info("🎉 Direct BackupServer integration successful!")
             elif real_server_instance is not None:
                 # Use the real server instance we created
                 self.server_bridge = create_server_bridge(real_server=real_server_instance)
@@ -1412,8 +1407,24 @@ if __name__ == "__main__":
             return False
         return True
 
+    # Initialize real server for standalone mode
+    backup_server = None
+    if REAL_SERVER_AVAILABLE:
+        try:
+            # Create BackupServer instance (it uses defaults for database and port)
+            backup_server = BackupServer()
+            logger.info("✅ Created BackupServer instance for standalone mode")
+        except Exception as e:
+            logger.error(f"❌ Failed to create BackupServer: {e}")
+            backup_server = None
+    else:
+        logger.info("ℹ️ Real server not available, using mock data")
+
     # Use desktop app mode to avoid FastAPI/pydantic dependencies
     print("FletV2 is starting in desktop mode (FLET_APP)")
 
-    # Launch async Flet app in desktop mode
-    asyncio.run(ft.app_async(target=main, view=ft.AppView.FLET_APP))  # type: ignore[attr-defined]
+    # Launch async Flet app in desktop mode with real server
+    async def main_with_server(page: ft.Page) -> None:
+        await main(page, backup_server)
+
+    asyncio.run(ft.app_async(target=main_with_server, view=ft.AppView.FLET_APP))  # type: ignore[attr-defined]
