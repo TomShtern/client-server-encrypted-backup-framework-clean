@@ -1,11 +1,32 @@
 {
   "python.defaultInterpreterPath": "./flet_venv/Scripts/python.exe",
+  "python.interpreterPath": "./flet_venv/Scripts/python.exe",
+  "python.pythonPath": "./flet_venv/Scripts/python.exe",
+  "python.interpreter.infoVisibility": "always",
   "python.terminal.activateEnvironment": true,
-  // NOTE: workspace-level 'python.analysis.*' settings were intentionally removed
-  // because this repository uses a project-level 'pyrightconfig.json'. Put
-  // repository-wide analysis settings in 'pyrightconfig.json' (preferred) or
-  // set personal overrides in your user settings. Only editor/linting flags
-  // remain here.
+  "python.terminal.activateEnvInCurrentTerminal": true,
+  "python.terminal.executeInFileDir": true,
+  "python.venvPath": "./",
+  "python.venvFolders": ["flet_venv"],
+  "python.condaPath": "",
+  "python.poetryPath": "",
+  "python.pipenvPath": "",
+  "python.autoComplete.addBrackets": true,
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.extraPaths": ["./", "./Shared", "./FletV2", "./python_server"],
+  "terminal.integrated.defaultProfile.windows": "FletVenv PowerShell",
+  "terminal.integrated.profiles.windows": {
+    "FletVenv PowerShell": {
+      "source": "PowerShell",
+      "args": ["-NoExit", "-Command", "& '.\\flet_venv\\Scripts\\Activate.ps1'"],
+      "icon": "terminal-powershell"
+    },
+    "FletVenv Command Prompt": {
+      "path": "${env:windir}\\System32\\cmd.exe",
+      "args": ["/k", ".\\flet_venv\\Scripts\\activate.bat"],
+      "icon": "terminal-cmd"
+    }
+  },
   "python.linting.enabled": true,
   "python.linting.pylintEnabled": true,
   "python.linting.flake8Enabled": true,
@@ -22,8 +43,8 @@
         "**/*.py.git": true,
         "**/.mypy_cache": true,
         "**/.pytest_cache": true,
-        "**/flet_venv": true,
         "**/.venv": true,
+        "**/venv": true,
         "**/vcpkg": true
     },
   "github.copilot.chat.editor.temporalContext.enabled": true,
@@ -49,9 +70,6 @@
     "specstory.showDeveloperTools": true,
     "specstory.derivedRules.enabled": true,
     "specstory.derivedRules.headers": "## PROJECT OVERVIEW\n## CODE STYLE\n## FOLDER ORGANIZATION\n## TECH STACK\n## PROJECT-SPECIFIC STANDARDS\n## WORKFLOW & RELEASE RULES\n## REFERENCE EXAMPLES\n## PROJECT DOCUMENTATION & CONTEXT SYSTEM\n## DEBUGGING\n## FINAL DOs AND DON'Ts\n## Framework Compliance\n## Package Compliance\n## Gotchas\n## Known Issues\n## Unused Files",
-  // Note: analysis include/exclude and other pyright settings are managed by
-  // the repository-level 'pyrightconfig.json'. If you need to add more
-  // excludes for the editor-only experience, put them in your user settings.
   "search.exclude": {
     "**/node_modules": true,
     "logs": true

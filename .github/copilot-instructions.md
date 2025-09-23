@@ -3,7 +3,6 @@ description: AI rules derived by SpecStory from the project AI interaction histo
 globs: *
 ---
 
-```markdown
 ---
 description: AI rules derived by SpecStory from the project AI interaction history
 ---
@@ -932,8 +931,6 @@ Notes
 - sys.path.insert(0, ...) ensures project imports win over similarly named external packages (like a pip-installed utils).
 ```
 
-### Performance Optimization Patterns
+### Configuration - Virtual Environment
 
-**CRITICAL**: Use performance-optimized patterns for smooth UI and efficient data handling.
-
-#### ListView
+**CRITICAL**: The `flet_venv` virtual environment MUST be used as the default. Ensure that

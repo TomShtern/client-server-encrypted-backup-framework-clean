@@ -41,13 +41,13 @@ class FletV2App(ft.Row):
 
 ### **The Flet Way vs Framework Fighting**
 
-| ✅ FRAMEWORK HARMONY | ❌ FRAMEWORK FIGHTING |
-|---------------------|----------------------|
-| `ft.NavigationRail.on_change` | Custom routing classes |
-| `ft.ResponsiveRow` + `expand=True` | Custom responsive systems |
-| `page.theme = ft.Theme()` | Custom theme managers >50 lines |
-| `ft.DataTable` | Custom table components |
-| `control.update()` | `page.update()` abuse |
+| ✅ FRAMEWORK HARMONY                | ❌ FRAMEWORK FIGHTING         |
+|------------------------------------|---------------------------------|
+| `ft.NavigationRail.on_change`      | Custom routing classes          |
+| `ft.ResponsiveRow` + `expand=True` | Custom responsive systems       |
+| `page.theme = ft.Theme()`          | Custom theme managers >50 lines |
+| `ft.DataTable`                     | Custom table components         |
+| `control.update()`                 | `page.update()` abuse           |
 
 ### **Critical API Verification (Flet 0.28.3)**
 
@@ -60,6 +60,10 @@ ft.Theme, ft.ColorScheme, ft.ThemeMode.SYSTEM, ft.SafeArea
 ft.MaterialState.DEFAULT, ft.Expanded(), ft.Colors.SURFACE_VARIANT, ft.UserControl
 ```
 
+flet 0.28.3 is the ONLY supported version. Always verify APIs against official docs.
+flet_server_gui/ is obsolete. Use FletV2/ exclusively.
+flet issues are common; always check context7 for workarounds, and proper usage.
+flet common issues: Flet uses Icons (capitalized) not icons (lowercase).
 ---
 
 ## 🏗️ ARCHITECTURE BLUEPRINT

@@ -1,7 +1,66 @@
-# FletV2 Requirements
-flet>=0.28.3
-requests>=2.32.4
+# Core Encryption & Security
+pycryptodome>=3.19.1
 psutil>=5.9.0
-httpx>=0.27.2,<0.28
-aiofiles>=24.1.0
-python-dotenv>=1.0.0
+
+# Flask Web Framework & API
+Flask>=2.3.2
+flask-cors>=6.0.0
+flask-socketio>=5.0.0
+sentry-sdk>=2.8.0
+
+# File System & Monitoring
+watchdog>=2.1.0
+filetype>=1.2.0
+
+# GUI Frameworks
+flet>=0.28.3                    # Primary GUI framework (Material Design 3) - Updated to latest
+tkcalendar>=1.6.1               # Legacy TKinter calendar widget
+tksheet>=6.2.15                 # Legacy TKinter sheet widget
+plyer>=2.1.0                    # Cross-platform native features
+matplotlib>=3.7.0               # Charts for GUI analytics
+
+# Data Validation & Processing
+pydantic>=2.11.7
+pydantic-core>=2.33.2
+
+# Async & HTTP Operations
+httpx>=0.27.2,<0.28             # Modern async HTTP client for FletV2
+aiofiles>=24.1.0                # Async file operations for better performance  
+python-dotenv>=1.0.0            # Environment variable management
+
+# Core Python Dependencies
+certifi>=2024.8.30
+charset_normalizer>=3.4.0
+docutils>=0.22
+idna>=3.10
+pillow>=10.4.0
+pygments>=2.19.0
+pypiwin32>=223
+pywin32>=311
+requests>=2.32.4
+urllib3>=2.2.5
+
+# Development & Testing
+loguru>=0.7.0                   # Structured logging library
+pytest>=7.0.0                   # Testing framework
+cryptography>=42.0.4            # Advanced cryptography library
+plotly>=5.15.0                  # Interactive plotting library
+humanize>=4.7.0                 # Human-readable data formatting
+seaborn>=0.12.0                 # Statistical visualization
+textual>=0.38.0                 # TUI framework
+typer>=0.9.0                    # CLI building toolkit
+
+# Unicode & Rich Text Support
+python-bidi>=0.4.2              # Unicode Bidirectional Algorithm
+wcwidth>=0.2.6                  # Unicode character width calculation
+rich>=13.7.0                    # Enhanced console output
+
+# Additional Utilities
+click>=8.1.0                    # Command-line interface framework
+websockets>=11.0                # WebSocket library
+sse-starlette>=1.6.0            # Server-Sent Events
+python-magic-bin>=0.4.14        # File type detection (Windows compatible)
+xxhash>=3.3.0                   # Fast hashing algorithm
+schedule>=1.2.0                 # Job scheduling library
+apscheduler>=3.10.0             # Advanced Python Scheduler
+numpy>=1.24.0                   # Numerical computing library
