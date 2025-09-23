@@ -6,10 +6,8 @@ Initialization file for utils package.
 # Import commonly used utility modules
 from .debug_setup import setup_terminal_debugging, get_logger
 from .server_bridge import ServerBridge, create_server_bridge
-from .mock_mode_indicator import create_mock_mode_banner, add_mock_indicator_to_snackbar_message
 from .state_manager import create_state_manager
 from .database_manager import FletDatabaseManager, create_database_manager
-# Legacy MockDataGenerator removed - using MockDatabase in server_bridge
 from .ui_components import create_modern_card, create_floating_action_button
 from .user_feedback import (
     show_user_feedback, show_success_message, show_error_message,
@@ -36,12 +34,9 @@ __all__ = [
     "get_logger",
     "ServerBridge",
     "create_server_bridge",
-    "create_mock_mode_banner",
-    "add_mock_indicator_to_snackbar_message",
     "create_state_manager",
     "FletDatabaseManager",
     "create_database_manager",
-    # "MockDataGenerator",  # removed - not present in this module
     "create_modern_card",
     "create_floating_action_button",
     "show_user_feedback",

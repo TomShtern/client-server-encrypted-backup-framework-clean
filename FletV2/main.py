@@ -84,25 +84,33 @@ except ImportError as e:
     print(f"Warning: Could not import server_bridge: {e}")
     # Create minimal fallback returning a simple object with the expected surface
     def create_server_bridge(real_server: Any | None = None) -> Any:  # type: ignore[override]
-        class _MockBridge:
+        class _PlaceholderBridge:
             def is_connected(self) -> bool:
                 return False
 
-        return _MockBridge()
+        return _PlaceholderBridge()
 
 # Exported runtime flags for tests and integration checks
 REAL_SERVER_AVAILABLE = False
-BRIDGE_TYPE = "Mock Server Development Mode"
+BRIDGE_TYPE = "Placeholder Data Development Mode"
 
 # Try to import and initialize the real BackupServer
 real_server_instance = None
 try:
+    # Disable BackupServer's embedded GUI to prevent conflicts with FletV2 GUI
+    os.environ['CYBERBACKUP_DISABLE_INTEGRATED_GUI'] = '1'
+    os.environ['CYBERBACKUP_DISABLE_GUI'] = '1'
+    logger.info("Disabled BackupServer embedded GUI to prevent conflicts")
+
     # Import the BackupServer
     from python_server.server.server import BackupServer
     logger.info("BackupServer class imported successfully")
 
     # Use the main repository database file (go up one level from FletV2/)
-    main_db_path = os.path.join(os.path.dirname(os.getcwd()), "defensive.db")
+    # Use __file__ for reliable path resolution instead of os.getcwd()
+    fletv2_root = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(fletv2_root)
+    main_db_path = os.path.join(project_root, "defensive.db")
     logger.info(f"Using main database file: {main_db_path}")
 
     # Check if the main database exists and has data
@@ -118,16 +126,26 @@ try:
         logger.warning(f"Main database file not found: {main_db_path}")
 
     # Initialize the real server instance with the correct database path
-    # We need to modify the DatabaseManager after initialization since BackupServer() doesn't accept db_name
+    # Set environment variable for BackupServer to use the correct database
+    os.environ['BACKUP_DATABASE_PATH'] = main_db_path
+    logger.info(f"Set BACKUP_DATABASE_PATH environment variable to: {main_db_path}")
+
     real_server_instance = BackupServer()
 
-    # Override the database path to use the main repository database
-    real_server_instance.db_manager.db_name = main_db_path
-    if real_server_instance.db_manager.connection_pool:
-        # If using connection pool, we need to recreate it with the new path
-        from python_server.server.database import DatabaseConnectionPool
-        real_server_instance.db_manager.connection_pool = DatabaseConnectionPool(main_db_path)
-        logger.info(f"DatabaseManager connection pool redirected to: {main_db_path}")
+    # Validate that the server is using the correct database
+    actual_db_path = getattr(real_server_instance.db_manager, 'db_name', 'Unknown')
+    logger.info(f"BackupServer initialized with database: {actual_db_path}")
+
+    # Test database connection
+    if hasattr(real_server_instance.db_manager, 'execute'):
+        try:
+            test_result = real_server_instance.db_manager.execute(
+                "SELECT COUNT(*) FROM clients", fetchone=True
+            )
+            logger.info(f"Database connection test successful: {test_result[0] if test_result else 0} clients found")
+        except Exception as e:
+            logger.warning(f"Database connection test failed: {e}")
+
 
     REAL_SERVER_AVAILABLE = True
     BRIDGE_TYPE = "Real Server Production Mode"
@@ -150,8 +168,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Application bridge type - will be updated when real server is injected
-bridge_type = "Mock Server Development Mode"
-logger.info("🧪 Using mock server for development (real server can be injected)")
+bridge_type = "Placeholder Data Development Mode"
+logger.info("🧪 Using placeholder data for development (real server can be injected)")
 
 
 class FletV2App(ft.Row):
@@ -197,9 +215,9 @@ class FletV2App(ft.Row):
                 real_server_available = True
                 logger.info("🎉 Real BackupServer integration successful!")
             else:
-                # Standard mock mode for development
+                # Standard placeholder mode for development
                 self.server_bridge = create_server_bridge()
-                logger.info("🧪 No real server available - using mock mode")
+                logger.info("🧪 No real server available - using placeholder mode")
         except Exception as bridge_ex:
             logger.error(f"❌ Server bridge initialization failed: {bridge_ex}")
             self.server_bridge = create_server_bridge()
@@ -552,8 +570,8 @@ class FletV2App(ft.Row):
         with contextlib.suppress(Exception):
             self.nav_rail.update()
         # Trigger the standard change handler to load the view
-        mock_event = type('Event', (), {'control': nav_rail_control})()
-        self._on_navigation_change(mock_event)
+        placeholder_event = type('Event', (), {'control': nav_rail_control})()
+        self._on_navigation_change(placeholder_event)
 
     def _create_navigation_rail(self) -> ft.Container:
         """Create enhanced collapsible navigation rail with modern 2025 UI styling."""
@@ -1120,25 +1138,36 @@ class FletV2App(ft.Row):
 
         # Set up subscriptions after view is added to page and updated
         # (prevents "Control must be added to page first" error)
-        if hasattr(content, '_setup_subscriptions') and content._setup_subscriptions:
-            try:
-                # Use page.run_task to defer subscription setup to next event loop iteration
-                # This ensures all controls are properly attached to the page hierarchy
-                async def setup_subs() -> None:
-                    try:
-                        # Check if _setup_subscriptions is a coroutine function
-                        if asyncio.iscoroutinefunction(content._setup_subscriptions):
-                            await content._setup_subscriptions()
-                        else:
-                            content._setup_subscriptions()
-                        logger.debug(f"Set up subscriptions for {view_name} view")
-                    except Exception as sub_error:
-                        logger.warning(f"Failed to set up subscriptions for {view_name}: {sub_error}")
+        if hasattr(content, '_setup_subscriptions'):
+            setup_cb = getattr(content, '_setup_subscriptions', None)
+            # Only proceed if the attribute is callable; skip falsy/non-callable values (e.g., 0)
+            if callable(setup_cb):
+                try:
+                    # Use page.run_task to defer subscription setup to next event loop iteration
+                    # This ensures all controls are properly attached to the page hierarchy
+                    async def setup_subs() -> None:
+                        try:
+                            # If the setup callback is defined as a coroutine function, await it directly
+                            if asyncio.iscoroutinefunction(setup_cb):
+                                await setup_cb()
+                            else:
+                                # Call the setup function; if it returns a coroutine, await that
+                                result = setup_cb()
+                                if asyncio.iscoroutine(result):
+                                    await result
+                            logger.debug(f"Set up subscriptions for {view_name} view")
+                        except Exception as sub_error:
+                            logger.warning(f"Failed to set up subscriptions for {view_name}: {sub_error}")
 
-                if hasattr(self.page, 'run_task'):
-                    self.page.run_task(setup_subs)
-            except Exception as sub_error:
-                logger.warning(f"Failed to schedule subscription setup for {view_name}: {sub_error}")
+                    if hasattr(self.page, 'run_task'):
+                        self.page.run_task(setup_subs)
+                except Exception as sub_error:
+                    logger.warning(f"Failed to schedule subscription setup for {view_name}: {sub_error}")
+            else:
+                logger.debug(
+                    f"Skipping subscription setup for {view_name}: _setup_subscriptions is not callable "
+                    f"(type={type(setup_cb).__name__})"
+                )
 
         return True
 
@@ -1335,17 +1364,17 @@ async def main(page: ft.Page, real_server: Optional[Any] = None) -> None:
             if hasattr(page, '__dict__'):
                 _p.app_ref = app  # type: ignore[attr-defined]
 
-        # Add mock mode banner if in mock mode - import at point of use to avoid unused import warnings
+        # Add placeholder mode banner if in placeholder mode - import at point of use to avoid unused import warnings
         try:
-            from utils.mock_mode_indicator import create_mock_mode_banner  # type: ignore[import-not-found]
-            mock_banner = cast(ft.Control, cast(Any, create_mock_mode_banner)(app.server_bridge))
+            from utils.placeholder_mode_indicator import create_placeholder_mode_banner  # type: ignore[import-not-found]
+            placeholder_banner = cast(ft.Control, cast(Any, create_placeholder_mode_banner)(app.server_bridge))
         except (ImportError, AttributeError):
-            logger.warning("Mock mode indicator not available, continuing without banner")
-            mock_banner = ft.Container(height=0)  # Empty container as fallback
+            logger.warning("Placeholder mode indicator not available, continuing without banner")
+            placeholder_banner = ft.Container(height=0)  # Empty container as fallback
 
         # Create main layout with banner and app
         main_layout = ft.Column([
-            mock_banner,
+            placeholder_banner,
             ft.Container(content=app, expand=True)
         ], spacing=0, expand=True)
 
@@ -1418,7 +1447,7 @@ if __name__ == "__main__":
             logger.error(f"❌ Failed to create BackupServer: {e}")
             backup_server = None
     else:
-        logger.info("ℹ️ Real server not available, using mock data")
+        logger.info("ℹ️ Real server not available, using placeholder data")
 
     # Use desktop app mode to avoid FastAPI/pydantic dependencies
     print("FletV2 is starting in desktop mode (FLET_APP)")
