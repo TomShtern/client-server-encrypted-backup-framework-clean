@@ -1,14 +1,38 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"label": "Run FletV2 integration tests",
-			"type": "shell",
-			"command": "python -m unittest discover -s FletV2/tests/integration -p \"test_*.py\"",
-			"args": [],
-			"isBackground": false,
-			"problemMatcher": [],
-			"group": "build"
-		}
-	]
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run FletV2 App",
+            "type": "shell",
+            "command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
+            "args": ["main.py"],
+            "options": {
+                "cwd": "${workspaceFolder}/FletV2"
+            },
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "new"
+            }
+        },
+        {
+            "label": "Run Python Server",
+            "type": "shell",
+            "command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
+            "args": ["server/server.py"],
+            "options": {
+                "cwd": "${workspaceFolder}/python_server"
+            },
+            "group": "build"
+        },
+        {
+            "label": "Lint Python Code",
+            "type": "shell",
+            "command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
+            "args": ["-m", "pylint", "FletV2", "Shared", "python_server", "api_server"],
+            "group": "test"
+        }
+    ]
 }

@@ -932,6 +932,6 @@ Notes
 - sys.path.insert(0, ...) ensures project imports win over similarly named external packages (like a pip-installed utils).
 ```
 
-### Configuration - Virtual Environment
+### VS Code Configuration
 
-**CRITICAL**: The `flet_venv` virtual environment MUST be used as the default
+To resolve issues with VS Code getting stuck on "Discovering Python Interpreters" or displaying a large

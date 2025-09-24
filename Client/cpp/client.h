@@ -134,26 +134,26 @@ private:
     // Buffer pool - pre-allocated, AES-aligned buffers to eliminate allocation overhead
     static constexpr size_t BUFFER_POOL_SIZES[] = {1024, 2048, 4096, 8192, 16384, 32768, 65536}; // 1KB to 64KB
     static constexpr size_t BUFFER_POOL_COUNT = sizeof(BUFFER_POOL_SIZES) / sizeof(size_t);
-    
+
     std::vector<std::vector<uint8_t>> buffer_pool;
     size_t current_buffer_index;
-    
+
     // Network performance tracking (isolated from encryption performance)
     std::deque<double> network_throughput_mbps;    // Megabits per second
     std::deque<std::chrono::milliseconds> encryption_times;
-    
+
     // Adaptation control
     size_t packets_since_last_adaptation;
     size_t total_packets_sent;
     std::chrono::steady_clock::time_point last_adaptation_time;
-    
+
     // Stability and hysteresis parameters
     static constexpr size_t MIN_PACKETS_FOR_ADAPTATION = 8;     // Collect data before adapting
     static constexpr size_t MIN_SECONDS_BETWEEN_ADAPTATIONS = 5; // Prevent rapid changes
     static constexpr double THROUGHPUT_IMPROVEMENT_THRESHOLD = 1.15; // 15% improvement to grow
     static constexpr double THROUGHPUT_DEGRADATION_THRESHOLD = 0.80; // 20% degradation to shrink
     static constexpr size_t THROUGHPUT_HISTORY_SIZE = 10;       // Samples for moving average
-    
+
     // Performance analysis
     double calculateAverageThroughput() const;
     bool shouldGrowBuffer() const;
@@ -162,28 +162,28 @@ private:
 
 public:
     ProperDynamicBufferManager(size_t initial_buffer_size = 8192);
-    
+
     // Get current buffer reference (zero-copy)
     std::vector<uint8_t>& getCurrentBuffer() { return buffer_pool[current_buffer_index]; }
     const std::vector<uint8_t>& getCurrentBuffer() const { return buffer_pool[current_buffer_index]; }
-    
+
     // Get current buffer size for reads
     size_t getCurrentBufferSize() const { return BUFFER_POOL_SIZES[current_buffer_index]; }
-    
+
     // Calculate total packets for protocol compliance
     uint16_t calculateTotalPackets(size_t file_size) const {
         size_t packets = (file_size + getCurrentBufferSize() - 1) / getCurrentBufferSize();
         return static_cast<uint16_t>(std::min(packets, static_cast<size_t>(UINT16_MAX)));
     }
-    
+
     // Record performance metrics and trigger adaptation if needed
-    void recordPacketMetrics(size_t bytes_sent, 
+    void recordPacketMetrics(size_t bytes_sent,
                            std::chrono::steady_clock::time_point send_start,
                            std::chrono::steady_clock::time_point send_end,
                            std::chrono::steady_clock::time_point encrypt_start,
                            std::chrono::steady_clock::time_point encrypt_end,
                            bool network_success);
-    
+
     // Get performance diagnostics
     struct PerformanceStats {
         double current_throughput_mbps;
@@ -194,10 +194,10 @@ public:
         std::chrono::milliseconds avg_encryption_time;
     };
     PerformanceStats getPerformanceStats() const;
-    
+
     // Reset for new transfer
     void reset(size_t suggested_initial_size = 8192);
-    
+
 private:
     size_t total_adaptations;
 };
@@ -275,10 +275,10 @@ public:
         uint16_t serverPort;
         std::string username;
         std::string filepath;
-        
+
         // Validation method
         bool isValid() const {
-            return !serverIP.empty() && serverPort > 0 && serverPort <= 65535 && 
+            return !serverIP.empty() && serverPort > 0 && serverPort <= 65535 &&
                    !username.empty() && username.length() <= 100 && !filepath.empty();
         }
     };
@@ -314,8 +314,8 @@ private:
     bool performReconnection();
     bool sendPublicKey();
     bool transferFile();
-    bool transferFileEnhanced(const TransferConfig& config = TransferConfig());
-    bool transferFileWithBuffer(std::ifstream& fileStream, const std::string& filename, 
+    bool transferFileEnhanced(const TransferConfig& = TransferConfig());
+    bool transferFileWithBuffer(std::ifstream& fileStream, const std::string& filename,
                                size_t fileSize, size_t bufferSize);
     bool sendFilePacket(const std::string& filename, const std::string& encryptedData,
                        uint32_t originalSize, uint16_t packetNum, uint16_t totalPackets);
@@ -343,7 +343,7 @@ private:
     static uint16_t littleEndianToHost16(const uint8_t* bytes);
     static uint32_t littleEndianToHost32(const uint8_t* bytes);
     static bool isSystemLittleEndian();
-    static size_t validateAndAlignBufferSize(size_t requestedSize, size_t fileSize);
+    static size_t validateAndAlignBufferSize(size_t requestedSize, size_t);
     static bool validateFileSizeForTransfer(size_t fileSize);
 
 

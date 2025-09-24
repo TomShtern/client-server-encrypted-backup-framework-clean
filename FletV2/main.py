@@ -15,24 +15,33 @@ This demonstrates the clean architecture:
 import os
 import sys
 
+# Idempotent bootstrap: ensure both the FletV2 package root and the repository root
+# are on sys.path so runtime imports like `utils.*` and `Shared.*` resolve whether
+# the app is launched from the repo root, FletV2 folder, or elsewhere.
 _here = os.path.abspath(__file__)
 _base = os.path.dirname(_here)
+# If this file is directly in FletV2/, _base will be the FletV2 folder
 if os.path.basename(_base) == "FletV2":
     flet_v2_root = _base
 else:
-    flet_v2_root = os.path.dirname(_base)  # if file is in a subfolder
+    # File may be in a subfolder of FletV2; the parent of the file's dir is FletV2
+    flet_v2_root = os.path.dirname(_base)
 
+# Repo root is the parent of the FletV2 root
+repo_root = os.path.dirname(flet_v2_root)
+
+# Insert flet_v2_root first so `import utils` resolves to FletV2/utils
 if flet_v2_root not in sys.path:
     sys.path.insert(0, flet_v2_root)
 
-# Optional: enable Shared.* imports if Shared is a sibling of FletV2
-repo_root = os.path.dirname(flet_v2_root)
-if os.path.isdir(os.path.join(repo_root, "Shared")) and repo_root not in sys.path:
-    sys.path.insert(0, repo_root)
-
-# CRITICAL: Add repo root for python_server imports
+# Ensure the repo root is available for sibling packages (Shared, python_server, api_server)
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
+
+# Best-effort: Also ensure the project root (one level up from this file) is present
+project_root = os.path.dirname(_here)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 # Standard library imports
 import asyncio
@@ -81,14 +90,12 @@ except ImportError as e:
 try:
     from utils.server_bridge import create_server_bridge  # noqa: E402
 except ImportError as e:
-    print(f"Warning: Could not import server_bridge: {e}")
-    # Create minimal fallback returning a simple object with the expected surface
+    print(f"Error: Could not import server_bridge: {e}")
+    # Mock data support has been removed - server bridge requires real server
     def create_server_bridge(real_server: Any | None = None) -> Any:  # type: ignore[override]
-        class _PlaceholderBridge:
-            def is_connected(self) -> bool:
-                return False
-
-        return _PlaceholderBridge()
+        if real_server is None:
+            raise ValueError("ServerBridge requires a real server instance. Mock data support has been removed.")
+        raise ImportError(f"ServerBridge module not available: {e}")
 
 # Exported runtime flags for tests and integration checks
 REAL_SERVER_AVAILABLE = False
@@ -102,59 +109,101 @@ try:
     os.environ['CYBERBACKUP_DISABLE_GUI'] = '1'
     logger.info("Disabled BackupServer embedded GUI to prevent conflicts")
 
-    # Import the BackupServer
-    from python_server.server.server import BackupServer
-    logger.info("BackupServer class imported successfully")
-
-    # Use the main repository database file (go up one level from FletV2/)
     # Use __file__ for reliable path resolution instead of os.getcwd()
     fletv2_root = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(fletv2_root)
     main_db_path = os.path.join(project_root, "defensive.db")
-    logger.info(f"Using main database file: {main_db_path}")
+
+    # Set environment variable BEFORE importing BackupServer to ensure proper initialization
+    os.environ['BACKUP_DATABASE_PATH'] = main_db_path
+    logger.info(f"Set BACKUP_DATABASE_PATH environment variable to: {main_db_path}")
+
+    # Import the BackupServer AFTER setting environment variables
+    from python_server.server.server import BackupServer
+    logger.info("BackupServer class imported successfully")
 
     # Check if the main database exists and has data
     if os.path.exists(main_db_path):
         import sqlite3
         conn = sqlite3.connect(main_db_path)
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM clients")
-        client_count = cursor.fetchone()[0]
-        conn.close()
-        logger.info(f"Main database contains {client_count} clients")
+        try:
+            cursor.execute("SELECT COUNT(*) FROM clients")
+            client_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM files")
+            file_count = cursor.fetchone()[0]
+            logger.info(f"Main database contains {client_count} clients and {file_count} files")
+        except Exception as db_error:
+            logger.warning(f"Database query failed: {db_error}")
+        finally:
+            conn.close()
     else:
-        logger.warning(f"Main database file not found: {main_db_path}")
+        logger.error(f"CRITICAL: Main database file not found: {main_db_path}")
+        logger.error("Application will start in placeholder mode")
+        raise FileNotFoundError(f"Database file not found: {main_db_path}")
 
-    # Initialize the real server instance with the correct database path
-    # Set environment variable for BackupServer to use the correct database
-    os.environ['BACKUP_DATABASE_PATH'] = main_db_path
-    logger.info(f"Set BACKUP_DATABASE_PATH environment variable to: {main_db_path}")
-
+    # Initialize the real server instance
+    logger.info("Initializing BackupServer instance...")
     real_server_instance = BackupServer()
 
     # Validate that the server is using the correct database
     actual_db_path = getattr(real_server_instance.db_manager, 'db_name', 'Unknown')
     logger.info(f"BackupServer initialized with database: {actual_db_path}")
 
-    # Test database connection
+    # Comprehensive database connection test
     if hasattr(real_server_instance.db_manager, 'execute'):
         try:
-            test_result = real_server_instance.db_manager.execute(
+            # Test client count
+            clients_result = real_server_instance.db_manager.execute(
                 "SELECT COUNT(*) FROM clients", fetchone=True
             )
-            logger.info(f"Database connection test successful: {test_result[0] if test_result else 0} clients found")
-        except Exception as e:
-            logger.warning(f"Database connection test failed: {e}")
+            client_count = clients_result[0] if clients_result else 0
 
+            # Test files count
+            files_result = real_server_instance.db_manager.execute(
+                "SELECT COUNT(*) FROM files", fetchone=True
+            )
+            file_count = files_result[0] if files_result else 0
+
+            logger.info(f"Database connection test successful: {client_count} clients, {file_count} files")
+
+            # Validate database integrity
+            integrity_result = real_server_instance.db_manager.execute(
+                "PRAGMA integrity_check", fetchone=True
+            )
+            if integrity_result and integrity_result[0] == 'ok':
+                logger.info("Database integrity check passed")
+            else:
+                logger.warning(f"Database integrity check result: {integrity_result}")
+
+        except Exception as e:
+            logger.error(f"Database connection test failed: {e}")
+            raise e
+
+    # Test server methods compatibility
+    try:
+        if hasattr(real_server_instance, 'get_clients'):
+            logger.info("Server has get_clients method - compatible with ServerBridge")
+        else:
+            logger.warning("Server missing get_clients method - may have compatibility issues")
+    except Exception as e:
+        logger.warning(f"Server method test failed: {e}")
 
     REAL_SERVER_AVAILABLE = True
     BRIDGE_TYPE = "Real Server Production Mode"
-    logger.info("✅ Real BackupServer initialized successfully")
+    logger.info("✅ Real BackupServer initialized successfully and verified")
+
 except ImportError as e:
-    logger.warning(f"Could not import BackupServer: {e}")
+    logger.error(f"Could not import BackupServer - check if python_server is available: {e}")
+    logger.info("Starting in placeholder mode - all GUI features will work with mock data")
+    real_server_instance = None
+except FileNotFoundError as e:
+    logger.error(f"Database file not found: {e}")
+    logger.info("Starting in placeholder mode - create a database file to enable real server mode")
     real_server_instance = None
 except Exception as e:
     logger.error(f"Failed to initialize BackupServer: {e}")
+    logger.info("Starting in placeholder mode due to server initialization failure")
     real_server_instance = None
 
 # Direct server integration support (no adapter layer needed)
@@ -202,27 +251,46 @@ class FletV2App(ft.Row):
         try:
             if real_server is not None:
                 # Direct server injection (from integrated startup script)
-                # Skip connectivity check - if server is provided, use it directly
-                logger.info("🎯 Using directly provided real server (skipping connectivity check)")
+                logger.info("🎯 Using directly provided real server (direct injection)")
                 self.server_bridge = create_server_bridge(real_server=real_server)
                 bridge_type = "Direct BackupServer Integration"
                 real_server_available = True
-                logger.info("🎉 Direct BackupServer integration successful!")
+                logger.info("✅ Direct BackupServer integration activated!")
             elif real_server_instance is not None:
-                # Use the real server instance we created
+                # Use the real server instance we created at startup
+                logger.info("🎯 Using global real server instance")
                 self.server_bridge = create_server_bridge(real_server=real_server_instance)
                 bridge_type = "Real BackupServer Integration"
                 real_server_available = True
-                logger.info("🎉 Real BackupServer integration successful!")
+                logger.info("✅ Real BackupServer integration activated!")
+
+                # Test server bridge functionality immediately
+                try:
+                    test_result = self.server_bridge.get_clients()
+                    if isinstance(test_result, list):
+                        logger.info(f"Server bridge test successful: {len(test_result)} clients accessible")
+                    elif isinstance(test_result, dict) and test_result.get('success'):
+                        client_count = len(test_result.get('data', []))
+                        logger.info(f"Server bridge test successful: {client_count} clients accessible")
+                    else:
+                        logger.warning(f"Server bridge test returned unexpected format: {type(test_result)}")
+                except Exception as test_error:
+                    logger.error(f"Server bridge test failed: {test_error}")
+                    logger.error("CRITICAL: Real server integration failed - this may indicate compatibility issues")
+                    # Don't fall back to placeholder since ServerBridge now requires real server
+                    raise test_error
             else:
-                # Standard placeholder mode for development
-                self.server_bridge = create_server_bridge()
-                logger.info("🧪 No real server available - using placeholder mode")
+                # No real server available - ServerBridge now requires real server instance
+                logger.error("❌ No real server available - ServerBridge requires real server instance")
+                logger.error("Application cannot start without a real server instance")
+                raise RuntimeError("ServerBridge requires real server instance. Mock data support has been removed.")
         except Exception as bridge_ex:
             logger.error(f"❌ Server bridge initialization failed: {bridge_ex}")
-            self.server_bridge = create_server_bridge()
+            logger.error("Application cannot continue without properly configured server bridge")
+            raise bridge_ex
 
-        logger.info(f"Server bridge initialized: {bridge_type}")
+        logger.info(f"Final server bridge configuration: {bridge_type}")
+        logger.info(f"Real server available: {real_server_available}")
 
         # Initialize state manager for reactive UI updates - after server bridge is ready
         self._initialize_state_manager()
@@ -1438,16 +1506,22 @@ if __name__ == "__main__":
 
     # Initialize real server for standalone mode
     backup_server = None
-    if REAL_SERVER_AVAILABLE:
+    if REAL_SERVER_AVAILABLE and real_server_instance is not None:
+        # Use the existing real server instance
+        backup_server = real_server_instance
+        logger.info("✅ Using existing BackupServer instance for standalone mode")
+    elif REAL_SERVER_AVAILABLE:
         try:
-            # Create BackupServer instance (it uses defaults for database and port)
+            # Create new BackupServer instance if needed
             backup_server = BackupServer()
-            logger.info("✅ Created BackupServer instance for standalone mode")
+            logger.info("✅ Created new BackupServer instance for standalone mode")
         except Exception as e:
-            logger.error(f"❌ Failed to create BackupServer: {e}")
+            logger.error(f"❌ Failed to create BackupServer for standalone mode: {e}")
             backup_server = None
     else:
-        logger.info("ℹ️ Real server not available, using placeholder data")
+        logger.error("❌ Real server not available, application cannot run without server integration")
+        logger.error("Please check that the python_server module is available and the database file exists")
+        raise RuntimeError("Application requires real server integration")
 
     # Use desktop app mode to avoid FastAPI/pydantic dependencies
     print("FletV2 is starting in desktop mode (FLET_APP)")

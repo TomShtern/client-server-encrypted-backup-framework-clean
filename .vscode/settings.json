@@ -1,86 +1,28 @@
 {
-  "python.defaultInterpreterPath": "./flet_venv/Scripts/python.exe",
-  "python.interpreterPath": "./flet_venv/Scripts/python.exe",
-  "python.pythonPath": "./flet_venv/Scripts/python.exe",
-  "python.interpreter.infoVisibility": "always",
+  "python.defaultInterpreterPath": "C:\\Users\\tom7s\\Desktopp\\Claude_Folder_2\\Client_Server_Encrypted_Backup_Framework\\flet_venv\\Scripts\\python.exe",
+  "python.venvPath": "${workspaceFolder}",
   "python.terminal.activateEnvironment": true,
-  "python.terminal.activateEnvInCurrentTerminal": true,
-  "python.terminal.executeInFileDir": true,
-  "python.venvPath": "./",
-  "python.venvFolders": ["flet_venv"],
-  "python.condaPath": "",
-  "python.poetryPath": "",
-  "python.pipenvPath": "",
-  "python.autoComplete.addBrackets": true,
-  "python.analysis.autoImportCompletions": true,
-  "python.analysis.extraPaths": ["./", "./Shared", "./FletV2", "./python_server"],
+
   "terminal.integrated.defaultProfile.windows": "FletVenv PowerShell",
   "terminal.integrated.profiles.windows": {
     "FletVenv PowerShell": {
       "source": "PowerShell",
       "args": ["-NoExit", "-Command", "& '.\\flet_venv\\Scripts\\Activate.ps1'"],
       "icon": "terminal-powershell"
-    },
-    "FletVenv Command Prompt": {
-      "path": "${env:windir}\\System32\\cmd.exe",
-      "args": ["/k", ".\\flet_venv\\Scripts\\activate.bat"],
-      "icon": "terminal-cmd"
     }
   },
-  "python.linting.enabled": true,
+    "python.linting.enabled": true,
   "python.linting.pylintEnabled": true,
   "python.linting.flake8Enabled": true,
-    "files.exclude": {
-        "**/__pycache__": true,
-        "**/*.pyc": true,
-        "**/node_modules": true,
-        "**/.git": true,
-        "**/.svn": true,
-        "**/.hg": true,
-        "**/CVS": true,
-        "**/.DS_Store": true,
-        "logs": true,
-        "**/*.py.git": true,
-        "**/.mypy_cache": true,
-        "**/.pytest_cache": true,
-        "**/.venv": true,
-        "**/venv": true,
-        "**/vcpkg": true
-    },
-  "github.copilot.chat.editor.temporalContext.enabled": true,
-    "github.copilot.chat.agent.thinkingTool": true,
-    "github.copilot.chat.codesearch.enabled": true,
-    "github.copilot.nextEditSuggestions.enabled": true,
-    "github.copilot.chat.newWorkspace.useContext7": true,
-    "github.copilot.chat.generateTests.codeLens": true,
-    "github.copilot.chat.edits.temporalContext.enabled": true,
-    "github.copilot.advanced": {
-        "useLanguageServer": true,
-        "maxCompletions": 5
-    },
-    "python-envs.pythonProjects": [
-      {
-        "path": "",
-        "envManager": "ms-python.python:flet_venv",
-        "packageManager": "ms-python.python:pip"
-      }
-    ],
-    "coderabbit.autoReviewMode": "auto",
-    "specstory.helpUsImprove": false,
-    "specstory.showDeveloperTools": true,
-    "specstory.derivedRules.enabled": true,
-    "specstory.derivedRules.headers": "## PROJECT OVERVIEW\n## CODE STYLE\n## FOLDER ORGANIZATION\n## TECH STACK\n## PROJECT-SPECIFIC STANDARDS\n## WORKFLOW & RELEASE RULES\n## REFERENCE EXAMPLES\n## PROJECT DOCUMENTATION & CONTEXT SYSTEM\n## DEBUGGING\n## FINAL DOs AND DON'Ts\n## Framework Compliance\n## Package Compliance\n## Gotchas\n## Known Issues\n## Unused Files",
-  "search.exclude": {
+
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
     "**/node_modules": true,
     "logs": true
   },
-  "search.searchView.semanticSearchBehavior": "runOnEmpty",
-  "chat.math.enabled": true,
-  "chat.checkpoints.showFileChanges": true,
-  "chat.agent.maxRequests": 40,
-  "inlineChat.notebookAgent": true,
-  "chat.agentSessionsViewLocation": "view",
-  "chat.mcp.serverSampling": {
-    "enabled": {}
+
+  "problems.exclude": {
+    "**/scripts/cmake/vcpkg_buildpath_length_warning.cmake": true
   }
 }

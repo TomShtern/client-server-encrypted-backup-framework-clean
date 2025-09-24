@@ -1,13 +1,11 @@
 """
-Simplified ServerBridge - Clean drop-in replacement for the original 2,743-line version.
-Preserves ALL functionality while removing over-engineering.
+Production ServerBridge - Direct delegation to real BackupServer instance.
 
-Reduces complexity from 2,743 lines to ~500 lines by:
-- Simple delegation pattern instead of complex abstraction layers
-- No artificial delays or complex retry mechanisms
-- Lorem ipsum placeholder data for GUI testing
-- Direct method calls with basic fallback
-- Clean error handling without complex hierarchies
+Provides clean API surface for the FletV2 GUI:
+- Direct delegation pattern to real server
+- Consistent structured returns: {'success': bool, 'data': Any, 'error': str}
+- Data format conversion between BackupServer and FletV2 formats
+- Error handling with structured responses
 """
 
 import asyncio
@@ -15,7 +13,7 @@ import logging
 import uuid
 from typing import Any, Dict, Optional, List, Callable
 
-from .placeholder_data import get_placeholder_generator
+# Mock data support removed - real server required
 from .real_server_client import RealServerClient
 
 # Import config locally when needed to avoid global import conflicts
@@ -110,53 +108,40 @@ class ServerBridge:
 
     def __init__(self, real_server: Any | None = None):
         """
-        Initialize ServerBridge with optional real server instance.
+        Initialize ServerBridge with required real server instance.
 
         Args:
             real_server: Real server instance with methods like get_clients(), delete_file(), etc.
-                        If None, uses placeholder data for development/testing.
+                        Required for production use.
         """
+        if real_server is None:
+            raise ValueError("ServerBridge requires a real server instance. Mock data support has been removed.")
+
         # Instance attributes
         self.real_server = real_server
-        # CRITICAL CHANGE: When real server is provided, NEVER use placeholder data
-        self._use_placeholder_data = not bool(real_server)
-        self._placeholder_generator = get_placeholder_generator() if not real_server else None
-        self._connection_status = "connected" if real_server else "placeholder_mode"
+        self._connection_status = "connected"
 
-        logger.info(f"ServerBridge initialized in {'PRODUCTION' if real_server else 'PLACEHOLDER'} mode")
+        logger.info("ServerBridge initialized in PRODUCTION mode with real server")
 
     def is_connected(self) -> bool:
         """Check if server is connected."""
-        if self.real_server:
-            return hasattr(self.real_server, 'is_connected') and self.real_server.is_connected()
-        return True  # Placeholder is always "connected"
+        return hasattr(self.real_server, 'is_connected') and self.real_server.is_connected()
 
-    def _call_real_or_placeholder(self, method_name: str, *args, **kwargs) -> Dict[str, Any]:
-        """Helper to call real server method or fall back to placeholder data with data conversion."""
+    def _call_real_server_method(self, method_name: str, *args, **kwargs) -> Dict[str, Any]:
+        """Helper to call real server method with data conversion."""
         try:
-            if self.real_server is not None and hasattr(self.real_server, method_name):
-                result = getattr(self.real_server, method_name)(*args, **kwargs)
+            if not hasattr(self.real_server, method_name):
+                return {'success': False, 'data': None, 'error': f'Method {method_name} not available on server'}
 
-                # Apply data format conversion for BackupServer results
-                converted_result = self._convert_backupserver_result(method_name, result)
+            result = getattr(self.real_server, method_name)(*args, **kwargs)
 
-                # Normalize result format
-                if isinstance(converted_result, dict) and 'success' in converted_result:
-                    return converted_result
-                return {'success': True, 'data': converted_result, 'error': None}
-            else:
-                # Use placeholder generator when no real server
-                if self._placeholder_generator is not None:
-                    placeholder_method = getattr(self._placeholder_generator, method_name, None)
-                    if placeholder_method:
-                        result = placeholder_method(*args, **kwargs)
-                        # If result is already in structured format, return as-is
-                        if isinstance(result, dict) and 'success' in result:
-                            return result
-                        return {'success': True, 'data': result, 'error': None}
+            # Apply data format conversion for BackupServer results
+            converted_result = self._convert_backupserver_result(method_name, result)
 
-                # Return empty data when placeholder is not available
-                return {'success': True, 'data': [], 'error': None}
+            # Normalize result format
+            if isinstance(converted_result, dict) and 'success' in converted_result:
+                return converted_result
+            return {'success': True, 'data': converted_result, 'error': None}
 
         except Exception as e:
             logger.error(f"Error in {method_name}: {e}")
@@ -220,43 +205,21 @@ class ServerBridge:
             logger.warning(f"Data conversion error for {method_name}: {e}")
             return result
 
-    async def _call_real_or_placeholder_async(self, method_name: str, *args, **kwargs) -> Dict[str, Any]:
-        """Async version of _call_real_or_placeholder with data conversion."""
+    async def _call_real_server_method_async(self, method_name: str, *args, **kwargs) -> Dict[str, Any]:
+        """Async version of _call_real_server_method with data conversion."""
         try:
-            if self.real_server is not None and hasattr(self.real_server, method_name):
-                result = await getattr(self.real_server, method_name)(*args, **kwargs)
+            if not hasattr(self.real_server, method_name):
+                return {'success': False, 'data': None, 'error': f'Method {method_name} not available on server'}
 
-                # Apply data format conversion for BackupServer results
-                converted_result = self._convert_backupserver_result(method_name, result)
+            result = await getattr(self.real_server, method_name)(*args, **kwargs)
 
-                # Normalize result format
-                if isinstance(converted_result, dict) and 'success' in converted_result:
-                    return converted_result
-                return {'success': True, 'data': converted_result, 'error': None}
-            else:
-                # Use placeholder generator when no real server
-                if self._placeholder_generator is not None:
-                    async_method_name = method_name if method_name.endswith('_async') else f"{method_name}_async"
-                    placeholder_method = getattr(self._placeholder_generator, async_method_name, None)
-                    if placeholder_method:
-                        result = await placeholder_method(*args, **kwargs)
-                        # If result is already in structured format, return as-is
-                        if isinstance(result, dict) and 'success' in result:
-                            return result
-                        return {'success': True, 'data': result, 'error': None}
-                    else:
-                        # Try sync version
-                        sync_method_name = method_name.replace('_async', '')
-                        placeholder_method = getattr(self._placeholder_generator, sync_method_name, None)
-                        if placeholder_method:
-                            result = placeholder_method(*args, **kwargs)
-                            # If result is already in structured format, return as-is
-                            if isinstance(result, dict) and 'success' in result:
-                                return result
-                            return {'success': True, 'data': result, 'error': None}
+            # Apply data format conversion for BackupServer results
+            converted_result = self._convert_backupserver_result(method_name, result)
 
-                # Return empty data when placeholder is not available
-                return {'success': True, 'data': [], 'error': None}
+            # Normalize result format
+            if isinstance(converted_result, dict) and 'success' in converted_result:
+                return converted_result
+            return {'success': True, 'data': converted_result, 'error': None}
 
         except Exception as e:
             logger.error(f"Error in {method_name}: {e}")
@@ -268,53 +231,53 @@ class ServerBridge:
 
     def get_all_clients_from_db(self) -> Dict[str, Any]:
         """Get all clients from database."""
-        return self._call_real_or_placeholder('get_clients')
+        return self._call_real_server_method('get_clients')
 
     def get_clients(self) -> List[Dict[str, Any]]:
         """Get all clients (sync version)."""
-        result = self._call_real_or_placeholder('get_clients')
+        result = self._call_real_server_method('get_clients')
         if isinstance(result, dict) and 'data' in result:
             return result['data'] if result['data'] is not None else []
         return result if isinstance(result, list) else []
 
     async def get_clients_async(self) -> List[Dict[str, Any]]:
         """Get all clients (async version)."""
-        result = await self._call_real_or_placeholder_async('get_clients_async')
+        result = await self._call_real_server_method_async('get_clients_async')
         if isinstance(result, dict) and 'data' in result:
             return result['data'] if result['data'] is not None else []
         return result if isinstance(result, list) else []
 
     def get_client_details(self, client_id: str) -> Dict[str, Any]:
         """Get details for a specific client."""
-        return self._call_real_or_placeholder('get_client_details', client_id)
+        return self._call_real_server_method('get_client_details', client_id)
 
     async def add_client_async(self, client_data: Dict[str, Any]) -> Dict[str, Any]:
         """Add a new client."""
-        return await self._call_real_or_placeholder_async('add_client_async', client_data)
+        return await self._call_real_server_method_async('add_client_async', client_data)
 
     def add_client(self, client_data: Dict[str, Any]) -> Dict[str, Any]:
         """Add a new client (sync version)."""
-        return self._call_real_or_placeholder('add_client', client_data)
+        return self._call_real_server_method('add_client', client_data)
 
     def delete_client(self, client_id: str) -> Dict[str, Any]:
         """Delete a client (sync version)."""
-        return self._call_real_or_placeholder('delete_client', client_id)
+        return self._call_real_server_method('delete_client', client_id)
 
     async def delete_client_async(self, client_id: str) -> Dict[str, Any]:
         """Delete a client (async version)."""
-        return await self._call_real_or_placeholder_async('delete_client_async', client_id)
+        return await self._call_real_server_method_async('delete_client_async', client_id)
 
     def disconnect_client(self, client_id: str) -> Dict[str, Any]:
         """Disconnect a specific client."""
-        return self._call_real_or_placeholder('disconnect_client', client_id)
+        return self._call_real_server_method('disconnect_client', client_id)
 
     async def disconnect_client_async(self, client_id: str) -> Dict[str, Any]:
         """Disconnect a specific client (async)."""
-        return await self._call_real_or_placeholder_async('disconnect_client_async', client_id)
+        return await self._call_real_server_method_async('disconnect_client_async', client_id)
 
     def resolve_client(self, client_identifier: str) -> Dict[str, Any]:
         """Resolve client by ID or name."""
-        return self._call_real_or_placeholder('resolve_client', client_identifier)
+        return self._call_real_server_method('resolve_client', client_identifier)
 
     # ============================================================================
     # FILE OPERATIONS
@@ -322,57 +285,57 @@ class ServerBridge:
 
     def get_client_files(self, client_id: str) -> Dict[str, Any]:
         """Get files for a specific client."""
-        return self._call_real_or_placeholder('get_client_files', client_id)
+        return self._call_real_server_method('get_client_files', client_id)
 
     async def get_client_files_async(self, client_id: str) -> Dict[str, Any]:
         """Get files for a specific client (async)."""
-        return await self._call_real_or_placeholder_async('get_client_files_async', client_id)
+        return await self._call_real_server_method_async('get_client_files_async', client_id)
 
     def get_files(self) -> List[Dict[str, Any]]:
         """Get all files."""
-        result = self._call_real_or_placeholder('get_files')
+        result = self._call_real_server_method('get_files')
         if isinstance(result, dict) and 'data' in result:
             return result['data'] if result['data'] is not None else []
         return result if isinstance(result, list) else []
 
     async def get_files_async(self) -> List[Dict[str, Any]]:
         """Get all files (async)."""
-        result = await self._call_real_or_placeholder_async('get_files_async')
+        result = await self._call_real_server_method_async('get_files_async')
         if isinstance(result, dict) and 'data' in result:
             return result['data'] if result['data'] is not None else []
         return result if isinstance(result, list) else []
 
     def delete_file(self, file_id: str) -> Dict[str, Any]:
         """Delete a file."""
-        return self._call_real_or_placeholder('delete_file', file_id)
+        return self._call_real_server_method('delete_file', file_id)
 
     async def delete_file_async(self, file_id: str) -> Dict[str, Any]:
         """Delete a file (async)."""
-        return await self._call_real_or_placeholder_async('delete_file_async', file_id)
+        return await self._call_real_server_method_async('delete_file_async', file_id)
 
     def delete_file_by_client_and_name(self, client_id: str, filename: str) -> Dict[str, Any]:
         """Delete a file by client ID and filename."""
-        return self._call_real_or_placeholder('delete_file_by_client_and_name', client_id, filename)
+        return self._call_real_server_method('delete_file_by_client_and_name', client_id, filename)
 
     async def delete_file_by_client_and_name_async(self, client_id: str, filename: str) -> Dict[str, Any]:
         """Delete a file by client ID and filename (async)."""
-        return await self._call_real_or_placeholder_async('delete_file_by_client_and_name_async', client_id, filename)
+        return await self._call_real_server_method_async('delete_file_by_client_and_name_async', client_id, filename)
 
     def download_file(self, file_id: str, destination_path: str) -> Dict[str, Any]:
         """Download a file to destination."""
-        return self._call_real_or_placeholder('download_file', file_id, destination_path)
+        return self._call_real_server_method('download_file', file_id, destination_path)
 
     async def download_file_async(self, file_id: str, destination_path: str):
         """Download a file to destination (async)."""
-        return await self._call_real_or_placeholder_async('download_file_async', file_id, destination_path)
+        return await self._call_real_server_method_async('download_file_async', file_id, destination_path)
 
     def verify_file(self, file_id: str):
         """Verify file integrity."""
-        return self._call_real_or_placeholder('verify_file', file_id)
+        return self._call_real_server_method('verify_file', file_id)
 
     async def verify_file_async(self, file_id: str):
         """Verify file integrity (async)."""
-        return await self._call_real_or_placeholder_async('verify_file_async', file_id)
+        return await self._call_real_server_method_async('verify_file_async', file_id)
 
     # ============================================================================
     # LOG OPERATIONS
@@ -380,31 +343,31 @@ class ServerBridge:
 
     def get_logs(self):
         """Get system logs."""
-        return self._call_real_or_placeholder('get_logs')
+        return self._call_real_server_method('get_logs')
 
     async def get_logs_async(self):
         """Get system logs (async)."""
-        return await self._call_real_or_placeholder_async('get_logs_async')
+        return await self._call_real_server_method_async('get_logs_async')
 
     async def clear_logs_async(self):
         """Clear all logs."""
-        return await self._call_real_or_placeholder_async('clear_logs_async')
+        return await self._call_real_server_method_async('clear_logs_async')
 
     async def export_logs_async(self, export_format: str, filters: Optional[Dict[str, Any]] = None):
         """Export logs in specified format."""
-        return await self._call_real_or_placeholder_async('export_logs_async', export_format, filters or {})
+        return await self._call_real_server_method_async('export_logs_async', export_format, filters or {})
 
     async def get_log_statistics_async(self):
         """Get log statistics."""
-        return await self._call_real_or_placeholder_async('get_log_statistics_async')
+        return await self._call_real_server_method_async('get_log_statistics_async')
 
     async def stream_logs_async(self, callback: Callable[[Dict[str, Any]], None]):
         """Stream logs in real-time."""
-        return await self._call_real_or_placeholder_async('stream_logs_async', callback)
+        return await self._call_real_server_method_async('stream_logs_async', callback)
 
     async def stop_log_stream_async(self, streaming_task: Any):
         """Stop log streaming."""
-        return await self._call_real_or_placeholder_async('stop_log_stream_async', streaming_task)
+        return await self._call_real_server_method_async('stop_log_stream_async', streaming_task)
 
     # ============================================================================
     # SERVER STATUS & MONITORING
@@ -412,31 +375,31 @@ class ServerBridge:
 
     def get_server_status(self):
         """Get basic server status."""
-        return self._call_real_or_placeholder('get_server_status')
+        return self._call_real_server_method('get_server_status')
 
     async def get_server_status_async(self):
         """Get basic server status (async)."""
-        return await self._call_real_or_placeholder_async('get_server_status_async')
+        return await self._call_real_server_method_async('get_server_status_async')
 
     def get_detailed_server_status(self):
         """Get comprehensive server status."""
-        return self._call_real_or_placeholder('get_detailed_server_status')
+        return self._call_real_server_method('get_detailed_server_status')
 
     async def get_detailed_server_status_async(self):
         """Get comprehensive server status (async)."""
-        return await self._call_real_or_placeholder_async('get_detailed_server_status_async')
+        return await self._call_real_server_method_async('get_detailed_server_status_async')
 
     def get_server_health(self):
         """Get server health metrics."""
-        return self._call_real_or_placeholder('get_server_health')
+        return self._call_real_server_method('get_server_health')
 
     async def get_server_health_async(self):
         """Get server health metrics (async)."""
-        return await self._call_real_or_placeholder_async('get_server_health_async')
+        return await self._call_real_server_method_async('get_server_health_async')
 
     async def start_server_async(self):
         """Start the server."""
-        return await self._call_real_or_placeholder_async('start_server_async')
+        return await self._call_real_server_method_async('start_server_async')
 
     def start_server(self):
         """Start the server (synchronous wrapper)."""
@@ -456,7 +419,7 @@ class ServerBridge:
 
     async def stop_server_async(self):
         """Stop the server."""
-        return await self._call_real_or_placeholder_async('stop_server_async')
+        return await self._call_real_server_method_async('stop_server_async')
 
     def stop_server(self):
         """Stop the server (synchronous wrapper)."""
@@ -476,11 +439,11 @@ class ServerBridge:
 
     def test_connection(self):
         """Test server connection."""
-        return self._call_real_or_placeholder('test_connection')
+        return self._call_real_server_method('test_connection')
 
     async def test_connection_async(self):
         """Test server connection (async)."""
-        return await self._call_real_or_placeholder_async('test_connection_async')
+        return await self._call_real_server_method_async('test_connection_async')
 
     # ============================================================================
     # ANALYTICS & SYSTEM
@@ -488,55 +451,55 @@ class ServerBridge:
 
     def get_system_status(self):
         """Get system status."""
-        return self._call_real_or_placeholder('get_system_status')
+        return self._call_real_server_method('get_system_status')
 
     async def get_system_status_async(self):
         """Get system status (async)."""
-        return await self._call_real_or_placeholder_async('get_system_status_async')
+        return await self._call_real_server_method_async('get_system_status_async')
 
     def get_analytics_data(self):
         """Get analytics data."""
-        return self._call_real_or_placeholder('get_analytics_data')
+        return self._call_real_server_method('get_analytics_data')
 
     async def get_analytics_data_async(self):
         """Get analytics data (async)."""
-        return await self._call_real_or_placeholder_async('get_analytics_data_async')
+        return await self._call_real_server_method_async('get_analytics_data_async')
 
     def get_performance_metrics(self):
         """Get performance metrics."""
-        return self._call_real_or_placeholder('get_performance_metrics')
+        return self._call_real_server_method('get_performance_metrics')
 
     async def get_performance_metrics_async(self):
         """Get performance metrics (async)."""
-        return await self._call_real_or_placeholder_async('get_performance_metrics_async')
+        return await self._call_real_server_method_async('get_performance_metrics_async')
 
     def get_historical_data(self, metric: str, hours: int = 24):
         """Get historical performance data."""
-        return self._call_real_or_placeholder('get_historical_data', metric, hours)
+        return self._call_real_server_method('get_historical_data', metric, hours)
 
     async def get_historical_data_async(self, metric: str, hours: int = 24):
         """Get historical performance data (async)."""
-        return await self._call_real_or_placeholder_async('get_historical_data_async', metric, hours)
+        return await self._call_real_server_method_async('get_historical_data_async', metric, hours)
 
     def get_dashboard_summary(self):
         """Get dashboard summary data."""
-        return self._call_real_or_placeholder('get_dashboard_summary')
+        return self._call_real_server_method('get_dashboard_summary')
 
     async def get_dashboard_summary_async(self):
         """Get dashboard summary data (async)."""
-        return await self._call_real_or_placeholder_async('get_dashboard_summary_async')
+        return await self._call_real_server_method_async('get_dashboard_summary_async')
 
     def get_server_statistics(self):
         """Get detailed server statistics."""
-        return self._call_real_or_placeholder('get_server_statistics')
+        return self._call_real_server_method('get_server_statistics')
 
     async def get_server_statistics_async(self):
         """Get detailed server statistics (async)."""
-        return await self._call_real_or_placeholder_async('get_server_statistics_async')
+        return await self._call_real_server_method_async('get_server_statistics_async')
 
     async def get_recent_activity_async(self, limit: int = 50):
         """Get recent system activity."""
-        return await self._call_real_or_placeholder_async('get_recent_activity_async', limit)
+        return await self._call_real_server_method_async('get_recent_activity_async', limit)
 
     # ============================================================================
     # SETTINGS MANAGEMENT
@@ -544,35 +507,35 @@ class ServerBridge:
 
     async def save_settings_async(self, settings_data: Dict[str, Any]):
         """Save application settings."""
-        return await self._call_real_or_placeholder_async('save_settings_async', settings_data)
+        return await self._call_real_server_method_async('save_settings_async', settings_data)
 
     def save_settings(self, settings_data: Dict[str, Any]):
         """Save application settings (sync version)."""
-        return self._call_real_or_placeholder('save_settings', settings_data)
+        return self._call_real_server_method('save_settings', settings_data)
 
     async def load_settings_async(self):
         """Load current settings."""
-        return await self._call_real_or_placeholder_async('load_settings_async')
+        return await self._call_real_server_method_async('load_settings_async')
 
     def load_settings(self):
         """Load current settings (sync version)."""
-        return self._call_real_or_placeholder('load_settings')
+        return self._call_real_server_method('load_settings')
 
     async def validate_settings_async(self, settings_data: Dict[str, Any]):
         """Validate settings data."""
-        return await self._call_real_or_placeholder_async('validate_settings_async', settings_data)
+        return await self._call_real_server_method_async('validate_settings_async', settings_data)
 
     async def backup_settings_async(self, backup_name: str, settings_data: Dict[str, Any]):
         """Create settings backup."""
-        return await self._call_real_or_placeholder_async('backup_settings_async', backup_name, settings_data)
+        return await self._call_real_server_method_async('backup_settings_async', backup_name, settings_data)
 
     async def restore_settings_async(self, backup_file: str):
         """Restore settings from backup."""
-        return await self._call_real_or_placeholder_async('restore_settings_async', backup_file)
+        return await self._call_real_server_method_async('restore_settings_async', backup_file)
 
     async def get_default_settings_async(self):
         """Get default settings."""
-        return await self._call_real_or_placeholder_async('get_default_settings_async')
+        return await self._call_real_server_method_async('get_default_settings_async')
 
     # ============================================================================
     # DATABASE OPERATIONS (for database view)
@@ -580,110 +543,76 @@ class ServerBridge:
 
     def get_database_info(self) -> Dict[str, Any]:
         """Get database information and statistics."""
-        if self.real_server and hasattr(self.real_server, 'db_manager'):
-            try:
-                db_manager = self.real_server.db_manager
-                stats = db_manager.get_database_stats()
-                health = db_manager.get_database_health()
+        if not hasattr(self.real_server, 'db_manager'):
+            return {'success': False, 'data': None, 'error': 'Database manager not available on server'}
 
-                return {
-                    'success': True,
-                    'data': {
-                        'status': 'Connected' if health.get('integrity_check') else 'Error',
-                        'tables': health.get('table_count', 0),
-                        'total_records': stats.get('total_clients', 0) + stats.get('total_files', 0),
-                        'size': f"{stats.get('database_size_bytes', 0) / (1024*1024):.1f} MB",
-                        'integrity_check': health.get('integrity_check', False),
-                        'foreign_key_check': health.get('foreign_key_check', False),
-                        'connection_pool_healthy': health.get('connection_pool_healthy', True)
-                    },
-                    'error': None
-                }
-            except Exception as e:
-                logger.error(f"Error getting database info: {e}")
-                return {'success': False, 'data': None, 'error': str(e)}
-        else:
-            # Use placeholder data when no real server
-            if self._placeholder_generator is not None:
-                return self._placeholder_generator.get_database_info()
-            else:
-                # Return empty data when placeholder is not available
-                return {
-                    'success': True,
-                    'data': {
-                        'status': 'Connected',
-                        'tables': 0,
-                        'total_records': 0,
-                        'size': '0 MB',
-                        'integrity_check': True,
-                        'foreign_key_check': True,
-                        'connection_pool_healthy': True
-                    },
-                    'error': None
-                }
+        try:
+            db_manager = self.real_server.db_manager
+            stats = db_manager.get_database_stats()
+            health = db_manager.get_database_health()
+
+            return {
+                'success': True,
+                'data': {
+                    'status': 'Connected' if health.get('integrity_check') else 'Error',
+                    'tables': health.get('table_count', 0),
+                    'total_records': stats.get('total_clients', 0) + stats.get('total_files', 0),
+                    'size': f"{stats.get('database_size_bytes', 0) / (1024*1024):.1f} MB",
+                    'integrity_check': health.get('integrity_check', False),
+                    'foreign_key_check': health.get('foreign_key_check', False),
+                    'connection_pool_healthy': health.get('connection_pool_healthy', True)
+                },
+                'error': None
+            }
+        except Exception as e:
+            logger.error(f"Error getting database info: {e}")
+            return {'success': False, 'data': None, 'error': str(e)}
 
     def get_table_names(self) -> Dict[str, Any]:
         """Get list of database table names."""
-        if self.real_server and hasattr(self.real_server, 'db_manager'):
-            try:
-                db_manager = self.real_server.db_manager
-                table_names = db_manager.get_table_names()
-                return {'success': True, 'data': table_names, 'error': None}
-            except Exception as e:
-                logger.error(f"Error getting table names: {e}")
-                return {'success': False, 'data': [], 'error': str(e)}
-        else:
-            # Use placeholder data when no real server
-            if self._placeholder_generator is not None:
-                return self._placeholder_generator.get_table_names()
-            else:
-                # Return empty data when placeholder is not available
-                return {'success': True, 'data': [], 'error': None}
+        if not hasattr(self.real_server, 'db_manager'):
+            return {'success': False, 'data': [], 'error': 'Database manager not available on server'}
+
+        try:
+            db_manager = self.real_server.db_manager
+            table_names = db_manager.get_table_names()
+            return {'success': True, 'data': table_names, 'error': None}
+        except Exception as e:
+            logger.error(f"Error getting table names: {e}")
+            return {'success': False, 'data': [], 'error': str(e)}
 
     def get_table_data(self, table_name: str) -> Dict[str, Any]:
         """Get data from a specific database table."""
-        if self.real_server and hasattr(self.real_server, 'db_manager'):
-            try:
-                db_manager = self.real_server.db_manager
-                columns, rows = db_manager.get_table_content(table_name)
+        if not hasattr(self.real_server, 'db_manager'):
+            return {'success': False, 'data': {'columns': [], 'rows': []}, 'error': 'Database manager not available on server'}
 
-                # Convert to format expected by FletV2
-                table_data = []
-                for row in rows:
-                    # Apply data conversion based on table type
-                    if table_name == 'clients':
-                        converted_row = convert_backupserver_client_to_fletv2(row)
-                    elif table_name == 'files':
-                        converted_row = convert_backupserver_file_to_fletv2(row)
-                    else:
-                        converted_row = row
-                    table_data.append(converted_row)
+        try:
+            db_manager = self.real_server.db_manager
+            columns, rows = db_manager.get_table_content(table_name)
 
-                return {
-                    'success': True,
-                    'data': {
-                        'columns': columns,
-                        'rows': table_data
-                    },
-                    'error': None
-                }
-            except Exception as e:
-                logger.error(f"Error getting table data for {table_name}: {e}")
-                return {'success': False, 'data': {'columns': [], 'rows': []}, 'error': str(e)}
-        else:
-            # Use placeholder data when no real server
-            if self._placeholder_generator is not None:
-                return self._placeholder_generator.get_table_data(table_name)
-            else:
-                # Return empty data when placeholder is not available
-                return {
-                    'success': True,
-                    'data': {
-                        'columns': [],
-                        'rows': []
-                    },
-                    'error': None
-                }
+            # Convert to format expected by FletV2
+            table_data = []
+            for row in rows:
+                # Apply data conversion based on table type
+                if table_name == 'clients':
+                    converted_row = convert_backupserver_client_to_fletv2(row)
+                elif table_name == 'files':
+                    converted_row = convert_backupserver_file_to_fletv2(row)
+                else:
+                    converted_row = row
+                table_data.append(converted_row)
+
+            return {
+                'success': True,
+                'data': {
+                    'columns': columns,
+                    'rows': table_data
+                },
+                'error': None
+            }
+        except Exception as e:
+            logger.error(f"Error getting table data for {table_name}: {e}")
+            return {'success': False, 'data': {'columns': [], 'rows': []}, 'error': str(e)}
 
 
 # ============================================================================
@@ -695,59 +624,27 @@ def create_server_bridge(real_server: Any | None = None):
     Factory function to create ServerBridge instance.
 
     Args:
-        real_server: Optional real server instance for production use
+        real_server: Required real server instance for production use
 
     Returns:
-        ServerBridge instance configured for production or development
+        ServerBridge instance configured for production use
+
+    Raises:
+        ValueError: If real_server is None
     """
-    # Local config import to avoid global module conflicts
-    try:
-        from .. import config
-    except ImportError:
-        try:
-            import config
-        except ImportError:
-            config = None
+    if real_server is None:
+        raise ValueError("ServerBridge requires a real server instance. Mock data support has been removed.")
 
-    # If real_server is provided directly, use it immediately
-    if real_server is not None:
-        logger.info("Using directly provided real server instance")
-        return ServerBridge(real_server=real_server)
-
-    # Auto-detect real server from environment if not explicitly provided
-    try:
-        if config and config.REAL_SERVER_URL:
-            try:
-                client: RealServerClient = RealServerClient(
-                    base_url=config.REAL_SERVER_URL,
-                    token=config.BACKUP_SERVER_TOKEN,
-                    verify_tls=config.VERIFY_TLS,
-                    timeout=config.REQUEST_TIMEOUT,
-                )
-                # Lightweight async health check
-                import asyncio
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                health: Dict[str, Any] = loop.run_until_complete(client.test_connection_async())
-                loop.close()
-                if health.get("success"):
-                    logger.debug("Using RealServerClient based on REAL_SERVER_URL")
-                    return ServerBridge(real_server=client)
-                else:
-                    logger.warning("Real server health check failed; falling back to placeholder mode: %s", health.get("error"))
-            except Exception as e:
-                logger.warning("Failed to initialize RealServerClient; falling back to placeholder mode: %s", e)
-    except (ImportError, AttributeError) as e:
-        logger.warning("Config import failed, using placeholder mode: %s", e)
-
-    return ServerBridge(real_server)
+    logger.info("Creating ServerBridge with real server instance")
+    return ServerBridge(real_server=real_server)
 
 # Module-level singleton to avoid function attribute access diagnostics
 _SERVER_BRIDGE_INSTANCE: Optional[ServerBridge] = None
 
 def get_server_bridge() -> ServerBridge:
-    """Get or create a singleton ServerBridge instance for development."""
-    global _SERVER_BRIDGE_INSTANCE
-    if _SERVER_BRIDGE_INSTANCE is None:
-        _SERVER_BRIDGE_INSTANCE = ServerBridge()
-    return _SERVER_BRIDGE_INSTANCE
+    """Get or create a singleton ServerBridge instance.
+
+    Note: This function is deprecated as ServerBridge now requires a real server instance.
+    Use create_server_bridge(real_server_instance) instead.
+    """
+    raise RuntimeError("get_server_bridge() is deprecated. Use create_server_bridge(real_server_instance) instead.")

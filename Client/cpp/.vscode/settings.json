@@ -1,0 +1,22 @@
+{
+  "C_Cpp.errorSquiggles": "disabled",
+  "C_Cpp.intelliSenseEngine": "Tag Parser",
+  "files.exclude": {
+    "**/build": true,
+    "**/*.obj": true,
+    "**/*.o": true,
+    "**/*.exe": true,
+    "**/*.dll": true,
+    "**/*.lib": true
+  }
+  ,
+  "problems.exclude": {
+    "client.cpp": true,
+    "**/build/**": true,
+    "**/*.obj": true,
+    "**/*.o": true,
+    "**/*.exe": true,
+    "**/*.dll": true,
+    "**/*.lib": true
+  }
+}

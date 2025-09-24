@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 // Client.cpp
 // Encrypted File Backup System - Enhanced Client Implementation
 // Fully compliant with project specifications
@@ -695,8 +696,8 @@ bool Client::testConnection() {
 
         // Instead of sending a test request with invalid code,
         // just check if the socket is still connected and responsive
-        boost::system::error_code ec;
-        size_t available = socket->available(ec);
+    boost::system::error_code ec;
+    socket->available(ec); // Only check, do not store
 
         if (ec) {
             displayError("Connection test failed: " + ec.message(), ErrorType::NETWORK);
@@ -888,7 +889,7 @@ bool Client::receiveResponse(ResponseHeader& header, std::vector<uint8_t>& paylo
 
         // Synchronously receive header with timeout
         displayStatus("Waiting for server response", true, "Max wait: 25 seconds");
-        
+
         // Read raw header bytes first to handle endianness properly
         // Protocol header is 7 bytes: 1 byte version + 2 bytes code + 4 bytes payload_size
         const size_t PROTOCOL_HEADER_SIZE = 1 + 2 + 4; // 7 bytes
@@ -1149,7 +1150,7 @@ bool Client::isSystemLittleEndian() {
 uint16_t Client::littleEndianToHost16(const uint8_t* bytes) {
     // Read bytes in little-endian order and convert to host byte order
     // bytes[0] is least significant byte, bytes[1] is most significant byte
-    return (static_cast<uint16_t>(bytes[1]) << 8) | 
+    return (static_cast<uint16_t>(bytes[1]) << 8) |
            static_cast<uint16_t>(bytes[0]);
 }
 
@@ -1163,19 +1164,17 @@ uint32_t Client::littleEndianToHost32(const uint8_t* bytes) {
            static_cast<uint32_t>(bytes[0]);
 }
 
-size_t Client::validateAndAlignBufferSize(size_t requestedSize, size_t fileSize) {
+size_t Client::validateAndAlignBufferSize(size_t requestedSize, size_t) {
     // Validate and align buffer size for optimal performance and server compatibility
-
+    // fileSize is intentionally unused; parameter name omitted to suppress warning
     // Ensure minimum buffer size
     if (requestedSize < MIN_BUFFER_SIZE) {
         requestedSize = MIN_BUFFER_SIZE;
     }
-
     // Ensure buffer doesn't exceed server limits
     if (requestedSize > MAX_SAFE_PACKET_SIZE) {
         requestedSize = MAX_SAFE_PACKET_SIZE;
     }
-
     // Align to AES block boundaries (16 bytes) for optimal encryption performance
     size_t alignedSize = ((requestedSize + AES_BLOCK_SIZE - 1) / AES_BLOCK_SIZE) * AES_BLOCK_SIZE;
 
@@ -1415,7 +1414,8 @@ bool Client::transferFileWithBuffer(std::ifstream& fileStream, const std::string
 }
 
 // Enhanced transfer implementation with adaptive buffer management
-bool Client::transferFileEnhanced(const TransferConfig& config) {
+bool Client::transferFileEnhanced(const TransferConfig&) {
+    // config is intentionally unused; parameter name omitted to suppress warning
     displayStatus("transferFileEnhanced", true, "Starting enhanced file transfer");
 
     // Open the file for reading in binary mode
@@ -1859,7 +1859,7 @@ void Client::displayProgress(const std::string& operation, size_t current, size_
     std::cout << operation << " [";
 
     const int barWidth = 40;
-    int pos = (barWidth * current) / total;
+    int pos = total ? int((barWidth * current) / total) : 0; // use int for loop
 
     SetConsoleTextAttribute(hConsole, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
     for (int i = 0; i < pos; i++) std::cout << "#";
@@ -1990,7 +1990,7 @@ void Client::displayError(const std::string& message, ErrorType type) {
 void Client::displaySeparator() {
 #ifdef _WIN32
     SetConsoleTextAttribute(hConsole, FOREGROUND_INTENSITY);
-    std::cout << std::string(60, '─') << std::endl;
+    for (int i = 0; i < 60; ++i) std::cout << '-'; std::cout << std::endl;
     SetConsoleTextAttribute(hConsole, savedAttributes);
 #else
     std::cout << std::string(60, '-') << std::endl;

@@ -2,24 +2,21 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: FletV2 App",
-            "type": "python",
+            "name": "Debugpy: FletV2 App",
+            "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/FletV2/main.py",
-            "python": "${workspaceFolder}/flet_venv/Scripts/python.exe",
-            "cwd": "${workspaceFolder}/FletV2",
+            "console": "integratedTerminal",
             "env": {
                 "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/Shared"
             },
-            "console": "integratedTerminal",
             "justMyCode": false
         },
         {
-            "name": "Python: Current File",
-            "type": "python",
+            "name": "Debugpy: Current File",
+            "type": "debugpy",
             "request": "launch",
             "program": "${file}",
-            "python": "${workspaceFolder}/flet_venv/Scripts/python.exe",
             "console": "integratedTerminal",
             "justMyCode": false
         }
