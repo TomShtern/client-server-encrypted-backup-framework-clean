@@ -1,12 +1,12 @@
 {
-  "python.venvPath": "${workspaceFolder}/FletV2",
+  "python.venvPath": "${workspaceFolder}",
   "python.terminal.activateEnvironment": true,
 
   "terminal.integrated.defaultProfile.windows": "FletVenv PowerShell",
   "terminal.integrated.profiles.windows": {
     "FletVenv PowerShell": {
       "source": "PowerShell",
-      "args": ["-NoExit", "-Command", "& '.\\FletV2\\flet_venv\\Scripts\\Activate.ps1'"],
+      "args": ["-NoExit", "-Command", "& '${workspaceFolder}\\flet_venv\\Scripts\\Activate.ps1'"],
       "icon": "terminal-powershell"
     }
   },
@@ -14,9 +14,9 @@
   "python.linting.pylintEnabled": true,
   "python.linting.flake8Enabled": true,
   "python.analysis.autoImportCompletions": true,
-  "python.defaultInterpreterPath": "./FletV2/flet_venv/Scripts/python.exe",
+  "python.defaultInterpreterPath": "${workspaceFolder}/flet_venv/Scripts/python.exe",
   "python.terminal.activateEnvInCurrentTerminal": true,
-  "python.envFile": "${workspaceFolder}/.env",
+  "python.envFile": "${workspaceFolder}/FletV2/.env",
   "terminal.integrated.env.windows": {
     "PYTHONIOENCODING": "utf-8",
     "CYBERBACKUP_DISABLE_INTEGRATED_GUI": "1",
@@ -33,5 +33,6 @@
 
   "problems.exclude": {
     "**/scripts/cmake/vcpkg_buildpath_length_warning.cmake": true
-  }
+  },
+  "github.copilot.nextEditSuggestions.enabled": true
 }

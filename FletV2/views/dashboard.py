@@ -241,6 +241,10 @@ def create_dashboard_view(
     _stop_polling = False
     auto_refresh_enabled = True
     activity_filter = "All"
+    activity_search_query = ""
+    activity_filter_chips: Dict[str, ft.FilterChip] = {}
+    is_loading = False
+    countdown_remaining = POLLING_INTERVAL
     last_updated = "Never"
     # For significant-change detection and toast throttling
     prev_server_snapshot: Optional[Dict[str, Any]] = None
@@ -291,6 +295,9 @@ def create_dashboard_view(
 
     def refresh_dashboard(e: ft.ControlEvent) -> None:
         """Refresh all dashboard data (async to avoid blocking UI)."""
+        nonlocal countdown_remaining
+        countdown_remaining = POLLING_INTERVAL
+        _update_refresh_countdown_display("Refreshing…")
         try:
             async def _manual_refresh() -> None:
                 await _update_all_displays_async('manual')
@@ -303,8 +310,34 @@ def create_dashboard_view(
     # Define UI controls that are used in update_all_displays
     # Dynamic hero metric value controls for live updates
     hero_total_clients_text = ft.Text("0", size=44, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
+    hero_total_clients_trend_icon = ft.Icon(ft.Icons.TRENDING_FLAT, size=16, color=ft.Colors.OUTLINE)
+    hero_total_clients_trend_text = ft.Text("+0", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.OUTLINE)
+    hero_total_clients_trend = ft.Container(
+        content=ft.Row([hero_total_clients_trend_icon, hero_total_clients_trend_text], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
+        padding=ft.padding.symmetric(horizontal=10, vertical=4),
+        border_radius=12,
+        bgcolor=ft.Colors.with_opacity(0.14, ft.Colors.OUTLINE)
+    )
+
     hero_active_transfers_text = ft.Text("0", size=44, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
+    hero_active_transfers_trend_icon = ft.Icon(ft.Icons.TRENDING_FLAT, size=16, color=ft.Colors.OUTLINE)
+    hero_active_transfers_trend_text = ft.Text("+0", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.OUTLINE)
+    hero_active_transfers_trend = ft.Container(
+        content=ft.Row([hero_active_transfers_trend_icon, hero_active_transfers_trend_text], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
+        padding=ft.padding.symmetric(horizontal=10, vertical=4),
+        border_radius=12,
+        bgcolor=ft.Colors.with_opacity(0.14, ft.Colors.OUTLINE)
+    )
+
     hero_uptime_text = ft.Text("0h 0m", size=44, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
+    hero_uptime_trend_icon = ft.Icon(ft.Icons.UPDATE, size=16, color=ft.Colors.OUTLINE)
+    hero_uptime_trend_text = ft.Text("Stable", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.OUTLINE)
+    hero_uptime_trend = ft.Container(
+        content=ft.Row([hero_uptime_trend_icon, hero_uptime_trend_text], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
+        padding=ft.padding.symmetric(horizontal=10, vertical=4),
+        border_radius=12,
+        bgcolor=ft.Colors.with_opacity(0.14, ft.Colors.OUTLINE)
+    )
 
     # Define buttons that are used in update_all_displays
     button_shape = ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12))
@@ -488,6 +521,7 @@ def create_dashboard_view(
         trend: str = "",
         card_type: str = "primary",
         value_control=None,
+        trend_control: Optional[ft.Control] = None,
         on_click=None
     ) -> ft.Control:
         """Create a polished hero metric tile with higher contrast and helpful semantics."""
@@ -499,7 +533,9 @@ def create_dashboard_view(
         accent = color_map.get(card_type, ft.Colors.PRIMARY)
 
         trend_widget = None
-        if trend:
+        if trend_control is not None:
+            trend_widget = trend_control
+        elif trend:
             is_positive = trend.startswith("+")
             trend_widget = ft.Row([
                 ft.Icon(ft.Icons.TRENDING_UP if is_positive else ft.Icons.TRENDING_DOWN, size=16, color=accent),
@@ -533,61 +569,41 @@ def create_dashboard_view(
 
 
     def create_premium_activity_stream() -> ft.Card:
-        """Create activity stream using Flet's native components and real data."""
+        """Create activity stream with interactive filters and search."""
 
-        # Get real activity data from the dashboard context
-        activities = current_activity[:10] if current_activity else []
-
-        # Create activity list using native Flet ListView with better performance
-        activity_controls = []
-        for activity in activities:
-            activity_type = str(activity.get('type', 'info')).lower()
-            # Reuse top-level cached helpers for consistency
-            icon = get_activity_icon(activity_type)  # type: ignore[arg-type]
-            color = get_activity_color(activity_type)  # type: ignore[arg-type]
-            timestamp = activity.get('timestamp', datetime.now())
-
-            # Format timestamp
-            if isinstance(timestamp, datetime):
-                time_ago = datetime.now() - timestamp
-                if time_ago.days > 0:
-                    time_str = f"{time_ago.days}d ago"
-                elif time_ago.seconds > 3600:
-                    time_str = f"{time_ago.seconds // 3600}h ago"
-                elif time_ago.seconds > 60:
-                    time_str = f"{time_ago.seconds // 60}m ago"
-                else:
-                    time_str = "Just now"
-            else:
-                time_str = str(timestamp)
-
-            activity_controls.append(
-                ft.ListTile(
-                    leading=ft.Icon(icon, color=color, size=18),
-                    title=ft.Text(activity.get('message', ''), size=13, weight=ft.FontWeight.W_500, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
-                    subtitle=ft.Text(time_str, size=11, color=ft.Colors.OUTLINE),
-                    dense=True,
-                    content_padding=ft.padding.symmetric(vertical=4)
-                )
+        filter_labels = ["All", "Success", "Info", "Warning", "Error"]
+        activity_filter_chips.clear()
+        chips: List[ft.FilterChip] = []
+        current_filter_key = activity_filter.lower()
+        for label in filter_labels:
+            key = label.lower()
+            chip = ft.FilterChip(
+                label=label,
+                selected=key == current_filter_key,
+                on_selected=lambda event, option=label: _handle_chip_event(option, event)
             )
+            activity_filter_chips[key] = chip
+            chips.append(chip)
+
+        filter_row = ft.Row(chips, spacing=8, wrap=True)
 
         return ft.Card(
             content=ft.Container(
                 content=ft.Column([
                     ft.Row([
                         ft.Icon(ft.Icons.TIMELINE, size=24, color=ft.Colors.PURPLE_600),
-                        ft.Text("Live Activity", size=20, weight=ft.FontWeight.BOLD)
-                    ], spacing=8),
-                    ft.ListView(
-                        controls=activity_controls,
-                        height=150,
-                        spacing=2
-                    ) if activity_controls else ft.Container(
-                        content=ft.Text("No recent activity", color=ft.Colors.OUTLINE),
-                        alignment=ft.alignment.center,
-                        height=120
+                        ft.Text("Live Activity", size=20, weight=ft.FontWeight.BOLD),
+                        ft.Container(expand=True),
+                        activity_search_field,
+                    ], spacing=8, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                    filter_row,
+                    ft.Container(
+                        content=activity_list,
+                        height=180,
+                        border_radius=12,
+                        bgcolor=ft.Colors.with_opacity(0.04, ft.Colors.PURPLE_200)
                     )
-                ], spacing=8),
+                ], spacing=12),
                 padding=20
             ),
             elevation=2
@@ -597,18 +613,66 @@ def create_dashboard_view(
     # UI Controls
     # Header metadata
     last_updated_text = ft.Text("Last updated: Never", size=12)
+    header_summary_text = ft.Text("Server status: Checking…", size=12, color=ft.Colors.OUTLINE)
+    refresh_countdown_text = ft.Text("Next refresh: 30s", size=12, color=ft.Colors.OUTLINE)
     # Slim live refresh indicator displayed during async updates
     refresh_indicator = ft.ProgressBar(height=3, value=None, visible=False)
 
+    def _update_refresh_countdown_display(message: Optional[str] = None) -> None:
+        if message is not None:
+            refresh_countdown_text.value = message
+        else:
+            if not auto_refresh_enabled:
+                refresh_countdown_text.value = "Auto refresh paused"
+            else:
+                refresh_countdown_text.value = f"Next refresh: {max(0, int(countdown_remaining))}s"
+        with contextlib.suppress(Exception):
+            refresh_countdown_text.update()
+
     cpu_text = ft.Text("CPU: 0%", size=14)
+    cpu_progress = ft.ProgressBar(value=0.0, width=220, bar_height=6)
     memory_text = ft.Text("Memory: 0%", size=14)
+    memory_progress = ft.ProgressBar(value=0.0, width=220, bar_height=6, bgcolor=ft.Colors.with_opacity(0.15, ft.Colors.GREEN))
     disk_text = ft.Text("Disk: 0%", size=14)
+    disk_progress = ft.ProgressBar(value=0.0, width=220, bar_height=6, bgcolor=ft.Colors.with_opacity(0.15, ft.Colors.PURPLE))
 
     # Activity list
     activity_list = ft.ListView(
         expand=True,
         spacing=5,
         padding=ft.padding.all(10)
+    )
+
+    def _on_activity_search_change(e: ft.ControlEvent) -> None:
+        nonlocal activity_search_query
+        activity_search_query = (e.control.value or "").strip()
+        update_activity_list()
+
+    def _on_activity_filter_selected(option: str) -> None:
+        nonlocal activity_filter
+        activity_filter = option
+        for key, chip in activity_filter_chips.items():
+            chip.selected = key == option.lower()
+            with contextlib.suppress(Exception):
+                chip.update()
+        update_activity_list()
+
+    def _handle_chip_event(option: str, event: ft.ControlEvent) -> None:
+        if not event.control.selected:
+            event.control.selected = True
+            with contextlib.suppress(Exception):
+                event.control.update()
+            return
+        _on_activity_filter_selected(option)
+
+    activity_search_field = ft.TextField(
+        hint_text="Search activity",
+        prefix_icon=ft.Icons.SEARCH,
+        on_change=_on_activity_search_change,
+        dense=True,
+        filled=True,
+        border_radius=20,
+        width=280,
     )
 
     # Clients snapshot controls
@@ -622,6 +686,19 @@ def create_dashboard_view(
     free_text.semantics_label = "Total storage free"
     forecast_text = ft.Text("Forecast: --", size=12, color=ft.Colors.OUTLINE)
     forecast_text.semantics_label = "Storage forecast"
+    capacity_health_badge_text = ft.Text("Healthy", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN)
+    capacity_health_badge_icon = ft.Icon(ft.Icons.HEALTH_AND_SAFETY, size=14, color=ft.Colors.GREEN)
+    capacity_health_badge = ft.Container(
+        content=ft.Row([
+            capacity_health_badge_icon,
+            capacity_health_badge_text
+        ], spacing=6),
+        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+        border_radius=14,
+        bgcolor=ft.Colors.with_opacity(0.12, ft.Colors.GREEN)
+    )
+    capacity_ring_percent = ft.Text("0%", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE)
+    capacity_progress_ring = ft.ProgressRing(value=0.0, width=160, height=160, stroke_width=8, color=ft.Colors.BLUE)
     # Real PieChart instead of placeholder
     capacity_pie = ft.PieChart(
         sections=[],
@@ -630,6 +707,11 @@ def create_dashboard_view(
         height=200,
         width=200,
     )
+    capacity_ring_stack = ft.Stack([
+        ft.Container(content=capacity_progress_ring, alignment=ft.alignment.center),
+        capacity_pie,
+        ft.Container(content=capacity_ring_percent, alignment=ft.alignment.center)
+    ], width=200, height=200)
 
     # KPI controls
     kpi_total_clients_text = ft.Text("0", size=28, weight=ft.FontWeight.BOLD)
@@ -723,13 +805,14 @@ def create_dashboard_view(
     mem_spark = _create_sparkline(ft.Colors.GREEN)
     disk_spark = _create_sparkline(ft.Colors.PURPLE)
 
-    def _metric_tile(title: str, summary_text: ft.Control, chart: ft.LineChart, accent: str, semantics: str) -> ft.Container:
+    def _metric_tile(title: str, summary_text: ft.Control, progress_bar: ft.ProgressBar, chart: ft.LineChart, accent: str, semantics: str) -> ft.Container:
         container = ft.Container(
             content=ft.Column([
                 ft.Row([
                     ft.Text(title, size=12, color=ft.Colors.with_opacity(0.8, accent), weight=ft.FontWeight.W_600)
                 ]),
                 summary_text,
+                ft.Container(content=progress_bar, padding=ft.padding.only(top=2, bottom=4)),
                 chart
             ], spacing=8),
             padding=ft.padding.all(12),
@@ -743,6 +826,54 @@ def create_dashboard_view(
         )
         container.semantics_label = semantics
         return container
+
+    def _update_trend_chip(
+        icon_control: Any,
+        text_control: Any,
+        container: ft.Container,
+        delta: float,
+        *,
+        zero_label: str = "0",
+        suffix: str = ""
+    ) -> None:
+        """Update hero metric trend chip with dynamic coloring and iconography."""
+        try:
+            if icon_control is None or text_control is None or container is None:
+                return
+
+            suffix_text = suffix or ""
+            delta_value = float(delta)
+            if delta_value > 0:
+                color = ft.Colors.GREEN
+                icon_control.name = ft.Icons.TRENDING_UP
+                display_value = (
+                    f"+{int(delta_value)}{suffix_text}"
+                    if delta_value.is_integer()
+                    else f"+{delta_value:.1f}{suffix_text}"
+                )
+            elif delta_value < 0:
+                color = ft.Colors.RED
+                icon_control.name = ft.Icons.TRENDING_DOWN
+                display_value = (
+                    f"{int(delta_value)}{suffix_text}"
+                    if delta_value.is_integer()
+                    else f"{delta_value:.1f}{suffix_text}"
+                )
+            else:
+                color = ft.Colors.OUTLINE
+                icon_control.name = ft.Icons.TRENDING_FLAT
+                display_value = zero_label
+
+            text_control.value = display_value.strip()
+            text_control.color = color
+            icon_control.color = color
+            container.bgcolor = ft.Colors.with_opacity(0.18, color)
+
+            container.update()
+            text_control.update()
+            icon_control.update()
+        except Exception:
+            pass
 
     def _update_spark(chart: ft.LineChart, values: List[float], color) -> None:
         """Update sparkline with efficient LineChart data points using modern Python."""
@@ -792,7 +923,10 @@ def create_dashboard_view(
 
     def update_all_displays() -> None:
         """Update all dashboard displays with current data."""
-        nonlocal current_server_status, current_system_metrics, current_activity, current_clients, last_updated, cpu_history, memory_history, disk_history
+        nonlocal current_server_status, current_system_metrics, current_activity, current_clients, last_updated
+        nonlocal cpu_history, memory_history, disk_history, prev_server_snapshot, is_loading
+
+        is_loading = False
 
         # Get fresh data
         current_server_status = get_server_status()
@@ -832,6 +966,19 @@ def create_dashboard_view(
         memory_text.value = f"Memory: {memory_percent:.1f}%"
         disk_text.value = f"Disk: {disk_percent:.1f}%"
 
+        try:
+            cpu_progress.value = max(0.0, min(1.0, cpu_percent / 100))
+            cpu_progress.color = ft.Colors.BLUE
+            memory_progress.value = max(0.0, min(1.0, memory_percent / 100))
+            memory_progress.color = ft.Colors.GREEN
+            disk_progress.value = max(0.0, min(1.0, disk_percent / 100))
+            disk_progress.color = ft.Colors.PURPLE
+            cpu_progress.update()
+            memory_progress.update()
+            disk_progress.update()
+        except Exception:
+            pass
+
         # Update history and sparklines with memory-efficient deque
         try:
             cpu_history.append(float(cpu_percent))
@@ -844,7 +991,7 @@ def create_dashboard_view(
         except Exception as e:
             logger.debug(f"Failed to update sparklines: {e}")
 
-    # Update activity list
+        # Update activity list
         update_activity_list()
 
         # Update clients snapshot list
@@ -865,6 +1012,20 @@ def create_dashboard_view(
             used_text.value = f"Used: {used_pct:.1f}%"
             free_text.value = f"Free: {free_pct:.1f}%"
             forecast_text.value = f"Forecast: {proj}"
+            capacity_ring_percent.value = f"{used_pct:.0f}%"
+
+            capacity_color = ft.Colors.GREEN
+            if used_pct >= 90:
+                capacity_color = ft.Colors.RED
+            elif used_pct >= 80:
+                capacity_color = ft.Colors.ORANGE
+            capacity_progress_ring.value = max(0.0, min(1.0, used_pct / 100))
+            capacity_progress_ring.color = capacity_color
+            capacity_ring_percent.color = capacity_color
+            capacity_health_badge.bgcolor = ft.Colors.with_opacity(0.16, capacity_color)
+            capacity_health_badge_text.color = capacity_color
+            capacity_health_badge_icon.color = capacity_color
+            capacity_health_badge_text.value = proj
 
             # Rebuild pie sections efficiently by replacing sections list
             capacity_pie.sections = [
@@ -873,6 +1034,12 @@ def create_dashboard_view(
                 ft.PieChartSection(value=free_pct, color=ft.Colors.GREEN, title="Free", radius=80,
                                    badge=ft.Text(f"{free_pct:.0f}%", size=10, color=ft.Colors.WHITE)),
             ]
+            with contextlib.suppress(Exception):
+                capacity_progress_ring.update()
+                capacity_ring_percent.update()
+                capacity_health_badge_text.update()
+                capacity_health_badge_icon.update()
+                capacity_health_badge.update()
         except Exception as e:
             logger.debug(f"Capacity update failed: {e}")
 
@@ -886,6 +1053,36 @@ def create_dashboard_view(
             logger.debug(f"Setting total clients to: {total_clients_val} (from {'database' if current_clients else 'server_status'})")
             kpi_total_clients_text.value = str(total_clients_val)
             hero_total_clients_text.value = str(total_clients_val)
+
+            prev_clients_val = total_clients_val
+            prev_transfers_val = current_server_status.get('total_transfers', 0)
+            prev_uptime_val = current_server_status.get('uptime_seconds', 0)
+            if isinstance(prev_server_snapshot, dict):
+                with contextlib.suppress(Exception):
+                    prev_clients_val = int(prev_server_snapshot.get('clients_connected', prev_clients_val))
+                    prev_transfers_val = int(prev_server_snapshot.get('total_transfers', prev_transfers_val) or 0)
+                    prev_uptime_val = int(prev_server_snapshot.get('uptime_seconds', prev_uptime_val))
+
+            delta_clients = total_clients_val - prev_clients_val
+            delta_transfers = int(current_server_status.get('total_transfers', 0) or 0) - int(prev_transfers_val or 0)
+            delta_uptime = int(current_server_status.get('uptime_seconds', 0) or 0) - int(prev_uptime_val or 0)
+
+            _update_trend_chip(
+                hero_total_clients_trend_icon,
+                hero_total_clients_trend_text,
+                hero_total_clients_trend,
+                delta_clients,
+                zero_label="No change",
+                suffix=" clients"
+            )
+            _update_trend_chip(
+                hero_active_transfers_trend_icon,
+                hero_active_transfers_trend_text,
+                hero_active_transfers_trend,
+                delta_transfers,
+                zero_label="No change",
+                suffix=" jobs"
+            )
 
             # Active jobs approximation: activities in last 10m containing start/running keywords
             now_dt = datetime.now()
@@ -927,6 +1124,18 @@ def create_dashboard_view(
                 hero_uptime_text.value = f"{uh}h {um}m"
             except Exception:
                 hero_uptime_text.value = "0h 0m"
+
+            # Uptime trend expressed in minutes difference
+            with contextlib.suppress(Exception):
+                delta_uptime_minutes = int(delta_uptime / 60)
+                _update_trend_chip(
+                    hero_uptime_trend_icon,
+                    hero_uptime_trend_text,
+                    hero_uptime_trend,
+                    delta_uptime_minutes,
+                    zero_label="Stable",
+                    suffix=" min"
+                )
         except Exception:
             pass
 
@@ -945,6 +1154,21 @@ def create_dashboard_view(
         except Exception:
             pass
 
+        # Update header summaries
+        try:
+            port_display = current_server_status.get('port') or current_server_status.get('listening_port') or "—"
+            storage_val = current_server_status.get('storage_used_gb')
+            storage_display = f"{storage_val:.1f} GB" if isinstance(storage_val, (int, float)) else "—"
+            summary_parts = [
+                "Online" if running else "Offline",
+                f"Port {port_display}",
+                f"Storage {storage_display}"
+            ]
+            header_summary_text.value = " • ".join(summary_parts)
+            header_summary_text.update()
+        except Exception:
+            pass
+
         # Update last updated
         last_updated_text.value = f"Last updated: {last_updated}"
 
@@ -958,6 +1182,12 @@ def create_dashboard_view(
             hero_total_clients_text.update()
             hero_active_transfers_text.update()
             hero_uptime_text.update()
+            last_updated_text.update()
+
+            # Update trend chips to reflect new styling
+            hero_total_clients_trend.update()
+            hero_active_transfers_trend.update()
+            hero_uptime_trend.update()
 
             # Use control.update() for 10x performance improvement over page.update()
             dashboard_container.update()
@@ -971,15 +1201,21 @@ def create_dashboard_view(
             except Exception as e2:
                 logger.error(f"Both control and page updates failed: {e2}")
 
+        with contextlib.suppress(Exception):
+            if isinstance(current_server_status, dict):
+                prev_server_snapshot = dict(current_server_status)
+
     async def _update_all_displays_async(source: str = 'auto') -> None:
         """Async version of update_all_displays."""
-        nonlocal current_server_status, current_system_metrics, current_activity, current_clients, last_updated, prev_server_snapshot, last_significant_toast_time
+        nonlocal current_server_status, current_system_metrics, current_activity, current_clients, last_updated, prev_server_snapshot, last_significant_toast_time, is_loading, countdown_remaining
 
         try:
             # Show slim refresh indicator during async updates
             refresh_indicator.visible = True
             with contextlib.suppress(Exception):
                 refresh_indicator.update()
+            is_loading = True
+            _update_refresh_countdown_display("Refreshing…")
 
             import asyncio
             loop = asyncio.get_event_loop()
@@ -1025,6 +1261,10 @@ def create_dashboard_view(
                 update_all_displays()
             except Exception as e:
                 logger.debug(f"update_all_displays() failed: {e}")
+            is_loading = False
+            if source != 'auto':
+                countdown_remaining = POLLING_INTERVAL
+                _update_refresh_countdown_display()
 
         except Exception as e:
             logger.debug(f"Async display update failed: {e}")
@@ -1034,6 +1274,7 @@ def create_dashboard_view(
                 prev_server_snapshot = dict(current_server_status) if isinstance(current_server_status, dict) else None
             except Exception:
                 pass
+            is_loading = False
             # Hide refresh indicator when finished
             refresh_indicator.visible = False
             with contextlib.suppress(Exception):
@@ -1048,15 +1289,42 @@ def create_dashboard_view(
 
     def update_activity_list() -> None:
         """Update the activity list."""
+        nonlocal is_loading
         activity_list.controls.clear()
+
+        if is_loading:
+            skeletons = [
+                ft.Container(
+                    content=ft.ProgressRing(width=26, height=26, stroke_width=4),
+                    height=56,
+                    alignment=ft.alignment.center,
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PURPLE_100),
+                    border_radius=10,
+                )
+                for _ in range(3)
+            ]
+            activity_list.controls.extend(skeletons)
+            with contextlib.suppress(Exception):
+                activity_list.update()
+            return
 
         # Filter activities with type safety
         safe_activity = current_activity if isinstance(current_activity, list) else []
+        filter_key = activity_filter.lower()
         filtered_activities = (
-            safe_activity if activity_filter == "All" else
+            safe_activity if filter_key == "all" else
             [activity for activity in safe_activity
-             if activity.get('type', '').lower() == activity_filter.lower()]
+             if activity.get('type', '').lower() == filter_key]
         )
+
+        if activity_search_query.strip():
+            query = activity_search_query.strip().lower()
+            filtered_activities = [
+                activity for activity in filtered_activities
+                if query in str(activity.get('message', '')).lower()
+                or query in str(activity.get('type', '')).lower()
+                or query in str(activity.get('timestamp', '')).lower()
+            ]
 
         # Empty state messaging
         if not filtered_activities:
@@ -1123,9 +1391,45 @@ def create_dashboard_view(
 
     def update_clients_list() -> None:
         """Update clients snapshot list from current_clients."""
+        nonlocal is_loading
         clients_list.controls.clear()
+        if is_loading:
+            clients_list.controls.extend([
+                ft.Container(
+                    content=ft.Row([
+                        ft.Shimmer(
+                            gradient=ft.LinearGradient(colors=[ft.Colors.OUTLINE_VARIANT, ft.Colors.SURFACE, ft.Colors.OUTLINE_VARIANT]),
+                            content=ft.Container(width=32, height=32, border_radius=16, bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE))
+                        ),
+                        ft.Column([
+                            ft.Container(width=120, height=10, border_radius=4, bgcolor=ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)),
+                            ft.Container(width=80, height=8, border_radius=4, bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE))
+                        ], spacing=6)
+                    ], spacing=12, alignment=ft.MainAxisAlignment.START),
+                    padding=ft.padding.symmetric(horizontal=10, vertical=8),
+                    border_radius=10,
+                    bgcolor=ft.Colors.with_opacity(0.04, ft.Colors.OUTLINE)
+                )
+                for _ in range(3)
+            ])
+            with contextlib.suppress(Exception):
+                clients_list.update()
+            return
         if not current_clients:
-            clients_list.controls.append(clients_empty)
+            clients_list.controls.append(
+                ft.Container(
+                    content=ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.PERSON_SEARCH, size=24, color=ft.Colors.OUTLINE),
+                            ft.Text("No clients available", size=12, color=ft.Colors.OUTLINE)
+                        ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
+                        ft.ElevatedButton("View clients", icon=ft.Icons.ARROW_FORWARD, on_click=_go_to_clients)
+                    ], spacing=12, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    padding=ft.padding.all(16),
+                    border_radius=12,
+                    bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.OUTLINE)
+                )
+            )
         else:
             # Sort by last_seen desc when available
             def _parse_ts(v: Any) -> datetime:
@@ -1138,23 +1442,58 @@ def create_dashboard_view(
                     return datetime.min
 
             sorted_clients = sorted(current_clients, key=lambda c: _parse_ts(c.get('last_seen') or c.get('last_activity')), reverse=True)
+            status_styles = {
+                'connected': 'success',
+                'active': 'success',
+                'online': 'success',
+                'idle': 'warning',
+                'warning': 'warning',
+                'connecting': 'warning',
+                'pending': 'info',
+                'disconnected': 'error',
+                'offline': 'error',
+                'error': 'error'
+            }
+
+            device_icons = {
+                'desktop': ft.Icons.COMPUTER,
+                'server': ft.Icons.DNS,
+                'laptop': ft.Icons.LAPTOP,
+                'mobile': ft.Icons.SMARTPHONE,
+            }
+
             for client in sorted_clients[:8]:
-                name = client.get('name') or client.get('client_id', 'unknown')
-                status = str(client.get('status', 'unknown')).lower()
-                last_seen = client.get('last_seen', client.get('last_activity', ''))
-                status_color = ft.Colors.GREEN if status in ['online', 'active', 'connected'] else (
-                    ft.Colors.ORANGE if status in ['idle', 'warning'] else ft.Colors.RED
-                )
+                name = client.get('name') or client.get('client_id', 'Unknown client')
+                status_value = str(client.get('status', 'unknown'))
+                status_key = status_value.lower()
+                last_seen = client.get('last_seen', client.get('last_activity', '')) or "—"
+                client_type = str(client.get('type', '')).lower()
+
+                icon_symbol = device_icons.get(client_type, ft.Icons.DEVICE_HUB)
+                status_chip = create_status_pill(status_value.title(), status_styles.get(status_key, 'info'))
+
                 item = ft.Container(
                     content=ft.Row([
-                        ft.Icon(ft.Icons.PERSON, size=18, color=status_color),
-                        ft.Text(name, expand=True, size=13),
-                        ft.Text(str(last_seen), size=11, color=ft.Colors.OUTLINE)
-                    ], spacing=10),
-                    padding=ft.padding.only(left=8, top=6, right=8, bottom=6),
-                    border_radius=8,
-                    bgcolor=ft.Colors.with_opacity(0.04, status_color),
-                    animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT)
+                        ft.CircleAvatar(
+                            content=ft.Icon(icon_symbol, size=16, color=ft.Colors.WHITE),
+                            radius=14,
+                            bgcolor=ft.Colors.with_opacity(0.6, ft.Colors.BLUE_GREY_700)
+                        ),
+                        ft.Column([
+                            ft.Text(name, size=13, weight=ft.FontWeight.W_500),
+                            ft.Text(f"Last seen: {last_seen}", size=11, color=ft.Colors.OUTLINE)
+                        ], spacing=2, expand=True),
+                        status_chip,
+                        ft.IconButton(
+                            icon=ft.Icons.OPEN_IN_NEW,
+                            tooltip="Open clients view",
+                            on_click=_go_to_clients,
+                        )
+                    ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                    padding=ft.padding.symmetric(horizontal=10, vertical=8),
+                    border_radius=10,
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.BLUE_GREY_200),
+                    animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT)
                 )
                 clients_list.controls.append(item)
 
@@ -1169,13 +1508,37 @@ def create_dashboard_view(
     hero_metrics_section = ft.ResponsiveRow([
         # Hero metric takes visual prominence with primary gradient
         ft.Column([
-            create_premium_hero_card("0", "Total Clients", "+0", "primary", value_control=hero_total_clients_text, on_click=_go_to_clients)
+            create_premium_hero_card(
+                "0",
+                "Total Clients",
+                "+0",
+                "primary",
+                value_control=hero_total_clients_text,
+                trend_control=hero_total_clients_trend,
+                on_click=_go_to_clients
+            )
         ], col={"sm": 12, "md": 8, "lg": 6}),
         # Secondary metrics cluster with different gradient schemes
         ft.Column([
             ft.Column([
-                create_premium_hero_card("0", "Active Transfers", "+0", "success", value_control=hero_active_transfers_text, on_click=_go_to_files),
-                create_premium_hero_card("0h 0m", "Server Uptime", "", "info", value_control=hero_uptime_text, on_click=_go_to_logs)
+                create_premium_hero_card(
+                    "0",
+                    "Active Transfers",
+                    "+0",
+                    "success",
+                    value_control=hero_active_transfers_text,
+                    trend_control=hero_active_transfers_trend,
+                    on_click=_go_to_files
+                ),
+                create_premium_hero_card(
+                    "0h 0m",
+                    "Server Uptime",
+                    "",
+                    "info",
+                    value_control=hero_uptime_text,
+                    trend_control=hero_uptime_trend,
+                    on_click=_go_to_logs
+                )
             ], spacing=20)
         ], col={"sm": 12, "md": 4, "lg": 6})
     ], spacing=28)
@@ -1183,9 +1546,10 @@ def create_dashboard_view(
 
     # Capacity & Forecast card
     capacity_content = ft.Row([
-        ft.Container(content=capacity_pie, alignment=ft.alignment.center, width=220, height=220),
+        ft.Container(content=capacity_ring_stack, alignment=ft.alignment.center, width=220, height=220),
         ft.Column([
             ft.Text("Storage breakdown", size=14, weight=ft.FontWeight.W_600),
+            capacity_health_badge,
             used_text,
             free_text,
             forecast_text,
@@ -1212,9 +1576,15 @@ def create_dashboard_view(
     # Create server status indicator used in header (dynamic)
     # Slim top bar: integrates status + actions in one compact bar
     def on_live_toggle(e: ft.ControlEvent) -> None:
-        nonlocal auto_refresh_enabled
+        nonlocal auto_refresh_enabled, countdown_remaining
         auto_refresh_enabled = bool(e.control.value)
-        show_success_message(page, "Live refresh enabled" if auto_refresh_enabled else "Live refresh paused")
+        if auto_refresh_enabled:
+            countdown_remaining = POLLING_INTERVAL
+            _update_refresh_countdown_display()
+            show_success_message(page, "Live refresh enabled")
+        else:
+            _update_refresh_countdown_display("Auto refresh paused")
+            show_success_message(page, "Live refresh paused")
 
     live_switch = ft.Switch(label="Live", value=True, on_change=on_live_toggle)
     live_switch.semantics_label = "Live auto refresh toggle"
@@ -1240,20 +1610,38 @@ def create_dashboard_view(
         live_switch,
     ], "secondary", semantics_label="Secondary dashboard actions")
 
+    quick_nav_menu = ft.PopupMenuButton(
+        icon=ft.Icons.MENU_OPEN,
+        items=[
+            ft.PopupMenuItem(text="Clients", icon=ft.Icons.PEOPLE_OUTLINE, on_click=_go_to_clients),
+            ft.PopupMenuItem(text="Files", icon=ft.Icons.FOLDER_OPEN, on_click=_go_to_files),
+            ft.PopupMenuItem(text="Logs", icon=ft.Icons.TERMINAL, on_click=_go_to_logs),
+        ],
+    )
+    quick_nav_menu.tooltip = "Quick navigation"
+
     header_row = ft.Row(
         [
-            ft.Text("Dashboard", size=20, weight=ft.FontWeight.W_600),
-            server_status_indicator_container,
-            ft.Container(expand=True),
+            ft.Column([
+                ft.Row([
+                    ft.Text("Dashboard", size=20, weight=ft.FontWeight.W_600),
+                    server_status_indicator_container,
+                    quick_nav_menu,
+                ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                ft.Row([
+                    header_summary_text,
+                    refresh_countdown_text,
+                    last_updated_text,
+                ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+            ], spacing=8, expand=True),
             primary_action_group,
             secondary_action_group,
-            last_updated_text,
         ],
         spacing=16,
         run_spacing=12,
         wrap=True,
         vertical_alignment=ft.CrossAxisAlignment.CENTER,
-        alignment=ft.MainAxisAlignment.START,
+        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
     )
 
     header_section = ft.Card(
@@ -1271,11 +1659,33 @@ def create_dashboard_view(
 
 
     # Live System Metrics card with sparklines
-    live_metrics_content = ft.Row([
-        _metric_tile("CPU", cpu_text, cpu_spark, ft.Colors.BLUE, "CPU usage sparkline"),
-        _metric_tile("Memory", memory_text, mem_spark, ft.Colors.GREEN, "Memory usage sparkline"),
-        _metric_tile("Disk", disk_text, disk_spark, ft.Colors.PURPLE, "Disk usage sparkline"),
+    def _legend_item(color: str, label: str) -> ft.Container:
+        return ft.Container(
+            content=ft.Row([
+                ft.Container(width=10, height=10, bgcolor=color, border_radius=5),
+                ft.Text(label, size=11)
+            ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.08, color)
+        )
+
+    metrics_tiles_row = ft.Row([
+        _metric_tile("CPU", cpu_text, cpu_progress, cpu_spark, ft.Colors.BLUE, "CPU usage sparkline"),
+        _metric_tile("Memory", memory_text, memory_progress, mem_spark, ft.Colors.GREEN, "Memory usage sparkline"),
+        _metric_tile("Disk", disk_text, disk_progress, disk_spark, ft.Colors.PURPLE, "Disk usage sparkline"),
     ], spacing=16, run_spacing=12, wrap=True)
+
+    metrics_legend = ft.Row([
+        _legend_item(ft.Colors.BLUE, "Compute"),
+        _legend_item(ft.Colors.GREEN, "Memory"),
+        _legend_item(ft.Colors.PURPLE, "Storage"),
+    ], spacing=12, wrap=True)
+
+    live_metrics_content = ft.Column([
+        metrics_tiles_row,
+        metrics_legend
+    ], spacing=12)
 
     live_system_metrics_card = themed_card(
         content=live_metrics_content,
@@ -1324,6 +1734,7 @@ def create_dashboard_view(
 
     def _update_operations_panels() -> None:
         """Optimized operations panel update using modern Python patterns."""
+        nonlocal is_loading
         # Ensure current_activity is a proper list for type safety
         safe_activity = current_activity if isinstance(current_activity, list) else []
 
@@ -1338,7 +1749,20 @@ def create_dashboard_view(
 
         # Update running jobs (simple conditional to reduce analyzer noise)
         running_jobs_list.controls.clear()
-        if not running_jobs:
+        if is_loading:
+            running_jobs_list.controls.extend([
+                ft.Container(
+                    content=ft.Row([
+                        ft.ProgressRing(width=22, height=22, stroke_width=4),
+                        ft.Text("Loading recent jobs…", size=12, color=ft.Colors.OUTLINE)
+                    ], spacing=12),
+                    padding=ft.padding.symmetric(horizontal=12, vertical=8),
+                    border_radius=8,
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.BLUE)
+                )
+                for _ in range(2)
+            ])
+        elif not running_jobs:
             running_jobs_list.controls.append(
                 ft.Text("All clear – no running jobs", size=12, color=ft.Colors.OUTLINE)
             )
@@ -1350,7 +1774,20 @@ def create_dashboard_view(
 
         # Update recent backups (simple conditional to reduce analyzer noise)
         recent_backups_list.controls.clear()
-        if not recent_backups:
+        if is_loading:
+            recent_backups_list.controls.extend([
+                ft.Container(
+                    content=ft.Row([
+                        ft.ProgressRing(width=22, height=22, stroke_width=4, color=ft.Colors.GREEN),
+                        ft.Text("Loading backup history…", size=12, color=ft.Colors.OUTLINE)
+                    ], spacing=12),
+                    padding=ft.padding.symmetric(horizontal=12, vertical=8),
+                    border_radius=8,
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.GREEN)
+                )
+                for _ in range(2)
+            ])
+        elif not recent_backups:
             recent_backups_list.controls.append(
                 ft.Text("No recent backups", size=12, color=ft.Colors.OUTLINE)
             )
@@ -1361,8 +1798,36 @@ def create_dashboard_view(
             )
 
     # Wrap operations panels into cards
-    running_jobs_card = themed_card(content=running_jobs_list, title="RUNNING JOBS", page=page)
-    recent_backups_card = themed_card(content=recent_backups_list, title="RECENT BACKUPS", page=page)
+    running_jobs_card = themed_card(
+        content=ft.Column([
+            ft.Row([
+                ft.Row([
+                    ft.Icon(ft.Icons.SYNC, size=18, color=ft.Colors.BLUE),
+                    ft.Text("Running Jobs", size=14, weight=ft.FontWeight.W_600)
+                ], spacing=8),
+                ft.Container(expand=True),
+                ft.TextButton("Open logs", icon=ft.Icons.OPEN_IN_NEW, on_click=_go_to_logs)
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            running_jobs_list
+        ], spacing=12),
+        title=None,
+        page=page
+    )
+    recent_backups_card = themed_card(
+        content=ft.Column([
+            ft.Row([
+                ft.Row([
+                    ft.Icon(ft.Icons.BACKUP, size=18, color=ft.Colors.GREEN),
+                    ft.Text("Recent Backups", size=14, weight=ft.FontWeight.W_600)
+                ], spacing=8),
+                ft.Container(expand=True),
+                ft.TextButton("Open files", icon=ft.Icons.FOLDER_OPEN, on_click=_go_to_files)
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            recent_backups_list
+        ], spacing=12),
+        title=None,
+        page=page
+    )
 
 
     # Clean, organized layout structure (streamlined, no redundant big sections)
@@ -1401,7 +1866,16 @@ def create_dashboard_view(
         ], scroll=ft.ScrollMode.AUTO),  # Add scrollbar when needed
         padding=ft.padding.only(left=28, top=20, right=28, bottom=20),
         expand=True,
-        bgcolor=ft.Colors.SURFACE,
+        gradient=ft.LinearGradient(
+            begin=ft.Alignment(-1, -1),
+            end=ft.Alignment(1, 1),
+            colors=[
+                ft.Colors.with_opacity(0.98, ft.Colors.BLUE_GREY_900),
+                ft.Colors.with_opacity(0.95, ft.Colors.BLUE_GREY_800),
+                ft.Colors.with_opacity(0.92, ft.Colors.BLUE_GREY_900),
+            ],
+        ),
+        border_radius=ft.border_radius.all(24),
         opacity=0.0,
         animate_opacity=ft.Animation(200, ft.AnimationCurve.EASE_OUT)
     )
@@ -1444,23 +1918,39 @@ def create_dashboard_view(
         except Exception:
             pass
 
+        _update_refresh_countdown_display()
+
         # Start lightweight periodic refresh in background using constants
         async def _poll_loop() -> None:
-            nonlocal _stop_polling
+            nonlocal _stop_polling, countdown_remaining
             operations_update_counter = 0
             try:
                 while not _stop_polling:
-                    await asyncio.sleep(POLLING_INTERVAL)
-                    if auto_refresh_enabled:
-                        # Fetch & update asynchronously to prevent UI blocking
-                        try:
-                            await _update_all_displays_async('auto')
-                            # Only update operations panels every other cycle to reduce load
-                            operations_update_counter += 1
-                            if operations_update_counter % OPERATIONS_UPDATE_CYCLE == 0:
-                                await _update_operations_panels_async()
-                        except Exception as e:
-                            logger.debug(f"Async update failed: {e}")
+                    countdown_remaining = POLLING_INTERVAL
+                    while countdown_remaining > 0 and not _stop_polling:
+                        if not auto_refresh_enabled:
+                            countdown_remaining = POLLING_INTERVAL
+                            _update_refresh_countdown_display()
+                            await asyncio.sleep(1)
+                            continue
+                        _update_refresh_countdown_display()
+                        await asyncio.sleep(1)
+                        countdown_remaining -= 1
+
+                    if _stop_polling or not auto_refresh_enabled:
+                        continue
+
+                    # Fetch & update asynchronously to prevent UI blocking
+                    try:
+                        await _update_all_displays_async('auto')
+                        # Only update operations panels every other cycle to reduce load
+                        operations_update_counter += 1
+                        if operations_update_counter % OPERATIONS_UPDATE_CYCLE == 0:
+                            await _update_operations_panels_async()
+                        countdown_remaining = POLLING_INTERVAL
+                        _update_refresh_countdown_display()
+                    except Exception as e:
+                        logger.debug(f"Async update failed: {e}")
             except Exception as e:
                 logger.debug(f"Polling loop terminated: {e}")
 

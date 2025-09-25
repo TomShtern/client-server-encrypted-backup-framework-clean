@@ -898,7 +898,7 @@ If FletV2/utils/debug_setup.py is missing, create it with:
 import logging
 import sys
 
-def setup_terminal_debugging(logger_name: str = "app", level: int = logging.INFO) -> logging.Logger:
+def setup_terminal_debugging(logger_name: str = "app", level: int =logging.INFO) -> logging.Logger:
     logger = logging.getLogger(logger_name)
     if not logger.handlers:
         handler = logging.StreamHandler(stream=sys.stdout)
