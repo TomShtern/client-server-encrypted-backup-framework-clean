@@ -105,10 +105,11 @@ def create_enhanced_action_buttons(state: EnhancedSettingsState) -> ft.Column:
 
     def import_handler(e: ft.ControlEvent) -> None:
         try:
-            state.file_picker.pick_files(
-                allowed_extensions=["json", "ini"],
-                dialog_title="Select Settings File"
-            )
+            if state.file_picker:
+                state.file_picker.pick_files(
+                    allowed_extensions=["json", "ini"],
+                    dialog_title="Select Settings File"
+                )
         except Exception as e:
             logger.error(f"Error opening file picker: {e}")
             if state.state_manager:

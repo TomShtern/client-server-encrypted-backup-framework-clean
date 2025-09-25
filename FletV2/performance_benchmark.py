@@ -90,8 +90,9 @@ class PerformanceBenchmark:
         for i in range(iterations):
             with self.measure_time("page_update_theme"):
                 # Simulate theme change
-                self.page.theme_mode = ft.ThemeMode.DARK if i % 2 == 0 else ft.ThemeMode.LIGHT
-                self.page.update()
+                if self.page:
+                    self.page.theme_mode = ft.ThemeMode.DARK if i % 2 == 0 else ft.ThemeMode.LIGHT
+                    self.page.update()
 
         results["theme_change_avg"] = statistics.mean(self.results["page_update_theme"])
 
@@ -100,14 +101,15 @@ class PerformanceBenchmark:
         for i in range(iterations // 2):  # Fewer iterations for overlay operations
             with self.measure_time("page_update_overlay"):
                 # Simulate dialog/overlay operation
-                snackbar = ft.SnackBar(content=ft.Text(f"Test {i}"))
-                self.page.overlay.append(snackbar)
-                snackbar.open = True
-                self.page.update()
+                if self.page:
+                    snackbar = ft.SnackBar(content=ft.Text(f"Test {i}"))
+                    self.page.overlay.append(snackbar)
+                    snackbar.open = True
+                    self.page.update()
 
-                # Clean up
-                self.page.overlay.remove(snackbar)
-                self.page.update()
+                    # Clean up
+                    self.page.overlay.remove(snackbar)
+                    self.page.update()
 
         results["overlay_operation_avg"] = statistics.mean(self.results["page_update_overlay"])
 

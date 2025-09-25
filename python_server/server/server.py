@@ -330,7 +330,7 @@ class BackupServer:
         """Factory method to create a new Client instance."""
         return Client(client_id, name)
 
-    def resolve_client(self, client_id: bytes) -> Optional[Client]:
+    def get_client_by_id(self, client_id: bytes) -> Optional[Client]:
         """Resolves a client object from the in-memory store by client ID."""
         with self.clients_lock:
             return self.clients.get(client_id)
@@ -1175,7 +1175,7 @@ class BackupServer:
             start_time = time.time()
             try:
                 self.db_manager.get_total_clients_count()
-                metrics_data['database_response_time_ms'] = (time.time() - start_time) * 1000
+                metrics_data['database_response_time_ms'] = int((time.time() - start_time) * 1000)
             except Exception:
                 metrics_data['database_response_time_ms'] = -1
 

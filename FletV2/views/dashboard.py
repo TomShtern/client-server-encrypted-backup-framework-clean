@@ -456,7 +456,7 @@ def create_dashboard_view(
 
         return sorted(activities, key=lambda x: x['timestamp'], reverse=True)
 
-    def create_premium_hero_card(value: str, label: str, trend: str = "", card_type: str = "primary", value_control: Optional[ft.Text] = None, on_click=None) -> ft.Card:
+    def create_premium_hero_card(value: str, label: str, trend: str = "", card_type: str = "primary", value_control=None, on_click=None) -> ft.Card:
         """Create hero metric card using Flet's native Card with built-in animations."""
         # Use Flet's semantic color system
         color_map = {
@@ -600,7 +600,7 @@ def create_dashboard_view(
     kpi_errors_24h_text = ft.Text("0", size=28, weight=ft.FontWeight.BOLD)
     kpi_storage_used_text = ft.Text("0 GB", size=28, weight=ft.FontWeight.BOLD)
 
-    def _kpi_card(value_control: ft.Text, label: str, icon: str, color, on_click=None) -> ft.Container:
+    def _kpi_card(value_control, label: str, icon: str, color, on_click=None) -> ft.Container:
         """Simplified KPI card using Flet's native features."""
         return ft.Container(
             content=ft.Column([

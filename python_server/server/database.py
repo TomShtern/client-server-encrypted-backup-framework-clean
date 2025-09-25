@@ -23,7 +23,7 @@ import threading
 import time
 from contextlib import suppress
 from datetime import datetime, timezone
-from typing import Any, Optional, List, Tuple, Dict
+from typing import Any, Optional, List, Tuple, Dict, Type
 from dataclasses import dataclass, field
 from collections import defaultdict
 
@@ -38,8 +38,8 @@ try:
     sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Shared'))
     from observability import StructuredLogger as _StructuredLogger, MetricsCollector as _MetricsCollector  # type: ignore
     OBSERVABILITY_AVAILABLE = True
-    StructuredLogger = _StructuredLogger
-    MetricsCollector = _MetricsCollector
+    StructuredLogger = _StructuredLogger  # type: ignore
+    MetricsCollector = _MetricsCollector  # type: ignore
 except ImportError:
     OBSERVABILITY_AVAILABLE = False
     # Create stub classes when observability is not available

@@ -4,7 +4,7 @@ Quick smoke test: import all FletV2 views, instantiate them with minimal mocks,
 and run any setup_subscriptions functions to ensure they execute without error.
 
 Run with the project's venv:
-  & "./flet_venv/Scripts/python.exe" scripts\smoke_views.py
+  & "./flet_venv/Scripts/python.exe" scripts\\smoke_views.py
 """
 import asyncio
 import importlib
@@ -31,7 +31,7 @@ try:
     import flet
     from flet.core.control import Control as _FletControl
     if not hasattr(_FletControl, '_smoke_orig_update'):
-        _FletControl._smoke_orig_update = _FletControl.update
+        setattr(_FletControl, '_smoke_orig_update', _FletControl.update)
 
     def _smoke_update(self, *args, **kwargs):
         # no-op to allow setup_subscriptions to call update() without a real page

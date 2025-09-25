@@ -158,13 +158,15 @@ def run_integrated_server(dev_mode=True, port=None):
 
         # Try to run the integrated server with port
         try:
-            asyncio.run(main_integrated(development_mode=dev_mode, force_mock=False, port=port))
+            port_to_use = port if port is not None else 8000
+            asyncio.run(main_integrated(development_mode=dev_mode, force_mock=False, port=port_to_use))
         except OSError as e:
             error_msg = str(e).lower()
             if "address already in use" in error_msg or "[errno 10048]" in error_msg or "only one usage of each socket address" in error_msg:
                 print(f"⚠️ Port {port} is already in use. Finding alternative port...")
                 try:
-                    new_port = find_available_port(start_port=port+1)
+                    start_port = (port + 1) if port is not None else 8000
+                    new_port = find_available_port(start_port=start_port)
                     print(f"🔍 Found alternative port: {new_port}")
                     print(f"🌐 Web URL: http://127.0.0.1:{new_port}")
                     asyncio.run(main_integrated(development_mode=dev_mode, force_mock=False, port=new_port))

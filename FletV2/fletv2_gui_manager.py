@@ -169,22 +169,22 @@ class FletV2Manager:
     async def _update_server_status_display(self):
         """Update server status in FletV2 interface."""
         if self.flet_app and hasattr(self.flet_app, 'update_server_status'):
-            await self.flet_app.update_server_status(self.server_status)
+            self.flet_app.update_server_status(self.server_status)
 
     async def _update_client_stats_display(self):
         """Update client statistics in FletV2 interface."""
         if self.flet_app and hasattr(self.flet_app, 'update_client_stats'):
-            await self.flet_app.update_client_stats(self.client_stats)
+            self.flet_app.update_client_stats(self.client_stats)
 
     async def _update_transfer_stats_display(self):
         """Update transfer statistics in FletV2 interface."""
         if self.flet_app and hasattr(self.flet_app, 'update_transfer_stats'):
-            await self.flet_app.update_transfer_stats(self.transfer_stats)
+            self.flet_app.update_transfer_stats(self.transfer_stats)
 
     async def _update_maintenance_stats_display(self):
         """Update maintenance statistics in FletV2 interface."""
         if self.flet_app and hasattr(self.flet_app, 'update_maintenance_stats'):
-            await self.flet_app.update_maintenance_stats(self.maintenance_stats)
+            self.flet_app.update_maintenance_stats(self.maintenance_stats)
 
     # ============================================================================
     # SERVER INTEGRATION METHODS (Same interface as old GUIManager)

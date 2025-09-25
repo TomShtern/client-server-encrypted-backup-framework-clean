@@ -18,6 +18,7 @@ import os
 import sys
 import signal
 from pathlib import Path
+from run_integrated_server import find_available_port
 from typing import Optional, Any
 
 # CRITICAL: Set up Python path IMMEDIATELY for all imports
@@ -94,10 +95,11 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import server_bridge: {e}")
     # Silent fallback - path should be configured by now
-    def create_server_bridge(real_server=None):
+    def _create_server_bridge_fallback(real_server=None):
         class MockBridge:
             def is_connected(self): return False
         return MockBridge()
+    create_server_bridge = _create_server_bridge_fallback
 
 try:
     from utils.debug_setup import setup_terminal_debugging
@@ -107,7 +109,7 @@ except ImportError as e:
     print(f"Warning: Could not import debug_setup: {e}")
     # Silent fallback - path should be configured by now
     import logging
-    def setup_terminal_debugging(logger_name=None):
+    def _setup_terminal_debugging_fallback(logger_name=None):
         logger = logging.getLogger(logger_name or __name__)
         if not logger.handlers:
             handler = logging.StreamHandler()
@@ -115,6 +117,7 @@ except ImportError as e:
             logger.addHandler(handler)
             logger.setLevel(logging.INFO)
         return logger
+    setup_terminal_debugging = _setup_terminal_debugging_fallback
 
 # Set up logging
 logger = setup_terminal_debugging(logger_name="IntegratedStartup")
@@ -352,7 +355,8 @@ async def main_integrated(development_mode: bool = False, force_mock: bool = Fal
         if development_mode and ("address already in use" in error_msg or "[errno 10048]" in error_msg or "only one usage of each socket address" in error_msg):
             logger.warning(f"⚠️ Port {port} is already in use. Finding alternative port...")
             try:
-                new_port = find_available_port(start_port=port+1)
+                start_port = (port + 1) if port is not None else 8000
+                new_port = find_available_port(start_port=start_port)
                 logger.info(f"🔍 Found alternative port: {new_port}")
                 logger.info(f"🌐 Web URL: http://127.0.0.1:{new_port}")
                 await manager.start_integrated_gui(development_mode=development_mode, port=new_port)

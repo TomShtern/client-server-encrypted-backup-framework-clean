@@ -17,6 +17,7 @@ import os
 import sys
 import logging
 from pathlib import Path
+from typing import Any, Optional
 
 # Set up environment for proper imports
 current_dir = Path(__file__).parent
@@ -69,16 +70,17 @@ class BackupServerWithFletV2:
                 self.logger.info("Replacing old GUI with FletV2Manager...")
 
                 # Replace the GUI manager
-                self.backup_server.gui_manager = FletV2Manager(self.backup_server)
+                self.backup_server.gui_manager = FletV2Manager(self.backup_server)  # type: ignore
 
                 # Initialize the FletV2 GUI
-                if self.backup_server.gui_manager.initialize():
+                initialize_method = getattr(self.backup_server.gui_manager, 'initialize', None)
+                if initialize_method and initialize_method():
                     self.logger.info("✅ FletV2 GUI successfully replaced old ServerGUI")
                 else:
                     self.logger.error("❌ Failed to initialize FletV2 GUI")
             else:
                 self.logger.info("GUI disabled - running headless")
-                self.backup_server.gui_manager = None
+                self.backup_server.gui_manager = None  # type: ignore
 
         else:
             self.logger.warning("BackupServer not available - using mock")
@@ -86,8 +88,10 @@ class BackupServerWithFletV2:
 
             # Still create FletV2Manager for demonstration
             if not disable_gui:
-                self.backup_server.gui_manager = FletV2Manager(self.backup_server)
-                self.backup_server.gui_manager.initialize()
+                self.backup_server.gui_manager = FletV2Manager(self.backup_server)  # type: ignore
+                initialize_method = getattr(self.backup_server.gui_manager, 'initialize', None)
+                if initialize_method:
+                    initialize_method()
 
     def start(self):
         """Start the BackupServer with FletV2 GUI."""
@@ -118,8 +122,9 @@ class BackupServerWithFletV2:
                 self.backup_server.gui_manager.shutdown()
 
             # Shutdown server
-            if hasattr(self.backup_server, 'shutdown'):
-                self.backup_server.shutdown()
+            shutdown_method = getattr(self.backup_server, 'shutdown', None)
+            if shutdown_method:
+                shutdown_method()
 
             self.logger.info("Shutdown complete")
 
@@ -147,33 +152,16 @@ class BackupServerWithFletV2:
                         gui = self.backup_server.gui_manager
 
                         # Update server status
-                        gui.update_server_status(
-                            running=True,
-                            address='localhost',
-                            port=1256,
-                            uptime=f"{int(time.time()) % 3600:02d}:00:00"
-                        )
+                        gui.update_server_status(True, 'localhost', 1256, f"{int(time.time()) % 3600:02d}:00:00")  # type: ignore
 
                         # Update client stats
-                        gui.update_client_stats(
-                            connected=connected_clients,
-                            total_registered=17,  # From real database
-                            active_transfers=connected_clients // 2
-                        )
+                        gui.update_client_stats(connected_clients, 17, connected_clients // 2)  # type: ignore
 
                         # Update transfer stats
-                        gui.update_transfer_stats(
-                            bytes_transferred=bytes_transferred,
-                            transfer_rate=1024.0,
-                            last_activity="Just now"
-                        )
+                        gui.update_transfer_stats(bytes_transferred, 1024.0, "Just now")  # type: ignore
 
                         # Update maintenance stats
-                        gui.update_maintenance_stats(
-                            last_cleanup="Today",
-                            files_cleaned=5,
-                            clients_cleaned=2
-                        )
+                        gui.update_maintenance_stats("Today", 5, 2)  # type: ignore
 
                     time.sleep(2)  # Update every 2 seconds
 

@@ -474,7 +474,7 @@ def themed_metric_card(title: str, value: str, icon: str) -> ft.Card:
 
 def themed_chip(text: str, icon: Optional[str] = None) -> ft.Container:
     """Create info chip using Flet's Container. Simple & clean!"""
-    content: List[Union[ft.Text, ft.Icon]] = [ft.Text(text, size=12)]
+    content = [ft.Text(text, size=12)]
     if icon:
         content.insert(0, ft.Icon(icon, size=16))
 

@@ -125,8 +125,8 @@ def test_server_bridge_integration(backup_server):
         logger.info("✅ Created ServerBridge with real server")
 
         # Test that it's not using mock data
-        if hasattr(bridge, '_use_mock_data'):
-            is_mock = bridge._use_mock_data
+        is_mock = getattr(bridge, '_use_mock_data', None)
+        if is_mock is not None:
             logger.info(f"ServerBridge _use_mock_data: {is_mock}")
             if not is_mock:
                 logger.info("✅ ServerBridge is using real server (not mock data)")

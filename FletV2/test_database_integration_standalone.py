@@ -283,7 +283,7 @@ class DatabaseIntegrationTester:
                 from utils.server_bridge import create_server_bridge
                 self.server_bridge = create_server_bridge(real_server=None)
 
-            db_view = create_database_view(self.server_bridge, mock_page)
+            db_view = create_database_view(self.server_bridge, mock_page)  # type: ignore
 
             if db_view is None:
                 return {'success': False, 'error': 'Database view creation failed'}
@@ -293,7 +293,7 @@ class DatabaseIntegrationTester:
             # Test clients view
             try:
                 from views.clients import create_clients_view
-                clients_view = create_clients_view(self.server_bridge, mock_page)
+                clients_view = create_clients_view(self.server_bridge, mock_page, None)  # type: ignore
                 if clients_view is None:
                     return {'success': False, 'error': 'Clients view creation failed'}
                 logger.info("Clients view created successfully")
@@ -303,7 +303,7 @@ class DatabaseIntegrationTester:
             # Test files view
             try:
                 from views.files import create_files_view
-                files_view = create_files_view(self.server_bridge, mock_page)
+                files_view = create_files_view(self.server_bridge, mock_page)  # type: ignore
                 if files_view is None:
                     return {'success': False, 'error': 'Files view creation failed'}
                 logger.info("Files view created successfully")
