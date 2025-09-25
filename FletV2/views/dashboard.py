@@ -44,7 +44,7 @@ except ImportError:
         return logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button
+from utils.ui_components import create_status_pill, themed_card, themed_button
 from utils.user_feedback import show_success_message, show_error_message
 
 logger = get_logger(__name__)
@@ -173,14 +173,14 @@ def normalize_activity_type(level: str) -> ActivityType:
     return 'info'
 
 # Enhanced components using Flet native features
-def create_status_pill(text: str, status: str) -> ft.Container:
+def create_status_pill(text: str, status_type: str) -> ft.Container:
     """Modern status pill using Flet's native styling."""
     color_map = {
         "success": ft.Colors.GREEN,
         "error": ft.Colors.ERROR,
         "warning": ft.Colors.ORANGE
     }
-    color = color_map.get(status, ft.Colors.PRIMARY)
+    color = color_map.get(status_type, ft.Colors.PRIMARY)
 
     return ft.Container(
         content=ft.Text(text, color=color, size=12, weight=ft.FontWeight.W_600),
@@ -190,17 +190,24 @@ def create_status_pill(text: str, status: str) -> ft.Container:
         padding=ft.padding.symmetric(horizontal=16, vertical=6)
     )
 
-def create_action_group(buttons: List[ft.Control], group_type: str = "primary", spacing: int = 8) -> ft.Container:
-    """Create action button group using Flet's native styling."""
-    bgcolor = ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY) if group_type == "primary" else ft.Colors.with_opacity(0.03, ft.Colors.OUTLINE)
-
-    return ft.Container(
-        content=ft.Row(buttons, spacing=spacing),
-        padding=ft.padding.symmetric(horizontal=8, vertical=4),
-        border_radius=8,
-        bgcolor=bgcolor,
+def create_action_group(
+    buttons: List[ft.Control],
+    group_type: str = "primary",
+    spacing: int = 10,
+    semantics_label: Optional[str] = None
+) -> ft.Container:
+    """Create a subtle action group wrapper that adapts to dark/light themes."""
+    tone = ft.Colors.PRIMARY if group_type == "primary" else ft.Colors.OUTLINE
+    container = ft.Container(
+        content=ft.Row(buttons, spacing=spacing, wrap=True, run_spacing=8),
+        padding=ft.padding.symmetric(horizontal=12, vertical=8),
+        border_radius=12,
+        bgcolor=ft.Colors.with_opacity(0.08, tone),
         animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT)
     )
+    if semantics_label:
+        container.semantics_label = semantics_label
+    return container
 
 def safe_server_call(method, *args, **kwargs) -> Optional[Dict[str, Any]]:
     """Standardized error handling for server bridge calls."""
@@ -295,18 +302,37 @@ def create_dashboard_view(
 
     # Define UI controls that are used in update_all_displays
     # Dynamic hero metric value controls for live updates
-    hero_total_clients_text = ft.Text("0", size=48, weight=ft.FontWeight.BOLD, color=ft.Colors.PRIMARY)
-    hero_active_transfers_text = ft.Text("0", size=48, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN)
-    hero_uptime_text = ft.Text("0h 0m", size=48, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE)
+    hero_total_clients_text = ft.Text("0", size=44, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
+    hero_active_transfers_text = ft.Text("0", size=44, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
+    hero_uptime_text = ft.Text("0h 0m", size=44, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
 
     # Define buttons that are used in update_all_displays
-    backup_button = themed_button("Backup", on_backup, variant="filled", icon=ft.Icons.BACKUP)
-    refresh_button = themed_button("Refresh", refresh_dashboard, variant="outlined", icon=ft.Icons.REFRESH)
-    connect_button = themed_button("Connect", start_server, variant="filled", icon=ft.Icons.PLAY_ARROW)
-    disconnect_button = themed_button("Disconnect", stop_server, variant="outlined", icon=ft.Icons.STOP)
+    button_shape = ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12))
+    connect_button = ft.FilledButton(text="Connect", icon=ft.Icons.PLAY_ARROW, on_click=start_server, style=button_shape)
+    connect_button.semantics_label = "Connect to server"
+
+    backup_button = ft.FilledTonalButton(text="Backup", icon=ft.Icons.BACKUP, on_click=on_backup, style=button_shape)
+    backup_button.semantics_label = "Start backup"
+
+    disconnect_button = ft.OutlinedButton(
+        text="Disconnect",
+        icon=ft.Icons.STOP,
+        on_click=stop_server,
+        style=ft.ButtonStyle(
+            shape=ft.RoundedRectangleBorder(radius=12),
+            color={ft.ControlState.DEFAULT: ft.Colors.ERROR},
+            side={ft.ControlState.DEFAULT: ft.BorderSide(1, ft.Colors.ERROR)}
+        )
+    )
+    disconnect_button.semantics_label = "Disconnect server"
+
+    refresh_button = ft.FilledTonalButton(text="Refresh", icon=ft.Icons.REFRESH, on_click=refresh_dashboard, style=button_shape)
+    refresh_button.semantics_label = "Refresh dashboard"
 
     # Define server status indicator container
     server_status_indicator_container = ft.Container()
+    server_status_indicator_container.semantics_label = "Server connection status"
+    server_status_indicator_container.content = create_status_pill("Checking", "info")
 
     # Get server status data with improved type safety
     def get_server_status() -> Dict[str, Any]:
@@ -456,47 +482,54 @@ def create_dashboard_view(
 
         return sorted(activities, key=lambda x: x['timestamp'], reverse=True)
 
-    def create_premium_hero_card(value: str, label: str, trend: str = "", card_type: str = "primary", value_control=None, on_click=None) -> ft.Card:
-        """Create hero metric card using Flet's native Card with built-in animations."""
-        # Use Flet's semantic color system
+    def create_premium_hero_card(
+        value: str,
+        label: str,
+        trend: str = "",
+        card_type: str = "primary",
+        value_control=None,
+        on_click=None
+    ) -> ft.Control:
+        """Create a polished hero metric tile with higher contrast and helpful semantics."""
         color_map = {
             "success": ft.Colors.GREEN,
             "info": ft.Colors.BLUE,
             "primary": ft.Colors.PRIMARY
         }
-        color = color_map.get(card_type, ft.Colors.PRIMARY)
+        accent = color_map.get(card_type, ft.Colors.PRIMARY)
 
-        # Trend indicator using native Flet components
         trend_widget = None
         if trend:
             is_positive = trend.startswith("+")
             trend_widget = ft.Row([
-                ft.Icon(ft.Icons.TRENDING_UP if is_positive else ft.Icons.TRENDING_DOWN, size=16, color=color),
-                ft.Text(trend, size=14, weight=ft.FontWeight.BOLD, color=color)
+                ft.Icon(ft.Icons.TRENDING_UP if is_positive else ft.Icons.TRENDING_DOWN, size=16, color=accent),
+                ft.Text(trend, size=14, weight=ft.FontWeight.BOLD, color=accent)
             ], spacing=4)
 
-        value_text = value_control or ft.Text(value, size=48, weight=ft.FontWeight.BOLD, color=color)
-        label_text = ft.Text(label, size=16, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE)
+        value_text = value_control or ft.Text(value, size=44, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
+        value_text.semantics_label = f"{label} value {value}"
+        label_text = ft.Text(label, size=16, weight=ft.FontWeight.W_600, color=ft.Colors.WHITE)
 
-        # Native Flet Card with built-in hover and animation support
-        card_content = ft.Container(
+        tile = ft.Container(
             content=ft.Column([
-                ft.Row([value_text, trend_widget or ft.Container()],
-                      alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Row([value_text, trend_widget or ft.Container()], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 label_text
-            ], spacing=8),
+            ], spacing=10),
             padding=24,
+            border_radius=18,
+            bgcolor=ft.Colors.with_opacity(0.14, accent),
+            shadow=ft.BoxShadow(
+                blur_radius=20,
+                spread_radius=0,
+                offset=ft.Offset(0, 10),
+                color=ft.Colors.with_opacity(0.25, accent)
+            ),
             on_click=on_click,
-            animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
-            animate_scale=ft.Animation(100, ft.AnimationCurve.EASE_OUT)
+            animate=ft.Animation(160, ft.AnimationCurve.EASE_OUT),
+            animate_scale=ft.Animation(110, ft.AnimationCurve.EASE_OUT)
         )
-
-        return ft.Card(
-            content=card_content,
-            elevation=4,
-            color=ft.Colors.with_opacity(0.05, color),
-            surface_tint_color=color
-        )
+        tile.semantics_label = f"{label} metric card"
+        return tile
 
 
     def create_premium_activity_stream() -> ft.Card:
@@ -530,10 +563,11 @@ def create_dashboard_view(
 
             activity_controls.append(
                 ft.ListTile(
-                    leading=ft.Icon(icon, color=color, size=20),
-                    title=ft.Text(activity.get('message', ''), size=13, weight=ft.FontWeight.W_500),
+                    leading=ft.Icon(icon, color=color, size=18),
+                    title=ft.Text(activity.get('message', ''), size=13, weight=ft.FontWeight.W_500, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
                     subtitle=ft.Text(time_str, size=11, color=ft.Colors.OUTLINE),
-                    dense=True
+                    dense=True,
+                    content_padding=ft.padding.symmetric(vertical=4)
                 )
             )
 
@@ -546,12 +580,12 @@ def create_dashboard_view(
                     ], spacing=8),
                     ft.ListView(
                         controls=activity_controls,
-                        height=200,
-                        spacing=4
+                        height=150,
+                        spacing=2
                     ) if activity_controls else ft.Container(
                         content=ft.Text("No recent activity", color=ft.Colors.OUTLINE),
                         alignment=ft.alignment.center,
-                        height=100
+                        height=120
                     )
                 ], spacing=8),
                 padding=20
@@ -583,8 +617,11 @@ def create_dashboard_view(
 
     # Capacity & forecast controls
     used_text = ft.Text("Used: --", size=14)
+    used_text.semantics_label = "Total storage used"
     free_text = ft.Text("Free: --", size=14)
+    free_text.semantics_label = "Total storage free"
     forecast_text = ft.Text("Forecast: --", size=12, color=ft.Colors.OUTLINE)
+    forecast_text.semantics_label = "Storage forecast"
     # Real PieChart instead of placeholder
     capacity_pie = ft.PieChart(
         sections=[],
@@ -686,6 +723,27 @@ def create_dashboard_view(
     mem_spark = _create_sparkline(ft.Colors.GREEN)
     disk_spark = _create_sparkline(ft.Colors.PURPLE)
 
+    def _metric_tile(title: str, summary_text: ft.Control, chart: ft.LineChart, accent: str, semantics: str) -> ft.Container:
+        container = ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    ft.Text(title, size=12, color=ft.Colors.with_opacity(0.8, accent), weight=ft.FontWeight.W_600)
+                ]),
+                summary_text,
+                chart
+            ], spacing=8),
+            padding=ft.padding.all(12),
+            border_radius=14,
+            bgcolor=ft.Colors.with_opacity(0.08, accent),
+            shadow=ft.BoxShadow(
+                blur_radius=12,
+                offset=ft.Offset(0, 6),
+                color=ft.Colors.with_opacity(0.15, accent)
+            )
+        )
+        container.semantics_label = semantics
+        return container
+
     def _update_spark(chart: ft.LineChart, values: List[float], color) -> None:
         """Update sparkline with efficient LineChart data points using modern Python."""
         # Use walrus operator and generator expression for efficiency
@@ -704,6 +762,8 @@ def create_dashboard_view(
             curved=True,
             prevent_curve_over_shooting=True
         )]
+        with contextlib.suppress(Exception):
+            chart.update()
 
 
     # Update all displays
@@ -873,21 +933,15 @@ def create_dashboard_view(
         # Update header status indicator
         try:
             label, severity = _compute_server_status_label(running)
-            severity_colors = {
-                "excellent": ft.Colors.GREEN,
-                "good": ft.Colors.GREEN,
-                "warning": ft.Colors.ORANGE,
-                "critical": ft.Colors.RED,
-                "info": ft.Colors.BLUE,
-                "neutral": ft.Colors.OUTLINE,
+            severity_map = {
+                "excellent": "success",
+                "good": "success",
+                "warning": "warning",
+                "critical": "error",
+                "info": "info",
+                "neutral": "default",
             }
-            color = severity_colors.get(severity, ft.Colors.PRIMARY)
-            server_status_indicator_container.content = ft.Container(
-                content=ft.Row([
-                    ft.Container(width=8, height=8, bgcolor=color, border_radius=4),
-                    ft.Text(label, color=color, weight=ft.FontWeight.BOLD)
-                ], spacing=8)
-            )
+            server_status_indicator_container.content = create_status_pill(label, severity_map.get(severity, "info"))
         except Exception:
             pass
 
@@ -1129,13 +1183,14 @@ def create_dashboard_view(
 
     # Capacity & Forecast card
     capacity_content = ft.Row([
-        ft.Container(content=capacity_pie),
+        ft.Container(content=capacity_pie, alignment=ft.alignment.center, width=220, height=220),
         ft.Column([
+            ft.Text("Storage breakdown", size=14, weight=ft.FontWeight.W_600),
             used_text,
             free_text,
             forecast_text,
-        ], spacing=8, expand=True)
-    ], spacing=16, alignment=ft.MainAxisAlignment.START)
+        ], spacing=10, horizontal_alignment=ft.CrossAxisAlignment.START, alignment=ft.MainAxisAlignment.START, expand=True)
+    ], spacing=24, vertical_alignment=ft.CrossAxisAlignment.CENTER, wrap=True)
 
     capacity_card = themed_card(
         content=capacity_content,
@@ -1162,6 +1217,7 @@ def create_dashboard_view(
         show_success_message(page, "Live refresh enabled" if auto_refresh_enabled else "Live refresh paused")
 
     live_switch = ft.Switch(label="Live", value=True, on_change=on_live_toggle)
+    live_switch.semantics_label = "Live auto refresh toggle"
     # Set simple string tooltips for broad Flet compatibility
     server_status_indicator_container.tooltip = "Server status"
     connect_button.tooltip = "Connect to server"
@@ -1176,41 +1232,50 @@ def create_dashboard_view(
         connect_button,
         disconnect_button,
         backup_button,
-    ], "primary")
+    ], "primary", semantics_label="Primary server actions")
 
     # Secondary actions - configuration and monitoring
     secondary_action_group = create_action_group([
         refresh_button,
         live_switch,
-    ], "secondary")
+    ], "secondary", semantics_label="Secondary dashboard actions")
 
-    header_section = ft.Container(
-        content=ft.Row([
+    header_row = ft.Row(
+        [
             ft.Text("Dashboard", size=20, weight=ft.FontWeight.W_600),
-            ft.Container(expand=True),
             server_status_indicator_container,
-            ft.VerticalDivider(width=1, color=ft.Colors.OUTLINE),
+            ft.Container(expand=True),
             primary_action_group,
-            ft.VerticalDivider(width=1, color=ft.Colors.OUTLINE),
             secondary_action_group,
-            ft.Container(width=8),
             last_updated_text,
-        ], spacing=12, alignment=ft.MainAxisAlignment.START),
-        padding=ft.padding.symmetric(horizontal=16, vertical=8),
-        border=ft.border.all(1, ft.Colors.OUTLINE),
-        border_radius=8,
-        bgcolor=ft.Colors.SURFACE,
-        animate_opacity=ft.Animation(250, ft.AnimationCurve.EASE_OUT),
-        opacity=1.0,  # Fixed: was 0.0 making header invisible!
+        ],
+        spacing=16,
+        run_spacing=12,
+        wrap=True,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        alignment=ft.MainAxisAlignment.START,
     )
+
+    header_section = ft.Card(
+        content=ft.Container(
+            content=header_row,
+            padding=ft.padding.symmetric(horizontal=20, vertical=12),
+            bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.SURFACE_TINT)
+        ),
+        elevation=4,
+        surface_tint_color=ft.Colors.TRANSPARENT,
+    )
+    header_section.animate_opacity = ft.Animation(250, ft.AnimationCurve.EASE_OUT)
+    header_section.opacity = 1.0
+    header_section.semantics_label = "Dashboard controls"
 
 
     # Live System Metrics card with sparklines
     live_metrics_content = ft.Row([
-        ft.Column([ft.Text("CPU", size=12, color=ft.Colors.OUTLINE), cpu_text, cpu_spark], spacing=6, expand=True),
-        ft.Column([ft.Text("Memory", size=12, color=ft.Colors.OUTLINE), memory_text, mem_spark], spacing=6, expand=True),
-        ft.Column([ft.Text("Disk", size=12, color=ft.Colors.OUTLINE), disk_text, disk_spark], spacing=6, expand=True),
-    ], spacing=12)
+        _metric_tile("CPU", cpu_text, cpu_spark, ft.Colors.BLUE, "CPU usage sparkline"),
+        _metric_tile("Memory", memory_text, mem_spark, ft.Colors.GREEN, "Memory usage sparkline"),
+        _metric_tile("Disk", disk_text, disk_spark, ft.Colors.PURPLE, "Disk usage sparkline"),
+    ], spacing=16, run_spacing=12, wrap=True)
 
     live_system_metrics_card = themed_card(
         content=live_metrics_content,

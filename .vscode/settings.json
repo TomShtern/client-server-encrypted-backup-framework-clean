@@ -1,19 +1,28 @@
 {
-  "python.defaultInterpreterPath": "C:\\Users\\tom7s\\Desktopp\\Claude_Folder_2\\Client_Server_Encrypted_Backup_Framework\\flet_venv\\Scripts\\python.exe",
-  "python.venvPath": "${workspaceFolder}",
+  "python.venvPath": "${workspaceFolder}/FletV2",
   "python.terminal.activateEnvironment": true,
 
   "terminal.integrated.defaultProfile.windows": "FletVenv PowerShell",
   "terminal.integrated.profiles.windows": {
     "FletVenv PowerShell": {
       "source": "PowerShell",
-      "args": ["-NoExit", "-Command", "& '.\\flet_venv\\Scripts\\Activate.ps1'"],
+      "args": ["-NoExit", "-Command", "& '.\\FletV2\\flet_venv\\Scripts\\Activate.ps1'"],
       "icon": "terminal-powershell"
     }
   },
-    "python.linting.enabled": true,
+  "python.linting.enabled": true,
   "python.linting.pylintEnabled": true,
   "python.linting.flake8Enabled": true,
+  "python.analysis.autoImportCompletions": true,
+  "python.defaultInterpreterPath": "./FletV2/flet_venv/Scripts/python.exe",
+  "python.terminal.activateEnvInCurrentTerminal": true,
+  "python.envFile": "${workspaceFolder}/.env",
+  "terminal.integrated.env.windows": {
+    "PYTHONIOENCODING": "utf-8",
+    "CYBERBACKUP_DISABLE_INTEGRATED_GUI": "1",
+    "CYBERBACKUP_DISABLE_GUI": "1",
+    "FLET_V2_DEBUG": "true"
+  },
 
   "files.exclude": {
     "**/__pycache__": true,

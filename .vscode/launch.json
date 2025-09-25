@@ -2,13 +2,19 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debugpy: FletV2 App",
+            "name": "FletV2 Desktop App",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/FletV2/main.py",
+            "python": "${workspaceFolder}/FletV2/flet_venv/Scripts/python.exe",
+            "cwd": "${workspaceFolder}/FletV2",
             "console": "integratedTerminal",
             "env": {
-                "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/Shared"
+                "PYTHONIOENCODING": "utf-8",
+                "CYBERBACKUP_DISABLE_INTEGRATED_GUI": "1",
+                "CYBERBACKUP_DISABLE_GUI": "1",
+                "FLET_V2_DEBUG": "true",
+                "PYTHONPATH": "${workspaceFolder};${workspaceFolder}/Shared;${workspaceFolder}/FletV2"
             },
             "justMyCode": false
         },

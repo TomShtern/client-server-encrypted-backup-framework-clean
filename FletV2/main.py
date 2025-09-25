@@ -15,6 +15,24 @@ This demonstrates the clean architecture:
 import os
 import sys
 
+# ALWAYS import UTF-8 solution FIRST to fix encoding issues
+# This MUST be imported before any subprocess or console operations
+try:
+    # Try to add parent directory to path for Shared module access
+    _current_dir = os.path.dirname(os.path.abspath(__file__))
+    _parent_dir = os.path.dirname(_current_dir)
+    if _parent_dir not in sys.path:
+        sys.path.insert(0, _parent_dir)
+
+    import Shared.utils.utf8_solution as _utf8_solution  # noqa: F401
+    # Ensure initialization for side effects
+    _utf8_solution.ensure_initialized()
+except ImportError as e:
+    print(f"WARNING: Could not import UTF-8 solution: {e}")
+    # Set basic UTF-8 environment as fallback
+    os.environ.setdefault("PYTHONUTF8", "1")
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
 # Idempotent bootstrap: ensure both the FletV2 package root and the repository root
 # are on sys.path so runtime imports like `utils.*` and `Shared.*` resolve whether
 # the app is launched from the repo root, FletV2 folder, or elsewhere.
@@ -46,6 +64,7 @@ if project_root not in sys.path:
 # Standard library imports
 import asyncio
 import contextlib
+import socket
 from typing import Any, Callable, Dict, Optional, Set, Tuple, cast
 
 # Third-party imports
@@ -59,7 +78,7 @@ try:
 except ImportError:
     # Silent fallback for import issues - create minimal debug setup with matching signature
     import logging
-    from typing import Optional
+    # Optional already imported at top
 
     def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: Optional[str] = None) -> logging.Logger:
         logger = logging.getLogger(logger_name or __name__)
@@ -70,9 +89,7 @@ except ImportError:
         logger.setLevel(log_level)
         return logger
 
-# ALWAYS import this in any Python file that deals with subprocess or console I/O
-# Import for side effects (UTF-8 configuration)
-import Shared.utils.utf8_solution as _  # noqa: F401,E402
+# UTF-8 solution already imported at the top of the file
 
 # Initialize logging and environment BEFORE any logger usage
 logger = setup_terminal_debugging(logger_name="FletV2.main")
@@ -84,8 +101,11 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import theme module: {e}")
     # Create minimal fallbacks
-    def setup_modern_theme(page): pass
-    def toggle_theme_mode(page): pass
+    def setup_modern_theme(page):
+        pass
+
+    def toggle_theme_mode(page):
+        pass
 
 try:
     from utils.server_bridge import create_server_bridge  # noqa: E402
@@ -500,7 +520,7 @@ class FletV2App(ft.Row):
         # Could update client count displays, refresh client-dependent views
         is_both_lists = isinstance(new_clients, list) and isinstance(old_clients, list)
         if is_both_lists and len(new_clients) != len(old_clients):
-                logger.info(f"Client count changed: {len(old_clients)} -> {len(new_clients)}")
+            logger.info(f"Client count changed: {len(old_clients)} -> {len(new_clients)}")
 
     def _on_server_status_changed(self, new_status: Any, old_status: Any) -> None:
         """Handle server status changes"""
@@ -1351,12 +1371,12 @@ class FletV2App(ft.Row):
                 result_t = cast(Tuple[Any, ...], result)
                 logger.debug(f"Tuple length: {len(result_t)} for {view_name}")
                 return self._process_view_result_tuple(result_t, view_name)
-            else:
-                logger.debug(f"Non-tuple result for {view_name}, creating auto-dispose")
-                # Backward compatibility: create auto-dispose function
-                # Track subscriptions for automatic cleanup
-                dispose_func = self._create_auto_dispose_for_view(view_name)
-                return result, dispose_func
+
+            logger.debug(f"Non-tuple result for {view_name}, creating auto-dispose")
+            # Backward compatibility: create auto-dispose function
+            # Track subscriptions for automatic cleanup
+            dispose_func = self._create_auto_dispose_for_view(view_name)
+            return result, dispose_func
 
         except Exception as e:
             logger.error(f"View creation failed for {view_name}: {e}")
@@ -1483,11 +1503,9 @@ async def main(page: ft.Page, real_server: Optional[Any] = None) -> None:
 if __name__ == "__main__":
     # Simple launch - let Flet handle the complexity
     # Run in web mode for UI analysis
-    import os as _os
-    _port = int(_os.getenv("FLET_SERVER_PORT", "8000"))
+    _port = int(os.getenv("FLET_SERVER_PORT", "8000"))
     # Proactively check if the desired port is available; if not, use an ephemeral port.
     def _port_available(port: int) -> bool:
-        import socket
         # Check IPv4
         try:
             s4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -1523,11 +1541,11 @@ if __name__ == "__main__":
         logger.error("Please check that the python_server module is available and the database file exists")
         raise RuntimeError("Application requires real server integration")
 
-    # Use desktop app mode to avoid FastAPI/pydantic dependencies
-    print("FletV2 is starting in desktop mode (FLET_APP)")
+    # Use browser mode for faster development
+    print("FletV2 is starting in browser mode for faster development")
 
-    # Launch async Flet app in desktop mode with real server
+    # Launch async Flet app in browser mode with real server
     async def main_with_server(page: ft.Page) -> None:
         await main(page, backup_server)
 
-    asyncio.run(ft.app_async(target=main_with_server, view=ft.AppView.FLET_APP))  # type: ignore[attr-defined]
+    asyncio.run(ft.app_async(target=main_with_server, view=ft.AppView.WEB_BROWSER, port=8550))  # type: ignore[attr-defined]
