@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 gui_constants.py - Centralized constants for the GUI's design system.
 
@@ -8,7 +7,6 @@ promotes a consistent, professional aesthetic and makes future theming or
 rebranding efforts trivial.
 """
 
-from typing import Dict, Tuple
 
 class Fonts:
     """Defines the typographic scale for the application."""
@@ -47,7 +45,7 @@ class CustomStyles:
 class Icons:
     """Maps conceptual icon names to their asset file names."""
     # This abstraction allows us to change the icon set without changing UI code.
-    MAP: Dict[str, str] = {
+    MAP: dict[str, str] = {
         # Navigation
         "DASHBOARD": "house-door-fill",
         "CLIENTS": "people-fill",

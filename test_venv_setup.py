@@ -2,8 +2,8 @@
 """
 Test script to verify virtual environment setup is working correctly
 """
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Import UTF-8 solution first
@@ -50,11 +50,11 @@ def test_environment():
     # Check if this is the expected environment
     expected_path = Path(__file__).parent / "flet_venv" / "Scripts" / "python.exe"
     if current_python.resolve() == expected_path.resolve():
-        print(f"\nPERFECT: Using correct unified environment!")
+        print("\nPERFECT: Using correct unified environment!")
         print(f"   Path: {current_python}")
         return True
     else:
-        print(f"\nWARNING: Environment mismatch")
+        print("\nWARNING: Environment mismatch")
         print(f"   Current:  {current_python}")
         print(f"   Expected: {expected_path}")
         return False

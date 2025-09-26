@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Test script to diagnose KivyMD text rendering issues
 This creates a minimal test case to identify the problem
 """
 
-import os
 import sys
 
 # Add UTF-8 solution
@@ -31,8 +29,9 @@ print("[INFO] Available text providers:", Config.get('kivy', 'text'))
 
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.label import MDLabel
 from kivymd.uix.button import MDRaisedButton
+from kivymd.uix.label import MDLabel
+
 
 class TextRenderingTest(MDApp):
     def build(self):
@@ -40,25 +39,25 @@ class TextRenderingTest(MDApp):
         self.theme_cls.material_style = "M3"
         self.theme_cls.theme_style = "Dark"
         self.theme_cls.primary_palette = "Blue"
-        
+
         # Main layout
         layout = MDBoxLayout(
             orientation="vertical",
             spacing="20dp",
             padding="20dp"
         )
-        
+
         # Test different text elements
         test_texts = [
             "Simple text test",
             "Server Dashboard",
-            "System Statistics", 
+            "System Statistics",
             "Live Monitoring",
             "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
             "1234567890",
             "Special chars: !@#$%^&*()"
         ]
-        
+
         for i, text in enumerate(test_texts):
             label = MDLabel(
                 text=f"Test {i+1}: {text}",
@@ -68,7 +67,7 @@ class TextRenderingTest(MDApp):
                 height="40dp"
             )
             layout.add_widget(label)
-        
+
         # Test button text
         button = MDRaisedButton(
             text="Test Button",
@@ -77,14 +76,14 @@ class TextRenderingTest(MDApp):
             pos_hint={"center_x": 0.5}
         )
         layout.add_widget(button)
-        
+
         return layout
 
 if __name__ == "__main__":
     print("[INFO] Starting text rendering test...")
     print(f"[INFO] Python encoding: {sys.stdout.encoding}")
     print(f"[INFO] File system encoding: {sys.getfilesystemencoding()}")
-    
+
     try:
         app = TextRenderingTest()
         app.run()

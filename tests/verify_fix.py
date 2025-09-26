@@ -3,19 +3,19 @@
 
 def test_struct_sizes():
     print("=== Struct Size Analysis ===")
-    
+
     # Calculate expected protocol header size
     protocol_header_size = 1 + 2 + 4  # version(1) + code(2) + payload_size(4)
     print(f"Protocol header size: {protocol_header_size} bytes")
-    
+
     # The issue was that sizeof(ResponseHeader) in C++ was 8 bytes due to padding
     # but the actual protocol only sends 7 bytes
-    print(f"Previous C++ client tried to read: 8 bytes (incorrect)")
+    print("Previous C++ client tried to read: 8 bytes (incorrect)")
     print(f"Actual protocol sends: {protocol_header_size} bytes (correct)")
     print()
     print("Fix: Use PROTOCOL_HEADER_SIZE = 7 instead of sizeof(ResponseHeader) = 8")
     print()
-    
+
     # Verify our fix addresses the hanging issue
     print("=== Root Cause Analysis ===")
     print("1. Client requested to read 8 bytes from socket")

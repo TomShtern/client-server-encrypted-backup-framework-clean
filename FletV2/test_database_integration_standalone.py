@@ -6,12 +6,12 @@ This script tests the complete database integration between BackupServer and Fle
 including configuration, data format conversion, and view compatibility.
 """
 
-import os
-import sys
 import asyncio
 import logging
+import os
+import sys
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any
 
 # Add project paths
 project_root = Path(__file__).parent.parent
@@ -30,7 +30,7 @@ class DatabaseIntegrationTester:
         self.backup_server = None
         self.server_bridge = None
 
-    async def run_all_tests(self) -> Dict[str, Any]:
+    async def run_all_tests(self) -> dict[str, Any]:
         """Run all database integration tests."""
         logger.info("🚀 Starting Database Integration Test Suite")
         logger.info("=" * 60)
@@ -72,7 +72,7 @@ class DatabaseIntegrationTester:
             logger.warning(f"⚠️ {total - passed} tests failed. Please review the issues above.")
             return {'success': False, 'passed': passed, 'total': total, 'results': self.test_results}
 
-    async def test_configuration(self) -> Dict[str, Any]:
+    async def test_configuration(self) -> dict[str, Any]:
         """Test configuration system."""
         try:
             # Test FletV2 config
@@ -104,7 +104,7 @@ class DatabaseIntegrationTester:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    async def test_database_connectivity(self) -> Dict[str, Any]:
+    async def test_database_connectivity(self) -> dict[str, Any]:
         """Test database file existence and accessibility."""
         try:
             import config as fletv2_config
@@ -148,14 +148,17 @@ class DatabaseIntegrationTester:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    async def test_data_conversion(self) -> Dict[str, Any]:
+    async def test_data_conversion(self) -> dict[str, Any]:
         """Test data format conversion functions."""
         try:
-            from utils.server_bridge import (
-                blob_to_uuid_string, uuid_string_to_blob,
-                convert_backupserver_client_to_fletv2, convert_backupserver_file_to_fletv2
-            )
             import uuid
+
+            from utils.server_bridge import (
+                blob_to_uuid_string,
+                convert_backupserver_client_to_fletv2,
+                convert_backupserver_file_to_fletv2,
+                uuid_string_to_blob,
+            )
 
             # Test UUID conversion
             test_uuid = uuid.uuid4()
@@ -194,7 +197,7 @@ class DatabaseIntegrationTester:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    async def test_server_bridge(self) -> Dict[str, Any]:
+    async def test_server_bridge(self) -> dict[str, Any]:
         """Test ServerBridge operations."""
         try:
             from utils.server_bridge import create_server_bridge
@@ -225,11 +228,12 @@ class DatabaseIntegrationTester:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    async def test_migration_system(self) -> Dict[str, Any]:
+    async def test_migration_system(self) -> dict[str, Any]:
         """Test migration system integration."""
         try:
-            from schema_migration import migrate_database_schema, check_database_schema
             import sqlite3
+
+            from schema_migration import check_database_schema
 
             # Test schema checking
             import config as fletv2_config
@@ -248,12 +252,11 @@ class DatabaseIntegrationTester:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    async def test_view_compatibility(self) -> Dict[str, Any]:
+    async def test_view_compatibility(self) -> dict[str, Any]:
         """Test that FletV2 views can work with real database."""
         try:
             # Test database view
             from views.database import create_database_view
-            import flet as ft
 
             # Create a mock page for testing
             class MockPage:
@@ -315,7 +318,7 @@ class DatabaseIntegrationTester:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    async def test_real_data_access(self) -> Dict[str, Any]:
+    async def test_real_data_access(self) -> dict[str, Any]:
         """Test accessing real data through ServerBridge."""
         try:
             # Try to create a ServerBridge with real BackupServer

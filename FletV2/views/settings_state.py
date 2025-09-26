@@ -12,18 +12,39 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import os
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Callable
+from typing import Any
 
 import aiofiles
 import flet as ft
 
-from utils.debug_setup import get_logger
-from utils.server_bridge import ServerBridge
-from utils.state_manager import StateManager
-from config import SETTINGS_FILE
+# --- PATH SETUP (consistent with repository guidelines) ---
+_views_dir = os.path.dirname(os.path.abspath(__file__))
+_flet_v2_root = os.path.dirname(_views_dir)
+_repo_root = os.path.dirname(_flet_v2_root)
+for _p in (_flet_v2_root, _repo_root):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+# Local imports after path setup
+try:  # Prefer absolute package imports
+    from FletV2.utils.debug_setup import get_logger  # type: ignore
+    from FletV2.utils.server_bridge import ServerBridge  # type: ignore
+    from FletV2.utils.state_manager import StateManager  # type: ignore
+    from FletV2 import config as _app_config  # type: ignore
+except Exception:  # noqa: BLE001 - fallback to relative (development mode)
+    from utils.debug_setup import get_logger  # type: ignore
+    from utils.server_bridge import ServerBridge  # type: ignore
+    from utils.state_manager import StateManager  # type: ignore
+    import config as _app_config  # type: ignore
+
+_settings_file_raw = getattr(_app_config, 'SETTINGS_FILE', 'settings.json')
+# Normalize to a Path object for filesystem operations
+SETTINGS_PATH = _settings_file_raw if isinstance(_settings_file_raw, Path) else Path(_settings_file_raw)
 
 logger = get_logger(__name__)
 
@@ -34,8 +55,8 @@ class EnhancedSettingsState:
     def __init__(
         self,
         page: ft.Page,
-        server_bridge: Optional[ServerBridge] = None,
-        state_manager: Optional[StateManager] = None,
+        server_bridge: ServerBridge | None = None,
+        state_manager: StateManager | None = None,
     ):
         self.page = page
         self.server_bridge = server_bridge
@@ -43,23 +64,23 @@ class EnhancedSettingsState:
 
         # Concurrency & syncing
         self._auto_save_lock: asyncio.Lock = asyncio.Lock()
-        self._auto_save_task: Optional[asyncio.Task] = None
+        self._auto_save_task: asyncio.Task | None = None
         self._sync_enabled: bool = True
-        self._pending_changes: Dict[str, Dict[str, Any]] = {}
+        self._pending_changes: dict[str, dict[str, Any]] = {}
 
         # UI and validation
-        self._ui_refs: Dict[str, list[ft.Control]] = {}
-        self._validation_errors: Dict[str, str] = {}
+        self._ui_refs: dict[str, list[ft.Control]] = {}
+        self._validation_errors: dict[str, str] = {}
 
         # File picker for imports (one per view instance)
-        self.file_picker: Optional[ft.FilePicker] = None
+        self.file_picker: ft.FilePicker | None = None
 
         # State
-        self.current_settings: Dict[str, Any] = self._load_default_settings()
+        self.current_settings: dict[str, Any] = self._load_default_settings()
         self.is_saving = False
         self.is_loading = False
-        self.last_saved: Optional[datetime] = None
-        self.last_loaded: Optional[datetime] = None
+        self.last_saved: datetime | None = None
+        self.last_loaded: datetime | None = None
 
         # Subscriptions cleanup callbacks
         self._unsubscribe_callbacks = []
@@ -141,8 +162,8 @@ class EnhancedSettingsState:
                     )
 
             # Fallback to local file
-            SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-            async with aiofiles.open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            async with aiofiles.open(SETTINGS_PATH, "w", encoding="utf-8") as f:
                 content = json.dumps(self.current_settings, indent=2, ensure_ascii=False)
                 await f.write(content)
             self.last_saved = datetime.now()
@@ -167,8 +188,8 @@ class EnhancedSettingsState:
     async def _save_local_backup(self):
         """Save local backup of settings."""
         try:
-            SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-            async with aiofiles.open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            async with aiofiles.open(SETTINGS_PATH, "w", encoding="utf-8") as f:
                 content = json.dumps(self.current_settings, indent=2, ensure_ascii=False)
                 await f.write(content)
         except Exception as e:
@@ -180,7 +201,7 @@ class EnhancedSettingsState:
             return False
         self.is_loading = True
         try:
-            loaded: Optional[Dict[str, Any]] = None
+            loaded: dict[str, Any] | None = None
 
             # Try server first
             if self.server_bridge:
@@ -194,8 +215,8 @@ class EnhancedSettingsState:
             # Fallback local
             if loaded is None:
                 try:
-                    if SETTINGS_FILE.exists():
-                        async with aiofiles.open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                    if SETTINGS_PATH.exists():
+                        async with aiofiles.open(SETTINGS_PATH, encoding="utf-8") as f:
                             content = await f.read()
                             loaded = json.loads(content)
                 except Exception as e:
@@ -220,7 +241,7 @@ class EnhancedSettingsState:
             self.is_loading = False
 
     # ---- Validation helpers (server-backed or local fallbacks) ----
-    def _validate_server_settings(self, server_settings: Dict[str, Any], validation_result: Dict[str, Any]) -> None:
+    def _validate_server_settings(self, server_settings: dict[str, Any], validation_result: dict[str, Any]) -> None:
         """Validate server-specific settings."""
         port = server_settings.get("port")
         if port and (not isinstance(port, int) or port < 1024 or port > 65535):
@@ -241,7 +262,7 @@ class EnhancedSettingsState:
                 )
                 validation_result["valid"] = False
 
-    def _validate_backup_settings(self, backup_settings: Dict[str, Any], validation_result: Dict[str, Any]) -> None:
+    def _validate_backup_settings(self, backup_settings: dict[str, Any], validation_result: dict[str, Any]) -> None:
         if backup_settings.get("auto_backup", False):
             interval = backup_settings.get("backup_interval_hours", 0)
             if not isinstance(interval, (int, float)) or interval <= 0:
@@ -256,7 +277,7 @@ class EnhancedSettingsState:
                 )
                 validation_result["valid"] = False
 
-    def _validate_monitoring_settings(self, monitoring_settings: Dict[str, Any], validation_result: Dict[str, Any]) -> None:
+    def _validate_monitoring_settings(self, monitoring_settings: dict[str, Any], validation_result: dict[str, Any]) -> None:
         if not monitoring_settings.get("enabled", False):
             return
         cpu = monitoring_settings.get("cpu_threshold", 80)
@@ -272,7 +293,7 @@ class EnhancedSettingsState:
                 "CPU threshold is higher than memory threshold - this may cause frequent alerts"
             )
 
-    def _validate_gui_settings(self, gui_settings: Dict[str, Any], validation_result: Dict[str, Any]) -> None:
+    def _validate_gui_settings(self, gui_settings: dict[str, Any], validation_result: dict[str, Any]) -> None:
         if not gui_settings.get("auto_refresh", False):
             return
         refresh = gui_settings.get("refresh_interval", 5)
@@ -286,7 +307,7 @@ class EnhancedSettingsState:
                 "Refresh intervals below 3 seconds may impact performance"
             )
 
-    async def validate_settings_async(self, settings_data: Dict[str, Any]):
+    async def validate_settings_async(self, settings_data: dict[str, Any]):
         try:
             if self.server_bridge:
                 return await self.server_bridge.validate_settings_async(settings_data)
@@ -377,7 +398,7 @@ class EnhancedSettingsState:
                 self.state_manager.add_notification("Settings conflict resolved", "warning")
 
     # ---- Subscription initialization ----
-    def init_subscriptions(self, state_manager: Optional[StateManager], on_loading_change):
+    def init_subscriptions(self, state_manager: StateManager | None, on_loading_change):
         """Register subscriptions; stores unsubscribe callbacks for dispose."""
         if not state_manager:
             return
@@ -392,9 +413,12 @@ class EnhancedSettingsState:
 
         # settings changes (if supported)
         if hasattr(state_manager, "subscribe_settings"):
+            manager_ref: StateManager = state_manager
             with contextlib.suppress(Exception):
-                state_manager.subscribe_settings(self._on_settings_changed)
-                self._unsubscribe_callbacks.append(lambda: getattr(state_manager, "unsubscribe_settings")(self._on_settings_changed))
+                manager_ref.subscribe_settings(self._on_settings_changed)
+                self._unsubscribe_callbacks.append(
+                    lambda: manager_ref.unsubscribe_settings(self._on_settings_changed)
+                )
 
     # ---- Backup & restore ----
     async def backup_settings_async(self, backup_name: str):
@@ -458,7 +482,7 @@ class EnhancedSettingsState:
             backup_path = Path(backup_file)
             if not backup_path.exists():
                 raise FileNotFoundError(f"Backup file not found: {backup_file}")
-            with open(backup_path, "r", encoding="utf-8") as f:
+            with open(backup_path, encoding="utf-8") as f:
                 backup_data = json.load(f)
             restored_settings = backup_data.get("settings", backup_data)
             self.current_settings = self._deep_merge_settings(
@@ -544,7 +568,7 @@ class EnhancedSettingsState:
                 self.state_manager.set_loading("settings_export", False)
 
     def _load_json_settings(self, file_path: str) -> dict:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             imported_data = json.load(f)
         if 'settings' in imported_data:
             version = imported_data.get('version', '1.0')
@@ -556,7 +580,7 @@ class EnhancedSettingsState:
         import configparser
         config = configparser.ConfigParser()
         config.read(file_path, encoding='utf-8')
-        imported: Dict[str, Dict[str, object]] = {}
+        imported: dict[str, dict[str, object]] = {}
         for section in config.sections():
             imported[section] = {}
             for key, value in config[section].items():
@@ -643,14 +667,14 @@ class EnhancedSettingsState:
             logger.warning(f"Error during settings view disposal: {e}")
 
     # ---- Defaults & merging ----
-    def _load_default_settings(self) -> Dict[str, Any]:
+    def _load_default_settings(self) -> dict[str, Any]:
         """Derive defaults from SETTINGS_CONFIG when available; fallback to reasonable baseline."""
         try:
             # Local import to avoid circular dependency
             from views.settings_config import SETTINGS_CONFIG  # type: ignore
-            defaults: Dict[str, Any] = {}
+            defaults: dict[str, Any] = {}
             for section, sec_cfg in SETTINGS_CONFIG.items():
-                sec_vals: Dict[str, Any] = {}
+                sec_vals: dict[str, Any] = {}
                 for subsection in sec_cfg.get("subsections", []):
                     for field in subsection.get("fields", []):
                         key = field.get("key")
@@ -670,7 +694,7 @@ class EnhancedSettingsState:
                 "backup": {"auto_backup": True, "backup_path": "backups/", "retention_days": 30},
             }
 
-    def _deep_merge_settings(self, base: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, Any]:
+    def _deep_merge_settings(self, base: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
         result = dict(base)
         for k, v in (incoming or {}).items():
             if isinstance(v, dict) and isinstance(result.get(k), dict):

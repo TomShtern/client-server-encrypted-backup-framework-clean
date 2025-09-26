@@ -47,19 +47,21 @@ Data loading pattern:
     clients_data = safe_load_data(server_bridge, 'get_clients', get_mock_clients())
 """
 
-import flet as ft
-from typing import Callable, Any, Optional, Awaitable
+from collections.abc import Awaitable, Callable
 from functools import wraps
+from typing import Any
+
+import flet as ft
 from utils.debug_setup import get_logger
-from utils.user_feedback import show_success_message, show_error_message
+from utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger(__name__)
 
 
 def async_event_handler(
-    success_message: Optional[str] = None,
+    success_message: str | None = None,
     error_message: str = "Operation failed",
-    log_context: Optional[str] = None
+    log_context: str | None = None
 ):
     """
     Decorator for async event handlers that provides standardized error handling and user feedback.
@@ -82,36 +84,36 @@ def async_event_handler(
         async def wrapper(e: ft.ControlEvent) -> Any:
             page = getattr(e, 'page', None) or getattr(e.control, 'page', None)
             context = log_context or func.__name__
-            
+
             try:
                 result = await func(e)
-                
+
                 if success_message and page:
                     show_success_message(page, success_message)
-                
+
                 logger.debug(f"Event handler '{context}' completed successfully")
                 return result
-                
+
             except Exception as ex:
-                error_detail = f"{error_message}: {str(ex)}"
+                error_detail = f"{error_message}: {ex!s}"
                 logger.error(f"Event handler '{context}' failed: {ex}", exc_info=True)
-                
+
                 if page:
                     show_error_message(page, error_detail)
-                
+
                 return None
-        
+
         return wrapper
     return decorator
 
 
 async def safe_async_operation(
-    operation: Callable[[], Awaitable[Any]], 
+    operation: Callable[[], Awaitable[Any]],
     page: ft.Page,
-    success_message: Optional[str] = None,
+    success_message: str | None = None,
     error_message: str = "Operation failed",
-    context: Optional[str] = None
-) -> Optional[Any]:
+    context: str | None = None
+) -> Any | None:
     """
     Execute an async operation with standardized error handling and user feedback.
     
@@ -136,19 +138,19 @@ async def safe_async_operation(
     """
     try:
         result = await operation()
-        
+
         if success_message:
             show_success_message(page, success_message)
-        
+
         if context:
             logger.debug(f"Safe async operation '{context}' completed successfully")
-            
+
         return result
-        
+
     except Exception as ex:
-        error_detail = f"{error_message}: {str(ex)}"
+        error_detail = f"{error_message}: {ex!s}"
         log_context = context or "async_operation"
-        
+
         logger.error(f"Safe async operation '{log_context}' failed: {ex}", exc_info=True)
         show_error_message(page, error_detail)
 
@@ -301,7 +303,7 @@ class SafeOperation:
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         if exc_type is not None:
-            error_msg = f"{self.error_prefix}: {str(exc_val)}"
+            error_msg = f"{self.error_prefix}: {exc_val!s}"
             show_error_message(self.page, error_msg)
             logger.debug(f"SafeOperation failed: {exc_val}")
         return True  # Suppress exception

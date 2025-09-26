@@ -3,9 +3,9 @@
 Unit tests for the server bridge modules.
 """
 
-import unittest
-import sys
 import os
+import sys
+import unittest
 from unittest.mock import Mock, patch
 
 # Set debug mode to enable mock data
@@ -59,12 +59,12 @@ class TestSimpleServerBridge(unittest.TestCase):
         """Test getting database information."""
         db_info_result = self.bridge.get_database_info()
         self.assertIsInstance(db_info_result, dict)
-        
+
         # Check that it has the expected structure
         self.assertIn('success', db_info_result)
         self.assertIn('data', db_info_result)
         self.assertIn('error', db_info_result)
-        
+
         # Check the data structure
         db_info = db_info_result['data']
         required_keys = ['status', 'tables', 'total_records', 'size']
@@ -98,14 +98,14 @@ class TestSimpleServerBridge(unittest.TestCase):
         mock_real_server = Mock()
         mock_real_server.is_connected.return_value = True
         mock_real_server.get_clients = Mock(return_value=[])  # Real server returns list directly
-        
+
         # Create bridge with real server
         bridge_with_real_server = ServerBridge(real_server=mock_real_server)
-        
+
         # Verify that mock database is not used
         self.assertIsNone(bridge_with_real_server._mock_db)
         self.assertFalse(bridge_with_real_server._use_mock_data)
-        
+
         # Test that methods return empty data instead of mock data
         result = bridge_with_real_server.get_all_clients_from_db()
         self.assertIsInstance(result, dict)
@@ -118,11 +118,11 @@ class TestSimpleServerBridge(unittest.TestCase):
         """Test that mock data is enabled when no real server is provided."""
         # Create bridge without real server (mock mode)
         bridge_mock_mode = ServerBridge()
-        
+
         # Verify that mock database is used
         self.assertIsNotNone(bridge_mock_mode._mock_db)
         self.assertTrue(bridge_mock_mode._use_mock_data)
-        
+
         # Test that methods return mock data
         clients = bridge_mock_mode.get_clients()
         self.assertIsInstance(clients, list)

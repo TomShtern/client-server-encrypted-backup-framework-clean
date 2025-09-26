@@ -3,21 +3,20 @@
 Final verification script to show all custom theme colors
 """
 import sys
-import os
 
 # Add project root to path
 sys.path.insert(0, '.')
 
 try:
-    from flet_server_gui.ui.theme_m3 import TOKENS, create_theme
     import flet as ft
-    
+    from flet_server_gui.ui.theme_m3 import TOKENS, create_theme
+
     def main(page: ft.Page):
         # Apply the custom theme
         theme = create_theme(use_material3=True, dark=False)
         page.theme = theme
         page.title = "Custom Theme Colors Verification"
-        
+
         # Create color swatches for all custom tokens
         swatches = []
         for name, color in TOKENS.items():
@@ -37,7 +36,7 @@ try:
                 width=120
             )
             swatches.append(swatch)
-        
+
         # Create a grid of color swatches
         swatch_grid = ft.GridView(
             controls=swatches,
@@ -47,10 +46,10 @@ try:
             run_spacing=10,
             padding=20
         )
-        
+
         # Add a gradient example
         try:
-            from flet_server_gui.ui.theme_m3 import linear_gradient, gradient_button
+            from flet_server_gui.ui.theme_m3 import gradient_button
             gradient_example = gradient_button(
                 ft.Text("Gradient Button"),
                 width=200,
@@ -70,7 +69,7 @@ try:
                 ),
                 border_radius=8
             )
-        
+
         page.add(
             ft.AppBar(
                 title=ft.Text("Custom Theme Colors Verification"),
@@ -94,9 +93,9 @@ try:
                 )
             ], scroll=ft.ScrollMode.AUTO, expand=True)
         )
-    
+
     ft.app(target=main)
-    
+
 except Exception as e:
     print(f"Error: {e}")
     import traceback

@@ -6,11 +6,12 @@ Extracted from views/settings.py for reuse and maintainability.
 
 from __future__ import annotations
 
-from typing import Tuple, Callable, Dict
-from config import MIN_PORT, MAX_PORT
+from collections.abc import Callable
+
+from config import MAX_PORT, MIN_PORT
 
 
-def validate_port(value: str) -> Tuple[bool, str]:
+def validate_port(value: str) -> tuple[bool, str]:
     try:
         port = int(value)
         if port < MIN_PORT:
@@ -24,7 +25,7 @@ def validate_port(value: str) -> Tuple[bool, str]:
         return False, "Please enter a valid number"
 
 
-def validate_max_clients(value: str) -> Tuple[bool, str]:
+def validate_max_clients(value: str) -> tuple[bool, str]:
     try:
         clients = int(value)
         if clients < 1:
@@ -38,7 +39,7 @@ def validate_max_clients(value: str) -> Tuple[bool, str]:
         return False, "Please enter a valid number"
 
 
-def validate_monitoring_interval(value: str) -> Tuple[bool, str]:
+def validate_monitoring_interval(value: str) -> tuple[bool, str]:
     try:
         interval = int(value)
         if interval < 1 or interval > 60:
@@ -50,7 +51,7 @@ def validate_monitoring_interval(value: str) -> Tuple[bool, str]:
         return False, "Please enter a valid number"
 
 
-def validate_file_size(value: str) -> Tuple[bool, str]:
+def validate_file_size(value: str) -> tuple[bool, str]:
     try:
         size = int(value)
         if size < 1024:
@@ -62,7 +63,7 @@ def validate_file_size(value: str) -> Tuple[bool, str]:
         return False, "Please enter a valid number"
 
 
-def validate_timeout(value: str) -> Tuple[bool, str]:
+def validate_timeout(value: str) -> tuple[bool, str]:
     try:
         timeout = int(value)
         if timeout < 1:
@@ -74,7 +75,7 @@ def validate_timeout(value: str) -> Tuple[bool, str]:
         return False, "Please enter a valid number"
 
 # Registry for validator lookup by name
-VALIDATORS: Dict[str, Callable[[str], Tuple[bool, str]]] = {
+VALIDATORS: dict[str, Callable[[str], tuple[bool, str]]] = {
     "validate_port": validate_port,
     "validate_max_clients": validate_max_clients,
     "validate_monitoring_interval": validate_monitoring_interval,

@@ -1,4 +1,4 @@
-from typing import Any, Protocol, runtime_checkable, Iterable, Mapping, Optional
+from typing import Any
 
 # Minimal catch-all stubs for Flet used by the project.
 # This maps commonly-used names to "Any" so Pyright/Pylance stop reporting

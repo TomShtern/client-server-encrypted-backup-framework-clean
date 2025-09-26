@@ -19,14 +19,14 @@ def view_details_clicked(e):
     button_clicks["count"] += 1
     client_id = e.control.data if hasattr(e.control, 'data') else "Unknown"
     print(f"VIEW DETAILS CLICKED! Client: {client_id}, Count: {button_clicks['count']}")
-    
+
     # Get page reference and show snack bar
     page = e.control.page if hasattr(e.control, 'page') else None
     if page:
         page.snack_bar = ft.SnackBar(ft.Text(f"View Details: {client_id} (click #{button_clicks['count']})"))
         page.snack_bar.open = True
         page.update()
-    
+
     # CRITICAL: Rebuild the entire table after action
     rebuild_table(page)
 
@@ -35,21 +35,21 @@ def disconnect_clicked(e):
     button_clicks["count"] += 1
     client_id = e.control.data if hasattr(e.control, 'data') else "Unknown"
     print(f"DISCONNECT CLICKED! Client: {client_id}, Count: {button_clicks['count']}")
-    
+
     # Get page reference and show snack bar
     page = e.control.page if hasattr(e.control, 'page') else None
     if page:
         page.snack_bar = ft.SnackBar(ft.Text(f"Disconnect: {client_id} (click #{button_clicks['count']})"))
         page.snack_bar.open = True
         page.update()
-    
+
     # CRITICAL: Rebuild the entire table after action
     rebuild_table(page)
 
 def create_fresh_datatable():
     """Create a completely fresh DataTable with working buttons"""
     print("Creating fresh DataTable...")
-    
+
     return ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text("Client ID", weight=ft.FontWeight.BOLD)),
@@ -93,10 +93,10 @@ table_container_ref = ft.Ref[ft.Container]()
 def rebuild_table(page):
     """Rebuild the entire table - the nuclear option"""
     print("REBUILDING ENTIRE TABLE...")
-    
+
     # Create completely fresh DataTable
     fresh_table = create_fresh_datatable()
-    
+
     # Replace the content entirely
     if table_container_ref.current:
         table_container_ref.current.content = ft.Column([fresh_table], scroll=ft.ScrollMode.AUTO)
@@ -105,10 +105,10 @@ def rebuild_table(page):
 
 def main(page: ft.Page):
     page.title = "View Rebuild Approach Test"
-    
+
     # Initial table
     initial_table = create_fresh_datatable()
-    
+
     # Container to hold the table (will be replaced)
     table_container = ft.Container(
         ref=table_container_ref,
@@ -118,7 +118,7 @@ def main(page: ft.Page):
         border_radius=8,
         padding=10
     )
-    
+
     page.add(
         ft.Text("View Rebuild Approach Test", size=20, weight=ft.FontWeight.BOLD),
         ft.Text(f"Total button clicks: {button_clicks['count']}", size=14),

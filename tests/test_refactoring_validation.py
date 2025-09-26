@@ -3,15 +3,15 @@
 Test script to validate the refactoring work done in Phases 1-5.
 """
 
-import unittest
-import sys
 import os
+import sys
+import unittest
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from Shared.utils.unified_config import get_config
 from api_server.real_backup_executor import RealBackupExecutor
-from python_server.server.server import BackupServer
-from api_server.cyberbackup_api_server import app as api_server_app
+from Shared.utils.unified_config import get_config
+
 
 class TestRefactoringValidation(unittest.TestCase):
 

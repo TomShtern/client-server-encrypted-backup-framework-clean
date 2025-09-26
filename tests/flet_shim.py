@@ -2,7 +2,6 @@
 Only implements minimal symbols referenced by components to allow import without real flet.
 If real flet is installed, tests can import it instead. This shim is NOT a functional UI layer.
 """
-from types import SimpleNamespace
 
 class _Colors:
     GREY = "#888888"
@@ -54,6 +53,14 @@ ScrollMode = _ScrollMode()
 
 # Provide a minimal placeholder for ft.* attribute access patterns
 __all__ = [
-    'Text','TextField','Row','Column','TextButton','ElevatedButton','Page',
-    'Colors','FontWeight','ScrollMode'
+    'Colors',
+    'Column',
+    'ElevatedButton',
+    'FontWeight',
+    'Page',
+    'Row',
+    'ScrollMode',
+    'Text',
+    'TextButton',
+    'TextField'
 ]

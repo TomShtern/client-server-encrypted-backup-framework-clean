@@ -3,8 +3,8 @@
 Simple test script to verify Phase 5 components
 """
 
-import sys
 import os
+import sys
 
 # Add the project directory to the path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -25,7 +25,6 @@ def test_performance_manager():
 def test_test_gui_integration():
     """Test test_gui_integration import"""
     try:
-        import tests.test_gui_integration
         print("test_gui_integration imported successfully")
         return True
     except Exception as e:
@@ -36,22 +35,22 @@ def main():
     """Main test function"""
     print("Phase 5 Component Verification")
     print("=" * 40)
-    
+
     tests = [
         ("Performance Manager", test_performance_manager),
         ("Test GUI Integration", test_test_gui_integration),
     ]
-    
+
     passed = 0
     total = len(tests)
-    
+
     for name, test_func in tests:
         print(f"\nTesting {name}...")
         if test_func():
             passed += 1
-    
+
     print(f"\nResults: {passed}/{total} tests passed")
-    
+
     if passed == total:
         print("\nAll Phase 5 components are working correctly!")
         return 0

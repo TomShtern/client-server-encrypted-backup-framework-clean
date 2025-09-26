@@ -2,23 +2,20 @@
 # Network Server Infrastructure Module
 # Extracted from monolithic server.py for better modularity
 
+import logging
+import signal
 import socket
 import threading
-import signal
-import logging
 import time
-from typing import Tuple, Optional, Callable, Any, Dict
+from collections.abc import Callable
+from typing import Any
 
-from .config import (
-    CLIENT_SOCKET_TIMEOUT, MAX_CONCURRENT_CLIENTS
-)
-from .exceptions import ProtocolError
 from . import protocol
-from .protocol import (
-    RESP_GENERIC_SERVER_ERROR
-)
-
+from .config import CLIENT_SOCKET_TIMEOUT, MAX_CONCURRENT_CLIENTS
 from .connection_health import get_connection_health_monitor
+from .exceptions import ProtocolError
+from .protocol import RESP_GENERIC_SERVER_ERROR
+
 health = get_connection_health_monitor()
 
 logger = logging.getLogger(__name__)
@@ -45,21 +42,21 @@ class NetworkServer:
         self.client_resolver: Callable[..., Any] = client_resolver
         self.shutdown_event = shutdown_event
 
-        self.server_socket: Optional[socket.socket] = None
+        self.server_socket: socket.socket | None = None
         self.running = False
         self.client_connection_semaphore = threading.Semaphore(MAX_CONCURRENT_CLIENTS)
-        self.active_connections: Dict[bytes, socket.socket] = {}
+        self.active_connections: dict[bytes, socket.socket] = {}
         self.connections_lock = threading.Lock()
         self.host = '0.0.0.0' # Default host
         self.start_time = time.time() # Server start time
-        self.last_error: Optional[str] = None # Last error encountered by the server
+        self.last_error: str | None = None # Last error encountered by the server
 
         # Setup signal handlers for graceful shutdown
         self._setup_signal_handlers()
 
     def _setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown."""
-        def signal_handler(signum: int, frame: Optional[Any]):
+        def signal_handler(signum: int, frame: Any | None):
             sig_name = signal.Signals(signum).name if hasattr(signal, 'Signals') else f"Signal {signum}"
             logger.warning(f"{sig_name} received by network server. Initiating shutdown...")
             self.stop()
@@ -143,7 +140,7 @@ class NetworkServer:
 
                 try:
                     client_conn, client_address = self.server_socket.accept()
-                except socket.timeout:
+                except TimeoutError:
                     continue  # Check shutdown status and continue loop
 
                 # Acquire semaphore slot for this client
@@ -229,7 +226,7 @@ class NetworkServer:
 
         logger.info("Network server shutdown completed.")
 
-    def get_connection_stats(self) -> Dict[str, int]:
+    def get_connection_stats(self) -> dict[str, int]:
         """Returns current connection statistics."""
         with self.connections_lock:
             return {
@@ -247,9 +244,9 @@ class NetworkServer:
         except Exception as e:
             logger.error(f"Failed to send response code {code}: {e}")
 
-    
 
-    def _handle_client_connection(self, client_conn: socket.socket, client_address: Tuple[str, int],
+
+    def _handle_client_connection(self, client_conn: socket.socket, client_address: tuple[str, int],
                                  conn_semaphore: threading.Semaphore):
         """
         Handles an individual client connection in a dedicated thread.

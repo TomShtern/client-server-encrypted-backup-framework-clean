@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-import tempfile
 import os
+import tempfile
 
 # Create a small 1KB test file to see if basic transfer works
 with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='_1KB_test.txt') as f:

@@ -1,7 +1,7 @@
 """Pytest configuration: provide a fallback flet shim if real flet not installed."""
+import importlib.util
 import sys
 from pathlib import Path
-import importlib.util
 
 try:
     import flet  # type: ignore

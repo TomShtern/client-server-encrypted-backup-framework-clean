@@ -43,6 +43,7 @@ urllib3>=2.2.5
 # Development & Testing
 loguru>=0.7.0                   # Structured logging library
 pytest>=7.0.0                   # Testing framework
+ruff>=0.6.8                     # Unified linting & formatting tool
 cryptography>=42.0.4            # Advanced cryptography library
 plotly>=5.15.0                  # Interactive plotting library
 humanize>=4.7.0                 # Human-readable data formatting

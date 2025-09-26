@@ -5,7 +5,6 @@ Basic test to verify theme loading.
 """
 
 import sys
-import os
 
 # Add project root to path
 sys.path.insert(0, '.')
@@ -20,7 +19,7 @@ try:
     print("\nAll theme tokens:")
     for key, value in TOKENS.items():
         print(f"  {key}: {value}")
-        
+
 except Exception as e:
     print(f"Error: {e}")
     import traceback

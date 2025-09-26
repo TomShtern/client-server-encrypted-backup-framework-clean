@@ -3,9 +3,9 @@
 Comprehensive validation script for flet_venv workspace setup
 Tests both current folder and workspace file contexts
 """
-import sys
-import os
 import json
+import os
+import sys
 from pathlib import Path
 
 # Import UTF-8 solution first
@@ -85,14 +85,14 @@ def validate_vscode_configuration():
             print(f"✅ {name}: {path}")
             if name.endswith('.json') or name.endswith('.code-workspace'):
                 try:
-                    with open(path, 'r', encoding='utf-8') as f:
+                    with open(path, encoding='utf-8') as f:
                         config = json.load(f)
                         # Check for flet_venv references
                         config_str = json.dumps(config)
                         if 'flet_venv' in config_str:
-                            print(f"   ✓ Contains flet_venv references")
+                            print("   ✓ Contains flet_venv references")
                         else:
-                            print(f"   ⚠️ No flet_venv references found")
+                            print("   ⚠️ No flet_venv references found")
                 except Exception as e:
                     print(f"   ❌ Error reading {name}: {e}")
                     all_valid = False
@@ -119,7 +119,7 @@ def validate_workspace_files():
         print(f"\nChecking: {workspace_file.name}")
         if workspace_file.exists():
             try:
-                with open(workspace_file, 'r', encoding='utf-8') as f:
+                with open(workspace_file, encoding='utf-8') as f:
                     workspace_config = json.load(f)
 
                 # Check settings

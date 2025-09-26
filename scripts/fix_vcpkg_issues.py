@@ -10,9 +10,9 @@ This script fixes common vcpkg build issues by:
 """
 
 import os
-import sys
-import subprocess
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -40,7 +40,7 @@ def run_command(command: str | list[str], cwd: str | None = None, timeout: int =
 def clean_vcpkg_cache():
     """Clean vcpkg cache and build directories"""
     print("Cleaning vcpkg cache...")
-    
+
     # Directories to clean
     dirs_to_clean = [
         "vcpkg_installed",
@@ -49,7 +49,7 @@ def clean_vcpkg_cache():
         "vcpkg/packages",
         "vcpkg/downloads"
     ]
-    
+
     for dir_path in dirs_to_clean:
         path = Path(dir_path)
         if path.exists():
@@ -66,23 +66,23 @@ def clean_vcpkg_cache():
 def update_vcpkg():
     """Update vcpkg to latest version"""
     print("Updating vcpkg...")
-    
+
     # Change to vcpkg directory
     vcpkg_dir = Path("vcpkg")
     if not vcpkg_dir.exists():
         print("❌ vcpkg directory not found!")
         return False
-    
+
     # Update vcpkg
     if not run_command("git pull", cwd=str(vcpkg_dir)):
         print("⚠️  Failed to update vcpkg via git pull")
-    
+
     # Bootstrap vcpkg
     bootstrap_cmd = "bootstrap-vcpkg.bat" if os.name == 'nt' else "./bootstrap-vcpkg.sh"
     if not run_command(bootstrap_cmd, cwd=str(vcpkg_dir)):
         print("❌ Failed to bootstrap vcpkg")
         return False
-    
+
     print("✅ vcpkg updated successfully")
     return True
 
@@ -90,13 +90,13 @@ def update_vcpkg():
 def install_dependencies():
     """Install dependencies with proper configuration"""
     print("Installing vcpkg dependencies...")
-    
+
     # Install dependencies
     install_cmd = "vcpkg\\vcpkg.exe install --triplet x64-windows --recurse"
     if not run_command(install_cmd, timeout=600):
         print("❌ Failed to install dependencies")
         return False
-    
+
     print("✅ Dependencies installed successfully")
     return True
 
@@ -105,33 +105,33 @@ def main():
     """Main function"""
     print("🔧 vcpkg Issue Fixer for CyberBackup 3.0")
     print("=" * 50)
-    
+
     # Check if we're in the right directory
     if not Path("vcpkg.json").exists():
         print("❌ vcpkg.json not found! Please run this from the project root.")
         return 1
-    
+
     try:
         # Step 1: Clean cache
         print("\n📁 Step 1: Cleaning vcpkg cache...")
         clean_vcpkg_cache()
-        
+
         # Step 2: Update vcpkg
         print("\n🔄 Step 2: Updating vcpkg...")
         if not update_vcpkg():
             print("❌ Failed to update vcpkg")
             return 1
-        
+
         # Step 3: Install dependencies
         print("\n📦 Step 3: Installing dependencies...")
         if not install_dependencies():
             print("❌ Failed to install dependencies")
             return 1
-        
+
         print("\n✅ vcpkg issues fixed successfully!")
         print("You can now run the one-click build script again.")
         return 0
-        
+
     except KeyboardInterrupt:
         print("\n⚠️  Operation cancelled by user")
         return 1

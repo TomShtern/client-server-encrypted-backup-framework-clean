@@ -3,9 +3,9 @@
 Quick test script to verify server integration and data availability
 """
 
+import asyncio
 import os
 import sys
-import asyncio
 
 # Set environment variables for real server integration
 os.environ['CYBERBACKUP_DISABLE_INTEGRATED_GUI'] = '1'
@@ -85,8 +85,9 @@ async def test_async_operations():
     print("\nTesting async operations...")
 
     try:
-        from python_server.server.server import BackupServer
         from utils.server_bridge import ServerBridge
+
+        from python_server.server.server import BackupServer
 
         real_server = BackupServer()
         server_bridge = ServerBridge(real_server)

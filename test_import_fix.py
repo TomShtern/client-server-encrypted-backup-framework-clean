@@ -4,7 +4,6 @@ Test the fletv2_import_fix module.
 """
 
 # Import the fix first
-import fletv2_import_fix
 
 # Now try to import the debug_setup module
 try:

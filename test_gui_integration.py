@@ -3,9 +3,9 @@
 Test script to verify GUI integration fixes
 """
 
-import sys
 import os
-import time
+import sys
+
 import pytest
 
 # Add the project directory to the path

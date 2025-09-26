@@ -7,40 +7,67 @@ Core Principle: Use Flet's built-in DataTable, TextField, and FilePicker.
 Let Flet handle the complexity. We compose, not reinvent.
 """
 
-# Explicit imports instead of star import for better static analysis
-import flet as ft
-from typing import Optional, Dict, Any, List, Callable
-from datetime import datetime, timedelta
 import json
-import asyncio
-import aiofiles
+import os
 import random
+import sys
+from collections.abc import Callable
+from datetime import datetime, timedelta
+from typing import Any
 
-from utils.debug_setup import get_logger
-from utils.server_bridge import ServerBridge
-from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button, create_status_pill
-from utils.user_feedback import show_success_message, show_error_message
+import aiofiles
+import flet as ft
+
+# Ensure repository and package roots are on sys.path for runtime resolution
+_views_dir = os.path.dirname(os.path.abspath(__file__))
+_flet_v2_root = os.path.dirname(_views_dir)
+_repo_root = os.path.dirname(_flet_v2_root)
+for _path in (_flet_v2_root, _repo_root):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+# ALWAYS import this in any Python file that deals with subprocess or console I/O
+import Shared.utils.utf8_solution as _  # noqa: F401
+
+try:
+    from FletV2.utils.debug_setup import get_logger
+except ImportError:  # pragma: no cover - fallback logging
+    import logging
+
+    from FletV2 import config
+
+    def get_logger(name: str) -> logging.Logger:
+        logger = logging.getLogger(name or __name__)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+            logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG if getattr(config, "DEBUG_MODE", False) else logging.WARNING)
+        return logger
+from FletV2.utils.server_bridge import ServerBridge
+from FletV2.utils.state_manager import StateManager
+from FletV2.utils.ui_components import create_status_pill, themed_button, themed_card
+from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger(__name__)
 
 
 def create_logs_view(
-    server_bridge: Optional[ServerBridge],
+    server_bridge: ServerBridge | None,
     page: ft.Page,
-    _state_manager: Optional[StateManager] = None
+    _state_manager: StateManager | None = None
 ) -> Any:
     """Simple logs view using Flet's built-in components."""
     logger.info("Creating simplified logs view")
 
     # Simple state management (no complex nested functions!)
-    logs_data: List[Dict[str, Any]] = []
+    logs_data: list[dict[str, Any]] = []
     filtered_logs = []
     search_query = ""
     level_filter = "ALL"
 
     # Generate mock logs (simplified)
-    def get_mock_logs() -> List[Dict[str, Any]]:
+    def get_mock_logs() -> list[dict[str, Any]]:
         """Simple mock log generation - no over-engineering!"""
         levels = ["INFO", "ERROR", "WARNING", "DEBUG"]
         components = ["Server", "Client", "Database", "Network"]
@@ -142,7 +169,7 @@ def create_logs_view(
         padding=ft.padding.all(8)
     )
 
-    def create_log_card(log: Dict[str, Any]) -> ft.Container:
+    def create_log_card(log: dict[str, Any]) -> ft.Container:
         """Create individual card for each log entry."""
         level = log["level"]
 
@@ -273,9 +300,8 @@ def create_logs_view(
                     await f.write(json.dumps(filtered_logs, indent=2))
                 show_success_message(page, f"Logs exported to {e.path}")
             except Exception as ex:
-                page.snack_bar = ft.SnackBar(ft.Text(f"Export failed: {ex}"))
-                page.snack_bar.open = True
-                page.update()
+                logger.error("Export failed", exc_info=True)
+                show_error_message(page, f"Export failed: {ex}")
 
     file_picker = ft.FilePicker(on_result=save_logs_as_json)
     page.overlay.append(file_picker)

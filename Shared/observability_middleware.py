@@ -4,23 +4,23 @@ Observability Middleware for CyberBackup 3.0
 Provides Flask middleware, decorators, and integration helpers
 """
 
-import time
-import functools
-import threading
 import contextlib
-from typing import Callable, Optional, Dict, Any, List
-from flask import Flask, request, g, jsonify, Response
-from .observability import (
-    get_metrics_collector, get_system_monitor, create_structured_logger,
-    TimedOperation
-)
+import functools
 import logging
+import threading
+import time
 import uuid
+from collections.abc import Callable
+from typing import Any
+
+from flask import Flask, Response, g, jsonify, request
+
+from .observability import TimedOperation, create_structured_logger, get_metrics_collector, get_system_monitor
 
 
 class FlaskObservabilityMiddleware:
     """Flask middleware for automatic request/response observability"""
-    
+
     def __init__(self, app: Flask, component_name: str = "api-server"):
         self.app = app
         self.component_name = component_name
@@ -34,7 +34,7 @@ class FlaskObservabilityMiddleware:
 
         # Add observability endpoints
         self._register_observability_endpoints()
-        
+
     def _before_request(self):
         """Called before each request - simplified to avoid deadlocks"""
         with contextlib.suppress(Exception):
@@ -48,7 +48,7 @@ class FlaskObservabilityMiddleware:
 
                 # Simple metrics without complex tags
                 self.metrics.record_counter("http.requests.total")
-        
+
     def _after_request(self, response: Response) -> Response:
         """Called after each request - simplified to avoid deadlocks"""
         with contextlib.suppress(Exception):
@@ -63,8 +63,8 @@ class FlaskObservabilityMiddleware:
                 self.metrics.record_counter("http.responses.total")
 
         return response
-        
-    def _teardown_request(self, exception: Optional[BaseException]) -> None:
+
+    def _teardown_request(self, exception: BaseException | None) -> None:
         """Called when request context is torn down"""
         if exception and hasattr(g, 'request_logger'):
             g.request_logger.error(
@@ -73,7 +73,7 @@ class FlaskObservabilityMiddleware:
                 error_code=type(exception).__name__,
                 context={"exception_str": str(exception)}
             )
-            
+
             # Record error metric - only if we're in a request context
             try:
                 from flask import has_request_context
@@ -119,24 +119,24 @@ class FlaskObservabilityMiddleware:
 
     def _register_observability_endpoints(self):
         """Register observability endpoints"""
-        
+
         @self.app.route('/api/observability/health')
-        def observability_health_check():  # noqa: F841
+        def observability_health_check():
             """Health check endpoint"""
             system_monitor = get_system_monitor()
             latest_metrics = system_monitor.get_latest_metrics()
-            
+
             # Get start time from config instead of private attribute
-            config: Dict[str, Any] = self.app.config  # type: ignore[assignment]
+            config: dict[str, Any] = self.app.config  # type: ignore[assignment]
             start_time = float(config['OBSERVABILITY_START_TIME']) if 'OBSERVABILITY_START_TIME' in config else float(time.time())
-            
-            health_status: Dict[str, Any] = {
+
+            health_status: dict[str, Any] = {
                 "status": "healthy",
                 "timestamp": time.time(),
                 "component": self.component_name,
                 "uptime_seconds": time.time() - start_time
             }
-            
+
             if latest_metrics:
                 health_status["system"] = {
                     "cpu_percent": latest_metrics.cpu_percent,
@@ -144,41 +144,41 @@ class FlaskObservabilityMiddleware:
                     "disk_free_gb": latest_metrics.disk_free_gb,
                     "active_connections": latest_metrics.active_connections
                 }
-                
+
                 # Simple health checks
                 if latest_metrics.cpu_percent > 90:
                     health_status["status"] = "degraded"
-                    warnings: List[str] = health_status.get("warnings", [])  # type: ignore[assignment]
+                    warnings: list[str] = health_status.get("warnings", [])  # type: ignore[assignment]
                     warnings.append("High CPU usage")
                     health_status["warnings"] = warnings
-                    
+
                 if latest_metrics.memory_percent > 90:
                     health_status["status"] = "degraded"
-                    warnings2: List[str] = health_status.get("warnings", [])  # type: ignore[assignment]
+                    warnings2: list[str] = health_status.get("warnings", [])  # type: ignore[assignment]
                     warnings2.append("High memory usage")
                     health_status["warnings"] = warnings2
-                    
+
             return jsonify(health_status)
-        
+
         @self.app.route('/api/observability/metrics')
-        def metrics_summary():  # noqa: F841
+        def metrics_summary():
             """Metrics summary endpoint"""
             window_seconds = request.args.get('window', 300, type=int)
             summaries = self.metrics.get_all_summaries(window_seconds)
-            
+
             return jsonify({
                 "window_seconds": window_seconds,
                 "timestamp": time.time(),
                 "metrics": summaries
             })
-        
+
         @self.app.route('/api/observability/system')
-        def system_metrics():  # noqa: F841
+        def system_metrics():
             """System metrics endpoint"""
             system_monitor = get_system_monitor()
             window_seconds = request.args.get('window', 300, type=int)
             metrics_history = system_monitor.get_metrics_history(window_seconds)
-            
+
             return jsonify({
                 "window_seconds": window_seconds,
                 "timestamp": time.time(),
@@ -195,20 +195,20 @@ def observe_operation(operation_name: str, component: str = "unknown"):
         def wrapper(*args, **kwargs):
             logger = create_structured_logger(component, logging.getLogger(func.__module__))
             metrics = get_metrics_collector()
-            
+
             with TimedOperation(operation_name, logger, tags={"function": func.__name__}):
                 try:
                     result = func(*args, **kwargs)
                     metrics.record_counter(f"operation.{operation_name}.success")
                     return result
                 except Exception as e:
-                    metrics.record_counter(f"operation.{operation_name}.failure", 
+                    metrics.record_counter(f"operation.{operation_name}.failure",
                                          tags={"error_type": type(e).__name__})
                     logger.error(f"Operation {operation_name} failed: {e}",
                                operation=operation_name,
                                error_code=type(e).__name__)
                     raise
-                    
+
         return wrapper
     return decorator
 
@@ -220,67 +220,67 @@ def observe_async_operation(operation_name: str, component: str = "unknown"):
         async def wrapper(*args, **kwargs):
             logger = create_structured_logger(component, logging.getLogger(func.__module__))
             metrics = get_metrics_collector()
-            
+
             start_time = time.time()
             logger.info(f"Starting async {operation_name}", operation=operation_name)
-            
+
             try:
                 result = await func(*args, **kwargs)
                 duration_ms = (time.time() - start_time) * 1000
-                
+
                 metrics.record_timer(f"operation.{operation_name}.duration", duration_ms)
                 metrics.record_counter(f"operation.{operation_name}.success")
-                
+
                 logger.info(f"Completed async {operation_name}",
                           operation=operation_name,
                           duration_ms=duration_ms)
                 return result
-                
+
             except Exception as e:
                 duration_ms = (time.time() - start_time) * 1000
-                
+
                 metrics.record_timer(f"operation.{operation_name}.duration", duration_ms,
                                    tags={"success": "false"})
                 metrics.record_counter(f"operation.{operation_name}.failure",
                                      tags={"error_type": type(e).__name__})
-                
+
                 logger.error(f"Async operation {operation_name} failed: {e}",
                            operation=operation_name,
                            duration_ms=duration_ms,
                            error_code=type(e).__name__)
                 raise
-                
+
         return wrapper
     return decorator
 
 
 class BackgroundMetricsReporter:
     """Background thread for periodic metrics reporting"""
-    
+
     def __init__(self, interval_seconds: float = 60.0, component: str = "metrics-reporter"):
         self.interval_seconds = interval_seconds
         self.component = component
         self.running = False
-        self.thread: Optional[threading.Thread] = None
+        self.thread: threading.Thread | None = None
         self.logger = create_structured_logger(component, logging.getLogger(__name__))
-        
+
     def start(self):
         """Start background metrics reporting"""
         if self.running:
             return
-            
+
         self.running = True
         self.thread = threading.Thread(target=self._report_loop, daemon=True)
         self.thread.start()
         self.logger.info("Background metrics reporting started")
-        
+
     def stop(self):
         """Stop background metrics reporting"""
         self.running = False
         if self.thread:
             self.thread.join(timeout=5.0)
         self.logger.info("Background metrics reporting stopped")
-        
+
     def _report_loop(self):
         """Main reporting loop"""
         while self.running:
@@ -288,18 +288,18 @@ class BackgroundMetricsReporter:
                 self._report_metrics()
             except Exception as e:
                 self.logger.error(f"Metrics reporting failed: {e}")
-                
+
             time.sleep(self.interval_seconds)
-            
+
     def _report_metrics(self):
         """Report current metrics"""
         metrics = get_metrics_collector()
         system_monitor = get_system_monitor()
-        
+
         # Get summaries
         metric_summaries = metrics.get_all_summaries(window_seconds=int(self.interval_seconds))
         system_metrics = system_monitor.get_latest_metrics()
-        
+
         # Log summary
         self.logger.info(
             "Periodic metrics report",
@@ -311,7 +311,7 @@ class BackgroundMetricsReporter:
                 "interval_seconds": self.interval_seconds
             }
         )
-        
+
         # Record reporting metric
         metrics.record_counter("metrics.reports.generated")
 
@@ -320,23 +320,23 @@ def setup_observability_for_flask(app: Flask, component_name: str = "api-server"
     """Setup complete observability for a Flask application"""
     # Store start time in Flask config instead of as attribute
     app.config['OBSERVABILITY_START_TIME'] = time.time()
-    
+
     # Setup middleware
     middleware = FlaskObservabilityMiddleware(app, component_name)
-    
+
     # Start system monitoring
     system_monitor = get_system_monitor()
     if not system_monitor.running:
         system_monitor.start()
-        
+
     # Start background metrics reporting
     reporter = BackgroundMetricsReporter(component=f"{component_name}-reporter")
     reporter.start()
-    
+
     # Store references for cleanup using Flask's extensions dictionary
     if not hasattr(app, 'extensions'):
         app.extensions = {}
     app.extensions['observability_middleware'] = middleware
     app.extensions['metrics_reporter'] = reporter
-    
+
     return middleware

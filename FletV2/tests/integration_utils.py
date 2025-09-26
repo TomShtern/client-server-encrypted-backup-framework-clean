@@ -9,7 +9,8 @@ Integration test helpers for FletV2 views.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable, Optional, Type, Awaitable, Coroutine
+from collections.abc import Awaitable, Callable, Coroutine
+from typing import Any
 
 import flet as ft
 
@@ -19,8 +20,8 @@ class FakePage:
 
     def __init__(self) -> None:
         self.overlay: list[Any] = []
-        self.snack_bar: Optional[ft.SnackBar] = None
-        self.last_opened_dialog: Optional[ft.AlertDialog] = None
+        self.snack_bar: ft.SnackBar | None = None
+        self.last_opened_dialog: ft.AlertDialog | None = None
 
     # API used by views
     def open(self, dialog: ft.AlertDialog) -> None:
@@ -62,7 +63,7 @@ class FakePage:
                 loop.close()
 
 
-def find_control_by_type(root: Any, type_cls: Type[Any]) -> Optional[Any]:
+def find_control_by_type(root: Any, type_cls: type[Any]) -> Any | None:
     """Depth-first search for the first control instance of the given type."""
     try:
         if isinstance(root, type_cls):

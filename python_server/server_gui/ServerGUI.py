@@ -1,22 +1,29 @@
-# -*- coding: utf-8 -*-
 # Enhanced ServerGUI.py - Modern Cross-platform GUI for Encrypted Backup Server
 # Enhanced Version: Improved visuals, UX, and modern UI patterns
 
 from __future__ import annotations
-import sys
+
+import csv
+import json
 import os
+import queue
+import shutil
+import sys
 import threading
+import time
 import traceback
 from collections import deque
-from datetime import datetime, timedelta
-from typing import (Dict, List, Optional, Any, Deque, Callable, TYPE_CHECKING, Protocol,
-                    runtime_checkable, cast, Tuple)
+from collections.abc import Callable
 from contextlib import suppress
-import time
-import queue
-import json
-import csv
-import shutil
+from datetime import datetime, timedelta
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Protocol,
+    cast,
+    runtime_checkable,
+)
+
 
 # --- Dependency and System Setup ---
 def _safe_reconfigure_stream(stream: Any) -> None:
@@ -36,13 +43,14 @@ except ImportError:
         print("[WARNING] Could not enable UTF-8 solution.")
 
 if TYPE_CHECKING:
-    from Shared.utils.process_monitor_gui import ProcessMonitorWidget
+    import matplotlib.pyplot as plt
     import pystray
+    from matplotlib.axes import Axes
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     from matplotlib.figure import Figure
-    from matplotlib.axes import Axes
     from matplotlib.lines import Line2D
-    import matplotlib.pyplot as plt
+
+    from Shared.utils.process_monitor_gui import ProcessMonitorWidget
 else:
     ProcessMonitorWidget = type(None)
     pystray = type(None)
@@ -56,13 +64,13 @@ else:
 class BackupServerLike(Protocol):
     running: bool
     db_manager: Any
-    clients: Dict[bytes, Any]
-    clients_by_name: Dict[str, bytes]
+    clients: dict[bytes, Any]
+    clients_by_name: dict[str, bytes]
     network_server: Any
     file_transfer_manager: Any
     def start(self) -> None: ...
     def stop(self) -> None: ...
-    def apply_settings(self, settings: Dict[str, Any]) -> None: ...
+    def apply_settings(self, settings: dict[str, Any]) -> None: ...
 
 # Import DatabaseManager for standalone mode
 try:
@@ -77,7 +85,7 @@ except ImportError:
 
 # --- Optional Dependency Imports with Graceful Fallbacks ---
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import filedialog, messagebox, ttk
 
 try:
     from tkcalendar import DateEntry as CalDateEntry
@@ -107,11 +115,11 @@ except ImportError:
 try:
     import matplotlib
     matplotlib.use('TkAgg')
+    import matplotlib.pyplot as plt
+    from matplotlib.axes import Axes
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     from matplotlib.figure import Figure
-    from matplotlib.axes import Axes
     from matplotlib.lines import Line2D
-    import matplotlib.pyplot as plt
     plt.style.use('dark_background')
     CHARTS_AVAILABLE = True
 except ImportError:
@@ -216,8 +224,8 @@ class EnhancedTooltip:
         self.widget = widget
         self.text = text
         self.delay = delay
-        self.tooltip_window: Optional[tk.Toplevel] = None
-        self.tooltip_job: Optional[str] = None  # after() returns str
+        self.tooltip_window: tk.Toplevel | None = None
+        self.tooltip_job: str | None = None  # after() returns str
 
         self.widget.bind("<Enter>", self.on_enter)
         self.widget.bind("<Leave>", self.on_leave)
@@ -331,22 +339,22 @@ class ModernCard(tk.Frame):
 
 class EnhancedTable(tk.Frame):
     """Enhanced table with improved styling, filtering, and interactions"""
-    def __init__(self, parent: tk.Widget, columns: Dict[str, Dict[str, Any]], **kwargs: Any) -> None:
+    def __init__(self, parent: tk.Widget, columns: dict[str, dict[str, Any]], **kwargs: Any) -> None:
         super().__init__(parent, bg=EnhancedTheme.CARD_BG, **kwargs)
         self.columns = columns
-        self.data: List[Dict[str, Any]] = []
-        self.filtered_data: List[Dict[str, Any]] = []
-        self.selected_items: List[Dict[str, Any]] = []
-        self.sort_column: Optional[str] = None
+        self.data: list[dict[str, Any]] = []
+        self.filtered_data: list[dict[str, Any]] = []
+        self.selected_items: list[dict[str, Any]] = []
+        self.sort_column: str | None = None
         self.sort_reverse: bool = False
 
         # Callbacks
-        self.selection_callback: Optional[Callable[[List[Dict[str, Any]]], None]] = None
-        self.context_menu_builder: Optional[Callable[[Dict[str, Any]], tk.Menu]] = None
+        self.selection_callback: Callable[[list[dict[str, Any]]], None] | None = None
+        self.context_menu_builder: Callable[[dict[str, Any]], tk.Menu] | None = None
 
         # Search and filter
         self.search_var = tk.StringVar()
-        self.filter_vars: Dict[str, tk.StringVar] = {}
+        self.filter_vars: dict[str, tk.StringVar] = {}
 
         self.tree = self._create_enhanced_table()
 
@@ -423,7 +431,7 @@ class EnhancedTable(tk.Frame):
 
         return tree
 
-    def set_data(self, data: List[Dict[str, Any]]) -> None:
+    def set_data(self, data: list[dict[str, Any]]) -> None:
         self.data = data
         self._apply_filter()
 
@@ -530,10 +538,10 @@ class EnhancedTable(tk.Frame):
                 finally:
                     menu.grab_release()
 
-    def set_selection_callback(self, callback: Callable[[List[Dict[str, Any]]], None]) -> None:
+    def set_selection_callback(self, callback: Callable[[list[dict[str, Any]]], None]) -> None:
         self.selection_callback = callback
 
-    def set_context_menu_builder(self, builder: Callable[[Dict[str, Any]], tk.Menu]) -> None:
+    def set_context_menu_builder(self, builder: Callable[[dict[str, Any]], tk.Menu]) -> None:
         self.context_menu_builder = builder
 
 class EnhancedStatusIndicator(tk.Frame):
@@ -547,7 +555,7 @@ class EnhancedStatusIndicator(tk.Frame):
         self.status_label.pack()
 
         self.current_status = "offline"
-        self.pulse_job: Optional[str] = None  # after() returns str
+        self.pulse_job: str | None = None  # after() returns str
 
     def set_status(self, status: str, animate: bool = True) -> None:
         self.current_status = status.lower()
@@ -592,7 +600,7 @@ class EnhancedProgressBar(tk.Frame):
         self.progress_var = tk.DoubleVar()
         self.target_value = 0.0
         self.current_value = 0.0
-        self.animation_job: Optional[str] = None  # after() returns str
+        self.animation_job: str | None = None  # after() returns str
 
         self.progress_bar = ttk.Progressbar(self, variable=self.progress_var,
                                           length=200, mode='determinate')
@@ -635,7 +643,7 @@ class EnhancedToastNotification:
     """Enhanced toast notification system with animations"""
     def __init__(self, parent: tk.Widget) -> None:
         self.parent = parent
-        self.toasts: List[Tuple[tk.Toplevel, str]] = []
+        self.toasts: list[tuple[tk.Toplevel, str]] = []
         self.max_toasts = 5
 
     def show_toast(self, message: str, level: str = "info", duration: int = 3000) -> None:
@@ -784,7 +792,7 @@ class EnhancedDetailPane(ModernCard):
         self.content_text.tag_configure("section", foreground=EnhancedTheme.ACCENT_PURPLE,
                                        font=(EnhancedTheme.FONT_FAMILY, EnhancedTheme.FONT_SIZE_MEDIUM, "bold"))
 
-    def update_details(self, item: Dict[str, Any]) -> None:
+    def update_details(self, item: dict[str, Any]) -> None:
         self.content_text.config(state=tk.NORMAL)
         self.content_text.delete(1.0, tk.END)
 
@@ -833,61 +841,61 @@ class EnhancedDetailPane(ModernCard):
 class EnhancedServerGUI:
     """Enhanced Server GUI with modern styling and improved UX"""
 
-    def __init__(self, server_instance: Optional[BackupServerLike] = None) -> None:
+    def __init__(self, server_instance: BackupServerLike | None = None) -> None:
         self.server = server_instance
-        self.root: Optional[tk.Tk] = None
+        self.root: tk.Tk | None = None
         self.is_running = False
-        self.gui_thread: Optional[threading.Thread] = None
+        self.gui_thread: threading.Thread | None = None
         self.start_time: float = 0.0
         self.current_tab = "dashboard"
-        self.settings: Dict[str, Any] = self._load_settings()
-        self.update_queue: queue.Queue[Dict[str, Any]] = queue.Queue()
+        self.settings: dict[str, Any] = self._load_settings()
+        self.update_queue: queue.Queue[dict[str, Any]] = queue.Queue()
 
         # UI Components
-        self.toast_system: Optional[EnhancedToastNotification] = None
+        self.toast_system: EnhancedToastNotification | None = None
         self.tray_icon: Any = None
-        self.tab_buttons: Dict[str, tk.Button] = {}
-        self.tab_contents: Dict[str, tk.Frame] = {}
-        self.status_labels: Dict[str, tk.Label] = {}
-        self.header_status_indicator: Optional[EnhancedStatusIndicator] = None
-        self.clock_label: Optional[tk.Label] = None
-        self.header_status_label: Optional[tk.Label] = None
-        self.activity_log_text: Optional[tk.Text] = None
+        self.tab_buttons: dict[str, tk.Button] = {}
+        self.tab_contents: dict[str, tk.Frame] = {}
+        self.status_labels: dict[str, tk.Label] = {}
+        self.header_status_indicator: EnhancedStatusIndicator | None = None
+        self.clock_label: tk.Label | None = None
+        self.header_status_label: tk.Label | None = None
+        self.activity_log_text: tk.Text | None = None
 
         # Add missing attributes to avoid AttributeError/type errors
-        self.server_status_label: Optional[tk.Label] = None
-        self.connection_count_label: Optional[tk.Label] = None
+        self.server_status_label: tk.Label | None = None
+        self.connection_count_label: tk.Label | None = None
         self.premium_chart: Any = None
         self.cpu_ax: Any = None
         self.memory_ax: Any = None
         self.network_ax: Any = None
         self.server_status_ring: Any = None
-        self.premium_metrics: Dict[str, Any] = {}
+        self.premium_metrics: dict[str, Any] = {}
 
         # Table components
-        self.client_table: Optional[EnhancedTable] = None
-        self.client_detail_pane: Optional[EnhancedDetailPane] = None
-        self.file_table: Optional[EnhancedTable] = None
-        self.file_detail_pane: Optional[EnhancedDetailPane] = None
-        self.db_table: Optional[EnhancedTable] = None
-        self.db_table_selector: Optional[ttk.Combobox] = None
+        self.client_table: EnhancedTable | None = None
+        self.client_detail_pane: EnhancedDetailPane | None = None
+        self.file_table: EnhancedTable | None = None
+        self.file_detail_pane: EnhancedDetailPane | None = None
+        self.db_table: EnhancedTable | None = None
+        self.db_table_selector: ttk.Combobox | None = None
 
         # Settings
-        self.setting_vars: Dict[str, tk.StringVar] = {}
+        self.setting_vars: dict[str, tk.StringVar] = {}
 
         # Charts
         self.performance_chart: Any = None
         self.ax: Any = None
         self.cpu_line: Any = None
         self.mem_line: Any = None
-        self.performance_data: Dict[str, Deque[Any]] = {
+        self.performance_data: dict[str, deque[Any]] = {
             'cpu': deque(maxlen=60),
             'memory': deque(maxlen=60),
             'time': deque(maxlen=60)
         }
 
         # Database
-        self._fallback_db_manager: Optional[Any] = None
+        self._fallback_db_manager: Any | None = None
 
     @property
     def effective_db_manager(self) -> Any:
@@ -1334,7 +1342,7 @@ class EnhancedServerGUI:
             btn.pack(fill="x", pady=(0, EnhancedTheme.SPACING_XS))
 
             # Enhanced button interactions
-            def make_hover_effect(button: tk.Button, normal_color: str) -> Tuple[Callable, Callable]:
+            def make_hover_effect(button: tk.Button, normal_color: str) -> tuple[Callable, Callable]:
                 def on_enter(event: tk.Event) -> None:
                     button.configure(bg=self._darken_color(normal_color))
                 def on_leave(event: tk.Event) -> None:
@@ -1893,7 +1901,7 @@ class EnhancedServerGUI:
         def _blend_colors(self, color1: str, color2: str, factor: float) -> str:
             """Blend two colors together"""
             try:
-                def hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
+                def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
                     hex_color = hex_color.lstrip('#')
                     r = int(hex_color[0:2], 16)
                     g = int(hex_color[2:4], 16)
@@ -1903,7 +1911,7 @@ class EnhancedServerGUI:
                 rgb1 = hex_to_rgb(color1)
                 rgb2 = hex_to_rgb(color2)
 
-                blended = tuple(int(c1 * (1 - factor) + c2 * factor) for c1, c2 in zip(rgb1, rgb2))
+                blended = tuple(int(c1 * (1 - factor) + c2 * factor) for c1, c2 in zip(rgb1, rgb2, strict=False))
                 return f"#{blended[0]:02x}{blended[1]:02x}{blended[2]:02x}"
             except Exception:
                 return color1
@@ -1950,7 +1958,7 @@ class EnhancedServerGUI:
             self.thickness = thickness
             self.progress = 0.0
             self.target_progress = 0.0
-            self.animation_job: Optional[str] = None
+            self.animation_job: str | None = None
 
             # Create progress ring
             self.create_oval(thickness//2, thickness//2,
@@ -2121,7 +2129,7 @@ class EnhancedServerGUI:
             ("System Health", "💚", EnhancedTheme.SUCCESS, 'system_health')
         ]
 
-        self.premium_metrics: Dict[str, Any] = {}
+        self.premium_metrics: dict[str, Any] = {}
 
         for i, (title, icon, color, key) in enumerate(metrics_data):
             row = 1 + (i // 2)
@@ -2209,7 +2217,7 @@ class EnhancedServerGUI:
         colors = [EnhancedTheme.ACCENT_BLUE, EnhancedTheme.ACCENT_PURPLE, EnhancedTheme.ACCENT_TEAL]
 
         # Style each subplot
-        for ax, title, color in zip(axes, titles, colors):
+        for ax, title, color in zip(axes, titles, colors, strict=False):
             ax.set_facecolor(EnhancedTheme.SECONDARY_BG)
             ax.set_title(title, color=EnhancedTheme.TEXT_PRIMARY, fontsize=12, fontweight='bold')
             ax.tick_params(colors=EnhancedTheme.TEXT_SECONDARY, labelsize=8)
@@ -2367,7 +2375,7 @@ class EnhancedServerGUI:
             if 'files_count' in self.premium_metrics and self.server and hasattr(self.server, 'db_manager'):
                 try:
                     files_count = len(self.server.db_manager.get_all_files()) if self.server.db_manager else 0
-                    self.premium_metrics['files_count'].update_value(files_count, f"📁 Total stored")
+                    self.premium_metrics['files_count'].update_value(files_count, "📁 Total stored")
                 except Exception:
                     pass
 
@@ -2643,7 +2651,7 @@ class EnhancedServerGUI:
         except Exception as e:
             self._show_toast(f"Error saving settings: {e}", "error")
 
-    def _load_settings(self) -> Dict[str, Any]:
+    def _load_settings(self) -> dict[str, Any]:
         """Load settings with premium defaults"""
         defaults = {
             'port': 1256,
@@ -2662,7 +2670,7 @@ class EnhancedServerGUI:
         }
 
         try:
-            with open("server_gui_settings.json", 'r', encoding='utf-8') as f:
+            with open("server_gui_settings.json", encoding='utf-8') as f:
                 loaded_settings = json.load(f)
                 defaults.update(loaded_settings)
         except (FileNotFoundError, json.JSONDecodeError):
@@ -2701,7 +2709,7 @@ class EnhancedServerGUI:
                         f"✅ Backup completed! ({size_mb:.1f} MB)\nSaved to: {os.path.basename(file_path)}",
                         "success"
                     ))
-                except Exception as e:
+                except Exception:
                     self.root.after(0, lambda: self._show_toast(f"Backup failed: {e}", "error"))
 
             threading.Thread(target=do_backup, daemon=True).start()
@@ -2758,7 +2766,7 @@ class EnhancedServerGUI:
         }
         self._handle_status_update(data)
 
-    def update_client_stats(self, stats_data: Dict[str, Any]) -> None:
+    def update_client_stats(self, stats_data: dict[str, Any]) -> None:
         """Update client statistics with premium animations"""
         processed_data = {
             'connected': stats_data.get('connected', 0),
@@ -2767,7 +2775,7 @@ class EnhancedServerGUI:
         }
         self._handle_client_stats_update(processed_data)
 
-    def update_transfer_stats(self, stats_data: Dict[str, Any]) -> None:
+    def update_transfer_stats(self, stats_data: dict[str, Any]) -> None:
         """Update transfer statistics with premium visualizations"""
         processed_data = {
             'bytes_transferred': stats_data.get('bytes_transferred', 0),
@@ -2776,7 +2784,7 @@ class EnhancedServerGUI:
         }
         self._handle_transfer_stats_update(processed_data)
 
-    def _handle_status_update(self, data: Dict[str, Any]) -> None:
+    def _handle_status_update(self, data: dict[str, Any]) -> None:
         """Handle status updates with premium indicators"""
         self.start_time = data.get('start_time', self.start_time)
         running = data.get('running', False)
@@ -2810,7 +2818,7 @@ class EnhancedServerGUI:
         elif 'uptime' in self.status_labels:
             self.status_labels['uptime'].config(text="⏱️ 0:00:00")
 
-    def _handle_client_stats_update(self, data: Dict[str, Any]) -> None:
+    def _handle_client_stats_update(self, data: dict[str, Any]) -> None:
         """Handle client stats updates with premium metrics"""
         if 'connected' in self.status_labels:
             connected_text = f"🟢 {data.get('connected', 0)}"
@@ -2828,7 +2836,7 @@ class EnhancedServerGUI:
         if self.current_tab == 'clients':
             self._refresh_client_table()
 
-    def _handle_transfer_stats_update(self, data: Dict[str, Any]) -> None:
+    def _handle_transfer_stats_update(self, data: dict[str, Any]) -> None:
         """Handle transfer stats updates with premium visualizations"""
         bytes_transferred = data.get('bytes_transferred', 0)
         rate_kbps = data.get('rate_kbps', 0)
@@ -2906,7 +2914,7 @@ class EnhancedServerGUI:
                 client['status'] = "🟢 Online" if is_online else "🔴 Offline"
 
                 # Add additional premium formatting
-                if 'last_seen' in client and client['last_seen']:
+                if client.get('last_seen'):
                     try:
                         last_seen = datetime.fromisoformat(client['last_seen'])
                         time_diff = datetime.now() - last_seen
@@ -2961,7 +2969,7 @@ class EnhancedServerGUI:
                 file_info['encrypted'] = "🔐 Yes" if file_info.get('encrypted', True) else "🔓 No"
 
                 # Format date
-                if 'date' in file_info and file_info['date']:
+                if file_info.get('date'):
                     try:
                         upload_date = datetime.fromisoformat(file_info['date'])
                         file_info['date'] = f"📅 {upload_date.strftime('%Y-%m-%d %H:%M')}"
@@ -2996,7 +3004,7 @@ class EnhancedServerGUI:
         except Exception as e:
             self._show_toast(f"Database error: {e}", "error")
 
-    def _on_db_table_select(self, event: Optional[tk.Event] = None) -> None:
+    def _on_db_table_select(self, event: tk.Event | None = None) -> None:
         """Handle database table selection with premium loading"""
         if not self.db_table_selector or not self.db_table:
             return
@@ -3031,7 +3039,7 @@ class EnhancedServerGUI:
             from typing import cast
             self.db_table = EnhancedTable(cast(tk.Widget, parent), table_cols)
             self.db_table.pack(fill="both", expand=True)
-            self.db_table.set_data([dict(zip(columns, row)) for row in data])
+            self.db_table.set_data([dict(zip(columns, row, strict=False)) for row in data])
 
             self._show_toast(f"Loaded {len(data)} rows", "success")
 
@@ -3039,17 +3047,17 @@ class EnhancedServerGUI:
             self._show_toast(f"Error loading table: {e}", "error")
 
     # Context menu builders
-    def _on_client_selected(self, items: List[Dict[str, Any]]) -> None:
+    def _on_client_selected(self, items: list[dict[str, Any]]) -> None:
         """Handle client selection with premium detail display"""
         if self.client_detail_pane and items:
             self.client_detail_pane.update_details(items[0])
 
-    def _on_file_selected(self, items: List[Dict[str, Any]]) -> None:
+    def _on_file_selected(self, items: list[dict[str, Any]]) -> None:
         """Handle file selection with premium detail display"""
         if self.file_detail_pane and items:
             self.file_detail_pane.update_details(items[0])
 
-    def _build_client_context_menu(self, item: Dict[str, Any]) -> tk.Menu:
+    def _build_client_context_menu(self, item: dict[str, Any]) -> tk.Menu:
         """Build premium client context menu"""
         if not self.root:
             return tk.Menu()
@@ -3075,7 +3083,7 @@ class EnhancedServerGUI:
 
         return menu
 
-    def _build_file_context_menu(self, item: Dict[str, Any]) -> tk.Menu:
+    def _build_file_context_menu(self, item: dict[str, Any]) -> tk.Menu:
         """Build premium file context menu"""
         if not self.root:
             return tk.Menu()
@@ -3129,20 +3137,20 @@ class EnhancedServerGUI:
         self._show_toast(f"Statistics for client: {client_id[:8]}...", "info")
         # Could show detailed client statistics
 
-    def _download_file(self, file_info: Dict[str, Any]) -> None:
+    def _download_file(self, file_info: dict[str, Any]) -> None:
         """Download file with premium progress indication"""
         filename = file_info.get('filename', 'unknown')
         self._show_toast(f"Download started: {filename}", "info")
         # Implementation would go here
 
-    def _verify_file(self, file_info: Dict[str, Any]) -> None:
+    def _verify_file(self, file_info: dict[str, Any]) -> None:
         """Verify file integrity with premium feedback"""
         filename = file_info.get('filename', 'unknown')
         self._show_toast(f"Verifying: {filename}", "info")
         # Implementation would go here
         self.root.after(2000, lambda: self._show_toast(f"✅ {filename} verified", "success"))
 
-    def _delete_file(self, file_info: Dict[str, Any]) -> None:
+    def _delete_file(self, file_info: dict[str, Any]) -> None:
         """Delete file with premium confirmation"""
         filename = file_info.get('filename', 'unknown')
 

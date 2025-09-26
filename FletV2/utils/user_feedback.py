@@ -4,8 +4,9 @@ Dialog Consolidation Utilities for FletV2
 Standardized dialog patterns and user feedback to eliminate the 15+ repeated AlertDialog implementations.
 """
 
+from collections.abc import Callable
+
 import flet as ft
-from typing import Optional, Callable, List, Union
 from utils.debug_setup import get_logger
 
 logger = get_logger(__name__)
@@ -27,7 +28,7 @@ class DialogManager:
         title: str,
         content: str,
         on_confirm: Callable,
-        on_cancel: Optional[Callable] = None,
+        on_cancel: Callable | None = None,
         confirm_text: str = "Confirm",
         cancel_text: str = "Cancel",
         confirm_color: str = ft.Colors.PRIMARY,
@@ -55,7 +56,6 @@ class DialogManager:
             try:
                 if on_confirm:
                     # Check if callback is async and run it appropriately
-                    import asyncio
                     import inspect
 
                     if inspect.iscoroutinefunction(on_confirm):
@@ -110,10 +110,10 @@ class DialogManager:
     def create_info_dialog(
         page: ft.Page,
         title: str,
-        content: Union[str, ft.Control],
+        content: str | ft.Control,
         ok_text: str = "OK",
-        width: Optional[float] = None,
-        height: Optional[float] = None
+        width: float | None = None,
+        height: float | None = None
     ) -> ft.AlertDialog:
         """
         Create standardized information dialog.
@@ -165,7 +165,7 @@ class DialogManager:
         content: str,
         input_label: str,
         on_submit: Callable[[str], None],
-        on_cancel: Optional[Callable] = None,
+        on_cancel: Callable | None = None,
         submit_text: str = "Submit",
         cancel_text: str = "Cancel",
         initial_value: str = "",
@@ -288,8 +288,8 @@ def show_confirmation(
 def show_info(
     page: ft.Page,
     title: str,
-    message: Union[str, ft.Control],
-    width: Optional[float] = None
+    message: str | ft.Control,
+    width: float | None = None
 ) -> ft.AlertDialog:
     """
     Quick info dialog factory function.
@@ -330,7 +330,7 @@ def show_input(
 
 
 # User Feedback Functions (migrated from user_feedback.py)
-def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, action_label: Optional[str] = None) -> None:
+def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, action_label: str | None = None) -> None:
     """
     Show centralized user feedback using Flet's SnackBar.
 
@@ -359,7 +359,7 @@ def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, acti
         logger.error(f"Failed to show user feedback: {e}")
 
 
-def show_success_message(page: ft.Page, message: str, action_label: Optional[str] = None, mode: Optional[str] = None) -> None:
+def show_success_message(page: ft.Page, message: str, action_label: str | None = None, mode: str | None = None) -> None:
     """Show success message to user with optional mode indicator."""
     try:
         # Add mode prefix if specified
@@ -384,12 +384,12 @@ def show_success_message(page: ft.Page, message: str, action_label: Optional[str
         logger.error(f"Failed to show user feedback: {e}")
 
 
-def show_error_message(page: ft.Page, message: str, action_label: Optional[str] = None) -> None:
+def show_error_message(page: ft.Page, message: str, action_label: str | None = None) -> None:
     """Show error message to user."""
     show_user_feedback(page, message, is_error=True, action_label=action_label)
 
 
-def show_info_message(page: ft.Page, message: str, action_label: Optional[str] = None, mode: Optional[str] = None) -> None:
+def show_info_message(page: ft.Page, message: str, action_label: str | None = None, mode: str | None = None) -> None:
     """Show info message to user with optional mode indicator."""
     # Add mode prefix if specified
     display_message = message
@@ -414,7 +414,7 @@ def show_info_message(page: ft.Page, message: str, action_label: Optional[str] =
         logger.error(f"Failed to show info message: {e}")
 
 
-def show_warning_message(page: ft.Page, message: str, action_label: Optional[str] = None) -> None:
+def show_warning_message(page: ft.Page, message: str, action_label: str | None = None) -> None:
     """Show warning message to user."""
     try:
         page.snack_bar = ft.SnackBar(

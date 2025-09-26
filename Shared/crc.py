@@ -8,7 +8,6 @@ Compatible with the C++ client implementation for cross-language consistency.
 """
 
 import logging
-from typing import Union
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +48,7 @@ _CRC32_TABLE = (
 )
 
 
-def calculate_crc32(data: Union[bytes, str]) -> int:
+def calculate_crc32(data: bytes | str) -> int:
     """
     Calculate CRC32 checksum compatible with POSIX cksum command.
     
@@ -70,19 +69,19 @@ def calculate_crc32(data: Union[bytes, str]) -> int:
         data = data.encode('utf-8')
     elif not isinstance(data, bytes):
         raise TypeError(f"Data must be bytes or string, got {type(data)}")
-    
+
     crc = 0
-    
+
     # Process each byte of data
     for byte_val in data:
         crc = ((crc << 8) ^ _CRC32_TABLE[(crc >> 24) ^ byte_val]) & 0xFFFFFFFF
-    
+
     # Process the length of the data (POSIX cksum requirement)
     length = len(data)
     while length:
         crc = ((crc << 8) ^ _CRC32_TABLE[(crc >> 24) ^ (length & 0xFF)]) & 0xFFFFFFFF
         length >>= 8
-    
+
     # Return one's complement
     return (~crc) & 0xFFFFFFFF
 
@@ -94,13 +93,13 @@ class CRC32Stream:
     Maintains state between update() calls and provides final CRC calculation
     that includes length processing.
     """
-    
+
     def __init__(self):
         """Initialize streaming CRC calculator."""
         self.crc = 0
         self.total_length = 0
-    
-    def update(self, data: Union[bytes, str]) -> None:
+
+    def update(self, data: bytes | str) -> None:
         """
         Update CRC with new data chunk.
         
@@ -115,12 +114,12 @@ class CRC32Stream:
             data = data.encode('utf-8')
         elif not isinstance(data, bytes):
             raise TypeError(f"Data must be bytes or string, got {type(data)}")
-        
+
         for byte_val in data:
             self.crc = ((self.crc << 8) ^ _CRC32_TABLE[(self.crc >> 24) ^ byte_val]) & 0xFFFFFFFF
-        
+
         self.total_length += len(data)
-    
+
     def finalize(self) -> int:
         """
         Finalize CRC calculation including length processing.
@@ -130,22 +129,22 @@ class CRC32Stream:
         """
         final_crc = self.crc
         length = self.total_length
-        
+
         # Process the total length (POSIX cksum requirement)
         while length:
             final_crc = ((final_crc << 8) ^ _CRC32_TABLE[(final_crc >> 24) ^ (length & 0xFF)]) & 0xFFFFFFFF
             length >>= 8
-        
+
         # Return one's complement
         return (~final_crc) & 0xFFFFFFFF
-    
+
     def reset(self) -> None:
         """Reset the CRC calculator to initial state."""
         self.crc = 0
         self.total_length = 0
 
 
-def verify_crc32(data: Union[bytes, str], expected_crc: int) -> bool:
+def verify_crc32(data: bytes | str, expected_crc: int) -> bool:
     """
     Verify data against expected CRC32 value.
     

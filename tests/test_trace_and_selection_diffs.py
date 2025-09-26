@@ -1,6 +1,6 @@
-from flet_server_gui.utils.trace_center import get_trace_center, trace_action_start, trace_action_end
-from flet_server_gui.state.selection_state import SelectionState
 from flet_server_gui.services.busy_indicator import get_busy_indicator
+from flet_server_gui.state.selection_state import SelectionState
+from flet_server_gui.utils.trace_center import get_trace_center, trace_action_end, trace_action_start
 
 
 def test_action_trace_pairing_and_correlation_uniqueness():

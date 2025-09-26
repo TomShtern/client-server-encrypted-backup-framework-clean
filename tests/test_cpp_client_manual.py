@@ -10,10 +10,9 @@ Run this script to test the C++ client outside of the web interface.
 """
 
 import os
-import sys
 import subprocess
-import tempfile
 from pathlib import Path
+
 
 def create_test_transfer_info():
     """Create a test transfer.info file"""
@@ -36,7 +35,7 @@ def test_executable_exists():
         r"client\EncryptedBackupClient.exe",
         r"EncryptedBackupClient.exe"
     ]
-    
+
     existing_exes = []
     for path in possible_paths:
         if os.path.exists(path):
@@ -44,7 +43,7 @@ def test_executable_exists():
             print(f"[OK] Found: {os.path.abspath(path)}")
         else:
             print(f"[MISSING] {path}")
-    
+
     return existing_exes
 
 def run_cpp_client_test(exe_path):
@@ -53,7 +52,7 @@ def run_cpp_client_test(exe_path):
     print(f"Testing: {exe_path}")
     print(f"Working Directory: {os.getcwd()}")
     print(f"{'='*60}")
-    
+
     # Test 1: Run with --batch flag (as used by Python code)
     print("\nTEST 1: Running with --batch flag")
     print(f"Command: {exe_path} --batch")
@@ -65,18 +64,18 @@ def run_cpp_client_test(exe_path):
             encoding='utf-8',
             timeout=30
         )
-        
+
         print(f"Exit Code: {result.returncode}")
         if result.stdout:
             print(f"STDOUT:\n{result.stdout}")
         if result.stderr:
             print(f"STDERR:\n{result.stderr}")
-            
+
         if result.returncode == 0:
             print("[SUCCESS] C++ client completed without errors")
         else:
             print(f"[FAILED] C++ client failed with exit code {result.returncode}")
-            
+
     except subprocess.TimeoutExpired:
         print("[TIMEOUT] C++ client hung for more than 30 seconds")
     except FileNotFoundError:
@@ -88,39 +87,39 @@ def main():
     print("C++ Client Manual Test Script")
     print("=" * 40)
     print()
-    
+
     # Change to the project root directory
     script_dir = Path(__file__).parent
     os.chdir(script_dir)
     print(f"Working directory: {os.getcwd()}")
     print()
-    
+
     # Check which executables exist
     print("Checking for C++ client executables...")
     existing_exes = test_executable_exists()
-    
+
     if not existing_exes:
         print("\n[ERROR] No C++ client executables found!")
         print("You may need to build the project first.")
         print("Try running: python one_click_build_and_run.py")
         return 1
-    
+
     # Create test files
-    print(f"\nCreating test files...")
+    print("\nCreating test files...")
     create_test_transfer_info()
     create_test_file()
-    
+
     # Test each executable
     for exe_path in existing_exes:
         run_cpp_client_test(exe_path)
-    
+
     # Cleanup
-    print(f"\nCleaning up test files...")
+    print("\nCleaning up test files...")
     for file in ["transfer.info", "test_file.txt"]:
         if os.path.exists(file):
             os.remove(file)
             print(f"Removed: {file}")
-    
+
     print(f"\n{'='*60}")
     print("Manual test completed!")
     print("If the C++ client failed, the error messages above")
@@ -131,7 +130,7 @@ if __name__ == "__main__":  # pragma: no cover - manual execution helper
     try:
         ret = main()
         print(f"Exited with code {ret}")
-    except KeyboardInterrupt:  # noqa: PIE786
+    except KeyboardInterrupt:
         print("\n\nTest interrupted by user")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"\n\nUnexpected error: {e}")

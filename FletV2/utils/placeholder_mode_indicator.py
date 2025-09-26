@@ -3,8 +3,8 @@ Simple placeholder mode indicator for FletV2 GUI.
 Shows a visual banner when the application is using placeholder/lorem ipsum data.
 """
 
+
 import flet as ft
-from typing import Optional
 
 
 def create_placeholder_mode_banner(server_bridge) -> ft.Control:

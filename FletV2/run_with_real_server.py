@@ -11,11 +11,10 @@ External Integration:
     launch_fletv2_with_server(my_backup_server)
 """
 
+import asyncio
+import logging
 import os
 import sys
-import logging
-import asyncio
-from pathlib import Path
 
 # Add project paths
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -26,7 +25,6 @@ for path in [project_root, fletv2_root]:
         sys.path.insert(0, path)
 
 # ALWAYS import UTF-8 solution first
-import Shared.utils.utf8_solution as _
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -34,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 # Import Flet
 import flet as ft
+
 
 def initialize_real_server():
     """Initialize and start BackupServer instance."""

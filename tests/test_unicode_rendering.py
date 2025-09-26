@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Unicode and Hebrew/Emoji Rendering Test for KivyMD
 Tests various Unicode characters, Hebrew text, and emojis
@@ -28,6 +27,7 @@ except ImportError:
 
 # Kivy configuration for Unicode support
 from kivy.config import Config
+
 Config.set('graphics', 'width', '800')
 Config.set('graphics', 'height', '600')
 
@@ -38,24 +38,25 @@ os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.card import MDCard
 from kivymd.uix.scrollview import MDScrollView
 from kivymd_gui.components.md3_label import MD3Label
-from kivymd.uix.card import MDCard
+
 
 class UnicodeRenderingTestApp(MDApp):
     def build(self):
         self.theme_cls.material_style = "M3"
         self.theme_cls.theme_style = "Dark"
-        
+
         # Main scroll container
         scroll = MDScrollView()
         main_layout = MDBoxLayout(
-            orientation="vertical", 
-            spacing="10dp", 
+            orientation="vertical",
+            spacing="10dp",
             padding="20dp",
             adaptive_height=True
         )
-        
+
         # Test cases for different Unicode scenarios
         test_cases = [
             ("English Text", "Hello World! This is regular English text."),
@@ -69,7 +70,7 @@ class UnicodeRenderingTestApp(MDApp):
             ("Unicode Symbols", "™ © ® ° ± × ÷ ≠ ≤ ≥ ∞ π α β γ δ"),
             ("RTL Test Hebrew", "כתובת: רחוב בן גוריון 123, תל אביב"),
         ]
-        
+
         for title, text in test_cases:
             # Create card for each test case
             card = MDCard(
@@ -79,31 +80,31 @@ class UnicodeRenderingTestApp(MDApp):
                 spacing="5dp",
                 orientation="vertical"
             )
-            
+
             # Title label
             title_label = MD3Label(
                 text=f"TEST: {title}",
-                font_style="Label", 
+                font_style="Label",
                 theme_text_color="Secondary",
                 size_hint_y=None,
                 height="20dp"
             )
-            
+
             # Test content label
             content_label = MD3Label(
                 text=text,
                 font_style="Body",
-                theme_text_color="Primary", 
+                theme_text_color="Primary",
                 size_hint_y=None,
                 height="40dp",
                 # Allow text wrapping for longer content
                 text_size=(None, None)
             )
-            
+
             card.add_widget(title_label)
             card.add_widget(content_label)
             main_layout.add_widget(card)
-        
+
         scroll.add_widget(main_layout)
         return scroll
 
@@ -112,7 +113,7 @@ if __name__ == "__main__":
     print(f"[INFO] System encoding: {sys.stdout.encoding}")
     print(f"[INFO] File system encoding: {sys.getfilesystemencoding()}")
     print(f"[INFO] Default locale: {os.environ.get('LANG', 'Not set')}")
-    
+
     try:
         app = UnicodeRenderingTestApp()
         app.run()

@@ -6,11 +6,13 @@ Eliminates duplication across views by providing common operation patterns.
 """
 
 import asyncio
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Dict, Optional, Callable, List, Union
+from typing import Any
+
 from utils.debug_setup import get_logger
 from utils.state_manager import StateManager
-from utils.user_feedback import show_success_message, show_error_message
+from utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger(__name__)
 
@@ -27,10 +29,10 @@ class ServerMediatedOperations:
         state_key: str,
         server_operation: str,
         fallback_data: Any = None,
-        data_processor: Optional[Callable] = None,
-        loading_key: Optional[str] = None,
+        data_processor: Callable | None = None,
+        loading_key: str | None = None,
         operation_data: Any = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Standard pattern for loading data through server bridge with fallback.
 
@@ -88,11 +90,11 @@ class ServerMediatedOperations:
         action_name: str,
         server_operation: str,
         operation_data: Any,
-        success_message: Optional[str] = None,
-        error_message: Optional[str] = None,
-        refresh_keys: Optional[List[str]] = None,
-        loading_key: Optional[str] = None
-    ) -> Dict[str, Any]:
+        success_message: str | None = None,
+        error_message: str | None = None,
+        refresh_keys: list[str] | None = None,
+        loading_key: str | None = None
+    ) -> dict[str, Any]:
         """
         Standard pattern for user actions that modify server state.
 
@@ -135,13 +137,13 @@ class ServerMediatedOperations:
 
         except Exception as e:
             logger.error(f"Action operation failed for {action_name}: {e}")
-            error_msg = error_message or f"Failed to {action_name}: {str(e)}"
+            error_msg = error_message or f"Failed to {action_name}: {e!s}"
             show_error_message(self.page, error_msg)
             return {'success': False, 'error': str(e)}
         finally:
             self.state_manager.set_loading(loading_key, False)
 
-    async def batch_load_operations(self, operations: List[Dict]) -> Dict[str, Any]:
+    async def batch_load_operations(self, operations: list[dict]) -> dict[str, Any]:
         """
         Execute multiple load operations in parallel for better performance.
 
@@ -190,7 +192,7 @@ class ServerMediatedOperations:
 
         return results
 
-    async def _refresh_data_keys(self, state_keys: List[str]):
+    async def _refresh_data_keys(self, state_keys: list[str]):
         """Refresh multiple state keys by triggering their reload operations"""
         for key in state_keys:
             try:
@@ -207,7 +209,7 @@ class ServerMediatedOperations:
         self,
         state_key: str,
         ui_update_callback: Callable,
-        control: Optional[Any] = None
+        control: Any | None = None
     ):
         """
         Create a reactive subscription that automatically updates UI when state changes.
@@ -232,7 +234,7 @@ class ServerMediatedOperations:
 
         self.state_manager.subscribe(state_key, reactive_callback, control)
 
-    def create_loading_subscription(self, loading_indicator, operation_keys: List[str]):
+    def create_loading_subscription(self, loading_indicator, operation_keys: list[str]):
         """
         Create a subscription that shows loading indicator for multiple operations.
 
@@ -253,7 +255,7 @@ class ServerMediatedOperations:
         self.state_manager.subscribe("loading_states", loading_callback)
 
     # Dashboard-specific operation patterns
-    async def dashboard_load_system_metrics(self) -> Dict[str, Any]:
+    async def dashboard_load_system_metrics(self) -> dict[str, Any]:
         """
         Load system metrics for dashboard with specialized error handling.
 
@@ -283,7 +285,7 @@ class ServerMediatedOperations:
                 'data': self._generate_fallback_system_metrics()
             }
 
-    def _generate_fallback_system_metrics(self) -> Dict[str, Any]:
+    def _generate_fallback_system_metrics(self) -> dict[str, Any]:
         """Generate fallback system metrics for dashboard."""
         import random
         return {
@@ -296,7 +298,7 @@ class ServerMediatedOperations:
             'timestamp': datetime.now().isoformat()
         }
 
-    async def dashboard_load_server_status(self) -> Dict[str, Any]:
+    async def dashboard_load_server_status(self) -> dict[str, Any]:
         """
         Load server status for dashboard with specialized error handling.
 
@@ -316,7 +318,7 @@ class ServerMediatedOperations:
                 'data': self._generate_fallback_server_status()
             }
 
-    def _generate_fallback_server_status(self) -> Dict[str, Any]:
+    def _generate_fallback_server_status(self) -> dict[str, Any]:
         """Generate fallback server status for dashboard."""
         import random
         return {
@@ -333,8 +335,8 @@ class ServerMediatedOperations:
     async def dashboard_load_activity_data(
         self,
         limit: int = 20,
-        activity_type: Optional[str] = None
-    ) -> Dict[str, Any]:
+        activity_type: str | None = None
+    ) -> dict[str, Any]:
         """
         Load recent activity data for dashboard with filtering options.
 
@@ -365,7 +367,7 @@ class ServerMediatedOperations:
                 'data': self._generate_fallback_activity_data(limit)
             }
 
-    def _generate_fallback_activity_data(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def _generate_fallback_activity_data(self, limit: int = 20) -> list[dict[str, Any]]:
         """Generate fallback activity data for dashboard."""
         import random
         from datetime import datetime, timedelta
@@ -403,8 +405,8 @@ class ServerMediatedOperations:
     async def analytics_load_performance_metrics(
         self,
         time_range: str = "1h",
-        metric_types: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
+        metric_types: list[str] | None = None
+    ) -> dict[str, Any]:
         """
         Load performance metrics for analytics with time range filtering.
 
@@ -434,7 +436,7 @@ class ServerMediatedOperations:
                 'data': self._generate_fallback_performance_metrics(time_range)
             }
 
-    def _generate_fallback_performance_metrics(self, time_range: str) -> Dict[str, Any]:
+    def _generate_fallback_performance_metrics(self, time_range: str) -> dict[str, Any]:
         """Generate fallback performance metrics for analytics."""
         import random
         from datetime import datetime, timedelta
@@ -487,7 +489,7 @@ class ServerMediatedOperations:
 
         return metrics
 
-    async def analytics_load_system_info(self) -> Dict[str, Any]:
+    async def analytics_load_system_info(self) -> dict[str, Any]:
         """
         Load detailed system information for analytics.
 
@@ -507,7 +509,7 @@ class ServerMediatedOperations:
                 'data': self._generate_fallback_system_info()
             }
 
-    def _generate_fallback_system_info(self) -> Dict[str, Any]:
+    def _generate_fallback_system_info(self) -> dict[str, Any]:
         """Generate fallback system information for analytics."""
         import random
         return {
@@ -524,7 +526,7 @@ class ServerMediatedOperations:
         self,
         state_key: str,
         ui_update_callback: Callable,
-        control: Optional[Any] = None,
+        control: Any | None = None,
         throttle_ms: int = 100
     ):
         """
@@ -559,7 +561,7 @@ class ServerMediatedOperations:
         self,
         state_key: str,
         ui_update_callback: Callable,
-        control: Optional[Any] = None,
+        control: Any | None = None,
         aggregate: bool = False
     ):
         """
@@ -585,7 +587,7 @@ class ServerMediatedOperations:
 
         self.state_manager.subscribe(state_key, analytics_callback, control)
 
-    def _aggregate_analytics_data(self, data: List[Dict]) -> Dict[str, Any]:
+    def _aggregate_analytics_data(self, data: list[dict]) -> dict[str, Any]:
         """Aggregate analytics data for better visualization."""
         if not data:
             return {}
@@ -608,9 +610,9 @@ class ServerMediatedOperations:
 
     def create_multi_key_subscription(
         self,
-        state_keys: List[str],
+        state_keys: list[str],
         ui_update_callback: Callable,
-        control: Optional[Any] = None
+        control: Any | None = None
     ):
         """
         Create a subscription that reacts to changes in multiple state keys.
@@ -620,7 +622,7 @@ class ServerMediatedOperations:
             ui_update_callback: Function to call when any state changes
             control: Optional control to auto-update
         """
-        def multi_key_callback(new_values: Dict[str, Any], old_values: Dict[str, Any]):
+        def multi_key_callback(new_values: dict[str, Any], old_values: dict[str, Any]):
             try:
                 ui_update_callback(new_values, old_values)
                 logger.debug(f"Multi-key UI update completed for {state_keys}")
@@ -642,8 +644,8 @@ class ServerMediatedOperations:
         self,
         state_key: str,
         server_operation: str,
-        stages: List[str],
-        on_stage_complete: Optional[Callable] = None
+        stages: list[str],
+        on_stage_complete: Callable | None = None
     ):
         """
         Create a loading operation with progressive stages and callbacks.
@@ -739,8 +741,8 @@ class ServerMediatedOperations:
 
     def create_batch_operation_with_progress(
         self,
-        operations: List[Dict],
-        on_progress: Optional[Callable] = None
+        operations: list[dict],
+        on_progress: Callable | None = None
     ):
         """
         Execute batch operations with progress tracking.
@@ -777,7 +779,7 @@ class ServerMediatedOperations:
         state_key: str,
         server_operation: str,
         condition: Callable,
-        fallback_operation: Optional[str] = None
+        fallback_operation: str | None = None
     ):
         """
         Create a loading operation that conditionally executes based on a condition function.
@@ -824,7 +826,7 @@ def create_server_mediated_operations(state_manager: StateManager, page) -> Serv
 
 
 # Common data processors for reuse
-def timestamp_processor(data: List[Dict]) -> List[Dict]:
+def timestamp_processor(data: list[dict]) -> list[dict]:
     """Process timestamp strings in data list"""
     if not isinstance(data, list):
         return data
@@ -839,7 +841,7 @@ def timestamp_processor(data: List[Dict]) -> List[Dict]:
     return data
 
 
-def file_size_processor(data: List[Dict]) -> List[Dict]:
+def file_size_processor(data: list[dict]) -> list[dict]:
     """Process file sizes into human-readable format"""
     if not isinstance(data, list):
         return data
@@ -860,7 +862,7 @@ def file_size_processor(data: List[Dict]) -> List[Dict]:
     return data
 
 
-def percentage_processor(data: List[Dict], key: str = 'value') -> List[Dict]:
+def percentage_processor(data: list[dict], key: str = 'value') -> list[dict]:
     """Process numerical values into percentage format"""
     if not isinstance(data, list):
         return data
@@ -871,7 +873,7 @@ def percentage_processor(data: List[Dict], key: str = 'value') -> List[Dict]:
     return data
 
 
-def status_processor(data: List[Dict], status_key: str = 'status') -> List[Dict]:
+def status_processor(data: list[dict], status_key: str = 'status') -> list[dict]:
     """Process status values into standardized format"""
     if not isinstance(data, list):
         return data

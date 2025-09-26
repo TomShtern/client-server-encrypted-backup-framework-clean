@@ -5,20 +5,21 @@ import os
 import sys
 import unittest
 
+
 # More robust path setup to ensure FletV2 modules can be found
 def setup_fletv2_path():
     """Set up the Python path to include FletV2 directory."""
     # Get the directory containing this test file
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    
+
     # Navigate up to find the FletV2 root (tests/integration/ -> FletV2/)
     fletv2_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
-    
+
     # Add FletV2 to Python path if not already there
     if fletv2_root not in sys.path:
         sys.path.insert(0, fletv2_root)
         print(f"Added {fletv2_root} to Python path")
-    
+
     # Also add the parent directory to ensure we can find FletV2 package
     parent_dir = os.path.dirname(fletv2_root)
     if parent_dir not in sys.path:
@@ -34,10 +35,10 @@ os.environ.setdefault("FLET_V2_DEBUG", "true")
 
 # Try to import the modules
 try:
+    from tests.integration_utils import FakePage
     from utils.server_bridge import create_server_bridge
     from utils.state_manager import StateManager
     from views.logs import create_logs_view
-    from tests.integration_utils import FakePage
 except ImportError as e:
     print(f"Import error: {e}")
     print("\nCurrent Python path:")

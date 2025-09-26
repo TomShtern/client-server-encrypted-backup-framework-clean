@@ -2,8 +2,10 @@
 """
 Quick Flet version and functionality test.
 """
-import flet as ft
 import sys
+
+import flet as ft
+
 
 def main(page: ft.Page):
     page.title = "Flet Version Test"

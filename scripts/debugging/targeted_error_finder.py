@@ -3,21 +3,19 @@
 Quick targeted error finder - focuses on specific runtime issues
 """
 
-import os
 import importlib.util
-from typing import List, Any, cast
+import os
+from typing import Any, cast
 
 # Setup standardized import paths
 from Shared.path_utils import setup_imports
+
 setup_imports()
 
 def test_server_gui_import() -> bool:
     """Test ServerGUI imports"""
     print("Testing ServerGUI imports...")
     try:
-        from python_server.server_gui import (
-            ServerGUI
-        )
         print("✓ All ServerGUI imports successful")
         return True
     except Exception as e:
@@ -26,15 +24,15 @@ def test_server_gui_import() -> bool:
         traceback.print_exc()
         return False
 
-def test_other_files() -> List[str]:
+def test_other_files() -> list[str]:
     """Test other Python files for import issues"""
     files_to_test = [
         'config_manager.py',
         'comprehensive_test_suite.py',
         'quick_validation.py'
     ]
-    
-    results: List[str] = []
+
+    results: list[str] = []
     for file in files_to_test:
         if os.path.exists(file):
             print(f"Testing {file}...")
@@ -54,7 +52,7 @@ def test_other_files() -> List[str]:
         else:
             print(f"? {file} not found")
             results.append(f"? {file} not found")
-    
+
     return results
 
 def test_gui_methods(gui: Any) -> None:
@@ -91,11 +89,11 @@ def test_minimal_functionality() -> bool:
         traceback.print_exc()
         return False
 
-def check_syntax_errors() -> List[str]:
+def check_syntax_errors() -> list[str]:
     """Check for syntax errors in Python files"""
     print("\nChecking Python files for syntax errors...")
     import py_compile
-    
+
     python_files = [
         'python_server/server_gui/ServerGUI.py',
         'config_manager.py',
@@ -106,8 +104,8 @@ def check_syntax_errors() -> List[str]:
         'validate_server_gui.py',
         'test_server_gui.py'
     ]
-    
-    results: List[str] = []
+
+    results: list[str] = []
     for file in python_files:
         if os.path.exists(file):
             try:
@@ -120,53 +118,53 @@ def check_syntax_errors() -> List[str]:
         else:
             print(f"? {file} not found")
             results.append(f"? {file} not found")
-    
+
     return results
 
-def print_results_list(title: str, results: List[str]) -> None:
+def print_results_list(title: str, results: list[str]) -> None:
     """Print a formatted list of results"""
     print(f"\n{title}:")
     for result in results:
         print(f"  {result}")
 
 
-def main() -> None: 
+def main() -> None:
     print("🎯 TARGETED ERROR DETECTION")
     print("=" * 50)
-    
+
     # Test 1: Check syntax errors
     syntax_results = check_syntax_errors()
-    
+
     # Test 2: Test ServerGUI import
     import_success = test_server_gui_import()
-    
+
     # Test 3: Test other files
     other_results = test_other_files()
-    
+
     # Test 4: Test basic functionality (only if import successful)
     func_success = test_minimal_functionality() if import_success else False
-    
+
     # Summary
     print("\n" + "=" * 50)
     print("SUMMARY")
     print("=" * 50)
-    
+
     print_results_list("Syntax check results", syntax_results)
-    
+
     print(f"\nServerGUI import: {'✓ SUCCESS' if import_success else '✗ FAILED'}")
-    
+
     print_results_list("Other files", other_results)
-    
+
     print(f"\nFunctionality test: {'✓ SUCCESS' if func_success else '✗ FAILED'}")
-    
+
     # Count issues
     syntax_errors = len([r for r in syntax_results if r.startswith('✗')])
     other_errors = len([r for r in other_results if r.startswith('✗')])
-    
+
     total_errors = syntax_errors + other_errors + (0 if import_success else 1) + (0 if func_success else 1)
-    
+
     if total_errors == 0:
-        print(f"\n🎉 NO ERRORS FOUND! All tests passed.")
+        print("\n🎉 NO ERRORS FOUND! All tests passed.")
     else:
         print(f"\n❌ FOUND {total_errors} ERRORS that need to be fixed.")
 

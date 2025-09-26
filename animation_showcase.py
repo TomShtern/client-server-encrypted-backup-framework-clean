@@ -5,7 +5,6 @@ Demonstrates all implemented motion and animation features.
 """
 
 import sys
-import os
 
 # Add project root to path
 sys.path.insert(0, '.')
@@ -13,12 +12,13 @@ sys.path.insert(0, '.')
 import flet as ft
 from flet_server_gui.utils.motion_utils import *
 
+
 def main(page: ft.Page):
     page.title = "Motion & Animation Showcase"
     page.theme = ft.Theme(color_scheme_seed="blue", use_material3=True)
     page.padding = 20
     page.scroll = ft.ScrollMode.AUTO
-    
+
     # Demo 1: Button animations
     button_demo = ft.Column([
         ft.Text("Button Animations", size=20, weight=ft.FontWeight.BOLD),
@@ -40,7 +40,7 @@ def main(page: ft.Page):
             ),
         ], spacing=20)
     ], spacing=10)
-    
+
     # Demo 2: Staggered entrance
     staggered_demo = ft.Column([
         ft.Text("Staggered Entrance Animation", size=20, weight=ft.FontWeight.BOLD),
@@ -77,7 +77,7 @@ def main(page: ft.Page):
             ),
         ], spacing=20)
     ], spacing=10)
-    
+
     # Demo 3: Page transitions
     transition_demo = ft.Column([
         ft.Text("Page Transitions", size=20, weight=ft.FontWeight.BOLD),
@@ -94,7 +94,7 @@ def main(page: ft.Page):
             ),
         ], spacing=20)
     ], spacing=10)
-    
+
     # Demo 4: Easing curves
     easing_demo = ft.Column([
         ft.Text("Easing Curves", size=20, weight=ft.FontWeight.BOLD),
@@ -113,7 +113,7 @@ def main(page: ft.Page):
             ),
         ], spacing=20)
     ], spacing=10)
-    
+
     # Add all demos to page
     page.add(
         ft.Text("Flet Motion & Animation Showcase", size=24, weight=ft.FontWeight.BOLD),

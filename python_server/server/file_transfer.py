@@ -55,30 +55,30 @@
 # (approximately lines 990-1160 in server_backup.py) and modularized for better
 # maintainability, testing, and separation of concerns.
 
+import contextlib
+import logging
+import os
+import re
 import socket
 import struct
-import uuid
-import os
-import time
 import threading
-import logging
-import re
-import contextlib
+import time
+import uuid
 from datetime import datetime
-from typing import Dict, Any, Tuple
+from typing import Any
 
 # Import crypto components through compatibility layer
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import unpad
-
-# Import custom exceptions
-from .exceptions import ServerError, ProtocolError, ClientError, FileError
-
 # Import configuration constants
 from .config import (
-    FILE_STORAGE_DIR, MAX_FILENAME_FIELD_SIZE, MAX_ACTUAL_FILENAME_LENGTH,
-    MAX_PAYLOAD_READ_LIMIT, MAX_ORIGINAL_FILE_SIZE
+    FILE_STORAGE_DIR,
+    MAX_ACTUAL_FILENAME_LENGTH,
+    MAX_FILENAME_FIELD_SIZE,
+    MAX_ORIGINAL_FILE_SIZE,
+    MAX_PAYLOAD_READ_LIMIT,
 )
+
+# Import custom exceptions
+from .exceptions import ClientError, FileError, ProtocolError, ServerError
 
 # Import protocol constants
 from .protocol import RESP_FILE_CRC, RESP_GENERIC_SERVER_ERROR
@@ -101,7 +101,7 @@ class FileTransferManager:
     - Thread-safe concurrent transfers
     - File validation and security checks
     """
-    
+
     # Standard POSIX cksum CRC32 table for file integrity verification
     _CRC32_TABLE = (
         0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b, 0x1a864db2, 0x1e475005,
@@ -137,7 +137,7 @@ class FileTransferManager:
         0x89b8fd09, 0x8d79e0be, 0x803ac667, 0x84fbdbd0, 0x9abc8bd5, 0x9e7d9662, 0x933eb0bb, 0x97ffad0c,
         0xafb010b1, 0xab710d06, 0xa6322bdf, 0xa2f33668, 0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4
     )
-    
+
     def __init__(self, server_instance: Any) -> None:
         """
         Initialize the FileTransferManager.
@@ -148,11 +148,11 @@ class FileTransferManager:
         """
         self.server = server_instance
         self.transfer_lock = threading.Lock()  # Global lock for transfer operations
-        self.active_transfers: Dict[str, Dict[str, Any]] = {}  # Track active transfers
+        self.active_transfers: dict[str, dict[str, Any]] = {}  # Track active transfers
         self.version = __FTM_VERSION__
 
         logger.info(f"FileTransferManager initialized (version={__FTM_VERSION__})")
-    
+
     def handle_send_file(self, sock: socket.socket, client: Any, payload: bytes) -> None:
         """
         Handles a file transfer packet (Code 1028) from a client.
@@ -184,7 +184,7 @@ class FileTransferManager:
             logger.error(f"File transfer error for client '{client.name}': {e}")
             self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
         except Exception as e:
-            logger.critical(f"Unexpected error during file transfer for client '{client.name}': {e}", 
+            logger.critical(f"Unexpected error during file transfer for client '{client.name}': {e}",
                           exc_info=True)
             self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
 
@@ -226,8 +226,8 @@ class FileTransferManager:
             # All packets received - process the complete file
             logger.debug(f"COMPLETE TRANSFER: Processing complete file '{metadata['filename']}' for client '{client.name}'")  # type: ignore
             self._process_complete_file(sock, client, metadata['filename'], aes_key)
-    
-    def _parse_file_transfer_metadata(self, payload: bytes) -> Dict[str, Any]:
+
+    def _parse_file_transfer_metadata(self, payload: bytes) -> dict[str, Any]:
         """
         Parses file transfer metadata from the payload.
         
@@ -242,32 +242,32 @@ class FileTransferManager:
         """
         # Size of the metadata part of the payload (fields before the actual file content)
         metadata_header_size = 4 + 4 + 2 + 2 + MAX_FILENAME_FIELD_SIZE
-        
+
         if len(payload) < metadata_header_size:
             logger.error(
                 f"XFER/PARSE_ERR: payload_too_short payload_len={len(payload)} expected_at_least={metadata_header_size}"
             )
             raise ProtocolError(f"Payload too short for file metadata: {len(payload)} < {metadata_header_size}")
-        
+
         # Unpack metadata fields (all little-endian)
         encrypted_size = struct.unpack("<I", payload[:4])[0]
         original_size = struct.unpack("<I", payload[4:8])[0]
         packet_number = struct.unpack("<H", payload[8:10])[0]
         total_packets = struct.unpack("<H", payload[10:12])[0]
         filename_bytes = payload[12:12 + MAX_FILENAME_FIELD_SIZE]
-        
+
         # Validate metadata fields
         logger.debug(
             f"XFER/PARSE: hdr enc_size={encrypted_size}, orig_size={original_size}, pkt={packet_number}, total={total_packets}"
         )
         self._validate_transfer_metadata(encrypted_size, original_size, packet_number, total_packets)
-        
+
         # Parse filename
         try:
             filename = filename_bytes.split(b'\0', 1)[0].decode('utf-8')
         except UnicodeDecodeError as e:
             raise ProtocolError("Filename field contains invalid UTF-8") from e
-        
+
         # Extract encrypted content
         actual_content = payload[metadata_header_size:]
         if len(actual_content) != encrypted_size:
@@ -276,7 +276,7 @@ class FileTransferManager:
                 f"pkt={packet_number}/{total_packets}"
             )
             raise ProtocolError(f"Content size mismatch: declared {encrypted_size}, actual {len(actual_content)}")
-        
+
         return {
             'encrypted_size': encrypted_size,
             'original_size': original_size,
@@ -286,8 +286,8 @@ class FileTransferManager:
             'filename_bytes': filename_bytes,  # Keep original for response
             'content': actual_content
         }
-    
-    def _validate_transfer_metadata(self, encrypted_size: int, original_size: int, 
+
+    def _validate_transfer_metadata(self, encrypted_size: int, original_size: int,
                                    packet_number: int, total_packets: int) -> None:
         """
         Validates file transfer metadata for security and sanity.
@@ -304,22 +304,22 @@ class FileTransferManager:
         if not (0 < encrypted_size <= MAX_PAYLOAD_READ_LIMIT):
             logger.error(f"XFER/VALIDATE_ERR: invalid_encrypted_size value={encrypted_size}")
             raise ProtocolError(f"Invalid encrypted_size: {encrypted_size}")
-        
+
         if not (0 <= original_size <= MAX_ORIGINAL_FILE_SIZE):
             logger.error(f"XFER/VALIDATE_ERR: invalid_original_size value={original_size}")
             raise ProtocolError(f"Invalid original_size: {original_size}")
-        
+
         if total_packets <= 0:
             logger.error(f"XFER/VALIDATE_ERR: invalid_total_packets value={total_packets}")
             raise ProtocolError(f"Invalid total_packets: {total_packets}")
-        
+
         if not (1 <= packet_number <= total_packets):
             logger.error(
                 f"XFER/VALIDATE_ERR: invalid_packet_number pkt={packet_number} total={total_packets}"
             )
             raise ProtocolError(f"Invalid packet_number {packet_number} for {total_packets} total packets")
-    
-    def _handle_packet_reassembly(self, client: Any, metadata: Dict[str, Any]) -> bool:
+
+    def _handle_packet_reassembly(self, client: Any, metadata: dict[str, Any]) -> bool:
         """
         Handles multi-packet file reassembly logic.
         
@@ -382,8 +382,8 @@ class FileTransferManager:
 
             # Check if transfer is complete
             return len(file_state["received_chunks"]) == total_packets
-    
-    def _process_complete_file(self, sock: socket.socket, client: Any, 
+
+    def _process_complete_file(self, sock: socket.socket, client: Any,
                               filename: str, aes_key: bytes) -> None:
         """
         Processes a complete file transfer (all packets received).
@@ -398,7 +398,7 @@ class FileTransferManager:
             file_state = client.partial_files.get(filename)
             if not file_state:
                 raise ServerError(f"File state missing for complete transfer: {filename}")
-            
+
             try:
                 # Reassemble encrypted data
                 full_encrypted_data = self._reassemble_encrypted_data(file_state)
@@ -406,7 +406,7 @@ class FileTransferManager:
                     f"XFER/FINAL: client='{client.name}', file='{filename}', total_packets={file_state['total_packets']}, "
                     f"assembled_enc_size={len(full_encrypted_data)}"
                 )
-                
+
                 # Decrypt the complete file
                 decrypt_start = time.perf_counter()
                 decrypted_data = self._decrypt_file_data(full_encrypted_data, aes_key)
@@ -415,39 +415,39 @@ class FileTransferManager:
                     f"XFER/FINAL: client='{client.name}', file='{filename}', decrypted_size={len(decrypted_data)}, "
                     f"expected_orig_size={file_state['original_size']}, decrypt_ms={decrypt_ms}"
                 )
-                
+
                 # Validate decrypted size
                 if len(decrypted_data) != file_state["original_size"]:
                     raise FileError(f"Decrypted size mismatch for '{filename}': "
                                   f"{len(decrypted_data)} != {file_state['original_size']}")
-                
+
                 # Calculate CRC checksum
                 crc_value = self._calculate_crc(decrypted_data)
                 logger.debug(
                     f"XFER/FINAL: client='{client.name}', file='{filename}', crc=0x{crc_value:08x}"
                 )
-                
+
                 # Save file to storage
                 final_path, mod_date = self._save_file_to_storage(filename, decrypted_data)
-                
+
                 # Update database
                 self.server.db_manager.save_file_info_to_db(client.id, filename, final_path, False, len(decrypted_data), mod_date, crc_value)
-                
+
                 # Update GUI statistics
                 self._update_gui_stats(filename, client.name, len(decrypted_data))
-                
+
                 # Send CRC response to client
-                self._send_file_crc_response(sock, client, filename, 
+                self._send_file_crc_response(sock, client, filename,
                                            len(full_encrypted_data), crc_value)
-                
+
                 logger.info(f"Client '{client.name}': File '{filename}' processed successfully. "
                            f"CRC: {crc_value}, Size: {len(decrypted_data)} bytes")
-                
+
             finally:
                 # Always clean up partial file state
                 client.clear_partial_file(filename)
-    
-    def _reassemble_encrypted_data(self, file_state: Dict[str, Any]) -> bytes:
+
+    def _reassemble_encrypted_data(self, file_state: dict[str, Any]) -> bytes:
         """
         Reassembles encrypted data from all received packets.
         
@@ -479,7 +479,7 @@ class FileTransferManager:
         except KeyError as e:
             logger.error(f"XFER/REASM_ERR: key_error detail={e}")
             raise ServerError(f"Packet reassembly failed: {e}") from e
-    
+
     def _decrypt_file_data(self, encrypted_data: bytes, aes_key: bytes) -> bytes:
         """
         Decrypts file data using AES-CBC with zero IV.
@@ -507,8 +507,8 @@ class FileTransferManager:
         except (ValueError, KeyError) as e:
             logger.error(f"XFER/DECRYPT_ERR: detail={e}")
             raise FileError(f"File decryption failed: {e}") from e
-    
-    def _save_file_to_storage(self, filename: str, data: bytes) -> Tuple[str, str]:
+
+    def _save_file_to_storage(self, filename: str, data: bytes) -> tuple[str, str]:
         """
         Atomically saves file data to storage.
         
@@ -538,8 +538,8 @@ class FileTransferManager:
                     os.remove(temp_path)
             raise FileError(f"Failed to save file '{filename}': {e}") from e
 
-    def _perform_atomic_file_save(self, temp_path: str, data: bytes, 
-                                 final_path: str, filename: str) -> Tuple[str, str]:
+    def _perform_atomic_file_save(self, temp_path: str, data: bytes,
+                                 final_path: str, filename: str) -> tuple[str, str]:
         """
         Performs atomic file save operation.
         
@@ -571,8 +571,8 @@ class FileTransferManager:
         mod_date = datetime.fromtimestamp(mod_time).isoformat()
 
         return final_path, mod_date
-    
-    def _send_file_crc_response(self, sock: socket.socket, client: Any, 
+
+    def _send_file_crc_response(self, sock: socket.socket, client: Any,
                                filename: str, encrypted_size: int, crc_value: int) -> None:
         """
         Sends file CRC response to client.
@@ -588,19 +588,19 @@ class FileTransferManager:
         filename_bytes = filename.encode('utf-8')
         if len(filename_bytes) > MAX_ACTUAL_FILENAME_LENGTH:
             filename_bytes = filename_bytes[:MAX_ACTUAL_FILENAME_LENGTH]
-        
+
         filename_padded = filename_bytes + b'\0' * (MAX_FILENAME_FIELD_SIZE - len(filename_bytes))
-        
+
         # Construct response payload
         # Payload: client_id[16], encrypted_size[4], filename[255], crc[4]
-        response_payload = (client.id + 
-                          struct.pack("<I", encrypted_size) + 
-                          filename_padded + 
+        response_payload = (client.id +
+                          struct.pack("<I", encrypted_size) +
+                          filename_padded +
                           struct.pack("<I", crc_value))
-        
+
         self._send_response(sock, RESP_FILE_CRC, response_payload)
         logger.info(f"Client '{client.name}': Sent CRC response for '{filename}' (CRC: {crc_value})")
-    
+
     def _calculate_crc(self, data: bytes) -> int:
         """
         Calculates a CRC32 checksum compatible with the Linux 'cksum' command.
@@ -626,7 +626,7 @@ class FileTransferManager:
 
         # Return one's complement
         return (~crc) & 0xFFFFFFFF
-    
+
     def _is_valid_filename_for_storage(self, filename: str) -> bool:
         """
         Validates a filename for secure storage.
@@ -641,9 +641,9 @@ class FileTransferManager:
         if not (1 <= len(filename) <= MAX_ACTUAL_FILENAME_LENGTH):
             logger.debug(f"Filename validation failed: invalid length {len(filename)}")
             return False
-        
+
         # Prevent path traversal
-        if ('/' in filename or '\\' in filename or 
+        if ('/' in filename or '\\' in filename or
             '..' in filename or '\0' in filename):
             logger.debug("Filename validation failed: contains path traversal chars")
             return False
@@ -666,7 +666,7 @@ class FileTransferManager:
             return False
 
         return True
-    
+
     def _update_gui_stats(self, filename: str, client_name: str, bytes_transferred: int) -> None:
         """
         Updates GUI with transfer statistics.
@@ -678,10 +678,10 @@ class FileTransferManager:
         """
         if hasattr(self.server, '_update_gui_transfer_stats'):
             self.server._update_gui_transfer_stats(bytes_transferred=bytes_transferred)
-        
+
         if hasattr(self.server, '_update_gui_success'):
             self.server._update_gui_success(f"File '{filename}' received from '{client_name}'")
-    
+
     def _send_response(self, sock: socket.socket, code: int, payload: bytes = b'') -> None:
         """
         Sends a response to the client.
@@ -701,10 +701,10 @@ class FileTransferManager:
                 response_data = create_response(code, payload)
                 sock.sendall(response_data)
                 logger.debug(f"Sent response code {code} with {len(payload)} bytes payload")
-            except socket.error as e:
+            except OSError as e:
                 logger.error(f"Failed to send response code {code}: {e}")
                 raise
-    
+
     def cleanup_stale_transfers(self, timeout_seconds: int = 900) -> int:
         _ = timeout_seconds  # Currently unused but preserved for API compatibility
         """
@@ -717,15 +717,15 @@ class FileTransferManager:
             Number of transfers cleaned up
         """
         _ = time.monotonic()  # Reserved for future stale transfer detection
-        
+
         with self.transfer_lock:
             # This would be used if we maintained global transfer state
             # For now, individual clients handle their own cleanup
             pass
-        
+
         return 0  # Inline the immediately returned variable
-    
-    def get_transfer_statistics(self) -> Dict[str, Any]:
+
+    def get_transfer_statistics(self) -> dict[str, Any]:
         """
         Gets current transfer statistics.
         

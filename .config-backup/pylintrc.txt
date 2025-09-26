@@ -1,0 +1,4 @@
+# Legacy pylint configuration has been archived.
+# This placeholder prevents editors from attempting to parse a heavy pylintrc
+# file that generated spurious diagnostics. See pylintrc.archive.ini in the
+# same directory if restoration is required.

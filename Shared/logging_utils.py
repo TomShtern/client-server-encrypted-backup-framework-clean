@@ -9,17 +9,18 @@ import contextlib
 import logging
 import os
 import sys
-from typing import Tuple, Optional, Dict, Any, Union, Callable, List
+from collections.abc import Callable
 from datetime import datetime
-from pathlib import Path
+from typing import Any
 
 # Import the safe_print function to prevent console encoding errors
 from .utils.utf8_solution import safe_print
 
 # Try to import enhanced output for emoji/color support
 try:
+    from .utils.enhanced_output import Colors as EnhancedColors
+    from .utils.enhanced_output import Emojis as EnhancedEmojis
     from .utils.enhanced_output import enhance_existing_logger
-    from .utils.enhanced_output import Emojis as EnhancedEmojis, Colors as EnhancedColors
     ENHANCED_OUTPUT_AVAILABLE = True
 except ImportError:
     ENHANCED_OUTPUT_AVAILABLE = False
@@ -80,7 +81,7 @@ else:
 
 # Centralized CODE MAPS for maintainability and UI consumption.
 # Each entry is either a section (has 'section') or an entry with code/text/emoji/level.
-CODE_MAPS: Dict[str, List[Dict[str, str]]] = {
+CODE_MAPS: dict[str, list[dict[str, str]]] = {
     'api': [
         {'section': 'HTTP STATUS CODES'},
         {'code': '1xx', 'text': 'Informational (100 Continue, 101 Switching Protocols)', 'emoji': Emojis.INFO, 'level': 'info'},
@@ -120,7 +121,7 @@ CODE_MAPS: Dict[str, List[Dict[str, str]]] = {
 }
 
 
-def get_code_map(server_type: str) -> List[Dict[str, str]]:
+def get_code_map(server_type: str) -> list[dict[str, str]]:
     """Return the structured CODE MAP for a given server type.
 
     This makes the data easy to consume from UIs or other tools.
@@ -135,10 +136,10 @@ def setup_dual_logging(
     console_level: int = logging.INFO,
     file_level: int = logging.DEBUG,
     console_format: str = '%(asctime)s - %(threadName)s - %(levelname)s - %(message)s',
-    file_format: Optional[str] = None,
+    file_format: str | None = None,
     log_dir: str = "logs",
     enable_enhanced_output: bool = True
-) -> Tuple[logging.Logger, str]:
+) -> tuple[logging.Logger, str]:
     """
     Set up dual logging: console and file output with different levels.
     Now with enhanced emoji and color support!
@@ -160,7 +161,6 @@ def setup_dual_logging(
         file_format = console_format
 
     # Check environment variable to disable enhanced output for cleaner terminal output
-    import os
     disable_code_map = os.environ.get('DISABLE_CODE_MAP', '').lower() in ('true', '1', 'yes')
     fletv2_context = 'FletV2' in os.getcwd() or os.path.basename(os.getcwd()) == 'FletV2'
 
@@ -214,7 +214,7 @@ def setup_dual_logging(
     ]
 
     # Console-only colored/emoji CODE-MAP (printed to stdout only so file logs remain plain)
-    console_lines: List[str] = []
+    console_lines: list[str] = []
     console_lines.append(Colors.info(f"=== {server_type.upper()} LOGGING INITIALIZED ===", bold=True))
     console_lines.append(Colors.info(f"Console Level: {logging.getLevelName(console_level)}"))
     console_lines.append(Colors.info(f"File Level: {logging.getLevelName(file_level)}"))
@@ -269,7 +269,7 @@ def setup_dual_logging(
     return logger, log_file_path
 
 
-def create_log_monitor_info(server_type: str, log_file_path: str) -> Dict[str, Any]:
+def create_log_monitor_info(server_type: str, log_file_path: str) -> dict[str, Any]:
     """
     Create monitoring information for log files.
 
@@ -300,7 +300,7 @@ class EnhancedLogger:
     def __init__(self, component: str, base_logger: logging.Logger):
         self.component = component
         self.base_logger = base_logger
-        self._context: Dict[str, Any] = {}
+        self._context: dict[str, Any] = {}
 
     def set_context(self, **kwargs: Any) -> None:
         """Set context variables for this logger."""
@@ -368,7 +368,7 @@ def log_performance_metrics(logger: logging.Logger, operation: str, duration_ms:
         success: Whether the operation was successful
         **kwargs: Additional context
     """
-    context: Dict[str, Any] = kwargs | {
+    context: dict[str, Any] = kwargs | {
         "operation": operation,
         "duration_ms": duration_ms,
         "success": success,

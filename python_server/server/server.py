@@ -1,24 +1,24 @@
 # GLOBAL UTF-8 AUTO-PATCHER: Automatically enables UTF-8 for ALL subprocess calls
+import contextlib
+import logging
 import os
 import socket
+import sys
 import threading
 import time
-import logging
-import sys
-import contextlib
 from datetime import datetime
-from typing import Dict, Optional, Any
+from typing import Any
 
-# Enable global UTF-8 support automatically (replaces all manual UTF-8 setup)  
+# Enable global UTF-8 support automatically (replaces all manual UTF-8 setup)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-import Shared.utils.utf8_solution  # 🚀 UTF-8 support enabled automatically
 
 # Setup standardized import paths BEFORE importing any other Shared modules
 from Shared.path_utils import setup_imports
+
 setup_imports()
 
 # Now import ALL Shared modules after path setup - consolidate all imports here
-from Shared.logging_utils import setup_dual_logging, create_log_monitor_info, create_enhanced_logger
+from Shared.logging_utils import create_enhanced_logger, create_log_monitor_info, setup_dual_logging
 from Shared.observability import get_metrics_collector, get_system_monitor
 
 # Try to import Sentry config - handle gracefully if not available
@@ -31,31 +31,31 @@ except ImportError:
         return False
 
 # Import singleton manager
-from .server_singleton import ensure_single_server_instance
-
 # Import crypto components directly from PyCryptodome
 from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 
-# Import custom exceptions
-from .exceptions import ServerError, ProtocolError
+from .config import *  # Configuration constants
 
 # Import database module
 from .database import DatabaseManager
 
-# Import request handler module
-from .request_handlers import RequestHandler
-
-# Import network server module
-from .network_server import NetworkServer
+# Import custom exceptions
+from .exceptions import ProtocolError, ServerError
 
 # GUI Integration
 from .gui_integration import GUIManager
 
+# Import network server module
+from .network_server import NetworkServer
+
 # Import protocol constants and configuration (refactored for modularity)
 from .protocol import *  # Protocol constants and utilities
-from .config import *    # Configuration constants
+
+# Import request handler module
+from .request_handlers import RequestHandler
+from .server_singleton import ensure_single_server_instance
 
 # Configuration constants now imported from config.py module
 # Remaining server-specific constants:
@@ -111,7 +111,7 @@ class Client:
     """
     Represents a connected client and stores its state.
     """
-    def __init__(self, client_id: bytes, name: str, public_key_bytes: Optional[bytes] = None):
+    def __init__(self, client_id: bytes, name: str, public_key_bytes: bytes | None = None):
         """
         Initializes a Client object.
 
@@ -122,12 +122,12 @@ class Client:
         """
         self.id: bytes = client_id
         self.name: str = name
-        self.public_key_bytes: Optional[bytes] = public_key_bytes
-        self.public_key_obj: Optional[Any] = None # PyCryptodome RSA key object or compatibility layer equivalent
-        self.aes_key: Optional[bytes] = None # Current session AES key
+        self.public_key_bytes: bytes | None = public_key_bytes
+        self.public_key_obj: Any | None = None # PyCryptodome RSA key object or compatibility layer equivalent
+        self.aes_key: bytes | None = None # Current session AES key
         self.last_seen: float = time.monotonic() # Monotonic time for session timeout
-        self.last_seen_db: Optional[str] = None # Database timestamp for audit purposes
-        self.partial_files: Dict[str, Dict[str, Any]] = {} # For reassembling multi-packet files
+        self.last_seen_db: str | None = None # Database timestamp for audit purposes
+        self.partial_files: dict[str, dict[str, Any]] = {} # For reassembling multi-packet files
         self.lock: threading.Lock = threading.Lock() # To protect concurrent access to client state
 
         if public_key_bytes:
@@ -166,7 +166,7 @@ class Client:
             if not self.public_key_obj: # Check if import failed
                  raise ProtocolError(f"Invalid RSA public key format provided by client '{self.name}' (failed to import).")
 
-    def get_aes_key(self) -> Optional[bytes]:
+    def get_aes_key(self) -> bytes | None:
         """Returns the current session AES key."""
         # This might be accessed by the client's handler thread only after being set.
         # If other threads could modify/read it, a lock would be good practice.
@@ -280,8 +280,8 @@ class BackupServer:
 
     def __init__(self):
         """Initializes the BackupServer instance."""
-        self.clients: Dict[bytes, Client] = {} # In-memory store: client_id_bytes -> Client object
-        self.clients_by_name: Dict[str, bytes] = {} # In-memory store: client_name_str -> client_id_bytes
+        self.clients: dict[bytes, Client] = {} # In-memory store: client_id_bytes -> Client object
+        self.clients_by_name: dict[str, bytes] = {} # In-memory store: client_name_str -> client_id_bytes
         self.clients_lock: threading.Lock = threading.Lock() # Protects access to clients and clients_by_name
 
         # Use default port for now
@@ -330,12 +330,12 @@ class BackupServer:
         """Factory method to create a new Client instance."""
         return Client(client_id, name)
 
-    def get_client_by_id(self, client_id: bytes) -> Optional[Client]:
+    def get_client_by_id(self, client_id: bytes) -> Client | None:
         """Resolves a client object from the in-memory store by client ID."""
         with self.clients_lock:
             return self.clients.get(client_id)
 
-    def resolve_client(self, client_identifier: str) -> Dict[str, Any]:
+    def resolve_client(self, client_identifier: str) -> dict[str, Any]:
         """Resolve client by ID or name - compatible with ServerBridge signature."""
         try:
             # First try to resolve by client ID (hex string)
@@ -349,7 +349,7 @@ class BackupServer:
                         'name': client.name,
                         'public_key_size': len(client.public_key_bytes) if client.public_key_bytes else 0
                     })
-            
+
             # Try to resolve by hex ID
             try:
                 client_id_bytes = bytes.fromhex(client_identifier)
@@ -362,7 +362,7 @@ class BackupServer:
                     })
             except ValueError:
                 pass  # Not a valid hex string
-            
+
             return self._format_response(False, error=f"Client '{client_identifier}' not found")
         except Exception as e:
             logger.error(f"Failed to resolve client {client_identifier}: {e}")
@@ -453,7 +453,7 @@ class BackupServer:
         self.db_manager.save_client_to_db(client.id, client.name, client.public_key_bytes, client.get_aes_key())
 
 
-    def _save_file_info_to_db(self, client_id: bytes, file_name: str, path_name: str, verified: bool, file_size: int, mod_date: str, crc: Optional[int] = None):
+    def _save_file_info_to_db(self, client_id: bytes, file_name: str, path_name: str, verified: bool, file_size: int, mod_date: str, crc: int | None = None):
         """Saves or updates file information in the database."""
         self.db_manager.save_file_info_to_db(client_id, file_name, path_name, verified, file_size, mod_date, crc)
 
@@ -612,7 +612,7 @@ class BackupServer:
     # ServerBridge Integration Layer - Wrapper Methods
     # ============================================================================
 
-    def _format_response(self, success: bool, data: Any = None, error: str = "") -> Dict[str, Any]:
+    def _format_response(self, success: bool, data: Any = None, error: str = "") -> dict[str, Any]:
         """Helper method to format responses in ServerBridge expected format."""
         return {
             'success': success,
@@ -622,7 +622,7 @@ class BackupServer:
 
     # --- Client Operations ---
 
-    def get_clients(self) -> Dict[str, Any]:
+    def get_clients(self) -> dict[str, Any]:
         """Get all clients - delegates to db_manager.get_all_clients()."""
         try:
             clients_data = self.db_manager.get_all_clients()
@@ -631,13 +631,13 @@ class BackupServer:
             logger.error(f"Failed to get clients: {e}")
             return self._format_response(False, error=str(e))
 
-    async def get_clients_async(self) -> Dict[str, Any]:
+    async def get_clients_async(self) -> dict[str, Any]:
         """Async version of get_clients()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_clients)
 
-    def get_client_details(self, client_id: str) -> Dict[str, Any]:
+    def get_client_details(self, client_id: str) -> dict[str, Any]:
         """Get details for a specific client by ID."""
         try:
             client_id_bytes = bytes.fromhex(client_id)
@@ -655,7 +655,7 @@ class BackupServer:
             logger.error(f"Failed to get client details for {client_id}: {e}")
             return self._format_response(False, error=str(e))
 
-    def add_client(self, client_data: Dict[str, Any]) -> Dict[str, Any]:
+    def add_client(self, client_data: dict[str, Any]) -> dict[str, Any]:
         """Add a new client using existing client creation logic."""
         try:
             import uuid
@@ -690,13 +690,13 @@ class BackupServer:
             logger.error(f"Failed to add client: {e}")
             return self._format_response(False, error=str(e))
 
-    async def add_client_async(self, client_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def add_client_async(self, client_data: dict[str, Any]) -> dict[str, Any]:
         """Async version of add_client()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.add_client, client_data)
 
-    def delete_client(self, client_id: str) -> Dict[str, Any]:
+    def delete_client(self, client_id: str) -> dict[str, Any]:
         """Delete a client - delegates to db_manager.delete_client()."""
         try:
             client_id_bytes = bytes.fromhex(client_id)
@@ -718,13 +718,13 @@ class BackupServer:
             logger.error(f"Failed to delete client {client_id}: {e}")
             return self._format_response(False, error=str(e))
 
-    async def delete_client_async(self, client_id: str) -> Dict[str, Any]:
+    async def delete_client_async(self, client_id: str) -> dict[str, Any]:
         """Async version of delete_client()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.delete_client, client_id)
 
-    def disconnect_client(self, client_id: str) -> Dict[str, Any]:
+    def disconnect_client(self, client_id: str) -> dict[str, Any]:
         """Disconnect a client (remove from in-memory store only)."""
         try:
             client_id_bytes = bytes.fromhex(client_id)
@@ -741,7 +741,7 @@ class BackupServer:
             logger.error(f"Failed to disconnect client {client_id}: {e}")
             return self._format_response(False, error=str(e))
 
-    async def disconnect_client_async(self, client_id: str) -> Dict[str, Any]:
+    async def disconnect_client_async(self, client_id: str) -> dict[str, Any]:
         """Async version of disconnect_client()."""
         import asyncio
         loop = asyncio.get_event_loop()
@@ -749,7 +749,7 @@ class BackupServer:
 
     # --- File Operations ---
 
-    def get_files(self) -> Dict[str, Any]:
+    def get_files(self) -> dict[str, Any]:
         """Get all files - delegates to db_manager.get_all_files()."""
         try:
             files_data = self.db_manager.get_all_files()
@@ -762,13 +762,13 @@ class BackupServer:
             logger.error(f"Failed to get files: {e}")
             return self._format_response(False, error=str(e))
 
-    async def get_files_async(self) -> Dict[str, Any]:
+    async def get_files_async(self) -> dict[str, Any]:
         """Async version of get_files()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_files)
 
-    def get_client_files(self, client_id: str) -> Dict[str, Any]:
+    def get_client_files(self, client_id: str) -> dict[str, Any]:
         """Get files for a specific client - delegates to db_manager.get_files_for_client()."""
         try:
             # Pass the hex string directly to db_manager.get_files_for_client
@@ -781,13 +781,13 @@ class BackupServer:
             logger.error(f"Failed to get files for client {client_id}: {e}")
             return self._format_response(False, error=str(e))
 
-    async def get_client_files_async(self, client_id: str) -> Dict[str, Any]:
+    async def get_client_files_async(self, client_id: str) -> dict[str, Any]:
         """Async version of get_client_files()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_client_files, client_id)
 
-    def delete_file(self, file_id: str) -> Dict[str, Any]:
+    def delete_file(self, file_id: str) -> dict[str, Any]:
         """Delete a file - delegates to db_manager.delete_file()."""
         try:
             # Note: The file_id format needs to be clarified based on the actual database schema
@@ -808,7 +808,7 @@ class BackupServer:
             logger.error(f"Failed to delete file {file_id}: {e}")
             return self._format_response(False, error=str(e))
 
-    def delete_file_by_client_and_name(self, client_id: str, filename: str) -> Dict[str, Any]:
+    def delete_file_by_client_and_name(self, client_id: str, filename: str) -> dict[str, Any]:
         """Delete a file by client ID and filename."""
         try:
             success = self.db_manager.delete_file(client_id, filename)
@@ -820,19 +820,19 @@ class BackupServer:
             logger.error(f"Failed to delete file {client_id}:{filename}: {e}")
             return self._format_response(False, error=str(e))
 
-    async def delete_file_async(self, file_id: str) -> Dict[str, Any]:
+    async def delete_file_async(self, file_id: str) -> dict[str, Any]:
         """Async version of delete_file()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.delete_file, file_id)
 
-    async def delete_file_by_client_and_name_async(self, client_id: str, filename: str) -> Dict[str, Any]:
+    async def delete_file_by_client_and_name_async(self, client_id: str, filename: str) -> dict[str, Any]:
         """Async version of delete_file_by_client_and_name()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.delete_file_by_client_and_name, client_id, filename)
 
-    def download_file(self, file_id: str, destination_path: str) -> Dict[str, Any]:
+    def download_file(self, file_id: str, destination_path: str) -> dict[str, Any]:
         """Download a file (placeholder implementation)."""
         try:
             # This would require implementation of actual file download logic
@@ -843,13 +843,13 @@ class BackupServer:
             logger.error(f"Failed to download file {file_id}: {e}")
             return self._format_response(False, error=str(e))
 
-    async def download_file_async(self, file_id: str, destination_path: str) -> Dict[str, Any]:
+    async def download_file_async(self, file_id: str, destination_path: str) -> dict[str, Any]:
         """Async version of download_file()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.download_file, file_id, destination_path)
 
-    def verify_file(self, file_id: str) -> Dict[str, Any]:
+    def verify_file(self, file_id: str) -> dict[str, Any]:
         """Verify a file's integrity (placeholder implementation)."""
         try:
             # This would require implementation of actual file verification logic
@@ -859,7 +859,7 @@ class BackupServer:
             logger.error(f"Failed to verify file {file_id}: {e}")
             return self._format_response(False, error=str(e))
 
-    async def verify_file_async(self, file_id: str) -> Dict[str, Any]:
+    async def verify_file_async(self, file_id: str) -> dict[str, Any]:
         """Async version of verify_file()."""
         import asyncio
         loop = asyncio.get_event_loop()
@@ -867,7 +867,7 @@ class BackupServer:
 
     # --- Database Operations ---
 
-    def get_database_info(self) -> Dict[str, Any]:
+    def get_database_info(self) -> dict[str, Any]:
         """Get database information - delegates to db_manager.get_database_stats()."""
         try:
             db_stats = self.db_manager.get_database_stats()
@@ -876,13 +876,13 @@ class BackupServer:
             logger.error(f"Failed to get database info: {e}")
             return self._format_response(False, error=str(e))
 
-    async def get_database_info_async(self) -> Dict[str, Any]:
+    async def get_database_info_async(self) -> dict[str, Any]:
         """Async version of get_database_info()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_database_info)
 
-    def get_table_data(self, table_name: str) -> Dict[str, Any]:
+    def get_table_data(self, table_name: str) -> dict[str, Any]:
         """Get data from a specific table (basic implementation)."""
         try:
             # This is a basic implementation - in a real system you'd want more sophisticated querying
@@ -898,13 +898,13 @@ class BackupServer:
             logger.error(f"Failed to get table data for {table_name}: {e}")
             return self._format_response(False, error=str(e))
 
-    async def get_table_data_async(self, table_name: str) -> Dict[str, Any]:
+    async def get_table_data_async(self, table_name: str) -> dict[str, Any]:
         """Async version of get_table_data()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_table_data, table_name)
 
-    def update_row(self, table_name: str, row_id: str, updated_data: Dict[str, Any]) -> Dict[str, Any]:
+    def update_row(self, table_name: str, row_id: str, updated_data: dict[str, Any]) -> dict[str, Any]:
         """Update a row in a table (placeholder implementation)."""
         try:
             # This would require more sophisticated implementation based on the actual schema
@@ -914,7 +914,7 @@ class BackupServer:
             logger.error(f"Failed to update row {row_id} in table {table_name}: {e}")
             return self._format_response(False, error=str(e))
 
-    def delete_row(self, table_name: str, row_id: str) -> Dict[str, Any]:
+    def delete_row(self, table_name: str, row_id: str) -> dict[str, Any]:
         """Delete a row from a table (placeholder implementation)."""
         try:
             # This would require more sophisticated implementation based on the actual schema
@@ -949,7 +949,7 @@ class BackupServer:
             logger.debug(f"is_connected check failed: {e}")
             return False
 
-    def get_server_status(self) -> Dict[str, Any]:
+    def get_server_status(self) -> dict[str, Any]:
         """Get current server status including running state, port, uptime."""
         try:
             uptime = time.time() - self.network_server.start_time if self.running else 0
@@ -967,13 +967,13 @@ class BackupServer:
             logger.error(f"Failed to get server status: {e}")
             return self._format_response(False, error=str(e))
 
-    async def get_server_status_async(self) -> Dict[str, Any]:
+    async def get_server_status_async(self) -> dict[str, Any]:
         """Async version of get_server_status()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_server_status)
 
-    def get_detailed_server_status(self) -> Dict[str, Any]:
+    def get_detailed_server_status(self) -> dict[str, Any]:
         """Get comprehensive server metrics including connection stats."""
         try:
             basic_status = self.get_server_status()['data']
@@ -1008,13 +1008,13 @@ class BackupServer:
             logger.error(f"Failed to get detailed server status: {e}")
             return self._format_response(False, error=str(e))
 
-    async def get_detailed_server_status_async(self) -> Dict[str, Any]:
+    async def get_detailed_server_status_async(self) -> dict[str, Any]:
         """Async version of get_detailed_server_status()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_detailed_server_status)
 
-    def get_server_health(self) -> Dict[str, Any]:
+    def get_server_health(self) -> dict[str, Any]:
         """Get server health metrics."""
         try:
             health_data = {
@@ -1030,7 +1030,7 @@ class BackupServer:
                 self.db_manager.get_total_clients_count()
             except Exception as e:
                 health_data['database_accessible'] = False
-                health_data['errors'].append(f"Database error: {str(e)}")
+                health_data['errors'].append(f"Database error: {e!s}")
                 health_data['status'] = 'unhealthy'
 
             return self._format_response(True, health_data)
@@ -1038,13 +1038,13 @@ class BackupServer:
             logger.error(f"Failed to get server health: {e}")
             return self._format_response(False, error=str(e))
 
-    async def get_server_health_async(self) -> Dict[str, Any]:
+    async def get_server_health_async(self) -> dict[str, Any]:
         """Async version of get_server_health()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_server_health)
 
-    def start_server(self) -> Dict[str, Any]:
+    def start_server(self) -> dict[str, Any]:
         """Start the server (wrapper for existing start method)."""
         try:
             if self.running:
@@ -1056,13 +1056,13 @@ class BackupServer:
             logger.error(f"Failed to start server: {e}")
             return self._format_response(False, error=str(e))
 
-    async def start_server_async(self) -> Dict[str, Any]:
+    async def start_server_async(self) -> dict[str, Any]:
         """Async version of start_server()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.start_server)
 
-    def stop_server(self) -> Dict[str, Any]:
+    def stop_server(self) -> dict[str, Any]:
         """Stop the server (wrapper for existing stop method)."""
         try:
             if not self.running:
@@ -1074,13 +1074,13 @@ class BackupServer:
             logger.error(f"Failed to stop server: {e}")
             return self._format_response(False, error=str(e))
 
-    async def stop_server_async(self) -> Dict[str, Any]:
+    async def stop_server_async(self) -> dict[str, Any]:
         """Async version of stop_server()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.stop_server)
 
-    def test_connection(self) -> Dict[str, Any]:
+    def test_connection(self) -> dict[str, Any]:
         """Test server connection status."""
         try:
             test_data = {
@@ -1103,7 +1103,7 @@ class BackupServer:
             logger.error(f"Failed to test connection: {e}")
             return self._format_response(False, error=str(e))
 
-    async def test_connection_async(self) -> Dict[str, Any]:
+    async def test_connection_async(self) -> dict[str, Any]:
         """Async version of test_connection()."""
         import asyncio
         loop = asyncio.get_event_loop()
@@ -1111,7 +1111,7 @@ class BackupServer:
 
     # --- Analytics & System ---
 
-    def get_system_status(self) -> Dict[str, Any]:
+    def get_system_status(self) -> dict[str, Any]:
         """Get system-level status information."""
         try:
             import psutil
@@ -1135,13 +1135,13 @@ class BackupServer:
             logger.error(f"Failed to get system status: {e}")
             return self._format_response(False, error=str(e))
 
-    async def get_system_status_async(self) -> Dict[str, Any]:
+    async def get_system_status_async(self) -> dict[str, Any]:
         """Async version of get_system_status()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_system_status)
 
-    def get_analytics_data(self) -> Dict[str, Any]:
+    def get_analytics_data(self) -> dict[str, Any]:
         """Get analytics information."""
         try:
             analytics_data = {
@@ -1155,13 +1155,13 @@ class BackupServer:
             logger.error(f"Failed to get analytics data: {e}")
             return self._format_response(False, error=str(e))
 
-    async def get_analytics_data_async(self) -> Dict[str, Any]:
+    async def get_analytics_data_async(self) -> dict[str, Any]:
         """Async version of get_analytics_data()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_analytics_data)
 
-    def get_performance_metrics(self) -> Dict[str, Any]:
+    def get_performance_metrics(self) -> dict[str, Any]:
         """Get performance data."""
         try:
             metrics_data = {
@@ -1184,13 +1184,13 @@ class BackupServer:
             logger.error(f"Failed to get performance metrics: {e}")
             return self._format_response(False, error=str(e))
 
-    async def get_performance_metrics_async(self) -> Dict[str, Any]:
+    async def get_performance_metrics_async(self) -> dict[str, Any]:
         """Async version of get_performance_metrics()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_performance_metrics)
 
-    def get_dashboard_summary(self) -> Dict[str, Any]:
+    def get_dashboard_summary(self) -> dict[str, Any]:
         """Get dashboard data."""
         try:
             dashboard_data = {
@@ -1206,13 +1206,13 @@ class BackupServer:
             logger.error(f"Failed to get dashboard summary: {e}")
             return self._format_response(False, error=str(e))
 
-    async def get_dashboard_summary_async(self) -> Dict[str, Any]:
+    async def get_dashboard_summary_async(self) -> dict[str, Any]:
         """Async version of get_dashboard_summary()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_dashboard_summary)
 
-    def get_server_statistics(self) -> Dict[str, Any]:
+    def get_server_statistics(self) -> dict[str, Any]:
         """Get detailed statistics."""
         try:
             stats_data = {
@@ -1236,22 +1236,22 @@ class BackupServer:
             logger.error(f"Failed to get server statistics: {e}")
             return self._format_response(False, error=str(e))
 
-    async def get_server_statistics_async(self) -> Dict[str, Any]:
+    async def get_server_statistics_async(self) -> dict[str, Any]:
         """Async version of get_server_statistics()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_server_statistics)
 
-    def get_historical_data(self, metric: str = "connections", hours: int = 24) -> Dict[str, Any]:
+    def get_historical_data(self, metric: str = "connections", hours: int = 24) -> dict[str, Any]:
         """Get historical data for metrics."""
         try:
             # Generate mock historical data points
             import random
             from datetime import datetime, timedelta
-            
+
             points = []
             now = datetime.now()
-            
+
             # Generate data points for the specified time range
             for i in range(hours):
                 timestamp = now - timedelta(hours=i)
@@ -1264,21 +1264,21 @@ class BackupServer:
                     value = random.randint(0, 1000)
                 else:
                     value = random.randint(0, 100)
-                    
+
                 points.append({
                     'timestamp': timestamp.isoformat(),
                     'value': value
                 })
-            
+
             # Reverse to show oldest first
             points.reverse()
-            
+
             return self._format_response(True, {'points': points})
         except Exception as e:
             logger.error(f"Failed to get historical data: {e}")
             return self._format_response(False, error=str(e))
 
-    async def get_historical_data_async(self, metric: str = "connections", hours: int = 24) -> Dict[str, Any]:
+    async def get_historical_data_async(self, metric: str = "connections", hours: int = 24) -> dict[str, Any]:
         """Async version of get_historical_data()."""
         import asyncio
         loop = asyncio.get_event_loop()
@@ -1286,7 +1286,7 @@ class BackupServer:
 
     # --- Log Operations ---
 
-    def get_logs(self) -> Dict[str, Any]:
+    def get_logs(self) -> dict[str, Any]:
         """Get system logs (basic implementation)."""
         try:
             # This is a basic implementation - in a production system you'd want proper log aggregation
@@ -1299,19 +1299,19 @@ class BackupServer:
             try:
                 # Check self.backup_log_file first, then module variable, then fallback to server.log
                 if hasattr(self, 'backup_log_file') and os.path.exists(self.backup_log_file):
-                    with open(self.backup_log_file, 'r', encoding='utf-8') as f:
+                    with open(self.backup_log_file, encoding='utf-8') as f:
                         lines = f.readlines()
                         # Get last 100 lines
                         recent_lines = lines[-100:] if len(lines) > 100 else lines
                         log_data['logs'] = [line.strip() for line in recent_lines]
                 elif os.path.exists(backup_log_file):  # Fallback to module variable
-                    with open(backup_log_file, 'r', encoding='utf-8') as f:
+                    with open(backup_log_file, encoding='utf-8') as f:
                         lines = f.readlines()
                         # Get last 100 lines
                         recent_lines = lines[-100:] if len(lines) > 100 else lines
                         log_data['logs'] = [line.strip() for line in recent_lines]
                 elif os.path.exists('server.log'):
-                    with open('server.log', 'r', encoding='utf-8') as f:
+                    with open('server.log', encoding='utf-8') as f:
                         lines = f.readlines()
                         # Get last 100 lines
                         recent_lines = lines[-100:] if len(lines) > 100 else lines
@@ -1324,13 +1324,13 @@ class BackupServer:
             logger.error(f"Failed to get logs: {e}")
             return self._format_response(False, error=str(e))
 
-    async def get_logs_async(self) -> Dict[str, Any]:
+    async def get_logs_async(self) -> dict[str, Any]:
         """Async version of get_logs()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_logs)
 
-    async def clear_logs_async(self) -> Dict[str, Any]:
+    async def clear_logs_async(self) -> dict[str, Any]:
         """Clear system logs (placeholder implementation)."""
         try:
             # This would require careful implementation to avoid disrupting active logging
@@ -1339,7 +1339,7 @@ class BackupServer:
             logger.error(f"Failed to clear logs: {e}")
             return self._format_response(False, error=str(e))
 
-    async def export_logs_async(self, export_format: str, filters: Dict[str, Any]) -> Dict[str, Any]:
+    async def export_logs_async(self, export_format: str, filters: dict[str, Any]) -> dict[str, Any]:
         """Export logs with filtering (placeholder implementation)."""
         try:
             return self._format_response(False, error="Log export functionality not yet implemented")
@@ -1349,7 +1349,7 @@ class BackupServer:
 
     # --- Settings Management ---
 
-    def save_settings(self, settings_data: Dict[str, Any]) -> Dict[str, Any]:
+    def save_settings(self, settings_data: dict[str, Any]) -> dict[str, Any]:
         """Save settings (placeholder implementation)."""
         try:
             # This would require implementation of a settings storage system
@@ -1359,13 +1359,13 @@ class BackupServer:
             logger.error(f"Failed to save settings: {e}")
             return self._format_response(False, error=str(e))
 
-    async def save_settings_async(self, settings_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def save_settings_async(self, settings_data: dict[str, Any]) -> dict[str, Any]:
         """Async version of save_settings()."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.save_settings, settings_data)
 
-    def load_settings(self) -> Dict[str, Any]:
+    def load_settings(self) -> dict[str, Any]:
         """Load settings (placeholder implementation)."""
         try:
             # This would require implementation of a settings storage system
@@ -1380,7 +1380,7 @@ class BackupServer:
             logger.error(f"Failed to load settings: {e}")
             return self._format_response(False, error=str(e))
 
-    async def load_settings_async(self) -> Dict[str, Any]:
+    async def load_settings_async(self) -> dict[str, Any]:
         """Async version of load_settings()."""
         import asyncio
         loop = asyncio.get_event_loop()

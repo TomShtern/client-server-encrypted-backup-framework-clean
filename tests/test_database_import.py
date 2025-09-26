@@ -3,8 +3,8 @@
 Test script to check database view import
 """
 
-import sys
 import os
+import sys
 
 # Add the project root to the path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -19,12 +19,12 @@ try:
     print(f"Attempting to import module: {module_path}")
     module = importlib.import_module(module_path)
     print(f"Module imported successfully: {module}")
-    
+
     class_name = "DatabaseView"
     print(f"Attempting to get class: {class_name}")
     view_class = getattr(module, class_name)
     print(f"Class found successfully: {view_class}")
-    
+
 except Exception as e:
     print(f"Error: {e}")
     import traceback

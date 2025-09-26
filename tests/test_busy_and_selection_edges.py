@@ -1,7 +1,7 @@
-import pytest
 from flet_server_gui.services.busy_indicator import get_busy_indicator
 from flet_server_gui.state.selection_state import SelectionState
 from flet_server_gui.utils.trace_center import get_trace_center
+
 
 def test_busy_indicator_underflow_and_nested():
     tc = get_trace_center(); tc.clear()

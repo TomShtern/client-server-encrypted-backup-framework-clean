@@ -1,6 +1,6 @@
-import sqlite3
-import sys
 import os
+import sqlite3
+
 
 def test_gui_queries():
     """Test the exact queries that the server-gui uses"""

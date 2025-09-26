@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 safe_date_entry.py - Safe DateEntry wrapper with fallback support.
 
@@ -7,11 +6,13 @@ compatibility issues and provides graceful fallbacks when the library has proble
 """
 
 from __future__ import annotations
-import tkinter as tk
-from tkinter import ttk
-from datetime import date, datetime
-from typing import Optional, Any, Callable, Protocol
+
 import contextlib
+import tkinter as tk
+from collections.abc import Callable
+from datetime import date, datetime
+from tkinter import ttk
+from typing import Any, Protocol
 
 # Try to import tkcalendar with comprehensive error handling
 _TKCALENDAR_AVAILABLE = False
@@ -41,31 +42,31 @@ class SafeDateEntry:
     A safe wrapper around tkcalendar.DateEntry that handles compatibility issues
     and provides fallbacks when the library has problems.
     """
-    
-    def __init__(self, parent: tk.Widget, date_pattern: str = 'yyyy-mm-dd', 
-                 firstweekday: str = 'sunday', startdate: Optional[date] = None, **kwargs):
+
+    def __init__(self, parent: tk.Widget, date_pattern: str = 'yyyy-mm-dd',
+                 firstweekday: str = 'sunday', startdate: date | None = None, **kwargs):
         self.parent = parent
         self.date_pattern = date_pattern
         self._current_date = startdate or date.today()
         self._callbacks: list[Callable[..., Any]] = []
-        self._widget: Optional[tk.Widget] = None
+        self._widget: tk.Widget | None = None
         self._is_fallback = True  # Initialize as True until proven otherwise
-        
+
         # Skip tkcalendar DateEntry due to compatibility issues - always use fallback
         # The current tkcalendar version has cleanup issues that cause AttributeError
         # when destroying widgets. Use fallback implementation for reliability.
         if False and _TKCALENDAR_AVAILABLE and _DateEntryClass:
             try:
                 # Create the real widget directly - avoid test creation that can cause issues
-                self._widget = _DateEntryClass(parent, date_pattern=date_pattern, 
+                self._widget = _DateEntryClass(parent, date_pattern=date_pattern,
                                              firstweekday=firstweekday, **kwargs)
                 if startdate:
                     with contextlib.suppress(Exception):
                         self._widget.set_date(startdate)  # type: ignore
-                        
+
                 self._is_fallback = False
                 return
-                
+
             except Exception as e:
                 print(f"[WARNING] tkcalendar DateEntry failed: {e}, using fallback")
                 # Clean up any partial widgets
@@ -73,33 +74,33 @@ class SafeDateEntry:
                     if hasattr(self, '_widget') and self._widget:
                         self._widget.destroy()
                         self._widget = None
-        
+
         # Create fallback widget
         self._create_fallback_widget(kwargs)
         self._is_fallback = True
-    
+
     def _create_fallback_widget(self, kwargs: dict[str, Any]) -> None:
         """Create a simple Entry widget as fallback."""
         frame = ttk.Frame(self.parent)
-        
+
         self._entry = ttk.Entry(frame, width=12)
         self._entry.pack(side=tk.LEFT)
         self._entry.insert(0, self._current_date.strftime('%Y-%m-%d'))
         self._entry.bind('<FocusOut>', self._on_entry_change)
         self._entry.bind('<Return>', self._on_entry_change)
-        
+
         # Add a calendar button for better UX
-        cal_btn = ttk.Button(frame, text="📅", width=3, 
+        cal_btn = ttk.Button(frame, text="📅", width=3,
                            command=self._show_simple_calendar)
         cal_btn.pack(side=tk.LEFT, padx=(2, 0))
-        
+
         self._widget = frame
-    
-    def _on_entry_change(self, event: Optional[tk.Event] = None) -> None:
+
+    def _on_entry_change(self, event: tk.Event | None = None) -> None:
         """Handle entry change in fallback mode."""
         if not hasattr(self, '_entry'):
             return
-            
+
         try:
             date_str = self._entry.get()
             # Try to parse the date
@@ -111,13 +112,13 @@ class SafeDateEntry:
             # Reset to current date if invalid
             self._entry.delete(0, tk.END)
             self._entry.insert(0, self._current_date.strftime('%Y-%m-%d'))
-    
+
     def _show_simple_calendar(self) -> None:
         """Show a simple calendar picker."""
         # For now, just focus the entry - could be enhanced with a popup calendar
         if hasattr(self, '_entry'):
             self._entry.focus()
-    
+
     def _trigger_callbacks(self) -> None:
         """Trigger registered callbacks."""
         for callback in self._callbacks:
@@ -125,22 +126,22 @@ class SafeDateEntry:
                 callback()
             except Exception as e:
                 print(f"[WARNING] DateEntry callback error: {e}")
-    
+
     def pack(self, **kwargs: Any) -> None:
         """Pack the widget."""
         if self._widget:
             self._widget.pack(**kwargs)
-    
+
     def grid(self, **kwargs: Any) -> None:
         """Grid the widget."""
         if self._widget:
             self._widget.grid(**kwargs)
-    
+
     def place(self, **kwargs: Any) -> None:
         """Place the widget."""
         if self._widget:
             self._widget.place(**kwargs)
-    
+
     def get_date(self) -> date:
         """Get the current date."""
         if self._is_fallback:
@@ -150,7 +151,7 @@ class SafeDateEntry:
                 return self._widget.get_date()  # type: ignore
             except Exception:
                 return self._current_date
-    
+
     def set_date(self, new_date: date) -> None:
         """Set the date."""
         self._current_date = new_date
@@ -163,7 +164,7 @@ class SafeDateEntry:
                 self._widget.set_date(new_date)  # type: ignore
             except Exception:
                 pass
-    
+
     def bind(self, event: str, callback: Callable[..., Any]) -> None:
         """Bind an event callback."""
         if self._is_fallback:
@@ -177,7 +178,7 @@ class SafeDateEntry:
                 self._widget.bind(event, callback)  # type: ignore
             except Exception:
                 pass
-    
+
     def destroy(self) -> None:
         """Safely destroy the widget."""
         try:
@@ -189,11 +190,11 @@ class SafeDateEntry:
                         # Try to cancel the problematic after_id that causes the error
                         problematic_attrs = [
                             '_determine_downarrow_name_after_id',
-                            '_determine_uparrow_name_after_id', 
+                            '_determine_uparrow_name_after_id',
                             'after_id',
                             '_after_id'
                         ]
-                        
+
                         for attr_name in problematic_attrs:
                             if hasattr(self._widget, attr_name):
                                 after_id = getattr(self._widget, attr_name, None)
@@ -204,7 +205,7 @@ class SafeDateEntry:
                                         setattr(self._widget, attr_name, None)
                                     except Exception:
                                         pass
-                
+
                 self._widget.destroy()
                 self._widget = None
         except Exception:

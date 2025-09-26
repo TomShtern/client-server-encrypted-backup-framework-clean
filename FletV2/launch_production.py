@@ -8,8 +8,8 @@ Handles environment setup and provides clear feedback about the connection statu
 
 import os
 import sys
-import logging
 from pathlib import Path
+
 
 def setup_environment():
     """Set up the environment for FletV2."""
@@ -40,7 +40,7 @@ def check_integration_status():
             clients = server.get_clients()
             files = server.get_files()
 
-            print(f"📊 Server Status:")
+            print("📊 Server Status:")
             print(f"   • Running: {status.get('running', False)}")
             print(f"   • Clients: {len(clients)}")
             print(f"   • Files: {len(files)}")

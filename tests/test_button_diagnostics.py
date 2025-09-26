@@ -4,9 +4,6 @@ Simple button diagnostics test
 Tests the button methods we modified without complex imports
 """
 
-import asyncio
-import os
-import sys
 
 # Test the button methods directly by running the Flet GUI and observing console output
 def run_flet_gui_for_diagnostics():
@@ -25,7 +22,7 @@ def run_flet_gui_for_diagnostics():
     print("3. Click on any of these buttons:")
     print("   - View Details")
     print("   - View Files (for clients)")
-    print("   - Preview File (for files)")  
+    print("   - Preview File (for files)")
     print("   - Disconnect Client")
     print("   - Download File")
     print()

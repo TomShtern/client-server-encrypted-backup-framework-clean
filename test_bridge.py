@@ -3,17 +3,17 @@
 Quick test of the server bridge with real BackupServer
 """
 
-import sys
 import os
+import sys
 
 # Add proper paths
 repo_root = os.path.dirname(os.path.abspath('.'))
 sys.path.insert(0, repo_root)
 
 # Import required modules
-from typing import List, Dict, Any
-from python_server.server.server import BackupServer
 from FletV2.utils.server_bridge import create_server_bridge
+from python_server.server.server import BackupServer
+
 
 def test_database_access(real_server):
     """

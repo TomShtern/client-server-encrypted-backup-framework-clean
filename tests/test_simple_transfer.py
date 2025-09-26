@@ -6,12 +6,12 @@ Simple test to isolate the transfer issue
 import os
 import subprocess
 import tempfile
-import time
+
 
 def create_simple_test_file():
     """Create a simple test file"""
     content = "This is a simple test file for debugging the transfer issue.\n" * 100
-    
+
     with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
         f.write(content)
         return f.name, len(content)
@@ -19,10 +19,10 @@ def create_simple_test_file():
 def test_simple_transfer():
     """Test with a simple small file"""
     print("=== Simple Transfer Test ===")
-    
+
     temp_file, file_size = create_simple_test_file()
     print(f"Created test file: {file_size} bytes")
-    
+
     try:
         # Create transfer.info
         transfer_info_path = "build/Release/transfer.info"
@@ -31,9 +31,9 @@ def test_simple_transfer():
             f.write("127.0.0.1:1256\n")
             f.write("SimpleDebugTest\n")
             f.write(f"{os.path.abspath(temp_file)}\n")
-        
+
         print("Running client with simple file...")
-        
+
         # Run client and capture output to a file to avoid Unicode issues
         with open("debug_output.txt", "w", encoding="utf-8", errors="replace") as output_file:
             result = subprocess.run(
@@ -43,17 +43,17 @@ def test_simple_transfer():
                 stderr=subprocess.STDOUT,
                 timeout=30
             )
-        
+
         print(f"Exit code: {result.returncode}")
-        
+
         # Read the output file
         try:
-            with open("debug_output.txt", "r", encoding="utf-8", errors="replace") as f:
+            with open("debug_output.txt", encoding="utf-8", errors="replace") as f:
                 output = f.read()
-                
+
             print("=== Client Output ===")
             print(output[:2000])  # First 2000 chars
-            
+
             # Check for key indicators
             if "Enhanced Buffer Transfer" in output:
                 print("✅ Enhanced buffer system activated")
@@ -71,12 +71,12 @@ def test_simple_transfer():
                 print("❌ Transfer failed")
             if "success" in output.lower():
                 print("✅ Transfer success detected")
-                
+
         except Exception as e:
             print(f"Could not read output file: {e}")
-        
+
         return result.returncode == 0
-        
+
     except subprocess.TimeoutExpired:
         print("⚠️ Test timed out")
         return False
@@ -93,11 +93,11 @@ def test_simple_transfer():
 if __name__ == "__main__":
     print("Simple Transfer Debug Test")
     print("=" * 30)
-    
+
     success = test_simple_transfer()
-    
+
     print(f"\nResult: {'✅ SUCCESS' if success else '❌ FAILED'}")
-    
+
     if not success:
         print("\nThis confirms the transfer is broken.")
         print("The issue is likely in our new code changes.")

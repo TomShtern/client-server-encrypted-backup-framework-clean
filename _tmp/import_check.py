@@ -1,4 +1,6 @@
-import importlib, sys
+import importlib
+import sys
+
 mods = ['flet','flask','requests','psutil','httpx','aiosqlite','emoji','python_server','shared']
 print('Python:', sys.version)
 failed = []

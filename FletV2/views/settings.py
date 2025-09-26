@@ -8,27 +8,26 @@ Clean settings management with server integration and simple validation.
 """
 
 # Explicit imports instead of star import for better static analysis
-import flet as ft
-from typing import Optional, Dict, Any, List
-from datetime import datetime
 import json
-import asyncio
-import aiofiles
+from typing import Any
 
+import aiofiles
+import flet as ft
 from utils.debug_setup import get_logger
 from utils.server_bridge import ServerBridge
 from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button
-from utils.user_feedback import show_success_message, show_error_message
+from utils.ui_components import themed_button
+from utils.user_feedback import show_error_message, show_success_message
+
 from config import SETTINGS_FILE
 
 logger = get_logger(__name__)
 
 
 def create_settings_view(
-    server_bridge: Optional[ServerBridge],
+    server_bridge: ServerBridge | None,
     page: ft.Page,
-    _state_manager: Optional[StateManager] = None
+    _state_manager: StateManager | None = None
 ) -> Any:
     """Simple settings view using Flet's built-in components."""
     logger.info("Creating simplified settings view")
@@ -37,7 +36,7 @@ def create_settings_view(
     current_settings = {}
 
     # Default settings structure
-    def get_default_settings() -> Dict[str, Any]:
+    def get_default_settings() -> dict[str, Any]:
         """Get default settings structure."""
         return {
             "server": {
@@ -103,7 +102,7 @@ def create_settings_view(
             # Load from local file
             try:
                 if SETTINGS_FILE.exists():
-                    async with aiofiles.open(SETTINGS_FILE, 'r') as f:
+                    async with aiofiles.open(SETTINGS_FILE) as f:
                         content = await f.read()
                         loaded = json.loads(content)
                         current_settings = {**get_default_settings(), **loaded}
@@ -438,7 +437,7 @@ def create_settings_view(
         async def load_import(e: ft.FilePickerResultEvent) -> None:
             if e.files:
                 try:
-                    async with aiofiles.open(e.files[0].path, 'r') as f:
+                    async with aiofiles.open(e.files[0].path) as f:
                         content = await f.read()
                         imported = json.loads(content)
 

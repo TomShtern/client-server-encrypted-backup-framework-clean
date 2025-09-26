@@ -3,10 +3,11 @@
 Test script to debug the API endpoints directly
 """
 
-import requests
-import json
-import sys
 import os
+import sys
+
+import requests
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Shared.utils.unified_config import get_config
 
@@ -31,7 +32,7 @@ def test_api_connect():
             "port": get_config('server.port', 1256),
             "username": "testuser"
         }
-        response = requests.post(f'{base_url}/api/connect', 
+        response = requests.post(f'{base_url}/api/connect',
                                json=data,
                                headers={'Content-Type': 'application/json'})
         print(f"Connect endpoint: {response.status_code}")
@@ -47,14 +48,14 @@ def test_api_upload():
         # Create a test file
         with open('test_upload_file.txt', 'w') as f:
             f.write('This is a test file for upload')
-        
+
         files = {'file': open('test_upload_file.txt', 'rb')}
         data = {
             'username': 'testuser',
             'server': get_config('server.host', '127.0.0.1'),
             'port': get_config('server.port', 1256)
         }
-        
+
         response = requests.post(f'{base_url}/api/start_backup',
                                files=files,
                                data=data)
@@ -73,14 +74,14 @@ def test_api_upload():
 
 if __name__ == "__main__":
     print("=== Testing API Endpoints ===")
-    
+
     print("\n1. Testing /api/status...")
     test_api_status()
-    
+
     print("\n2. Testing /api/connect...")
     test_api_connect()
-    
+
     print("\n3. Testing /api/start_backup...")
     test_api_upload()
-    
+
     print("\n=== Test Complete ===")

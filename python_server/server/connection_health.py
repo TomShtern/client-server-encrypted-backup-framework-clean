@@ -9,12 +9,12 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple, Any
+from typing import Any
 
 
 @dataclass
 class ConnStats:
-    client_addr: Tuple[str, int]
+    client_addr: tuple[str, int]
     client_id_hex: str = ""
     opened_ts: float = field(default_factory=time.time)
     last_read_ts: float = field(default_factory=time.time)
@@ -24,8 +24,8 @@ class ConnStats:
     read_errors: int = 0
     write_errors: int = 0
     partial_clears: int = 0
-    closed_ts: Optional[float] = None
-    last_error: Optional[str] = None
+    closed_ts: float | None = None
+    last_error: str | None = None
 
     def heartbeat_read(self, n: int):
         now = time.time()
@@ -49,7 +49,7 @@ class ConnStats:
     def close(self):
         self.closed_ts = time.time()
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         """Return a summary dict of this connection's stats."""
         now = time.time()
         lifetime = (self.closed_ts or now) - self.opened_ts
@@ -68,9 +68,9 @@ class ConnStats:
 class ConnectionHealthMonitor:
     def __init__(self):
         self._lock = threading.RLock()
-        self._stats: Dict[int, ConnStats] = {}
+        self._stats: dict[int, ConnStats] = {}
 
-    def open_conn(self, fd: int, client_addr: Tuple[str, int]):
+    def open_conn(self, fd: int, client_addr: tuple[str, int]):
         with self._lock:
             self._stats[fd] = ConnStats(client_addr=client_addr)
 
@@ -111,18 +111,18 @@ class ConnectionHealthMonitor:
                 cs.close()
                 # store closed stats under negative key to retain briefly? For now, drop.
 
-    def get_summary(self) -> Dict[int, Dict]:
+    def get_summary(self) -> dict[int, dict]:
         with self._lock:
             return {fd: cs.summary() for fd, cs in self._stats.items()}
 
-    def get_conn(self, fd: int) -> Optional[Dict]:
+    def get_conn(self, fd: int) -> dict | None:
         with self._lock:
             cs = self._stats.get(fd)
             return cs.summary() if cs else None
 
 
 # Global singleton used by server
-_monitor_instance: Optional[ConnectionHealthMonitor] = None
+_monitor_instance: ConnectionHealthMonitor | None = None
 
 
 def get_connection_health_monitor() -> ConnectionHealthMonitor:

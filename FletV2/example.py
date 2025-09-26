@@ -3,19 +3,20 @@
 Example script demonstrating FletV2 framework usage.
 """
 
-import sys
 import os
+import sys
 
 # Add the FletV2 directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '.'))
 
-import flet as ft
 import contextlib
 from typing import Any, cast
+
+import flet as ft
 from theme import setup_modern_theme as setup_default_theme
 from utils.server_bridge import create_server_bridge
-from views.dashboard import create_dashboard_view
 from views.clients import create_clients_view
+from views.dashboard import create_dashboard_view
 
 
 def main(page: ft.Page):

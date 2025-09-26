@@ -24,7 +24,7 @@ try:
     if _parent_dir not in sys.path:
         sys.path.insert(0, _parent_dir)
 
-    import Shared.utils.utf8_solution as _utf8_solution  # noqa: F401
+    import Shared.utils.utf8_solution as _utf8_solution
     # Ensure initialization for side effects
     _utf8_solution.ensure_initialized()
 except ImportError as e:
@@ -64,23 +64,78 @@ if project_root not in sys.path:
 # Standard library imports
 import asyncio
 import contextlib
+
+# Compatibility shim: ensure ft.FilterChip exists for older/newer flet builds
+import contextlib as _contextlib
 import socket
-from typing import Any, Callable, Dict, Optional, Set, Tuple, cast
+from collections.abc import Callable
+from typing import Any, cast
 
 # Third-party imports
 import flet as ft
+
+if not hasattr(ft, "FilterChip"):
+    class FilterChip(ft.Container):  # sourcery skip: remove-unnecessary-cast, remove-unnecessary-try-except
+        def __init__(
+            self,
+            label: str = "",
+            selected: bool = False,
+            on_selected: Callable[[ft.ControlEvent], None] | None = None,
+            **kwargs: Any,
+        ) -> None:
+            self.label = label
+            self.selected = bool(selected)
+            self.on_selected = on_selected
+            self._button = ft.ElevatedButton(
+                text=str(label),
+                on_click=self._handle_click,
+                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=16)),
+            )
+            super().__init__(content=self._button, padding=ft.padding.symmetric(horizontal=6, vertical=2), **kwargs)
+            self._refresh_style()
+
+        def _handle_click(self, e: ft.ControlEvent) -> None:
+            try:
+                if callable(self.on_selected):
+                    ev = type("Evt", (), {"control": self})()
+                    self.on_selected(ev)
+            except Exception:
+                pass
+
+        def _refresh_style(self) -> None:
+            try:
+                if self.selected:
+                    self._button.bgcolor = ft.Colors.PRIMARY
+                    self._button.color = ft.Colors.ON_PRIMARY
+                else:
+                    self._button.bgcolor = None
+                    self._button.color = None
+                with _contextlib.suppress(Exception):
+                    self._button.update()
+            except Exception:
+                pass
+
+        def update(self, *args: Any, **kwargs: Any) -> None:
+            self._refresh_style()
+            try:
+                super().update(*args, **kwargs)
+            except Exception:
+                with _contextlib.suppress(Exception):
+                    self._button.update()
+
+    ft.FilterChip = cast(Any, FilterChip)  # type: ignore[attr-defined]
 
 # (Path setup handled above)
 
 # Local imports - utilities first
 try:
-    from utils.debug_setup import setup_terminal_debugging  # noqa: E402
+    from .utils.debug_setup import setup_terminal_debugging
 except ImportError:
     # Silent fallback for import issues - create minimal debug setup with matching signature
     import logging
     # Optional already imported at top
 
-    def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: Optional[str] = None) -> logging.Logger:
+    def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: str | None = None) -> logging.Logger:
         logger = logging.getLogger(logger_name or __name__)
         if not logger.handlers:
             handler = logging.StreamHandler()
@@ -97,7 +152,7 @@ os.environ.setdefault("PYTHONUTF8", "1")
 
 # Local imports - application modules
 try:
-    from theme import setup_modern_theme, toggle_theme_mode  # noqa: E402
+    from .theme import setup_modern_theme, toggle_theme_mode
 except ImportError as e:
     print(f"Warning: Could not import theme module: {e}")
     # Create minimal fallbacks
@@ -108,7 +163,7 @@ except ImportError as e:
         pass
 
 try:
-    from utils.server_bridge import create_server_bridge  # noqa: E402
+    from .utils.server_bridge import create_server_bridge
 except ImportError as e:
     print(f"Error: Could not import server_bridge: {e}")
     # Mock data support has been removed - server bridge requires real server
@@ -252,19 +307,19 @@ class FletV2App(ft.Row):
     - Uses theme.py for styling
     """
 
-    def __init__(self, page: ft.Page, real_server: Optional[Any] = None) -> None:
+    def __init__(self, page: ft.Page, real_server: Any | None = None) -> None:
         super().__init__()
         self.page: ft.Page = page  # Ensure page is never None
         self.expand = True
 
         # Type annotations for key attributes
         self.server_bridge: Any = None
-        self.state_manager: Optional[Any] = None
+        self.state_manager: Any | None = None
         self.content_area: ft.Container = ft.Container()
         self.nav_rail: ft.Container = ft.Container()
         self.nav_rail_extended: bool = True
-        self._loaded_views: Dict[str, ft.Control] = {}
-        self._background_tasks: Set[Any] = set()
+        self._loaded_views: dict[str, ft.Control] = {}
+        self._background_tasks: set[Any] = set()
 
         # Initialize server bridge - prefer real server instance
         global bridge_type, real_server_available, real_server_instance
@@ -316,8 +371,8 @@ class FletV2App(ft.Row):
         self._initialize_state_manager()
 
         # Comment 12: Track current view dispose function for proper StateManager cleanup
-        self._current_view_dispose: Optional[Callable[[], None]] = None
-        self._current_view_name: Optional[str] = None
+        self._current_view_dispose: Callable[[], None] | None = None
+        self._current_view_name: str | None = None
 
         # Create optimized content area with modern Material Design 3 styling and fast transitions
         self.content_area = ft.Container(
@@ -412,7 +467,7 @@ class FletV2App(ft.Row):
     def _initialize_state_manager(self) -> None:
         """Initialize state manager with server bridge integration for reactive UI updates"""
         try:
-            from utils.state_manager import create_state_manager
+            from .utils.state_manager import create_state_manager
             # Pass server_bridge for enhanced server-mediated operations
             self.state_manager = create_state_manager(self.page, self.server_bridge)
 
@@ -804,7 +859,7 @@ class FletV2App(ft.Row):
             border_radius=ft.BorderRadius(0, 12, 12, 0),  # Smaller radius for speed
         )
 
-    def _toggle_navigation_rail(self, e: Optional[ft.ControlEvent] = None) -> None:
+    def _toggle_navigation_rail(self, e: ft.ControlEvent | None = None) -> None:
         """Toggle navigation rail with modern UI feedback and optimized performance animations."""
         self.nav_rail_extended = not self.nav_rail_extended
 
@@ -1173,7 +1228,7 @@ class FletV2App(ft.Row):
         duration = getattr(animated_switcher, 'duration', 'unknown')
         logger.debug(f"Set animation for {view_name}: {transition}, duration={duration}ms")
 
-    def _get_view_config(self, view_name: str) -> Tuple[str, str, str]:
+    def _get_view_config(self, view_name: str) -> tuple[str, str, str]:
         """Get view configuration for the specified view name."""
         view_configs = {
             "dashboard": ("views.dashboard", "create_dashboard_view"),
@@ -1334,13 +1389,13 @@ class FletV2App(ft.Row):
                     self.page.update()  # type: ignore[call-arg]
             return False
 
-    def _extract_content_and_dispose(self, result_t: Tuple[Any, ...]) -> Tuple[Any, Optional[Callable[[], None]]]:
+    def _extract_content_and_dispose(self, result_t: tuple[Any, ...]) -> tuple[Any, Callable[[], None] | None]:
         """Extract content and dispose function from result tuple."""
         content = result_t[0]
-        dispose_func = cast(Optional[Callable[[], None]], result_t[1])
+        dispose_func = cast(Callable[[], None] | None, result_t[1])
         return content, dispose_func
 
-    def _process_view_result_tuple(self, result_t: Tuple[Any, ...], view_name: str) -> Tuple[Any, Optional[Callable[[], None]]]:
+    def _process_view_result_tuple(self, result_t: tuple[Any, ...], view_name: str) -> tuple[Any, Callable[[], None] | None]:
         """Process view result tuple and extract content and dispose function."""
         if len(result_t) == 3:
             content, dispose_func = self._extract_content_and_dispose(result_t)
@@ -1359,7 +1414,7 @@ class FletV2App(ft.Row):
 
     def _create_enhanced_view(
         self, view_function: Callable[..., Any], view_name: str
-    ) -> Tuple[Any, Optional[Callable[[], None]]]:
+    ) -> tuple[Any, Callable[[], None] | None]:
         """Create view with state manager integration - now required for all views."""
         try:
             # All views now require state_manager as per Phase 2 refactor
@@ -1368,7 +1423,7 @@ class FletV2App(ft.Row):
 
             # Comment 12: Check if view returned dispose function and subscription setup (new pattern)
             if isinstance(result, tuple):
-                result_t = cast(Tuple[Any, ...], result)
+                result_t = cast(tuple[Any, ...], result)
                 logger.debug(f"Tuple length: {len(result_t)} for {view_name}")
                 return self._process_view_result_tuple(result_t, view_name)
 
@@ -1414,7 +1469,7 @@ class FletV2App(ft.Row):
 
 
 # Simple application entry point
-async def main(page: ft.Page, real_server: Optional[Any] = None) -> None:
+async def main(page: ft.Page, real_server: Any | None = None) -> None:
     """Simple main function - supports optional real server injection."""
     def on_window_event(e: ft.ControlEvent) -> None:
         """Handle window events to force sizing."""
@@ -1454,7 +1509,9 @@ async def main(page: ft.Page, real_server: Optional[Any] = None) -> None:
 
         # Add placeholder mode banner if in placeholder mode - import at point of use to avoid unused import warnings
         try:
-            from utils.placeholder_mode_indicator import create_placeholder_mode_banner  # type: ignore[import-not-found]
+            from .utils.placeholder_mode_indicator import (
+                create_placeholder_mode_banner,  # type: ignore[import-not-found]
+            )
             placeholder_banner = cast(ft.Control, cast(Any, create_placeholder_mode_banner)(app.server_bridge))
         except (ImportError, AttributeError):
             logger.warning("Placeholder mode indicator not available, continuing without banner")
@@ -1491,7 +1548,7 @@ async def main(page: ft.Page, real_server: Optional[Any] = None) -> None:
         if hasattr(page, '__dict__'):  # Check if we can set attributes
             _p = cast(Any, page)
             _p.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Application failed to start: {str(e)}"),
+                content=ft.Text(f"Application failed to start: {e!s}"),
                 bgcolor=ft.Colors.RED,
                 duration=3000
             )

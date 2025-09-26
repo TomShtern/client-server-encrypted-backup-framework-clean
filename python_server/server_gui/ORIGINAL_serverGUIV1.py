@@ -1,22 +1,28 @@
-# -*- coding: utf-8 -*-
 # ServerGUI.py - ULTRA MODERN Cross-platform GUI for Encrypted Backup Server
 # Final Version: Fully implemented, refactored, and meticulously type-safe for strict checkers (Python 3.9+).
 
 from __future__ import annotations
-import sys
+
+import json
 import os
+import queue
+import shutil
+import sys
 import threading
+import time
 import traceback
 from collections import deque
-from datetime import datetime, timedelta
-from typing import (Dict, List, Optional, Any, Deque, Callable, TYPE_CHECKING, Protocol,
-                    runtime_checkable, cast, Tuple)
+from collections.abc import Callable
 from contextlib import suppress
-import time
-import queue
-import json
-import csv
-import shutil
+from datetime import datetime, timedelta
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Protocol,
+    cast,
+    runtime_checkable,
+)
+
 
 # --- Dependency and System Setup ---
 def _safe_reconfigure_stream(stream: Any) -> None:
@@ -36,12 +42,13 @@ except ImportError:
         print("[WARNING] Could not enable UTF-8 solution.")
 
 if TYPE_CHECKING:
-    from Shared.utils.process_monitor_gui import ProcessMonitorWidget
     import pystray
+    from matplotlib.axes import Axes
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     from matplotlib.figure import Figure
-    from matplotlib.axes import Axes
     from matplotlib.lines import Line2D
+
+    from Shared.utils.process_monitor_gui import ProcessMonitorWidget
 else:
     # Runtime fallbacks for when packages aren't available
     ProcessMonitorWidget = type(None)
@@ -55,13 +62,13 @@ else:
 class BackupServerLike(Protocol):
     running: bool
     db_manager: Any
-    clients: Dict[bytes, Any]
-    clients_by_name: Dict[str, bytes]
+    clients: dict[bytes, Any]
+    clients_by_name: dict[str, bytes]
     network_server: Any
     file_transfer_manager: Any
     def start(self) -> None: ...
     def stop(self) -> None: ...
-    def apply_settings(self, settings: Dict[str, Any]) -> None: ...
+    def apply_settings(self, settings: dict[str, Any]) -> None: ...
 
 # Import DatabaseManager for standalone mode
 try:
@@ -76,7 +83,7 @@ except ImportError:
 
 # --- Optional Dependency Imports with Graceful Fallbacks ---
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, font
+from tkinter import filedialog, messagebox, ttk
 
 try:
     from tkcalendar import DateEntry as CalDateEntry  # type: ignore
@@ -106,11 +113,11 @@ except ImportError:
 try:
     import matplotlib
     matplotlib.use('TkAgg')
+    import matplotlib.pyplot as plt  # Import pyplot properly
+    from matplotlib.axes import Axes
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     from matplotlib.figure import Figure
-    from matplotlib.axes import Axes
     from matplotlib.lines import Line2D
-    import matplotlib.pyplot as plt  # Import pyplot properly
     plt.style.use('dark_background')  # type: ignore
     CHARTS_AVAILABLE = True
 except ImportError:
@@ -154,7 +161,7 @@ class ModernTheme:
     FONT_FAMILY, FONT_SIZE_MEDIUM, FONT_SIZE_SMALL = "Segoe UI", 11, 9
 
 class Icons:
-    ICONS: Dict[str, str] = {"dashboard": "🏠", "clients": "👥", "files": "📁", "analytics": "📊",
+    ICONS: dict[str, str] = {"dashboard": "🏠", "clients": "👥", "files": "📁", "analytics": "📊",
         "database": "🗄️", "logs": "📝", "settings": "⚙️", "processes": "⚙️", "start": "▶️",
         "stop": "⏹️", "restart": "🔄", "save": "💾", "delete": "🗑️", "info": "ℹ️", "disconnect": "🔌", "exit": "🚪"}
     @classmethod
@@ -165,7 +172,7 @@ class ModernTooltip:
     def __init__(self, widget: tk.Widget, text: str) -> None:
         self.widget = widget
         self.text = text
-        self.tooltip_window: Optional[tk.Toplevel] = None
+        self.tooltip_window: tk.Toplevel | None = None
         self.widget.bind("<Enter>", self.show_tooltip)
         self.widget.bind("<Leave>", self.hide_tooltip)
 
@@ -200,15 +207,15 @@ class ModernCard(tk.Frame):
         return content_frame
 
 class ModernTable(tk.Frame):
-    def __init__(self, parent: tk.Widget, columns: Dict[str, Dict[str, Any]], **kwargs: Any) -> None:
+    def __init__(self, parent: tk.Widget, columns: dict[str, dict[str, Any]], **kwargs: Any) -> None:
         super().__init__(parent, bg=ModernTheme.CARD_BG, **kwargs)
         self.columns = columns
-        self.data: List[Dict[str, Any]] = []
-        self.filtered_data: List[Dict[str, Any]] = []
-        self.sort_column: Optional[str] = None
+        self.data: list[dict[str, Any]] = []
+        self.filtered_data: list[dict[str, Any]] = []
+        self.sort_column: str | None = None
         self.sort_reverse: bool = False
-        self.selection_callback: Optional[Callable[[Dict[str, Any]], None]] = None
-        self.context_menu_builder: Optional[Callable[[Dict[str, Any]], tk.Menu]] = None
+        self.selection_callback: Callable[[dict[str, Any]], None] | None = None
+        self.context_menu_builder: Callable[[dict[str, Any]], tk.Menu] | None = None
         self.search_var = tk.StringVar()
         self.tree = self._create_table()
 
@@ -242,7 +249,7 @@ class ModernTable(tk.Frame):
         tree.bind("<Button-3>", self._show_context_menu)
         return tree
 
-    def set_data(self, data: List[Dict[str, Any]]) -> None:
+    def set_data(self, data: list[dict[str, Any]]) -> None:
         self.data = data
         self._apply_filter()
 
@@ -282,17 +289,17 @@ class ModernTable(tk.Frame):
                 menu = self.context_menu_builder(selected_item)
                 menu.post(event.x_root, event.y_root)
 
-    def set_selection_callback(self, cb: Callable[[Dict[str, Any]], None]) -> None: self.selection_callback = cb
-    def set_context_menu_builder(self, builder: Callable[[Dict[str, Any]], tk.Menu]) -> None: self.context_menu_builder = builder
+    def set_selection_callback(self, cb: Callable[[dict[str, Any]], None]) -> None: self.selection_callback = cb
+    def set_context_menu_builder(self, builder: Callable[[dict[str, Any]], tk.Menu]) -> None: self.context_menu_builder = builder
 
 class ModernStatusIndicator(tk.Frame):
     """Modern status indicator with colored LED-style indicator."""
     def __init__(self, parent: tk.Widget, **kwargs: Any) -> None:
         super().__init__(parent, bg=ModernTheme.CARD_BG, **kwargs)
-        self.status_label = tk.Label(self, text="●", fg=ModernTheme.ERROR, bg=ModernTheme.CARD_BG, 
+        self.status_label = tk.Label(self, text="●", fg=ModernTheme.ERROR, bg=ModernTheme.CARD_BG,
                                    font=(ModernTheme.FONT_FAMILY, 12))
         self.status_label.pack()
-        
+
     def set_status(self, status: str) -> None:
         """Set the status indicator color based on status."""
         if status.lower() in {"online", "running", "connected"}:
@@ -312,7 +319,7 @@ class ModernProgressBar(tk.Frame):
         self.label = tk.Label(self, text="0%", bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_PRIMARY,
                             font=(ModernTheme.FONT_FAMILY, ModernTheme.FONT_SIZE_SMALL))
         self.label.pack(side="right")
-        
+
     def set_progress(self, value: float) -> None:
         """Set progress value (0-100)."""
         self.progress_var.set(value)
@@ -322,54 +329,54 @@ class ToastNotification:
     """Toast notification system for showing temporary messages."""
     def __init__(self, parent: tk.Widget) -> None:
         self.parent = parent
-        self.toasts: List[tk.Toplevel] = []
-        
+        self.toasts: list[tk.Toplevel] = []
+
     def show_toast(self, message: str, level: str = "info") -> None:
         """Show a toast notification."""
         colors = {
             "info": ModernTheme.INFO,
-            "success": ModernTheme.SUCCESS, 
+            "success": ModernTheme.SUCCESS,
             "warning": ModernTheme.WARNING,
             "error": ModernTheme.ERROR
         }
-        
+
         toast = tk.Toplevel(self.parent)
         toast.withdraw()
         toast.overrideredirect(True)
         toast.configure(bg=colors.get(level, ModernTheme.INFO))
-        
+
         label = tk.Label(toast, text=message, bg=colors.get(level, ModernTheme.INFO),
                         fg=ModernTheme.TEXT_PRIMARY, font=(ModernTheme.FONT_FAMILY, 10),
                         padx=20, pady=10)
         label.pack()
-        
+
         # Position toast
         toast.update_idletasks()
         x = self.parent.winfo_rootx() + self.parent.winfo_width() - toast.winfo_width() - 20
         y = self.parent.winfo_rooty() + 20 + len(self.toasts) * 60
         toast.geometry(f"+{x}+{y}")
         toast.deiconify()
-        
+
         self.toasts.append(toast)
-        
+
         # Auto-hide after 3 seconds
         def hide_toast() -> None:
             if toast in self.toasts:
                 self.toasts.remove(toast)
                 toast.destroy()
-        
+
         toast.after(3000, hide_toast)
 
 class DetailPane(ModernCard):
     """Detail pane for showing detailed information about selected items."""
     def __init__(self, parent: tk.Widget, title: str = "", **kwargs: Any) -> None:
         super().__init__(parent, title=title, **kwargs)
-        self.content_text = tk.Text(self.content_frame, bg=ModernTheme.CARD_BG, 
+        self.content_text = tk.Text(self.content_frame, bg=ModernTheme.CARD_BG,
                                   fg=ModernTheme.TEXT_PRIMARY, wrap=tk.WORD,
                                   font=(ModernTheme.FONT_FAMILY, ModernTheme.FONT_SIZE_SMALL))
         self.content_text.pack(fill="both", expand=True)
-        
-    def update_details(self, item: Dict[str, Any]) -> None:
+
+    def update_details(self, item: dict[str, Any]) -> None:
         """Update the detail pane with information about the selected item."""
         self.content_text.delete(1.0, tk.END)
         for key, value in item.items():
@@ -379,48 +386,48 @@ class DetailPane(ModernCard):
 SERVER_CONTROL_AVAILABLE = True
 
 class ServerGUI:
-    def __init__(self, server_instance: Optional[BackupServerLike] = None) -> None:
+    def __init__(self, server_instance: BackupServerLike | None = None) -> None:
         self.server = server_instance
-        self.root: Optional[tk.Tk] = None
+        self.root: tk.Tk | None = None
         self.is_running = False
-        self.gui_thread: Optional[threading.Thread] = None
+        self.gui_thread: threading.Thread | None = None
         self.start_time: float = 0.0
         self.current_tab = "dashboard"
-        self.settings: Dict[str, Any] = self._load_settings()
-        self.update_queue: queue.Queue[Dict[str, Any]] = queue.Queue()
-        self.toast_system: Optional[ToastNotification] = None
+        self.settings: dict[str, Any] = self._load_settings()
+        self.update_queue: queue.Queue[dict[str, Any]] = queue.Queue()
+        self.toast_system: ToastNotification | None = None
         self.tray_icon: Any = None
-        self.tab_buttons: Dict[str, tk.Button] = {}
-        self.tab_contents: Dict[str, tk.Frame] = {}
-        self.status_labels: Dict[str, tk.Label] = {}
-        self.header_status_indicator: Optional[ModernStatusIndicator] = None
-        self.clock_label: Optional[tk.Label] = None
-        self.header_status_label: Optional[tk.Label] = None
-        self.activity_log_text: Optional[tk.Text] = None
-        self.client_table: Optional[ModernTable] = None
-        self.client_detail_pane: Optional[DetailPane] = None
-        self.file_table: Optional[ModernTable] = None
-        self.file_detail_pane: Optional[DetailPane] = None
-        self.db_table: Optional[ModernTable] = None
-        self.db_table_selector: Optional[ttk.Combobox] = None
-        self.setting_vars: Dict[str, tk.StringVar] = {}
+        self.tab_buttons: dict[str, tk.Button] = {}
+        self.tab_contents: dict[str, tk.Frame] = {}
+        self.status_labels: dict[str, tk.Label] = {}
+        self.header_status_indicator: ModernStatusIndicator | None = None
+        self.clock_label: tk.Label | None = None
+        self.header_status_label: tk.Label | None = None
+        self.activity_log_text: tk.Text | None = None
+        self.client_table: ModernTable | None = None
+        self.client_detail_pane: DetailPane | None = None
+        self.file_table: ModernTable | None = None
+        self.file_detail_pane: DetailPane | None = None
+        self.db_table: ModernTable | None = None
+        self.db_table_selector: ttk.Combobox | None = None
+        self.setting_vars: dict[str, tk.StringVar] = {}
         self.performance_chart: Any = None
         self.ax: Any = None
         self.cpu_line: Any = None
         self.mem_line: Any = None
-        self.performance_data: Dict[str, Deque[Any]] = {'cpu': deque(maxlen=60), 'memory': deque(maxlen=60), 'time': deque(maxlen=60)}
-        self._fallback_db_manager: Optional[Any] = None
+        self.performance_data: dict[str, deque[Any]] = {'cpu': deque(maxlen=60), 'memory': deque(maxlen=60), 'time': deque(maxlen=60)}
+        self._fallback_db_manager: Any | None = None
 
     @property
     def effective_db_manager(self) -> Any:
         """Get database manager from server or create fallback for standalone mode."""
         if self.server and hasattr(self.server, 'db_manager') and self.server.db_manager:
             return self.server.db_manager
-        
+
         # Fallback for standalone mode
         if DatabaseManager is None:
             return None
-            
+
         if self._fallback_db_manager is None:
             try:
                 self._fallback_db_manager = DatabaseManager()
@@ -460,7 +467,7 @@ class ServerGUI:
         """Initialize the root window with proper configuration."""
         self.root = TkinterDnD.Tk() if DND_AVAILABLE and TkinterDnD else tk.Tk()  # type: ignore
         self.root = cast(tk.Tk, self.root)  # type: ignore
-        
+
         self.root.title("Encrypted Backup Server")  # type: ignore
         self.root.geometry("1400x900")  # type: ignore
         self.root.minsize(1000, 700)  # type: ignore
@@ -485,7 +492,7 @@ class ServerGUI:
             self.root.mainloop()  # type: ignore
         except Exception as e:
             print(f"GUI main loop error: {e}")
-            if SENTRY_AVAILABLE and 'sentry_sdk' in globals(): 
+            if SENTRY_AVAILABLE and 'sentry_sdk' in globals():
                 sentry_sdk.capture_exception(e)  # type: ignore
             traceback.print_exc()
         finally:
@@ -581,7 +588,7 @@ class ServerGUI:
         paned_window = ttk.PanedWindow(parent, orient=tk.HORIZONTAL)
         paned_window.pack(fill="both", expand=True)
         table_card = ModernCard(paned_window, title=f"{Icons.get('clients')} Client Management")
-        columns: Dict[str, Dict[str, Any]] = {'name': {'text': 'Name', 'width': 150}, 'id': {'text': 'Client ID', 'width': 250},
+        columns: dict[str, dict[str, Any]] = {'name': {'text': 'Name', 'width': 150}, 'id': {'text': 'Client ID', 'width': 250},
                    'status': {'text': 'Status', 'width': 100}, 'last_seen': {'text': 'Last Seen', 'width': 150}}
         self.client_table = ModernTable(table_card.content_frame, columns)
         self.client_table.pack(fill="both", expand=True)
@@ -595,7 +602,7 @@ class ServerGUI:
         paned_window = ttk.PanedWindow(parent, orient=tk.HORIZONTAL)
         paned_window.pack(fill="both", expand=True)
         table_card = ModernCard(paned_window, title=f"{Icons.get('files')} File Management")
-        columns: Dict[str, Dict[str, Any]] = {'filename': {'text': 'File Name', 'width': 250}, 'client_name': {'text': 'Client', 'width': 150},
+        columns: dict[str, dict[str, Any]] = {'filename': {'text': 'File Name', 'width': 250}, 'client_name': {'text': 'Client', 'width': 150},
                    'size_mb': {'text': 'Size (MB)', 'width': 80, 'anchor': 'e'}, 'date': {'text': 'Date', 'width': 150},
                    'verified': {'text': 'Verified', 'width': 80, 'anchor': 'center'}}
         self.file_table = ModernTable(table_card.content_frame, columns)
@@ -673,7 +680,7 @@ class ServerGUI:
 
     # --- Dashboard Sub-components ---
     def _create_dashboard_status_cards(self, parent: tk.Frame) -> None:
-        datasets: List[Tuple[str, List[Tuple[str, str, str]], Tuple[int, int]]] = [
+        datasets: list[tuple[str, list[tuple[str, str, str]], tuple[int, int]]] = [
             ("Server Status", [("Status", 'status', "Stopped"), ("Address", 'address', "N/A"), ("Uptime", 'uptime', "00:00:00")], (0,0)),
             ("Client Stats", [("Connected", 'connected', "0"), ("Total", 'total', "0"), ("Active Transfers", 'active_transfers', "0")], (0,1)),
             ("Transfer Stats", [("Total Transferred", 'bytes', "0 MB"), ("Transfer Rate", 'rate', "0 KB/s")], (1,0)),
@@ -792,7 +799,7 @@ class ServerGUI:
             self.mem_line.set_data(times, list(self.performance_data['memory']))  # type: ignore
             self.performance_chart.draw_idle()  # type: ignore
 
-    def _handle_status_update(self, data: Dict[str, Any]) -> None:
+    def _handle_status_update(self, data: dict[str, Any]) -> None:
         self.start_time = data.get('start_time', self.start_time)
         running = data.get('running', False)
         status_text, color = ("Running", ModernTheme.SUCCESS) if running else ("Stopped", ModernTheme.ERROR)
@@ -804,18 +811,18 @@ class ServerGUI:
             self.status_labels['uptime'].config(text=str(timedelta(seconds=int(time.time() - self.start_time))))
         elif 'uptime' in self.status_labels: self.status_labels['uptime'].config(text="0:00:00")
 
-    def _handle_client_stats_update(self, data: Dict[str, Any]) -> None:
+    def _handle_client_stats_update(self, data: dict[str, Any]) -> None:
         if 'connected' in self.status_labels: self.status_labels['connected'].config(text=str(data.get('connected', 0)))
         if 'total' in self.status_labels: self.status_labels['total'].config(text=str(data.get('total', 0)))
         if 'active_transfers' in self.status_labels: self.status_labels['active_transfers'].config(text=str(data.get('active_transfers', 0)))
         if self.current_tab == 'clients': self._refresh_client_table()
 
-    def _handle_transfer_stats_update(self, data: Dict[str, Any]) -> None:
+    def _handle_transfer_stats_update(self, data: dict[str, Any]) -> None:
         if 'bytes' in self.status_labels: self.status_labels['bytes'].config(text=f"{data.get('bytes_transferred', 0) / (1024*1024):.2f} MB")
         if 'rate' in self.status_labels: self.status_labels['rate'].config(text=f"{data.get('rate_kbps', 0):.1f} KB/s")
         if self.current_tab == 'files': self._refresh_file_table()
 
-    def _handle_maintenance_update(self, data: Dict[str, Any]) -> None:
+    def _handle_maintenance_update(self, data: dict[str, Any]) -> None:
         last_cleanup = data.get('last_cleanup', 'Never')
         if last_cleanup != 'Never': last_cleanup = datetime.fromisoformat(last_cleanup).strftime('%Y-%m-%d %H:%M')
         if 'last_cleanup' in self.status_labels: self.status_labels['last_cleanup'].config(text=last_cleanup)
@@ -829,7 +836,7 @@ class ServerGUI:
             btn.configure(bg=ModernTheme.ACCENT_BLUE if pid == page_id else ModernTheme.SECONDARY_BG)
         for content in self.tab_contents.values(): content.pack_forget()
         self.tab_contents[page_id].pack(fill="both", expand=True)
-        refresh_map: Dict[str, Callable[[], None]] = {'clients': self._refresh_client_table, 'files': self._refresh_file_table, 'database': self._refresh_db_tables}
+        refresh_map: dict[str, Callable[[], None]] = {'clients': self._refresh_client_table, 'files': self._refresh_file_table, 'database': self._refresh_db_tables}
         if page_id in refresh_map: refresh_map[page_id]()
 
     def _start_server(self) -> None:
@@ -890,10 +897,10 @@ class ServerGUI:
             client['status'] = "Online" if bytes.fromhex(client['id']) in online_ids else "Offline"
         self.client_table.set_data(clients_db)
 
-    def _on_client_selected(self, item: Dict[str, Any]) -> None:
+    def _on_client_selected(self, item: dict[str, Any]) -> None:
         if self.client_detail_pane: self.client_detail_pane.update_details(item)
 
-    def _build_client_context_menu(self, item: Dict[str, Any]) -> tk.Menu:
+    def _build_client_context_menu(self, item: dict[str, Any]) -> tk.Menu:
         if not self.root: return tk.Menu()
         menu = tk.Menu(self.root, tearoff=0, bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_PRIMARY, activebackground=ModernTheme.ACCENT_BLUE)
         if self.client_detail_pane: menu.add_command(label=f"{Icons.get('info')} Show Details", command=lambda: self.client_detail_pane.update_details(item))  # type: ignore
@@ -913,17 +920,17 @@ class ServerGUI:
             f['verified'] = "Yes" if f.get('verified') else "No"
         self.file_table.set_data(files_db)
 
-    def _on_file_selected(self, item: Dict[str, Any]) -> None:
+    def _on_file_selected(self, item: dict[str, Any]) -> None:
         if self.file_detail_pane: self.file_detail_pane.update_details(item)
 
-    def _build_file_context_menu(self, item: Dict[str, Any]) -> tk.Menu:
+    def _build_file_context_menu(self, item: dict[str, Any]) -> tk.Menu:
         if not self.root: return tk.Menu()
         menu = tk.Menu(self.root, tearoff=0, bg=ModernTheme.CARD_BG, fg=ModernTheme.TEXT_PRIMARY, activebackground=ModernTheme.ACCENT_BLUE)
         if self.file_detail_pane: menu.add_command(label=f"{Icons.get('info')} Show Details", command=lambda: self.file_detail_pane.update_details(item))  # type: ignore
         menu.add_command(label=f"{Icons.get('delete')} Delete File", command=lambda: self._delete_file(item))
         return menu
 
-    def _delete_file(self, file_info: Dict[str, Any]) -> None:
+    def _delete_file(self, file_info: dict[str, Any]) -> None:
         if not self.server or not self.server.db_manager: return
         if not messagebox.askyesno("Confirm Delete", f"Permanently delete {file_info['filename']}?"): return
         if self.server.db_manager.delete_file(file_info['client_id'], file_info['filename']):
@@ -934,7 +941,7 @@ class ServerGUI:
     def _refresh_db_tables(self) -> None:
         if not self.db_table_selector: return
         db_manager = self.effective_db_manager
-        if not db_manager: 
+        if not db_manager:
             self._show_toast("Database not available", "error")
             return
         try:
@@ -945,22 +952,22 @@ class ServerGUI:
                 self._on_db_table_select()
         except Exception as e: self._show_toast(f"DB Error: {e}", "error")
 
-    def _on_db_table_select(self, event: Optional[tk.Event] = None) -> None:
+    def _on_db_table_select(self, event: tk.Event | None = None) -> None:
         if not self.db_table_selector or not self.db_table: return
         db_manager = self.effective_db_manager
-        if not db_manager: 
+        if not db_manager:
             self._show_toast("Database not available", "error")
             return
         table_name = self.db_table_selector.get()
         try:
             self._rebuild_database_table(db_manager, table_name)
-        except Exception as e: 
+        except Exception as e:
             self._show_toast(f"DB Error: {e}", "error")
 
     def _rebuild_database_table(self, db_manager: Any, table_name: str) -> None:
         """Rebuild the database table with new data."""
         columns, data = db_manager.get_table_content(table_name)
-        table_cols: Dict[str, Dict[str, Any]] = {col: {'text': col, 'width': 120} for col in columns}
+        table_cols: dict[str, dict[str, Any]] = {col: {'text': col, 'width': 120} for col in columns}
         parent = self.db_table.master  # type: ignore
         if self.db_table is not None:
             self.db_table.destroy()
@@ -976,11 +983,11 @@ class ServerGUI:
         self.activity_log_text.see(tk.END)
         self.activity_log_text.config(state=tk.DISABLED)
 
-    def _load_settings(self) -> Dict[str, Any]:
-        defaults: Dict[str, Any] = {'port': 1256, 'storage_dir': 'received_files', 'max_clients': 50,
+    def _load_settings(self) -> dict[str, Any]:
+        defaults: dict[str, Any] = {'port': 1256, 'storage_dir': 'received_files', 'max_clients': 50,
                     'session_timeout': 10, 'maintenance_interval': 60, 'last_tab': 'dashboard'}
         with suppress(FileNotFoundError, json.JSONDecodeError):
-            with open("server_gui_settings.json", 'r') as f:
+            with open("server_gui_settings.json") as f:
                 defaults |= json.load(f)
         return defaults
 
@@ -1007,8 +1014,8 @@ class ServerGUI:
             'start_time': self.start_time
         }
         self._handle_status_update(data)
-        
-    def update_client_stats(self, stats_data: Dict[str, Any]) -> None:
+
+    def update_client_stats(self, stats_data: dict[str, Any]) -> None:
         """Update client statistics display in the GUI."""
         # Ensure expected keys exist with defaults
         processed_data = {
@@ -1017,8 +1024,8 @@ class ServerGUI:
             'active_transfers': stats_data.get('active_transfers', 0)
         }
         self._handle_client_stats_update(processed_data)
-        
-    def update_transfer_stats(self, stats_data: Dict[str, Any]) -> None:
+
+    def update_transfer_stats(self, stats_data: dict[str, Any]) -> None:
         """Update transfer statistics display in the GUI."""
         # Process the data to match expected format
         processed_data = {
@@ -1027,8 +1034,8 @@ class ServerGUI:
             'last_activity': stats_data.get('last_activity', '')
         }
         self._handle_transfer_stats_update(processed_data)
-        
-    def update_maintenance_stats(self, stats: Dict[str, Any]) -> None:
+
+    def update_maintenance_stats(self, stats: dict[str, Any]) -> None:
         """Update maintenance statistics display in the GUI."""
         # For now, just log maintenance stats as there's no specific handler yet
         print(f"[GUI] Maintenance stats update: {stats}")
@@ -1038,21 +1045,21 @@ class ServerGUI:
         """Synchronize GUI with current server state on initialization."""
         if not self.server:
             return
-            
+
         # Update server status based on current server state
         running = getattr(self.server, 'running', False)
         address = getattr(self.server, 'host', '0.0.0.0')
         port = getattr(self.server, 'port', 1256)
-        
+
         self.update_server_status(running, address, port)
-        
+
         # Update client stats if database is available
         if hasattr(self.server, 'db_manager') and self.server.db_manager:
             try:
                 # Get total clients from database
                 total_clients = len(self.server.db_manager.get_all_clients())
                 connected_clients = len(getattr(self.server, 'client_connections', {}))
-                
+
                 self.update_client_stats({
                     'connected': connected_clients,
                     'total': total_clients,
@@ -1060,7 +1067,7 @@ class ServerGUI:
                 })
             except Exception as e:
                 print(f"[GUI] Error syncing client stats: {e}")
-                
+
         # Update database display if on database tab
         if self.current_tab == 'database':
             self._refresh_db_tables()

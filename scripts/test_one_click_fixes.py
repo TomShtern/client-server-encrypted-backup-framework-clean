@@ -2,11 +2,11 @@
 """Test script to validate the fixes made to one_click_build_and_run.py"""
 
 import sys
-
 from pathlib import Path
 
 # Setup standardized import paths
 from Shared.path_utils import setup_imports
+
 setup_imports()
 
 try:
@@ -34,7 +34,7 @@ def test_command_exists():
     try:
         exists, version = build_script.check_command_exists("python")
         print(f"[OK] Python check: exists={exists}, version={version}")
-        
+
         exists, version = build_script.check_command_exists("nonexistent_command")
         print(f"[OK] Nonexistent command check: exists={exists}")
         return True
@@ -49,7 +49,7 @@ def test_port_availability():
         # Test a high port that should be available
         available = build_script.check_port_available(65432)
         print(f"[OK] Port 65432 availability: {available}")
-        
+
         # Test our specific ports
         port_9090 = build_script.check_port_available(9090)
         port_1256 = build_script.check_port_available(1256)
@@ -82,31 +82,31 @@ def test_file_path_validations():
             Path("Client/EncryptedBackupClient.exe"),
             Path("client/EncryptedBackupClient.exe")
         ]
-        
+
         found_exe = None
         for exe_path in exe_locations:
             if exe_path.exists():
                 found_exe = exe_path
                 print(f"[INFO] Found C++ client: {found_exe}")
                 break
-        
+
         if not found_exe:
             print("[INFO] No C++ client found (expected if not built yet)")
-        
+
         # Test API server path checking
         api_server_path = Path("api_server/cyberbackup_api_server.py")
         if api_server_path.exists():
             print(f"[OK] API server found: {api_server_path}")
         else:
             print(f"[INFO] API server not found at: {api_server_path}")
-        
+
         # Test backup server path checking
         server_path = Path("python_server/server/server.py")
         if server_path.exists():
             print(f"[OK] Backup server found: {server_path}")
         else:
             print(f"[INFO] Backup server not found at: {server_path}")
-        
+
         return True
     except Exception as e:
         print(f"[ERROR] File path validation failed: {e}")
@@ -117,7 +117,7 @@ def main():
     print("=" * 60)
     print("Testing one_click_build_and_run.py fixes")
     print("=" * 60)
-    
+
     tests = [
         test_dependency_check,
         test_command_exists,
@@ -125,10 +125,10 @@ def main():
         test_vcpkg_dependency_check,
         test_file_path_validations
     ]
-    
+
     passed = 0
     total = len(tests)
-    
+
     for test in tests:
         try:
             if test():
@@ -137,11 +137,11 @@ def main():
                 print(f"[FAIL] {test.__name__} failed")
         except Exception as e:
             print(f"[FAIL] {test.__name__} crashed: {e}")
-    
+
     print("\n" + "=" * 60)
     print(f"Test Results: {passed}/{total} passed")
     print("=" * 60)
-    
+
     if passed == total:
         print("[SUCCESS] All tests passed! The fixes appear to be working correctly.")
         return 0

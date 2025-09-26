@@ -8,55 +8,140 @@ Clean, maintainable dashboard that preserves all user-facing functionality.
 """
 
 # Standard library imports
-import os
-import sys
-
-# Add parent directory to path for Shared imports
-parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
-
-# Explicit imports instead of star import for better static analysis
-import flet as ft
-from typing import Optional, Dict, Any, List
-from datetime import datetime
-import json
 import asyncio
-import aiofiles
+import contextlib
+import os
+import random
+import sys
+from collections import deque
+from collections.abc import Callable, Iterator
+from datetime import datetime, timedelta
+from functools import lru_cache
+from typing import Any, Literal, cast
+
+# Ensure repository and package roots are on sys.path for runtime resolution
+_views_dir = os.path.dirname(os.path.abspath(__file__))
+_flet_v2_root = os.path.dirname(_views_dir)
+_repo_root = os.path.dirname(_flet_v2_root)
+for _path in (_flet_v2_root, _repo_root):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+# Third-party imports
+import flet as ft
+import psutil
 
 # ALWAYS import this in any Python file that deals with subprocess or console I/O
-import Shared.utils.utf8_solution as _  # Import for UTF-8 side effects
+import Shared.utils.utf8_solution as _  # noqa: F401
 
 try:
-    from utils.debug_setup import get_logger
-except ImportError:
-    # Fallback for when utils.debug_setup is not available
+    from FletV2.utils.debug_setup import get_logger
+except ImportError:  # pragma: no cover - fallback logging
     import logging
-    from config import DEBUG_MODE
+
+    from FletV2 import config
+
     def get_logger(name: str) -> logging.Logger:
         logger = logging.getLogger(name or __name__)
         if not logger.handlers:
             handler = logging.StreamHandler()
             handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
             logger.addHandler(handler)
-            # Set level based on DEBUG_MODE
-            logger.setLevel(logging.DEBUG if DEBUG_MODE else logging.WARNING)
+        logger.setLevel(logging.DEBUG if getattr(config, "DEBUG_MODE", False) else logging.WARNING)
         return logger
-from utils.server_bridge import ServerBridge
-from utils.state_manager import StateManager
-from utils.ui_components import create_status_pill, themed_card, themed_button
-from utils.user_feedback import show_success_message, show_error_message
+
+from FletV2.theme import setup_modern_theme
+from FletV2.utils.server_bridge import ServerBridge
+from FletV2.utils.state_manager import StateManager
+from FletV2.utils.ui_components import themed_card
+from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger(__name__)
 
-# Additional imports specific to dashboard
-import contextlib
-from typing import Tuple, Literal, Union, Iterator, Callable  # Extending base typing imports
-from collections import deque
-from functools import lru_cache
-import psutil
-import random
-from datetime import timedelta
+
+def apply_semantics(control: ft.Control | None, label: str | None) -> None:
+    """Assign an accessibility label without upsetting static analyzers."""
+    if control is None or not label:
+        return
+    # Some Flet controls may not expose semantics_label in type stubs; set defensively
+    try:  # noqa: SIM105
+        setattr(control, 'semantics_label', label)  # type: ignore[attr-defined]
+    except Exception:  # pragma: no cover - defensive
+        pass
+
+
+# Compatibility shim: Some flet versions don't expose FilterChip.
+# Provide a lightweight replacement that mimics the small API used
+# by this code (label, selected, on_selected, update()). We attach
+# it to the ft module as ft.FilterChip so existing code continues to work.
+if not hasattr(ft, "FilterChip"):
+    class FilterChip(ft.Container):  # sourcery skip
+        # Annotate public attributes for static analysis
+        label: str
+        selected: bool
+        on_selected: Callable[[ft.ControlEvent], None] | None
+        def __init__(self, label: str = "", selected: bool = False,
+                     on_selected: Callable[[ft.ControlEvent], None] | None = None, **kwargs: Any) -> None:
+            # store API-friendly attributes
+            self.label = label
+            self.selected = selected
+            self.on_selected = on_selected
+
+            # create an inner button that will be placed as the visible UI
+            self._button = ft.ElevatedButton(
+                text=label,
+                on_click=self._handle_click,
+                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=16)),
+            )
+
+            # initialize container with the button as content
+            super().__init__(content=self._button, padding=ft.padding.symmetric(horizontal=6, vertical=2), **kwargs)
+            self._refresh_style()
+
+        def _handle_click(self, e: ft.ControlEvent) -> None:
+            # When clicked, call the provided on_selected callback with
+            # an object that exposes `.control` pointing to this instance
+            if not callable(self.on_selected):
+                return
+            with contextlib.suppress(Exception):
+                ev = type("Evt", (), {"control": self})()
+                self.on_selected(ev)
+
+        def _refresh_style(self) -> None:
+            # Visual feedback for selected state
+            if self.selected:
+                # selected: use a higher-contrast background
+                self._button.bgcolor = ft.Colors.PRIMARY
+                self._button.color = ft.Colors.ON_PRIMARY
+            else:
+                # unselected: default button styling
+                self._button.bgcolor = None
+                self._button.color = None
+            # ensure visual is updated
+            with contextlib.suppress(Exception):
+                self._button.update()
+
+        def update(self, *args: Any, **kwargs: Any) -> None:  # pragma: no cover - small wrapper
+            # keep interface consistent with Flet controls
+            self._refresh_style()
+            try:
+                super().update(*args, **kwargs)
+            except Exception:
+                # if the parent update isn't available for some reason,
+                # try updating the inner button
+                with contextlib.suppress(Exception):
+                    self._button.update()
+
+    # attach shim to flet module so other modules can reference ft.FilterChip
+    ft.FilterChip = cast(Any, FilterChip)  # type: ignore[attr-defined]
+
+# Compatibility shim for ft.Shimmer (added in recent versions of Flet)
+if not hasattr(ft, "Shimmer"):
+    class Shimmer(ft.Container):  # type: ignore[override]
+        def __init__(self, content: ft.Control | None = None, **kwargs: Any) -> None:
+            super().__init__(content=content, **kwargs)
+
+    ft.Shimmer = Shimmer  # type: ignore[attr-defined]
 
 # Type definitions for better type safety
 ActivityType = Literal['info', 'warning', 'error', 'success']
@@ -64,9 +149,9 @@ CardType = Literal['primary', 'success', 'info']
 UpdateSource = Literal['auto', 'manual', 'initial']
 
 # Simple dict types instead of TypedDict for better compatibility
-ActivityEntry = Dict[str, Any]
-ServerStatus = Dict[str, Any]
-SystemMetrics = Dict[str, Any]
+ActivityEntry = dict[str, Any]
+ServerStatus = dict[str, Any]
+SystemMetrics = dict[str, Any]
 
 # Constants for configuration
 MAX_HISTORY_POINTS = 30
@@ -120,7 +205,7 @@ def _parse_uptime_to_seconds(uptime_value: Any) -> int:
             return h * 3600 + m * 60 + sec
     return 0
 
-def _normalize_server_status_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_server_status_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Normalize server status dict to the keys the dashboard expects."""
     if not isinstance(payload, dict):
         return {}
@@ -191,10 +276,10 @@ def create_status_pill(text: str, status_type: str) -> ft.Container:
     )
 
 def create_action_group(
-    buttons: List[ft.Control],
+    buttons: list[ft.Control],
     group_type: str = "primary",
     spacing: int = 10,
-    semantics_label: Optional[str] = None
+    semantics_label: str | None = None
 ) -> ft.Container:
     """Create a subtle action group wrapper that adapts to dark/light themes."""
     tone = ft.Colors.PRIMARY if group_type == "primary" else ft.Colors.OUTLINE
@@ -205,11 +290,10 @@ def create_action_group(
         bgcolor=ft.Colors.with_opacity(0.08, tone),
         animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT)
     )
-    if semantics_label:
-        container.semantics_label = semantics_label
+    apply_semantics(container, semantics_label)
     return container
 
-def safe_server_call(method, *args, **kwargs) -> Optional[Dict[str, Any]]:
+def safe_server_call(method, *args, **kwargs) -> dict[str, Any] | None:
     """Standardized error handling for server bridge calls."""
     try:
         result = method(*args, **kwargs)
@@ -221,34 +305,35 @@ def safe_server_call(method, *args, **kwargs) -> Optional[Dict[str, Any]]:
 
 
 def create_dashboard_view(
-    server_bridge: Optional[ServerBridge],
+    server_bridge: ServerBridge | None,
     page: ft.Page,
-    _state_manager: Optional[StateManager]
-) -> Tuple[ft.Control, Callable, Callable]:
+    _state_manager: StateManager | None
+) -> tuple[ft.Control, Callable, Callable]:
     """Modern 2025 dashboard with visual hierarchy, semantic colors, and engaging data storytelling."""
     logger.info("Creating modern dashboard with enhanced visual appeal")
 
     # Apply the enhanced modern theme for 2025 visual excellence
-    from theme import setup_modern_theme
     setup_modern_theme(page)
 
     # Simple state management with proper initialization
-    current_server_status: Dict[str, Any] = {}
-    current_system_metrics: Dict[str, Any] = {}
-    current_activity: List[Dict[str, Any]] = []
-    current_clients: List[Dict[str, Any]] = []
+    current_server_status: dict[str, Any] = {}
+    current_system_metrics: dict[str, Any] = {}
+    current_activity: list[dict[str, Any]] = []
+    current_clients: list[dict[str, Any]] = []
     refresh_task = None
     _stop_polling = False
     auto_refresh_enabled = True
     activity_filter = "All"
     activity_search_query = ""
-    activity_filter_chips: Dict[str, ft.FilterChip] = {}
+    activity_filter_chips: dict[str, ft.FilterChip] = {}
     is_loading = False
     countdown_remaining = POLLING_INTERVAL
     last_updated = "Never"
+    # Forward declarations for controls created later (satisfy type checkers for closures)
+    clients_list: ft.ListView = cast(Any, None)
     # For significant-change detection and toast throttling
-    prev_server_snapshot: Optional[Dict[str, Any]] = None
-    last_significant_toast_time: Optional[datetime] = None
+    prev_server_snapshot: dict[str, Any] | None = None
+    last_significant_toast_time: datetime | None = None
 
     # Memory-efficient history buffers using deque with fixed size
     cpu_history: deque = deque(maxlen=MAX_HISTORY_POINTS)
@@ -342,10 +427,10 @@ def create_dashboard_view(
     # Define buttons that are used in update_all_displays
     button_shape = ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12))
     connect_button = ft.FilledButton(text="Connect", icon=ft.Icons.PLAY_ARROW, on_click=start_server, style=button_shape)
-    connect_button.semantics_label = "Connect to server"
+    apply_semantics(connect_button, "Connect to server")
 
     backup_button = ft.FilledTonalButton(text="Backup", icon=ft.Icons.BACKUP, on_click=on_backup, style=button_shape)
-    backup_button.semantics_label = "Start backup"
+    apply_semantics(backup_button, "Start backup")
 
     disconnect_button = ft.OutlinedButton(
         text="Disconnect",
@@ -357,18 +442,18 @@ def create_dashboard_view(
             side={ft.ControlState.DEFAULT: ft.BorderSide(1, ft.Colors.ERROR)}
         )
     )
-    disconnect_button.semantics_label = "Disconnect server"
+    apply_semantics(disconnect_button, "Disconnect server")
 
     refresh_button = ft.FilledTonalButton(text="Refresh", icon=ft.Icons.REFRESH, on_click=refresh_dashboard, style=button_shape)
-    refresh_button.semantics_label = "Refresh dashboard"
+    apply_semantics(refresh_button, "Refresh dashboard")
 
     # Define server status indicator container
     server_status_indicator_container = ft.Container()
-    server_status_indicator_container.semantics_label = "Server connection status"
+    apply_semantics(server_status_indicator_container, "Server connection status")
     server_status_indicator_container.content = create_status_pill("Checking", "info")
 
     # Get server status data with improved type safety
-    def get_server_status() -> Dict[str, Any]:
+    def get_server_status() -> dict[str, Any]:
         """Get server status using server bridge or mock data, normalized."""
         if server_bridge and (result := safe_server_call(server_bridge.get_server_status)):
             raw = result.get('data', {})
@@ -395,7 +480,7 @@ def create_dashboard_view(
         return fallback_data
 
     # Get system metrics using psutil with type safety
-    def get_system_metrics() -> Dict[str, Any]:
+    def get_system_metrics() -> dict[str, Any]:
         """Prefer server-reported system metrics; fall back to psutil."""
         # Try server metrics first
         try:
@@ -464,14 +549,14 @@ def create_dashboard_view(
         return 'info'
 
     # Get activity data with improved type safety
-    def get_activity_data() -> List[ActivityEntry]:
+    def get_activity_data() -> list[ActivityEntry]:
         """Get recent activity data using logs as canonical source, with mock fallback."""
         if server_bridge and (logs_result := safe_server_call(server_bridge.get_logs)):
             entries = logs_result.get('data', [])
             if not isinstance(entries, list):
                 entries = []
 
-            activities: List[ActivityEntry] = []
+            activities: list[ActivityEntry] = []
             for i, entry in enumerate(entries):
                 # Normalize fields with type safety
                 level = normalize_activity_type(entry.get('level', entry.get('severity', 'info')))
@@ -487,7 +572,7 @@ def create_dashboard_view(
             return sorted(activities, key=lambda x: x['timestamp'], reverse=True)
 
         # Type-safe mock activity data
-        activity_types: List[ActivityType] = ['info', 'error', 'warning', 'success']
+        activity_types: list[ActivityType] = ['info', 'error', 'warning', 'success']
         messages = [
             "Client connected from 192.168.1.{ip}",
             "File backup completed: {filename}",
@@ -500,7 +585,7 @@ def create_dashboard_view(
             "Network connection restored"
         ]
 
-        activities: List[ActivityEntry] = []
+        activities: list[ActivityEntry] = []
         for i in range(20):
             time_offset = timedelta(minutes=random.randint(0, 120))
             activities.append({
@@ -521,7 +606,7 @@ def create_dashboard_view(
         trend: str = "",
         card_type: str = "primary",
         value_control=None,
-        trend_control: Optional[ft.Control] = None,
+        trend_control: ft.Control | None = None,
         on_click=None
     ) -> ft.Control:
         """Create a polished hero metric tile with higher contrast and helpful semantics."""
@@ -543,7 +628,7 @@ def create_dashboard_view(
             ], spacing=4)
 
         value_text = value_control or ft.Text(value, size=44, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
-        value_text.semantics_label = f"{label} value {value}"
+        apply_semantics(value_text, f"{label} value {value}")
         label_text = ft.Text(label, size=16, weight=ft.FontWeight.W_600, color=ft.Colors.WHITE)
 
         tile = ft.Container(
@@ -564,7 +649,7 @@ def create_dashboard_view(
             animate=ft.Animation(160, ft.AnimationCurve.EASE_OUT),
             animate_scale=ft.Animation(110, ft.AnimationCurve.EASE_OUT)
         )
-        tile.semantics_label = f"{label} metric card"
+        apply_semantics(tile, f"{label} metric card")
         return tile
 
 
@@ -573,15 +658,15 @@ def create_dashboard_view(
 
         filter_labels = ["All", "Success", "Info", "Warning", "Error"]
         activity_filter_chips.clear()
-        chips: List[ft.FilterChip] = []
+        chips: list[ft.FilterChip] = []
         current_filter_key = activity_filter.lower()
         for label in filter_labels:
             key = label.lower()
-            chip = ft.FilterChip(
+            chip = cast(Any, ft.FilterChip(
                 label=label,
                 selected=key == current_filter_key,
                 on_selected=lambda event, option=label: _handle_chip_event(option, event)
-            )
+            ))  # type: ignore[arg-type]
             activity_filter_chips[key] = chip
             chips.append(chip)
 
@@ -618,7 +703,7 @@ def create_dashboard_view(
     # Slim live refresh indicator displayed during async updates
     refresh_indicator = ft.ProgressBar(height=3, value=None, visible=False)
 
-    def _update_refresh_countdown_display(message: Optional[str] = None) -> None:
+    def _update_refresh_countdown_display(message: str | None = None) -> None:
         if message is not None:
             refresh_countdown_text.value = message
         else:
@@ -652,14 +737,20 @@ def create_dashboard_view(
         nonlocal activity_filter
         activity_filter = option
         for key, chip in activity_filter_chips.items():
-            chip.selected = key == option.lower()
+            try:
+                chip.selected = key == option.lower()  # type: ignore[attr-defined]
+            except Exception:
+                setattr(chip, 'selected', key == option.lower())
             with contextlib.suppress(Exception):
                 chip.update()
         update_activity_list()
 
     def _handle_chip_event(option: str, event: ft.ControlEvent) -> None:
-        if not event.control.selected:
-            event.control.selected = True
+        if not getattr(event.control, 'selected', False):
+            try:
+                event.control.selected = True  # type: ignore[attr-defined]
+            except Exception:
+                setattr(event.control, 'selected', True)
             with contextlib.suppress(Exception):
                 event.control.update()
             return
@@ -681,11 +772,11 @@ def create_dashboard_view(
 
     # Capacity & forecast controls
     used_text = ft.Text("Used: --", size=14)
-    used_text.semantics_label = "Total storage used"
+    apply_semantics(used_text, "Total storage used")
     free_text = ft.Text("Free: --", size=14)
-    free_text.semantics_label = "Total storage free"
+    apply_semantics(free_text, "Total storage free")
     forecast_text = ft.Text("Forecast: --", size=12, color=ft.Colors.OUTLINE)
-    forecast_text.semantics_label = "Storage forecast"
+    apply_semantics(forecast_text, "Storage forecast")
     capacity_health_badge_text = ft.Text("Healthy", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN)
     capacity_health_badge_icon = ft.Icon(ft.Icons.HEALTH_AND_SAFETY, size=14, color=ft.Colors.GREEN)
     capacity_health_badge = ft.Container(
@@ -746,26 +837,23 @@ def create_dashboard_view(
         )
 
     # Navigation helpers using the app_ref exposed on page
-    def _go_to_clients(e: Optional[ft.ControlEvent] = None) -> None:
-        try:
-            if hasattr(page, 'app_ref') and hasattr(page.app_ref, '_switch_to_view'):
-                page.app_ref._switch_to_view(1)  # Clients
-        except Exception:
-            pass
+    def _switch_view(index: int) -> None:
+        app_ref = getattr(page, "app_ref", None)
+        if app_ref is None:
+            return
+        switcher = getattr(app_ref, "_switch_to_view", None)
+        if callable(switcher):
+            with contextlib.suppress(Exception):
+                switcher(index)
 
-    def _go_to_files(e: Optional[ft.ControlEvent] = None) -> None:
-        try:
-            if hasattr(page, 'app_ref') and hasattr(page.app_ref, '_switch_to_view'):
-                page.app_ref._switch_to_view(2)  # Files
-        except Exception:
-            pass
+    def _go_to_clients(e: ft.ControlEvent | None = None) -> None:
+        _switch_view(1)
 
-    def _go_to_logs(e: Optional[ft.ControlEvent] = None) -> None:
-        try:
-            if hasattr(page, 'app_ref') and hasattr(page.app_ref, '_switch_to_view'):
-                page.app_ref._switch_to_view(5)  # Logs
-        except Exception:
-            pass
+    def _go_to_files(e: ft.ControlEvent | None = None) -> None:
+        _switch_view(2)
+
+    def _go_to_logs(e: ft.ControlEvent | None = None) -> None:
+        _switch_view(5)
 
     kpi_row = ft.ResponsiveRow([
         ft.Column([_kpi_card(kpi_total_clients_text, "Total Clients", ft.Icons.PEOPLE, ft.Colors.BLUE, on_click=_go_to_clients)], col={"sm": 6, "md": 3, "lg": 3}),
@@ -824,7 +912,7 @@ def create_dashboard_view(
                 color=ft.Colors.with_opacity(0.15, accent)
             )
         )
-        container.semantics_label = semantics
+        apply_semantics(container, semantics)
         return container
 
     def _update_trend_chip(
@@ -875,7 +963,7 @@ def create_dashboard_view(
         except Exception:
             pass
 
-    def _update_spark(chart: ft.LineChart, values: List[float], color) -> None:
+    def _update_spark(chart: ft.LineChart, values: list[float], color) -> None:
         """Update sparkline with efficient LineChart data points using modern Python."""
         # Use walrus operator and generator expression for efficiency
         if not (limited_values := values[-MAX_HISTORY_POINTS:]):
@@ -898,7 +986,7 @@ def create_dashboard_view(
 
 
     # Update all displays
-    def _compute_server_status_label(running: bool) -> Tuple[str, str]:
+    def _compute_server_status_label(running: bool) -> tuple[str, str]:
         """Return (label, severity) based on bridge and status.
         severity in {excellent, good, warning, critical, info, neutral}
         """
@@ -1587,7 +1675,7 @@ def create_dashboard_view(
             show_success_message(page, "Live refresh paused")
 
     live_switch = ft.Switch(label="Live", value=True, on_change=on_live_toggle)
-    live_switch.semantics_label = "Live auto refresh toggle"
+    apply_semantics(live_switch, "Live auto refresh toggle")
     # Set simple string tooltips for broad Flet compatibility
     server_status_indicator_container.tooltip = "Server status"
     connect_button.tooltip = "Connect to server"
@@ -1655,7 +1743,7 @@ def create_dashboard_view(
     )
     header_section.animate_opacity = ft.Animation(250, ft.AnimationCurve.EASE_OUT)
     header_section.opacity = 1.0
-    header_section.semantics_label = "Dashboard controls"
+    apply_semantics(header_section, "Dashboard controls")
 
 
     # Live System Metrics card with sparklines
@@ -1698,9 +1786,9 @@ def create_dashboard_view(
     recent_backups_list = ft.ListView(expand=True, spacing=6, padding=ft.padding.all(10), height=160)
 
     def filter_activities_by_keywords(
-        activities: List[ActivityEntry],
-        keywords: List[str],
-        time_window_minutes: Optional[int] = None
+        activities: list[ActivityEntry],
+        keywords: list[str],
+        time_window_minutes: int | None = None
     ) -> Iterator[ActivityEntry]:
         """Efficient activity filtering using generator and modern Python patterns."""
         now = datetime.now()
@@ -1714,7 +1802,7 @@ def create_dashboard_view(
                  (now - activity['timestamp']) <= time_threshold))
         )
 
-    def create_operation_item(activity: ActivityEntry, icon: str, color: str, status_text: Optional[str] = None) -> ft.Container:
+    def create_operation_item(activity: ActivityEntry, icon: str, color: str, status_text: str | None = None) -> ft.Container:
         """Create operation item with type safety."""
         timestamp = activity['timestamp']
         time_display = timestamp.strftime("%H:%M") if isinstance(timestamp, datetime) else str(timestamp)

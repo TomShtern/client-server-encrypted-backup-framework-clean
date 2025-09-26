@@ -3,10 +3,9 @@
 Test script to verify the endianness fix in the C++ client
 """
 
-import subprocess
-import time
 import os
 from pathlib import Path
+
 
 def test_client_build():
     """Test that the client builds successfully with our endianness fixes"""
@@ -34,7 +33,7 @@ def test_endianness_functions():
         return False
 
     # Check header file for function declarations
-    with open(client_header, 'r') as f:
+    with open(client_header) as f:
         header_content = f.read()
 
     required_declarations = [
@@ -56,7 +55,7 @@ def test_endianness_functions():
         print("[OK] All endianness function declarations found in client.h")
 
     # Check source file for function implementations
-    with open(client_source, 'r') as f:
+    with open(client_source) as f:
         source_content = f.read()
 
     required_functions = [
@@ -83,7 +82,7 @@ def test_receive_response_modification():
     """Verify that the receiveResponse method was modified correctly"""
     client_source = Path("Client/cpp/client.cpp")
 
-    with open(client_source, 'r') as f:
+    with open(client_source) as f:
         source_content = f.read()
 
     # Check that the old direct struct reading is gone

@@ -5,18 +5,17 @@ Just accepts connections and processes basic requests to test the 66KB issue
 """
 
 import socket
-import threading
 import struct
-import time
-import sys
+import threading
+
 
 def handle_client(client_socket, client_address):
     """Handle a client connection"""
     print(f"Client connected: {client_address}")
-    
+
     try:
         client_socket.settimeout(60.0)
-        
+
         while True:
             try:
                 # Read 23-byte header
@@ -27,15 +26,15 @@ def handle_client(client_socket, client_address):
                         print(f"Client {client_address} disconnected")
                         return
                     header_data += chunk
-                
+
                 # Parse header
                 client_id = header_data[:16]
                 version = header_data[16]
                 code = struct.unpack('<H', header_data[17:19])[0]
                 payload_size = struct.unpack('<I', header_data[19:23])[0]
-                
+
                 print(f"Request from {client_address}: Version={version}, Code={code}, PayloadSize={payload_size}")
-                
+
                 # Read payload if any
                 payload = b''
                 if payload_size > 0:
@@ -45,9 +44,9 @@ def handle_client(client_socket, client_address):
                             print(f"Client {client_address} disconnected during payload")
                             return
                         payload += chunk
-                
+
                 print(f"Received {len(payload)} bytes payload from {client_address}")
-                
+
                 # Send a simple response based on request code
                 if code == 1025:  # REQ_REGISTER
                     # Registration response
@@ -65,26 +64,26 @@ def handle_client(client_socket, client_address):
                     # Generic response
                     response_code = 1604  # RESP_ACK
                     response_payload = b''
-                
+
                 # Construct response: version(1) + code(2) + payload_size(4) + payload
                 response_header = struct.pack('<BHI', 3, response_code, len(response_payload))
                 response = response_header + response_payload
-                
+
                 client_socket.send(response)
                 print(f"Sent response to {client_address}: Code={response_code}, PayloadSize={len(response_payload)}")
-                
+
                 # For file transfers, break after response
                 if code == 1028:
                     print(f"File transfer completed for {client_address}")
                     break
-                    
-            except socket.timeout:
+
+            except TimeoutError:
                 print(f"Timeout for client {client_address}")
                 break
             except Exception as e:
                 print(f"Error handling client {client_address}: {e}")
                 break
-                
+
     except Exception as e:
         print(f"Connection error with {client_address}: {e}")
     finally:
@@ -95,13 +94,13 @@ def main():
     """Start the minimal backup server"""
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    
+
     try:
         server_socket.bind(('127.0.0.1', 1256))
         server_socket.listen(5)
         print("Minimal Backup Server started on port 1256")
         print("Press Ctrl+C to stop")
-        
+
         while True:
             try:
                 client_socket, client_address = server_socket.accept()
@@ -115,14 +114,14 @@ def main():
                 break
             except Exception as e:
                 print(f"Accept error: {e}")
-                
+
     except Exception as e:
         print(f"Server error: {e}")
         return 1
     finally:
         server_socket.close()
         print("Server stopped")
-        
+
     return 0
 
 if __name__ == "__main__":  # pragma: no cover - manual run helper

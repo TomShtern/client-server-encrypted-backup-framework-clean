@@ -5,10 +5,9 @@ This module provides centralized filename validation logic that ensures
 consistent security and compatibility across all server components.
 """
 
+import logging
 import os
 import re
-import logging
-from typing import Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +16,7 @@ MAX_ACTUAL_FILENAME_LENGTH = 200  # Maximum allowed filename length
 MIN_FILENAME_LENGTH = 1           # Minimum allowed filename length
 
 # Reserved OS names that should be rejected (case-insensitive)
-RESERVED_OS_NAMES: Set[str] = {
+RESERVED_OS_NAMES: set[str] = {
     "CON", "PRN", "AUX", "NUL",
     "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
     "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
@@ -63,7 +62,7 @@ def validate_filename(filename: str, strict: bool = True) -> bool:
 
 def _validate_filename_internal(filename: str, strict: bool) -> bool:
     """Internal filename validation logic."""
-    
+
     # Check length constraints
     if not (MIN_FILENAME_LENGTH <= len(filename) <= MAX_ACTUAL_FILENAME_LENGTH):
         error_msg = f"Filename length ({len(filename)}) is out of allowed range ({MIN_FILENAME_LENGTH}-{MAX_ACTUAL_FILENAME_LENGTH})"
@@ -71,7 +70,7 @@ def _validate_filename_internal(filename: str, strict: bool) -> bool:
         if strict:
             raise FilenameValidationError(error_msg)
         return False
-    
+
     # Check for path traversal characters
     if any(char in filename for char in PATH_TRAVERSAL_CHARS):
         error_msg = "Contains path traversal sequence or null characters"
@@ -79,7 +78,7 @@ def _validate_filename_internal(filename: str, strict: bool) -> bool:
         if strict:
             raise FilenameValidationError(error_msg)
         return False
-    
+
     # Check allowed characters
     if not ALLOWED_FILENAME_PATTERN.match(filename):
         error_msg = f"Contains disallowed characters (does not match pattern '{ALLOWED_FILENAME_PATTERN.pattern}')"
@@ -87,7 +86,7 @@ def _validate_filename_internal(filename: str, strict: bool) -> bool:
         if strict:
             raise FilenameValidationError(error_msg)
         return False
-    
+
     # Check for reserved OS names
     base_filename_no_ext = os.path.splitext(filename)[0].upper()
     if base_filename_no_ext in RESERVED_OS_NAMES:
@@ -96,7 +95,7 @@ def _validate_filename_internal(filename: str, strict: bool) -> bool:
         if strict:
             raise FilenameValidationError(error_msg)
         return False
-    
+
     return True
 
 
@@ -116,16 +115,16 @@ def sanitize_filename(filename: str, replacement_char: str = '_') -> str:
     """
     if len(replacement_char) != 1 or not ALLOWED_FILENAME_PATTERN.match(replacement_char):
         raise ValueError(f"Replacement character must be a single valid character, got: '{replacement_char}'")
-    
+
     # Truncate if too long
     if len(filename) > MAX_ACTUAL_FILENAME_LENGTH:
         filename = filename[:MAX_ACTUAL_FILENAME_LENGTH]
-    
+
     # Replace path traversal characters
     for char in PATH_TRAVERSAL_CHARS:
         if char in filename:
             filename = filename.replace(char, replacement_char)
-    
+
     # Replace disallowed characters
     sanitized = ""
     for char in filename:
@@ -133,18 +132,18 @@ def sanitize_filename(filename: str, replacement_char: str = '_') -> str:
             sanitized += char
         else:
             sanitized += replacement_char
-    
+
     # Handle reserved names
     base_name, ext = os.path.splitext(sanitized)
     if base_name.upper() in RESERVED_OS_NAMES:
         base_name = f"{replacement_char}{base_name}"
-    
+
     sanitized = base_name + ext
-    
+
     # Ensure minimum length
     if len(sanitized) < MIN_FILENAME_LENGTH:
         sanitized = f"file{replacement_char}" + sanitized
-    
+
     return sanitized
 
 
@@ -161,20 +160,20 @@ def get_safe_filename(original_filename: str, fallback_name: str = "unnamed_file
     """
     if not original_filename:
         return fallback_name
-    
+
     try:
         if validate_filename(original_filename, strict=False):
             return original_filename
     except Exception:
         pass
-    
+
     try:
         sanitized = sanitize_filename(original_filename)
         if validate_filename(sanitized, strict=False):
             return sanitized
     except Exception:
         pass
-    
+
     return fallback_name
 
 
@@ -203,16 +202,16 @@ def is_valid_filename_for_storage(filename: str) -> bool:
 # Configuration for different validation levels
 class ValidationLevel:
     """Predefined validation levels for different use cases."""
-    
+
     STRICT = True      # Strict validation with exceptions
     PERMISSIVE = False # Permissive validation without exceptions
 
 
 def configure_validation(
-    max_length: Optional[int] = None,
-    min_length: Optional[int] = None,
-    additional_allowed_chars: Optional[str] = None,
-    additional_reserved_names: Optional[Set[str]] = None
+    max_length: int | None = None,
+    min_length: int | None = None,
+    additional_allowed_chars: str | None = None,
+    additional_reserved_names: set[str] | None = None
 ) -> None:
     """
     Configure global validation parameters.
@@ -228,22 +227,22 @@ def configure_validation(
         Consider using custom validation functions for application-specific needs.
     """
     global MAX_ACTUAL_FILENAME_LENGTH, MIN_FILENAME_LENGTH, ALLOWED_FILENAME_PATTERN, RESERVED_OS_NAMES
-    
+
     if max_length is not None:
         MAX_ACTUAL_FILENAME_LENGTH = max_length
         logger.info(f"Updated max filename length to {max_length}")
-    
+
     if min_length is not None:
         MIN_FILENAME_LENGTH = min_length
         logger.info(f"Updated min filename length to {min_length}")
-    
+
     if additional_allowed_chars:
         # Escape special regex characters
         escaped_chars = re.escape(additional_allowed_chars)
         new_pattern = ALLOWED_FILENAME_PATTERN.pattern[:-2] + escaped_chars + "]+$"
         ALLOWED_FILENAME_PATTERN = re.compile(new_pattern)
         logger.info(f"Added allowed characters: {additional_allowed_chars}")
-    
+
     if additional_reserved_names:
         RESERVED_OS_NAMES.update(name.upper() for name in additional_reserved_names)
         logger.info(f"Added reserved names: {additional_reserved_names}")

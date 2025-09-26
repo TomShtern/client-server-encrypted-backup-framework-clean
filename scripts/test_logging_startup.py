@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import logging
 import time
-from pathlib import Path
 
 # Small test to exercise setup_dual_logging startup messages (CODE-MAP)
 from Shared.logging_utils import setup_dual_logging
@@ -23,7 +22,7 @@ time.sleep(0.2)
 
 # Show tail of file for quick verification
 try:
-    with open(log_file, 'r', encoding='utf-8') as f:
+    with open(log_file, encoding='utf-8') as f:
         lines = f.readlines()
     print('\n[TEST] Last 10 lines from log file:')
     for line in lines[-10:]:

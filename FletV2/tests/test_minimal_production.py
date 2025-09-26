@@ -6,6 +6,7 @@ This tests whether the complex infrastructure is preventing button serialization
 
 import flet as ft
 
+
 # Module-level handlers (working pattern)
 def view_details_clicked(e):
     print(f"VIEW DETAILS CLICKED! Data: {e.control.data}")
@@ -25,13 +26,13 @@ def disconnect_clicked(e):
 
 def main(page: ft.Page):
     page.title = "Minimal Production Test - No Infrastructure"
-    
+
     # Simple mock data (no StateManager, no EnhancedServerBridge)
     clients = [
         {"client_id": "test_001", "address": "192.168.1.101", "status": "connected"},
         {"client_id": "test_002", "address": "192.168.1.102", "status": "offline"}
     ]
-    
+
     # Create DataTable EXACTLY like the working simple test
     # BUT with production-like structure
     datatable = ft.DataTable(
@@ -70,7 +71,7 @@ def main(page: ft.Page):
         border=ft.border.all(1, ft.Colors.OUTLINE),
         border_radius=8
     )
-    
+
     page.add(
         ft.Text("Minimal Production Test", size=20, weight=ft.FontWeight.BOLD),
         ft.Text("No StateManager, no EnhancedServerBridge, no refs", size=14),

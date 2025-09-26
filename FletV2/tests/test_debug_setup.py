@@ -3,15 +3,14 @@
 Unit tests for the debug setup module.
 """
 
-import unittest
-import sys
 import os
-from unittest.mock import Mock, patch, MagicMock
+import sys
+import unittest
 
 # Add the FletV2 directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from utils.debug_setup import setup_terminal_debugging, get_logger
+from utils.debug_setup import get_logger, setup_terminal_debugging
 
 
 class TestDebugSetup(unittest.TestCase):
@@ -22,13 +21,13 @@ class TestDebugSetup(unittest.TestCase):
         # Test that the function returns a logger
         logger = setup_terminal_debugging(logger_name="test_logger")
         self.assertIsNotNone(logger)
-        
+
     def test_get_logger(self):
         """Test getting a logger."""
         # Test that the function returns a logger
         logger = get_logger("test_logger")
         self.assertIsNotNone(logger)
-        
+
     def test_logger_has_correct_name(self):
         """Test that the logger has the correct name."""
         logger = get_logger("test_logger")

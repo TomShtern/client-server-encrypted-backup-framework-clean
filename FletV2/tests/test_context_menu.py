@@ -14,37 +14,37 @@ def view_details_action(client_id):
     """View details action via context menu"""
     action_count["count"] += 1
     print(f"VIEW DETAILS ACTION! Client: {client_id}, Count: {action_count['count']}")
-    
+
     feedback_text.value = f"VIEW DETAILS for {client_id} (action #{action_count['count']})"
     feedback_text.update()
-    
+
     return f"View Details: {client_id}"
 
 def disconnect_action(client_id):
     """Disconnect action via context menu"""
     action_count["count"] += 1
     print(f"DISCONNECT ACTION! Client: {client_id}, Count: {action_count['count']}")
-    
+
     feedback_text.value = f"DISCONNECT for {client_id} (action #{action_count['count']})"
     feedback_text.update()
-    
+
     return f"Disconnect: {client_id}"
 
 def create_context_menu(client_id, page):
     """Create context menu for a client row"""
-    
+
     def on_view_details(e):
         message = view_details_action(client_id)
         page.snack_bar = ft.SnackBar(ft.Text(message))
         page.snack_bar.open = True
         page.update()
-    
+
     def on_disconnect(e):
         message = disconnect_action(client_id)
         page.snack_bar = ft.SnackBar(ft.Text(message))
         page.snack_bar.open = True
         page.update()
-    
+
     return ft.MenuBar(
         controls=[
             ft.SubmenuButton(
@@ -71,18 +71,18 @@ def create_context_menu(client_id, page):
 
 def main(page: ft.Page):
     page.title = "Context Menu Solution Test"
-    
+
     # Mock clients data
     clients = [
         {"client_id": "client_001", "address": "192.168.1.101:5432", "status": "connected"},
         {"client_id": "client_002", "address": "192.168.1.102:5433", "status": "registered"},
         {"client_id": "client_003", "address": "192.168.1.103:5434", "status": "offline"}
     ]
-    
+
     # Create DataTable with context menu rows
     def create_clickable_row(client):
         """Create a clickable row with context menu"""
-        
+
         def on_row_long_press(e):
             """Handle long press (right click equivalent)"""
             print(f"Long press on {client['client_id']}")
@@ -93,7 +93,7 @@ def main(page: ft.Page):
             page.snack_bar = ft.SnackBar(ft.Text(f"Long press: {message}"))
             page.snack_bar.open = True
             page.update()
-        
+
         return ft.DataRow(
             cells=[
                 ft.DataCell(ft.Text(client["client_id"])),
@@ -103,7 +103,7 @@ def main(page: ft.Page):
             ],
             on_long_press=on_row_long_press  # This should work!
         )
-    
+
     datatable = ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text("Client ID", weight=ft.FontWeight.BOLD)),
@@ -117,11 +117,11 @@ def main(page: ft.Page):
         border=ft.border.all(1, ft.Colors.OUTLINE),
         border_radius=8
     )
-    
+
     # Alternative: Dropdown approach
     def create_dropdown_row(client):
         """Alternative: Use dropdown in each row"""
-        
+
         def on_dropdown_change(e):
             action = e.control.value
             if action == "view_details":
@@ -137,7 +137,7 @@ def main(page: ft.Page):
             # Reset dropdown
             e.control.value = None
             e.control.update()
-        
+
         return ft.DataRow(cells=[
             ft.DataCell(ft.Text(client["client_id"])),
             ft.DataCell(ft.Text(client["address"])),
@@ -154,7 +154,7 @@ def main(page: ft.Page):
                 )
             )
         ])
-    
+
     dropdown_table = ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text("Client ID", weight=ft.FontWeight.BOLD)),
@@ -168,10 +168,10 @@ def main(page: ft.Page):
         border=ft.border.all(1, ft.Colors.OUTLINE),
         border_radius=8
     )
-    
+
     page.add(
         ft.Text("Context Menu & Dropdown Solution Test", size=20, weight=ft.FontWeight.BOLD),
-        
+
         # Feedback text
         ft.Container(
             content=feedback_text,
@@ -179,14 +179,14 @@ def main(page: ft.Page):
             bgcolor=ft.Colors.SURFACE,
             border_radius=4
         ),
-        
+
         ft.Divider(),
-        
+
         ft.Text("Approach 1: Long-press rows for context menu", size=16, weight=ft.FontWeight.BOLD),
         datatable,
-        
+
         ft.Divider(),
-        
+
         ft.Text("Approach 2: Dropdown actions in each row", size=16, weight=ft.FontWeight.BOLD),
         dropdown_table
     )

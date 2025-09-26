@@ -3,8 +3,8 @@
 Test script to simulate actual button clicks in the GUI
 """
 
-import sys
 import os
+import sys
 
 # Add project root to path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -14,14 +14,12 @@ if project_root not in sys.path:
 def test_actual_button_click():
     """Test actual button click simulation"""
     print("Testing actual button click simulation...")
-    
+
     try:
-        import flet as ft
-        from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
         from flet_server_gui.components.base_component import BaseComponent
-        from flet_server_gui.actions.client_actions import ClientActions
         from flet_server_gui.components.client_action_handlers import ClientActionHandlers
-        
+        from flet_server_gui.ui.widgets.buttons import ActionButtonFactory
+
         # Create a simple mock page
         class MockPage:
             def __init__(self):
@@ -29,11 +27,11 @@ def test_actual_button_click():
                 self.window_min_width = None
                 self.window_min_height = None
                 self.update_called = False
-                
+
             def update(self):
                 self.update_called = True
                 print("[DEBUG] Page.update() called")
-                
+
             def run_task(self, coro, *args, **kwargs):
                 print(f"[DEBUG] run_task called with coro: {coro}, args: {args}, kwargs: {kwargs}")
                 # For testing, just call the coroutine directly
@@ -42,7 +40,7 @@ def test_actual_button_click():
                     asyncio.run(coro)
                 except Exception as e:
                     print(f"[DEBUG] run_task exception: {e}")
-                    
+
         # Create a mock base component
         class MockBaseComponent(BaseComponent):
             def __init__(self, page):
@@ -51,20 +49,20 @@ def test_actual_button_click():
                 self.confirmation_executed = False
                 self.toast_manager = None
                 self.dialog_system = None
-                
+
             async def _show_error(self, message):
                 self.error_shown = True
                 print(f"[ERROR] {message}")
-                
+
             async def _show_success(self, message):
                 print(f"[SUCCESS] {message}")
-                
+
             async def execute_with_confirmation(self, action, confirmation_text, success_message, operation_name):
                 self.confirmation_executed = True
                 print(f"[CONFIRMATION] {confirmation_text}")
                 print(f"[SUCCESS] {success_message}")
                 print(f"[OPERATION] {operation_name}")
-                
+
                 # Try to execute the action
                 try:
                     if callable(action):
@@ -79,7 +77,7 @@ def test_actual_button_click():
                 except Exception as e:
                     print(f"[ACTION ERROR] {e}")
                     return False
-                    
+
             async def execute_bulk_action(self, action, selected_items, item_type, action_name):
                 print(f"[BULK ACTION] action: {action}, selected_items: {selected_items}, item_type: {item_type}, action_name: {action_name}")
                 try:
@@ -95,39 +93,39 @@ def test_actual_button_click():
                 except Exception as e:
                     print(f"[BULK ACTION ERROR] {e}")
                     return False
-                    
+
         class MockServerBridge:
             pass
-            
+
         class MockDialogSystem:
             pass
-            
+
         # Create instances
         mock_page = MockPage()
         mock_component = MockBaseComponent(mock_page)
         mock_server_bridge = MockServerBridge()
         mock_dialog_system = MockDialogSystem()
-        
+
         # Create button factory
         button_factory = ActionButtonFactory(mock_component, mock_server_bridge, mock_page)
-        
+
         # Create and set action handlers (this is what the real views do)
         client_action_handlers = ClientActionHandlers(mock_server_bridge, mock_dialog_system, None, mock_page)
         button_factory.actions["ClientActionHandlers"] = client_action_handlers
-        
+
         # Test creating and clicking a client view details button
         def get_selected_client():
             return ["test_client_id"]
-            
+
         print("Creating client view details button...")
         button = button_factory.create_action_button(
             "client_view_details",
             get_selected_client
         )
-        
+
         print(f"Button type: {type(button)}")
         print(f"Button on_click: {button.on_click}")
-        
+
         # Simulate clicking the button
         print("Simulating button click...")
         if button.on_click:
@@ -136,9 +134,9 @@ def test_actual_button_click():
                 def __init__(self):
                     self.data = None
                     self.control = button
-                    
+
             mock_event = MockEvent()
-            
+
             # Call the click handler
             try:
                 button.on_click(mock_event)
@@ -149,9 +147,9 @@ def test_actual_button_click():
                 traceback.print_exc()
         else:
             print("[ERROR] Button has no click handler")
-            
+
         print("[DEBUG] Button click simulation test completed")
-        
+
     except Exception as e:
         print(f"[FAIL] Button click simulation test error: {e}")
         import traceback

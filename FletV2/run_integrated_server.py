@@ -22,8 +22,8 @@ try:
 except ImportError:
     try:
         # Try relative import from current location
-        import sys
         import os
+        import sys
         parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         sys.path.insert(0, parent_dir)
         import Shared.utils.utf8_solution as _
@@ -54,7 +54,7 @@ def setup_environment():
     os.environ['PYTHONUTF8'] = '1'
     os.environ['PYTHONIOENCODING'] = 'utf-8'
 
-    print(f"[OK] Python paths configured:")
+    print("[OK] Python paths configured:")
     for path in paths_to_add:
         print(f"   - {path}")
 
@@ -73,7 +73,7 @@ def is_port_available(port):
             return True
     except OSError:
         pass
-    
+
     try:
         # Try IPv6
         with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as sock:
@@ -86,23 +86,23 @@ def is_port_available(port):
             return True
     except OSError:
         pass
-    
+
     return False
 
 def find_available_port(start_port=8000, max_port=8100):
     """Find an available port starting from start_port."""
-    import socket
     import random
-    
+    import socket
+
     # First try the start port
     if is_port_available(start_port):
         return start_port
-    
+
     # Try a few ports in sequence
     for port in range(start_port + 1, min(start_port + 10, max_port)):
         if is_port_available(port):
             return port
-    
+
     # If sequential ports don't work, try random ports in the range
     attempts = 0
     while attempts < 20 and start_port + attempts < max_port:
@@ -110,7 +110,7 @@ def find_available_port(start_port=8000, max_port=8100):
         if is_port_available(port):
             return port
         attempts += 1
-    
+
     # Last resort: let the OS choose a port
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -130,8 +130,9 @@ def run_integrated_server(dev_mode=True, port=None):
 
     # Import after path setup
     try:
-        from start_integrated_gui import main_integrated
         import asyncio
+
+        from start_integrated_gui import main_integrated
 
         # Find available port if not specified
         if dev_mode and port is None:
@@ -151,7 +152,7 @@ def run_integrated_server(dev_mode=True, port=None):
                 except RuntimeError:
                     print(f"⚠️ Port detection failed, using requested port {port}")
 
-        print(f"🚀 Starting integrated server...")
+        print("🚀 Starting integrated server...")
         print(f"📊 Mode: {'Development (Web)' if dev_mode else 'Production (Desktop)'}")
         if dev_mode and port:
             print(f"🌐 Web URL: http://127.0.0.1:{port}")

@@ -2,26 +2,25 @@
 # Client Management Module
 # Extracted from monolithic server.py for better modularity and organization
 
+import logging
 import threading
 import time
-import logging
-from typing import Dict, Optional, Any, List
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 # Import crypto components through compatibility layer
 from Crypto.PublicKey import RSA
 
-# Import custom exceptions and configuration
-from .exceptions import ServerError, ProtocolError, ClientError
 from .config import (
+    AES_KEY_SIZE_BYTES,
     CLIENT_SESSION_TIMEOUT,
     PARTIAL_FILE_TIMEOUT,
     RSA_PUBLIC_KEY_SIZE,
-    AES_KEY_SIZE_BYTES,
-    MAX_CLIENT_NAME_LENGTH,
-    MAX_FILENAME_FIELD_SIZE
 )
 from .database import DatabaseManager
+
+# Import custom exceptions and configuration
+from .exceptions import ClientError, ProtocolError, ServerError
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ class Client:
     Thread-safe client object with comprehensive state management.
     """
 
-    def __init__(self, client_id: bytes, name: str, public_key_bytes: Optional[bytes] = None):
+    def __init__(self, client_id: bytes, name: str, public_key_bytes: bytes | None = None):
         """
         Initializes a Client object.
 
@@ -43,11 +42,11 @@ class Client:
         """
         self.id: bytes = client_id
         self.name: str = name
-        self.public_key_bytes: Optional[bytes] = public_key_bytes
-        self.public_key_obj: Optional[Any] = None  # Use flexible type for compatibility layer
-        self.aes_key: Optional[bytes] = None  # Current session AES key
+        self.public_key_bytes: bytes | None = public_key_bytes
+        self.public_key_obj: Any | None = None  # Use flexible type for compatibility layer
+        self.aes_key: bytes | None = None  # Current session AES key
         self.last_seen: float = time.monotonic()  # Monotonic time for session timeout
-        self.partial_files: Dict[str, Dict[str, Any]] = {}  # For reassembling multi-packet files
+        self.partial_files: dict[str, dict[str, Any]] = {}  # For reassembling multi-packet files
         self.lock: threading.Lock = threading.Lock()  # To protect concurrent access to client state
 
         if public_key_bytes:
@@ -86,7 +85,7 @@ class Client:
             if not self.public_key_obj:  # Check if import failed
                 raise ProtocolError(f"Invalid RSA public key format provided by client '{self.name}' (failed to import).")
 
-    def get_aes_key(self) -> Optional[bytes]:
+    def get_aes_key(self) -> bytes | None:
         """Returns the current session AES key."""
         return self.aes_key
 
@@ -215,10 +214,10 @@ class ClientManager:
             db_manager: DatabaseManager instance for persistence operations.
         """
         self.db_manager = db_manager
-        self.clients: Dict[bytes, Client] = {}  # In-memory store: client_id_bytes -> Client object
-        self.clients_by_name: Dict[str, bytes] = {}  # In-memory store: client_name_str -> client_id_bytes
+        self.clients: dict[bytes, Client] = {}  # In-memory store: client_id_bytes -> Client object
+        self.clients_by_name: dict[str, bytes] = {}  # In-memory store: client_name_str -> client_id_bytes
         self.clients_lock: threading.Lock = threading.Lock()  # Protects access to clients and clients_by_name
-        self.maintenance_stats: Dict[str, Any] = {
+        self.maintenance_stats: dict[str, Any] = {
             'last_cleanup': None,
             'clients_removed_total': 0,
             'partial_files_cleaned_total': 0
@@ -266,7 +265,7 @@ class ClientManager:
         """
         self.db_manager.save_client_to_db(client.id, client.name, client.public_key_bytes, client.get_aes_key())
 
-    def register_client(self, client_id: bytes, name: str, public_key_bytes: Optional[bytes] = None) -> Client:
+    def register_client(self, client_id: bytes, name: str, public_key_bytes: bytes | None = None) -> Client:
         """
         Registers a new client or retrieves an existing one.
 
@@ -305,7 +304,7 @@ class ClientManager:
             logger.info(f"Registered new client: '{name}' (ID: {client_id.hex()})")
             return client
 
-    def get_client_by_id(self, client_id: bytes) -> Optional[Client]:
+    def get_client_by_id(self, client_id: bytes) -> Client | None:
         """
         Retrieves a client by ID.
 
@@ -321,7 +320,7 @@ class ClientManager:
                 client.update_last_seen()
             return client
 
-    def get_client_by_name(self, name: str) -> Optional[Client]:
+    def get_client_by_name(self, name: str) -> Client | None:
         """
         Retrieves a client by name.
 
@@ -374,7 +373,7 @@ class ClientManager:
         Returns:
             The number of expired clients removed.
         """
-        expired_clients: List[bytes] = []
+        expired_clients: list[bytes] = []
         current_time = time.monotonic()
 
         with self.clients_lock:
@@ -411,7 +410,7 @@ class ClientManager:
         self.maintenance_stats['partial_files_cleaned_total'] += total_cleaned
         return total_cleaned
 
-    def run_maintenance(self) -> Dict[str, int]:
+    def run_maintenance(self) -> dict[str, int]:
         """
         Runs maintenance tasks including expired session cleanup and partial file cleanup.
 
@@ -426,7 +425,7 @@ class ClientManager:
         # Clean up stale partial files
         stale_files_cleaned = self.cleanup_stale_partial_files()
 
-        self.maintenance_stats['last_cleanup'] = datetime.now(timezone.utc).isoformat()
+        self.maintenance_stats['last_cleanup'] = datetime.now(UTC).isoformat()
 
         stats = {
             'expired_sessions_removed': expired_sessions_removed,
@@ -460,7 +459,7 @@ class ClientManager:
         with self.clients_lock:
             return sum(client.get_partial_file_count() for client in self.clients.values())
 
-    def get_client_stats(self) -> Dict[str, Any]:
+    def get_client_stats(self) -> dict[str, Any]:
         """
         Returns comprehensive client statistics.
 
@@ -481,7 +480,7 @@ class ClientManager:
                 'maintenance_stats': self.maintenance_stats.copy()
             }
 
-    def get_client_list(self) -> List[Dict[str, Any]]:
+    def get_client_list(self) -> list[dict[str, Any]]:
         """
         Returns a list of client information dictionaries.
 
@@ -489,7 +488,7 @@ class ClientManager:
             List of dictionaries containing client information.
         """
         with self.clients_lock:
-            client_list: List[Dict[str, Any]] = []
+            client_list: list[dict[str, Any]] = []
             for client in self.clients.values():
                 client_info = {
                     'id': client.id.hex(),
@@ -502,7 +501,7 @@ class ClientManager:
                 client_list.append(client_info)
             return client_list
 
-    def is_name_available(self, name: str, exclude_id: Optional[bytes] = None) -> bool:
+    def is_name_available(self, name: str, exclude_id: bytes | None = None) -> bool:
         """
         Checks if a client name is available for registration.
 

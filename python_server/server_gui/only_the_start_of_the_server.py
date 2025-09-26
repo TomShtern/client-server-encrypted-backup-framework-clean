@@ -1,17 +1,15 @@
-# -*- coding: utf-8 -*-
 # ServerGUI.py - ULTRA MODERN Cross-platform GUI for Encrypted Backup Server
 # Enhanced version with real functionality and advanced features
 
-import sys
 import os
-import threading
-import logging
-import traceback
-from collections import deque
-from datetime import datetime
-from typing import Dict, List, Optional, Any, Union, Deque, Callable, TYPE_CHECKING, Protocol, runtime_checkable, Type, cast
-from functools import partial
+import sys
 from contextlib import suppress
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Protocol,
+    runtime_checkable,
+)
 
 # UTF-8 support for international characters and emojis
 try:
@@ -19,7 +17,6 @@ try:
 except ImportError:
     # Fallback for when running from within python_server directory
     sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-    import Shared.utils.utf8_solution  # 🚀 UTF-8 support enabled automatically
 
 # Type-safe reconfigure for stdout/stderr (guarded for analyzers)
 def _safe_reconfigure_stream(stream: Any) -> None:
@@ -35,25 +32,23 @@ _safe_reconfigure_stream(sys.stdin)
 _safe_reconfigure_stream(sys.stdout)
 
 if TYPE_CHECKING:
-    from Shared.utils.process_monitor_gui import ProcessMonitorWidget
     from python_server.server.server import BackupServer
+    from Shared.utils.process_monitor_gui import ProcessMonitorWidget
 
 # Lightweight structural type to satisfy static type checkers for the server used by the GUI
 @runtime_checkable
 class BackupServerLike(Protocol):
     running: bool
     db_manager: Any
-    clients: Dict[bytes, Any]
-    clients_by_name: Dict[str, bytes]
+    clients: dict[bytes, Any]
+    clients_by_name: dict[str, bytes]
     network_server: Any
 
     def start(self) -> None: ...
     def stop(self) -> None: ...
-    def apply_settings(self, settings: Dict[str, Any]) -> None: ...
+    def apply_settings(self, settings: dict[str, Any]) -> None: ...
 
 # GUI Imports
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
 
 # Calendar for date range selection
 try:
@@ -69,7 +64,8 @@ except Exception:
 
 # Drag and Drop support
 try:
-    from tkinterdnd2 import DND_FILES, TkinterDnD as DNDTk  # type: ignore
+    from tkinterdnd2 import DND_FILES  # type: ignore
+    from tkinterdnd2 import TkinterDnD as DNDTk
     DND_AVAILABLE = True
     TkinterDnD = DNDTk
     print("[OK] Drag-and-drop functionality available (tkinterdnd2 installed)")
@@ -102,10 +98,9 @@ except ImportError:
         from server.server_singleton import ensure_single_server_instance
     except ImportError:
         # Another fallback for direct execution
-        import sys
         import os
+        import sys
         sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-        from server.server_singleton import ensure_single_server_instance
 
 # Import system tray functionality based on platform
 try:
@@ -194,7 +189,7 @@ class ModernTheme:
 
 class IconProvider:
     # Simple text-based icons instead of base64 encoded images
-    _icons: Dict[str, str] = {
+    _icons: dict[str, str] = {
         "dashboard": "🏠",
         "clients": "👥",
         "files": "📁",
@@ -214,7 +209,7 @@ class IconProvider:
     }
 
     @classmethod
-    def get_icon(cls, name: str, size: int = 16) -> Optional[str]:
+    def get_icon(cls, name: str, size: int = 16) -> str | None:
         """Get a text-based icon by name."""
         return cls._icons.get(name, "🔹")  # Default icon
 

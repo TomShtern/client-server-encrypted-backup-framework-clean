@@ -4,8 +4,8 @@ Test script to verify GUI Integration Tests
 """
 # sourcery skip: dont-import-test-modules - This is a test runner utility script
 
-import sys
 import os
+import sys
 import unittest
 
 # Add the project directory to the path
@@ -27,7 +27,7 @@ def test_gui_integration_import():
     """Test that GUI integration tests can be imported"""
     try:
         module = _import_test_module('tests.test_gui_integration')
-        TestGUIIntegration = getattr(module, 'TestGUIIntegration')
+        TestGUIIntegration = module.TestGUIIntegration
         print("GUI Integration tests imported successfully")
         return True
     except Exception as e:
@@ -38,8 +38,7 @@ def test_gui_integration_import():
 
 def _create_test_suite_from_module(module):
     """Create a test suite from a test module."""
-    TestGUIIntegration = getattr(module, 'TestGUIIntegration')
-    import unittest
+    TestGUIIntegration = module.TestGUIIntegration
 
     # Create a test suite
     suite = unittest.TestLoader().loadTestsFromTestCase(TestGUIIntegration)

@@ -2,12 +2,12 @@
 """
 Debug file transfer process step by step
 """
-import httpx
-import os
-from contextlib import suppress
-import tempfile
-import time
 import asyncio
+import os
+import tempfile
+from contextlib import suppress
+
+import httpx
 
 
 async def debug_file_transfer():
@@ -112,7 +112,7 @@ async def debug_file_transfer():
                 print(f"   ✅ File found! Size: {received_size} bytes")
 
                 # Compare content
-                with open(received_path, 'r') as f:
+                with open(received_path) as f:
                     received_content = f.read()
                 if received_content == test_content:
                     print("   ✅ Content matches!")

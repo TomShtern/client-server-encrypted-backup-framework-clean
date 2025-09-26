@@ -4,12 +4,12 @@ FINAL UTF-8 Solution Test - With ACTUAL Emoji Display
 """
 
 import sys
-import os
+
 
 def main():
     # Use buffer writing for the first part to avoid encoding issues
-    sys.stdout.buffer.write("FINAL UTF-8 SOLUTION TEST\n".encode('utf-8'))
-    sys.stdout.buffer.write("========================\n".encode('utf-8'))
+    sys.stdout.buffer.write(b"FINAL UTF-8 SOLUTION TEST\n")
+    sys.stdout.buffer.write(b"========================\n")
     sys.stdout.buffer.flush()
 
     # Test importing our UTF-8 solution
@@ -32,13 +32,13 @@ def main():
             utf8_solution.safe_print("❌ UTF-8 environment not configured")
 
     except Exception as e:
-        sys.stdout.buffer.write(f"❌ UTF-8 solution import failed: {e}\n".encode('utf-8'))
+        sys.stdout.buffer.write(f"❌ UTF-8 solution import failed: {e}\n".encode())
         sys.stdout.buffer.flush()
         return
 
-    sys.stdout.buffer.write("\n==================================================\n".encode('utf-8'))
-    sys.stdout.buffer.write("EMOJI DISPLAY TEST - ACTUAL RESULTS\n".encode('utf-8'))
-    sys.stdout.buffer.write("==================================================\n".encode('utf-8'))
+    sys.stdout.buffer.write(b"\n==================================================\n")
+    sys.stdout.buffer.write(b"EMOJI DISPLAY TEST - ACTUAL RESULTS\n")
+    sys.stdout.buffer.write(b"==================================================\n")
     sys.stdout.buffer.flush()
 
     # Test actual emoji display using our safe_print function
@@ -51,15 +51,15 @@ def main():
         "שלום 🌍 עולם ✅ (Hebrew with emojis)"
     ]
 
-    sys.stdout.buffer.write("Testing ACTUAL emoji display:\n".encode('utf-8'))
+    sys.stdout.buffer.write(b"Testing ACTUAL emoji display:\n")
     sys.stdout.buffer.flush()
 
     for i, test_case in enumerate(test_cases, 1):
         utf8_solution.safe_print(f"{i}. {test_case}")
 
-    sys.stdout.buffer.write("\n==================================================\n".encode('utf-8'))
-    sys.stdout.buffer.write("FINAL STATUS\n".encode('utf-8'))
-    sys.stdout.buffer.write("==================================================\n".encode('utf-8'))
+    sys.stdout.buffer.write(b"\n==================================================\n")
+    sys.stdout.buffer.write(b"FINAL STATUS\n")
+    sys.stdout.buffer.write(b"==================================================\n")
     sys.stdout.buffer.flush()
 
     utf8_solution.safe_print("✅ UTF-8 ENCODING: WORKING")

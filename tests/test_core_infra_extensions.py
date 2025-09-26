@@ -1,6 +1,5 @@
-import pytest
 from flet_server_gui.utils.action_result import ActionResult, timed_execution
-from flet_server_gui.utils.trace_center import get_trace_center, TraceCenter
+from flet_server_gui.utils.trace_center import TraceCenter, get_trace_center
 
 
 def test_action_result_factories_basic():

@@ -5,9 +5,9 @@ Tests all key operations to ensure the simplified version maintains 100% compati
 """
 
 import asyncio
+import logging
 import os
 import sys
-import logging
 from pathlib import Path
 
 # Add parent directory to path for Shared imports
@@ -16,12 +16,11 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 # ALWAYS import this in any Python file that deals with subprocess or console I/O
-import Shared.utils.utf8_solution as _  # Import for UTF-8 side effects
 
 # Add the utils directory to sys.path so we can import our modules
 sys.path.insert(0, str(Path(__file__).parent))
 
-from utils.server_bridge import ServerBridge, create_server_bridge
+from utils.server_bridge import create_server_bridge
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

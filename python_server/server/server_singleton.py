@@ -5,15 +5,13 @@ Server Singleton Manager - Ensures only one Python server instance runs at a tim
 If a new instance is started, it will terminate the old one and take its place.
 """
 
-import os
-import sys
-import time
-import signal
-import socket
 import atexit
 import logging
+import os
+import signal
+import socket
+import time
 from pathlib import Path
-from typing import Optional
 
 # Try to import psutil for advanced process checking
 try:
@@ -31,7 +29,7 @@ class ServerSingletonManager:
     Manages a single server instance. If a new instance is launched,
     it terminates the existing one.
     """
-    
+
     def __init__(self, server_name: str = "BackupServer", port: int = 1256):
         """
         Initialize the singleton manager.
@@ -46,7 +44,7 @@ class ServerSingletonManager:
         self.lock_dir = Path(os.environ.get("TEMP", "/tmp"))
         self.pid_file = self.lock_dir / f"{server_name}_{port}.pid"
         self.is_locked = False
-        
+
         # Register cleanup to run when the process exits
         atexit.register(self.cleanup)
 
@@ -60,7 +58,7 @@ class ServerSingletonManager:
                 return False
             else:
                 return True
-        
+
         return psutil_module.pid_exists(pid) if psutil_module else False
 
     def _terminate_process(self, pid: int):
@@ -135,10 +133,10 @@ class ServerSingletonManager:
                 except OSError:
                     pass # May already be gone
 
-        # 2. Check if the port is in use with retry logic for Windows TIME_WAIT 
+        # 2. Check if the port is in use with retry logic for Windows TIME_WAIT
         max_retries = 12  # Up to 60 seconds total wait
         retry_delay = 1   # Start with 1 second delay
-        
+
         for attempt in range(max_retries):
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -147,7 +145,7 @@ class ServerSingletonManager:
                     s.bind(("127.0.0.1", self.port))
                 # Port is available, break out of retry loop
                 break
-            except socket.error as e:
+            except OSError as e:
                 if attempt < max_retries - 1:  # Not the last attempt
                     logger.warning(f"Port {self.port} still in use (attempt {attempt + 1}/{max_retries}). "
                                  f"Waiting {retry_delay} seconds... Error: {e}")
@@ -196,7 +194,7 @@ def ensure_single_server_instance(server_name: str = "BackupServer", port: int =
         SystemExit: If the lock cannot be acquired.
     """
     singleton = ServerSingletonManager(server_name, port)
-    
+
     if not singleton.acquire_lock():
         print(f"\n[CRITICAL ERROR] Could not acquire singleton lock for {server_name} on port {port}.")
         print("   Another instance may be running and could not be terminated,")
@@ -204,20 +202,20 @@ def ensure_single_server_instance(server_name: str = "BackupServer", port: int =
         print("   This is a FATAL error - process will terminate immediately.")
         logger.critical(f"FATAL: Singleton lock acquisition failed for {server_name}:{port}")
         os._exit(1)  # Force immediate exit, bypassing any exception handlers
-    
+
     return singleton
 
 # CLI utility for checking and cleaning up
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Server Singleton Management Utility")
     parser.add_argument("--cleanup", action="store_true", help="Force cleanup of a stale lock file")
     parser.add_argument("--port", type=int, default=1256, help="Server port (default: 1256)")
     parser.add_argument("--name", default="BackupServer", help="Server name (default: BackupServer)")
-    
+
     args = parser.parse_args()
-    
+
     if args.cleanup:
         pid_file = Path(os.environ.get("TEMP", "/tmp")) / f"{args.name}_{args.port}.pid"
         if pid_file.exists():

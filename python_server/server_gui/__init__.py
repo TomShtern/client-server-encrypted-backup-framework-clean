@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 server_gui - A modern, modular GUI package for the Encrypted Backup Server.
 
@@ -24,15 +23,15 @@ try:
     import Shared.utils.utf8_solution
 except ImportError:
     try:
-        import sys
         import os
+        import sys
         # If direct import fails, dynamically add the project root to the path.
         # server_gui -> server -> python_server -> Client_Server_Encrypted_Backup_Framework
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         import Shared.utils.utf8_solution
-        print(f"[OK]   Project root dynamically added to path for cross-package imports.")
+        print("[OK]   Project root dynamically added to path for cross-package imports.")
     except ImportError:
         print("[WARNING] Could not enable the project-wide UTF-8 solution. Cross-package imports may fail.")
 

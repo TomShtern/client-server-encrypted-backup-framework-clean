@@ -19,8 +19,8 @@ Safe to run multiple times; it will detect new files compared to the initial dir
 import os
 import time
 import uuid
-import requests
 
+import requests
 
 API_URL = "http://localhost:9090/api/start_backup"
 RECEIVED_DIRS = [
@@ -111,8 +111,8 @@ def test_filename_acceptance_via_gui_api():
     # Try to locate the uploaded file among new files (filenames on server are usually prefixed)
     # sourcery skip: merge-list-append, list-comprehension
     matched = [
-        os.path.join(d, fname) 
-        for d, fname in found_paths 
+        os.path.join(d, fname)
+        for d, fname in found_paths
         if base_filename in fname or fname.endswith(base_filename)
     ]
 
@@ -121,7 +121,7 @@ def test_filename_acceptance_via_gui_api():
 
     for path in to_check:
         try:
-            with open(path, "r", encoding="utf-8", errors="ignore") as rf:
+            with open(path, encoding="utf-8", errors="ignore") as rf:
                 if unique_sig in rf.read():
                     print(f"✅ Verified uploaded file content at: {path}")
                     return True
@@ -138,8 +138,8 @@ def main():
     print("=" * 60)
     ok = test_filename_acceptance_via_gui_api()
     print("\n" + "=" * 60)
-    
-    result_msg = ("🎉 PASS: Filename with punctuation accepted and verified end-to-end." 
+
+    result_msg = ("🎉 PASS: Filename with punctuation accepted and verified end-to-end."
                   if ok else "💥 FAIL: Filename acceptance test did not pass.")
     print(result_msg)
     print("=" * 60)

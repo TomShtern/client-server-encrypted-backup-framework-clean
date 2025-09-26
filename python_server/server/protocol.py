@@ -2,13 +2,12 @@
 # Protocol Constants and Utilities
 # Extracted from monolithic server.py for better modularity
 
-import struct
 import logging
 import socket
-from typing import Tuple, List
+import struct
 
 # Import configuration constants
-from .config import SERVER_VERSION, MAX_PAYLOAD_READ_LIMIT
+from .config import MAX_PAYLOAD_READ_LIMIT, SERVER_VERSION
 from .exceptions import ProtocolError
 
 logger = logging.getLogger(__name__)
@@ -35,7 +34,7 @@ RESP_GENERIC_SERVER_ERROR = 1607
 
 # --- Protocol Functions ---
 
-def parse_request_header(header_data: bytes) -> Tuple[bytes, int, int, int]:
+def parse_request_header(header_data: bytes) -> tuple[bytes, int, int, int]:
     """
     Parses the 23-byte request header.
     
@@ -45,12 +44,12 @@ def parse_request_header(header_data: bytes) -> Tuple[bytes, int, int, int]:
     expected_header_len = 23
     if len(header_data) != expected_header_len:
         raise ProtocolError(f"Invalid request header length. Expected {expected_header_len}, got {len(header_data)}.")
-    
+
     client_id = header_data[:16]
     version = header_data[16]
     code = struct.unpack("<H", header_data[17:19])[0]
     payload_size = struct.unpack("<I", header_data[19:23])[0]
-    
+
     return client_id, version, code, payload_size
 
 def create_response(code: int, payload: bytes = b"") -> bytes:
@@ -71,19 +70,19 @@ def read_exact(sock: socket.socket, num_bytes: int) -> bytes:
     if num_bytes > MAX_PAYLOAD_READ_LIMIT:
         raise ProtocolError(f"Requested read of {num_bytes} bytes exceeds limit.")
 
-    parts: List[bytes] = []
+    parts: list[bytes] = []
     bytes_read = 0
     while bytes_read < num_bytes:
         try:
             chunk = sock.recv(min(num_bytes - bytes_read, 4096))
-        except socket.timeout as e:
+        except TimeoutError as e:
             raise TimeoutError(f"Socket timeout reading {num_bytes} bytes.") from e
-        except socket.error as e:
+        except OSError as e:
             raise ConnectionError(f"Socket error during read: {e}") from e
 
         if not chunk:
             raise ConnectionError(f"Socket closed while reading {num_bytes} bytes.")
-        
+
         parts.append(chunk)
         bytes_read += len(chunk)
 

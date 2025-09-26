@@ -11,8 +11,8 @@ Launch script for Flet Server GUI
 Runs the Material Design 3 desktop application.
 """
 
-import sys
 import os
+import sys
 
 # Add project root to path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -36,9 +36,9 @@ except ImportError as e:
 
 try:
     # Import and run the Flet GUI
-    from flet_server_gui.main import main
     import flet as ft
-    
+    from flet_server_gui.main import main
+
     print("=" * 60)
     print("Starting Flet Material Design 3 Server GUI")
     print("=" * 60)
@@ -48,7 +48,7 @@ try:
     print("Theme: Dark mode with dynamic switching")
     print("Navigation: Multi-screen navigation rail")
     print("=" * 60)
-    
+
     if len(sys.argv) > 1 and "--web" in sys.argv:
         print("Running as web application...")
         ft.app(target=main, view=ft.WEB_BROWSER, port=8550)
@@ -64,7 +64,7 @@ except ImportError as e:
     print("2. Install Flet if not installed:")
     print("   pip install flet")
     print("3. Check if all required files exist in flet_server_gui/")
-    
+
 except Exception as e:
     print(f"Error: {e}")
     print("\nCheck the error details above and ensure all components are properly installed.")

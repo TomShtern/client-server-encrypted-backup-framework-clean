@@ -1,8 +1,9 @@
 # find_missing_imports.py
 # Save in your workspace root and run: python find_missing_imports.py
-import ast, sys, os
+import ast
+import os
+import sys
 from collections import defaultdict
-from typing import Dict, Set
 
 # Add parent directory to path for Shared imports
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -10,11 +11,10 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 # ALWAYS import this in any Python file that deals with subprocess or console I/O
-import Shared.utils.utf8_solution as _  # Import for UTF-8 side effects
 
 root = os.getcwd()
 ignore_dirs = {"flet_venv", ".venv", "__pycache__", ".git", "dist", "build"}
-imports: Dict[str, Set[str]] = defaultdict(set)
+imports: dict[str, set[str]] = defaultdict(set)
 
 def add_import(name, fn):
     top = name.split('.')[0]
@@ -28,7 +28,7 @@ for dirpath, dirnames, filenames in os.walk(root):
             continue
         path = os.path.join(dirpath, fn)
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 tree = ast.parse(f.read(), filename=path)
         except Exception:
             continue

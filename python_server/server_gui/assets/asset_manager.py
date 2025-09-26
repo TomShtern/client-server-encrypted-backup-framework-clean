@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 asset_manager.py - A robust, caching asset loader for the Server GUI.
 
@@ -16,11 +15,11 @@ Key Features:
   prevent them from being garbage collected and disappearing from the UI.
 """
 from __future__ import annotations
-import os
+
 from pathlib import Path
-from typing import Dict, Tuple, Optional
-import tkinter as tk
+
 from PIL import Image, ImageDraw, ImageTk
+
 
 class AssetManager:
     """A class that manages loading and caching of GUI assets."""
@@ -28,18 +27,18 @@ class AssetManager:
     def __init__(self):
         """Initializes the AssetManager and locates the asset base directory."""
         self.ASSETS_DIR = Path(__file__).parent.resolve()
-        
+
         # Caches to prevent re-loading and re-processing files from disk.
-        self._icon_cache: Dict[str, ImageTk.PhotoImage] = {}
-        self._image_cache: Dict[str, Image.Image] = {}
-        self._sound_cache: Dict[str, str] = {}
-        
+        self._icon_cache: dict[str, ImageTk.PhotoImage] = {}
+        self._image_cache: dict[str, Image.Image] = {}
+        self._sound_cache: dict[str, str] = {}
+
         # A critical reference store to prevent Tkinter's garbage collection
         # from deleting PhotoImage objects that are in use.
-        self._photo_image_references: Dict[str, ImageTk.PhotoImage] = {}
+        self._photo_image_references: dict[str, ImageTk.PhotoImage] = {}
         print(f"[OK]   AssetManager initialized. Asset directory: {self.ASSETS_DIR}")
 
-    def get_sound(self, name: str) -> Optional[str]:
+    def get_sound(self, name: str) -> str | None:
         """
         Gets the full path to a sound file.
 
@@ -61,7 +60,7 @@ class AssetManager:
             print(f"[WARNING] Sound asset not found: {name}")
             return None
 
-    def get_image(self, name: str) -> Optional[Image.Image]:
+    def get_image(self, name: str) -> Image.Image | None:
         """
         Loads a PIL Image from the 'images' directory. Caches the result.
 
@@ -87,7 +86,7 @@ class AssetManager:
             print(f"[WARNING] Image asset not found: {name}")
             return None
 
-    def get_icon(self, name: str, size: Tuple[int, int] = (16, 16)) -> ImageTk.PhotoImage:
+    def get_icon(self, name: str, size: tuple[int, int] = (16, 16)) -> ImageTk.PhotoImage:
         """
         Loads, resizes, and returns a ImageTk.PhotoImage from an icon file.
         
@@ -108,7 +107,7 @@ class AssetManager:
             return self._icon_cache[cache_key]
 
         icon_path = self.ASSETS_DIR / "icons" / f"{name}.png"
-        
+
         try:
             if not icon_path.exists():
                 raise FileNotFoundError(f"Icon asset not found: {icon_path}")
@@ -117,7 +116,7 @@ class AssetManager:
                 # Use high-quality resizing
                 resized_img = img.resize(size, Image.Resampling.LANCZOS)
                 photo_image = ImageTk.PhotoImage(resized_img)
-        
+
         except Exception:
             # Reduce verbosity - only print once per unique icon name
             if not hasattr(self, '_warned_icons'):
@@ -130,10 +129,10 @@ class AssetManager:
         # Store in cache AND in the critical reference holder.
         self._icon_cache[cache_key] = photo_image
         self._photo_image_references[cache_key] = photo_image
-        
+
         return photo_image
 
-    def _create_placeholder_icon(self, size: Tuple[int, int], icon_name: str = "unknown") -> ImageTk.PhotoImage:
+    def _create_placeholder_icon(self, size: tuple[int, int], icon_name: str = "unknown") -> ImageTk.PhotoImage:
         """
         Generates a themed placeholder icon based on the icon name.
         This is a resilience feature to prevent crashes on missing assets.
@@ -144,7 +143,7 @@ class AssetManager:
 
         img = Image.new('RGBA', size, (0, 0, 0, 0))  # Transparent background
         draw = ImageDraw.Draw(img)
-        
+
         # Choose color and shape based on icon name
         if 'fill' in icon_name or 'solid' in icon_name:
             color = '#2563eb'  # Blue
@@ -156,52 +155,52 @@ class AssetManager:
             color = '#ea580c'  # Orange
         else:
             color = '#6b7280'  # Gray
-        
+
         # Create a simple geometric shape based on icon name
         margin = 2
         if 'circle' in icon_name:
-            draw.ellipse([margin, margin, size[0]-margin, size[1]-margin], 
+            draw.ellipse([margin, margin, size[0]-margin, size[1]-margin],
                         fill=color, outline=color)
         elif 'house' in icon_name or 'home' in icon_name:
             # Simple house shape
-            points = [(size[0]//2, margin), (size[0]-margin, size[1]//2), 
-                     (size[0]-margin, size[1]-margin), (margin, size[1]-margin), 
+            points = [(size[0]//2, margin), (size[0]-margin, size[1]//2),
+                     (size[0]-margin, size[1]-margin), (margin, size[1]-margin),
                      (margin, size[1]//2)]
             draw.polygon(points, fill=color)
         elif 'people' in icon_name or 'person' in icon_name:
             # Simple person icon
             head_r = size[0] // 6
-            draw.ellipse([size[0]//2 - head_r, margin, size[0]//2 + head_r, margin + head_r*2], 
+            draw.ellipse([size[0]//2 - head_r, margin, size[0]//2 + head_r, margin + head_r*2],
                         fill=color)
-            draw.rectangle([size[0]//2 - head_r, margin + head_r*2, size[0]//2 + head_r, size[1]-margin], 
+            draw.rectangle([size[0]//2 - head_r, margin + head_r*2, size[0]//2 + head_r, size[1]-margin],
                           fill=color)
         elif 'file' in icon_name or 'document' in icon_name:
             # Simple document shape
-            draw.rectangle([margin*2, margin, size[0]-margin, size[1]-margin], 
+            draw.rectangle([margin*2, margin, size[0]-margin, size[1]-margin],
                           fill=color, outline=color)
-            draw.polygon([(size[0]-margin*3, margin), (size[0]-margin, margin), 
+            draw.polygon([(size[0]-margin*3, margin), (size[0]-margin, margin),
                          (size[0]-margin, margin*3)], fill='white')
         elif 'gear' in icon_name or 'settings' in icon_name:
             # Simple gear shape
             center = (size[0]//2, size[1]//2)
             r = min(size) // 3
-            draw.ellipse([center[0]-r, center[1]-r, center[0]+r, center[1]+r], 
+            draw.ellipse([center[0]-r, center[1]-r, center[0]+r, center[1]+r],
                         fill=color, outline=color)
         elif 'database' in icon_name:
             # Simple database cylinders
             h = size[1] // 4
             for i in range(3):
                 y = margin + i * h
-                draw.ellipse([margin*2, y, size[0]-margin*2, y+h//2], 
+                draw.ellipse([margin*2, y, size[0]-margin*2, y+h//2],
                            fill=color, outline=color)
         else:
             # Default square with rounded corners
-            draw.rounded_rectangle([margin*2, margin*2, size[0]-margin*2, size[1]-margin*2], 
+            draw.rounded_rectangle([margin*2, margin*2, size[0]-margin*2, size[1]-margin*2],
                                  radius=3, fill=color)
-        
+
         photo_image = ImageTk.PhotoImage(img)
-        
+
         self._icon_cache[cache_key] = photo_image
         self._photo_image_references[cache_key] = photo_image
-        
+
         return photo_image

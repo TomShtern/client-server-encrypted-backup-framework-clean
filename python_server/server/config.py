@@ -68,7 +68,7 @@ def read_port_config() -> int:
     """Reads server port from `port.info`, defaults to `DEFAULT_PORT` on error."""
     logger = logging.getLogger(__name__)
     try:
-        with open(PORT_CONFIG_FILE, 'r') as f:
+        with open(PORT_CONFIG_FILE) as f:
             port_str = f.read().strip()
             if not port_str:  # Handle case where port.info is empty
                 raise ValueError("Port configuration file is empty.")

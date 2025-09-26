@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """One-click build and run orchestrator for CyberBackup 3.0.
 
 This script:
@@ -30,18 +29,17 @@ if sys.platform == 'win32':
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from Shared.utils.unified_config import get_config
-import subprocess
-import time
+import datetime
 import json
 import logging
+import subprocess
+import time
 import traceback
-import datetime
-import socket
 import webbrowser
-import shutil
 from pathlib import Path
-from typing import List, Tuple, Dict, Any
+from typing import Any
+
+from Shared.utils.unified_config import get_config
 
 try:
     import psutil
@@ -55,10 +53,10 @@ def setup_logging():
     script_dir = Path(__file__).parent
     project_root = script_dir.parent
     logs_dir = project_root / 'logs'
-    
+
     # Ensure logs directory exists BEFORE creating file handler
     logs_dir.mkdir(exist_ok=True)
-    
+
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
@@ -73,7 +71,7 @@ def setup_unicode_console():
     if os.name == 'nt':  # Windows only
         with contextlib.suppress(Exception):
             # Set UTF-8 codepage
-            os.system("chcp 65001 >nul 2>&1")            
+            os.system("chcp 65001 >nul 2>&1")
             logging.info("UTF-8 console setup completed - UTF-8 mode enforced")
 
 def safe_print(message: str, fallback: str | None = None):
@@ -87,7 +85,6 @@ def safe_print(message: str, fallback: str | None = None):
 
 def print_phase(phase_num: int, total_phases: int, title: str):
     """Print phase header with timestamp"""
-    import datetime
     timestamp = datetime.datetime.now().strftime("%H:%M:%S")
     print()
     print(f"[{timestamp}] [PHASE {phase_num}/{total_phases}] {title}...")
@@ -161,14 +158,14 @@ def install_additional_dependencies():
     """Install additional Python dependencies (extracted from main)"""
     print("Installing additional dependencies...")
     additional_deps = ["sentry-sdk", "flask-cors", "watchdog"]
-    
+
     for dep in additional_deps:
         print(f"Installing {dep}...")
         if run_command(f"pip install {dep}", check_exit=False, timeout=60):
             print(f"[OK] {dep} installed successfully")
         else:
             print(f"[WARNING] Failed to install {dep} - continuing anyway")
-    
+
     print_spacing()
 
 
@@ -212,7 +209,6 @@ def print_api_server_troubleshooting():
 
 def open_web_gui(gui_url: str):
     """Open the Web GUI in the default browser with a standard message"""
-    import webbrowser
     print(f"\nOpening Web GUI in browser: {gui_url}")
     webbrowser.open(gui_url)
 
@@ -239,33 +235,33 @@ def handle_error_and_exit(error_message: str, wait_for_input: bool = True):
         input("Press Enter to exit...")
     sys.exit(1)
 
-def run_command(command: str | List[str], shell: bool = True, check_exit: bool = True, cwd: str | None = None, timeout: int = 60) -> bool:
+def run_command(command: str | list[str], shell: bool = True, check_exit: bool = True, cwd: str | None = None, timeout: int = 60) -> bool:
     """Run a command and handle errors with better timeout and path handling"""
     print(f"Running: {command}")
     print()
-    
+
     try:
         # For Windows batch files, ensure proper execution
         if isinstance(command, str) and command.endswith('.bat'):
             # Use absolute path and proper shell execution for batch files
             command = os.path.abspath(command)
-        
+
         result = subprocess.run(
-            command, 
-            shell=shell, 
+            command,
+            shell=shell,
             cwd=cwd or os.getcwd(),
             timeout=timeout,
             capture_output=False  # Show output in real-time
         )
-        
+
         if check_exit and result.returncode != 0:
             print()
             print(f"[ERROR] Command failed with exit code: {result.returncode}")
             wait_for_exit()
             sys.exit(1)
-        
+
         return result.returncode == 0
-        
+
     except subprocess.TimeoutExpired:
         print()
         print(f"[ERROR] Command timed out after {timeout} seconds: {command}")
@@ -281,7 +277,7 @@ def run_command(command: str | List[str], shell: bool = True, check_exit: bool =
             sys.exit(1)
         return False
 
-def check_command_exists(command: str) -> Tuple[bool, str]:
+def check_command_exists(command: str) -> tuple[bool, str]:
     """Check if a command exists"""
     # Special case for Python - if we're running this script, Python exists
     if command == "python":
@@ -294,9 +290,9 @@ def check_command_exists(command: str) -> Tuple[bool, str]:
             return True, f"Python {sys.version.split()[0]} (upgrade recommended)"
         else:
             return False, f"Python {python_version.major}.{python_version.minor} is too old - requires 3.13+"
-    
+
     try:
-        result = subprocess.run(f"{command} --version", shell=True, 
+        result = subprocess.run(f"{command} --version", shell=True,
                               capture_output=True, text=True, timeout=10)
         return result.returncode == 0, result.stdout.strip()
     except Exception as e:
@@ -306,7 +302,7 @@ def check_command_exists(command: str) -> Tuple[bool, str]:
 def check_appmap_available():
     """Check if AppMap is available for recording"""
     try:
-        result = subprocess.run("appmap-python --help", shell=True, 
+        result = subprocess.run("appmap-python --help", shell=True,
                               capture_output=True, text=True, timeout=10)
         return result.returncode == 0
     except Exception:
@@ -335,7 +331,7 @@ def check_port_available(port: int = get_config('api.port', 9090)) -> bool:
     except Exception:
         return False
 
-def check_python_dependencies() -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]]:
+def check_python_dependencies() -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
     """Check if required Python dependencies are available with version info"""
     required_modules = {
         'flask': 'Flask web framework',
@@ -345,8 +341,8 @@ def check_python_dependencies() -> Tuple[List[Tuple[str, str]], List[Tuple[str, 
         'cryptography': 'Cryptographic operations',
         'watchdog': 'File system monitoring'
     }
-    missing_modules: List[Tuple[str, str]] = []
-    optional_missing: List[Tuple[str, str]] = []
+    missing_modules: list[tuple[str, str]] = []
+    optional_missing: list[tuple[str, str]] = []
 
     for module, description in required_modules.items():
         try:
@@ -382,7 +378,7 @@ def check_and_fix_vcpkg_dependencies():
         return False
 
     try:
-        with open(vcpkg_json_path, 'r') as f:
+        with open(vcpkg_json_path) as f:
             vcpkg_config = json.load(f)
 
         required_deps = ["boost-asio", "boost-beast", "boost-iostreams", "cryptopp", "zlib"]
@@ -401,7 +397,7 @@ def check_and_fix_vcpkg_dependencies():
             print("[OK] vcpkg.json updated with missing dependencies")
         else:
             print("[OK] All required vcpkg dependencies are present")
-        
+
         return True
 
     except Exception as e:
@@ -432,7 +428,7 @@ def wait_for_server_startup(host: str = get_config('api.host', '127.0.0.1'), por
     print(f"Waiting for API server to start on {host}:{port}...")
     elapsed = 0
     last_error = None
-    
+
     while elapsed < max_wait:
         try:
             if check_api_server_status(host, port):
@@ -440,25 +436,25 @@ def wait_for_server_startup(host: str = get_config('api.host', '127.0.0.1'), por
                 return True
         except Exception as e:
             last_error = str(e)
-        
+
         # Show progress with more frequent updates
         if elapsed % 3 == 0 and elapsed > 0:
             print(f"[INFO] Still waiting... ({elapsed}s/{max_wait}s)")
-        
+
         time.sleep(check_interval)
         elapsed += check_interval
-    
+
     print(f"[ERROR] API server failed to start within {max_wait} seconds")
     if last_error:
         print(f"[DEBUG] Last connection error: {last_error}")
-    
+
     # Additional diagnostic information
     print("[DIAGNOSTIC] Checking system status...")
     if check_port_available(port):
         print(f"[DEBUG] Port {port} appears to be available (no process bound)")
     else:
         print(f"[DEBUG] Port {port} is in use by another process")
-    
+
     return False
 
 def check_backup_server_status():
@@ -473,7 +469,7 @@ def check_backup_server_status():
     except Exception:
         return False
 
-def _report_terminated_processes(terminated_processes: List[str]):
+def _report_terminated_processes(terminated_processes: list[str]):
     """Report terminated processes and wait for cleanup"""
     if terminated_processes:
         print(f"Successfully terminated {len(terminated_processes)} processes:")
@@ -486,7 +482,7 @@ def _report_terminated_processes(terminated_processes: List[str]):
         print("No CyberBackup processes found running.")
         print()
 
-def check_executable_locations(locations: List[Path] | None = None, context: str = "C++ client") -> Tuple[Path | None, List[Path]]:
+def check_executable_locations(locations: list[Path] | None = None, context: str = "C++ client") -> tuple[Path | None, list[Path]]:
     """Check multiple potential locations for the EncryptedBackupClient.exe file
     
     Args:
@@ -503,11 +499,11 @@ def check_executable_locations(locations: List[Path] | None = None, context: str
             Path("Client/EncryptedBackupClient.exe"),
             Path("client/EncryptedBackupClient.exe")
         ]
-    
+
     for exe_path in locations:
         if exe_path.exists():
             return exe_path, locations
-    
+
     return None, locations
 
 def cleanup_existing_processes():  # sourcery skip: low-code-quality
@@ -516,12 +512,12 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
         print("[WARNING] psutil not available - cannot perform automatic process cleanup")
         print("Please manually close any existing CyberBackup processes")
         return
-        
+
     print("Cleaning up existing CyberBackup processes...")
     print()
-    
-    terminated_processes: List[str] = []
-    
+
+    terminated_processes: list[str] = []
+
     # Define process patterns to look for
     process_patterns = {
         "API Server": ["cyberbackup_api_server.py", "api_server"],
@@ -529,35 +525,35 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
         "C++ Client": ["encryptedbackupclient.exe", "EncryptedBackupClient.exe"],
         "Server GUI": ["ServerGUI.py", "server_gui"]
     }
-    
+
     try:
         # Get list of all running processes with better error handling
         for process in psutil.process_iter(['pid', 'name', 'cmdline']):  # type: ignore
             try:
-                process_info: Dict[str, Any] = process.info
-                cmdline: List[str] = process_info.get('cmdline', [])
+                process_info: dict[str, Any] = process.info
+                cmdline: list[str] = process_info.get('cmdline', [])
                 name: str = process_info.get('name', '').lower()
-                
+
                 if not cmdline:
                     continue
-                
+
                 cmdline_str: str = ' '.join(cmdline).lower()
                 should_terminate: bool = False
                 process_type: str = ""
-                
+
                 # Check against each pattern
                 for ptype, patterns in process_patterns.items():
                     if any(pattern.lower() in cmdline_str for pattern in patterns):
                         should_terminate = True
                         process_type = ptype
                         break
-                
+
                 # Additional port-based detection with safer connection checking
                 if not should_terminate:
                     with contextlib.suppress(AttributeError, psutil.AccessDenied, psutil.NoSuchProcess):
                         # Use psutil.net_connections() for port checking
                         for conn in psutil.net_connections():
-                            if (hasattr(conn, 'laddr') and conn.laddr and 
+                            if (hasattr(conn, 'laddr') and conn.laddr and
                                 hasattr(conn, 'pid') and conn.pid == process_info['pid']):
                                 # Safely get port from connection info
                                 port: int | None = None
@@ -565,14 +561,14 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
                                     port = conn.laddr.port
                                 elif len(conn.laddr) >= 2:
                                     port = conn.laddr[1]
-                                
-                                if (port in [9090, 1256] and 
-                                    hasattr(conn, 'status') and conn.status == psutil.CONN_LISTEN and 
+
+                                if (port in [9090, 1256] and
+                                    hasattr(conn, 'status') and conn.status == psutil.CONN_LISTEN and
                                     ('python' in name or 'flask' in cmdline_str)):
                                         should_terminate = True
                                         process_type = f"Port-bound Server ({port})"
                                         break
-                
+
                 if should_terminate:
                     print(f"Terminating {process_type} (PID: {process.info['pid']})")
                     try:
@@ -588,23 +584,23 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
                     except psutil.NoSuchProcess:
                         # Process already terminated
                         terminated_processes.append(f"{process_type} (PID: {process.info['pid']}) - Already terminated")
-                        
+
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue  # Process may have disappeared or we don't have access
-                
+
     except Exception as e:
         print(f"[WARNING] Error during process cleanup: {e}")
-    
+
     _report_terminated_processes(terminated_processes)
-    
+
     # Additional port cleanup with improved error handling
     if psutil:
         ports_to_clean = [get_config('api.port', 9090), get_config('server.port', 1256)]
         for port in ports_to_clean:
             try:
                 print(f"Checking for processes on port {port}...")
-                port_processes: List[int] = []
-                
+                port_processes: list[int] = []
+
                 for conn in psutil.net_connections():
                     conn_port: int | None = None
                     if hasattr(conn, 'laddr') and conn.laddr:
@@ -612,17 +608,17 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
                             conn_port = conn.laddr.port
                         elif len(conn.laddr) >= 2:
                             conn_port = conn.laddr[1]
-                    
+
                     if conn_port == port and conn.status == psutil.CONN_LISTEN and conn.pid:
                         port_processes.append(conn.pid)
-                
+
                 for pid in port_processes:
                     with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
                         process = psutil.Process(pid)
                         process_name: str = process.name()
                         print(f"Terminating process using port {port}: {process_name} (PID: {pid})")
                         process.terminate()
-                        
+
                         # Give process time to terminate gracefully
                         try:
                             process.wait(timeout=3)
@@ -630,10 +626,10 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
                         except psutil.TimeoutExpired:
                             print(f"Force killing process {pid}")
                             process.kill()
-                            
+
             except Exception as e:
                 print(f"[WARNING] Error cleaning port {port}: {e}")
-    
+
     print("[OK] Process cleanup completed!")
     print()
 
@@ -644,10 +640,10 @@ def main():
     api_port = get_config('api.port', 9090)
     gui_url = f"http://{get_config('api.host', '127.0.0.1')}:{api_port}/"
     logging.info("Starting CyberBackup 3.0 build and deployment process")
-    
+
     # Enhanced Unicode console setup
     setup_unicode_console()
-    
+
     print()
     print("=" * 72)
     safe_print("   [LAUNCH] ONE-CLICK BUILD AND RUN - CyberBackup 3.0")
@@ -656,30 +652,30 @@ def main():
     print("Starting complete build and deployment process...")
     print("This will configure, build, and launch the entire backup framework.")
     print()
-    
+
     # Change to project root directory (parent of scripts directory)
     script_dir = Path(__file__).parent.parent
     os.chdir(script_dir)
     print(f"Working directory: {os.getcwd()}")
     print()
-    
+
     # ========================================================================
     # PHASE 0: CLEANUP EXISTING PROCESSES
     # ========================================================================
     print_phase(0, 7, "Cleaning Up Existing Processes")
     cleanup_existing_processes()
-    
+
     # ========================================================================
     # PHASE 1: PREREQUISITES CHECK
     # ========================================================================
     print_phase(1, 7, "Checking Prerequisites")
-    
+
     # Check Python
     exists, version = check_command_exists("python")
     if not exists:
         handle_error_and_exit("[ERROR] Python 3.13+ is not installed or not in PATH\nPlease install Python 3.13+ and add it to your PATH")
     print(f"[OK] Python found: {version.split()[1] if 'Python' in version else version}")
-    
+
     # Check CMake
     exists, version = check_command_exists("cmake")
     if not exists:
@@ -689,18 +685,18 @@ def main():
     else:
         print(f"[OK] CMake found: {version.split()[2] if 'version' in version else version}")
         skip_build = False
-    
+
     # Check Git (optional)
     exists, version = check_command_exists("git")
     if exists:
         print("[OK] Git found")
     else:
         print("[WARNING] Git not found (optional but recommended)")
-    
+
     print()
     print("Prerequisites check completed successfully!")
     print()
-    
+
     if not skip_build:
         # ========================================================================
         # PHASE 2: CMAKE CONFIGURATION AND VCPKG SETUP
@@ -713,23 +709,23 @@ def main():
 
         print("Calling scripts\\build\\configure_cmake.bat for CMake + vcpkg setup...")
         print()
-        
+
         if not run_command("scripts\\build\\configure_cmake.bat", timeout=300):
             print_error_with_newline("[ERROR] CMake configuration failed!")
             print("Check the output above for details.")
             wait_for_exit()
             sys.exit(1)
-        
+
         print_success_with_spacing("[OK] CMake configuration completed successfully!")
-        
+
         # ========================================================================
         # PHASE 3: BUILD C++ CLIENT
         # ========================================================================
         print_phase(3, 7, "Building C++ Client")
-        
+
         print_build_command_info("Building EncryptedBackupClient.exe with CMake...", "cmake --build build --config Release")
         print()
-        
+
         if not run_command("cmake --build build --config Release", timeout=180):
             print_build_failure_help()
 
@@ -750,11 +746,11 @@ def main():
                     handle_error_and_exit("", wait_for_input=True)
             except (EOFError, KeyboardInterrupt):
                 handle_error_and_exit("\nExiting...", wait_for_input=False)
-        
+
         # Verify the executable was created with fallback locations
         found_exe, checked_locations = check_executable_locations()
         report_executable_status(found_exe, checked_locations)
-        
+
         print_spacing()
         print("[OK] C++ client built successfully!")
         print(f"   Location: {found_exe}")
@@ -767,7 +763,7 @@ def main():
 
         print_phase(3, 7, "Checking Existing C++ Client")
         found_exe, checked_locations = check_executable_locations()
-        
+
         if found_exe:
             print(f"[OK] Found existing C++ client: {found_exe}")
         else:
@@ -777,18 +773,18 @@ def main():
                 print(f"  - {path}")
             print("\nRecommendation: Run cmake --build build --config Release")
         print()
-    
+
     # ========================================================================
     # PHASE 4: PYTHON ENVIRONMENT SETUP
     # ========================================================================
     print_phase(4, 7, "Setting up Python Environment")
-    
+
     # Install Python dependencies (uses helper to avoid duplicate logic)
     install_python_dependencies()
 
     # Install additional dependencies with better error handling
     install_additional_dependencies()
-    
+
     # ========================================================================
     # PHASE 5: CONFIGURATION VERIFICATION
     # ========================================================================
@@ -995,7 +991,7 @@ def main():
                 print_api_start_failure()
 
         except Exception as e:
-            print(f"[ERROR] Failed to start API server: {str(e)}")
+            print(f"[ERROR] Failed to start API server: {e!s}")
             server_started_successfully = False
     else:
         # Try alternative API server locations
@@ -1113,7 +1109,7 @@ def main():
     print("=" * 72)
 
 
-def print_missing_and_optional_deps(header: str, deps: List[Tuple[str, str]], footer: str):
+def print_missing_and_optional_deps(header: str, deps: list[tuple[str, str]], footer: str):
     """Print missing or optional dependencies in a standardized format."""
     print(header)
     for dep, desc in deps:

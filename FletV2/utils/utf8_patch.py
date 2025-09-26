@@ -4,6 +4,7 @@ Replaces previous external Shared.utils.utf8_solution dependency.
 Keeps side-effect only behavior so importing it is safe and idempotent.
 """
 from __future__ import annotations
+
 import os
 import sys
 

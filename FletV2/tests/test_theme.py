@@ -3,15 +3,15 @@
 Unit tests for the theme module.
 """
 
-import unittest
-import sys
 import os
+import sys
+import unittest
 
 # Add the FletV2 directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import flet as ft
-from theme import BRAND_COLORS, setup_modern_theme, toggle_theme_mode, get_design_tokens
+from theme import BRAND_COLORS, get_design_tokens, setup_modern_theme, toggle_theme_mode
 
 
 class TestThemeModule(unittest.TestCase):

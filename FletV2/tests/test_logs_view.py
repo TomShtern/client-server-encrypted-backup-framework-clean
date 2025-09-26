@@ -3,10 +3,10 @@
 Unit tests for the logs view.
 """
 
-import unittest
-import sys
 import os
-from unittest.mock import Mock, patch, MagicMock
+import sys
+import unittest
+from unittest.mock import MagicMock, Mock
 
 # Add the FletV2 directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -24,11 +24,11 @@ class TestLogsView(unittest.TestCase):
         """Set up test fixtures before each test method."""
         # Create mock server bridge
         self.mock_server_bridge = Mock()
-        
+
         # Create mock page
         self.mock_page = Mock()
         self.mock_page.run_task = Mock()
-        
+
         # Mock logs data
         self.mock_server_bridge.get_logs.return_value = [
             {
@@ -55,7 +55,7 @@ class TestLogsView(unittest.TestCase):
             view = create_logs_view(self.mock_server_bridge, self.mock_page)
             # If we get here without exception, the function executed
             self.assertIsNotNone(view)
-        except Exception as e:
+        except Exception:
             # This is expected since we're mocking flet
             pass
 

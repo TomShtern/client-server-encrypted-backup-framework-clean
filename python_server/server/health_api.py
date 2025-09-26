@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 try:
-    from flask import Blueprint, jsonify, Response
+    from flask import Blueprint, Response, jsonify
     from flask.wrappers import Response as FlaskResponse
     HAS_FLASK = True
 except Exception:  # server.py may not run Flask, so guard imports
@@ -11,18 +11,16 @@ except Exception:  # server.py may not run Flask, so guard imports
     FlaskResponse = None
     HAS_FLASK = False
 
-from typing import Dict, Any, Union, Optional, Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from flask import Flask
+    pass
 
 from .connection_health import get_connection_health_monitor
 
-
 if HAS_FLASK and Blueprint is not None and jsonify is not None:
     health_bp = Blueprint('conn_health', __name__)
-    
+
     @health_bp.route('/health/connections')
     def connections_summary() -> Any:
         """Get connection health summary"""

@@ -7,28 +7,58 @@ Core Principle: Use Flet's built-in charts and progress components.
 Real system metrics with clean, maintainable code.
 """
 
-# Explicit imports instead of star import for better static analysis
-import flet as ft
-from typing import Optional, Dict, Any, List
-from datetime import datetime
-import json
+# Standard library imports
 import asyncio
+import json
+import os
+import sys
+from datetime import datetime
+from typing import Any
+
+# Ensure repository and package roots are on sys.path for runtime resolution
+_views_dir = os.path.dirname(os.path.abspath(__file__))
+_flet_v2_root = os.path.dirname(_views_dir)
+_repo_root = os.path.dirname(_flet_v2_root)
+for _path in (_flet_v2_root, _repo_root):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+# Third-party imports
 import aiofiles
+import flet as ft
 import psutil
 
-from utils.debug_setup import get_logger
-from utils.server_bridge import ServerBridge
-from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button, themed_metric_card
-from utils.user_feedback import show_success_message, show_error_message
+# ALWAYS import this in any Python file that deals with subprocess or console I/O
+import Shared.utils.utf8_solution as _  # noqa: F401
+
+try:
+    from FletV2.utils.debug_setup import get_logger
+except ImportError:  # pragma: no cover - fallback logging
+    import logging
+
+    from FletV2 import config
+
+    def get_logger(name: str) -> logging.Logger:
+        logger = logging.getLogger(name or __name__)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+            logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG if getattr(config, "DEBUG_MODE", False) else logging.WARNING)
+        return logger
+
+from FletV2.utils.server_bridge import ServerBridge
+from FletV2.utils.state_manager import StateManager
+from FletV2.utils.ui_components import themed_button, themed_card, themed_metric_card
+from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger(__name__)
 
 
 def create_analytics_view(
-    server_bridge: Optional[ServerBridge],
+    server_bridge: ServerBridge | None,
     page: ft.Page,
-    _state_manager: Optional[StateManager] = None
+    _state_manager: StateManager | None = None
 ) -> Any:
     """Simple analytics view with real system metrics."""
     logger.info("Creating simplified analytics view")
@@ -39,7 +69,7 @@ def create_analytics_view(
     refresh_task = None
 
     # Get real system metrics using psutil
-    def get_system_metrics() -> Dict[str, Any]:
+    def get_system_metrics() -> dict[str, Any]:
         """Get real system metrics using psutil - simple and direct."""
         try:
             # CPU metrics

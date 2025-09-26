@@ -7,27 +7,55 @@ Core Principle: Use Flet's built-in DataTable, AlertDialog, and TextField.
 Let Flet handle CRUD operations with simple, clean patterns.
 """
 
-# Explicit imports instead of star import for better static analysis
-import flet as ft
-from typing import Optional, Dict, Any, List
-from datetime import datetime
+# Standard library imports
 import json
-import asyncio
-import aiofiles
+import os
+import sys
+from datetime import datetime
+from typing import Any
 
-from utils.debug_setup import get_logger
-from utils.server_bridge import ServerBridge
-from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button, themed_metric_card, create_status_pill
-from utils.user_feedback import show_success_message, show_error_message
+# Ensure repository and package roots are on sys.path for runtime resolution
+_views_dir = os.path.dirname(os.path.abspath(__file__))
+_flet_v2_root = os.path.dirname(_views_dir)
+_repo_root = os.path.dirname(_flet_v2_root)
+for _path in (_flet_v2_root, _repo_root):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+# Third-party imports
+import aiofiles
+import flet as ft
+
+# ALWAYS import this in any Python file that deals with subprocess or console I/O
+import Shared.utils.utf8_solution as _  # noqa: F401
+
+try:
+    from FletV2.utils.debug_setup import get_logger
+except ImportError:  # pragma: no cover - fallback logging
+    import logging
+
+    from FletV2 import config
+
+    def get_logger(name: str) -> logging.Logger:
+        logger = logging.getLogger(name or __name__)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+            logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG if getattr(config, "DEBUG_MODE", False) else logging.WARNING)
+        return logger
+from FletV2.utils.server_bridge import ServerBridge
+from FletV2.utils.state_manager import StateManager
+from FletV2.utils.ui_components import create_status_pill, themed_button, themed_card, themed_metric_card
+from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger(__name__)
 
 
 def create_database_view(
-    server_bridge: Optional[ServerBridge],
+    server_bridge: ServerBridge | None,
     page: ft.Page,
-    _state_manager: Optional[StateManager] = None
+    _state_manager: StateManager | None = None
 ) -> Any:
     """Simple database view using Flet's built-in components."""
     logger.info("Creating simplified database view")
@@ -39,7 +67,7 @@ def create_database_view(
     search_query = ""
 
     # Mock database info for demonstration
-    def get_mock_db_info() -> Dict[str, Any]:
+    def get_mock_db_info() -> dict[str, Any]:
         """Simple database info generator."""
         return {
             "status": "Connected",
@@ -49,7 +77,7 @@ def create_database_view(
         }
 
     # Mock table data generator
-    def get_mock_table_data(table_name: str) -> List[Dict[str, Any]]:
+    def get_mock_table_data(table_name: str) -> list[dict[str, Any]]:
         """Simple table data generator."""
         if table_name == "clients":
             return [
@@ -196,7 +224,7 @@ def create_database_view(
         database_table.update()
 
     # Edit record dialog using Flet's AlertDialog
-    def edit_record(record: Dict[str, Any]) -> None:
+    def edit_record(record: dict[str, Any]) -> None:
         """Simple edit dialog using AlertDialog."""
         fields = {}
 
@@ -240,7 +268,7 @@ def create_database_view(
         page.open(edit_dialog)
 
     # Delete record dialog using Flet's AlertDialog
-    def delete_record(record: Dict[str, Any]) -> None:
+    def delete_record(record: dict[str, Any]) -> None:
         """Simple delete confirmation dialog."""
         def confirm_delete(_e: ft.ControlEvent) -> None:
             # Remove from data
@@ -298,7 +326,7 @@ def create_database_view(
                         ids.append(int(row_id) if row_id else 0)
                 max_id = max(ids, default=0)
                 new_record['id'] = max_id + 1
-            except Exception as e:
+            except Exception:
                 # Fallback: use timestamp-based ID
                 import time
                 new_record['id'] = int(time.time() * 1000) % 1000000

@@ -4,11 +4,10 @@ FletV2 Database Manager
 Handles database operations for FletV2 using MockaBase as a drop-in replacement
 """
 
-import sqlite3
 import os
+import sqlite3
 import sys
-from typing import List, Dict, Any, Optional
-from datetime import datetime
+from typing import Any
 
 # Add project root to path
 project_root = os.path.join(os.path.dirname(__file__), "..", "..")
@@ -52,7 +51,7 @@ class FletDatabaseManager:
             self.connection = None
             logger.info("Disconnected from database")
 
-    def get_table_names(self) -> List[str]:
+    def get_table_names(self) -> list[str]:
         """Get list of table names in the database."""
         if not self.connection:
             return []
@@ -66,7 +65,7 @@ class FletDatabaseManager:
             logger.error(f"Failed to get table names: {e}")
             return []
 
-    def get_table_data(self, table_name: str) -> Dict[str, Any]:
+    def get_table_data(self, table_name: str) -> dict[str, Any]:
         """Get table data including columns and rows."""
         if not self.connection:
             return {"columns": [], "rows": []}
@@ -102,7 +101,7 @@ class FletDatabaseManager:
             logger.error(f"Failed to get table data for {table_name}: {e}")
             return {"columns": [], "rows": []}
 
-    def get_database_stats(self) -> Dict[str, Any]:
+    def get_database_stats(self) -> dict[str, Any]:
         """Get database statistics."""
         if not self.connection:
             return {}
@@ -142,7 +141,7 @@ class FletDatabaseManager:
             logger.error(f"Failed to get database stats: {e}")
             return {}
 
-    def get_clients(self) -> List[Dict[str, Any]]:
+    def get_clients(self) -> list[dict[str, Any]]:
         """Get all clients from the database."""
         if not self.connection:
             return []
@@ -173,7 +172,7 @@ class FletDatabaseManager:
             logger.error(f"Failed to get clients: {e}")
             return []
 
-    def get_files(self) -> List[Dict[str, Any]]:
+    def get_files(self) -> list[dict[str, Any]]:
         """Get all files from the database."""
         if not self.connection:
             return []
@@ -208,7 +207,7 @@ class FletDatabaseManager:
             logger.error(f"Failed to get files: {e}")
             return []
 
-    def update_row(self, table_name: str, row_id: str, update_data: Dict[str, Any]) -> bool:
+    def update_row(self, table_name: str, row_id: str, update_data: dict[str, Any]) -> bool:
         """Update a row in a table."""
         if not self.connection:
             return False
@@ -249,7 +248,7 @@ class FletDatabaseManager:
             return False
 
 
-def create_database_manager(database_path: str = "MockaBase.db") -> Optional[FletDatabaseManager]:
+def create_database_manager(database_path: str = "MockaBase.db") -> FletDatabaseManager | None:
     """
     Factory function to create a database manager.
 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 assets - A package for storing and managing all GUI assets.
 

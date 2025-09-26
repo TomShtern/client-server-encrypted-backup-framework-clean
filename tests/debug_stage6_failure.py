@@ -5,15 +5,13 @@ This script mimics the exact subprocess calls from stage 6/7 but with enhanced e
 """
 
 import os
-import sys
-import subprocess
-
 import socket
+import subprocess
+import sys
 from pathlib import Path
 
-from typing import Tuple
 
-def check_port_available(port: int) -> Tuple[bool, str]:
+def check_port_available(port: int) -> tuple[bool, str]:
     """Check if a port is available"""
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -23,13 +21,13 @@ def check_port_available(port: int) -> Tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
-from typing import List
 
-def check_dependencies() -> List[str]:
+
+def check_dependencies() -> list[str]:
     """Check required Python dependencies"""
     required_modules = ['flask', 'flask_cors', 'psutil', 'cryptography']
-    missing_modules: List[str] = []
-    
+    missing_modules: list[str] = []
+
     for module in required_modules:
         try:
             __import__(module)
@@ -37,7 +35,7 @@ def check_dependencies() -> List[str]:
         except ImportError as e:
             missing_modules.append(module)
             print(f"[ERROR] {module} is missing: {e}")
-    
+
     return missing_modules
 
 def test_server_module() -> bool:
@@ -48,9 +46,9 @@ def test_server_module() -> bool:
         os.chdir(project_root)
         from Shared.path_utils import setup_imports
         setup_imports()
-        
+
         print(f"Working directory: {os.getcwd()}")
-        
+
         # Try to import the server module
 
         print("[OK] python_server.server.server module imports successfully")
@@ -66,11 +64,11 @@ def test_api_server() -> bool:
         if not api_server_path.exists():
             print(f"[ERROR] API server file not found: {api_server_path}")
             return False
-        
+
         # Test syntax by compiling the file
-        with open(api_server_path, 'r', encoding='utf-8') as f:
+        with open(api_server_path, encoding='utf-8') as f:
             content = f.read()
-            
+
         compile(content, str(api_server_path), 'exec')
         print("[OK] cyberbackup_api_server.py has valid syntax")
         return True
@@ -83,11 +81,11 @@ def test_subprocess_calls():
     print("\n" + "="*60)
     print("TESTING SUBPROCESS CALLS (with error capture)")
     print("="*60)
-    
+
     # Test 1: Backup Server Command
     print("\n1. Testing Backup Server Command:")
     print("   Command: python -m python_server.server.server")
-    
+
     try:
         _result: subprocess.CompletedProcess[str] = subprocess.run(
             [sys.executable, "-m", "python_server.server.server"],
@@ -96,22 +94,22 @@ def test_subprocess_calls():
             text=True,
             cwd=os.getcwd()
         )
-        
+
         print(f"   Exit Code: {_result.returncode}")
         if _result.stdout:
             print(f"   STDOUT:\n{_result.stdout}")
         if _result.stderr:
             print(f"   STDERR:\n{_result.stderr}")
-            
+
     except subprocess.TimeoutExpired:
         print("   [INFO] Command timed out after 5s (server may be starting normally)")
     except Exception as e:
         print(f"   [ERROR] Command failed: {e}")
-    
+
     # Test 2: API Server Command
     print("\n2. Testing API Server Command:")
     print("   Command: python cyberbackup_api_server.py")
-    
+
     try:
         _result: subprocess.CompletedProcess[str] = subprocess.run(
             [sys.executable, "cyberbackup_api_server.py"],
@@ -120,13 +118,13 @@ def test_subprocess_calls():
             text=True,
             cwd=os.getcwd()
         )
-        
+
         print(f"   Exit Code: {_result.returncode}")
         if _result.stdout:
             print(f"   STDOUT:\n{_result.stdout}")
         if _result.stderr:
             print(f"   STDERR:\n{_result.stderr}")
-            
+
     except subprocess.TimeoutExpired:
         print("   [INFO] Command timed out after 5s (server may be starting normally)")
     except Exception as e:
@@ -135,57 +133,57 @@ def test_subprocess_calls():
 def main():
     print("STAGE 6/7 FAILURE DIAGNOSTIC SCRIPT")
     print("="*50)
-    
+
     # Check 1: Dependencies
     print("\nCHECK 1: Python Dependencies")
     print("-" * 30)
     missing_deps = check_dependencies()
-    
+
     if missing_deps:
         print(f"\n[CRITICAL] Missing dependencies: {', '.join(missing_deps)}")
         print("Install with: pip install " + " ".join(missing_deps))
         return
-    
+
     # Check 2: Port Availability
     print("\nCHECK 2: Port Availability")
     print("-" * 30)
-    
+
     port_1256 = check_port_available(1256)
     port_9090 = check_port_available(9090)
-    
+
     if port_1256[0]:
         print("[OK] Port 1256 is available")
     else:
         print(f"[ERROR] Port 1256 is in use: {port_1256[1]}")
-    
+
     if port_9090[0]:
         print("[OK] Port 9090 is available")
     else:
         print(f"[ERROR] Port 9090 is in use: {port_9090[1]}")
-    
+
     # Check 3: File Existence
     print("\nCHECK 3: Required Files")
     print("-" * 30)
-    
+
     server_file = Path("python_server/server/server.py")
     api_file = Path("cyberbackup_api_server.py")
-    
+
     print(f"Server file: {server_file} - {'EXISTS' if server_file.exists() else 'MISSING'}")
     print(f"API file: {api_file} - {'EXISTS' if api_file.exists() else 'MISSING'}")
-    
+
     # Check 4: Module Import
     print("\nCHECK 4: Module Import")
     print("-" * 30)
     test_server_module()
-    
+
     # Check 5: API Server Syntax
     print("\nCHECK 5: API Server Syntax")
     print("-" * 30)
     test_api_server()
-    
+
     # Check 6: Subprocess Commands
     test_subprocess_calls()
-    
+
     # Summary
     print("\n" + "="*60)
     print("DIAGNOSTIC SUMMARY")

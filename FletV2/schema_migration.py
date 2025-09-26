@@ -7,13 +7,13 @@ while preserving all existing data. It integrates with the BackupServer's existi
 migration system and ensures compatibility between server and GUI expectations.
 """
 
-import os
-import sys
-import sqlite3
 import logging
+import os
+import sqlite3
+import sys
 import uuid
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Any
 
 # Add project root to path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -44,7 +44,7 @@ def blob_to_uuid_string(blob_data: bytes) -> str:
         return str(uuid.uuid4())
     return str(uuid.UUID(bytes=blob_data))
 
-def migrate_database_schema(db_path: Optional[str] = None) -> bool:
+def migrate_database_schema(db_path: str | None = None) -> bool:
     """
     Migrate the database schema to be compatible with FletV2 using integrated migration system.
 
@@ -113,7 +113,7 @@ def migrate_database_schema(db_path: Optional[str] = None) -> bool:
         logger.error(traceback.format_exc())
         return False
 
-def check_database_schema(conn: sqlite3.Connection) -> Dict[str, Any]:
+def check_database_schema(conn: sqlite3.Connection) -> dict[str, Any]:
     """Check the current database schema and return information about it."""
     try:
         # Get table information
@@ -154,7 +154,7 @@ def check_database_schema(conn: sqlite3.Connection) -> Dict[str, Any]:
         logger.error(f"Error checking database schema: {e}")
         return {'tables': [], 'backupserver_compatible': False, 'fletv2_ready': False}
 
-def apply_fletv2_enhancements(conn: sqlite3.Connection, schema_info: Dict[str, Any]) -> bool:
+def apply_fletv2_enhancements(conn: sqlite3.Connection, schema_info: dict[str, Any]) -> bool:
     """Apply FletV2-specific enhancements to the existing BackupServer schema."""
     try:
         logger.info("Applying FletV2 enhancements...")
@@ -192,7 +192,7 @@ def create_fletv2_indexes(conn: sqlite3.Connection):
         except Exception as e:
             logger.warning(f"Failed to create index: {e}")
 
-def create_compatibility_views(conn: sqlite3.Connection, schema_info: Dict[str, Any]):
+def create_compatibility_views(conn: sqlite3.Connection, schema_info: dict[str, Any]):
     """Create views for data compatibility between BackupServer and FletV2."""
     try:
         # Create a view that presents clients in FletV2-friendly format
@@ -239,7 +239,7 @@ def create_compatibility_views(conn: sqlite3.Connection, schema_info: Dict[str, 
     except Exception as e:
         logger.warning(f"Failed to create compatibility views: {e}")
 
-def add_fletv2_columns(conn: sqlite3.Connection, schema_info: Dict[str, Any]):
+def add_fletv2_columns(conn: sqlite3.Connection, schema_info: dict[str, Any]):
     """Add any missing columns that FletV2 might need."""
     try:
         # This is handled by BackupServer's migration system

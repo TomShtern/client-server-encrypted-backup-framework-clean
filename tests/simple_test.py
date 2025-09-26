@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Simple test - no fancy output, just check if it works"""
 
-import httpx
-import os
 import asyncio
+import os
+
+import httpx
+
 
 async def test_simple():
     # Create test file

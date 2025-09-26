@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Dict
 
 from utils.debug_setup import get_logger
 from views.settings_state import EnhancedSettingsState
@@ -79,7 +78,7 @@ async def enhanced_export_settings(state: EnhancedSettingsState, export_format: 
 
 
 def _load_json_settings(file_path: str) -> dict:
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, encoding='utf-8') as f:
         imported_data = json.load(f)
     if 'settings' in imported_data:
         version = imported_data.get('version', '1.0')
@@ -92,7 +91,7 @@ def _load_ini_settings(file_path: str) -> dict:
     import configparser
     config = configparser.ConfigParser()
     config.read(file_path, encoding='utf-8')
-    imported: Dict[str, Dict[str, object]] = {}
+    imported: dict[str, dict[str, object]] = {}
     for section in config.sections():
         imported[section] = {}
         for key, value in config[section].items():

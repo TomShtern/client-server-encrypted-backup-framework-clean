@@ -3,11 +3,11 @@
 Unit tests for the clients view.
 """
 
-import unittest
-import sys
 import os
+import sys
+import unittest
 from contextlib import suppress
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock
 
 # Add the FletV2 directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))

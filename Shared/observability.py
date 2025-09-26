@@ -5,16 +5,17 @@ Provides structured logging, metrics collection, and comprehensive monitoring
 """
 
 import json
-import time
-import threading
 import logging
-from datetime import datetime, timezone
-from typing import Dict, Any, Optional, List
-from dataclasses import dataclass, field, asdict
+import threading
+import time
 from collections import defaultdict, deque
-from enum import Enum
-import psutil
 from contextlib import suppress
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
+from typing import Any
+
+import psutil
 
 
 class MetricType(Enum):
@@ -40,15 +41,15 @@ class StructuredLogEntry:
     level: str
     component: str
     message: str
-    context: Dict[str, Any] = field(default_factory=dict)
-    trace_id: Optional[str] = None
-    span_id: Optional[str] = None
-    user_id: Optional[str] = None
-    session_id: Optional[str] = None
-    operation: Optional[str] = None
-    duration_ms: Optional[float] = None
-    error_code: Optional[str] = None
-    tags: Dict[str, str] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
+    trace_id: str | None = None
+    span_id: str | None = None
+    user_id: str | None = None
+    session_id: str | None = None
+    operation: str | None = None
+    duration_ms: float | None = None
+    error_code: str | None = None
+    tags: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -58,8 +59,8 @@ class Metric:
     type: MetricType
     value: float
     timestamp: float
-    tags: Dict[str, str] = field(default_factory=dict)
-    unit: Optional[str] = None
+    tags: dict[str, str] = field(default_factory=dict)
+    unit: str | None = None
 
 
 @dataclass
@@ -79,14 +80,14 @@ class SystemMetrics:
 
 class StructuredLogger:
     """Enhanced structured logger with context management"""
-    
+
     def __init__(self, component: str, base_logger: logging.Logger):
         self.component = component
         self.base_logger = base_logger
-        self.context: Dict[str, Any] = {}
-        self.trace_id: Optional[str] = None
-        self.span_id: Optional[str] = None
-        
+        self.context: dict[str, Any] = {}
+        self.trace_id: str | None = None
+        self.span_id: str | None = None
+
     def with_context(self, **kwargs) -> 'StructuredLogger':
         """Create a new logger with additional context"""
         new_logger = StructuredLogger(self.component, self.base_logger)
@@ -94,19 +95,19 @@ class StructuredLogger:
         new_logger.trace_id = self.trace_id
         new_logger.span_id = self.span_id
         return new_logger
-        
-    def with_trace(self, trace_id: str, span_id: Optional[str] = None) -> 'StructuredLogger':
+
+    def with_trace(self, trace_id: str, span_id: str | None = None) -> 'StructuredLogger':
         """Create a new logger with tracing information"""
         new_logger = StructuredLogger(self.component, self.base_logger)
         new_logger.context = self.context.copy()
         new_logger.trace_id = trace_id
         new_logger.span_id = span_id or trace_id
         return new_logger
-        
+
     def _log(self, level: LogLevel, message: str, **kwargs: Any) -> None:
         """Internal logging method"""
         entry = StructuredLogEntry(
-            timestamp=f"{datetime.now(timezone.utc).isoformat()}Z",
+            timestamp=f"{datetime.now(UTC).isoformat()}Z",
             level=level.value,
             component=self.component,
             message=message,
@@ -120,17 +121,17 @@ class StructuredLogger:
             error_code=kwargs.get('error_code'),
             tags=kwargs.get('tags', {})
         )
-        
+
         # Log as JSON for structured parsing
         json_log = json.dumps(asdict(entry), default=str)
-        
+
         # Also log human-readable format
         human_msg = f"[{self.component}] {message}"
         if self.trace_id:
             human_msg += f" [trace:{self.trace_id}]"
         if entry.context:
             human_msg += f" {entry.context}"
-            
+
         # Send to appropriate log level
         if level in (LogLevel.TRACE, LogLevel.DEBUG):
             self.base_logger.debug(f"STRUCTURED: {json_log}")
@@ -147,35 +148,35 @@ class StructuredLogger:
         elif level == LogLevel.FATAL:
             self.base_logger.critical(f"STRUCTURED: {json_log}")
             self.base_logger.critical(human_msg)
-    
+
     def trace(self, message: str, **kwargs: Any) -> None:
         self._log(LogLevel.TRACE, message, **kwargs)
-        
+
     def debug(self, message: str, **kwargs: Any) -> None:
         self._log(LogLevel.DEBUG, message, **kwargs)
-        
+
     def info(self, message: str, **kwargs: Any) -> None:
         self._log(LogLevel.INFO, message, **kwargs)
-        
+
     def warn(self, message: str, **kwargs: Any) -> None:
         self._log(LogLevel.WARN, message, **kwargs)
-        
+
     def error(self, message: str, **kwargs: Any) -> None:
         self._log(LogLevel.ERROR, message, **kwargs)
-        
+
     def fatal(self, message: str, **kwargs: Any) -> None:
         self._log(LogLevel.FATAL, message, **kwargs)
 
 
 class MetricsCollector:
     """Thread-safe metrics collection and aggregation"""
-    
+
     def __init__(self, max_history: int = 1000):
-        self.metrics: Dict[str, deque[Metric]] = defaultdict(lambda: deque(maxlen=max_history))
+        self.metrics: dict[str, deque[Metric]] = defaultdict(lambda: deque(maxlen=max_history))
         self.lock = threading.RLock()
         self.start_time = time.time()
-        
-    def record_counter(self, name: str, value: float = 1.0, tags: Optional[Dict[str, str]] = None):
+
+    def record_counter(self, name: str, value: float = 1.0, tags: dict[str, str] | None = None):
         """Record a counter metric (cumulative)"""
         metric = Metric(
             name=name,
@@ -186,8 +187,8 @@ class MetricsCollector:
         )
         with self.lock:
             self.metrics[name].append(metric)
-            
-    def record_gauge(self, name: str, value: float, tags: Optional[Dict[str, str]] = None):
+
+    def record_gauge(self, name: str, value: float, tags: dict[str, str] | None = None):
         """Record a gauge metric (current value)"""
         metric = Metric(
             name=name,
@@ -198,8 +199,8 @@ class MetricsCollector:
         )
         with self.lock:
             self.metrics[name].append(metric)
-            
-    def record_timer(self, name: str, duration_ms: float, tags: Optional[Dict[str, str]] = None):
+
+    def record_timer(self, name: str, duration_ms: float, tags: dict[str, str] | None = None):
         """Record a timer metric"""
         metric = Metric(
             name=name,
@@ -211,20 +212,20 @@ class MetricsCollector:
         )
         with self.lock:
             self.metrics[name].append(metric)
-            
-    def get_metric_summary(self, name: str, window_seconds: int = 300) -> Dict[str, Any]:
+
+    def get_metric_summary(self, name: str, window_seconds: int = 300) -> dict[str, Any]:
         """Get summary statistics for a metric within time window"""
         with self.lock:
             if name not in self.metrics:
                 return {}
-                
+
             now = time.time()
             cutoff = now - window_seconds
             recent_metrics = [m for m in self.metrics[name] if m.timestamp >= cutoff]
-            
+
             if not recent_metrics:
                 return {}
-                
+
             values = [m.value for m in recent_metrics]
             return {
                 "name": name,
@@ -237,39 +238,39 @@ class MetricsCollector:
                 "window_seconds": window_seconds,
                 "timestamp": now
             }
-            
-    def get_all_summaries(self, window_seconds: int = 300) -> Dict[str, Dict[str, Any]]:
+
+    def get_all_summaries(self, window_seconds: int = 300) -> dict[str, dict[str, Any]]:
         """Get summaries for all metrics"""
         with self.lock:
-            return {name: self.get_metric_summary(name, window_seconds) 
+            return {name: self.get_metric_summary(name, window_seconds)
                    for name in self.metrics.keys()}
 
 
 class SystemMonitor:
     """System-level metrics monitoring"""
-    
+
     def __init__(self, collection_interval: float = 30.0):
         self.collection_interval = collection_interval
         self.running = False
-        self.thread: Optional[threading.Thread] = None
+        self.thread: threading.Thread | None = None
         self.metrics_history: deque[SystemMetrics] = deque(maxlen=1000)
         self.lock = threading.RLock()
-        
+
     def start(self):
         """Start system monitoring"""
         if self.running:
             return
-            
+
         self.running = True
         self.thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self.thread.start()
-        
+
     def stop(self):
         """Stop system monitoring"""
         self.running = False
         if self.thread:
             self.thread.join(timeout=5.0)
-            
+
     def _monitor_loop(self):
         """Main monitoring loop"""
         while self.running:
@@ -277,26 +278,26 @@ class SystemMonitor:
                 metrics = self._collect_system_metrics()
                 with self.lock:
                     self.metrics_history.append(metrics)
-                
+
             time.sleep(self.collection_interval)
-            
+
     def _collect_system_metrics(self) -> SystemMetrics:
         """Collect current system metrics"""
         # CPU and Memory
         cpu_percent = psutil.cpu_percent(interval=1.0)
         memory = psutil.virtual_memory()
-        
+
         # Disk usage for current directory
         disk = psutil.disk_usage('.')
-        
+
         # Network stats
         net_io = psutil.net_io_counters()
-        
+
         # Process stats
         current_process = psutil.Process()
         connections = len(current_process.net_connections())
         open_files = len(current_process.open_files())
-        
+
         return SystemMetrics(
             timestamp=time.time(),
             cpu_percent=cpu_percent,
@@ -309,13 +310,13 @@ class SystemMonitor:
             active_connections=connections,
             open_files=open_files
         )
-        
-    def get_latest_metrics(self) -> Optional[SystemMetrics]:
+
+    def get_latest_metrics(self) -> SystemMetrics | None:
         """Get the most recent system metrics"""
         with self.lock:
             return self.metrics_history[-1] if self.metrics_history else None
-            
-    def get_metrics_history(self, window_seconds: int = 300) -> List[SystemMetrics]:
+
+    def get_metrics_history(self, window_seconds: int = 300) -> list[SystemMetrics]:
         """Get system metrics within time window"""
         cutoff = time.time() - window_seconds
         with self.lock:
@@ -323,8 +324,8 @@ class SystemMonitor:
 
 
 # Global instances
-_metrics_collector: Optional[MetricsCollector] = None
-_system_monitor: Optional[SystemMonitor] = None
+_metrics_collector: MetricsCollector | None = None
+_system_monitor: SystemMonitor | None = None
 
 
 def get_metrics_collector() -> MetricsCollector:
@@ -351,38 +352,38 @@ def create_structured_logger(component: str, base_logger: logging.Logger) -> Str
 # Context manager for operation timing
 class TimedOperation:
     """Context manager for timing operations and recording metrics"""
-    
-    def __init__(self, operation_name: str, logger: StructuredLogger, 
-                 tags: Optional[Dict[str, str]] = None):
+
+    def __init__(self, operation_name: str, logger: StructuredLogger,
+                 tags: dict[str, str] | None = None):
         self.operation_name = operation_name
         self.logger = logger
         self.tags = tags or {}
         self.start_time = None
-        
+
     def __enter__(self):
         self.start_time = time.time()
-        self.logger.info(f"Starting {self.operation_name}", 
+        self.logger.info(f"Starting {self.operation_name}",
                         operation=self.operation_name, tags=self.tags)
         return self
-        
-    def __exit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> None:
+
+    def __exit__(self, exc_type: type | None, exc_val: Exception | None, exc_tb: Any | None) -> None:
         if self.start_time is None:
             # Should not happen in normal flow, but handle gracefully
             self.logger.error(f"Timer not properly initialized for {self.operation_name}")
             return
-            
+
         duration_ms = (time.time() - self.start_time) * 1000
-        
+
         # Record timing metric
         get_metrics_collector().record_timer(
             f"operation.{self.operation_name}.duration",
             duration_ms,
             self.tags
         )
-        
+
         # Log completion
         if exc_type is None:
-            self.logger.info(f"Completed {self.operation_name}", 
+            self.logger.info(f"Completed {self.operation_name}",
                            operation=self.operation_name,
                            duration_ms=duration_ms,
                            tags=self.tags)
@@ -392,4 +393,4 @@ class TimedOperation:
                             duration_ms=duration_ms,
                             error_code=exc_type.__name__,
                             tags=self.tags)
-                          
+

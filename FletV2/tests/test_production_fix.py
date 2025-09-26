@@ -4,20 +4,20 @@ Production Button Fix Test - Apply Working Pattern to Production-Like Code
 This tests the exact working minimal test pattern in a production-like environment.
 """
 
+
 import flet as ft
-import asyncio
-from typing import List, Dict, Any
+
 
 def main(page: ft.Page):
     page.title = "Production Button Fix Test"
-    
+
     # Simulate our production data
     mock_clients_data = [
         {"client_id": "client_001", "address": "192.168.1.101:5432", "status": "connected"},
         {"client_id": "client_002", "address": "192.168.1.102:5433", "status": "registered"},
         {"client_id": "client_003", "address": "192.168.1.103:5434", "status": "offline"}
     ]
-    
+
     # CRITICAL: Define handlers at the RIGHT SCOPE (same level as DataTable)
     def view_details_clicked(e):
         client_id = e.control.data if hasattr(e.control, 'data') else "Unknown"
@@ -25,19 +25,19 @@ def main(page: ft.Page):
         page.snack_bar = ft.SnackBar(ft.Text(f"View Details clicked for: {client_id}"))
         page.snack_bar.open = True
         page.update()
-    
+
     def disconnect_clicked(e):
         client_id = e.control.data if hasattr(e.control, 'data') else "Unknown"
         print(f"DISCONNECT CLICKED! Client: {client_id}")
         page.snack_bar = ft.SnackBar(ft.Text(f"Disconnect clicked for: {client_id}"))
         page.snack_bar.open = True
         page.update()
-    
+
     # Create DataTable with the EXACT working pattern from minimal test
-    def create_data_rows() -> List[ft.DataRow]:
+    def create_data_rows() -> list[ft.DataRow]:
         """Create DataTable rows with working button pattern"""
         rows = []
-        
+
         for client in mock_clients_data:
             row = ft.DataRow(cells=[
                 ft.DataCell(ft.Text(client["client_id"])),
@@ -65,9 +65,9 @@ def main(page: ft.Page):
                 )
             ])
             rows.append(row)
-        
+
         return rows
-    
+
     # Create DataTable with buttons at creation time (working pattern)
     clients_table = ft.DataTable(
         columns=[
@@ -82,7 +82,7 @@ def main(page: ft.Page):
         border=ft.border.all(1, ft.Colors.OUTLINE),
         border_radius=8
     )
-    
+
     page.add(
         ft.Text("Production Button Fix Test", size=20, weight=ft.FontWeight.BOLD),
         ft.Text("Testing exact working pattern from minimal test", size=14),

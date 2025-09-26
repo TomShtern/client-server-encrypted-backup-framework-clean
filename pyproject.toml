@@ -6,8 +6,19 @@
 include = [
     "FletV2",
     "Shared",
-    "python_server", 
     "api_server"
+]
+exclude = [
+    "python_server",
+    "stubs",
+    "tests",
+    "tmp",
+    "scripts",
+    "vcpkg",
+    "flet_venv",
+    "flet_venv_broken",
+    ".config-backup",
+    "**/.config-backup/**"
 ]
 
 [tool.mypy]
@@ -27,7 +38,7 @@ typeshedPath = "./stubs"
 typeCheckingMode = "basic"
 reportMissingImports = "warning"
 reportMissingTypeStubs = false
-reportUnknownParameterType = false 
+reportUnknownParameterType = false
 reportUnknownArgumentType = false
 reportUnknownMemberType = false
 reportGeneralTypeIssues = true

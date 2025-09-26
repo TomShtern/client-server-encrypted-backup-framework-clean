@@ -9,7 +9,7 @@ by providing a centralized, reliable way to handle Python import paths.
 
 import sys
 from pathlib import Path
-from typing import List
+
 
 def get_project_root() -> Path:
     """
@@ -20,7 +20,7 @@ def get_project_root() -> Path:
     """
     # Start from this file's location and search upward for project markers
     current_path = Path(__file__).resolve().parent
-    
+
     # Look for project markers that indicate the root directory
     project_markers = [
         'CLAUDE.md',           # Project instructions file
@@ -30,14 +30,14 @@ def get_project_root() -> Path:
         'Client',             # C++ client source
         'python_server'       # Python server directory
     ]
-    
+
     # Search upward from current directory
     while current_path != current_path.parent:
         # Check if current directory has any project markers
         if any((current_path / marker).exists() for marker in project_markers):
             return current_path
         current_path = current_path.parent
-    
+
     # Fallback: assume we're already in project root or nearby
     fallback = Path(__file__).resolve().parent.parent
     return fallback
@@ -50,18 +50,18 @@ def ensure_imports() -> None:
     This replaces all scattered sys.path.insert() calls with a single standardized approach.
     """
     project_root = get_project_root()
-    
+
     # Critical paths that need to be in sys.path for imports
     critical_paths = [
         project_root,                           # Project root for Shared, etc.
         project_root / 'python_server' / 'server',  # Server modules
-        project_root / 'api_server',            # API server modules  
+        project_root / 'api_server',            # API server modules
         project_root / 'Shared',                # Shared utilities
         project_root / 'Database',              # Database modules
         project_root / 'src' / 'api',          # API implementation
         project_root / 'Client' / 'wrappers',  # C++ wrapper modules
     ]
-    
+
     # Add paths to sys.path if not already present
     for path in critical_paths:
         path_str = str(path.resolve())
@@ -92,30 +92,30 @@ def get_config_directory() -> Path:
     """Get the config directory path."""
     return get_project_root() / 'config'
 
-def validate_project_structure() -> List[str]:
+def validate_project_structure() -> list[str]:
     """
     Validate that the project structure is intact.
     
     Returns:
         List of validation errors (empty if all good)
     """
-    errors: List[str] = []
+    errors: list[str] = []
     project_root = get_project_root()
-    
+
     # Check for essential directories
     essential_dirs = [
         'python_server/server',
-        'api_server', 
+        'api_server',
         'Shared',
         'Client',
         'scripts'
     ]
-    
+
     for dir_path in essential_dirs:
         full_path = project_root / dir_path
         if not full_path.exists():
             errors.append(f"Missing essential directory: {dir_path}")
-    
+
     # Check for essential files
     essential_files = [
         'CLAUDE.md',
@@ -123,12 +123,12 @@ def validate_project_structure() -> List[str]:
         'python_server/server/server.py',
         'api_server/cyberbackup_api_server.py'
     ]
-    
+
     for file_path in essential_files:
         full_path = project_root / file_path
         if not full_path.exists():
             errors.append(f"Missing essential file: {file_path}")
-    
+
     return errors
 
 # Convenience function for quick setup at module import
@@ -149,15 +149,15 @@ def setup_imports():
 if __name__ == "__main__":
     # Test the path utilities
     print("Testing Path Utilities...")
-    
+
     root = get_project_root()
     print(f"Project root: {root}")
     print(f"Project root exists: {root.exists()}")
-    
+
     print(f"Server directory: {get_server_directory()}")
     print(f"API directory: {get_api_directory()}")
     print(f"Shared directory: {get_shared_directory()}")
-    
+
     # Validate structure
     errors = validate_project_structure()
     if errors:
@@ -166,10 +166,10 @@ if __name__ == "__main__":
             print(f"  - {error}")
     else:
         print("Project structure validation passed!")
-    
+
     # Test import setup
     print("Setting up imports...")
     ensure_imports()
     print(f"sys.path now has {len(sys.path)} entries")
-    
+
     print("Path utilities test completed!")

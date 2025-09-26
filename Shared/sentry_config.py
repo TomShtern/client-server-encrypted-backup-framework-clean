@@ -16,7 +16,7 @@ Usage:
 
 import logging
 import os
-from typing import Optional, Dict, Any, Union, Literal
+from typing import Any
 
 # Sentry DSN Configuration
 SENTRY_DSN = "https://094a0bee5d42a7f7e8ec8a78a37c8819@o4509746411470848.ingest.us.sentry.io/4509747877773312"
@@ -27,8 +27,8 @@ logger = logging.getLogger(__name__)
 
 def init_sentry(
     component_name: str,
-    dsn: Optional[str] = None,
-    environment: Optional[str] = None,
+    dsn: str | None = None,
+    environment: str | None = None,
     debug: bool = False,
     sample_rate: float = 1.0,
     traces_sample_rate: float = 0.1
@@ -51,13 +51,13 @@ def init_sentry(
         import sentry_sdk
         from sentry_sdk.integrations.logging import LoggingIntegration
         from sentry_sdk.integrations.threading import ThreadingIntegration
-        
+
         # Configure logging integration
         logging_integration = LoggingIntegration(
             level=logging.INFO,        # Capture info and above as breadcrumbs
             event_level=logging.ERROR  # Send errors and above as events
         )
-        
+
         # Initialize Sentry
         sentry_sdk.init(
             dsn=dsn or SENTRY_DSN,
@@ -73,19 +73,19 @@ def init_sentry(
             before_send=_before_send_filter,
             release=_get_release_version()
         )
-        
+
         # Set component context
         sentry_sdk.set_tag("component", component_name)
         sentry_sdk.set_tag("framework", "cyberbackup")
-        
+
         # Add system context
         import platform
         sentry_sdk.set_tag("os", platform.system())
         sentry_sdk.set_tag("python_version", platform.python_version())
-        
+
         logger.info(f"[SENTRY] Initialized for component: {component_name}")
         return True
-        
+
     except ImportError:
         logger.warning(f"[SENTRY] SDK not available for {component_name} - error tracking disabled")
         return False
@@ -94,7 +94,7 @@ def init_sentry(
         return False
 
 
-def _before_send_filter(event: Any, hint: Any) -> Optional[Any]:
+def _before_send_filter(event: Any, hint: Any) -> Any | None:
     """
     Filter events before sending to Sentry.
     Can be used to sanitize sensitive data or filter noise.
@@ -102,17 +102,17 @@ def _before_send_filter(event: Any, hint: Any) -> Optional[Any]:
     # Filter out common non-critical errors
     if 'exc_info' in hint:
         _, exc_value, _ = hint['exc_info']
-        
+
         # Filter out expected network timeouts
         if isinstance(exc_value, (ConnectionResetError, BrokenPipeError)):
             return None
-            
+
         # Filter out file not found errors for optional files
         if isinstance(exc_value, FileNotFoundError):
             filename = str(exc_value).lower()
             if any(optional in filename for optional in ['optional', 'cache', 'temp']):
                 return None
-    
+
     return event
 
 
@@ -132,12 +132,12 @@ def _get_release_version() -> str:
             return f"cyberbackup@{result.stdout.strip()}"
     except Exception:
         pass
-    
+
     # Fallback to static version
     return "cyberbackup@3.0.0"
 
 
-def capture_error(error: Exception, component: str, extra_context: Optional[Dict[str, Any]] = None) -> None:
+def capture_error(error: Exception, component: str, extra_context: dict[str, Any] | None = None) -> None:
     """
     Capture an error with additional context.
     
@@ -148,23 +148,23 @@ def capture_error(error: Exception, component: str, extra_context: Optional[Dict
     """
     try:
         import sentry_sdk
-        
+
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("error_component", component)
-            
+
             if extra_context:
                 for key, value in extra_context.items():
                     scope.set_extra(key, value)
-            
+
             sentry_sdk.capture_exception(error)
-            
+
     except ImportError:
         logger.error(f"[{component}] Error occurred but Sentry not available: {error}")
     except Exception as e:
         logger.error(f"[{component}] Failed to capture error in Sentry: {e}")
 
 
-def capture_message(message: str, level: str = "info", component: str = "unknown", extra_context: Optional[Dict[str, Any]] = None) -> None:
+def capture_message(message: str, level: str = "info", component: str = "unknown", extra_context: dict[str, Any] | None = None) -> None:
     """
     Capture a message with additional context.
     
@@ -176,14 +176,14 @@ def capture_message(message: str, level: str = "info", component: str = "unknown
     """
     try:
         import sentry_sdk
-        
+
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("message_component", component)
-            
+
             if extra_context:
                 for key, value in extra_context.items():
                     scope.set_extra(key, value)
-            
+
             # Map string level to Sentry level
             level_lower = level.lower()
             if level_lower == 'critical':
@@ -193,14 +193,14 @@ def capture_message(message: str, level: str = "info", component: str = "unknown
             else:
                 sentry_level = 'info'
             sentry_sdk.capture_message(message, level=sentry_level)
-            
+
     except ImportError:
         logger.info(f"[{component}] Message: {message} (Sentry not available)")
     except Exception as e:
         logger.error(f"[{component}] Failed to capture message in Sentry: {e}")
 
 
-def set_user_context(user_id: str, username: Optional[str] = None, ip_address: Optional[str] = None) -> None:
+def set_user_context(user_id: str, username: str | None = None, ip_address: str | None = None) -> None:
     """Set user context for Sentry events."""
     try:
         import sentry_sdk

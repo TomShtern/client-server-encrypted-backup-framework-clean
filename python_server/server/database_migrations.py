@@ -2,12 +2,13 @@
 # Safe Database Migration System for the Encrypted Backup Framework
 # Handles schema changes and upgrades without breaking existing functionality
 
-import sqlite3
 import logging
 import os
 import shutil
-from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional, Callable
+import sqlite3
+from datetime import UTC, datetime
+from typing import Any
+
 try:
     from .config import DATABASE_NAME
 except ImportError:
@@ -20,14 +21,14 @@ class DatabaseMigration:
     """
     Represents a single database migration with rollback capability.
     """
-    
+
     def __init__(self, version: int, description: str, up_sql: str, down_sql: str = ""):
         self.version = version
         self.description = description
         self.up_sql = up_sql
         self.down_sql = down_sql
         self.applied_at = None
-    
+
     def __str__(self):
         return f"Migration {self.version}: {self.description}"
 
@@ -36,13 +37,13 @@ class DatabaseMigrationManager:
     Manages database schema migrations with safety checks and rollback capability.
     Ensures that database changes don't break existing functionality.
     """
-    
-    def __init__(self, db_name: Optional[str] = None):
+
+    def __init__(self, db_name: str | None = None):
         self.db_name = db_name or DATABASE_NAME
-        self.migrations: List[DatabaseMigration] = []
+        self.migrations: list[DatabaseMigration] = []
         self._init_migration_table()
         self._register_migrations()
-    
+
     def _init_migration_table(self):
         """Initialize the migration tracking table if it doesn't exist."""
         try:
@@ -61,10 +62,10 @@ class DatabaseMigrationManager:
         except Exception as e:
             logger.error(f"Failed to initialize migration table: {e}")
             raise
-    
+
     def _register_migrations(self):
         """Register all available migrations in order."""
-        
+
         # Migration 1: Add performance indexes
         self.migrations.append(DatabaseMigration(
             version=1,
@@ -90,7 +91,7 @@ class DatabaseMigrationManager:
                 DROP INDEX IF EXISTS idx_files_client_name;
             '''
         ))
-        
+
         # Migration 2: Add extended file metadata
         self.migrations.append(DatabaseMigration(
             version=2,
@@ -110,7 +111,7 @@ class DatabaseMigrationManager:
                 -- Users would need to restore from backup
             '''
         ))
-        
+
         # Migration 3: Create analytics tables
         self.migrations.append(DatabaseMigration(
             version=3,
@@ -157,7 +158,7 @@ class DatabaseMigrationManager:
                 DROP TABLE IF EXISTS file_categories;
             '''
         ))
-        
+
         # Migration 4: Client quotas and storage management
         self.migrations.append(DatabaseMigration(
             version=4,
@@ -180,7 +181,7 @@ class DatabaseMigrationManager:
                 DROP TABLE IF EXISTS client_quotas;
             '''
         ))
-        
+
         # Migration 5: File versioning system
         self.migrations.append(DatabaseMigration(
             version=5,
@@ -211,12 +212,12 @@ class DatabaseMigrationManager:
                 -- Note: ALTER TABLE DROP COLUMN not supported in SQLite
             '''
         ))
-    
+
     def backup_database(self) -> str:
         """Create a backup of the database before applying migrations."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = f"{self.db_name}.backup_{timestamp}"
-        
+
         try:
             shutil.copy2(self.db_name, backup_path)
             logger.info(f"Database backed up to: {backup_path}")
@@ -224,7 +225,7 @@ class DatabaseMigrationManager:
         except Exception as e:
             logger.error(f"Failed to backup database: {e}")
             raise
-    
+
     def get_current_version(self) -> int:
         """Get the current database version."""
         try:
@@ -236,30 +237,30 @@ class DatabaseMigrationManager:
         except Exception as e:
             logger.warning(f"Could not determine database version: {e}")
             return 0
-    
-    def get_pending_migrations(self) -> List[DatabaseMigration]:
+
+    def get_pending_migrations(self) -> list[DatabaseMigration]:
         """Get list of migrations that haven't been applied yet."""
         current_version = self.get_current_version()
         return [m for m in self.migrations if m.version > current_version]
-    
+
     def apply_migration(self, migration: DatabaseMigration) -> bool:
         """Apply a single migration with safety checks."""
         logger.info(f"Applying migration {migration.version}: {migration.description}")
-        
+
         try:
             with sqlite3.connect(self.db_name) as conn:
                 cursor = conn.cursor()
-                
+
                 # Execute migration SQL - use executescript for better SQL parsing
                 # Note: executescript commits automatically, so we can't use transactions
                 # For safety, we validate that this is a read-only or safe operation first
                 if any(dangerous in migration.up_sql.upper() for dangerous in ['DROP TABLE', 'DELETE FROM clients', 'DELETE FROM files']):
                     logger.error(f"Migration {migration.version} contains potentially dangerous operations")
                     return False
-                
+
                 # Execute the migration SQL
                 cursor.executescript(migration.up_sql)
-                
+
                 # Record migration in tracking table
                 cursor.execute('''
                     INSERT INTO database_migrations (version, description, applied_at, rollback_sql)
@@ -267,30 +268,30 @@ class DatabaseMigrationManager:
                 ''', (
                     migration.version,
                     migration.description,
-                    datetime.now(timezone.utc).isoformat(),
+                    datetime.now(UTC).isoformat(),
                     migration.down_sql
                 ))
-                
+
                 conn.commit()
                 logger.info(f"Successfully applied migration {migration.version}")
                 return True
-                
+
         except Exception as e:
             logger.error(f"Failed to apply migration {migration.version}: {e}")
             return False
-    
+
     def migrate_to_latest(self) -> bool:
         """Apply all pending migrations to bring database to latest version."""
         pending_migrations = self.get_pending_migrations()
-        
+
         if not pending_migrations:
             logger.info("Database is already at latest version")
             return True
-        
+
         # Create backup before applying migrations
         backup_path = self.backup_database()
         logger.info(f"Created backup: {backup_path}")
-        
+
         success_count = 0
         for migration in pending_migrations:
             if self.apply_migration(migration):
@@ -299,47 +300,47 @@ class DatabaseMigrationManager:
                 logger.error(f"Migration failed at version {migration.version}")
                 logger.error(f"Database backup available at: {backup_path}")
                 return False
-        
+
         logger.info(f"Successfully applied {success_count} migrations")
         logger.info(f"Database is now at version {self.get_current_version()}")
         return True
-    
+
     def validate_database_integrity(self) -> bool:
         """Validate database integrity after migrations."""
         try:
             with sqlite3.connect(self.db_name) as conn:
                 cursor = conn.cursor()
-                
+
                 # Check database integrity
                 cursor.execute("PRAGMA integrity_check")
                 result = cursor.fetchone()
                 if result[0] != "ok":
                     logger.error(f"Database integrity check failed: {result[0]}")
                     return False
-                
+
                 # Check if critical tables exist
                 cursor.execute("""
                     SELECT name FROM sqlite_master 
                     WHERE type='table' AND name IN ('clients', 'files')
                 """)
                 tables = [row[0] for row in cursor.fetchall()]
-                
+
                 if 'clients' not in tables or 'files' not in tables:
                     logger.error("Critical tables missing after migration")
                     return False
-                
+
                 logger.info("Database integrity validation passed")
                 return True
-                
+
         except Exception as e:
             logger.error(f"Database integrity validation failed: {e}")
             return False
-    
-    def get_migration_status(self) -> Dict[str, Any]:
+
+    def get_migration_status(self) -> dict[str, Any]:
         """Get detailed status of all migrations."""
         current_version = self.get_current_version()
         pending = self.get_pending_migrations()
-        
+
         return {
             'current_version': current_version,
             'latest_version': max([m.version for m in self.migrations]) if self.migrations else 0,
@@ -349,7 +350,7 @@ class DatabaseMigrationManager:
             'database_exists': os.path.exists(self.db_name)
         }
 
-def migrate_database(db_name: Optional[str] = None) -> bool:
+def migrate_database(db_name: str | None = None) -> bool:
     """
     Convenience function to run all pending migrations.
     
@@ -362,14 +363,14 @@ def migrate_database(db_name: Optional[str] = None) -> bool:
     try:
         manager = DatabaseMigrationManager(db_name)
         success = manager.migrate_to_latest()
-        
+
         if success:
-            logger.info(f"Database migration completed successfully.")
+            logger.info("Database migration completed successfully.")
             return True
         else:
-            logger.error(f"Database migration failed.")
+            logger.error("Database migration failed.")
             return False
-            
+
     except Exception as e:
         logger.error(f"Database migration error: {e}")
         return False
@@ -377,7 +378,7 @@ def migrate_database(db_name: Optional[str] = None) -> bool:
 if __name__ == "__main__":
     # CLI interface for migration management
     import sys
-    
+
     if len(sys.argv) > 1 and sys.argv[1] == "migrate":
         success = migrate_database()
         sys.exit(0 if success else 1)

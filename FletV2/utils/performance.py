@@ -13,14 +13,15 @@ Author: Claude (2025-09-09)
 """
 
 import asyncio
+import gc
+import logging
 import threading
 import time
-import logging
-from typing import Any, Callable, Dict, List, Optional, TypeVar, Generic
-from dataclasses import dataclass
-from concurrent.futures import ThreadPoolExecutor
 import weakref
-import gc
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ T = TypeVar('T')
 # ==========================================
 
 _metrics_lock = threading.Lock()
-_metrics: Dict[str, Dict[str, Any]] = {}
+_metrics: dict[str, dict[str, Any]] = {}
 
 def record_metric(name: str, elapsed_ms: float) -> None:
     """
@@ -49,7 +50,7 @@ def record_metric(name: str, elapsed_ms: float) -> None:
         if elapsed_ms > m["max_ms"]:
             m["max_ms"] = elapsed_ms
 
-def get_metrics() -> Dict[str, Dict[str, Any]]:
+def get_metrics() -> dict[str, dict[str, Any]]:
     """
     Get all recorded performance metrics.
 
@@ -60,7 +61,7 @@ def get_metrics() -> Dict[str, Dict[str, Any]]:
         # Shallow copy to ensure caller cannot mutate internal state directly
         return {k: v.copy() for k, v in _metrics.items()}
 
-def reset_metrics(pattern: Optional[str] = None) -> None:
+def reset_metrics(pattern: str | None = None) -> None:
     """
     Reset performance metrics.
 
@@ -125,7 +126,7 @@ class Debouncer:
             delay: Delay in seconds before executing the function
         """
         self.delay = delay
-        self._timer: Optional[threading.Timer] = None
+        self._timer: threading.Timer | None = None
         self._lock = threading.Lock()
 
     def debounce(self, func: Callable[[], None]) -> None:
@@ -156,7 +157,7 @@ class AsyncDebouncer:
 
     def __init__(self, delay: float = 0.3):
         self.delay = delay
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
     async def debounce(self, coro: Callable[[], Any]) -> None:
         """
@@ -201,7 +202,7 @@ class PaginationConfig:
         """Get end index for current page."""
         return min(self.start_index + self.page_size, self.total_items)
 
-    def get_page_data(self, data: List[T]) -> List[T]:
+    def get_page_data(self, data: list[T]) -> list[T]:
         """Get data for current page."""
         return data[self.start_index:self.end_index]
 
@@ -232,11 +233,11 @@ class AsyncDataLoader:
     """
 
     def __init__(self, max_cache_size: int = 100):
-        self._cache: Dict[str, Any] = {}
-        self._cache_timestamps: Dict[str, float] = {}
+        self._cache: dict[str, Any] = {}
+        self._cache_timestamps: dict[str, float] = {}
         self._max_cache_size = max_cache_size
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="DataLoader")
-        self._prefetch_tasks: Dict[str, asyncio.Task] = {}
+        self._prefetch_tasks: dict[str, asyncio.Task] = {}
 
     async def load_data_async(self,
                              key: str,
@@ -328,7 +329,7 @@ class AsyncDataLoader:
 
             logger.debug(f"Cleaned {len(keys_to_remove)} cache entries")
 
-    def clear_cache(self, key: Optional[str] = None) -> None:
+    def clear_cache(self, key: str | None = None) -> None:
         """Clear cache entries."""
         if key:
             self._cache.pop(key, None)
@@ -354,11 +355,11 @@ class MemoryManager:
     """
 
     def __init__(self):
-        self._weak_refs: List[weakref.ref] = []
+        self._weak_refs: list[weakref.ref] = []
         self._last_gc_time = time.time()
         self._gc_interval = 60.0  # Run GC every 60 seconds
 
-    def register_cleanup(self, obj: Any, cleanup_func: Optional[Callable] = None) -> None:
+    def register_cleanup(self, obj: Any, cleanup_func: Callable | None = None) -> None:
         """
         Register an object for cleanup.
 
@@ -382,7 +383,7 @@ class MemoryManager:
         logger.debug(f"Registered component for memory tracking: {component_name}")
         # For now, just log the registration. Could be extended for component-specific tracking.
 
-    def force_cleanup(self) -> Dict[str, int]:
+    def force_cleanup(self) -> dict[str, int]:
         """
         Force garbage collection and cleanup.
 
@@ -418,7 +419,7 @@ class MemoryManager:
         logger.debug(f"Memory cleanup completed: {stats}")
         return stats
 
-    def maybe_cleanup(self) -> Optional[Dict[str, int]]:
+    def maybe_cleanup(self) -> dict[str, int] | None:
         """
         Run cleanup if enough time has passed.
 
@@ -435,7 +436,7 @@ class BackgroundTaskManager:
     """
 
     def __init__(self):
-        self._tasks: Dict[str, asyncio.Task] = {}
+        self._tasks: dict[str, asyncio.Task] = {}
         self._shutdown = False
 
     def start_task(self, name: str, coro: Callable[[], Any], restart_on_error: bool = False) -> str:
@@ -490,7 +491,7 @@ class BackgroundTaskManager:
             return True
         return False
 
-    def get_task_status(self, name: str) -> Optional[str]:
+    def get_task_status(self, name: str) -> str | None:
         """
         Get status of a background task.
 
@@ -542,7 +543,7 @@ async def async_debounce(coro: Callable[[], Any], delay: float = 0.3) -> None:
     debouncer = AsyncDebouncer(delay)
     await debouncer.debounce(coro)
 
-def paginate_data(data: List[T], page: int = 0, page_size: int = 50) -> tuple[List[T], PaginationConfig]:
+def paginate_data(data: list[T], page: int = 0, page_size: int = 50) -> tuple[list[T], PaginationConfig]:
     """
     Convenience function for paginating data.
 
@@ -556,6 +557,6 @@ async def load_async(key: str, loader_func: Callable[[], Any], cache_ttl: float 
     """Convenience function for async data loading."""
     return await global_data_loader.load_data_async(key, loader_func, cache_ttl)
 
-def cleanup_memory() -> Dict[str, int]:
+def cleanup_memory() -> dict[str, int]:
     """Convenience function for memory cleanup."""
     return global_memory_manager.force_cleanup()

@@ -4,9 +4,10 @@ Minimal Flet Test - Isolate GUI errors from logging noise
 Tests basic Flet functionality and Material Design 3 compliance
 """
 
-import flet as ft
-import sys
 import os
+import sys
+
+import flet as ft
 
 # Add project path for imports
 sys.path.insert(0, os.path.dirname(__file__))
@@ -30,29 +31,29 @@ def safe_print(message: str):
 
 def main(page: ft.Page):
     """Minimal test of Flet with Material Design 3"""
-    
+
     # Configure page
     page.title = "Flet MD3 Test"
     page.theme_mode = ft.ThemeMode.SYSTEM
     page.window_width = 800
     page.window_height = 600
-    
+
     # Test Material Design 3 colors and icons
     test_card = ft.Card(
         content=ft.Container(
             content=ft.Column([
-                ft.Text("Flet Material Design 3 Test", 
+                ft.Text("Flet Material Design 3 Test",
                        style=ft.TextThemeStyle.HEADLINE_MEDIUM,
                        weight=ft.FontWeight.BOLD),
                 ft.Divider(),
                 ft.Row([
                     ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN_600, size=24),
-                    ft.Text("Flet successfully imported and running", 
+                    ft.Text("Flet successfully imported and running",
                            style=ft.TextThemeStyle.BODY_LARGE)
                 ], spacing=12),
                 ft.Row([
                     ft.Icon(ft.Icons.PALETTE, color=ft.Colors.PRIMARY, size=24),
-                    ft.Text(f"Theme mode: {page.theme_mode}", 
+                    ft.Text(f"Theme mode: {page.theme_mode}",
                            style=ft.TextThemeStyle.BODY_MEDIUM)
                 ], spacing=12),
                 ft.Divider(),
@@ -68,7 +69,7 @@ def main(page: ft.Page):
                     ),
                     ft.Container(
                         content=ft.OutlinedButton(
-                            "Secondary", 
+                            "Secondary",
                             icon=ft.Icons.SETTINGS,
                             on_click=lambda _: page.show_snack_bar(ft.SnackBar(ft.Text("Snackbar working!")))
                         ),
@@ -81,7 +82,7 @@ def main(page: ft.Page):
         ),
         elevation=2
     )
-    
+
     # Add to page
     page.add(
         ft.Container(
@@ -91,7 +92,7 @@ def main(page: ft.Page):
             alignment=ft.alignment.center
         )
     )
-    
+
     safe_print("[SUCCESS] Minimal Flet test initialized successfully")
 
 if __name__ == "__main__":

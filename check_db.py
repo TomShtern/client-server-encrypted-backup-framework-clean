@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Quick database inspection script"""
 
-import sqlite3
 import os
+import sqlite3
 
 # Check if database exists
 db_path = "defensive.db"

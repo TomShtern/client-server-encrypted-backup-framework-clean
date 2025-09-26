@@ -6,10 +6,8 @@ This script runs automated interactions with the FletV2 app to capture
 performance metrics as outlined in Section 13 of the plan.
 """
 
-import sys
-import os
 import json
-import asyncio
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -29,8 +27,9 @@ def capture_baseline_metrics():
             def reset_metrics(): pass
 
         from utils.ui_helpers import (
-            size_to_human, format_iso_short, compute_file_signature,
-            build_status_badge, build_level_badge
+            compute_file_signature,
+            format_iso_short,
+            size_to_human,
         )
 
         print("Starting baseline metrics capture...")
@@ -86,7 +85,7 @@ def capture_baseline_metrics():
     except Exception as e:
         return {
             "timestamp": datetime.now().isoformat(),
-            "error": f"Failed to capture baseline: {str(e)}",
+            "error": f"Failed to capture baseline: {e!s}",
             "environment": {
                 "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
                 "platform": sys.platform,

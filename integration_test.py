@@ -4,8 +4,8 @@ Integration test for BackupServer and ServerBridge compatibility.
 Tests that all expected methods exist and return proper response formats.
 """
 
-import sys
 import os
+import sys
 import traceback
 
 # Add project paths
@@ -13,7 +13,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'python_server'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'FletV2'))
 
 # Import UTF-8 support
-import Shared.utils.utf8_solution
 
 def test_backup_server_integration():
     """Test that BackupServer has all methods expected by ServerBridge."""
@@ -23,8 +22,8 @@ def test_backup_server_integration():
 
     try:
         # Import the classes
-        from python_server.server.server import BackupServer
         from FletV2.utils.server_bridge import ServerBridge
+        from python_server.server.server import BackupServer
 
         print("✅ Successfully imported BackupServer and ServerBridge")
 
@@ -104,7 +103,7 @@ def test_backup_server_integration():
                                 print(f"    ⚠️  Method call failed: {e}")
                         else:
                             successful_methods += 1
-                            print(f"    ℹ️  Skipped destructive method test")
+                            print("    ℹ️  Skipped destructive method test")
 
                     else:
                         print(f"  ❌ {method_name}: Method missing from BackupServer")
@@ -112,13 +111,13 @@ def test_backup_server_integration():
                 except Exception as e:
                     print(f"  ❌ {method_name}: Error testing method: {e}")
 
-        print(f"\n📊 Integration Test Results:")
+        print("\n📊 Integration Test Results:")
         print(f"   Total methods tested: {total_methods}")
         print(f"   Successful: {successful_methods}")
         print(f"   Success rate: {(successful_methods/total_methods)*100:.1f}%")
 
         # Test ServerBridge delegation
-        print(f"\n🔗 Testing ServerBridge delegation...")
+        print("\n🔗 Testing ServerBridge delegation...")
         try:
             # Test a safe method through ServerBridge
             bridge_result = server_bridge.get_server_status()
@@ -131,7 +130,7 @@ def test_backup_server_integration():
             print(f"❌ ServerBridge delegation failed: {e}")
             traceback.print_exc()
 
-        print(f"\n🎉 Integration test completed!")
+        print("\n🎉 Integration test completed!")
 
         if successful_methods >= total_methods * 0.8:  # 80% success rate
             print("✅ INTEGRATION SUCCESS: BackupServer is compatible with ServerBridge")

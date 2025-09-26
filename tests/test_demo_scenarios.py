@@ -13,12 +13,14 @@ Date: 2025-08-01
 """
 
 import asyncio
+import os
+import tempfile
+import time
+from contextlib import suppress
+
 import pytest
 from playwright.async_api import async_playwright, expect
-import time
-import tempfile
-import os
-from contextlib import suppress
+
 
 class TestCyberBackupDemo:
     """

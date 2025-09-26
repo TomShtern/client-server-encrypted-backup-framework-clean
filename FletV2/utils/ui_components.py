@@ -7,10 +7,11 @@ Core Principle: Use Flet's built-in components with proper theming.
 Let Flet do the heavy lifting. We compose, not reinvent.
 """
 
-import flet as ft
-from typing import Optional, List, Callable, Dict, Any, Union
-from theme import get_design_tokens
+from collections.abc import Callable
+from typing import Any
 
+import flet as ft
+from theme import get_design_tokens
 
 # ==============================================================================
 # FRAMEWORK-HARMONIOUS COMPONENTS - Using Flet's Native Power
@@ -47,7 +48,7 @@ def create_professional_card(title: str, content: ft.Control) -> ft.Card:
     )
 
 
-def create_beautiful_card(title: str, content: ft.Control, accent_color: Optional[str] = None) -> ft.Container:
+def create_beautiful_card(title: str, content: ft.Control, accent_color: str | None = None) -> ft.Container:
     """Visually stunning card with depth and polish matching the reference design."""
     # Beautiful dark theme colors
     BEAUTIFUL_DARK_PALETTE = {
@@ -89,7 +90,7 @@ def create_simple_bar_chart(data_points: list, labels: list, colors: list) -> ft
     """Create a simple bar chart for data visualization."""
     # Create bar groups from data
     bar_groups = []
-    for i, (value, label, color) in enumerate(zip(data_points, labels, colors)):
+    for i, (value, label, color) in enumerate(zip(data_points, labels, colors, strict=False)):
         bar_groups.append(
             ft.BarChartGroup(
                 x=i,
@@ -403,7 +404,7 @@ def format_file_size(size_bytes: int) -> str:
 # THEME-AWARE FLET HELPERS (Simple wrappers, not reinventions)
 # ==============================================================================
 
-def themed_card(content: ft.Control, title: Optional[str] = None, page: Optional[ft.Page] = None) -> ft.Card:
+def themed_card(content: ft.Control, title: str | None = None, page: ft.Page | None = None) -> ft.Card:
     """
     Enhanced card with layered depth and old design styling.
     Hybrid approach: visually appealing colors that adapt to light/dark themes.
@@ -433,7 +434,7 @@ def themed_card(content: ft.Control, title: Optional[str] = None, page: Optional
 
 
 def themed_button(text: str, on_click: Callable, variant: str = "filled",
-                 icon: Optional[str] = None) -> ft.Control:
+                 icon: str | None = None) -> ft.Control:
     """Create themed button using Flet built-ins. 5 lines vs 200+ lines!"""
     button_content = ft.Row([ft.Icon(icon), ft.Text(text)], tight=True) if icon else text
 
@@ -472,7 +473,7 @@ def themed_metric_card(title: str, value: str, icon: str) -> ft.Card:
     )
 
 
-def themed_chip(text: str, icon: Optional[str] = None) -> ft.Container:
+def themed_chip(text: str, icon: str | None = None) -> ft.Container:
     """Create info chip using Flet's Container. Simple & clean!"""
     content = [ft.Text(text, size=12)]
     if icon:
@@ -526,7 +527,7 @@ def create_status_pill(text: str, status_type: str) -> ft.Container:
 # SMART FIELD BUILDERS (Simplified from the complex registry system)
 # ==============================================================================
 
-def smart_text_field(label: str, value: str = "", on_change: Optional[Callable] = None) -> ft.TextField:
+def smart_text_field(label: str, value: str = "", on_change: Callable | None = None) -> ft.TextField:
     """Create text field using Flet's theming. Simple & powerful!"""
     return ft.TextField(
         label=label,
@@ -537,13 +538,13 @@ def smart_text_field(label: str, value: str = "", on_change: Optional[Callable] 
     )
 
 
-def smart_switch(label: str, value: bool = False, on_change: Optional[Callable] = None) -> ft.Switch:
+def smart_switch(label: str, value: bool = False, on_change: Callable | None = None) -> ft.Switch:
     """Create switch using Flet's theming. Simple & works!"""
     return ft.Switch(label=label, value=value, on_change=on_change)
 
 
-def smart_dropdown(label: str, options: List[str], value: str = "",
-                  on_change: Optional[Callable] = None) -> ft.Dropdown:
+def smart_dropdown(label: str, options: list[str], value: str = "",
+                  on_change: Callable | None = None) -> ft.Dropdown:
     """Create dropdown using Flet's theming. Clean & simple!"""
     return ft.Dropdown(
         label=label,
@@ -558,7 +559,7 @@ def smart_dropdown(label: str, options: List[str], value: str = "",
 # DATA DISPLAY HELPERS (Using Flet's DataTable properly)
 # ==============================================================================
 
-def smart_data_table(columns: List[str], rows: List[List[str]]) -> ft.DataTable:
+def smart_data_table(columns: list[str], rows: list[list[str]]) -> ft.DataTable:
     """Create DataTable using Flet's built-in styling. Let Flet handle the complexity!"""
     return ft.DataTable(
         columns=[ft.DataColumn(ft.Text(col)) for col in columns],
@@ -590,7 +591,7 @@ def smart_file_row(filename: str, status: str, size: int) -> ft.Container:
 # LAYOUT HELPERS (Using Flet's ResponsiveRow)
 # ==============================================================================
 
-def smart_responsive_cards(cards: List[ft.Control]) -> ft.ResponsiveRow:
+def smart_responsive_cards(cards: list[ft.Control]) -> ft.ResponsiveRow:
     """Create responsive card layout using Flet's ResponsiveRow. Framework harmony!"""
     return ft.ResponsiveRow([
         ft.Column([card], col={"sm": 12, "md": 6, "lg": 4})
@@ -598,7 +599,7 @@ def smart_responsive_cards(cards: List[ft.Control]) -> ft.ResponsiveRow:
     ])
 
 
-def smart_dashboard_layout(metrics: List[Dict[str, Any]]) -> ft.Column:
+def smart_dashboard_layout(metrics: list[dict[str, Any]]) -> ft.Column:
     """Create dashboard layout using Flet patterns. Simple & responsive!"""
     cards = [
         themed_metric_card(m["title"], m["value"], m["icon"])
@@ -638,7 +639,7 @@ def create_loading_overlay(message: str = "Loading...") -> ft.Container:
         border_radius=12
     )
 
-def create_enhanced_metric_card(title: str, value: Any, icon: str, accent_color: Optional[str] = None) -> ft.Card:
+def create_enhanced_metric_card(title: str, value: Any, icon: str, accent_color: str | None = None) -> ft.Card:
     """Enhanced metric card compatibility wrapper."""
     return themed_metric_card(title, str(value), icon)
 
@@ -652,11 +653,11 @@ def apply_advanced_table_effects(data_table: ft.DataTable, **kwargs) -> ft.Conta
         bgcolor=ft.Colors.SURFACE
     )
 
-def create_professional_datatable(columns: List[str], rows: List[List[str]], **kwargs) -> ft.DataTable:
+def create_professional_datatable(columns: list[str], rows: list[list[str]], **kwargs) -> ft.DataTable:
     """Professional DataTable using Flet's built-in styling."""
     return smart_data_table(columns, rows)
 
-def get_premium_table_styling() -> Dict[str, Any]:
+def get_premium_table_styling() -> dict[str, Any]:
     """Simple table styling dict - let Flet handle the complexity."""
     return {
         "heading_row_color": ft.Colors.SURFACE,
@@ -689,7 +690,7 @@ def create_floating_action_button(icon: str, on_click: Callable, tooltip: str = 
     return ft.FloatingActionButton(icon=icon, on_click=on_click, tooltip=tooltip)
 
 # Settings field builders (simplified from complex registry system)
-def build_settings_field(field_config: Dict[str, Any], state) -> Optional[ft.Control]:
+def build_settings_field(field_config: dict[str, Any], state) -> ft.Control | None:
     """Simple settings field builder using Flet built-ins."""
     field_type = field_config.get("type", "text")
     label = str(field_config.get("label", ""))
@@ -764,15 +765,15 @@ _RD = _TOKENS["radii"]
 
 def AppCard(
     content: ft.Control,
-    title: Optional[str] = None,
-    actions: Optional[List[ft.Control]] = None,
-    padding: Optional[int] = None,
-    tooltip: Optional[str] = None,
+    title: str | None = None,
+    actions: list[ft.Control] | None = None,
+    padding: int | None = None,
+    tooltip: str | None = None,
 ) -> ft.Container:
     """Unified card: subtle border + elevation, consistent padding & radius."""
     pad = padding if padding is not None else _SP["xl"]
     body = content
-    header_controls: List[ft.Control] = []
+    header_controls: list[ft.Control] = []
     if title is not None or actions:
         header_controls.append(
             ft.Row([
@@ -803,7 +804,7 @@ def AppCard(
 def AppButton(
     text: str,
     on_click: Callable,
-    icon: Optional[str] = None,
+    icon: str | None = None,
     variant: str = "primary",  # primary | tonal | outline | danger | success
 ) -> ft.Control:
     """Unified button with consistent shape, padding and states."""
@@ -827,7 +828,7 @@ def AppButton(
     return ft.FilledButton(content=content, on_click=on_click, style=ft.ButtonStyle(shape=shape, padding=padding))
 
 
-def SectionHeader(title: str, actions: Optional[List[ft.Control]] = None) -> ft.Row:
+def SectionHeader(title: str, actions: list[ft.Control] | None = None) -> ft.Row:
     """Standard page section header with title and optional actions on the right."""
     return ft.Row([
         ft.Text(title, size=20, weight=ft.FontWeight.W_600),
@@ -865,6 +866,6 @@ def DataTableWrapper(table: ft.DataTable) -> ft.Container:
     )
 
 
-def FilterBar(controls: List[ft.Control]) -> ft.Row:
+def FilterBar(controls: list[ft.Control]) -> ft.Row:
     """Unified filter bar spacing and alignment."""
     return ft.Row(controls, spacing=_SP["lg"], alignment=ft.MainAxisAlignment.START)

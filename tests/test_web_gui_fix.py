@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-import tempfile
 import os
+import tempfile
 
 # Create a test file with a simple name (no special characters)
 with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='_simple_66KB.txt') as f:
@@ -26,7 +26,7 @@ print(f"Created transfer.info at: {transfer_info_path}")
 print("Now test this file through the web GUI to see if it works")
 
 # Also verify the transfer.info was written correctly
-with open(transfer_info_path, 'r') as f:
+with open(transfer_info_path) as f:
     content = f.read()
     print(f"transfer.info content:\n{content}")
     print(f"Content length: {len(content)} characters")

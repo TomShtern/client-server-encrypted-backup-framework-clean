@@ -16,9 +16,9 @@ This file will be removed in a future version.
 
 import sys
 
-
 # Setup standardized import paths
 from Shared.path_utils import setup_imports
+
 setup_imports()
 
 def main():

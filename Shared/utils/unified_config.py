@@ -10,16 +10,16 @@ This addresses the critical configuration management issues identified in CLAUDE
 - Hard-coded values across 80+ locations
 """
 
-import os
 import json
 import logging
+import os
+import re
 import threading
-from pathlib import Path
-from typing import Dict, Any, Optional, List, Union, Callable
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-import configparser
-import re
+from pathlib import Path
+from typing import Any
 
 # Import the existing ConfigurationManager
 from Shared.config_manager import ConfigurationManager
@@ -40,7 +40,7 @@ class LegacyConfigurationAdapter:
     Adapter for legacy configuration formats (.info files, hardcoded values).
     Provides unified access while maintaining backward compatibility.
     """
-    
+
     def __init__(self, base_path: str = "."):
         """
         Initialize the legacy configuration adapter.
@@ -49,13 +49,13 @@ class LegacyConfigurationAdapter:
             base_path: Base directory for finding configuration files
         """
         self.base_path = Path(base_path)
-        self.legacy_configs: Dict[str, Any] = {}
-        self.migrations: List[ConfigurationMigration] = []
+        self.legacy_configs: dict[str, Any] = {}
+        self.migrations: list[ConfigurationMigration] = []
         self.lock = threading.RLock()
-        
+
         logger.info(f"LegacyConfigurationAdapter initialized with base_path: {self.base_path}")
-    
-    def read_transfer_info(self, file_path: Optional[str] = None) -> Optional[Dict[str, str]]:
+
+    def read_transfer_info(self, file_path: str | None = None) -> dict[str, str] | None:
         """
         Read transfer.info file in the legacy 3-line format.
         
@@ -75,13 +75,13 @@ class LegacyConfigurationAdapter:
             ]
         else:
             search_paths = [Path(file_path)]
-        
+
         for path in search_paths:
             try:
                 if path.exists():
-                    with open(path, 'r', encoding='utf-8') as f:
+                    with open(path, encoding='utf-8') as f:
                         lines = [line.strip() for line in f.readlines()]
-                    
+
                     if len(lines) >= 3:
                         # Parse server:port format
                         server_parts = lines[0].split(':')
@@ -91,7 +91,7 @@ class LegacyConfigurationAdapter:
                         else:
                             server_host = lines[0]
                             server_port = 1256  # Default
-                        
+
                         config = {
                             'server_address': lines[0],
                             'server_host': server_host,
@@ -99,19 +99,19 @@ class LegacyConfigurationAdapter:
                             'username': lines[1],
                             'file_path': lines[2]
                         }
-                        
+
                         logger.info(f"Successfully read transfer.info from: {path}")
                         return config
                     else:
                         logger.warning(f"Invalid transfer.info format in {path}: expected 3 lines, got {len(lines)}")
-                        
+
             except Exception as e:
                 logger.warning(f"Failed to read transfer.info from {path}: {e}")
-        
+
         logger.warning("No valid transfer.info file found in search paths")
         return None
-    
-    def read_port_info(self, file_path: Optional[str] = None) -> Optional[int]:
+
+    def read_port_info(self, file_path: str | None = None) -> int | None:
         """
         Read port.info file containing a single port number.
         
@@ -128,26 +128,26 @@ class LegacyConfigurationAdapter:
             ]
         else:
             search_paths = [Path(file_path)]
-        
+
         for path in search_paths:
             try:
                 if path.exists():
-                    with open(path, 'r', encoding='utf-8') as f:
+                    with open(path, encoding='utf-8') as f:
                         port_str = f.read().strip()
-                    
+
                     port = int(port_str)
                     if 1 <= port <= 65535:
                         logger.info(f"Successfully read port.info from: {path}")
                         return port
                     else:
                         logger.warning(f"Invalid port in {path}: {port}")
-                        
+
             except Exception as e:
                 logger.warning(f"Failed to read port.info from {path}: {e}")
-        
+
         return None
-    
-    def scan_hardcoded_values(self) -> Dict[str, List[str]]:
+
+    def scan_hardcoded_values(self) -> dict[str, list[str]]:
         """
         Scan source files for hardcoded configuration values.
         
@@ -163,42 +163,42 @@ class LegacyConfigurationAdapter:
             'transfer_info': [r'transfer\.info'],
             'me_info': [r'me\.info']
         }
-        
-        results: Dict[str, List[str]] = {}
+
+        results: dict[str, list[str]] = {}
         source_extensions = ['.py', '.cpp', '.h', '.js', '.html']
-        
+
         for config_key, patterns in hardcoded_patterns.items():
             results[config_key] = []
-            
+
             # Search through source files
             for ext in source_extensions:
                 for file_path in self.base_path.rglob(f'*{ext}'):
                     try:
                         if 'vcpkg' in str(file_path):  # Skip vcpkg directory
                             continue
-                            
-                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+
+                        with open(file_path, encoding='utf-8', errors='ignore') as f:
                             content = f.read()
-                        
+
                         for pattern in patterns:
                             if re.search(pattern, content, re.IGNORECASE):
                                 results[config_key].append(str(file_path))
                                 break  # Found in this file, no need to check other patterns
-                                
+
                     except Exception as e:
                         logger.debug(f"Could not scan {file_path}: {e}")
-        
+
         return results
-    
-    def create_migration_plan(self) -> List[ConfigurationMigration]:
+
+    def create_migration_plan(self) -> list[ConfigurationMigration]:
         """
         Create a migration plan for converting legacy configurations to unified format.
         
         Returns:
             List of ConfigurationMigration objects
         """
-        migrations: List[ConfigurationMigration] = []
-        
+        migrations: list[ConfigurationMigration] = []
+
         # Migrate transfer.info
         transfer_config = self.read_transfer_info()
         if transfer_config:
@@ -208,14 +208,14 @@ class LegacyConfigurationAdapter:
                 ConfigurationMigration("transfer.info", "client.default_username", transfer_config['username']),
                 ConfigurationMigration("transfer.info", "client.last_file_path", transfer_config['file_path'])
             ])
-        
+
         # Migrate port.info
         port = self.read_port_info()
         if port:
             migrations.append(
                 ConfigurationMigration("server/port.info", "server.port", port)
             )
-        
+
         # Migrate hardcoded values
         hardcoded = self.scan_hardcoded_values()
         for config_key, files in hardcoded.items():
@@ -240,7 +240,7 @@ class LegacyConfigurationAdapter:
                     migrations.append(
                         ConfigurationMigration(f"hardcoded_in_{len(files)}_files", "server.database_name", "defensive.db")
                     )
-        
+
         return migrations
 
 
@@ -249,7 +249,7 @@ class UnifiedConfigurationManager:
     Unified Configuration Manager that extends ConfigurationManager 
     to handle all configuration formats and provide migration capabilities.
     """
-    
+
     def __init__(self, config_dir: str = "config", environment: str = "development", base_path: str = "."):
         """
         Initialize the unified configuration manager.
@@ -261,32 +261,32 @@ class UnifiedConfigurationManager:
         """
         # Initialize the base configuration manager
         self.base_config = ConfigurationManager(config_dir, environment)
-        
+
         # Initialize legacy adapter
         self.legacy_adapter = LegacyConfigurationAdapter(base_path)
-        
+
         # Configuration cache and monitoring
-        self.config_cache: Dict[str, Any] = {}
-        self.config_watchers: List[Callable[[str, Any, Any], None]] = []
+        self.config_cache: dict[str, Any] = {}
+        self.config_watchers: list[Callable[[str, Any, Any], None]] = []
         self.lock = threading.RLock()
-        
+
         # Load all configurations
         self._load_unified_configuration()
-        
+
         logger.info(f"UnifiedConfigurationManager initialized for environment: {environment}")
-    
+
     def _load_unified_configuration(self):
         """Load configuration from all sources with proper precedence."""
         with self.lock:
             # Start with base JSON configuration
             self.config_cache = dict(self.base_config.config_data)
-            
+
             # Apply legacy configurations (lower precedence)
             self._apply_legacy_configurations()
-            
+
             # Apply environment variables (highest precedence)
             self._apply_environment_variables()
-    
+
     def _apply_legacy_configurations(self):
         """Apply configuration from legacy sources."""
         # transfer.info overrides for client defaults
@@ -296,12 +296,12 @@ class UnifiedConfigurationManager:
             self._safe_set("client.last_server_port", transfer_config['server_port'])
             self._safe_set("client.last_username", transfer_config['username'])
             self._safe_set("client.last_file_path", transfer_config['file_path'])
-        
+
         # port.info overrides server port
         port = self.legacy_adapter.read_port_info()
         if port:
             self._safe_set("server.port", port)
-    
+
     def _apply_environment_variables(self):
         """Apply configuration from environment variables."""
         env_mappings = {
@@ -314,7 +314,7 @@ class UnifiedConfigurationManager:
             'BACKUP_MAX_CLIENTS': 'server.max_clients',
             'BACKUP_ENVIRONMENT': 'environment'
         }
-        
+
         for env_var, config_key in env_mappings.items():
             env_value = os.getenv(env_var)
             if env_value:
@@ -331,30 +331,30 @@ class UnifiedConfigurationManager:
                     except ValueError:
                         logger.warning(f"Invalid float value for {env_var}: {env_value}")
                         continue
-                
+
                 self._safe_set(config_key, env_value)
                 logger.info(f"Applied environment variable {env_var} -> {config_key}")
-    
+
     def _safe_set(self, key: str, value: Any):
         """Safely set a configuration value with dot notation."""
         keys = key.split('.')
         target = self.config_cache
-        
+
         for k in keys[:-1]:
             if k not in target:
                 target[k] = {}
             target = target[k]
-        
+
         old_value = target.get(keys[-1])
         target[keys[-1]] = value
-        
+
         # Notify watchers
         for watcher in self.config_watchers:
             try:
                 watcher(key, old_value, value)
             except Exception as e:
                 logger.error(f"Configuration watcher failed: {e}")
-    
+
     def get(self, key: str, default: Any = None) -> Any:
         """
         Get configuration value using dot notation with unified precedence.
@@ -368,14 +368,14 @@ class UnifiedConfigurationManager:
         with self.lock:
             keys = key.split('.')
             value = self.config_cache
-            
+
             try:
                 for k in keys:
                     value = value[k]
                 return value
             except (KeyError, TypeError):
                 return default
-    
+
     def set(self, key: str, value: Any, persist: bool = True):
         """
         Set configuration value and optionally persist to file.
@@ -387,12 +387,12 @@ class UnifiedConfigurationManager:
         """
         with self.lock:
             self._safe_set(key, value)
-            
+
             if persist:
                 # Update the base configuration and save
                 self.base_config.set(key, value)
                 self.base_config.save_configuration()
-    
+
     def add_watcher(self, callback: Callable[[str, Any, Any], None]):
         """
         Add a configuration change watcher.
@@ -402,14 +402,14 @@ class UnifiedConfigurationManager:
         """
         with self.lock:
             self.config_watchers.append(callback)
-    
+
     def remove_watcher(self, callback: Callable[[str, Any, Any], None]):
         """Remove a configuration change watcher."""
         with self.lock:
             if callback in self.config_watchers:
                 self.config_watchers.remove(callback)
-    
-    def migrate_legacy_configurations(self, create_backups: bool = True) -> List[ConfigurationMigration]:
+
+    def migrate_legacy_configurations(self, create_backups: bool = True) -> list[ConfigurationMigration]:
         """
         Migrate all legacy configurations to unified format.
         
@@ -420,10 +420,10 @@ class UnifiedConfigurationManager:
             List of completed migrations
         """
         migration_plan = self.legacy_adapter.create_migration_plan()
-        completed_migrations: List[ConfigurationMigration] = []
-        
+        completed_migrations: list[ConfigurationMigration] = []
+
         logger.info(f"Starting migration of {len(migration_plan)} configuration items")
-        
+
         for migration in migration_plan:
             try:
                 # Create backup if requested
@@ -434,20 +434,20 @@ class UnifiedConfigurationManager:
                         source_path.rename(backup_path)
                         migration.backup_created = True
                         logger.info(f"Created backup: {backup_path}")
-                
+
                 # Apply the migration
                 self.set(migration.target_key, migration.value, persist=True)
                 migration.migrated_at = datetime.now()
                 completed_migrations.append(migration)
-                
+
                 logger.info(f"Migrated {migration.source_file} -> {migration.target_key} = {migration.value}")
-                
+
             except Exception as e:
                 logger.error(f"Migration failed for {migration.source_file}: {e}")
-        
+
         logger.info(f"Migration completed: {len(completed_migrations)}/{len(migration_plan)} successful")
         return completed_migrations
-    
+
     def generate_transfer_info(self, username: str, file_path: str, output_path: str = "transfer.info") -> str:
         """
         Generate transfer.info file from current configuration.
@@ -462,33 +462,33 @@ class UnifiedConfigurationManager:
         """
         server_host = self.get('server.host', '127.0.0.1')
         server_port = self.get('server.port', 1256)
-        
+
         content = f"{server_host}:{server_port}\n{username}\n{file_path}\n"
-        
+
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(content)
-        
+
         logger.info(f"Generated transfer.info at: {output_path}")
         return output_path
-    
-    def validate_all_configurations(self) -> Dict[str, List[str]]:
+
+    def validate_all_configurations(self) -> dict[str, list[str]]:
         """
         Validate all configuration sources and return detailed results.
         
         Returns:
             Dictionary with validation results by source
         """
-        results: Dict[str, List[str]] = {
+        results: dict[str, list[str]] = {
             'json_config': [],
             'legacy_config': [],
             'environment_vars': [],
             'overall': []
         }
-        
+
         # Validate JSON configuration
         json_errors = self.base_config.validate_configuration()
         results['json_config'] = json_errors
-        
+
         # Validate legacy configurations
         transfer_config = self.legacy_adapter.read_transfer_info()
         if transfer_config:
@@ -498,24 +498,24 @@ class UnifiedConfigurationManager:
                     results['legacy_config'].append(f"Invalid server port in transfer.info: {transfer_config['server_port']}")
             except (ValueError, TypeError):
                 results['legacy_config'].append(f"Invalid server port format in transfer.info: {transfer_config['server_port']}")
-            
+
             if not str(transfer_config.get('username', '')).strip():
                 results['legacy_config'].append("Empty username in transfer.info")
-        
+
         # Check for configuration conflicts
         json_port = self.base_config.get('server.port')
         legacy_port = self.legacy_adapter.read_port_info()
         if json_port and legacy_port and json_port != legacy_port:
             results['overall'].append(f"Port conflict: JSON config ({json_port}) vs port.info ({legacy_port})")
-        
+
         # Validate critical paths
         file_storage_dir = self.get('server.file_storage_dir')
         if file_storage_dir and not os.path.exists(file_storage_dir):
             results['overall'].append(f"File storage directory does not exist: {file_storage_dir}")
-        
+
         return results
-    
-    def get_configuration_summary(self) -> Dict[str, Any]:
+
+    def get_configuration_summary(self) -> dict[str, Any]:
         """Get a comprehensive summary of current configuration."""
         return {
             'environment': self.base_config.environment,
@@ -564,27 +564,27 @@ def set_config(key: str, value: Any, persist: bool = True):
 def test_unified_configuration():
     """Test the unified configuration system."""
     print("Testing Unified Configuration System...")
-    
+
     config = UnifiedConfigurationManager()
-    
+
     # Test basic functionality
     print(f"Server host: {config.get('server.host')}")
     print(f"Server port: {config.get('server.port')}")
     print(f"Database name: {config.get('server.database_name')}")
-    
+
     # Test legacy integration
     transfer_config = config.legacy_adapter.read_transfer_info()
     print(f"Legacy transfer.info found: {transfer_config}" if transfer_config else "No legacy transfer.info found")
-    
+
     # Test hardcoded value detection
     hardcoded = config.legacy_adapter.scan_hardcoded_values()
     hardcoded_files = [f"Hardcoded {key} found in {len(files)} files" for key, files in hardcoded.items() if files]
     print("\n".join(hardcoded_files) if hardcoded_files else "No hardcoded values found")
-    
+
     # Test configuration summary
     summary = config.get_configuration_summary()
     print(f"Configuration summary: {json.dumps(summary, indent=2, default=str)}")
-    
+
     print("Unified Configuration System test completed!")
 
 if __name__ == "__main__":

@@ -4,13 +4,13 @@ FletV2 UI Performance Benchmark Suite
 Validates the optimal UI update patterns already implemented in the codebase.
 """
 
-import time
 import asyncio
-import flet as ft
-import statistics
-from typing import List, Dict, Any
-from contextlib import contextmanager
 import logging
+import statistics
+import time
+from contextlib import contextmanager
+
+import flet as ft
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -20,9 +20,8 @@ class PerformanceBenchmark:
     """Benchmark suite to validate FletV2's optimal UI performance patterns."""
 
     def __init__(self):
-        from typing import Optional
-        self.results: Dict[str, List[float]] = {}
-        self.page: Optional[ft.Page] = None
+        self.results: dict[str, list[float]] = {}
+        self.page: ft.Page | None = None
 
     @contextmanager
     def measure_time(self, operation_name: str):
@@ -40,7 +39,7 @@ class PerformanceBenchmark:
 
             logger.info(f"{operation_name}: {duration:.2f}ms")
 
-    def benchmark_control_updates(self, iterations: int = 100) -> Dict[str, float]:
+    def benchmark_control_updates(self, iterations: int = 100) -> dict[str, float]:
         """Benchmark control.update() performance (current implementation)."""
         results = {}
 
@@ -81,7 +80,7 @@ class PerformanceBenchmark:
 
         return results
 
-    def benchmark_page_updates(self, iterations: int = 50) -> Dict[str, float]:
+    def benchmark_page_updates(self, iterations: int = 50) -> dict[str, float]:
         """Benchmark page.update() for appropriate use cases."""
         results = {}
 
@@ -115,7 +114,7 @@ class PerformanceBenchmark:
 
         return results
 
-    async def benchmark_async_patterns(self, iterations: int = 30) -> Dict[str, float]:
+    async def benchmark_async_patterns(self, iterations: int = 30) -> dict[str, float]:
         """Benchmark async update patterns."""
         results = {}
 
@@ -142,7 +141,7 @@ class PerformanceBenchmark:
 
         return results
 
-    def validate_optimal_patterns(self) -> Dict[str, bool]:
+    def validate_optimal_patterns(self) -> dict[str, bool]:
         """Validate that the codebase follows optimal patterns."""
         validation = {
             "control_updates_fast": False,
@@ -175,8 +174,8 @@ class PerformanceBenchmark:
 
         return validation
 
-    def generate_performance_report(self, sync_results: Dict, page_results: Dict,
-                                  async_results: Dict, validation: Dict) -> str:
+    def generate_performance_report(self, sync_results: dict, page_results: dict,
+                                  async_results: dict, validation: dict) -> str:
         """Generate comprehensive performance report."""
         report = []
         report.append("# FletV2 UI Performance Benchmark Report")

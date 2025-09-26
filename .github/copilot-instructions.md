@@ -16,6 +16,138 @@ description: AI rules derived by SpecStory from the project AI interaction histo
 description: AI rules derived by SpecStory from the project AI interaction history
 ---
 
+# Client-Server Encrypted Backup Framework - AI Development Guide
+
+## 🏗️ System Architecture Overview
+
+This is a **production-grade 5-layer encrypted backup system** with hybrid web-to-native-desktop architecture:
+
+```
+Web UI → Flask API Bridge → C++ Client (subprocess) → Python Server → Flet Desktop GUI
+  ↓           ↓                    ↓                     ↓                     ↓
+HTTP      RealBackupExecutor    --batch mode       Custom Binary       Material Design 3
+requests  process management   + transfer.info     Custom Binary TCP   Server Management
+```
+
+**Critical Components**:
+- **C++ Client**: Production executable with RSA/AES encryption, CRC verification, and `--batch` mode for subprocess integration
+- **Flask API Bridge**: HTTP API server (port 9090) coordinating between web UI and native client
+- **Python Server**: Multi-threaded TCP server (port 1256) with file storage in `received_files/`
+- **Flet Desktop GUI**: Material Design 3 server management interface with modular architecture
+- **SQLite3 Database**: Client and file tracking storage
+
+### Build/Lint/Test Commands
+
+#### Python
+```bash
+# Lint: ruff check . (line-length=110, rules: E,F,W,B,I)
+ruff check .
+
+# Format: ruff format .
+ruff format .
+
+# Type Check: mypy . (strict mode, Python 3.13.5)
+mypy .
+
+# Lint: pylint (configuration via .pylintrc)
+pylint
+
+# Test All: pytest tests/
+pytest tests/
+
+# Test Single: pytest tests/test_specific_file.py::TestClass::test_method -v
+pytest tests/test_specific_file.py::TestClass::test_method -v
+
+# Test Integration: pytest tests/integration/ -v
+pytest tests/integration/ -v
+```
+
+#### C++
+```bash
+# Build: cmake with vcpkg toolchain
+cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake" && cmake --build build --config Release
+
+# Format: clang-format -i file.cpp (Google style, 100 cols, 4-space indent)
+clang-format -i file.cpp
+```
+
+#### Full System
+```bash
+# One-Click Build+Run: python scripts/one_click_build_and_run.py
+python scripts/one_click_build_and_run.py
+```
+
+### Code Style Guidelines
+
+#### Python
+- **Imports**: Standard library first, then third-party, then local (alphabetical within groups)
+- **Naming**: snake_case for variables/functions, PascalCase for classes, UPPER_CASE for constants
+- **Types**: Use type hints, strict mypy compliance
+- **Line Length**: 110 characters max
+- **Error Handling**: Try/except with specific exceptions, log errors with context
+- **Async**: Use async/await for I/O operations, avoid blocking calls
+
+#### C++
+- **Style**: Google C++ style with clang-format
+- **Indentation**: 4 spaces, no tabs
+- **Braces**: Attach to function/class, new line for control statements
+- **Pointers**: Left-aligned (*)
+- **Includes**: Group by type, alphabetical within groups
+
+#### General
+- **UTF-8**: Import `Shared.utils.utf8_solution` in files with subprocess/console I/O
+- **Logging**: Use logger instead of print() for debugging
+- **File Size**: Keep files under 650 lines, decompose larger files
+- **Framework Harmony**: Prefer Flet built-ins over custom solutions
+
+### Key Principles
+- **FletV2 First**: Use `FletV2/` directory exclusively (modern implementation)
+- **Single Responsibility**: Components <300 lines, focused on one purpose
+- **Async Patterns**: Use `page.run_task()` for background operations
+- **Theme System**: Use TOKENS instead of hardcoded colors
+- **Verification**: Check `received_files/` for actual transfers (not exit codes)
+
+### Testing Strategy
+- Integration tests verify end-to-end flows
+- Component tests isolate Flet UI elements
+- Always verify file presence in `received_files/` directory
+- Test responsive layouts on 800x600 minimum window size
+
+### Core Integration Patterns
+
+#### Subprocess Management (CRITICAL)
+```python
+# Flask API → RealBackupExecutor → C++ client (with --batch flag)
+# File Lifecycle: SynchronizedFileManager prevents race conditions
+self.backup_process = subprocess.Popen(
+    [self.client_exe, "--batch"],  # --batch prevents hanging in subprocess
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True,
+    cwd=os.path.dirname(os.path.abspath(self.client_exe)),  # CRITICAL: Working directory
+    env=Shared.utils.utf8_solution.get_env()  # UTF-8 environment
+)
+```
+
+#### File Transfer Verification (CRITICAL)
+Always verify file transfers by checking actual files in `received_files/` directory:
+- Compare file sizes
+- Compare SHA256 hashes
+- Verify network activity on port 1256
+
+#### Configuration Generation Pattern
+```python
+# transfer.info must be generated per operation (3-line format)
+def _generate_transfer_info(self, server_ip, server_port, username, file_path):
+    with open("transfer.info", 'w') as f:
+        f.write(f"{server_ip}:{server_port}\n")  # Line 1: server endpoint
+        f.write(f"{username}\n")                 # Line 2: username
+        f.write(f"{file_path}\n")                # Line 3: absolute file path
+```
+
+---
+
 # FletV2 Development Guide (Concise)
 This guide codifies the essential rules to generate high-quality, compatible, and efficient code for this repository, focused on the FletV2 application. It consolidates prior guidance into a single DRY reference.
 
@@ -93,6 +225,104 @@ def create_view(page: ft.Page, server_bridge, state_manager) -> ft.Control:
     refresh_btn = themed_button(text="Refresh", on_click=on_refresh, icon=ft.Icons.REFRESH)
     items = ft.Column(scroll=ft.ScrollMode.AUTO)
     return ft.Container(content=ft.Column([ft.Row([ft.Text("Example"), refresh_btn]), items]), padding=20)
+```
+
+#### Flet Component Development Best Practices
+
+When creating UI components for Flet, follow these best practices:
+
+##### 1. Single Inheritance Pattern
+Always inherit from a single Flet control class:
+```python
+# ✅ CORRECT - Single inheritance
+class EnhancedButton(ft.FilledButton):
+    def __init__(self, text="", **kwargs):
+        super().__init__(text=text, **kwargs)
+        # Add custom functionality
+
+# ❌ INCORRECT - Multiple inheritance
+class BadButton(ft.FilledButton, ft.TextButton):
+    def __init__(self, text="", **kwargs):
+        super().__init__(text=text, **kwargs)
+```
+
+##### 2. Proper Initialization
+Always call `super().__init__()` properly:
+```python
+class MyComponent(ft.Container):
+    def __init__(self, content=None, **kwargs):
+        # Pass Flet-native parameters to parent class
+        super().__init__(content=content, **kwargs)
+
+        # Set custom properties AFTER parent initialization
+        self.custom_property = "value"
+```
+
+##### 3. Component Composition Over Complex Inheritance
+Use composition when a single component isn't sufficient:
+```python
+class StatCard(ft.Card):
+    def __init__(self, title, value, **kwargs):
+        # Create content using Flet controls
+        content = ft.Column([
+            ft.Text(title, size=16, weight=ft.FontWeight.W_500),
+            ft.Text(str(value), size=24, weight=ft.FontWeight.W_300)
+        ])
+
+        # Initialize parent with composed content
+        super().__init__(content=content, **kwargs)
+```
+
+##### 4. Flet-Native Properties
+Leverage Flet's built-in properties instead of custom implementations where possible:
+```python
+# ✅ CORRECT - Use Flet's built-in properties
+class MyButton(ft.FilledButton):
+    def __init__(self, text="", **kwargs):
+        super().__init__(text=text, **kwargs)
+        self.bgcolor = ft.Colors.PRIMARY  # Use Flet's color constants
+        self.height = 40  # Direct property assignment
+
+# ❌ INCORRECT - Custom property management
+class MyButton:
+    def __init__(self, text="", **kwargs):
+        self._bgcolor = None
+        self._height = None
+        # Custom property management is unnecessary
+```
+
+##### 5. Event Handling Patterns
+Use Flet's event system properly:
+```python
+class ClickableCard(ft.Card):
+    def __init__(self, on_click=None, **kwargs):
+        super().__init__(**kwargs)
+        self.on_click = on_click  # Set event handler directly
+
+    def handle_click(self, e):
+        if self.on_click:
+            self.on_click(e)
+```
+
+##### 6. State Management
+Manage component state using Flet's update mechanism:
+```python
+class StatefulButton(ft.FilledButton):
+    def __init__(self, text="", **kwargs):
+        super().__init__(text=text, **kwargs)
+        self._state = "enabled"
+
+    def set_state(self, state):
+        self._state = state
+        if state == "loading":
+            self.disabled = True
+            self.text = "Loading..."
+        elif state == "disabled":
+            self.disabled = True
+        else:
+            self.disabled = False
+            self.text = "Click me"
+        self.update()  # Trigger UI update
 ```
 
 ### Async Programming Patterns
@@ -185,6 +415,25 @@ async def bad_ui_update(e):
 # ❌ WRONG: Mixing sync and async incorrectly
 def sync_function():
     asyncio.run(async_operation())  # Don't do this in event handlers
+```
+
+#### Flet Async Task Management Patterns
+```python
+# Pattern 1: Simple async method calls
+# ❌ INCORRECT - Calling the coroutine instead of passing it
+self.page.run_task(self.action_handlers.clear_logs())
+
+# ✅ CORRECT - Pass the coroutine function itself
+self.page.run_task(self.action_handlers.clear_logs)
+
+# Pattern 2: Parameterized async method calls
+# ❌ INCORRECT - Calling the coroutine with parameters
+self.page.run_task(self.action_handlers.export_logs(filter_level, filter_component, search_query))
+
+# ✅ CORRECT - Create a wrapper function to capture parameters
+async def export_logs_wrapper():
+    await self.action_handlers.export_logs(filter_level, filter_component, search_query)
+self.page.run_task(export_logs_wrapper)
 ```
 
 ### Error Handling & Feedback
@@ -706,232 +955,3 @@ class TestViewComponents(unittest.TestCase):
 
         # Assert
         mock_show_success.assert_called_once()
-        self.mock_page.update.assert_called()
-```
-
-#### Integration Test Patterns
-```python
-import pytest
-import flet as ft
-from utils.server_bridge import create_server_bridge
-from utils.state_manager import StateManager
-
-class TestDashboardIntegration:
-    """Integration tests for dashboard functionality."""
-
-    @pytest.fixture
-    def setup_app(self):
-        """Set up test application."""
-        # Create test page
-        page = ft.Page()
-        server_bridge = create_server_bridge()
-        state_manager = StateManager()
-
-        return page, server_bridge, state_manager
-
-    def test_dashboard_loads_data(self, setup_app):
-        """Test that dashboard loads and displays data correctly."""
-        page, server_bridge, state_manager = setup_app
-
-        # Create dashboard view
-        from views.dashboard import create_dashboard_view
-        dashboard = create_dashboard_view(page, server_bridge, state_manager)
-
-        # Verify structure
-        assert isinstance(dashboard, ft.Container)
-        assert len(dashboard.content.controls) > 0
-
-        # Verify data loading
-        clients = server_bridge.get_clients()
-        assert len(clients) > 0
-
-    def test_reactive_updates(self, setup_app):
-        """Test that UI reacts to state changes."""
-        page, server_bridge, state_manager = setup_app
-
-        # Subscribe to state changes
-        update_called = False
-        def on_update(data):
-            nonlocal update_called
-            update_called = True
-
-        state_manager.set_settings('test', on_update)
-
-        # Trigger state change
-        state_manager.set_settings('test', {'value': 'new'})
-
-        # Verify reactive update
-        assert update_called
-```
-
-#### Testing Anti-Patterns (AVOID)
-```python
-# ❌ WRONG: Testing implementation details
-def test_internal_method(self):
-    # Don't test private methods directly
-    bridge = ServerBridge()
-    bridge._internal_method()  # Avoid testing private methods
-
-# ❌ WRONG: No mocking of external dependencies
-def test_with_real_network(self):
-    # Don't make real network calls in unit tests
-    result = make_http_request('http://real-api.com')  # Slow, unreliable
-
-# ❌ WRONG: Testing without proper setup
-def test_without_setup(self):
-    # Missing setUp/tearDown
-    page = ft.Page()  # No proper initialization
-    # Test will be flaky
-```
-
-#### Comprehensive Integration Tests
-
-To ensure the stability and functionality of the FletV2 application, the following integration tests are recommended:
-
-- **View Integration Tests**: Each FletV2 view (Dashboard, Clients, Files, Database, Logs) should be tested to ensure they load correctly and display real server data.
-- **Server Operation Tests**: Verify that server operations such as adding/deleting clients and file management work correctly through the GUI.
-- **Error Handling Tests**: Implement tests for error handling and graceful degradation scenarios to ensure the application behaves predictably under various failure conditions. Ensure the application behaves predictably under various failure conditions.
-- **Relevant Files**: `@views`, `@tests`, `@main.py`
-
-To address the `ModuleNotFoundError: No module named 'utils'` errors in the integration tests, the following pattern MUST be followed:
-
-- Add `sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))` to the beginning of each integration test file. This ensures that the `utils` module can be found.
-
-#### Integration Test Example - Logs View
-
-```python
-#!/usr/bin/env python3
-"""Integration tests for Logs view with ServerBridge (mock-backed)."""
-
-import os
-import sys
-import unittest
-
-import flet as ft
-
-# Ensure FletV2 root is on sys.path for `utils`, `views`, etc.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-
-os.environ.setdefault("FLET_V2_DEBUG", "true")
-
-from utils.server_bridge import create_server_bridge
-from utils.state_manager import StateManager
-from views.logs import create_logs_view
-from tests.integration_utils import FakePage
-
-
-class TestLogsIntegration(unittest.TestCase):
-    def setUp(self) -> None:
-        self.page: ft.Page = FakePage()  # type: ignore[assignment]
-        self.bridge = create_server_bridge()
-        self.state_manager = StateManager(self.page, self.bridge)
-
-    def test_logs_view_loads_and_filters(self):
-        view, dispose, setup = create_logs_view(self.bridge, self.page, self.state_manager)
-        self.assertIsInstance(view, ft.Control)
-        setup()
-
-        # Bridge should respond for logs in mock mode
-        result = self.bridge.get_logs()
-        self.assertTrue(result.get("success", False))
-        data = result.get("data", [])
-        self.assertIsInstance(data, list)
-
-        dispose()
-
-
-if __name__ == "__main__":
-    unittest.main()
-```
-
-#### Fix: ImportError "No module named 'utils.debug_setup'" when launching FletV2
-```markdown
-Problem
-- The app crashes on startup with: No module named 'utils.debug_setup'.
-- Cause: The sys.path bootstrap in one or more entry files points to the wrong directory level (it goes too far up), so Python can’t see FletV2/utils.
-
-Why this happens
-- The project uses an import like:
-  from utils.debug_setup import setup_terminal_debugging
-- This requires FletV2 (the folder that contains utils/) to be on sys.path before imports run.
-- Some files use a “two-levels up” pattern:
-  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-  In top-level files (directly under FletV2/), that resolves to the repo root’s parent, dropping FletV2 from sys.path and breaking utils.* imports.
-
-Resolution (precise steps)
-
-1) Fix the sys.path setup in entry modules
-- In every file directly under FletV2/ that imports utils.* (e.g., FletV2/main.py, FletV2/app.py, any launcher), replace the two-level pattern with this exact snippet at the very top (before any other imports):
-
-```python
-import os
-import sys
-
-# Ensure FletV2 root is on sys.path (works for files for files in FletV2/ and its subfolders)
-_here = os.path.abspath(__file__)
-_base = os.path.dirname(_here)
-if os.path.basename(_base) == "FletV2":
-    flet_v2_root = _base
-else:
-    flet_v2_root = os.path.dirname(_base)  # if file is in a subfolder
-
-if flet_v2_root not in sys.path:
-    sys.path.insert(0, flet_v2_root)
-
-# Optional: enable Shared.* imports if Shared is a sibling of FletV2
-repo_root = os.path.dirname(flet_v2_root)
-if os.path.isdir(os.path.join(repo_root, "Shared")) and repo_root not in sys.path:
-    sys.path.insert(0, repo_root)
-```
-
-- Do not remove the import order you already follow; keep the imports exactly as documented after this snippet.
-
-2) Verify utils package structure
-- Ensure these paths exist:
-  - FletV2/utils/__init__.py (can be empty; ensures package import across environments)
-  - FletV2/utils/debug_setup.py (must define setup_terminal_debugging)
-
-If FletV2/utils/debug_setup.py is missing, create it with:
-
-```python
-# filepath: c:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\utils\debug_setup.py
-import logging
-import sys
-
-def setup_terminal_debugging(logger_name: str = "app", level: int =logging.INFO) -> logging.Logger:
-    logger = logging.getLogger(logger_name)
-    if not logger.handlers:
-        handler = logging.StreamHandler(stream=sys.stdout)
-        formatter = logging.Formatter("[%(asctime)s] %(levelname)s %(name)s: %(message)s")
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-    logger.setLevel(level)
-    return logger
-```
-
-3) Keep the documented import order
-- After the path snippet, follow the project’s strict import order, including:
-  - from utils.debug_setup import setup_terminal_debugging
-  - import Shared.utils.utf8_solution as _  # if you use Shared
-  - logger = setup_terminal_debugging(logger_name="module_name")
-
-4) Find and fix all affected files
-- In VS Code, search for these to locate offenders:
-  - Query: from utils.debug_setup
-  - Query: os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-- Apply Step 1 to each file that’s directly under FletV2/ or that fails to import utils.*
-
-5) Validate
-- From the repo root in Terminal (Windows):
-  - python -V  (ensure ≥ 3.9)
-  - python .\FletV2\main.py  (or your actual launcher)
-- Expected: App starts; no ImportError for utils.debug_setup.
-
-Notes
-- If your Shared package is located inside FletV2 (FletV2/Shared), you do not need the repo_root insertion; the snippet above supports both layouts safely.
-- sys.path.insert(0, ...) ensures project imports win over similarly named external packages (like a pip-installed utils).
-```
-
-### VS Code Configuration
-
-To resolve issues with VS Code getting stuck on "Discovering Python Interpreters" or displaying a large

@@ -3,12 +3,12 @@
 Quick Python Import Error Scanner - Fast version without executing modules
 """
 
-import os
 import ast
-from typing import Any, Dict, List, Set
+import os
+from typing import Any
 
 
-def check_imports_in_file(filepath: str) -> Dict[str, Any]:
+def check_imports_in_file(filepath: str) -> dict[str, Any]:
     """
     Parse a Python file and check for import statements without executing it.
     
@@ -19,13 +19,13 @@ def check_imports_in_file(filepath: str) -> Dict[str, Any]:
         dict with imports and potential issues
     """
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, encoding='utf-8') as f:
             content = f.read()
-        
+
         # Parse AST to find import statements
         tree = ast.parse(content, filename=filepath)
-        imports: List[Dict[str, Any]] = []
-        
+        imports: list[dict[str, Any]] = []
+
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
@@ -38,18 +38,18 @@ def check_imports_in_file(filepath: str) -> Dict[str, Any]:
                 module = node.module if node.module else ''
                 for alias in node.names:
                     imports.append({
-                        'type': 'from_import', 
+                        'type': 'from_import',
                         'module': module,
                         'name': alias.name,
                         'line': node.lineno
                     })
-        
+
         return {
             'success': True,
             'imports': imports,
             'error': None
         }
-        
+
     except SyntaxError as e:
         return {
             'success': False,
@@ -78,7 +78,7 @@ def check_module_availability(module_name: str) -> bool:
 def main() -> None:
     print("Quick Python Import Error Scanner")
     print("=" * 50)
-    
+
     # Core project files to check
     core_files = [
         './api_server/cyberbackup_api_server.py',
@@ -93,69 +93,69 @@ def main() -> None:
         './Shared/observability.py',
         './Shared/sentry_config.py'
     ]
-    
+
     # Track problematic imports
-    missing_modules: Set[str] = set()
-    syntax_errors: List[Any] = []
-    problematic_files: List[str] = []
-    
+    missing_modules: set[str] = set()
+    syntax_errors: list[Any] = []
+    problematic_files: list[str] = []
+
     print(f"\nScanning {len(core_files)} core files for import issues...\n")
-    
+
     for filepath in core_files:
         if not os.path.exists(filepath):
             print(f"MISSING: {filepath}")
             continue
-            
+
         result = check_imports_in_file(filepath)
-        
+
         if not result['success']:
             syntax_errors.append((filepath, result['error']))
             print(f"SYNTAX ERR: {filepath}")
             print(f"  {result['error']}")
             continue
-        
+
         print(f"PARSING: {filepath}")
-        
+
         # Check each import
-        file_missing_imports: List[str] = []
+        file_missing_imports: list[str] = []
         if result['imports']:
             for imp in result['imports']:
                 if imp['type'] == 'import':
                     module = imp['module']
                 else:
                     module = imp['module']
-                
+
                 # Skip relative imports and standard library
                 if module.startswith('.') or not module:
                     continue
-                    
+
                 # Check common third-party modules
                 if module in ['flask', 'sentry_sdk', 'watchdog', 'tkinter', 'pystray', 'PIL', 'matplotlib']:
                     if not check_module_availability(module):
                         missing_modules.add(module)
                         file_missing_imports.append(f"  Line {imp['line']}: {module}")
-        
+
         if file_missing_imports:
             problematic_files.append(filepath)
             for missing in file_missing_imports:
                 print(missing)
-    
+
     # Summary
     print("\n" + "=" * 50)
     print("IMPORT ANALYSIS SUMMARY")
     print("=" * 50)
-    
+
     if syntax_errors:
         print(f"\nSYNTAX ERRORS ({len(syntax_errors)} files):")
         for filepath, error in syntax_errors:
             print(f"  * {filepath}")
             print(f"    {error}")
-    
+
     if missing_modules:
         print(f"\nMISSING DEPENDENCIES ({len(missing_modules)} modules):")
         for module in sorted(missing_modules):
             print(f"  * {module}")
-            
+
             # Suggest fixes
             if module == 'flask':
                 print("    Fix: pip install flask flask-cors flask-socketio")
@@ -169,12 +169,12 @@ def main() -> None:
                 print("    Fix: pip install matplotlib")
             elif module == 'tkinter':
                 print("    Fix: Install Python with tkinter support")
-    
+
     if problematic_files:
         print(f"\nFILES WITH MISSING IMPORTS ({len(problematic_files)} files):")
         for filepath in problematic_files:
             print(f"  * {filepath}")
-    
+
     # Recommendations
     if not syntax_errors and not missing_modules:
         print("\nGOOD NEWS: No obvious import issues found in core files!")
@@ -186,7 +186,7 @@ def main() -> None:
         if missing_modules:
             print("* Install missing dependencies with the suggested pip commands")
             print("* Check if requirements.txt exists and run: pip install -r requirements.txt")
-    
+
     print("\nScan complete!")
 
 if __name__ == "__main__":

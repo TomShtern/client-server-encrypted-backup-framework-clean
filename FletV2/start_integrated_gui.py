@@ -12,14 +12,14 @@ Usage:
 """
 
 import asyncio
-import contextlib
 import logging
 import os
-import sys
 import signal
+import sys
 from pathlib import Path
+from typing import Any
+
 from run_integrated_server import find_available_port
-from typing import Optional, Any
 
 # CRITICAL: Set up Python path IMMEDIATELY for all imports
 current_dir = Path(__file__).parent
@@ -32,7 +32,6 @@ for path in paths_to_add:
         sys.path.insert(0, path)
 
 # CRITICAL: Update PYTHONPATH environment variable for subprocess imports
-import os
 current_pythonpath = os.environ.get('PYTHONPATH', '')
 new_pythonpath = os.pathsep.join(paths_to_add + ([current_pythonpath] if current_pythonpath else []))
 os.environ['PYTHONPATH'] = new_pythonpath
@@ -49,7 +48,6 @@ os.environ['DISABLE_SIGNAL_HANDLERS'] = 'true'
 os.environ['NO_SIGNAL_HANDLERS'] = '1'
 
 # Essential UTF-8 support for subprocess operations
-import Shared.utils.utf8_solution as _  # Import for side effects
 
 # Import our path fix module to ensure proper imports
 try:
@@ -79,7 +77,8 @@ except ImportError as e:
 
 # Import FletV2 components
 try:
-    from main import main as flet_main, FletV2App
+    from main import FletV2App
+    from main import main as flet_main
 except ImportError as e:
     print(f"Error: Could not import main module: {e}")
     sys.exit(1)
@@ -130,12 +129,12 @@ class IntegratedServerManager:
 
     def __init__(self, force_mock: bool = False):
         self.force_mock = force_mock
-        self.backup_server: Optional[Any] = None
-        self.server_bridge: Optional[Any] = None
-        self.gui_task: Optional[asyncio.Task] = None
+        self.backup_server: Any | None = None
+        self.server_bridge: Any | None = None
+        self.gui_task: asyncio.Task | None = None
         self.shutdown_event = asyncio.Event()
 
-    async def initialize_backup_server(self) -> Optional[Any]:
+    async def initialize_backup_server(self) -> Any | None:
         """
         Initialize the production BackupServer in background thread with proper error handling.
 
@@ -207,7 +206,7 @@ class IntegratedServerManager:
             logger.error(f"❌ Migration error: {e}")
             return False
 
-    def create_integrated_server_bridge(self, backup_server: Optional[Any]) -> Any:
+    def create_integrated_server_bridge(self, backup_server: Any | None) -> Any:
         """
         Create ServerBridge with either real BackupServer or mock fallback.
 

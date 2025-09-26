@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Test script for the responsive grid system implementation
 Verifies Material Design 3 breakpoints and adaptive layout behavior
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Fix Unicode encoding for Windows without breaking PyTest capture
@@ -15,7 +13,7 @@ if sys.platform == "win32":  # pragma: win32-only
         import io
         if not isinstance(sys.stdout, io.TextIOBase):  # rare edge, keep default
             pass
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
 
 # Add project root to path for imports
@@ -33,25 +31,25 @@ def test_responsive_layout():
     """Test responsive layout functionality (simplified version)"""
     try:
         print("Testing responsive layout system...")
-        
+
         # Simulate different screen sizes
         test_sizes = [
             (400, 600),   # Mobile portrait
-            (600, 400),   # Mobile landscape  
+            (600, 400),   # Mobile landscape
             (800, 600),   # Tablet
             (1024, 768),  # Tablet large
             (1200, 800),  # Desktop small
             (1440, 900),  # Desktop medium
             (1920, 1080)  # Desktop large
         ]
-        
+
         print("Material Design 3 Breakpoint Analysis:")
         print("=" * 60)
-        
+
         for width, height in test_sizes:
             # Calculate available width (accounting for padding)
             available_width = width - 48  # 48dp total padding
-            
+
             # Determine breakpoint
             if available_width <= 768:
                 breakpoint = "mobile"
@@ -62,12 +60,12 @@ def test_responsive_layout():
             else:
                 breakpoint = "desktop"
                 expected_cols = 3
-            
+
             print(f"\nScreen: {width}x{height}px")
             print(f"Available Width: {available_width}px")
             print(f"Breakpoint: {breakpoint}")
             print(f"Expected Columns: {expected_cols}")
-            
+
             # Calculate card sizing
             if expected_cols == 1:
                 spacing = 16
@@ -87,7 +85,7 @@ def test_responsive_layout():
                 padding = [24, 20, 24, 20]
                 min_height = 120
                 radius = 12
-            
+
             print(f"Card Width: {card_width:.1f}px")
             print(f"Card Spacing: {spacing}px")
             print(f"Card Padding: {padding}")
@@ -98,7 +96,7 @@ def test_responsive_layout():
         print("[OK] All breakpoint calculations completed successfully!")
         assert True
 
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"[ERROR] Test failed: {e}")
         import traceback
         traceback.print_exc()
@@ -108,7 +106,7 @@ def test_responsive_constraints():
     """Test responsive constraint application"""
     print("\nTesting responsive constraint application:")
     print("=" * 50)
-    
+
     try:
         # Test constraint calculations
         test_cases = [
@@ -121,7 +119,7 @@ def test_responsive_constraints():
                 "expected_radius": [16]
             },
             {
-                "name": "Tablet Two Column", 
+                "name": "Tablet Two Column",
                 "available_width": 1000,
                 "cols": 2,
                 "expected_padding": [22, 18, 22, 18],
@@ -137,7 +135,7 @@ def test_responsive_constraints():
                 "expected_radius": [12]
             }
         ]
-        
+
         for test_case in test_cases:
             print(f"\n{test_case['name']}:")
             print(f"  Available Width: {test_case['available_width']}px")
@@ -146,11 +144,11 @@ def test_responsive_constraints():
             print(f"  Expected Min Height: {test_case['expected_min_height']}dp")
             print(f"  Expected Radius: {test_case['expected_radius']}")
             print("  [OK] Constraint calculation: PASSED")
-        
+
         print("\n" + "=" * 50)
         print("[OK] All responsive constraint tests passed!")
         return True
-        
+
     except Exception as e:
         print(f"[ERROR] Constraint test failed: {e}")
         return False
@@ -161,17 +159,17 @@ def main():
     print("=" * 60)
     print("Testing Material Design 3 breakpoints and adaptive layout behavior")
     print("=" * 60)
-    
+
     # Run tests
     layout_test_passed = test_responsive_layout()
     constraints_test_passed = test_responsive_constraints()
-    
+
     print("\n" + "=" * 60)
     print("TEST SUMMARY")
     print("=" * 60)
     print(f"Responsive Layout Test: {'[OK] PASSED' if layout_test_passed else '[ERROR] FAILED'}")
     print(f"Constraint Application Test: {'[OK] PASSED' if constraints_test_passed else '[ERROR] FAILED'}")
-    
+
     if layout_test_passed and constraints_test_passed:
         print("\n[SUCCESS] All tests passed! Responsive grid system is working correctly.")
         print("\nKey Features Verified:")

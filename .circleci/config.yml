@@ -11,7 +11,7 @@ executors:
     docker:
       - image: cimg/python:3.11
     working_directory: ~/project
-    
+
   cpp-windows-executor:
     machine:
       image: windows-server-2022-gui:current
@@ -29,7 +29,8 @@ commands:
           command: |
             pip install --upgrade pip
             pip install -r requirements.txt
-      
+            pip install ruff
+
       - run:
           name: Verify critical imports
           command: |
@@ -44,13 +45,13 @@ commands:
           command: |
             cd vcpkg
             .\bootstrap-vcpkg.bat
-      
+
       - run:
           name: Install C++ dependencies
           command: |
             cd vcpkg
             .\vcpkg.exe install cryptopp boost zlib sentry-native --triplet x64-windows
-      
+
       - run:
           name: Verify vcpkg dependencies
           command: |
@@ -64,12 +65,12 @@ commands:
           name: Configure CMake with vcpkg
           command: |
             cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
-      
+
       - run:
           name: Build C++ client
           command: |
             cmake --build build --config Release
-      
+
       - run:
           name: Verify build artifacts
           command: |
@@ -89,21 +90,15 @@ jobs:
     steps:
       - checkout
       - install-python-deps
-      
+
       - run:
-          name: Run Python linting (if available)
+          name: Run Ruff linting
           command: |
-            # Check if ruff or flake8 is available
-            if pip show ruff > /dev/null 2>&1; then
-              echo "Running ruff linting..."
-              ruff check . || echo "⚠️  Linting issues found (non-blocking)"
-            elif pip show flake8 > /dev/null 2>&1; then
-              echo "Running flake8 linting..."
-              flake8 . || echo "⚠️  Linting issues found (non-blocking)"
-            else
-              echo "No linters found, skipping linting step"
-            fi
-      
+            echo "Running Ruff format check..."
+            ruff format --check . || echo "⚠️  Formatting issues found (non-blocking)"
+            echo "Running Ruff diagnostics..."
+            ruff check . || echo "⚠️  Linting issues found (non-blocking)"
+
       - run:
           name: Verify UTF-8 solution import
           command: |
@@ -116,7 +111,7 @@ jobs:
       - checkout
       - setup-vcpkg-deps
       - build-cpp-client
-      
+
       - persist_to_workspace:
           root: ~/project
           paths:
@@ -128,21 +123,21 @@ jobs:
     steps:
       - checkout
       - install-python-deps
-      
+
       - run:
           name: Run Python unit tests
           command: |
             # Run individual test files that don't require full system
             echo "Running isolated Python tests..."
-            
+
             # Test imports and basic functionality
             python scripts/testing/quick_validation.py || echo "⚠️  Quick validation issues (non-blocking)"
-            
+
             # Test specific modules if available
             if [ -f "tests/test_api.py" ]; then
               python tests/test_api.py || echo "⚠️  API tests issues (non-blocking)"
             fi
-            
+
             # Test UTF-8 functionality
             python scripts/test_emoji_support.py || echo "⚠️  UTF-8 tests issues (non-blocking)"
 
@@ -153,50 +148,50 @@ jobs:
       - checkout
       - attach_workspace:
           at: ~/project
-      
+
       - run:
           name: Install Python dependencies on Windows
           command: |
             pip install --upgrade pip
             pip install -r requirements.txt
-      
+
       - run:
           name: Start test servers in background
           command: |
             # Start backup server in background
             Start-Process python -ArgumentList "python_server/server/server.py" -WindowStyle Hidden
             Start-Sleep 5
-            
-            # Start API server in background  
+
+            # Start API server in background
             Start-Process python -ArgumentList "api_server/cyberbackup_api_server.py" -WindowStyle Hidden
             Start-Sleep 5
           background: true
-      
+
       - run:
           name: Wait for servers to be ready
           command: |
             # Check if servers are running
             $timeout = 30
             $elapsed = 0
-            
+
             while ($elapsed -lt $timeout) {
               $apiRunning = (netstat -an | Select-String ":9090") -ne $null
               $serverRunning = (netstat -an | Select-String ":1256") -ne $null
-              
+
               if ($apiRunning -and $serverRunning) {
                 Write-Host "✅ Both servers are running"
                 break
               }
-              
+
               Start-Sleep 2
               $elapsed += 2
               Write-Host "Waiting for servers... ($elapsed/$timeout seconds)"
             }
-            
+
             if ($elapsed -ge $timeout) {
               Write-Host "⚠️  Servers didn't start in time, continuing anyway"
             }
-      
+
       - run:
           name: Run integration tests
           command: |
@@ -204,12 +199,12 @@ jobs:
             if (Test-Path "tests/integration/run_integration_tests.py") {
               python tests/integration/run_integration_tests.py || echo "⚠️  Integration tests issues (non-blocking)"
             }
-            
+
             # Run master test suite if available
             if (Test-Path "scripts/testing/master_test_suite.py") {
               python scripts/testing/master_test_suite.py || echo "⚠️  Master test suite issues (non-blocking)"
             }
-            
+
             # Test file transfer functionality
             if (Test-Path "tests/test_upload.py") {
               python tests/test_upload.py || echo "⚠️  Upload tests issues (non-blocking)"
@@ -221,39 +216,39 @@ jobs:
     steps:
       - checkout
       - install-python-deps
-      
+
       - run:
           name: Install security scanning tools
           command: |
             pip install safety bandit semgrep
-      
+
       - run:
           name: Check for known vulnerabilities in dependencies
           command: |
             safety check || echo "⚠️  Security vulnerabilities found in dependencies"
-      
+
       - run:
           name: Run static security analysis
           command: |
             bandit -r . -f json -o bandit-report.json || echo "⚠️  Security issues found (non-blocking)"
-      
+
       - run:
           name: Scan for encryption vulnerabilities
           command: |
             # Check for your specific security issues mentioned in CLAUDE.md
             echo "Scanning for static IV usage..."
             grep -r "static.*IV\|zero.*IV" . --include="*.cpp" --include="*.h" || echo "✅ No static IV patterns found"
-            
+
             echo "Scanning for CRC32 without HMAC..."
             grep -r "CRC32\|crc32" . --include="*.cpp" --include="*.h" | grep -v "HMAC" || echo "✅ CRC usage appears secure"
-            
+
             echo "Checking for hardcoded keys..."
             bandit -r . -f json -o security-detailed.json --severity-level medium || echo "⚠️  Potential security issues found"
-      
+
       - store_artifacts:
           path: bandit-report.json
           destination: security-reports/bandit-report.json
-      
+
       - store_artifacts:
           path: security-detailed.json
           destination: security-reports/security-detailed.json
@@ -264,12 +259,12 @@ jobs:
     steps:
       - checkout
       - install-python-deps
-      
+
       - run:
           name: Validate system dependencies
           command: |
             python scripts/check_dependencies.py || echo "⚠️  Dependency issues found"
-      
+
       - run:
           name: Test system startup sequence
           command: |
@@ -281,7 +276,7 @@ jobs:
 # Define workflows
 workflows:
   version: 2
-  
+
   # Main build and test workflow
   build-and-test:
     jobs:
@@ -290,18 +285,18 @@ workflows:
       - cpp-build
       - security-scan
       - system-validation
-      
+
       # Stage 2: Unit tests (depends on dependencies being validated)
       - python-unit-tests:
           requires:
             - python-lint-and-deps
-      
+
       # Stage 3: Integration tests (requires both C++ build and Python validation)
       - integration-tests:
           requires:
             - cpp-build
             - python-unit-tests
-  
+
   # Nightly comprehensive testing
   nightly-tests:
     triggers:

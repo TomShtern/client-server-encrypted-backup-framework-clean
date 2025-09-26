@@ -30,12 +30,28 @@ Enhanced for server integration with:
 - Event-driven architecture for real-time responsiveness
 """
 
-import flet as ft
 import asyncio
-import time
 import contextlib
-from typing import Dict, Any, Callable, Optional, List, Union
-from .debug_setup import setup_terminal_debugging
+import os
+import sys
+import time
+from collections.abc import Callable
+from typing import Any
+
+import flet as ft
+
+# --- PATH SETUP (allow direct execution / editor open) ---
+_utils_dir = os.path.dirname(os.path.abspath(__file__))
+_flet_v2_root = os.path.dirname(_utils_dir)
+_repo_root = os.path.dirname(_flet_v2_root)
+for _p in (_flet_v2_root, _repo_root):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+try:
+    from FletV2.utils.debug_setup import setup_terminal_debugging  # type: ignore
+except Exception:  # noqa: BLE001
+    from .debug_setup import setup_terminal_debugging  # type: ignore
 
 logger = setup_terminal_debugging(logger_name="FletV2.state_manager")
 
@@ -74,15 +90,15 @@ class StateManager:
         self.global_listeners = []  # Listeners for all state changes
         self._change_history = []  # Track state changes for debugging
         # Debounce tasks for frequently changing operations (not persisted in state)
-        self._debounce_tasks: Dict[str, asyncio.Task] = {}
+        self._debounce_tasks: dict[str, asyncio.Task] = {}
         # Event deduplication tracking (Comment 10: Fix duplicate event notifications)
-        self._last_update_source: Dict[str, str] = {}  # {state_key: last_source}
-        self._update_counter: Dict[str, int] = {}  # {state_key: update_count}
+        self._last_update_source: dict[str, str] = {}  # {state_key: last_source}
+        self._update_counter: dict[str, int] = {}  # {state_key: update_count}
         # Lock & versioning for settings conflict resolution
         self._settings_lock = asyncio.Lock()
         self._settings_version = 0
         # Track pending progress operations (mirrors state['progress_states'])
-        self._progress_internal: Dict[str, Dict[str, Any]] = {}
+        self._progress_internal: dict[str, dict[str, Any]] = {}
         logger.info("Enhanced StateManager initialized with server bridge support")
 
     def update(self, key: str, value: Any, source: str = "manual"):
@@ -219,7 +235,7 @@ class StateManager:
         """Get current state value"""
         return self.state.get(key, default)
 
-    def subscribe(self, key: str, callback: Callable, control: Optional[ft.Control] = None):
+    def subscribe(self, key: str, callback: Callable, control: ft.Control | None = None):
         """Subscribe to state changes with optional automatic control updates"""
         if key not in self.callbacks:
             self.callbacks[key] = []
@@ -248,7 +264,7 @@ class StateManager:
 
         logger.debug(f"Subscribed to state key: {key}")
 
-    def subscribe_async(self, key: str, async_callback: Callable, control: Optional[ft.Control] = None):
+    def subscribe_async(self, key: str, async_callback: Callable, control: ft.Control | None = None):
         """Subscribe to state changes with async callback"""
         if key not in self.async_callbacks:
             self.async_callbacks[key] = []
@@ -297,13 +313,13 @@ class StateManager:
             self.async_callbacks[key].remove(async_callback)
             logger.debug(f"Unsubscribed async from state key: {key}")
 
-    def batch_update(self, updates: Dict[str, Any], source: str = "batch"):
+    def batch_update(self, updates: dict[str, Any], source: str = "batch"):
         """Update multiple state values efficiently"""
         logger.debug(f"Batch updating {len(updates)} state keys")
         for key, value in updates.items():
             self.update(key, value, source=source)
 
-    async def batch_update_async(self, updates: Dict[str, Any], source: str = "batch_async"):
+    async def batch_update_async(self, updates: dict[str, Any], source: str = "batch_async"):
         """Async batch update for server-mediated operations"""
         logger.debug(f"Batch updating async {len(updates)} state keys")
         for key, value in updates.items():
@@ -330,9 +346,13 @@ class StateManager:
         }
         self.update("progress_states", progress_states, source="progress")
 
-    def subscribe_settings(self, callback: Callable, control: Optional[ft.Control] = None):
+    def subscribe_settings(self, callback: Callable, control: ft.Control | None = None):
         """Subscribe to settings changes"""
-        self.subscribe("settings", callback, control)
+        self.subscribe("settings_data", callback, control)
+
+    def unsubscribe_settings(self, callback: Callable) -> None:
+        """Unsubscribe from settings changes"""
+        self.unsubscribe("settings_data", callback)
 
     async def server_mediated_update(self, key: str, value: Any, server_operation: str | None = None, *args, **kwargs):
         """Update state through server bridge for persistence"""
@@ -413,11 +433,11 @@ class StateManager:
         notifications = [n for n in notifications if n['id'] != notification_id]
         self.update("notifications", notifications, source="notification_dismiss")
 
-    def get_change_history(self, limit: int = 10) -> List[Dict]:
+    def get_change_history(self, limit: int = 10) -> list[dict]:
         """Get recent state changes for debugging"""
         return self._change_history[-limit:]
 
-    def get_state_summary(self) -> Dict[str, Any]:
+    def get_state_summary(self) -> dict[str, Any]:
         """Get summary of current state for debugging"""
         return {
             'state_keys': list(self.state.keys()),
@@ -433,7 +453,7 @@ class StateManager:
 
     # --- Enhanced Logs-Specific State Management ---
 
-    def subscribe_to_logs(self, callback: Callable, control: Optional[ft.Control] = None):
+    def subscribe_to_logs(self, callback: Callable, control: ft.Control | None = None):
         """Subscribe specifically to logs data changes with automatic UI updates"""
         self.subscribe("logs_data", callback, control)
         # Also subscribe to related logs state
@@ -446,7 +466,7 @@ class StateManager:
         self.subscribe("logs_filters", filter_proxy, control)
         logger.debug("Subscribed to logs with automatic filtering")
 
-    def subscribe_to_logs_async(self, async_callback: Callable, control: Optional[ft.Control] = None):
+    def subscribe_to_logs_async(self, async_callback: Callable, control: ft.Control | None = None):
         """Subscribe to logs data changes with async callback"""
         self.subscribe_async("logs_data", async_callback, control)
         # Also subscribe to related logs state
@@ -455,7 +475,7 @@ class StateManager:
         self.subscribe_async("logs_filters", async_filter_callback, control)
         logger.debug("Subscribed to logs async with automatic filtering")
 
-    async def update_logs_async(self, logs_data: List[Dict[str, Any]], source: str = "server"):
+    async def update_logs_async(self, logs_data: list[dict[str, Any]], source: str = "server"):
         """Update logs data with intelligent caching and filtering"""
         try:
             # Update main logs data
@@ -511,7 +531,7 @@ class StateManager:
         except Exception as e:
             logger.error(f"Failed to clear logs state: {e}")
 
-    def filter_logs_state(self, filters: Dict[str, Any]):
+    def filter_logs_state(self, filters: dict[str, Any]):
         """Apply filters to logs and update state reactively (debounced)"""
         try:
             # Update filter state immediately (so UI shows current selected filters)
@@ -522,7 +542,7 @@ class StateManager:
         except Exception as e:
             logger.error(f"Failed to filter logs state: {e}")
 
-    async def _apply_logs_filter(self, filters: Dict[str, Any]):
+    async def _apply_logs_filter(self, filters: dict[str, Any]):
         """Internal helper to apply log filters and update logs_filtered state"""
         try:
             # Get current logs
@@ -547,7 +567,7 @@ class StateManager:
         except Exception as e:
             logger.error(f"Failed to apply logs filter: {e}")
 
-    async def export_logs_state(self, format: str, filters: Optional[Dict[str, Any]] = None):
+    async def export_logs_state(self, format: str, filters: dict[str, Any] | None = None):
         """Export logs through server bridge with state tracking"""
         try:
             self.set_loading("logs_export", True)
@@ -576,7 +596,7 @@ class StateManager:
                 return {'success': False, 'error': 'No server bridge'}
         except Exception as e:
             logger.error(f"Failed to export logs: {e}")
-            self.add_notification(f"Export error: {str(e)}", "error")
+            self.add_notification(f"Export error: {e!s}", "error")
             retry_info = self.get("retry_states", {})
             retry_info["logs_export"] = retry_info.get("logs_export", {"attempts": 0, "last_error": None})
             retry_info["logs_export"]["last_error"] = str(e)
@@ -587,17 +607,17 @@ class StateManager:
 
     # --- Enhanced Settings-Specific State Management ---
 
-    def subscribe_to_settings(self, callback: Callable, control: Optional[ft.Control] = None):
+    def subscribe_to_settings(self, callback: Callable, control: ft.Control | None = None):
         """Subscribe specifically to settings data changes with automatic UI updates"""
         self.subscribe("settings_data", callback, control)
         logger.debug("Subscribed to settings with automatic UI updates")
 
-    def subscribe_to_settings_async(self, async_callback: Callable, control: Optional[ft.Control] = None):
+    def subscribe_to_settings_async(self, async_callback: Callable, control: ft.Control | None = None):
         """Subscribe to settings data changes with async callback"""
         self.subscribe_async("settings_data", async_callback, control)
         logger.debug("Subscribed to settings async with automatic UI updates")
 
-    async def update_settings_async(self, settings_data: Dict[str, Any], source: str = "server"):
+    async def update_settings_async(self, settings_data: dict[str, Any], source: str = "server"):
         """Update settings data with validation and server integration"""
         try:
             # Basic optimistic versioning for conflict resolution
@@ -656,7 +676,7 @@ class StateManager:
             self.set_error_state("settings_update", str(e))
             return {'success': False, 'error': str(e)}
 
-    async def validate_settings_state(self, settings_data: Dict[str, Any]):
+    async def validate_settings_state(self, settings_data: dict[str, Any]):
         """Validate settings and update validation state"""
         try:
             if self.server_bridge and hasattr(self.server_bridge, 'validate_settings_async'):
@@ -718,13 +738,13 @@ class StateManager:
                 return {'success': False, 'error': 'No server bridge'}
         except Exception as e:
             logger.error(f"Failed to backup settings: {e}")
-            self.add_notification(f"Backup error: {str(e)}", "error")
+            self.add_notification(f"Backup error: {e!s}", "error")
             self.set_error_state("settings_backup", str(e))
             return {'success': False, 'error': str(e)}
         finally:
             self.set_loading("settings_backup", False)
 
-    async def restore_settings_state(self, backup_file: str, settings_data: Optional[Dict[str, Any]] = None):
+    async def restore_settings_state(self, backup_file: str, settings_data: dict[str, Any] | None = None):
         """Restore settings from backup"""
         try:
             self.set_loading("settings_restore", True)
@@ -759,7 +779,7 @@ class StateManager:
                     return {'success': False, 'error': 'No settings data'}
         except Exception as e:
             logger.error(f"Failed to restore settings: {e}")
-            self.add_notification(f"Restore error: {str(e)}", "error")
+            self.add_notification(f"Restore error: {e!s}", "error")
             self.set_error_state("settings_restore", str(e))
             return {'success': False, 'error': str(e)}
         finally:
@@ -767,7 +787,7 @@ class StateManager:
 
     # --- Enhanced Cross-View Synchronization ---
 
-    def broadcast_logs_event(self, event_type: str, event_data: Dict[str, Any]):
+    def broadcast_logs_event(self, event_type: str, event_data: dict[str, Any]):
         """Broadcast logs-related events to all subscribers"""
         event = {
             'type': event_type,
@@ -785,7 +805,7 @@ class StateManager:
         self.update("logs_events_history", history, source="broadcast_history")
         logger.debug(f"Broadcasted logs event: {event_type}")
 
-    def broadcast_settings_event(self, event_type: str, event_data: Dict[str, Any]):
+    def broadcast_settings_event(self, event_type: str, event_data: dict[str, Any]):
         """Broadcast settings-related events to all subscribers"""
         event = {
             'type': event_type,
@@ -845,7 +865,7 @@ class StateManager:
             new_task = asyncio.create_task(_worker())
         self._debounce_tasks[key] = new_task
 
-    def _deep_merge_dicts(self, a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+    def _deep_merge_dicts(self, a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         """Deep merge dict b into a and return new dict (b overrides a)"""
         result = dict(a) if a else {}
         for k, v in (b or {}).items():
@@ -873,7 +893,7 @@ class StateManager:
         self.update("progress_states", progress_states, source="progress_start")
         self._progress_internal[operation] = p
 
-    def update_progress(self, operation: str, step: Optional[int] = None, message: Optional[str] = None):
+    def update_progress(self, operation: str, step: int | None = None, message: str | None = None):
         """Update progress for an operation"""
         progress_states = self.get("progress_states", {})
         p = progress_states.get(operation, None)
@@ -894,7 +914,7 @@ class StateManager:
         progress_states[operation] = p
         self.update("progress_states", progress_states, source="progress_update")
 
-    def get_progress(self, operation: str) -> Optional[Dict[str, Any]]:
+    def get_progress(self, operation: str) -> dict[str, Any] | None:
         """Get current progress for an operation"""
         return self.get("progress_states", {}).get(operation)
 
@@ -949,7 +969,7 @@ class StateManager:
 
     # --- Enhanced Error State Management ---
 
-    def set_error_state(self, operation: str, error: str, details: Optional[Dict[str, Any]] = None):
+    def set_error_state(self, operation: str, error: str, details: dict[str, Any] | None = None):
         """Set error state for an operation"""
         error_data = {
             'operation': operation,
@@ -975,7 +995,7 @@ class StateManager:
             self.update("error_states", errors, source="error_clear")
             logger.debug(f"Error state cleared for {operation}")
 
-    def get_error_state(self, operation: str) -> Optional[Dict[str, Any]]:
+    def get_error_state(self, operation: str) -> dict[str, Any] | None:
         """Get error state for an operation"""
         errors = self.get("error_states", {})
         return errors.get(operation)

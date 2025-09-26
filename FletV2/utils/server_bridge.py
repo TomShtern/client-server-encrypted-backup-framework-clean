@@ -8,13 +8,12 @@ Provides clean API surface for the FletV2 GUI:
 - Error handling with structured responses
 """
 
-import asyncio
 import logging
 import uuid
-from typing import Any, Dict, Optional, List, Callable
+from collections.abc import Callable
+from typing import Any
 
 # Mock data support removed - real server required
-from .real_server_client import RealServerClient
 
 # Import config locally when needed to avoid global import conflicts
 
@@ -38,7 +37,7 @@ def uuid_string_to_blob(uuid_str: str) -> bytes:
     except (ValueError, TypeError):
         return uuid.uuid4().bytes
 
-def convert_backupserver_client_to_fletv2(client_data: Dict[str, Any]) -> Dict[str, Any]:
+def convert_backupserver_client_to_fletv2(client_data: dict[str, Any]) -> dict[str, Any]:
     """Convert BackupServer client format to FletV2 expected format."""
     if not client_data:
         return {}
@@ -57,7 +56,7 @@ def convert_backupserver_client_to_fletv2(client_data: Dict[str, Any]) -> Dict[s
     }
     return converted
 
-def convert_backupserver_file_to_fletv2(file_data: Dict[str, Any]) -> Dict[str, Any]:
+def convert_backupserver_file_to_fletv2(file_data: dict[str, Any]) -> dict[str, Any]:
     """Convert BackupServer file format to FletV2 expected format."""
     if not file_data:
         return {}
@@ -80,7 +79,7 @@ def convert_backupserver_file_to_fletv2(file_data: Dict[str, Any]) -> Dict[str, 
     }
     return converted
 
-def convert_fletv2_client_to_backupserver(client_data: Dict[str, Any]) -> Dict[str, Any]:
+def convert_fletv2_client_to_backupserver(client_data: dict[str, Any]) -> dict[str, Any]:
     """Convert FletV2 client format to BackupServer expected format."""
     if not client_data:
         return {}
@@ -127,7 +126,7 @@ class ServerBridge:
         """Check if server is connected."""
         return hasattr(self.real_server, 'is_connected') and self.real_server.is_connected()
 
-    def _call_real_server_method(self, method_name: str, *args, **kwargs) -> Dict[str, Any]:
+    def _call_real_server_method(self, method_name: str, *args, **kwargs) -> dict[str, Any]:
         """Helper to call real server method with data conversion."""
         try:
             if not hasattr(self.real_server, method_name):
@@ -205,7 +204,7 @@ class ServerBridge:
             logger.warning(f"Data conversion error for {method_name}: {e}")
             return result
 
-    async def _call_real_server_method_async(self, method_name: str, *args, **kwargs) -> Dict[str, Any]:
+    async def _call_real_server_method_async(self, method_name: str, *args, **kwargs) -> dict[str, Any]:
         """Async version of _call_real_server_method with data conversion."""
         try:
             if not hasattr(self.real_server, method_name):
@@ -229,53 +228,53 @@ class ServerBridge:
     # CLIENT OPERATIONS
     # ============================================================================
 
-    def get_all_clients_from_db(self) -> Dict[str, Any]:
+    def get_all_clients_from_db(self) -> dict[str, Any]:
         """Get all clients from database."""
         return self._call_real_server_method('get_clients')
 
-    def get_clients(self) -> List[Dict[str, Any]]:
+    def get_clients(self) -> list[dict[str, Any]]:
         """Get all clients (sync version)."""
         result = self._call_real_server_method('get_clients')
         if isinstance(result, dict) and 'data' in result:
             return result['data'] if result['data'] is not None else []
         return result if isinstance(result, list) else []
 
-    async def get_clients_async(self) -> List[Dict[str, Any]]:
+    async def get_clients_async(self) -> list[dict[str, Any]]:
         """Get all clients (async version)."""
         result = await self._call_real_server_method_async('get_clients_async')
         if isinstance(result, dict) and 'data' in result:
             return result['data'] if result['data'] is not None else []
         return result if isinstance(result, list) else []
 
-    def get_client_details(self, client_id: str) -> Dict[str, Any]:
+    def get_client_details(self, client_id: str) -> dict[str, Any]:
         """Get details for a specific client."""
         return self._call_real_server_method('get_client_details', client_id)
 
-    async def add_client_async(self, client_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def add_client_async(self, client_data: dict[str, Any]) -> dict[str, Any]:
         """Add a new client."""
         return await self._call_real_server_method_async('add_client_async', client_data)
 
-    def add_client(self, client_data: Dict[str, Any]) -> Dict[str, Any]:
+    def add_client(self, client_data: dict[str, Any]) -> dict[str, Any]:
         """Add a new client (sync version)."""
         return self._call_real_server_method('add_client', client_data)
 
-    def delete_client(self, client_id: str) -> Dict[str, Any]:
+    def delete_client(self, client_id: str) -> dict[str, Any]:
         """Delete a client (sync version)."""
         return self._call_real_server_method('delete_client', client_id)
 
-    async def delete_client_async(self, client_id: str) -> Dict[str, Any]:
+    async def delete_client_async(self, client_id: str) -> dict[str, Any]:
         """Delete a client (async version)."""
         return await self._call_real_server_method_async('delete_client_async', client_id)
 
-    def disconnect_client(self, client_id: str) -> Dict[str, Any]:
+    def disconnect_client(self, client_id: str) -> dict[str, Any]:
         """Disconnect a specific client."""
         return self._call_real_server_method('disconnect_client', client_id)
 
-    async def disconnect_client_async(self, client_id: str) -> Dict[str, Any]:
+    async def disconnect_client_async(self, client_id: str) -> dict[str, Any]:
         """Disconnect a specific client (async)."""
         return await self._call_real_server_method_async('disconnect_client_async', client_id)
 
-    def resolve_client(self, client_identifier: str) -> Dict[str, Any]:
+    def resolve_client(self, client_identifier: str) -> dict[str, Any]:
         """Resolve client by ID or name."""
         return self._call_real_server_method('resolve_client', client_identifier)
 
@@ -283,45 +282,45 @@ class ServerBridge:
     # FILE OPERATIONS
     # ============================================================================
 
-    def get_client_files(self, client_id: str) -> Dict[str, Any]:
+    def get_client_files(self, client_id: str) -> dict[str, Any]:
         """Get files for a specific client."""
         return self._call_real_server_method('get_client_files', client_id)
 
-    async def get_client_files_async(self, client_id: str) -> Dict[str, Any]:
+    async def get_client_files_async(self, client_id: str) -> dict[str, Any]:
         """Get files for a specific client (async)."""
         return await self._call_real_server_method_async('get_client_files_async', client_id)
 
-    def get_files(self) -> List[Dict[str, Any]]:
+    def get_files(self) -> list[dict[str, Any]]:
         """Get all files."""
         result = self._call_real_server_method('get_files')
         if isinstance(result, dict) and 'data' in result:
             return result['data'] if result['data'] is not None else []
         return result if isinstance(result, list) else []
 
-    async def get_files_async(self) -> List[Dict[str, Any]]:
+    async def get_files_async(self) -> list[dict[str, Any]]:
         """Get all files (async)."""
         result = await self._call_real_server_method_async('get_files_async')
         if isinstance(result, dict) and 'data' in result:
             return result['data'] if result['data'] is not None else []
         return result if isinstance(result, list) else []
 
-    def delete_file(self, file_id: str) -> Dict[str, Any]:
+    def delete_file(self, file_id: str) -> dict[str, Any]:
         """Delete a file."""
         return self._call_real_server_method('delete_file', file_id)
 
-    async def delete_file_async(self, file_id: str) -> Dict[str, Any]:
+    async def delete_file_async(self, file_id: str) -> dict[str, Any]:
         """Delete a file (async)."""
         return await self._call_real_server_method_async('delete_file_async', file_id)
 
-    def delete_file_by_client_and_name(self, client_id: str, filename: str) -> Dict[str, Any]:
+    def delete_file_by_client_and_name(self, client_id: str, filename: str) -> dict[str, Any]:
         """Delete a file by client ID and filename."""
         return self._call_real_server_method('delete_file_by_client_and_name', client_id, filename)
 
-    async def delete_file_by_client_and_name_async(self, client_id: str, filename: str) -> Dict[str, Any]:
+    async def delete_file_by_client_and_name_async(self, client_id: str, filename: str) -> dict[str, Any]:
         """Delete a file by client ID and filename (async)."""
         return await self._call_real_server_method_async('delete_file_by_client_and_name_async', client_id, filename)
 
-    def download_file(self, file_id: str, destination_path: str) -> Dict[str, Any]:
+    def download_file(self, file_id: str, destination_path: str) -> dict[str, Any]:
         """Download a file to destination."""
         return self._call_real_server_method('download_file', file_id, destination_path)
 
@@ -353,7 +352,7 @@ class ServerBridge:
         """Clear all logs."""
         return await self._call_real_server_method_async('clear_logs_async')
 
-    async def export_logs_async(self, export_format: str, filters: Optional[Dict[str, Any]] = None):
+    async def export_logs_async(self, export_format: str, filters: dict[str, Any] | None = None):
         """Export logs in specified format."""
         return await self._call_real_server_method_async('export_logs_async', export_format, filters or {})
 
@@ -361,7 +360,7 @@ class ServerBridge:
         """Get log statistics."""
         return await self._call_real_server_method_async('get_log_statistics_async')
 
-    async def stream_logs_async(self, callback: Callable[[Dict[str, Any]], None]):
+    async def stream_logs_async(self, callback: Callable[[dict[str, Any]], None]):
         """Stream logs in real-time."""
         return await self._call_real_server_method_async('stream_logs_async', callback)
 
@@ -505,11 +504,11 @@ class ServerBridge:
     # SETTINGS MANAGEMENT
     # ============================================================================
 
-    async def save_settings_async(self, settings_data: Dict[str, Any]):
+    async def save_settings_async(self, settings_data: dict[str, Any]):
         """Save application settings."""
         return await self._call_real_server_method_async('save_settings_async', settings_data)
 
-    def save_settings(self, settings_data: Dict[str, Any]):
+    def save_settings(self, settings_data: dict[str, Any]):
         """Save application settings (sync version)."""
         return self._call_real_server_method('save_settings', settings_data)
 
@@ -521,11 +520,11 @@ class ServerBridge:
         """Load current settings (sync version)."""
         return self._call_real_server_method('load_settings')
 
-    async def validate_settings_async(self, settings_data: Dict[str, Any]):
+    async def validate_settings_async(self, settings_data: dict[str, Any]):
         """Validate settings data."""
         return await self._call_real_server_method_async('validate_settings_async', settings_data)
 
-    async def backup_settings_async(self, backup_name: str, settings_data: Dict[str, Any]):
+    async def backup_settings_async(self, backup_name: str, settings_data: dict[str, Any]):
         """Create settings backup."""
         return await self._call_real_server_method_async('backup_settings_async', backup_name, settings_data)
 
@@ -541,7 +540,7 @@ class ServerBridge:
     # DATABASE OPERATIONS (for database view)
     # ============================================================================
 
-    def get_database_info(self) -> Dict[str, Any]:
+    def get_database_info(self) -> dict[str, Any]:
         """Get database information and statistics."""
         if not hasattr(self.real_server, 'db_manager'):
             return {'success': False, 'data': None, 'error': 'Database manager not available on server'}
@@ -568,7 +567,7 @@ class ServerBridge:
             logger.error(f"Error getting database info: {e}")
             return {'success': False, 'data': None, 'error': str(e)}
 
-    def get_table_names(self) -> Dict[str, Any]:
+    def get_table_names(self) -> dict[str, Any]:
         """Get list of database table names."""
         if not hasattr(self.real_server, 'db_manager'):
             return {'success': False, 'data': [], 'error': 'Database manager not available on server'}
@@ -581,7 +580,7 @@ class ServerBridge:
             logger.error(f"Error getting table names: {e}")
             return {'success': False, 'data': [], 'error': str(e)}
 
-    def get_table_data(self, table_name: str) -> Dict[str, Any]:
+    def get_table_data(self, table_name: str) -> dict[str, Any]:
         """Get data from a specific database table."""
         if not hasattr(self.real_server, 'db_manager'):
             return {'success': False, 'data': {'columns': [], 'rows': []}, 'error': 'Database manager not available on server'}
@@ -639,7 +638,7 @@ def create_server_bridge(real_server: Any | None = None):
     return ServerBridge(real_server=real_server)
 
 # Module-level singleton to avoid function attribute access diagnostics
-_SERVER_BRIDGE_INSTANCE: Optional[ServerBridge] = None
+_SERVER_BRIDGE_INSTANCE: ServerBridge | None = None
 
 def get_server_bridge() -> ServerBridge:
     """Get or create a singleton ServerBridge instance.

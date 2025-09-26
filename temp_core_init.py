@@ -28,14 +28,14 @@ Usage:
     layout_system = ResponsiveLayoutSystem()
 """
 
-from .server_operations import ServerOperations
 from .client_management import ClientManagement
 from .file_management import FileManagement
+from .server_operations import ServerOperations
 
 # Updated theme imports - using new theme system
 try:
-    from ..theme import THEMES
     from ..managers.theme_manager import ThemeManager
+    from ..theme import THEMES
     # Create a default TOKENS for backward compatibility
     TOKENS = THEMES['TealTheme'][0] if THEMES else {}  # Light theme colors
 except ImportError:
@@ -43,21 +43,25 @@ except ImportError:
     TOKENS = {}
 
 from .responsive_layout import (
-    ResponsiveLayoutSystem, BreakpointSize, DeviceType, Breakpoint,
-    responsive_layout_system, get_responsive_layout_system
+    Breakpoint,
+    BreakpointSize,
+    DeviceType,
+    ResponsiveLayoutSystem,
+    get_responsive_layout_system,
+    responsive_layout_system,
 )
 
 __all__ = [
     # Original core classes
     'ServerOperations',
-    'ClientManagement', 
+    'ClientManagement',
     'FileManagement',
-    
+
     # Phase 4 theme system
     'MaterialDesign3ThemeSystem',
     'theme_system',
     'get_theme_system',
-    
+
     # Phase 4 design tokens
     'ColorRole',
     'TypographyRole',
@@ -70,7 +74,7 @@ __all__ = [
     'get_typography_token',
     'get_spacing_token',
     'get_elevation_token',
-    
+
     # Phase 4 responsive layout system
     'ResponsiveLayoutSystem',
     'BreakpointSize',

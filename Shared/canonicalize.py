@@ -5,10 +5,10 @@ This module implements the exact canonicalization rules defined in the protocol
 specification for consistent header processing across all components.
 """
 
+import logging
 import re
 import unicodedata
-import logging
-from typing import Dict, Tuple, Union, Optional
+
 from .crc import calculate_crc32
 
 logger = logging.getLogger(__name__)
@@ -59,18 +59,18 @@ def normalize_header_value(value: str) -> str:
     """
     # Unicode NFC normalization
     normalized = unicodedata.normalize('NFC', value)
-    
+
     # Strip leading and trailing whitespace
     stripped = normalized.strip()
-    
+
     # Collapse internal whitespace to single space
     collapsed = re.sub(r'\s+', ' ', stripped)
-    
+
     # Remove control characters except tab (which gets converted to space above)
     return re.sub(r'[\x00-\x08\x0B-\x1F\x7F]', '', collapsed)
 
 
-def parse_bhi_headers(bhi_content: str) -> Dict[str, str]:
+def parse_bhi_headers(bhi_content: str) -> dict[str, str]:
     """
     Parse BHI header content into normalized key-value pairs.
     
@@ -85,28 +85,28 @@ def parse_bhi_headers(bhi_content: str) -> Dict[str, str]:
         MalformedHeaderError: If header format is invalid
     """
     headers = {}
-    
+
     for line in bhi_content.strip().split('\n'):
         line = line.strip()
         if not line:
             continue
-            
+
         if ':' not in line:
             raise MalformedHeaderError(f"Invalid header format (missing colon): {line}")
-        
+
         name, value = line.split(':', 1)
         normalized_name = normalize_header_name(name)
         normalized_value = normalize_header_value(value)
-        
+
         if normalized_name in headers:
             raise DuplicateHeaderError(f"Duplicate header name: {normalized_name}")
-        
+
         headers[normalized_name] = normalized_value
-    
+
     return headers
 
 
-def canonicalize_headers_bhi(raw_input: Union[str, bytes]) -> bytes:
+def canonicalize_headers_bhi(raw_input: str | bytes) -> bytes:
     """
     Canonicalize BHI headers according to protocol specification.
     
@@ -132,31 +132,31 @@ def canonicalize_headers_bhi(raw_input: Union[str, bytes]) -> bytes:
             raise InvalidUTF8Error(f"Invalid UTF-8 sequence: {e}") from e
     else:
         raw_input_str = str(raw_input)
-    
+
     # Extract content between <bhi> tags
     bhi_match = re.search(r'<bhi>\s*(.*?)\s*</bhi>', raw_input_str, re.DOTALL)
     if not bhi_match:
         raise MalformedHeaderError("Missing or malformed <bhi> tags")
-    
+
     bhi_content = bhi_match[1]
-    
+
     # Parse headers
     headers = parse_bhi_headers(bhi_content)
-    
+
     # Build canonical format
     canonical_lines = ['<bhi>']
-    
+
     # Sort headers alphabetically by name
     canonical_lines.extend(f"{name}:{headers[name]}" for name in sorted(headers.keys()))
-    
+
     canonical_lines.append('</bhi>')
-    
+
     # Join with newlines and encode as UTF-8
     canonical_str = '\n'.join(canonical_lines) + '\n'
     return canonical_str.encode('utf-8')
 
 
-def canonicalize_and_crc(raw_input: Union[str, bytes]) -> Tuple[bytes, int]:
+def canonicalize_and_crc(raw_input: str | bytes) -> tuple[bytes, int]:
     """
     Canonicalize headers and calculate CRC32 in one operation.
     
@@ -171,7 +171,7 @@ def canonicalize_and_crc(raw_input: Union[str, bytes]) -> Tuple[bytes, int]:
     return canonical_bytes, crc32_value
 
 
-def verify_canonicalization(raw_input: Union[str, bytes], expected_crc: int) -> bool:
+def verify_canonicalization(raw_input: str | bytes, expected_crc: int) -> bool:
     """
     Verify that canonicalization produces expected CRC.
     
@@ -190,7 +190,7 @@ def verify_canonicalization(raw_input: Union[str, bytes], expected_crc: int) -> 
         return False
 
 
-def format_timestamp_iso8601(timestamp: Union[int, float, str]) -> str:
+def format_timestamp_iso8601(timestamp: int | float | str) -> str:
     """
     Format timestamp in ISO 8601 format for protocol compliance.
     
@@ -201,7 +201,7 @@ def format_timestamp_iso8601(timestamp: Union[int, float, str]) -> str:
         ISO 8601 formatted timestamp string
     """
     import datetime
-    
+
     if isinstance(timestamp, str):
         # Assume already formatted, validate and return
         try:
@@ -209,13 +209,13 @@ def format_timestamp_iso8601(timestamp: Union[int, float, str]) -> str:
             return timestamp
         except ValueError as e:
             raise ValueError(f"Invalid ISO 8601 timestamp: {timestamp}") from e
-    
+
     # Convert numeric timestamp to ISO 8601
-    dt = datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)
+    dt = datetime.datetime.fromtimestamp(timestamp, tz=datetime.UTC)
     return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
-def create_bhi_headers(headers: Dict[str, Union[str, int, float]]) -> str:
+def create_bhi_headers(headers: dict[str, str | int | float]) -> str:
     """
     Create BHI header block from dictionary.
     
@@ -226,7 +226,7 @@ def create_bhi_headers(headers: Dict[str, Union[str, int, float]]) -> str:
         Formatted BHI header block string
     """
     lines = ['<bhi>']
-    
+
     for name, value in headers.items():
         # Convert non-string values
         if isinstance(value, (int, float)):
@@ -234,9 +234,9 @@ def create_bhi_headers(headers: Dict[str, Union[str, int, float]]) -> str:
                 value = format_timestamp_iso8601(value)
             else:
                 value = str(value)
-        
+
         lines.append(f"{name}: {value}")
-    
+
     lines.append('</bhi>')
     return '\n'.join(lines)
 
@@ -245,14 +245,14 @@ class HeaderCanonicalizer:
     """
     Stateful header canonicalizer for batch processing.
     """
-    
+
     def __init__(self):
         """Initialize canonicalizer."""
         self.processed_count = 0
         self.error_count = 0
-        self.last_error: Optional[Exception] = None
-    
-    def canonicalize(self, raw_input: Union[str, bytes]) -> Tuple[bytes, int]:
+        self.last_error: Exception | None = None
+
+    def canonicalize(self, raw_input: str | bytes) -> tuple[bytes, int]:
         """
         Canonicalize headers and return canonical bytes with CRC.
         
@@ -270,15 +270,15 @@ class HeaderCanonicalizer:
             self.error_count += 1
             self.last_error = e
             raise
-    
-    def get_stats(self) -> Dict[str, Union[int, str, None]]:
+
+    def get_stats(self) -> dict[str, int | str | None]:
         """Get processing statistics."""
         return {
             'processed_count': self.processed_count,
             'error_count': self.error_count,
             'last_error': str(self.last_error) if self.last_error else None
         }
-    
+
     def reset_stats(self):
         """Reset processing statistics."""
         self.processed_count = 0
@@ -287,7 +287,7 @@ class HeaderCanonicalizer:
 
 
 # Convenience functions for common operations
-def quick_canonicalize(headers_dict: Dict[str, Union[str, int, float]]) -> bytes:
+def quick_canonicalize(headers_dict: dict[str, str | int | float]) -> bytes:
     """
     Quick canonicalization from dictionary.
     
@@ -301,7 +301,7 @@ def quick_canonicalize(headers_dict: Dict[str, Union[str, int, float]]) -> bytes
     return canonicalize_headers_bhi(bhi_str)
 
 
-def validate_header_format(raw_input: Union[str, bytes]) -> bool:
+def validate_header_format(raw_input: str | bytes) -> bool:
     """
     Validate header format without full canonicalization.
     
@@ -319,7 +319,7 @@ def validate_header_format(raw_input: Union[str, bytes]) -> bool:
 
 
 # Legacy compatibility functions
-def canonicalize_protocol_headers(raw_input: Union[str, bytes]) -> bytes:
+def canonicalize_protocol_headers(raw_input: str | bytes) -> bytes:
     """
     Legacy compatibility function.
     

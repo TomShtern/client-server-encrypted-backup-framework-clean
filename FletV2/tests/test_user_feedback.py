@@ -3,10 +3,10 @@
 Unit tests for the user feedback module.
 """
 
-import unittest
-import sys
 import os
-from unittest.mock import Mock, patch, MagicMock
+import sys
+import unittest
+from unittest.mock import MagicMock, Mock
 
 # Add the FletV2 directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -15,11 +15,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 sys.modules['flet'] = MagicMock()
 
 from utils.user_feedback import (
-    show_success_message, show_error_message, show_info_message, 
-    show_warning_message, show_confirmation, show_input
+    show_confirmation,
+    show_error_message,
+    show_info_message,
+    show_input,
+    show_success_message,
+    show_warning_message,
 )
-
-
 
 
 class TestUserFeedback(unittest.TestCase):
@@ -56,9 +58,9 @@ class TestUserFeedback(unittest.TestCase):
     def test_show_confirmation_dialog(self):
         """Test showing a confirmation dialog."""
         show_confirmation(
-            self.mock_page, 
-            "Test title", 
-            "Test content", 
+            self.mock_page,
+            "Test title",
+            "Test content",
             lambda e: None
         )
         self.mock_page.update.assert_called()

@@ -16,36 +16,35 @@ Features demonstrated:
 - Custom error reporting
 """
 
-import flet as ft
 import asyncio
-import traceback
 from datetime import datetime
 
+import flet as ft
+
 # Import our error boundary components
-from flet_server_gui.components.error_boundary import GlobalErrorBoundary, ErrorBoundary
-from flet_server_gui.components.error_dialog import show_error_dialog, show_simple_error
-from flet_server_gui.utils.error_context import create_error_context
+from flet_server_gui.components.error_boundary import GlobalErrorBoundary
+from flet_server_gui.components.error_dialog import show_simple_error
 
 
 class ErrorBoundaryDemo:
     """Demo application showcasing the error boundary system."""
-    
+
     def __init__(self, page: ft.Page):
         self.page = page
         self.page.title = "Error Boundary System Demo"
         self.page.theme_mode = ft.ThemeMode.LIGHT
         self.page.padding = 20
-        
+
         # Initialize global error boundary
         self.error_boundary = GlobalErrorBoundary.initialize(page)
-        
+
         # Set up custom error reporting
         self.error_reports = []
         self.error_boundary.set_error_report_callback(self.handle_error_report)
-        
+
         # Create the demo UI
         self.create_demo_ui()
-    
+
     def handle_error_report(self, error_context):
         """Handle error reports from the error boundary."""
         self.error_reports.append({
@@ -56,10 +55,10 @@ class ErrorBoundaryDemo:
             "correlation_id": error_context.correlation_id
         })
         print(f"Error reported: {error_context.error_type} - {error_context.error_message}")
-    
+
     def create_demo_ui(self):
         """Create the demo user interface."""
-        
+
         # Title
         title = ft.Text(
             "🛡️ Error Boundary System Demo",
@@ -67,19 +66,19 @@ class ErrorBoundaryDemo:
             weight=ft.FontWeight.BOLD,
             color=ft.colors.PRIMARY
         )
-        
+
         subtitle = ft.Text(
             "Click the buttons below to trigger different types of errors and see how they are handled gracefully.",
             size=16,
             color=ft.colors.ON_SURFACE_VARIANT
         )
-        
+
         # Error trigger buttons
         error_buttons = self.create_error_buttons()
-        
+
         # Info section
         info_section = self.create_info_section()
-        
+
         # Layout
         self.page.add(
             ft.Column([
@@ -92,10 +91,10 @@ class ErrorBoundaryDemo:
                 info_section
             ], spacing=20)
         )
-    
+
     def create_error_buttons(self):
         """Create buttons that trigger different error types."""
-        
+
         # Protected button callbacks using the error boundary
         buttons = [
             ft.ElevatedButton(
@@ -155,7 +154,7 @@ class ErrorBoundaryDemo:
                 color=ft.colors.SECONDARY
             )
         ]
-        
+
         # Arrange in rows
         button_rows = []
         for i in range(0, len(buttons), 3):
@@ -166,12 +165,12 @@ class ErrorBoundaryDemo:
                     alignment=ft.MainAxisAlignment.START
                 )
             )
-        
+
         return ft.Column(button_rows, spacing=10)
-    
+
     def create_info_section(self):
         """Create information section about the error boundary."""
-        
+
         return ft.Container(
             content=ft.Column([
                 ft.Text("ℹ️ How the Error Boundary Works:", size=18, weight=ft.FontWeight.BOLD),
@@ -189,27 +188,26 @@ class ErrorBoundaryDemo:
             padding=20,
             border_radius=10
         )
-    
+
     # Error trigger methods
     def trigger_value_error(self, e):
         """Trigger a ValueError."""
         raise ValueError("Invalid input provided - this is a test error to demonstrate error handling")
-    
+
     def trigger_file_error(self, e):
         """Trigger a FileNotFoundError."""
         # Simulate file operation
-        with open("nonexistent_file.txt", "r") as f:
+        with open("nonexistent_file.txt") as f:
             content = f.read()
-    
+
     def trigger_permission_error(self, e):
         """Trigger a PermissionError."""
         raise PermissionError("Access denied to protected resource")
-    
+
     def trigger_connection_error(self, e):
         """Trigger a ConnectionError."""
-        import socket
-        raise socket.error("Unable to connect to remote server")
-    
+        raise OSError("Unable to connect to remote server")
+
     def trigger_runtime_error(self, e):
         """Trigger a RuntimeError with nested calls."""
         def nested_function():
@@ -217,36 +215,36 @@ class ErrorBoundaryDemo:
                 raise RuntimeError("Something went wrong in deeply nested function")
             deeply_nested()
         nested_function()
-    
+
     def trigger_custom_error(self, e):
         """Trigger a custom error with detailed context."""
         # Simulate some local variables
         user_id = 12345
         operation_type = "data_processing"
         batch_size = 100
-        
+
         try:
             # Simulate operation failure
             result = self.simulate_complex_operation(user_id, operation_type, batch_size)
         except Exception as exc:
             # Re-raise with additional context
             raise RuntimeError(f"Complex operation failed for user {user_id}") from exc
-    
+
     def simulate_complex_operation(self, user_id, operation_type, batch_size):
         """Simulate a complex operation that fails."""
         if batch_size > 50:
             raise ValueError("Batch size too large for processing")
         return True
-    
+
     def trigger_critical_error(self, e):
         """Trigger a critical system error."""
         raise MemoryError("Insufficient memory to complete operation - this is a critical error")
-    
+
     async def trigger_async_error(self, e):
         """Trigger an error in async operation."""
         await asyncio.sleep(0.1)  # Simulate async work
         raise ConnectionError("Async network operation failed")
-    
+
     def show_simple_error_demo(self, e):
         """Show a simple error dialog without the full error boundary."""
         show_simple_error(

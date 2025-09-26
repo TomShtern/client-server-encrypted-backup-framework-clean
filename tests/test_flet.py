@@ -3,16 +3,17 @@
 
 import flet as ft
 
+
 def main(page: ft.Page):
     page.title = "Flet Test"
     page.theme_mode = ft.ThemeMode.DARK
-    
+
     # Test Material Design 3 components
     page.add(
         ft.Column([
             ft.Text("🎉 Flet Works!", style="headlineLarge"),
             ft.Text("Hebrew test: שלום עולם", style="bodyLarge"),
-            
+
             ft.Card(
                 content=ft.Container(
                     content=ft.Column([

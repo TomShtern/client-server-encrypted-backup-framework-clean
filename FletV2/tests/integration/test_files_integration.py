@@ -12,10 +12,10 @@ import flet as ft
 
 os.environ.setdefault("FLET_V2_DEBUG", "false")
 
+from tests.integration_utils import FakePage, find_control_by_type
 from utils.server_bridge import create_server_bridge
 from utils.state_manager import StateManager
 from views.files import create_files_view
-from tests.integration_utils import FakePage, find_control_by_type
 
 
 class TestFilesIntegration(unittest.TestCase):

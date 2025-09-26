@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 utils - A package for GUI-specific helper modules and utility classes.
 

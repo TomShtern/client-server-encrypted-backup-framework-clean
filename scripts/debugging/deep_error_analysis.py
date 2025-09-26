@@ -3,11 +3,11 @@
 Deep analysis script to find all errors in the project
 """
 
+import ast
 import os
 import sys
-import ast
 import traceback
-from typing import Dict, Any, List
+from typing import Any
 
 # Add the project root to the Python path
 script_dir = os.path.dirname(__file__)
@@ -16,14 +16,15 @@ sys.path.insert(0, project_root)
 
 # Setup standardized import paths
 from Shared.path_utils import setup_imports
+
 setup_imports()
 
-def check_syntax_and_incomplete_methods(content: str, filepath: str) -> Dict[str, List[str]]:
+def check_syntax_and_incomplete_methods(content: str, filepath: str) -> dict[str, list[str]]:
     # sourcery skip: low-code-quality
     """Check syntax and find incomplete methods"""
-    syntax_errors: List[str] = []
-    incomplete_methods: List[str] = []
-    
+    syntax_errors: list[str] = []
+    incomplete_methods: list[str] = []
+
     try:
         tree = ast.parse(content)
         # Find incomplete methods
@@ -45,14 +46,14 @@ def check_syntax_and_incomplete_methods(content: str, filepath: str) -> Dict[str
                     incomplete_methods.append(f"Line {node.lineno}: {node.name} - Empty method body")
     except SyntaxError as e:
         syntax_errors.append(f"Line {e.lineno}: {e.msg}")
-    
+
     return {'syntax_errors': syntax_errors, 'incomplete_methods': incomplete_methods}
 
 
-def check_imports(content: str, filepath: str) -> List[str]:
+def check_imports(content: str, filepath: str) -> list[str]:
     """Check for missing imports"""
-    missing_imports: List[str] = []
-    
+    missing_imports: list[str] = []
+
     # Test key imports for ServerGUI.py
     if 'ServerGUI.py' in filepath:
         test_imports = [
@@ -64,15 +65,15 @@ def check_imports(content: str, filepath: str) -> List[str]:
             'from typing import Dict, List, Optional, Any, Union, Tuple',
             'from collections import deque'
         ]
-        
+
         missing_imports.extend(f"Missing: {imp}" for imp in test_imports if imp not in content)
-    
+
     return missing_imports
 
 
-def analyze_python_file(filepath: str) -> Dict[str, Any]:
+def analyze_python_file(filepath: str) -> dict[str, Any]:
     """Analyze a Python file for various issues"""
-    results: Dict[str, Any] = {
+    results: dict[str, Any] = {
         'file': filepath,
         'syntax_errors': [],
         'import_errors': [],
@@ -83,7 +84,7 @@ def analyze_python_file(filepath: str) -> Dict[str, Any]:
 
     try:
         # Read file content
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, encoding='utf-8') as f:
             content = f.read()
 
         # Check syntax and incomplete methods
@@ -102,9 +103,9 @@ def analyze_python_file(filepath: str) -> Dict[str, Any]:
 
     return results
 
-def test_functionality() -> List[str]:
+def test_functionality() -> list[str]:
     """Test actual functionality"""
-    results: List[str] = []
+    results: list[str] = []
 
     print("Testing ServerGUI functionality...")
     try:
@@ -122,7 +123,7 @@ def test_functionality() -> List[str]:
 
         # Skipping tests for components not available in current codebase
         results.append("ℹ ModernCard, ModernProgressBar, ModernStatusIndicator tests skipped (components not available)")
-        
+
         # try:
         #     _card = ModernCard(root, title="Test")  # type: ignore
         #     results.append("✓ ModernCard creation works")
@@ -184,7 +185,7 @@ def main() -> None:
     print("=" * 60)
 
     # Find all Python files
-    python_files: List[str] = []
+    python_files: list[str] = []
     for root, _dirs, files in os.walk('.'):
         python_files.extend(
             os.path.join(root, file) for file in files if file.endswith('.py')
@@ -192,7 +193,7 @@ def main() -> None:
     print(f"Found {len(python_files)} Python files")
 
     # Analyze each file
-    all_issues: List[Dict[str, Any]] = []
+    all_issues: list[dict[str, Any]] = []
     for filepath in python_files:
         if '__pycache__' in filepath or '.git' in filepath:
             continue

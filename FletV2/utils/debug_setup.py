@@ -1,7 +1,6 @@
 import logging
 import sys
 import traceback
-from typing import Optional
 from datetime import datetime
 
 # Global flag to ensure setup runs only once
@@ -38,7 +37,7 @@ class EnhancedFormatter(logging.Formatter):
         return log_message
 
 
-def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: Optional[str] = None) -> logging.Logger:
+def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: str | None = None) -> logging.Logger:
     """
     Set up centralized terminal debugging for FletV2 with enhanced context.
 

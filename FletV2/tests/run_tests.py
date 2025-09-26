@@ -3,9 +3,9 @@
 Test runner script for FletV2.
 """
 
-import unittest
-import sys
 import os
+import sys
+import unittest
 
 # Add the FletV2 directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -16,10 +16,10 @@ def run_tests():
     loader = unittest.TestLoader()
     start_dir = os.path.join(os.path.dirname(__file__), 'tests')
     suite = loader.discover(start_dir, pattern='test_*.py')
-    
+
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
-    
+
     # Return exit code based on test results
     return 0 if result.wasSuccessful() else 1
 

@@ -6,12 +6,10 @@ This version keeps console windows open so you can see any errors.
 """
 
 import os
-import sys
 import subprocess
+import sys
 import time
-
 from pathlib import Path
-from typing import List
 
 # Import the original functions
 # Try a relative import (when executed as a package). If that fails
@@ -19,22 +17,26 @@ from typing import List
 # module can be run with "python scripts/one_click_build_and_run_debug.py".
 try:
     from .one_click_build_and_run import (
-        check_api_server_status, check_backup_server_status, 
-        check_python_dependencies, cleanup_existing_processes,
-        print_phase as original_print_phase  # type: ignore
+        check_api_server_status,
+        check_backup_server_status,
+        check_python_dependencies,
+        cleanup_existing_processes,
     )
+    from .one_click_build_and_run import print_phase as original_print_phase  # type: ignore
 except (ImportError, SystemError):
     # Running as a plain script (no package context) - use absolute import
     from scripts.one_click_build_and_run import (
-        check_api_server_status, check_backup_server_status, 
-        check_python_dependencies, cleanup_existing_processes,
-        print_phase as original_print_phase
+        check_api_server_status,
+        check_backup_server_status,
+        check_python_dependencies,
+        cleanup_existing_processes,
     )
+    from scripts.one_click_build_and_run import print_phase as original_print_phase
 
 def print_phase(phase_num: int, total_phases: int, title: str) -> None:
     original_print_phase(phase_num, total_phases, title)
 
-def create_debug_batch_file(command_list: List[str], title: str):
+def create_debug_batch_file(command_list: list[str], title: str):
     """Create a batch file that runs a command and keeps the window open"""
     # Create a temporary batch file
     batch_content = f"""@echo off
@@ -44,7 +46,7 @@ echo Command: {' '.join(command_list)}
 echo.
 
 """
-    
+
     # Add the actual command
     if len(command_list) == 1:
         batch_content += f"{command_list[0]}\n"
@@ -54,7 +56,7 @@ echo.
         for arg in command_list[1:]:
             batch_content += f' "{arg}"'
         batch_content += "\n"
-    
+
     batch_content += """
 
 echo.
@@ -68,7 +70,7 @@ if %ERRORLEVEL% EQU 0 (
 )
 pause >nul
 """
-    
+
     # Write to a temporary file
     import tempfile
     with tempfile.NamedTemporaryFile(mode='w', suffix='.bat', delete=False) as f:

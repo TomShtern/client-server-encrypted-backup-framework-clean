@@ -7,32 +7,56 @@ Core Principle: Use Flet's built-in DataTable, AlertDialog, and FilePicker.
 Clean file management with server integration and graceful fallbacks.
 """
 
-# Explicit imports instead of star import for better static analysis
-import flet as ft
-from typing import Optional, Dict, Any, List
+# Standard library imports
+import hashlib
+import os
+import sys
 from datetime import datetime
-import json
-import asyncio
-import aiofiles
+from typing import Any
 
-from utils.debug_setup import get_logger
-from utils.server_bridge import ServerBridge
-from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button
-from utils.user_feedback import show_success_message, show_error_message
+# Ensure repository and package roots are on sys.path for runtime resolution
+_views_dir = os.path.dirname(os.path.abspath(__file__))
+_flet_v2_root = os.path.dirname(_views_dir)
+_repo_root = os.path.dirname(_flet_v2_root)
+for _path in (_flet_v2_root, _repo_root):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+# Third-party imports
+import aiofiles
+import flet as ft
+
+# ALWAYS import this in any Python file that deals with subprocess or console I/O
+import Shared.utils.utf8_solution as _  # noqa: F401
+
+try:
+    from FletV2.utils.debug_setup import get_logger
+except ImportError:  # pragma: no cover - fallback logging
+    import logging
+
+    from FletV2 import config
+
+    def get_logger(name: str) -> logging.Logger:
+        logger = logging.getLogger(name or __name__)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+            logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG if getattr(config, "DEBUG_MODE", False) else logging.WARNING)
+        return logger
+
+from FletV2.utils.server_bridge import ServerBridge
+from FletV2.utils.state_manager import StateManager
+from FletV2.utils.ui_components import create_status_pill, themed_button, themed_card, themed_metric_card
+from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger(__name__)
 
-# Additional imports specific to files
-import os
-import hashlib
-from utils.ui_components import themed_metric_card, create_status_pill
-
 
 def create_files_view(
-    server_bridge: Optional[ServerBridge],
+    server_bridge: ServerBridge | None,
     page: ft.Page,
-    _state_manager: Optional[StateManager] = None
+    _state_manager: StateManager | None = None
 ) -> Any:
     """Simple files view using Flet's built-in components."""
     logger.info("Creating simplified files view")
@@ -44,7 +68,7 @@ def create_files_view(
     files_data = []
 
     # Mock file data for demonstration
-    def get_mock_files() -> List[Dict[str, Any]]:
+    def get_mock_files() -> list[dict[str, Any]]:
         """Simple mock file data generator."""
         return [
             {"id": "file_001", "name": "backup_001.pdf", "size": 1024*512, "type": "document",
@@ -126,7 +150,7 @@ def create_files_view(
         expand=True
     )
 
-    def filter_files() -> List[Dict[str, Any]]:
+    def filter_files() -> list[dict[str, Any]]:
         """Filter files based on search and filters."""
         filtered = files_data.copy()
 
@@ -224,7 +248,7 @@ def create_files_view(
             stats_row.update()
 
     # File action handlers
-    def download_file(file: Dict[str, Any]) -> None:
+    def download_file(file: dict[str, Any]) -> None:
         """Download file using FilePicker."""
         async def save_file(e: ft.FilePickerResultEvent) -> None:
             if not e.path:
@@ -259,7 +283,7 @@ def create_files_view(
             file_name=file.get('name', 'file.txt')
         )
 
-    def verify_file(file: Dict[str, Any]) -> None:
+    def verify_file(file: dict[str, Any]) -> None:
         """Verify file integrity."""
         file_name = file.get('name', 'Unknown')
         file_path = file.get('path', '')
@@ -306,7 +330,7 @@ def create_files_view(
             }
             show_verification_dialog(file_name, verification_data, "Mock")
 
-    def show_verification_dialog(file_name: str, data: Dict[str, Any], mode: str) -> None:
+    def show_verification_dialog(file_name: str, data: dict[str, Any], mode: str) -> None:
         """Show verification results dialog."""
         verification_dialog = ft.AlertDialog(
             title=ft.Text(f"Verification Results - {mode}"),
@@ -332,7 +356,7 @@ def create_files_view(
         )
         page.open(verification_dialog)
 
-    def delete_file(file: Dict[str, Any]) -> None:
+    def delete_file(file: dict[str, Any]) -> None:
         """Delete file with confirmation."""
         def confirm_delete(_e: ft.ControlEvent) -> None:
             if server_bridge:

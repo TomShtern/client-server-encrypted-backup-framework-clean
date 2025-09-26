@@ -10,18 +10,19 @@ imported without side effects and are easy to unit test.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Tuple, Optional
+from typing import Any
+
 import flet as ft
 
 __all__ = [
-	"size_to_human",
-	"format_iso_short",
-	"status_color",
-	"level_colors",
-	"build_status_badge",
 	"build_level_badge",
-	"striped_row_color",
+	"build_status_badge",
 	"compute_file_signature",
+	"format_iso_short",
+	"level_colors",
+	"size_to_human",
+	"status_color",
+	"striped_row_color",
 ]
 
 
@@ -47,7 +48,7 @@ def size_to_human(size: Any) -> str:
 		return str(size)
 
 
-def format_iso_short(ts: Optional[str]) -> str:
+def format_iso_short(ts: str | None) -> str:
 	"""Format ISO timestamp to YYYY-MM-DD HH:MM; if already short or invalid return original."""
 	if not ts:
 		return "Unknown"
@@ -102,7 +103,7 @@ _LEVEL_COLOR_BG = {
 }
 
 
-def level_colors(level: str) -> Tuple[str, str]:
+def level_colors(level: str) -> tuple[str, str]:
 	"""Return (fg,bg) colors for log level."""
 	return (
 		_LEVEL_COLOR_FG.get(level, ft.Colors.ON_SURFACE),
@@ -135,12 +136,12 @@ def build_level_badge(level: str) -> ft.Control:
 	)
 
 
-def striped_row_color(index: int) -> Optional[str]:
+def striped_row_color(index: int) -> str | None:
 	"""Return subtle stripe color for even rows; odd rows transparent."""
 	return ft.Colors.GREEN_50 if index % 2 == 0 else None
 
 
-def compute_file_signature(file_dict: Dict[str, Any]):
+def compute_file_signature(file_dict: dict[str, Any]):
 	"""Return a lightweight immutable signature for a file row for future diffing."""
 	return (
 		file_dict.get("id"),

@@ -7,9 +7,9 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from flet_server_gui.utils.trace_center import get_trace_center
-from flet_server_gui.utils.action_result import ActionResult
 from flet_server_gui.utils.action_executor import get_action_executor
+from flet_server_gui.utils.action_result import ActionResult
+from flet_server_gui.utils.trace_center import get_trace_center
 
 # NOTE: This is a lightweight integration-like test focusing on the ActionExecutor
 # wiring rather than full Flet UI event loop. We directly invoke _handle_button_click

@@ -7,31 +7,48 @@ Core Principle: Use Flet's built-in DataTable, AlertDialog, and TextField.
 Clean client management with server integration and graceful fallbacks.
 """
 
-# Explicit imports instead of star import for better static analysis
 import asyncio
 import contextlib
-from datetime import datetime
 import os
 import sys
 import uuid
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from datetime import datetime
+from typing import Any
 
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
-
-repo_root = os.path.dirname(parent_dir)
-shared_dir = os.path.join(repo_root, "Shared")
-if os.path.isdir(shared_dir) and repo_root not in sys.path:
-    sys.path.insert(0, repo_root)
+# Ensure repository and package roots are on sys.path for runtime resolution
+_views_dir = os.path.dirname(os.path.abspath(__file__))
+_flet_v2_root = os.path.dirname(_views_dir)
+_repo_root = os.path.dirname(_flet_v2_root)
+for _path in (_flet_v2_root, _repo_root):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
 import flet as ft
 
-from utils.debug_setup import get_logger
-from utils.server_bridge import ServerBridge
-from utils.state_manager import StateManager
-from utils.ui_components import themed_card, themed_button
-from utils.user_feedback import show_success_message, show_error_message
+# ALWAYS import this in any Python file that deals with subprocess or console I/O
+import Shared.utils.utf8_solution as _  # noqa: F401
+
+try:
+    from FletV2.utils.debug_setup import get_logger
+except ImportError:  # pragma: no cover - fallback logging
+    import logging
+
+    from FletV2 import config
+
+    def get_logger(name: str) -> logging.Logger:
+        logger = logging.getLogger(name or __name__)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+            logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG if getattr(config, "DEBUG_MODE", False) else logging.WARNING)
+        return logger
+
+from FletV2.utils.server_bridge import ServerBridge
+from FletV2.utils.state_manager import StateManager
+from FletV2.utils.ui_components import create_status_pill, themed_button, themed_card
+from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger(__name__)
 
@@ -56,20 +73,17 @@ def _build_metric_card(title: str, value_control: Any, icon: str, card_descripti
     return card
 
 
-# Additional imports specific to clients
-from utils.ui_components import create_status_pill
-
 
 def create_clients_view(
-    server_bridge: Optional[ServerBridge],
+    server_bridge: ServerBridge | None,
     page: ft.Page,
-    _state_manager: Optional[StateManager]
+    _state_manager: StateManager | None
 ) -> Any:
     """Simple clients view using Flet's built-in components."""
     logger.info("Creating simplified clients view")
 
-    state_manager: Optional[StateManager] = _state_manager
-    state_subscription_callback: Optional[Callable[[Any, Any], None]] = None
+    state_manager: StateManager | None = _state_manager
+    state_subscription_callback: Callable[[Any, Any], None] | None = None
 
     # Simple state management
     search_query = ""
@@ -77,7 +91,7 @@ def create_clients_view(
     clients_data = []
 
     # Mock client data for demonstration
-    def get_mock_clients() -> List[Dict[str, Any]]:
+    def get_mock_clients() -> list[dict[str, Any]]:
         """Simple mock client data generator."""
         return [
             {"id": "client-001", "name": "Desktop-PC-01", "status": "Connected",
@@ -92,7 +106,7 @@ def create_clients_view(
              "last_seen": "2025-01-17 12:20:45", "files_count": 67, "ip_address": "192.168.1.104"},
         ]
 
-    def _fetch_clients_sync() -> List[Dict[str, Any]]:
+    def _fetch_clients_sync() -> list[dict[str, Any]]:
         """Retrieve clients synchronously from bridge with graceful fallback."""
         if server_bridge:
             try:
@@ -106,12 +120,12 @@ def create_clients_view(
                 logger.debug(f"Falling back to mock clients: {ex}")
         return get_mock_clients()
 
-    async def _fetch_clients_async() -> List[Dict[str, Any]]:
+    async def _fetch_clients_async() -> list[dict[str, Any]]:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _fetch_clients_sync)
 
     # Load client data from server or use mock
-    def load_clients_data(*, broadcast: Optional[bool] = None) -> None:
+    def load_clients_data(*, broadcast: bool | None = None) -> None:
         """Load client data using optional async scheduling to avoid blocking UI."""
         should_broadcast = state_manager is not None if broadcast is None else broadcast
 
@@ -153,7 +167,7 @@ def create_clients_view(
         }
         return status_mapping.get(status.lower(), "default")
 
-    def filter_clients() -> List[Dict[str, Any]]:
+    def filter_clients() -> list[dict[str, Any]]:
         """Filter clients based on search and status."""
         filtered = clients_data.copy()
 
@@ -244,11 +258,11 @@ def create_clients_view(
             with contextlib.suppress(Exception):
                 control.update()
 
-    def apply_clients_data(new_clients: List[Dict[str, Any]] | None, *, broadcast: bool = False, source: str = "clients_view") -> None:
+    def apply_clients_data(new_clients: list[dict[str, Any]] | None, *, broadcast: bool = False, source: str = "clients_view") -> None:
         """Centralized handler for client data updates with optional state broadcast."""
         nonlocal clients_data
 
-        normalized: List[Dict[str, Any]] = []
+        normalized: list[dict[str, Any]] = []
         if new_clients:
             for item in new_clients:
                 normalized.append(dict(item) if isinstance(item, dict) else item)
@@ -274,7 +288,7 @@ def create_clients_view(
         state_manager.subscribe("clients", state_subscription_callback)
 
     # Client action handlers
-    def view_client_details(client: Dict[str, Any]) -> None:
+    def view_client_details(client: dict[str, Any]) -> None:
         """View client details using AlertDialog."""
         details_dialog = ft.AlertDialog(
             title=ft.Text("Client Details"),
@@ -295,7 +309,7 @@ def create_clients_view(
         )
         page.open(details_dialog)
 
-    def disconnect_client(client: Dict[str, Any]) -> None:
+    def disconnect_client(client: dict[str, Any]) -> None:
         """Disconnect client with confirmation."""
         def confirm_disconnect(_e: ft.ControlEvent) -> None:
             if server_bridge:
@@ -330,7 +344,7 @@ def create_clients_view(
         )
         page.open(confirm_dialog)
 
-    def delete_client(client: Dict[str, Any]) -> None:
+    def delete_client(client: dict[str, Any]) -> None:
         """Delete client with confirmation."""
         def confirm_delete(_e: ft.ControlEvent) -> None:
             nonlocal clients_data
@@ -502,7 +516,7 @@ def create_clients_view(
 
     def setup_subscriptions() -> None:
         """Setup subscriptions and initial data loading after view is added to page."""
-        existing_clients: List[Dict[str, Any]] = []
+        existing_clients: list[dict[str, Any]] = []
         if state_manager is not None:
             with contextlib.suppress(Exception):
                 state_value = state_manager.get("clients", [])

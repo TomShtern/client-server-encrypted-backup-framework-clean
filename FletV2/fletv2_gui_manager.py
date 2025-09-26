@@ -10,14 +10,15 @@ Integration Pattern:
 """
 
 import asyncio
-import threading
-import queue
 import logging
-from typing import Optional, Any, Dict
-import flet as ft
-from pathlib import Path
-import sys
 import os
+import queue
+import sys
+import threading
+from pathlib import Path
+from typing import Any
+
+import flet as ft
 
 # Add current directory to path for local imports
 current_dir = Path(__file__).parent
@@ -144,7 +145,7 @@ class FletV2Manager:
         if self.page:
             self.page.run_task(process_updates)
 
-    async def _handle_update(self, update_type: str, data: Dict[str, Any]):
+    async def _handle_update(self, update_type: str, data: dict[str, Any]):
         """Handle real-time updates from server."""
         try:
             if update_type == 'server_status':
@@ -190,7 +191,7 @@ class FletV2Manager:
     # SERVER INTEGRATION METHODS (Same interface as old GUIManager)
     # ============================================================================
 
-    def queue_update(self, update_type: str, data: Dict[str, Any]):
+    def queue_update(self, update_type: str, data: dict[str, Any]):
         """Queue an update for the GUI - same method as old GUIManager."""
         try:
             self.update_queue.put((update_type, data))
@@ -296,7 +297,7 @@ class FletV2Manager:
         if self.server and hasattr(self.server, 'backup_database'):
             threading.Thread(target=self.server.backup_database, daemon=True).start()
 
-    def save_settings(self, settings: Dict[str, Any]):
+    def save_settings(self, settings: dict[str, Any]):
         """Save server settings - called from FletV2 controls."""
         if self.server and hasattr(self.server, 'save_settings'):
             self.server.save_settings(settings)

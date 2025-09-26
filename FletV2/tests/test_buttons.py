@@ -6,13 +6,14 @@ This will test different button creation patterns to identify the root cause.
 
 import flet as ft
 
+
 def main(page: ft.Page):
     page.title = "Button Test - Isolating DataTable Issues"
-    
+
     # Counter to track clicks visually
     click_counter = {"count": 0}
     counter_text = ft.Text("No clicks yet", size=16)
-    
+
     # Test 1: Static button (like official docs)
     def static_button_clicked(e):
         click_counter["count"] += 1
@@ -22,7 +23,7 @@ def main(page: ft.Page):
         page.snack_bar = ft.SnackBar(ft.Text("Static button worked!"))
         page.snack_bar.open = True
         page.update()
-    
+
     # Test 2: Dynamic button outside DataTable
     def dynamic_button_clicked(e):
         click_counter["count"] += 1
@@ -32,7 +33,7 @@ def main(page: ft.Page):
         page.snack_bar = ft.SnackBar(ft.Text("Dynamic button worked!"))
         page.snack_bar.open = True
         page.update()
-    
+
     # Test 3: Button inside DataTable (our problematic case)
     def datatable_button_clicked(e):
         click_counter["count"] += 1
@@ -42,21 +43,21 @@ def main(page: ft.Page):
         page.snack_bar = ft.SnackBar(ft.Text("DataTable button worked!"))
         page.snack_bar.open = True
         page.update()
-    
+
     # Create static button (should work)
     static_button = ft.IconButton(
         icon=ft.Icons.STAR,
         tooltip="Static Button Test",
         on_click=static_button_clicked
     )
-    
+
     # Create dynamic button outside table (test dynamic creation)
     dynamic_button = ft.IconButton(
         icon=ft.Icons.FAVORITE,
-        tooltip="Dynamic Button Test", 
+        tooltip="Dynamic Button Test",
         on_click=dynamic_button_clicked
     )
-    
+
     # Create DataTable with button (problematic case)
     datatable = ft.DataTable(
         columns=[
@@ -74,20 +75,20 @@ def main(page: ft.Page):
             ])
         ]
     )
-    
+
     page.add(
         ft.Text("Button Serialization Test", size=20, weight=ft.FontWeight.BOLD),
         counter_text,  # Show click counter
         ft.Divider(),
-        
+
         ft.Text("Test 1: Static Button (should work)"),
         static_button,
-        
+
         ft.Divider(),
         ft.Text("Test 2: Dynamic Button (should work)"),
         dynamic_button,
-        
-        ft.Divider(), 
+
+        ft.Divider(),
         ft.Text("Test 3: DataTable Button (problematic)"),
         datatable
     )

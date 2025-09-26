@@ -4,9 +4,9 @@ Configuration and Constants for FletV2.
 """
 
 import os
-from pathlib import Path
 from contextlib import suppress
-from typing import Dict, Any
+from pathlib import Path
+from typing import Any
 
 # Load environment variables from .env file if it exists
 with suppress(ImportError):
@@ -152,7 +152,7 @@ def is_database_available() -> bool:
     """Check if the BackupServer database file exists."""
     return DATABASE_PATH.exists()
 
-def get_database_config() -> Dict[str, Any]:
+def get_database_config() -> dict[str, Any]:
     """Get complete database configuration for ServerBridge."""
     return {
         'database_path': str(DATABASE_PATH),

@@ -3,19 +3,18 @@
 Test script to verify ft.Ref implementation in FletV2 views.
 """
 
-import flet as ft
-import sys
 import os
+import sys
+
+import flet as ft
 
 # Add the FletV2 directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '.'))
 
-from utils.debug_setup import setup_terminal_debugging, get_logger
+from utils.debug_setup import setup_terminal_debugging
+
 logger = setup_terminal_debugging(logger_name="FletV2.test")
 
-from views.dashboard import create_dashboard_view
-from views.clients import create_clients_view
-from views.files import create_files_view
 
 
 def test_ref_access():

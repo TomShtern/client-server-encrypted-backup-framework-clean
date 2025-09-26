@@ -6,12 +6,13 @@ Test script to verify that utils.debug_setup can be imported from anywhere.
 import os
 import sys
 
+
 def setup_path_correctly():
     """Set up the Python path correctly to find FletV2 modules."""
     # Get current directory
     current_dir = os.getcwd()
     print(f"Current directory: {current_dir}")
-    
+
     # Look for FletV2 directory
     fletv2_path = os.path.join(current_dir, 'FletV2')
     if os.path.exists(fletv2_path):
@@ -51,7 +52,7 @@ def test_import_with_explicit_path():
         fletv2_utils_path = os.path.join(os.getcwd(), 'FletV2', 'utils')
         if fletv2_utils_path not in sys.path:
             sys.path.insert(0, fletv2_utils_path)
-        
+
         import debug_setup
         print("[PASS] Explicit path import successful")
         return True
@@ -63,19 +64,19 @@ def test_import():
     """Test importing utils.debug_setup using different methods."""
     print("Method 1: Direct import")
     success1 = test_import_directly()
-    
+
     print("\nMethod 2: Module import")
     success2 = test_import_as_module()
-    
+
     print("\nMethod 3: Explicit path import")
     success3 = test_import_with_explicit_path()
-    
+
     return success1 or success2 or success3
 
 if __name__ == "__main__":
     print("Testing utils.debug_setup import...")
     print(f"Python path: {sys.path}")
-    
+
     success = test_import()
     if success:
         print("\n[PASS] At least one import method worked!")

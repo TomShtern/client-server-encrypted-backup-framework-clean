@@ -77,12 +77,12 @@ environment variables propagate to child processes (best effort, optional).
 
 
 import contextlib
+import locale
 import logging
 import os
-import sys
 import subprocess
-import locale
-from typing import Dict, Optional, Any, Union, List, TextIO, BinaryIO, IO, cast
+import sys
+from typing import IO, Any, TextIO, cast
 
 # Import ctypes with proper error handling for Windows
 try:
@@ -103,9 +103,9 @@ except ImportError:
 
 # rich: Enhanced console output, better unicode handling, formatting
 try:
+    from rich import print as rich_print
     from rich.console import Console
     from rich.text import Text
-    from rich import print as rich_print
     HAS_RICH = True
     # Create a console instance for internal use
     _rich_console = Console(force_terminal=True, legacy_windows=False)
@@ -135,8 +135,8 @@ class UTF8Support:
     """
 
     _initialized: bool = False
-    _original_console_cp: Optional[int] = None
-    _original_console_output_cp: Optional[int] = None
+    _original_console_cp: int | None = None
+    _original_console_output_cp: int | None = None
 
     @classmethod
     def setup(cls) -> bool:
@@ -169,7 +169,7 @@ class UTF8Support:
             # Expected benign environment/terminal limitation
             logger.debug("UTF8Support.setup benign failure: %s", e)
             return False
-        except Exception as e:  # noqa: BLE001 (want to log unexpected issue once)
+        except Exception as e:
             logger.exception("Unexpected UTF8Support.setup failure: %s", e)
             return False
 
@@ -221,7 +221,7 @@ class UTF8Support:
                 sys.stderr.reconfigure(encoding='utf-8')  # type: ignore[attr-defined]
 
     @classmethod
-    def get_env(cls, base_env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    def get_env(cls, base_env: dict[str, str] | None = None) -> dict[str, str]:
         """
         Get environment with UTF-8 settings for subprocess calls.
 
@@ -373,7 +373,7 @@ def safe_print(message: str) -> None:
                 sys.stdout.write(safe_line)
                 sys.stdout.flush()
             return
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
 
     # Ultimate silent fallback
@@ -393,12 +393,12 @@ def rtl_print(message: str) -> None:
     """
     try:
         safe_print(process_bidirectional_text(message))
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.debug("rtl_print processing error: %s", e)
         safe_print(message)
 
 # Convenience functions that match the CyberBackup Framework patterns
-def get_env(base_env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+def get_env(base_env: dict[str, str] | None = None) -> dict[str, str]:
     """Get UTF-8 environment for subprocess calls."""
     return UTF8Support.get_env(base_env)
 
@@ -431,7 +431,7 @@ def ensure_initialized(verify_child: bool = False, timeout: int = 5) -> bool:
     except Exception:
         return False
 
-def run_utf8(cmd: Union[str, List[str]], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
+def run_utf8(cmd: str | list[str], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
     """
     Run subprocess with UTF-8 support.
 
@@ -452,7 +452,7 @@ def run_utf8(cmd: Union[str, List[str]], **kwargs: Any) -> subprocess.CompletedP
 
     return subprocess.run(cmd, **kwargs)
 
-def Popen_utf8(cmd: Union[str, List[str]], **kwargs: Any) -> subprocess.Popen[str]:
+def Popen_utf8(cmd: str | list[str], **kwargs: Any) -> subprocess.Popen[str]:
     """
     Create Popen with UTF-8 support.
 
@@ -490,7 +490,7 @@ def test_utf8() -> bool:
         return False
 
 # === ENHANCED FILE OPERATIONS ===
-def open_utf8(file: Union[str, bytes, int], mode: str = 'r', **kwargs: Any) -> IO[Any]:
+def open_utf8(file: str | bytes | int, mode: str = 'r', **kwargs: Any) -> IO[Any]:
     """
     Enhanced open function with automatic UTF-8 handling.
 
@@ -524,7 +524,7 @@ def open_utf8(file: Union[str, bytes, int], mode: str = 'r', **kwargs: Any) -> I
 
     return open(file, mode, **kwargs)
 
-def read_file(filepath: Union[str, bytes], encoding: Optional[str] = None, errors: Optional[str] = None) -> Optional[str]:
+def read_file(filepath: str | bytes, encoding: str | None = None, errors: str | None = None) -> str | None:
     """
     Read file with UTF-8 support.
 
@@ -553,7 +553,7 @@ def read_file(filepath: Union[str, bytes], encoding: Optional[str] = None, error
         safe_print(f"Error reading file {filepath}: {e}")
         return None
 
-def write_file(filepath: Union[str, bytes], content: str, encoding: Optional[str] = None, errors: Optional[str] = None) -> bool:
+def write_file(filepath: str | bytes, content: str, encoding: str | None = None, errors: str | None = None) -> bool:
     """
     Write file with UTF-8 support.
 
@@ -707,7 +707,7 @@ def truncate_text(text: str, width: int, suffix: str = '...') -> str:
 
     return text[:truncate_pos] + suffix
 
-def format_table_row(columns: List[str], widths: List[int], sep: str = ' | ', align: str = 'left') -> str:
+def format_table_row(columns: list[str], widths: list[int], sep: str = ' | ', align: str = 'left') -> str:
     """Format a table row with proper Unicode width alignment.
 
     Uses wcwidth when available for accurate column alignment with Unicode text.
@@ -733,11 +733,11 @@ def format_table_row(columns: List[str], widths: List[int], sep: str = ' | ', al
 
     formatted_columns = [
         pad_text(column, width, align=align)
-        for column, width in zip(columns, widths)
+        for column, width in zip(columns, widths, strict=False)
     ]
     return sep.join(formatted_columns)
 
-def wrap_text(text: str, width: int, indent: str = '', subsequent_indent: str = '') -> List[str]:
+def wrap_text(text: str, width: int, indent: str = '', subsequent_indent: str = '') -> list[str]:
     """Wrap text to specified width with proper Unicode width handling.
 
     Uses wcwidth when available for accurate text wrapping with Unicode characters.
@@ -801,7 +801,7 @@ def wrap_text(text: str, width: int, indent: str = '', subsequent_indent: str = 
 ########################################
 
 # === ENHANCED ERROR REPORTING ===
-def diagnose_utf8_environment() -> Dict[str, Any]:
+def diagnose_utf8_environment() -> dict[str, Any]:
     """
     Provide detailed UTF-8 environment diagnosis including optional library status.
 

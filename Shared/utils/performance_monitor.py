@@ -10,23 +10,22 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional, List, Any
-from datetime import datetime
+from typing import Any
 
 
 @dataclass
 class Sample:
     ts: float
-    bytes_transferred: Optional[int] = None
-    total_bytes: Optional[int] = None
-    speed_bps: Optional[float] = None  # bytes/second
-    phase: Optional[str] = None
+    bytes_transferred: int | None = None
+    total_bytes: int | None = None
+    speed_bps: float | None = None  # bytes/second
+    phase: str | None = None
 
 
 @dataclass
 class JobStats:
     job_id: str
-    total_bytes: Optional[int] = None
+    total_bytes: int | None = None
     start_ts: float = field(default_factory=time.time)
     last_ts: float = field(default_factory=time.time)
     last_progress_bytes: int = 0
@@ -35,8 +34,8 @@ class JobStats:
     avg_speed_bps: float = 0.0      # arithmetic mean
     ema_speed_bps: float = 0.0      # exponential moving average
     ema_alpha: float = 0.2          # smoothing factor
-    samples: List[Sample] = field(default_factory=list)
-    stalled_since: Optional[float] = None
+    samples: list[Sample] = field(default_factory=list)
+    stalled_since: float | None = None
 
     def record(self, s: Sample):
         self.samples.append(s)
@@ -68,7 +67,7 @@ class JobStats:
                 self.stalled_since = None
                 self.last_progress_bytes = s.bytes_transferred
 
-    def summarize(self) -> Dict[str, Any]:
+    def summarize(self) -> dict[str, Any]:
         now = time.time()
         elapsed = max(0.0, now - self.start_ts)
         last_update_age = now - self.last_ts
@@ -120,10 +119,10 @@ class JobStats:
 
 class PerformanceMonitor:
     def __init__(self):
-        self._jobs: Dict[str, JobStats] = {}
+        self._jobs: dict[str, JobStats] = {}
         self._lock = threading.RLock()
 
-    def start_job(self, job_id: str, total_bytes: Optional[int] = None):
+    def start_job(self, job_id: str, total_bytes: int | None = None):
         with self._lock:
             if job_id not in self._jobs:
                 self._jobs[job_id] = JobStats(job_id=job_id, total_bytes=total_bytes)
@@ -144,10 +143,10 @@ class PerformanceMonitor:
     def record_sample(
         self,
         job_id: str,
-        bytes_transferred: Optional[int] = None,
-        total_bytes: Optional[int] = None,
-        speed_bps: Optional[float] = None,
-        phase: Optional[str] = None,
+        bytes_transferred: int | None = None,
+        total_bytes: int | None = None,
+        speed_bps: float | None = None,
+        phase: str | None = None,
     ):
         with self._lock:
             if job_id not in self._jobs:
@@ -161,18 +160,18 @@ class PerformanceMonitor:
             )
             self._jobs[job_id].record(s)
 
-    def get_job_summary(self, job_id: str) -> Optional[Dict[str, Any]]:
+    def get_job_summary(self, job_id: str) -> dict[str, Any] | None:
         with self._lock:
             js = self._jobs.get(job_id)
             return js.summarize() if js else None
 
-    def get_all_summaries(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_summaries(self) -> dict[str, dict[str, Any]]:
         with self._lock:
             return {jid: js.summarize() for jid, js in self._jobs.items()}
 
 
 # Global singleton
-_monitor_instance: Optional[PerformanceMonitor] = None
+_monitor_instance: PerformanceMonitor | None = None
 
 
 def get_performance_monitor() -> PerformanceMonitor:

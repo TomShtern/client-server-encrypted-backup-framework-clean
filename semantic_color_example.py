@@ -7,12 +7,12 @@ into existing Flet components to replace hardcoded colors.
 
 import flet as ft
 from flet_server_gui.core.semantic_colors import (
+    LegacyColorReplacements,
     get_status_color,
-    get_ui_state_color, 
-    get_text_color,
     get_surface_color,
+    get_text_color,
     get_toast_colors,
-    LegacyColorReplacements
+    get_ui_state_color,
 )
 
 
@@ -20,7 +20,7 @@ def create_status_dashboard_old():
     """OLD WAY: Using hardcoded colors (before semantic color system)"""
     return ft.Column([
         ft.Text("Status Dashboard", size=24, color=ft.Colors.ON_SURFACE),
-        
+
         # Status cards with hardcoded colors
         ft.Row([
             ft.Card(
@@ -38,7 +38,7 @@ def create_status_dashboard_old():
                 content=ft.Container(
                     content=ft.Column([
                         ft.Icon(ft.icons.ERROR_OUTLINE, color=ft.Colors.RED_600),
-                        ft.Text("Errors", color=ft.Colors.RED_600), 
+                        ft.Text("Errors", color=ft.Colors.RED_600),
                         ft.Text("2 failed transfers", color=ft.Colors.ON_SURFACE)
                     ], alignment=ft.MainAxisAlignment.CENTER),
                     padding=20
@@ -50,24 +50,24 @@ def create_status_dashboard_old():
                     content=ft.Column([
                         ft.Icon(ft.icons.WARNING_OUTLINED, color=ft.Colors.ORANGE_600),
                         ft.Text("Warnings", color=ft.Colors.ORANGE_600),
-                        ft.Text("5 retries needed", color=ft.Colors.ON_SURFACE) 
+                        ft.Text("5 retries needed", color=ft.Colors.ON_SURFACE)
                     ], alignment=ft.MainAxisAlignment.CENTER),
                     padding=20
                 ),
                 bgcolor=ft.Colors.SURFACE
             )
         ]),
-        
+
         # Action buttons with hardcoded colors
         ft.Row([
             ft.ElevatedButton(
-                "Start Server", 
+                "Start Server",
                 bgcolor=ft.Colors.GREEN_600,
                 color=ft.Colors.WHITE
             ),
             ft.ElevatedButton(
                 "Stop Server",
-                bgcolor=ft.Colors.RED_600, 
+                bgcolor=ft.Colors.RED_600,
                 color=ft.Colors.WHITE
             ),
             ft.OutlinedButton(
@@ -82,7 +82,7 @@ def create_status_dashboard_new():
     """NEW WAY: Using semantic color system (recommended)"""
     return ft.Column([
         ft.Text("Status Dashboard", size=24, color=get_text_color("primary")),
-        
+
         # Status cards with semantic colors
         ft.Row([
             ft.Card(
@@ -100,7 +100,7 @@ def create_status_dashboard_new():
                 content=ft.Container(
                     content=ft.Column([
                         ft.Icon(ft.icons.ERROR_OUTLINE, color=get_status_color("error")),
-                        ft.Text("Errors", color=get_status_color("error")), 
+                        ft.Text("Errors", color=get_status_color("error")),
                         ft.Text("2 failed transfers", color=get_text_color("primary"))
                     ], alignment=ft.MainAxisAlignment.CENTER),
                     padding=20
@@ -112,24 +112,24 @@ def create_status_dashboard_new():
                     content=ft.Column([
                         ft.Icon(ft.icons.WARNING_OUTLINED, color=get_status_color("warning")),
                         ft.Text("Warnings", color=get_status_color("warning")),
-                        ft.Text("5 retries needed", color=get_text_color("primary")) 
+                        ft.Text("5 retries needed", color=get_text_color("primary"))
                     ], alignment=ft.MainAxisAlignment.CENTER),
                     padding=20
                 ),
                 bgcolor=get_surface_color("card")
             )
         ]),
-        
+
         # Action buttons with semantic colors
         ft.Row([
             ft.ElevatedButton(
-                "Start Server", 
+                "Start Server",
                 bgcolor=get_status_color("success"),
                 color=get_text_color("inverse")
             ),
             ft.ElevatedButton(
                 "Stop Server",
-                bgcolor=get_status_color("error"), 
+                bgcolor=get_status_color("error"),
                 color=get_text_color("inverse")
             ),
             ft.OutlinedButton(
@@ -207,7 +207,7 @@ def create_toast_notification_old(message: str, toast_type: str):
         "warning": ft.Colors.ORANGE_600,
         "info": ft.Colors.BLUE_600,
     }
-    
+
     return ft.Container(
         content=ft.Row([
             ft.Icon(ft.icons.INFO, color=color_map.get(toast_type, ft.Colors.GREY_600)),
@@ -223,7 +223,7 @@ def create_toast_notification_old(message: str, toast_type: str):
 def create_toast_notification_new(message: str, toast_type: str):
     """NEW WAY: Toast with semantic colors"""
     toast_colors = get_toast_colors(toast_type)
-    
+
     return ft.Container(
         content=ft.Row([
             ft.Icon(ft.icons.INFO, color=toast_colors["icon"]),
@@ -244,14 +244,14 @@ def create_theme_aware_component():
             bgcolor=get_ui_state_color("button", "default", theme_mode),
             color=get_text_color("inverse", theme_mode)
         )
-    
+
     return ft.Column([
         ft.Text("Theme-Aware Components:", size=18, color=get_text_color("primary")),
         ft.Row([
             create_button_for_theme("light"),
             create_button_for_theme("dark")
         ]),
-        
+
         # Performance indicators with semantic colors
         ft.Text("Performance Levels:", size=18, color=get_text_color("primary")),
         ft.Row([
@@ -263,7 +263,7 @@ def create_theme_aware_component():
             ),
             ft.Container(
                 content=ft.Text("Average", color=get_text_color("inverse")),
-                bgcolor=get_status_color("warning"), 
+                bgcolor=get_status_color("warning"),
                 padding=8,
                 border_radius=4
             ),
@@ -281,7 +281,7 @@ def create_legacy_replacement_example():
     """Example using legacy replacement methods for quick migration"""
     return ft.Column([
         ft.Text("Legacy Replacement Example:", size=18, color=get_text_color("primary")),
-        
+
         # Using legacy replacements for quick migration
         ft.Row([
             ft.Container(
@@ -312,40 +312,40 @@ def main(page: ft.Page):
     """Main function to demonstrate the semantic color system"""
     page.title = "Semantic Color System Examples"
     page.scroll = ft.ScrollMode.AUTO
-    
+
     page.add(
-        ft.Text("Semantic Color System Integration Examples", 
-                size=24, 
+        ft.Text("Semantic Color System Integration Examples",
+                size=24,
                 weight=ft.FontWeight.BOLD,
                 color=get_text_color("primary")),
-        
+
         ft.Divider(color=get_ui_state_color("row", "alternate")),
-        
-        ft.Text("Status Dashboard Comparison:", 
-                size=18, 
+
+        ft.Text("Status Dashboard Comparison:",
+                size=18,
                 weight=ft.FontWeight.W_500,
                 color=get_text_color("primary")),
-        
+
         ft.ExpansionTile(
             title=ft.Text("NEW: Semantic Colors", color=get_status_color("success")),
             controls=[create_status_dashboard_new()]
         ),
-        
+
         ft.ExpansionTile(
             title=ft.Text("OLD: Hardcoded Colors", color=get_status_color("error")),
             controls=[create_status_dashboard_old()]
         ),
-        
+
         ft.Divider(color=get_ui_state_color("row", "alternate")),
-        
+
         create_theme_aware_component(),
-        
+
         ft.Divider(color=get_ui_state_color("row", "alternate")),
-        
+
         create_legacy_replacement_example(),
-        
+
         ft.Divider(color=get_ui_state_color("row", "alternate")),
-        
+
         ft.Text("Toast Notifications:", size=18, color=get_text_color("primary")),
         ft.Column([
             create_toast_notification_new("Success message", "success"),

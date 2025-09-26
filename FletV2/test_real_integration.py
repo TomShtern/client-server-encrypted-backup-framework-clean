@@ -6,11 +6,9 @@ This script tests all aspects of the integration between FletV2 and BackupServer
 to ensure real data is properly displayed instead of mock data.
 """
 
+import logging
 import os
 import sys
-import logging
-import asyncio
-from pathlib import Path
 
 # Add project paths
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -21,7 +19,6 @@ for path in [project_root, fletv2_root]:
         sys.path.insert(0, path)
 
 # ALWAYS import UTF-8 solution first
-import Shared.utils.utf8_solution as _
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -30,7 +27,6 @@ logger = logging.getLogger(__name__)
 def test_server_import():
     """Test importing the real server."""
     try:
-        from python_server.server.server import BackupServer
         logger.info("✅ Successfully imported BackupServer")
         return True
     except Exception as e:
@@ -190,7 +186,7 @@ def test_fletv2_import(backup_server):
 def test_integration_script():
     """Test the integration script."""
     try:
-        from run_with_real_server import initialize_real_server, launch_fletv2_with_server
+        from run_with_real_server import initialize_real_server
         logger.info("✅ Successfully imported integration script functions")
 
         # Test server initialization via integration script

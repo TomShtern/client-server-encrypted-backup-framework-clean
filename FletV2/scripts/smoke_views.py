@@ -7,12 +7,14 @@ Run with the project's venv:
   & "./flet_venv/Scripts/python.exe" scripts\\smoke_views.py
 """
 import asyncio
+import contextlib
 import importlib
+import os
 import sys
 import traceback
+from collections.abc import Callable
 from types import SimpleNamespace
-from typing import Any, Callable
-import os
+from typing import Any
 
 # Ensure FletV2 root is on sys.path so `import views.*` works when script runs from scripts/
 _script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -21,14 +23,11 @@ if _flet_root not in sys.path:
     sys.path.insert(0, _flet_root)
 
 # Also set CWD to FletV2 root to match main.py behavior
-try:
+with contextlib.suppress(Exception):
     os.chdir(_flet_root)
-except Exception:
-    pass
 
 # Monkeypatch flet Control.update to a no-op for smoke testing, avoiding "must be added to the page" asserts
 try:
-    import flet
     from flet.core.control import Control as _FletControl
     if not hasattr(_FletControl, '_smoke_orig_update'):
         setattr(_FletControl, '_smoke_orig_update', _FletControl.update)
@@ -72,8 +71,7 @@ class PageMock(SimpleNamespace):
     def run_task(self, coro: Callable[..., Any]):
         # schedule a coroutine
         try:
-            task = self._loop.create_task(coro()) if callable(coro) else None
-            return task
+            return self._loop.create_task(coro()) if callable(coro) else None
         except Exception:
             # last resort: run synchronously
             return None
@@ -94,7 +92,7 @@ async def test_view(module_name: str, func_name: str) -> bool:
         print(f"[ERROR] {module_name} missing {func_name}")
         return False
 
-    view_func = getattr(module, func_name)
+    view_func: Callable[..., Any] = getattr(module, func_name)
 
     page = PageMock()
     server_bridge = None
@@ -108,19 +106,15 @@ async def test_view(module_name: str, func_name: str) -> bool:
         return False
 
     # Normalize result: could be control, (control, dispose), or (control, dispose, setup_subs)
-    setup_cb = None
+    setup_cb: Callable[..., Any] | None = None
+    control_obj: Any = result
     if isinstance(result, tuple):
-        if len(result) >= 3:
-            setup_cb = result[2]
-        elif len(result) == 2:
-            # no setup_cb
-            setup_cb = None
-    else:
-        setup_cb = getattr(result, '_setup_subscriptions', None)
-
-    # If attribute present on content, prefer that
-    if hasattr(result, '_setup_subscriptions') and callable(getattr(result, '_setup_subscriptions')):
-        setup_cb = getattr(result, '_setup_subscriptions')
+        if result:
+            control_obj = result[0]
+        setup_cb = result[2] if len(result) >= 3 else None
+    attr_setup = getattr(control_obj, '_setup_subscriptions', None)
+    if callable(attr_setup):
+        setup_cb = attr_setup
 
     if setup_cb is None:
         print(f"[OK] {module_name}.{func_name}: created (no setup_subscriptions)")
@@ -136,45 +130,36 @@ async def test_view(module_name: str, func_name: str) -> bool:
         def attach_control_recursive(ctrl, page_obj, _seen=None):
             if _seen is None:
                 _seen = set()
-            try:
+            with contextlib.suppress(Exception):
                 ident = id(ctrl)
                 if ident in _seen:
                     return
                 _seen.add(ident)
-            except Exception:
-                pass
 
             # Try to set the internal mangled page attribute used by flet controls
-            try:
-                setattr(ctrl, '_Control__page', page_obj)
-            except Exception:
-                # best-effort
-                pass
+            with contextlib.suppress(Exception):
+                ctrl._Control__page = page_obj
 
             # Also set public page attribute if available
-            try:
-                setattr(ctrl, 'page', page_obj)
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                ctrl.page = page_obj
 
             # Recurse into common child properties
             for attr in ('content', 'controls', 'rows', 'columns', 'items', 'children'):
                 try:
                     child = getattr(ctrl, attr, None)
-                    if child is None:
-                        continue
-                    if isinstance(child, (list, tuple)):
-                        for c in child:
-                            attach_control_recursive(c, page_obj, _seen=_seen)
-                    else:
-                        attach_control_recursive(child, page_obj, _seen=_seen)
                 except Exception:
                     continue
+                if child is None:
+                    continue
+                if isinstance(child, (list, tuple)):
+                    for c in child:
+                        attach_control_recursive(c, page_obj, _seen=_seen)
+                else:
+                    attach_control_recursive(child, page_obj, _seen=_seen)
 
-        try:
+        with contextlib.suppress(Exception):
             attach_control_recursive(result, page)
-        except Exception:
-            pass
 
         if asyncio.iscoroutinefunction(setup_cb):
             await setup_cb()
@@ -200,8 +185,7 @@ async def main():
     for k, v in results.items():
         print(f"  {k}: {'PASS' if v else 'FAIL'}")
 
-    failed = [k for k, v in results.items() if not v]
-    if failed:
+    if failed := [k for k, v in results.items() if not v]:
         print("Smoke test FAILED for views:", failed)
         sys.exit(2)
     else:

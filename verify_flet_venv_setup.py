@@ -3,12 +3,11 @@
 Comprehensive verification that flet_venv is the primary and only virtual environment.
 This script validates the complete setup and ensures everything works correctly.
 """
-import sys
-import os
 import json
 import subprocess
+import sys
 from pathlib import Path
-from typing import List, Dict, Tuple
+
 
 def print_header(title: str):
     """Print a formatted header."""
@@ -32,7 +31,7 @@ def print_info(message: str):
     """Print info message."""
     print(f"ℹ️  {message}")
 
-def verify_environment_structure() -> Tuple[bool, List[str]]:
+def verify_environment_structure() -> tuple[bool, list[str]]:
     """Verify the virtual environment structure."""
     print_header("VIRTUAL ENVIRONMENT STRUCTURE VERIFICATION")
 
@@ -74,7 +73,7 @@ def verify_environment_structure() -> Tuple[bool, List[str]]:
 
     return len(issues) == 0, issues
 
-def verify_python_executable() -> Tuple[bool, List[str]]:
+def verify_python_executable() -> tuple[bool, list[str]]:
     """Verify Python executable and version."""
     print_header("PYTHON EXECUTABLE VERIFICATION")
 
@@ -98,7 +97,7 @@ def verify_python_executable() -> Tuple[bool, List[str]]:
                 version_num = python_version.split()[1]
                 major, minor = version_num.split(".")[:2]
                 if int(major) >= 3 and int(minor) >= 9:
-                    print_success(f"Python version is compatible (≥3.9)")
+                    print_success("Python version is compatible (≥3.9)")
                 else:
                     print_warning(f"Python version might be too old: {version_num}")
 
@@ -119,7 +118,7 @@ def verify_python_executable() -> Tuple[bool, List[str]]:
 
     return len(issues) == 0, issues
 
-def verify_requirements() -> Tuple[bool, List[str]]:
+def verify_requirements() -> tuple[bool, list[str]]:
     """Verify that all requirements are installed."""
     print_header("REQUIREMENTS VERIFICATION")
 
@@ -168,7 +167,7 @@ def verify_requirements() -> Tuple[bool, List[str]]:
 
     return len(issues) == 0, issues
 
-def verify_vscode_configuration() -> Tuple[bool, List[str]]:
+def verify_vscode_configuration() -> tuple[bool, list[str]]:
     """Verify VS Code configuration."""
     print_header("VS CODE CONFIGURATION VERIFICATION")
 
@@ -179,7 +178,7 @@ def verify_vscode_configuration() -> Tuple[bool, List[str]]:
     settings_file = project_root / ".vscode" / "settings.json"
     if settings_file.exists():
         try:
-            with open(settings_file, 'r', encoding='utf-8') as f:
+            with open(settings_file, encoding='utf-8') as f:
                 settings = json.load(f)
 
             # Check Python interpreter path
@@ -207,7 +206,7 @@ def verify_vscode_configuration() -> Tuple[bool, List[str]]:
     launch_file = project_root / ".vscode" / "launch.json"
     if launch_file.exists():
         try:
-            with open(launch_file, 'r', encoding='utf-8') as f:
+            with open(launch_file, encoding='utf-8') as f:
                 launch_config = json.load(f)
 
             flet_venv_configs = 0
@@ -222,7 +221,7 @@ def verify_vscode_configuration() -> Tuple[bool, List[str]]:
 
     return len(issues) == 0, issues
 
-def verify_workspace_files() -> Tuple[bool, List[str]]:
+def verify_workspace_files() -> tuple[bool, list[str]]:
     """Verify workspace configuration files."""
     print_header("WORKSPACE FILES VERIFICATION")
 
@@ -239,7 +238,7 @@ def verify_workspace_files() -> Tuple[bool, List[str]]:
         workspace_path = project_root / workspace_file
         if workspace_path.exists():
             try:
-                with open(workspace_path, 'r', encoding='utf-8') as f:
+                with open(workspace_path, encoding='utf-8') as f:
                     workspace_config = json.load(f)
 
                 settings = workspace_config.get('settings', {})
@@ -259,7 +258,7 @@ def verify_workspace_files() -> Tuple[bool, List[str]]:
 
     return len(issues) == 0, issues
 
-def verify_flet_functionality() -> Tuple[bool, List[str]]:
+def verify_flet_functionality() -> tuple[bool, list[str]]:
     """Verify that Flet can be imported and basic functionality works."""
     print_header("FLET FUNCTIONALITY VERIFICATION")
 
@@ -346,7 +345,7 @@ def main() -> int:
         except Exception as e:
             print_error(f"Test '{test_name}' crashed: {e}")
             test_results.append((test_name, False))
-            all_issues.append(f"Test '{test_name}' crashed: {str(e)}")
+            all_issues.append(f"Test '{test_name}' crashed: {e!s}")
 
     # Print summary
     print_header("VERIFICATION SUMMARY")

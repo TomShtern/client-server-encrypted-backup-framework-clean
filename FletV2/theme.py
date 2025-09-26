@@ -6,8 +6,9 @@ Uses Flet's built-in ft.Theme, ft.ColorScheme, and ft.TextTheme instead of custo
 Reduced from 947 lines to ~250 lines while maintaining all functionality.
 """
 
+from typing import cast
+
 import flet as ft
-from typing import Optional, cast
 
 # Core brand colors - simplified palette
 BRAND_COLORS = {
@@ -88,7 +89,7 @@ def setup_modern_theme(page: ft.Page):
 
 def create_modern_card(
     content: ft.Control,
-    elevation: Optional[int] = None,
+    elevation: int | None = None,
     hover_effect: bool = True
 ) -> ft.Container:
     """Create modern card using Flet's built-in styling."""
@@ -110,7 +111,7 @@ def themed_button(
     text: str,
     on_click=None,
     variant: str = "filled",  # filled, outlined, text
-    icon: Optional[str] = None,
+    icon: str | None = None,
     disabled: bool = False
 ) -> ft.ElevatedButton | ft.OutlinedButton | ft.TextButton:
     """Create themed button using Flet's built-in button types."""
@@ -151,8 +152,8 @@ def themed_button(
 def create_metric_card(
     title: str,
     value: str,
-    change: Optional[str] = None,
-    icon: Optional[str] = None,
+    change: str | None = None,
+    icon: str | None = None,
     color_type: str = "primary"
 ) -> ft.Container:
     """Create metric card using simplified styling."""
@@ -218,7 +219,7 @@ def toggle_theme_mode(page: ft.Page):
         page.theme_mode = ft.ThemeMode.LIGHT
     page.update()
 
-def create_section_divider(title: Optional[str] = None) -> ft.Container:
+def create_section_divider(title: str | None = None) -> ft.Container:
     """Create section divider with optional title."""
     if title:
         return ft.Container(

@@ -9,6 +9,7 @@ FletV2 modules to ensure the Python path is set up correctly.
 import os
 import sys
 
+
 def fix_fletv2_imports():
     """
     Fix FletV2 imports by ensuring the correct paths are in sys.path.
@@ -17,7 +18,7 @@ def fix_fletv2_imports():
     """
     # Get the directory containing this script
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    
+
     # Check if we're in the FletV2 directory
     if os.path.basename(current_dir) == 'FletV2':
         fletv2_dir = current_dir
@@ -27,12 +28,12 @@ def fix_fletv2_imports():
         if not os.path.exists(fletv2_dir):
             # Try looking in parent directory
             fletv2_dir = os.path.join(os.path.dirname(current_dir), 'FletV2')
-    
+
     # Add FletV2 to Python path if found
     if os.path.exists(fletv2_dir) and fletv2_dir not in sys.path:
         sys.path.insert(0, fletv2_dir)
         print(f"Added FletV2 to Python path: {fletv2_dir}")
-        
+
         # Also add FletV2/utils to path for direct imports
         utils_dir = os.path.join(fletv2_dir, 'utils')
         if os.path.exists(utils_dir) and utils_dir not in sys.path:

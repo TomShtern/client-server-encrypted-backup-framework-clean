@@ -6,10 +6,9 @@ Tests the direct integration between BackupServer and FletV2 (bypassing the adap
 This script verifies that all components work together correctly with the new architecture.
 """
 
+import logging
 import os
 import sys
-import logging
-from pathlib import Path
 
 # Add project root to path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -79,8 +78,9 @@ def test_server_bridge_integration():
     logger.info("🧪 Testing ServerBridge integration...")
 
     try:
-        from python_server.server.server import BackupServer
         from utils.server_bridge import create_server_bridge
+
+        from python_server.server.server import BackupServer
 
         # Create real server directly
         real_server = BackupServer()
@@ -118,6 +118,7 @@ def test_async_operations():
 
     try:
         import asyncio
+
         from server_adapter import create_fletv2_server
 
         async def run_async_tests():
@@ -188,7 +189,7 @@ def test_fletv2_import():
 
     try:
         # Import main FletV2 app
-        from main import FletV2App, main, real_server_available, bridge_type
+        from main import bridge_type, main, real_server_available
 
         logger.info(f"Real server available: {real_server_available}")
         logger.info(f"Bridge type: {bridge_type}")
@@ -219,7 +220,7 @@ def test_startup_script():
 
     try:
         # Import startup script components
-        from start_integrated_gui import IntegratedServerManager, main_integrated
+        from start_integrated_gui import IntegratedServerManager
 
         # Test manager creation
         manager = IntegratedServerManager(force_mock=True)

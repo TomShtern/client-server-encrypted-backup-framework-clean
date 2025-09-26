@@ -3,7 +3,6 @@
 Simple Integration Test - Basic functionality verification without full GUI imports.
 """
 
-import os
 import sys
 from pathlib import Path
 

@@ -7,27 +7,26 @@ Progress monitoring and verification are handled by the UnifiedFileMonitor.
 """
 
 import contextlib
-import json
-import os
-import sys
-import time
 import hashlib
-import tempfile
+import json
 import logging
-import threading
+import os
 import subprocess
-from typing import Optional, Dict, Any, Callable, Union, List, Tuple, IO
+import sys
+import tempfile
+import threading
+import time
+from collections.abc import Callable
+from typing import IO, Any
 
 # UTF-8 support for subprocess operations with C++ client
-import Shared.utils.utf8_solution  # 🚀 UTF-8 support enabled automatically
-from Shared.utils.utf8_solution import Popen_utf8
+from Shared.unified_monitor import UnifiedFileMonitor
 
 # Enhanced output with emojis and colors
-from Shared.utils.enhanced_output import EmojiLogger, Emojis, success_print, error_print, warning_print
-
+from Shared.utils.enhanced_output import EmojiLogger, Emojis
+from Shared.utils.error_handler import ErrorSeverity, handle_subprocess_error
 from Shared.utils.file_lifecycle import SynchronizedFileManager
-from Shared.utils.error_handler import handle_subprocess_error, ErrorSeverity
-from Shared.unified_monitor import UnifiedFileMonitor
+from Shared.utils.utf8_solution import Popen_utf8
 
 logger = logging.getLogger(__name__)
 # Create enhanced logger for better visual feedback
@@ -38,7 +37,7 @@ class RealBackupExecutor:
     A simplified wrapper for EncryptedBackupClient.exe that provides real backup functionality
     by managing the C++ subprocess.
     """
-    def __init__(self, client_exe_path: Optional[str] = None):
+    def __init__(self, client_exe_path: str | None = None):
         if not client_exe_path:
             current_dir = os.path.dirname(os.path.abspath(__file__))
             project_root = os.path.dirname(current_dir)
@@ -52,12 +51,12 @@ class RealBackupExecutor:
             self.client_exe = client_exe_path
 
         self.temp_dir = tempfile.mkdtemp()
-        self.backup_process: Optional[subprocess.Popen[str]] = None
-        self.status_callback: Optional[Callable[..., Any]] = None
+        self.backup_process: subprocess.Popen[str] | None = None
+        self.status_callback: Callable[..., Any] | None = None
         self.file_manager = SynchronizedFileManager(self.temp_dir)
-        self.process_id: Optional[int] = None
+        self.process_id: int | None = None
         self.server_received_files = "received_files"
-        
+
         # Adaptive timeout configuration (coordinates with C++ client 25s timeout)
         self.timeout_config = {
             'base_timeout': 30,     # Base timeout in seconds (must be > C++ client 25s)
@@ -65,10 +64,10 @@ class RealBackupExecutor:
             'min_timeout': 45,      # Minimum timeout (ensures margin above C++ client)
             'max_timeout': 1800,    # Maximum timeout (30 minutes for very large files)
         }
-        
+
         # Progress simulation configuration
         self.progress_config = self._load_progress_config()
-        self.progress_thread: Optional[threading.Thread] = None
+        self.progress_thread: threading.Thread | None = None
         self.progress_stop_event = threading.Event()
         self.current_phase = "READY"
         self.phase_start_time = 0.0
@@ -111,42 +110,42 @@ class RealBackupExecutor:
         emoji_map = {
             # Execution phases
             'EXECUTION': Emojis.ROCKET,
-            'LAUNCH': Emojis.LOADING, 
+            'LAUNCH': Emojis.LOADING,
             'PROCESS': Emojis.GEAR,
             'START': Emojis.ROCKET,
-            
+
             # Completion states
             'COMPLETION': Emojis.SUCCESS,
             'MONITOR_COMPLETE': Emojis.TARGET,
             'COMPLETE': Emojis.COMPLETE,
-            
+
             # Error states
             'MONITOR_FAILURE': Emojis.ERROR,
             'ERROR': Emojis.ERROR,
             'TIMEOUT': Emojis.WARNING,
             'FORCE_KILL': Emojis.ERROR,
-            
+
             # Management operations
             'CANCEL': Emojis.WARNING,
             'CLEANUP': Emojis.WRENCH,
             'VERIFICATION': Emojis.DEBUG,
-            
+
             # Configuration & setup
             'CONFIG': Emojis.GEAR,
             'AUTH': Emojis.LOCK,
             'TIMEOUT_CALC': Emojis.CLOCK,
-            
+
             # File operations
             'FILE_COPY': Emojis.FILE,
             'FILE_CREATE': Emojis.DOCUMENT,
-            
+
             # Default
             'DEFAULT': Emojis.INFO
         }
-        
+
         emoji = emoji_map.get(phase, emoji_map['DEFAULT'])
-        
-        # Use enhanced logger for better visual feedback  
+
+        # Use enhanced logger for better visual feedback
         if phase in {'ERROR', 'MONITOR_FAILURE', 'FORCE_KILL'}:
             enhanced_logger.error(f"[{phase}] {message}")
         elif phase in {'WARNING', 'TIMEOUT', 'CANCEL'}:
@@ -159,27 +158,27 @@ class RealBackupExecutor:
                 enhanced_logger.info(f"✅ [{phase}] {message}")
         else:
             enhanced_logger.info(f"[{phase}] {message}")
-        
+
         # Also log to original logger for compatibility
         logger.info(f"{emoji} [{phase}] {message}")
-        
+
         if self.status_callback:
             self.status_callback(phase, {'message': message})
-    
-    def _load_progress_config(self) -> Dict[str, Any]:
+
+    def _load_progress_config(self) -> dict[str, Any]:
         """Load progress configuration from JSON file"""
         try:
             # Try to find progress_config.json in python_server directory
             current_dir = os.path.dirname(os.path.abspath(__file__))
             project_root = os.path.dirname(current_dir)
             config_path = os.path.join(project_root, 'python_server', 'progress_config.json')
-            
+
             if os.path.exists(config_path):
-                with open(config_path, 'r', encoding='utf-8') as f:
+                with open(config_path, encoding='utf-8') as f:
                     return json.load(f)
         except Exception as e:
             logger.warning(f"Failed to load progress config: {e}")
-        
+
         # Fallback default configuration
         return {
             "phases": {
@@ -190,112 +189,112 @@ class RealBackupExecutor:
                 "VERIFYING": {"weight": 0.10, "description": "Verifying transfer integrity..."}
             }
         }
-    
+
     def _start_progress_simulation(self):
         """Start progress simulation thread"""
         if self.progress_thread and self.progress_thread.is_alive():
             return
-            
+
         self.progress_stop_event.clear()
         self.progress_thread = threading.Thread(target=self._progress_simulation_worker, daemon=True)
         self.progress_thread.start()
-    
+
     def _stop_progress_simulation(self):
         """Stop progress simulation thread"""
         self.progress_stop_event.set()
         if self.progress_thread:
             self.progress_thread.join(timeout=1.0)
-    
+
     def _progress_simulation_worker(self):
         """Worker thread for progress simulation"""
         phases = ["CONNECTING", "AUTHENTICATING", "ENCRYPTING", "TRANSFERRING", "VERIFYING"]
-        phase_weights: Dict[str, float] = {}
+        phase_weights: dict[str, float] = {}
         total_weight = 0.0
-        
+
         # Calculate weights from config
         for phase in phases:
             weight = self.progress_config.get("phases", {}).get(phase, {}).get("weight", 0.2)
             phase_weights[phase] = float(weight) if weight is not None else 0.2
             total_weight += phase_weights[phase]
-        
+
         # Normalize weights to sum to 1.0
         if total_weight > 0:
             for phase in phase_weights:
                 phase_weights[phase] /= total_weight
-        
+
         current_progress = 0.0
         for i, phase in enumerate(phases):
             if self.progress_stop_event.is_set():
                 return
-                
+
             self.current_phase = phase
             phase_weight = phase_weights.get(phase, 0.2)
             phase_duration = 2.0 + (i * 0.5)  # Vary duration by phase
-            
+
             # Update phase description
             phase_description = self.progress_config.get("phases", {}).get(phase, {}).get("description", f"{phase}...")
             if self.status_callback:
                 self.status_callback(phase, {'message': phase_description, 'progress': current_progress})
-            
+
             # Simulate progress within this phase
             steps = 20
             for step in range(steps):
                 if self.progress_stop_event.is_set():
                     return
-                    
+
                 step_progress = (step / steps) * phase_weight * 100
                 total_progress = current_progress + step_progress
-                
+
                 if self.status_callback:
                     self.status_callback(phase, {
                         'message': phase_description,
                         'progress': min(total_progress, 100.0)
                     })
-                
+
                 time.sleep(phase_duration / steps)
-            
+
             current_progress += phase_weight * 100
-        
+
         # Final completion
         if not self.progress_stop_event.is_set() and self.status_callback:
             self.status_callback("COMPLETED", {'message': 'Backup completed successfully!', 'progress': 100.0})
-    
-    def _log_status_with_progress(self, phase: str, message: str, progress: Optional[float] = None):
+
+    def _log_status_with_progress(self, phase: str, message: str, progress: float | None = None):
         """Enhanced log status with progress information"""
         self._log_status(phase, message)
         if progress is not None and self.status_callback:
             self.status_callback(phase, {'message': message, 'progress': progress})
-    
+
     def _calculate_adaptive_timeout(self, file_path: str) -> int:
         """Calculate adaptive timeout based on file size to prevent client/server timeout mismatches."""
         try:
             file_size_bytes = os.path.getsize(file_path)
             file_size_mb = file_size_bytes / (1024 * 1024)
-            
+
             # Calculate timeout: base + (size_in_mb * multiplier)
             calculated_timeout = self.timeout_config['base_timeout'] + (file_size_mb * self.timeout_config['size_multiplier'])
-            
+
             # Apply min/max bounds
-            adaptive_timeout = max(self.timeout_config['min_timeout'], 
+            adaptive_timeout = max(self.timeout_config['min_timeout'],
                                  min(calculated_timeout, self.timeout_config['max_timeout']))
-            
-            self._log_status('TIMEOUT_CALC', 
+
+            self._log_status('TIMEOUT_CALC',
                            f'File: {file_size_mb:.1f}MB → Timeout: {adaptive_timeout:.0f}s '
                            f'(base: {self.timeout_config["base_timeout"]}s + '
                            f'{file_size_mb:.1f}MB × {self.timeout_config["size_multiplier"]}s/MB)')
-            
+
             return int(adaptive_timeout)
-            
-        except (OSError, IOError) as e:
+
+        except OSError as e:
             self._log_status('TIMEOUT_CALC', f'Could not get file size for {file_path}: {e}. Using min timeout.')
             return self.timeout_config['min_timeout']
 
-    def _generate_transfer_info(self, server_ip: str, server_port: int, username: str, file_path: str) -> Tuple[str, str]:
+    def _generate_transfer_info(self, server_ip: str, server_port: int, username: str, file_path: str) -> tuple[str, str]:
         """Generate managed transfer.info file for the C++ client"""
         absolute_file_path = os.path.abspath(file_path)
         content = f"{server_ip}:{server_port}\n{username}\n{absolute_file_path}"
         self._log_status("CONFIG", f"transfer.info content:\n---\n{content}---")
-        
+
         transfer_info_path = self.file_manager.create_managed_file("transfer.info", content)
         file_id = f"transfer_{int(time.time())}"  # Generate a simple file ID
         self._log_status("CONFIG", f"Generated managed transfer.info: {transfer_info_path}")
@@ -307,10 +306,10 @@ class RealBackupExecutor:
         # For now, just log the username change check
         self._log_status("AUTH", f"Checking credentials for username: {username}")
 
-    def _execute_client_subprocess(self, client_cwd: str, timeout: int = 120) -> Dict[str, Any]:
+    def _execute_client_subprocess(self, client_cwd: str, timeout: int = 120) -> dict[str, Any]:
         """Execute the C++ client subprocess and return results."""
         self._log_status("EXECUTION", f"Starting C++ client: {self.client_exe} with --batch flag")
-        
+
         # Use UTF-8 subprocess with proper environment setup for C++ client
         # Note: Popen_utf8 includes errors='replace' to handle invalid UTF-8 bytes from C++ client
         self.backup_process = Popen_utf8(
@@ -336,9 +335,9 @@ class RealBackupExecutor:
             'stderr': stderr
         }
 
-    def _execute_subprocess_nonblocking(self, timeout: int = 120) -> Dict[str, Any]:
+    def _execute_subprocess_nonblocking(self, timeout: int = 120) -> dict[str, Any]:
         """Execute subprocess with non-blocking, progressive timeout pipe reading."""
-        def _read_pipe(pipe: Optional[IO[str]], chunks: List[str], lock: threading.Lock) -> None:
+        def _read_pipe(pipe: IO[str] | None, chunks: list[str], lock: threading.Lock) -> None:
             """Helper to read pipe chunks safely with improved error handling."""
             if not pipe:
                 return
@@ -362,26 +361,26 @@ class RealBackupExecutor:
                     pipe.close()
 
         # Thread-safe data structures
-        stdout_chunks: List[str] = []
-        stderr_chunks: List[str] = []
+        stdout_chunks: list[str] = []
+        stderr_chunks: list[str] = []
         stdout_lock, stderr_lock = threading.Lock(), threading.Lock()
 
         # Launch non-blocking readers
         if self.backup_process is None:
             raise RuntimeError("Backup process is not initialized")
-            
-        stdout_thread = threading.Thread(target=_read_pipe, 
+
+        stdout_thread = threading.Thread(target=_read_pipe,
             args=(self.backup_process.stdout, stdout_chunks, stdout_lock), daemon=True)
-        stderr_thread = threading.Thread(target=_read_pipe, 
+        stderr_thread = threading.Thread(target=_read_pipe,
             args=(self.backup_process.stderr, stderr_chunks, stderr_lock), daemon=True)
-        
+
         stdout_thread.start()
         stderr_thread.start()
 
         # Progressive timeout with incremental checks
         start_time = time.time()
-        while (time.time() - start_time < timeout and 
-               self.backup_process is not None and 
+        while (time.time() - start_time < timeout and
+               self.backup_process is not None and
                self.backup_process.poll() is None):
             time.sleep(1)  # Small sleep to prevent busy waiting
 
@@ -414,7 +413,7 @@ class RealBackupExecutor:
             'return_code': self.backup_process.returncode if self.backup_process else -1
         }
 
-    def execute_real_backup(self, username: str, file_path: str, server_ip: str, server_port: int) -> Dict[str, Any]:
+    def execute_real_backup(self, username: str, file_path: str, server_ip: str, server_port: int) -> dict[str, Any]:
         """Executes the C++ client, waits for it to complete, and returns the result."""
         if not self.client_exe or not os.path.exists(self.client_exe):
             error_msg = f"C++ client not found at {self.client_exe}"
@@ -455,9 +454,9 @@ class RealBackupExecutor:
             self.backup_process = None
             self.process_id = None
 
-    def execute_backup_with_verification(self, username: str, file_path: str, 
+    def execute_backup_with_verification(self, username: str, file_path: str,
                            server_ip: str = "127.0.0.1", server_port: int = 1256,
-                           timeout: Optional[int] = None) -> Dict[str, Any]:
+                           timeout: int | None = None) -> dict[str, Any]:
         """Execute REAL backup using the C++ client with verification and robust progress.
 
         This rewritten implementation corrects prior indentation corruption and consolidates
@@ -467,13 +466,13 @@ class RealBackupExecutor:
         # Calculate adaptive timeout based on file size (prevents C++ client timeout mismatches)
         if timeout is None:
             timeout = self._calculate_adaptive_timeout(file_path)
-        
+
         self._log_status("START", f"Starting REAL backup for {username}: {file_path} (timeout: {timeout}s)")
-        
+
         # Start progress simulation
         self._start_progress_simulation()
 
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             'success': False,
             'error': None,
             'process_exit_code': None,
@@ -483,9 +482,9 @@ class RealBackupExecutor:
         }
 
         start_time = time.time()
-        monitor: Optional[UnifiedFileMonitor] = None
-        file_id: Optional[str] = None
-        transfer_info_path: Optional[str] = None
+        monitor: UnifiedFileMonitor | None = None
+        file_id: str | None = None
+        transfer_info_path: str | None = None
 
         try:
             # --- Pre-flight validation ---
@@ -517,7 +516,7 @@ class RealBackupExecutor:
                 if os.path.exists(target_path):
                     with contextlib.suppress(Exception):
                         os.remove(target_path)
-                with open(managed_transfer_path, 'r', encoding='utf-8') as src, open(target_path, 'w', encoding='utf-8') as dst:
+                with open(managed_transfer_path, encoding='utf-8') as src, open(target_path, 'w', encoding='utf-8') as dst:
                     dst.write(src.read())
                 transfer_info_path = target_path
                 self._log_status('CONFIG', f'Copied managed transfer.info to working dir: {target_path}')
@@ -554,15 +553,15 @@ class RealBackupExecutor:
             monitor.start_monitoring()
 
             job_completed = threading.Event()
-            verification_result: Dict[str, Any] = {}
+            verification_result: dict[str, Any] = {}
 
-            def on_complete(data: Dict[str, Any]):
+            def on_complete(data: dict[str, Any]):
                 nonlocal verification_result
                 self._log_status("MONITOR_COMPLETE", f"Verification successful: {data}")
                 verification_result.update(data)
                 job_completed.set()
 
-            def on_failure(data: Dict[str, Any]):
+            def on_failure(data: dict[str, Any]):
                 nonlocal verification_result
                 self._log_status("MONITOR_FAILURE", f"Verification failed: {data}")
                 verification_result.update(data)
@@ -572,9 +571,9 @@ class RealBackupExecutor:
             expected_size = os.path.getsize(file_path)
             with open(file_path, 'rb') as f:
                 expected_hash = hashlib.sha256(f.read()).hexdigest()
-            
+
             job_id = f"backup_{username}_{os.path.basename(file_path)}"
-            
+
             monitor.register_job(
                 filename=os.path.basename(file_path),
                 job_id=job_id,
@@ -589,16 +588,16 @@ class RealBackupExecutor:
             try:
                 exec_result = self._execute_subprocess_nonblocking(timeout)
                 result['process_exit_code'] = exec_result['return_code']
-                if exec_result['stdout']: 
+                if exec_result['stdout']:
                     self._log_status('CLIENT_STDOUT', exec_result['stdout'])
-                if exec_result['stderr']: 
+                if exec_result['stderr']:
                     self._log_status('CLIENT_STDERR', exec_result['stderr'])
-                
+
                 # Signal subprocess completion to file manager (prevents race condition)
                 if file_id:
                     self.file_manager.release_subprocess_use(file_id)
                     self._log_status('LIFECYCLE', f'Subprocess completed - released file {file_id}')
-                    
+
             except subprocess.TimeoutExpired:
                 self._log_status('TIMEOUT', 'C++ client process timed out.')
                 self.cancel("Timeout")
@@ -607,7 +606,7 @@ class RealBackupExecutor:
                 # Still release subprocess use on timeout
                 if file_id:
                     self.file_manager.release_subprocess_use(file_id)
-                    
+
             except Exception as exec_error:
                 self._log_status('ERROR', f'Subprocess execution failed: {exec_error}')
                 result['error'] = str(exec_error)
@@ -619,7 +618,7 @@ class RealBackupExecutor:
             # --- Wait for Verification ---
             self._log_status('VERIFICATION', 'Waiting for file verification to complete...')
             job_completed.wait(timeout=30) # Wait up to 30s for verification
-            
+
             result['verification'] = verification_result
             result['success'] = verification_result.get('status', '') == 'complete'
 
@@ -642,16 +641,16 @@ class RealBackupExecutor:
         finally:
             # Stop progress simulation
             self._stop_progress_simulation()
-            
+
             result['duration'] = time.time() - start_time
-            
+
             # Enhanced file lifecycle cleanup with proper subprocess coordination
             if file_id:
                 with contextlib.suppress(Exception):
                     # Wait longer since subprocess completion is now properly signaled
                     self.file_manager.safe_cleanup(file_id, wait_timeout=30.0)
                     self._log_status('LIFECYCLE', f'Completed safe cleanup for managed file {file_id}')
-                    
+
             # Clean up working directory copy (safe since managed file handles the lifecycle)
             if transfer_info_path and os.path.exists(transfer_info_path):
                 with contextlib.suppress(Exception):
@@ -672,7 +671,7 @@ def main():
 
     executor = RealBackupExecutor()
 
-    def status_update(phase: str, data: Union[str, Dict[str, Any]]):
+    def status_update(phase: str, data: str | dict[str, Any]):
         if isinstance(data, dict):
             if 'message' in data:
                 print(f"STATUS: {phase} - {data['message']}")
@@ -706,7 +705,7 @@ def main():
 
     if result['verification']:
         v = result['verification']
-        print(f"\nFILE TRANSFER VERIFICATION:")
+        print("\nFILE TRANSFER VERIFICATION:")
         print(f"File Found: {v['file_found']}")
         print(f"Size Match: {v['size_match']} ({v['original_size']} -> {v['received_size']})")
         print(f"Hash Match: {v['hash_match']}")

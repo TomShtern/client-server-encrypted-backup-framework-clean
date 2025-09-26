@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Test System Working - ASCII-only validation script
 """
 
-import socket
-import httpx
 import asyncio
+import socket
 from pathlib import Path
+
+import httpx
+
 
 def test_port(port: int, name: str):
     """Test if a port is responding - ASCII only output"""
@@ -22,7 +23,7 @@ def test_port(port: int, name: str):
                 print(f"[ERROR] {name} (port {port}): NOT RESPONDING")
                 return False
     except Exception as e:
-        print(f"[ERROR] {name} (port {port}): EXCEPTION - {str(e)}")
+        print(f"[ERROR] {name} (port {port}): EXCEPTION - {e!s}")
         return False
 
 async def test_web_interface():
@@ -37,7 +38,7 @@ async def test_web_interface():
                 print(f"[ERROR] Web interface: HTTP {response.status_code}")
             return False
         except Exception as e:
-            print(f"[ERROR] Web interface: {str(e)}")
+            print(f"[ERROR] Web interface: {e!s}")
             return False
 
 def test_file_transfer_setup():
@@ -75,7 +76,7 @@ def test_file_transfer_setup():
 def create_test_file():
     """Create a test file for transfer testing"""
     test_file = Path("test_upload.txt")
-    content = f"Test file created for CyberBackup transfer test\nTimestamp: {str(datetime.now())}\nThis file tests the complete transfer chain."
+    content = f"Test file created for CyberBackup transfer test\nTimestamp: {datetime.now()!s}\nThis file tests the complete transfer chain."
 
     try:
         with open(test_file, 'w', encoding='utf-8') as f:

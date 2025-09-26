@@ -12,32 +12,29 @@ if package_dir not in sys.path:
     sys.path.insert(0, package_dir)
 
 # Import main application components
+# Import views package
+# Import utils package
+from . import utils, views
 from .main import FletV2App, main
 from .theme import (
-    setup_modern_theme,
-    toggle_theme_mode,
     create_modern_button_style,
     create_modern_card_container,
     create_trend_indicator,
-    get_design_tokens
+    get_design_tokens,
+    setup_modern_theme,
+    toggle_theme_mode,
 )
-
-# Import views package
-from . import views
-
-# Import utils package
-from . import utils
 
 # Define what should be imported with "from FletV2 import *"
 __all__ = [
     "FletV2App",
-    "main",
-    "toggle_theme_mode",
-    "setup_modern_theme",
     "create_modern_button_style",
     "create_modern_card_container",
     "create_trend_indicator",
     "get_design_tokens",
-    "views",
-    "utils"
+    "main",
+    "setup_modern_theme",
+    "toggle_theme_mode",
+    "utils",
+    "views"
 ]

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-import tempfile
 import os
 import random
+import tempfile
 
 # Create a 66KB test file for CRC testing with unique username
 with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='_66KB_CRC_test.txt') as f:

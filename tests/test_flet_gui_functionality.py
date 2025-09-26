@@ -5,6 +5,7 @@ longer blocks the suite with outdated integration logic.
 """
 import pytest
 
+
 @pytest.mark.skip(reason="Legacy Flet GUI monolithic test deprecated; superseded by granular tests")
 def test_deprecated_flet_gui_suite_placeholder():
     pass

@@ -29,39 +29,44 @@ See API_SERVER_UNIFICATION.md for details.
 """
 
 # Standard library imports
+import contextlib
+import hashlib
+import logging
 import os
 import sys
-import time
-import threading
 import tempfile
-import logging
-import hashlib
-import contextlib
+import threading
+import time
+from collections.abc import Callable
 from datetime import datetime
-from typing import Optional, Set, Dict, Any, Callable, cast
+from typing import Any, cast
 
 # CRITICAL: Set up paths and UTF-8 encoding before any other imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-import Shared.utils.utf8_solution as _  # Enable UTF-8 console encoding for emoji logging
 
 # Third-party imports
-from flask import Flask, request, jsonify, g, Response, send_file, send_from_directory, session
+from flask import Flask, Response, jsonify, request, send_file, send_from_directory, session
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 
 # First-party imports (ensure_imports() must be called first)
 from Shared.path_utils import setup_imports
+
 setup_imports() # This must be called before any other first-party imports
 
-from Shared.logging_utils import setup_dual_logging, create_log_monitor_info, create_enhanced_logger, log_performance_metrics
-from Shared.utils.unified_config import get_config
-from Shared.sentry_config import init_sentry, capture_error
-from Shared.observability_middleware import setup_observability_for_flask
-from Shared.unified_monitor import UnifiedFileMonitor
-from Shared.utils.performance_monitor import get_performance_monitor # Moved from api_perf_job()
-
+from python_server.server.connection_health import get_connection_health_monitor  # Moved from global scope
 from python_server.server.server_singleton import ensure_single_server_instance
-from python_server.server.connection_health import get_connection_health_monitor # Moved from global scope
+from Shared.logging_utils import (
+    create_enhanced_logger,
+    create_log_monitor_info,
+    log_performance_metrics,
+    setup_dual_logging,
+)
+from Shared.observability_middleware import setup_observability_for_flask
+from Shared.sentry_config import capture_error, init_sentry
+from Shared.unified_monitor import UnifiedFileMonitor
+from Shared.utils.performance_monitor import get_performance_monitor  # Moved from api_perf_job()
+from Shared.utils.unified_config import get_config
 
 # Define PROJECT_ROOT for consistent path resolution
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -96,10 +101,10 @@ conn_health = get_connection_health_monitor()
 # Connection management
 MAX_CONNECTIONS = 10  # Increased - allow more WebSocket connections for better UX
 MAX_CONNECTIONS_PER_IP = 12  # Increased to allow more concurrent connections for assets
-connected_clients: Set[str] = set()  # Track connected client IDs
-connection_locks: Dict[str, threading.Lock] = {}  # Per-IP connection limits
-ip_connection_counts: Dict[str, int] = {}  # Track connections per IP
-active_sessions: Dict[str, Any] = {}  # Track active sessions per IP to prevent multiple browser instances
+connected_clients: set[str] = set()  # Track connected client IDs
+connection_locks: dict[str, threading.Lock] = {}  # Per-IP connection limits
+ip_connection_counts: dict[str, int] = {}  # Track connections per IP
+active_sessions: dict[str, Any] = {}  # Track active sessions per IP to prevent multiple browser instances
 
 
 app: Flask = Flask(__name__)
@@ -197,9 +202,10 @@ if SENTRY_INITIALIZED:
         }), 500
 
 # Performance monitoring singleton
-from Shared.utils.performance_monitor import get_performance_monitor
 # Connection health monitoring
 from python_server.server.connection_health import get_connection_health_monitor
+from Shared.utils.performance_monitor import get_performance_monitor
+
 conn_health: Any = get_connection_health_monitor()
 
 perf_monitor: Any = get_performance_monitor()
@@ -209,9 +215,9 @@ class CallbackMultiplexer:
     """Thread-safe callback multiplexer to prevent race conditions in concurrent requests."""
 
     def __init__(self) -> None:
-        self._job_callbacks: Dict[str, Callable[[str, Any], None]] = {}
+        self._job_callbacks: dict[str, Callable[[str, Any], None]] = {}
         self._lock = threading.Lock()
-        self._registered_executor: Optional['RealBackupExecutor'] = None
+        self._registered_executor: RealBackupExecutor | None = None
 
     def register_job_callback(self, job_id: str, callback: Callable[[str, Any], None]) -> None:
         """Register a callback for a specific job."""
@@ -254,11 +260,11 @@ callback_multiplexer = CallbackMultiplexer()
 
 # --- Initialize global variables & Locks ---
 # For job-specific data
-active_backup_jobs: Dict[str, Dict[str, Any]] = {}
+active_backup_jobs: dict[str, dict[str, Any]] = {}
 active_backup_jobs_lock = threading.Lock()
 
 # For general, non-job-specific server status
-def get_default_server_status() -> Dict[str, Any]:
+def get_default_server_status() -> dict[str, Any]:
     return {
         'connected': False,
         'backing_up': False,
@@ -267,18 +273,18 @@ def get_default_server_status() -> Dict[str, Any]:
         'message': 'Ready for backup',
         'last_updated': datetime.now().isoformat()
     }
-server_status: Dict[str, Any] = get_default_server_status()
+server_status: dict[str, Any] = get_default_server_status()
 server_status_lock = threading.Lock()
-last_known_status: Dict[str, Any] = get_default_server_status()
+last_known_status: dict[str, Any] = get_default_server_status()
 
 # Other globals
 connection_established: bool = False
-connection_timestamp: Optional[datetime] = None
+connection_timestamp: datetime | None = None
 websocket_enabled: bool = True
 
 # Server configuration with fallback error handling
 try:
-    server_config: Dict[str, Any] = {
+    server_config: dict[str, Any] = {
         'host': get_config('server.host', '127.0.0.1'),
         'port': get_config('server.port', 1256),
         'username': get_config('client.default_username', 'default_user')
@@ -312,7 +318,7 @@ def update_server_status(phase: str, message: str) -> None:
         server_status['last_updated'] = datetime.now().isoformat()
     print(f"[SERVER_STATUS] {phase}: {message}")
 
-def check_backup_server_status(host: Optional[str] = None, port: Optional[int] = None):
+def check_backup_server_status(host: str | None = None, port: int | None = None):
     """Check if the Python backup server is reachable.
 
     Uses dynamic server_config host/port unless explicitly overridden.
@@ -364,7 +370,7 @@ def handle_disconnect():
         print(f"[WEBSOCKET] Client disconnected: {client_id} (Total: {len(connected_clients)})")
 
 @socketio.on('request_status')
-def handle_status_request(data: Optional[Dict[str, Any]]) -> None:
+def handle_status_request(data: dict[str, Any] | None) -> None:
     """Handle client status requests via WebSocket"""
     job_id = data.get('job_id') if data else None
     status = active_backup_jobs.get(job_id, last_known_status) if job_id else last_known_status
@@ -385,7 +391,7 @@ def handle_ping():
     emit('pong', {'timestamp': time.time()})
 
 # Connection cleanup background task with proper shutdown signaling
-def cleanup_stale_connections(stop_event: Optional[threading.Event] = None) -> None:
+def cleanup_stale_connections(stop_event: threading.Event | None = None) -> None:
     """Clean up stale connections periodically with graceful shutdown support"""
     logger.info("WebSocket cleanup thread started")
 
@@ -457,8 +463,8 @@ def start_websocket_cleanup_thread():
 
     try:
         # Import thread manager for proper shutdown coordination
-        import sys
         import os
+        import sys
         sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'Shared', 'utils'))
         from Shared.utils.thread_manager import create_managed_thread
 
@@ -721,7 +727,7 @@ def api_connect():
 
         # Update server configuration
         if config:
-            server_config.update(cast(Dict[str, Any], config))
+            server_config.update(cast(dict[str, Any], config))
 
         update_server_status('CONNECT', f'Testing connection to {server_config["host"]}:{server_config["port"]}...')
 
@@ -750,7 +756,7 @@ def api_connect():
         })
 
     except Exception as e:
-        error_msg = f"Connection error: {str(e)}"
+        error_msg = f"Connection error: {e!s}"
         print(f"[ERROR] {error_msg}")
         update_server_status('ERROR', error_msg)
         return jsonify({'success': False, 'error': error_msg}), 500
@@ -776,7 +782,7 @@ def api_disconnect():
         })
 
     except Exception as e:
-        error_msg = f"Disconnect error: {str(e)}"
+        error_msg = f"Disconnect error: {e!s}"
         print(f"[ERROR] {error_msg}")
         return jsonify({'success': False, 'error': error_msg}), 500
 
@@ -859,7 +865,7 @@ def api_start_backup_working():
                 job_data['last_updated'] = datetime.now().isoformat()
 
                 if isinstance(data, dict):
-                    data_dict = cast(Dict[str, Any], data)
+                    data_dict = cast(dict[str, Any], data)
                     job_data['message'] = data_dict.get('message', phase)
                     if 'progress' in data_dict:
                         job_data['progress']['percentage'] = data_dict['progress']
@@ -951,9 +957,9 @@ def api_start_backup_working():
                 with active_backup_jobs_lock:
                     if job_id in active_backup_jobs:
                         active_backup_jobs[job_id]['phase'] = 'FAILED'
-                        active_backup_jobs[job_id]['message'] = f'Backup error: {str(e)}'
+                        active_backup_jobs[job_id]['message'] = f'Backup error: {e!s}'
                         active_backup_jobs[job_id]['backing_up'] = False
-                print(f"[ERROR] Backup thread error: {str(e)}")
+                print(f"[ERROR] Backup thread error: {e!s}")
             finally:
                 # Clean up callback registration to prevent memory leaks
                 callback_multiplexer.remove_job_callback(job_id)
@@ -990,7 +996,7 @@ def api_start_backup_working():
 
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
-        error_msg = f"Backup start error: {str(e)}"
+        error_msg = f"Backup start error: {e!s}"
 
         structured_logger.error(error_msg,
                                 operation="start_backup",
@@ -1025,7 +1031,7 @@ def api_check_file_receipt(filename: str):
         })
 
     except Exception as e:
-        error_msg = f"Error checking file receipt: {str(e)}"
+        error_msg = f"Error checking file receipt: {e!s}"
         print(f"[ERROR] {error_msg}")
         return jsonify({
             'success': False,
@@ -1048,7 +1054,7 @@ def api_list_received_files():
         return jsonify(files_info)
 
     except Exception as e:
-        error_msg = f"Error listing received files: {str(e)}"
+        error_msg = f"Error listing received files: {e!s}"
         print(f"[ERROR] {error_msg}")
         return jsonify({
             'success': False,
@@ -1070,7 +1076,7 @@ def api_monitor_status():
         return jsonify(status)
 
     except Exception as e:
-        error_msg = f"Error getting monitor status: {str(e)}"
+        error_msg = f"Error getting monitor status: {e!s}"
         print(f"[ERROR] {error_msg}")
         return jsonify({
             'monitoring_active': False,
@@ -1212,7 +1218,7 @@ def api_cancel_job(job_id: str):
         try:
             if request and request.is_json:
                 if data := cast(
-                    Optional[Dict[str, Any]], request.get_json(silent=True)
+                    dict[str, Any] | None, request.get_json(silent=True)
                 ):
                     cancel_reason = data.get('reason')
         except Exception:
@@ -1241,7 +1247,7 @@ def api_cancel_job(job_id: str):
 @app.route('/api/cancel_all', methods=['POST'])
 def api_cancel_all_jobs():
     try:
-        results: Dict[str, bool] = {}
+        results: dict[str, bool] = {}
         for jid, job in list(active_backup_jobs.items()):
             if execu := job.get('executor'):
                 try:
@@ -1266,7 +1272,7 @@ def api_cancel_all_jobs():
 @app.route('/api/cancelable_jobs', methods=['GET'])
 def api_cancelable_jobs():
     try:
-        items: list[Dict[str, Any]] = []
+        items: list[dict[str, Any]] = []
         for jid, job in active_backup_jobs.items():
             # A job is cancelable if it has an executor and is in a running phase
             cancelable = bool(job.get('executor')) and job.get('phase') not in ['COMPLETED', 'FAILED', 'ERROR', 'CANCELLED']

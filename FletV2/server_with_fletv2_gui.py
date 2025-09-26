@@ -13,11 +13,10 @@ Integration Pattern:
     NEW: BackupServer.__init__() → self.gui_manager = FletV2Manager(self)
 """
 
+import logging
 import os
 import sys
-import logging
 from pathlib import Path
-from typing import Any, Optional
 
 # Set up environment for proper imports
 current_dir = Path(__file__).parent
@@ -47,6 +46,7 @@ except ImportError as e:
 
 # Import our FletV2Manager
 from fletv2_gui_manager import FletV2Manager, is_gui_disabled
+
 
 class BackupServerWithFletV2:
     """
@@ -133,8 +133,8 @@ class BackupServerWithFletV2:
 
     def _simulate_server_activity(self):
         """Simulate server activity for demonstration."""
-        import time
         import threading
+        import time
 
         def update_loop():
             """Simulate real-time updates that the GUI would receive."""

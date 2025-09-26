@@ -7,14 +7,13 @@ the simplified bridge contract. Uses httpx for async requests.
 
 from __future__ import annotations
 
-import httpx
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-import config
+import httpx
 
 
 class RealServerClient:
-    def __init__(self, base_url: str, token: Optional[str] = None, verify_tls: bool = True, timeout: float = 10.0):
+    def __init__(self, base_url: str, token: str | None = None, verify_tls: bool = True, timeout: float = 10.0):
         self.base_url = base_url.rstrip('/')
         self.token = token
         self.verify_tls = verify_tls
@@ -26,7 +25,7 @@ class RealServerClient:
             verify=self.verify_tls,
         )
 
-    def _default_headers(self) -> Dict[str, str]:
+    def _default_headers(self) -> dict[str, str]:
         headers = {"Accept": "application/json"}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
@@ -36,7 +35,7 @@ class RealServerClient:
         await self._client.aclose()
 
     # Health / connectivity -------------------------------------------------
-    async def test_connection_async(self) -> Dict[str, Any]:
+    async def test_connection_async(self) -> dict[str, Any]:
         try:
             resp = await self._client.get("/health")
             resp.raise_for_status()
@@ -50,22 +49,22 @@ class RealServerClient:
         return True
 
     # Clients ---------------------------------------------------------------
-    async def get_clients_async(self) -> List[Dict[str, Any]]:
+    async def get_clients_async(self) -> list[dict[str, Any]]:
         resp = await self._client.get("/clients")
         resp.raise_for_status()
         return resp.json()
 
-    def get_clients(self) -> List[Dict[str, Any]]:
+    def get_clients(self) -> list[dict[str, Any]]:
         raise NotImplementedError("Use async variant get_clients_async()")
 
-    def get_client_details(self, client_id: str) -> Dict[str, Any]:
+    def get_client_details(self, client_id: str) -> dict[str, Any]:
         # Provide a sync shim via httpx.Client for rare sync paths
         with httpx.Client(base_url=self.base_url, headers=self._default_headers(), timeout=self.timeout, verify=self.verify_tls) as c:
             resp = c.get(f"/clients/{client_id}")
             resp.raise_for_status()
             return resp.json()
 
-    async def add_client_async(self, client_data: Dict[str, Any]):
+    async def add_client_async(self, client_data: dict[str, Any]):
         resp = await self._client.post("/clients", json=client_data)
         resp.raise_for_status()
         return resp.json().get("id")
@@ -82,7 +81,7 @@ class RealServerClient:
 
     def resolve_client(self, client_identifier: str):
         with httpx.Client(base_url=self.base_url, headers=self._default_headers(), timeout=self.timeout, verify=self.verify_tls) as c:
-            resp = c.get(f"/clients/resolve", params={"q": client_identifier})
+            resp = c.get("/clients/resolve", params={"q": client_identifier})
             resp.raise_for_status()
             return resp.json()
 
@@ -106,8 +105,9 @@ class RealServerClient:
         # Streaming download
         async with self._client.stream("GET", f"/files/{file_id}/download") as r:
             r.raise_for_status()
-            import aiofiles
             import os
+
+            import aiofiles
             os.makedirs(destination_path, exist_ok=True)
             filename = r.headers.get("x-filename", f"{file_id}.bin")
             full_path = os.path.join(destination_path, filename)
@@ -133,7 +133,7 @@ class RealServerClient:
         resp.raise_for_status()
         return resp.json()
 
-    def update_row(self, table_name: str, row_id: str, updated_data: Dict[str, Any]):
+    def update_row(self, table_name: str, row_id: str, updated_data: dict[str, Any]):
         with httpx.Client(base_url=self.base_url, headers=self._default_headers(), timeout=self.timeout, verify=self.verify_tls) as c:
             resp = c.patch(f"/database/tables/{table_name}/{row_id}", json=updated_data)
             resp.raise_for_status()
@@ -156,7 +156,7 @@ class RealServerClient:
         resp.raise_for_status()
         return True
 
-    async def export_logs_async(self, export_format: str, filters: Optional[Dict[str, Any]] = None):
+    async def export_logs_async(self, export_format: str, filters: dict[str, Any] | None = None):
         resp = await self._client.post("/logs/export", json={"format": export_format, "filters": filters or {}})
         resp.raise_for_status()
         return resp.json()
@@ -210,7 +210,7 @@ class RealServerClient:
         return resp.json()
 
     # Settings --------------------------------------------------------------
-    async def save_settings_async(self, settings_data: Dict[str, Any]):
+    async def save_settings_async(self, settings_data: dict[str, Any]):
         resp = await self._client.post("/settings", json=settings_data)
         resp.raise_for_status()
         return True
@@ -220,12 +220,12 @@ class RealServerClient:
         resp.raise_for_status()
         return resp.json()
 
-    async def validate_settings_async(self, settings_data: Dict[str, Any]):
+    async def validate_settings_async(self, settings_data: dict[str, Any]):
         resp = await self._client.post("/settings/validate", json=settings_data)
         resp.raise_for_status()
         return resp.json()
 
-    async def backup_settings_async(self, backup_name: str, settings_data: Dict[str, Any]):
+    async def backup_settings_async(self, backup_name: str, settings_data: dict[str, Any]):
         resp = await self._client.post("/settings/backup", json={"name": backup_name, "data": settings_data})
         resp.raise_for_status()
         return resp.json()

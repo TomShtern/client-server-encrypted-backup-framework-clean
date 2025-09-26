@@ -4,13 +4,14 @@ Comprehensive Python Import Error Scanner
 Scans all project Python files for actual import failures.
 """
 
+import importlib.util
 import os
 import sys
-import importlib.util
 import traceback
-from typing import Any, Dict, List
+from typing import Any
 
-def test_import_file(filepath: str) -> Dict[str, Any]:
+
+def test_import_file(filepath: str) -> dict[str, Any]:
     """
     Attempt to import a Python file and return import status.
     
@@ -25,11 +26,11 @@ def test_import_file(filepath: str) -> Dict[str, Any]:
         # Convert file path to module name
         relative_path = os.path.relpath(filepath, '.')
         module_name = relative_path.replace(os.sep, '.').replace('.py', '')
-        
+
         # Handle __init__.py files
         if module_name.endswith('.__init__'):
             module_name = module_name.replace('.__init__', '')
-        
+
         # Try to load the module using importlib
         spec = importlib.util.spec_from_file_location(module_name, filepath)
         if spec is None or spec.loader is None:
@@ -39,12 +40,12 @@ def test_import_file(filepath: str) -> Dict[str, Any]:
                 'error_type': 'SpecError',
                 'module_name': module_name
             }
-        
+
         module = importlib.util.module_from_spec(spec)
-        
+
         # Add to sys.modules temporarily to handle relative imports
         sys.modules[module_name] = module
-        
+
         try:
             spec.loader.exec_module(module)
             return {
@@ -57,10 +58,10 @@ def test_import_file(filepath: str) -> Dict[str, Any]:
             # Remove from sys.modules on failure
             if module_name in sys.modules:
                 del sys.modules[module_name]
-            
+
             error_type = type(e).__name__
             error_msg = str(e)
-            
+
             return {
                 'success': False,
                 'error': error_msg,
@@ -68,7 +69,7 @@ def test_import_file(filepath: str) -> Dict[str, Any]:
                 'module_name': module_name,
                 'traceback': traceback.format_exc()
             }
-        
+
     except Exception as e:
         return {
             'success': False,
@@ -78,14 +79,14 @@ def test_import_file(filepath: str) -> Dict[str, Any]:
             'traceback': traceback.format_exc()
         }
 
-def categorize_error(result: Dict[str, Any]) -> str:
+def categorize_error(result: dict[str, Any]) -> str:
     """Categorize the type of import error."""
     if result['success']:
         return 'SUCCESS'
-    
+
     error_type = result['error_type']
     error_msg = result['error'].lower()
-    
+
     if error_type in ['ImportError', 'ModuleNotFoundError']:
         if 'no module named' in error_msg:
             return 'MISSING_DEPENDENCY'
@@ -105,11 +106,11 @@ def categorize_error(result: Dict[str, Any]) -> str:
 def main() -> None:
     print("Comprehensive Python Import Error Scanner")
     print("=" * 60)
-    
+
     # Get all Python files
     python_files = [
         './api_server/__init__.py',
-        './api_server/cyberbackup_api_server.py', 
+        './api_server/cyberbackup_api_server.py',
         './api_server/real_backup_executor.py',
         './Database/database_manager.py',
         './Database/database_monitor.py',
@@ -174,7 +175,7 @@ def main() -> None:
         './Shared/utils/process_monitor_gui.py',
         './Shared/utils/unified_config.py'
     ]
-    
+
     # Also include test files for completeness
     test_files = [
         './tests/comprehensive_boundary_test.py',
@@ -226,76 +227,76 @@ def main() -> None:
         './tests/integration/test_error_scenarios.py',
         './tests/integration/test_performance_flow.py'
     ]
-    
+
     all_files = python_files + test_files
-    
+
     # Track results
-    results: List[Any] = []
-    categories: Dict[str, List[Any]] = {
+    results: list[Any] = []
+    categories: dict[str, list[Any]] = {
         'SUCCESS': [],
         'MISSING_DEPENDENCY': [],
         'IMPORT_NAME_ERROR': [],
-        'IMPORT_ERROR': [], 
+        'IMPORT_ERROR': [],
         'SYNTAX_ERROR': [],
         'NAME_ERROR': [],
         'FILE_ERROR': [],
         'OTHER_ERROR': []
     }
-    
+
     print(f"Testing {len(all_files)} Python files...")
     print()
-    
+
     for i, filepath in enumerate(all_files, 1):
         # Skip files that don't exist
         if not os.path.exists(filepath):
             print(f"SKIP [{i:3d}/{len(all_files)}] {filepath} (file not found)")
             continue
-            
+
         result = test_import_file(filepath)
         results.append((filepath, result))
-        
+
         category = categorize_error(result)
         categories[category].append((filepath, result))
-        
+
         if result['success']:
             print(f"OK  [{i:3d}/{len(all_files)}] {filepath}")
         else:
             print(f"ERR [{i:3d}/{len(all_files)}] {filepath}")
             print(f"   Error: {result['error_type']}: {result['error']}")
-    
+
     # Summary Report
     print("\n" + "="*60)
     print("IMPORT ANALYSIS SUMMARY")
     print("="*60)
-    
+
     total_files = len([r for r in results if r])
     successful = len(categories['SUCCESS'])
     failed = total_files - successful
-    
+
     print(f"Total files tested: {total_files}")
     print(f"Successful imports: {successful}")
     print(f"Failed imports: {failed}")
     print(f"Success rate: {successful/total_files*100:.1f}%" if total_files > 0 else "N/A")
-    
+
     # Detailed failure analysis
     for category, items in categories.items():
         if category == 'SUCCESS' or not items:
             continue
-            
+
         print(f"\n{category.replace('_', ' ')} ({len(items)} files):")
         print("-" * 50)
-        
+
         for filepath, result in items:
             print(f"  * {filepath}")
             print(f"    Error: {result['error']}")
-            
+
             # Show common missing dependencies
             if category == 'MISSING_DEPENDENCY':
                 error_msg = result['error'].lower()
                 if 'flask' in error_msg:
                     print("    Fix: pip install flask flask-cors flask-socketio")
                 elif 'sentry_sdk' in error_msg:
-                    print("    Fix: pip install sentry-sdk") 
+                    print("    Fix: pip install sentry-sdk")
                 elif 'watchdog' in error_msg:
                     print("    Fix: pip install watchdog")
                 elif 'tkinter' in error_msg:
@@ -303,28 +304,28 @@ def main() -> None:
                 elif any(pkg in error_msg for pkg in ['cryptography', 'crypto']):
                     print("    Fix: pip install cryptography pycryptodome")
             print()
-    
+
     # Recommendations
     print("RECOMMENDATIONS:")
     print("-" * 50)
-    
+
     if categories['MISSING_DEPENDENCY']:
         print("* Install missing dependencies with pip")
         print("* Check requirements.txt for complete dependency list")
-    
+
     if categories['SYNTAX_ERROR']:
-        print("* Review syntax errors in failed files") 
+        print("* Review syntax errors in failed files")
         print("* Consider if files are Python version specific")
-    
+
     if categories['IMPORT_NAME_ERROR'] or categories['IMPORT_ERROR']:
         print("* Check for circular imports or incorrect relative imports")
         print("* Verify module structure and __init__.py files")
-    
+
     if categories['FILE_ERROR']:
         print("* Verify file paths and permissions")
         print("* Check for missing files or directories")
-        
+
     print("\nScan complete!")
-    
+
 if __name__ == "__main__":
     main()

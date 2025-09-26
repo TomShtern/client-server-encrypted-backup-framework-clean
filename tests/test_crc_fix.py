@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-import tempfile
 import os
+import tempfile
 
 # Create a 66KB test file for CRC testing
 with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='_66KB_CRC_test.txt') as f:

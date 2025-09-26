@@ -5,12 +5,12 @@ This module provides centralized configuration management that replaces
 scattered configuration logic throughout the codebase.
 """
 
-import os
 import json
 import logging
+import os
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
-from dataclasses import dataclass, asdict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -70,30 +70,30 @@ class SystemConfig:
     api_server: APIServerConfig
     crypto: CryptoConfig
     protocol: ProtocolConfig
-    
+
     def __post_init__(self):
         """Validate configuration after initialization."""
         self._validate_config()
-    
+
     def _validate_config(self):
         """Validate configuration parameters."""
         if self.server.port == self.api_server.port:
             raise ValueError("Server and API server cannot use the same port")
-        
+
         if self.server.port < 1 or self.server.port > 65535:
             raise ValueError(f"Invalid server port: {self.server.port}")
-        
+
         if self.api_server.port < 1 or self.api_server.port > 65535:
             raise ValueError(f"Invalid API server port: {self.api_server.port}")
-        
+
         if self.protocol.max_filename_length < 1:
             raise ValueError("Max filename length must be positive")
 
 
 class ConfigManager:
     """Centralized configuration manager."""
-    
-    def __init__(self, config_file: Optional[str] = None):
+
+    def __init__(self, config_file: str | None = None):
         """
         Initialize configuration manager.
         
@@ -101,14 +101,14 @@ class ConfigManager:
             config_file: Path to configuration file (optional)
         """
         self.config_file = config_file or "config.json"
-        self._config: Optional[SystemConfig] = None
+        self._config: SystemConfig | None = None
         self._load_config()
-    
+
     def _load_config(self):
         """Load configuration from file or create default."""
         if os.path.exists(self.config_file):
             try:
-                with open(self.config_file, 'r') as f:
+                with open(self.config_file) as f:
                     config_data = json.load(f)
                 self._config = self._dict_to_config(config_data)
                 logger.info(f"Loaded configuration from {self.config_file}")
@@ -118,7 +118,7 @@ class ConfigManager:
         else:
             self._config = self._create_default_config()
             self.save_config()
-    
+
     def _create_default_config(self) -> SystemConfig:
         """Create default configuration."""
         return SystemConfig(
@@ -127,8 +127,8 @@ class ConfigManager:
             crypto=CryptoConfig(),
             protocol=ProtocolConfig()
         )
-    
-    def _dict_to_config(self, config_data: Dict[str, Any]) -> SystemConfig:
+
+    def _dict_to_config(self, config_data: dict[str, Any]) -> SystemConfig:
         """Convert dictionary to SystemConfig object."""
         return SystemConfig(
             server=ServerConfig(**config_data.get('server', {})),
@@ -136,7 +136,7 @@ class ConfigManager:
             crypto=CryptoConfig(**config_data.get('crypto', {})),
             protocol=ProtocolConfig(**config_data.get('protocol', {}))
         )
-    
+
     def save_config(self) -> None:
         """Save current configuration to file."""
         try:
@@ -148,19 +148,19 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"Failed to save config to {self.config_file}: {e}")
             raise
-    
+
     @property
     def config(self) -> SystemConfig:
         """Get current configuration."""
         if self._config is None:
             self._config = self._create_default_config()
         return self._config
-    
+
     def update_config(self, **kwargs) -> None:
         """Update configuration parameters."""
         config = self.config  # Use property to ensure non-None config
         config_dict = asdict(config)
-        
+
         for key, value in kwargs.items():
             if '.' in key:
                 # Handle nested keys like 'server.port'
@@ -173,14 +173,14 @@ class ConfigManager:
                 current[parts[-1]] = value
             else:
                 config_dict[key] = value
-        
+
         self._config = self._dict_to_config(config_dict)
         self.save_config()
-    
+
     def get_value(self, key: str, default: Any = None) -> Any:
         """Get configuration value by key."""
         try:
-            config = self.config  # Use property to ensure non-None config  
+            config = self.config  # Use property to ensure non-None config
             if '.' not in key:
                 return getattr(config, key, default)
             parts = key.split('.')
@@ -190,17 +190,17 @@ class ConfigManager:
             return current
         except (KeyError, AttributeError):
             return default
-    
+
     def reload_config(self):
         """Reload configuration from file."""
         self._load_config()
 
 
 # Global configuration manager instance
-_config_manager: Optional[ConfigManager] = None
+_config_manager: ConfigManager | None = None
 
 
-def get_config_manager(config_file: Optional[str] = None) -> ConfigManager:
+def get_config_manager(config_file: str | None = None) -> ConfigManager:
     """
     Get global configuration manager instance.
     
@@ -250,7 +250,7 @@ def load_port_from_file(filename: str = "port.info") -> int:
     """
     logger.warning("load_port_from_file() is deprecated, use get_server_config().port instead")
     try:
-        with open(filename, 'r') as f:
+        with open(filename) as f:
             return int(f.read().strip())
     except (FileNotFoundError, ValueError):
         return get_server_config().port
@@ -262,8 +262,6 @@ def get_database_path() -> str:
 
 def get_absolute_database_path() -> str:
     """Get absolute path to the database file for cross-module access."""
-    import os
-    from pathlib import Path
 
     # Get the project root (where this file's parent's parent is)
     project_root = Path(__file__).parent.parent
@@ -305,7 +303,7 @@ RESP_FILE_RECEIVED = 1604
 RESP_GENERIC_SERVER_ERROR = 1605
 
 
-def initialize_config(config_file: Optional[str] = None) -> ConfigManager:
+def initialize_config(config_file: str | None = None) -> ConfigManager:
     """
     Initialize global configuration.
     
@@ -328,7 +326,7 @@ def reset_config():
 
 # Database Integration Functions for FletV2 Compatibility
 
-def get_database_config_for_fletv2() -> Dict[str, Any]:
+def get_database_config_for_fletv2() -> dict[str, Any]:
     """
     Get database configuration optimized for FletV2 GUI integration.
 
@@ -364,7 +362,7 @@ def is_database_compatible() -> bool:
     except Exception:
         return False
 
-def get_database_schema_info() -> Dict[str, Any]:
+def get_database_schema_info() -> dict[str, Any]:
     """
     Get information about the database schema for compatibility checking.
 

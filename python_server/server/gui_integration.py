@@ -3,11 +3,12 @@
 # GUI Integration Module
 # Extracted from monolithic server.py for better modularity
 
+import logging
 import os
 import sys
 import threading
-import logging
-from typing import Optional, Dict, Any, TYPE_CHECKING, Callable, Protocol
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 # UTF-8 support for international characters and emojis
 try:
@@ -15,10 +16,9 @@ try:
 except ImportError:
     # Fallback for when running from within python_server directory
     sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-    import Shared.utils.utf8_solution  # 🚀 UTF-8 support enabled automatically
 
 if TYPE_CHECKING:
-    from python_server.server_gui import ServerGUI
+    pass
 
 # Use Any-based runtime annotations to keep static analyzer happy without
 # introducing heavyweight Protocols that complicate imports.
@@ -30,7 +30,7 @@ class GUIManager:
     Manages GUI integration for the backup server.
     Handles GUI initialization, updates, and cleanup with graceful degradation.
     """
-    
+
     def __init__(self, server_instance: Any = None):
         """Initialize the GUI manager.
 
@@ -40,7 +40,7 @@ class GUIManager:
         self.server_instance = server_instance
 
         # Use Any for runtime to avoid circular import/type issues
-        self.gui: Optional[Any] = None
+        self.gui: Any | None = None
         self.gui_ready = threading.Event()  # Event to signal GUI is fully initialized
         self.data_loaded = threading.Event()  # Event to signal that initial data is loaded
         self.gui_lock = threading.Lock()
@@ -71,7 +71,7 @@ class GUIManager:
                 logger.info(f"GUI components not available: {e}")
                 self.ServerGUI = None
                 self.gui_available = False
-    
+
     def initialize_gui(self) -> bool:
         """
         Initialize the GUI in a separate thread to avoid blocking server startup.
@@ -128,7 +128,7 @@ class GUIManager:
         except Exception as e:
             logger.warning(f"Failed to start GUI thread: {e}, continuing without GUI")
             return False
-    
+
     def is_gui_ready(self) -> bool:
         """Check if GUI is fully initialized and ready for interaction."""
         return self.gui_ready.is_set()
@@ -155,7 +155,7 @@ class GUIManager:
         if self.is_gui_ready() and self.gui:
             self._execute_gui_action(self.gui.update_server_status, running, address, port)
 
-    def update_client_stats(self, stats_data: Optional[Dict[str, Any]] = None) -> None:
+    def update_client_stats(self, stats_data: dict[str, Any] | None = None) -> None:
         if self.is_gui_ready() and self.gui:
             self.data_loaded.wait(timeout=5.0)  # Wait for data to be loaded
             if stats_data is None:
@@ -170,7 +170,7 @@ class GUIManager:
             }
             self._execute_gui_action(self.gui.update_transfer_stats, stats_data)
 
-    def update_maintenance_stats(self, stats: Dict[str, Any]) -> None:
+    def update_maintenance_stats(self, stats: dict[str, Any]) -> None:
         if self.is_gui_ready() and self.gui:
             self._execute_gui_action(self.gui.update_maintenance_stats, stats)
 
@@ -190,7 +190,7 @@ class GUIManager:
         """Queue an update for the GUI to process safely."""
         if not self.is_gui_ready():
             return
-        
+
         with self.gui_lock:
             if self.gui is not None and hasattr(self.gui, 'update_queue') and self.gui.update_queue is not None:
                 self.gui.update_queue.put((update_type, data))
@@ -201,7 +201,7 @@ class GUIManager:
             return False
         # Check if the GUI thread is alive, or if the root window exists
         gui_thread_alive = bool(self.gui.gui_thread and self.gui.gui_thread.is_alive()) if self.gui.gui_thread else False
-        root_window_exists = bool(hasattr(self.gui, 'root') and self.gui.root and 
+        root_window_exists = bool(hasattr(self.gui, 'root') and self.gui.root and
                                  hasattr(self.gui.root, 'winfo_exists') and self.gui.root.winfo_exists())
         return gui_thread_alive or root_window_exists
 
@@ -212,14 +212,14 @@ class GUIManager:
             return
 
         logger.info("Shutting down GUI...")
-        
+
         # Check if GUI exists before attempting to call shutdown
         with self.gui_lock:
             if self.gui is not None and hasattr(self.gui, 'shutdown'):
                 self._execute_gui_action(self.gui.shutdown)
             else:
                 logger.info("GUI object is None or doesn't have shutdown method")
-        
+
         with self.gui_lock:
             self.gui = None
         self.gui_ready.clear()

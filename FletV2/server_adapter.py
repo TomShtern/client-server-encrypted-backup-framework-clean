@@ -8,11 +8,11 @@ and provides the exact method signatures that FletV2's ServerBridge expects.
 No API calls - pure Python object method calls for maximum performance and reliability.
 """
 
-import os
-import sys
-import sqlite3
-import logging
 import asyncio
+import logging
+import os
+import sqlite3
+import sys
 
 # Add project root to path for Shared imports
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -20,13 +20,9 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # ALWAYS import this in any Python file that deals with subprocess or console I/O
-import Shared.utils.utf8_solution as _  # Import for UTF-8 side effects
-import threading
-import time
 import uuid
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Union
-from pathlib import Path
+from typing import Any
 
 # Add project root to path for imports
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -35,10 +31,10 @@ if project_root not in sys.path:
 
 # Import your existing server infrastructure
 try:
-    from python_server.server.database import DatabaseManager
-    from python_server.server.client_manager import ClientManager, Client
-    from python_server.server.config import DATABASE_NAME, FILE_STORAGE_DIR
     from api_server.real_backup_executor import RealBackupExecutor
+    from python_server.server.client_manager import Client, ClientManager
+    from python_server.server.config import DATABASE_NAME, FILE_STORAGE_DIR
+    from python_server.server.database import DatabaseManager
     _REAL_SERVER_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Could not import server modules: {e}")
@@ -75,7 +71,7 @@ class FletV2ServerAdapter:
     existing DatabaseManager, ClientManager, and other server components.
     """
 
-    def __init__(self, db_path: Optional[str] = None, storage_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None, storage_path: str | None = None):
         """
         Initialize the server adapter with your existing server components.
 
@@ -125,7 +121,7 @@ class FletV2ServerAdapter:
         except Exception:
             return False
 
-    def get_server_status(self) -> Dict[str, Any]:
+    def get_server_status(self) -> dict[str, Any]:
         """Return server status for dashboard KPI cards."""
         try:
             if not self.db_manager:
@@ -171,7 +167,7 @@ class FletV2ServerAdapter:
             logger.error(f"Error getting server status: {e}")
             return self._get_fallback_status()
 
-    def _get_fallback_status(self) -> Dict[str, Any]:
+    def _get_fallback_status(self) -> dict[str, Any]:
         """Fallback status when database is unavailable."""
         return {
             "running": False,
@@ -186,11 +182,11 @@ class FletV2ServerAdapter:
     # CLIENT MANAGEMENT METHODS (Required by FletV2)
     # ============================================================================
 
-    def get_all_clients_from_db(self) -> List[Dict[str, Any]]:
+    def get_all_clients_from_db(self) -> list[dict[str, Any]]:
         """Return list of all clients."""
         return self.get_clients()
 
-    def get_clients(self) -> List[Dict[str, Any]]:
+    def get_clients(self) -> list[dict[str, Any]]:
         """Get all clients from database."""
         try:
             if not self.db_manager:
@@ -232,7 +228,7 @@ class FletV2ServerAdapter:
             logger.error(f"Error getting clients: {e}")
             return []
 
-    def _get_clients_legacy_schema(self, conn: sqlite3.Connection) -> List[Dict[str, Any]]:
+    def _get_clients_legacy_schema(self, conn: sqlite3.Connection) -> list[dict[str, Any]]:
         """Get clients using legacy schema."""
         try:
             rows = conn.execute("""
@@ -263,11 +259,11 @@ class FletV2ServerAdapter:
             logger.error(f"Error getting clients with legacy schema: {e}")
             return []
 
-    async def get_clients_async(self) -> List[Dict[str, Any]]:
+    async def get_clients_async(self) -> list[dict[str, Any]]:
         """Async version of get_clients."""
         return await asyncio.get_event_loop().run_in_executor(None, self.get_clients)
 
-    def get_client_details(self, client_id: str) -> Dict[str, Any]:
+    def get_client_details(self, client_id: str) -> dict[str, Any]:
         """Get detailed information for specific client."""
         try:
             if not self.db_manager:
@@ -310,7 +306,7 @@ class FletV2ServerAdapter:
             logger.error(f"Error getting client details for {client_id}: {e}")
             return {}
 
-    def add_client(self, client_data: Dict[str, Any]) -> str:
+    def add_client(self, client_data: dict[str, Any]) -> str:
         """Add new client."""
         try:
             if not self.db_manager:
@@ -338,7 +334,7 @@ class FletV2ServerAdapter:
             logger.error(f"Error adding client: {e}")
             return ""
 
-    async def add_client_async(self, client_data: Dict[str, Any]) -> str:
+    async def add_client_async(self, client_data: dict[str, Any]) -> str:
         """Add new client (async)."""
         return await asyncio.get_event_loop().run_in_executor(None, self.add_client, client_data)
 
@@ -408,7 +404,7 @@ class FletV2ServerAdapter:
     # FILE MANAGEMENT METHODS (Required by FletV2)
     # ============================================================================
 
-    def get_files(self) -> List[Dict[str, Any]]:
+    def get_files(self) -> list[dict[str, Any]]:
         """Return all files."""
         try:
             if not self.db_manager:
@@ -443,11 +439,11 @@ class FletV2ServerAdapter:
             logger.error(f"Error getting files: {e}")
             return []
 
-    async def get_files_async(self) -> List[Dict[str, Any]]:
+    async def get_files_async(self) -> list[dict[str, Any]]:
         """Get all files (async)."""
         return await asyncio.get_event_loop().run_in_executor(None, self.get_files)
 
-    def get_client_files(self, client_id: str) -> List[Dict[str, Any]]:
+    def get_client_files(self, client_id: str) -> list[dict[str, Any]]:
         """Get files for specific client."""
         try:
             if not self.db_manager:
@@ -469,7 +465,7 @@ class FletV2ServerAdapter:
             logger.error(f"Error getting files for client {client_id}: {e}")
             return []
 
-    async def get_client_files_async(self, client_id: str) -> List[Dict[str, Any]]:
+    async def get_client_files_async(self, client_id: str) -> list[dict[str, Any]]:
         """Get client files (async)."""
         return await asyncio.get_event_loop().run_in_executor(None, self.get_client_files, client_id)
 
@@ -511,7 +507,7 @@ class FletV2ServerAdapter:
         """Delete file (async)."""
         return await asyncio.get_event_loop().run_in_executor(None, self.delete_file, file_id)
 
-    def download_file(self, file_id: str) -> Dict[str, Any]:
+    def download_file(self, file_id: str) -> dict[str, Any]:
         """Prepare file for download."""
         try:
             if not self.db_manager:
@@ -538,7 +534,7 @@ class FletV2ServerAdapter:
             logger.error(f"Error preparing download for file {file_id}: {e}")
             return {}
 
-    def verify_file(self, file_id: str) -> Dict[str, Any]:
+    def verify_file(self, file_id: str) -> dict[str, Any]:
         """Verify file integrity."""
         try:
             if not self.db_manager:
@@ -569,7 +565,7 @@ class FletV2ServerAdapter:
             logger.error(f"Error verifying file {file_id}: {e}")
             return {"verified": False, "error": str(e)}
 
-    async def verify_file_async(self, file_id: str) -> Dict[str, Any]:
+    async def verify_file_async(self, file_id: str) -> dict[str, Any]:
         """Verify file (async)."""
         return await asyncio.get_event_loop().run_in_executor(None, self.verify_file, file_id)
 
@@ -577,7 +573,7 @@ class FletV2ServerAdapter:
     # DATABASE ACCESS METHODS (Required by FletV2)
     # ============================================================================
 
-    def get_database_info(self) -> Dict[str, Any]:
+    def get_database_info(self) -> dict[str, Any]:
         """Return database schema information."""
         try:
             if not self.db_manager:
@@ -608,11 +604,11 @@ class FletV2ServerAdapter:
             logger.error(f"Error getting database info: {e}")
             return {"tables": [], "total_size": "0 MB", "version": "unknown"}
 
-    async def get_database_info_async(self) -> Dict[str, Any]:
+    async def get_database_info_async(self) -> dict[str, Any]:
         """Get database info (async)."""
         return await asyncio.get_event_loop().run_in_executor(None, self.get_database_info)
 
-    def get_table_data(self, table_name: str) -> List[Dict[str, Any]]:
+    def get_table_data(self, table_name: str) -> list[dict[str, Any]]:
         """Return all rows from specified table."""
         try:
             if not self.db_manager:
@@ -637,11 +633,11 @@ class FletV2ServerAdapter:
             logger.error(f"Error getting data from table {table_name}: {e}")
             return []
 
-    async def get_table_data_async(self, table_name: str) -> List[Dict[str, Any]]:
+    async def get_table_data_async(self, table_name: str) -> list[dict[str, Any]]:
         """Get table data (async)."""
         return await asyncio.get_event_loop().run_in_executor(None, self.get_table_data, table_name)
 
-    def update_row(self, table_name: str, row_id: str, data: Dict[str, Any]) -> bool:
+    def update_row(self, table_name: str, row_id: str, data: dict[str, Any]) -> bool:
         """Update database row."""
         try:
             if not self.db_manager:
@@ -705,7 +701,7 @@ class FletV2ServerAdapter:
     # LOGGING METHODS (Required by FletV2)
     # ============================================================================
 
-    def get_logs(self) -> List[Dict[str, Any]]:
+    def get_logs(self) -> list[dict[str, Any]]:
         """Return recent log entries."""
         try:
             if not self.db_manager:
@@ -744,7 +740,7 @@ class FletV2ServerAdapter:
             logger.error(f"Error getting logs: {e}")
             return []
 
-    async def get_logs_async(self) -> List[Dict[str, Any]]:
+    async def get_logs_async(self) -> list[dict[str, Any]]:
         """Get logs (async)."""
         return await asyncio.get_event_loop().run_in_executor(None, self.get_logs)
 
@@ -767,7 +763,7 @@ class FletV2ServerAdapter:
             logger.error(f"Error clearing logs: {e}")
             return False
 
-    async def export_logs_async(self, export_format: str, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def export_logs_async(self, export_format: str, filters: dict[str, Any] | None = None) -> dict[str, Any]:
         """Export logs in specified format."""
         try:
             logs = await self.get_logs_async()
@@ -812,7 +808,7 @@ class FletV2ServerAdapter:
 
 
 # Factory function for easy integration
-def create_fletv2_server(db_path: Optional[str] = None, storage_path: Optional[str] = None) -> FletV2ServerAdapter:
+def create_fletv2_server(db_path: str | None = None, storage_path: str | None = None) -> FletV2ServerAdapter:
     """
     Factory function to create a FletV2-compatible server instance.
 

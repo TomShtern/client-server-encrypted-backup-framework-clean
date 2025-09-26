@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 import traceback
-from typing import Any, TYPE_CHECKING, cast
+from typing import Any, cast
 
 # Setup standardized import paths
 from Shared.path_utils import setup_imports
+
 setup_imports()
 
 def find_errors() -> bool:
@@ -30,7 +31,7 @@ def find_errors() -> bool:
 
         # Components not available in current codebase - skipping tests
         print("ℹ ModernCard, ModernProgressBar, ModernStatusIndicator tests skipped (components not available)")
-        
+
         # try:
         #     card: Any = ModernCard(container, title="Test")
         #     _ = getattr(card, "content_frame", None)
