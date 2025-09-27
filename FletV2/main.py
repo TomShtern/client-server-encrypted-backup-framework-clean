@@ -63,6 +63,7 @@ if project_root not in sys.path:
 
 # Standard library imports
 import asyncio
+import time  # For optional startup profiling
 import contextlib
 
 # Compatibility shim: ensure ft.FilterChip exists for older/newer flet builds
@@ -84,10 +85,10 @@ if not hasattr(ft, "FilterChip"):
             **kwargs: Any,
         ) -> None:
             self.label = label
-            self.selected = bool(selected)
+            self.selected = selected
             self.on_selected = on_selected
             self._button = ft.ElevatedButton(
-                text=str(label),
+                text=label,
                 on_click=self._handle_click,
                 style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=16)),
             )
@@ -150,27 +151,105 @@ except ImportError:
 logger = setup_terminal_debugging(logger_name="FletV2.main")
 os.environ.setdefault("PYTHONUTF8", "1")
 
+# Install global exception handlers early so any silent crashes are surfaced.
+def _install_global_exception_handlers() -> None:  # pragma: no cover - diagnostic utility
+    try:
+        previous_hook = sys.excepthook
+    except Exception:  # noqa: BLE001
+        previous_hook = None  # type: ignore[assignment]
+
+    def _excepthook(exc_type, exc, tb):  # type: ignore[override]
+        try:
+            logger.critical("UNCAUGHT EXCEPTION (sys.excepthook)", exc_info=(exc_type, exc, tb))
+        except Exception:  # noqa: BLE001
+            pass
+        if previous_hook and previous_hook is not sys.excepthook:  # avoid recursion
+            try:
+                previous_hook(exc_type, exc, tb)  # type: ignore[misc]
+            except Exception:  # noqa: BLE001
+                pass
+
+    try:
+        sys.excepthook = _excepthook  # type: ignore[assignment]
+    except Exception:  # noqa: BLE001
+        logger.warning("Failed to install sys.excepthook override")
+
+    # Asyncio loop exception handler
+    try:
+        loop = asyncio.get_event_loop()
+
+        def _loop_exception_handler(loop_obj, context):  # type: ignore[no-untyped-def]
+            try:
+                msg = context.get("message") or "Asyncio loop exception"
+                logger.critical(f"ASYNCIO LOOP EXCEPTION: {msg}", exc_info=context.get("exception"))
+            except Exception:  # noqa: BLE001
+                pass
+
+        loop.set_exception_handler(_loop_exception_handler)
+    except Exception as _loop_err:  # noqa: BLE001
+        logger.warning(f"Failed to set asyncio loop exception handler: {_loop_err}")
+
+_install_global_exception_handlers()
+
 # Local imports - application modules
 try:
-    from .theme import setup_modern_theme, toggle_theme_mode
-except ImportError as e:
-    print(f"Warning: Could not import theme module: {e}")
-    # Create minimal fallbacks
-    def setup_modern_theme(page):
-        pass
+    # Prefer package-relative import
+    from .theme import setup_modern_theme, toggle_theme_mode  # type: ignore[import-not-found]
+except ImportError as _theme_rel_err:  # pragma: no cover - fallback path
+    try:
+        # Fallback to absolute import when running as a script inside FletV2 directory
+        from theme import setup_modern_theme, toggle_theme_mode  # type: ignore[import-not-found]
+    except ImportError as _theme_abs_err:
+        print(f"Warning: Could not import theme module: {_theme_rel_err}; {_theme_abs_err}")
+        # Create minimal fallbacks so the app can still start
+        def setup_modern_theme(page):  # type: ignore[no-redef]
+            return None
 
-    def toggle_theme_mode(page):
-        pass
+        def toggle_theme_mode(page):  # type: ignore[no-redef]
+            return None
 
 try:
-    from .utils.server_bridge import create_server_bridge
-except ImportError as e:
-    print(f"Error: Could not import server_bridge: {e}")
-    # Mock data support has been removed - server bridge requires real server
-    def create_server_bridge(real_server: Any | None = None) -> Any:  # type: ignore[override]
-        if real_server is None:
-            raise ValueError("ServerBridge requires a real server instance. Mock data support has been removed.")
-        raise ImportError(f"ServerBridge module not available: {e}")
+    # Primary: package-relative import (works when launched via `python -m FletV2.main`)
+    from .utils.server_bridge import create_server_bridge  # type: ignore[import-not-found]
+except ImportError as _rel_err:  # pragma: no cover - fallback path
+    try:
+        # Fallback: absolute import (works when running `python FletV2/main.py` directly)
+        from utils.server_bridge import create_server_bridge  # type: ignore[import-not-found]
+    except ImportError as _abs_err:
+        # Final explicit path-based fallback to avoid package context issues
+        try:
+            import importlib.util as _importlib_util
+            _srv_path = os.path.join(flet_v2_root, 'utils', 'server_bridge.py')
+            if os.path.isfile(_srv_path):
+                _spec = _importlib_util.spec_from_file_location('fletv2_server_bridge_fallback', _srv_path)
+                if _spec and _spec.loader:  # type: ignore[truthy-bool]
+                    _mod = _importlib_util.module_from_spec(_spec)  # type: ignore[arg-type]
+                    _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
+                    if hasattr(_mod, 'create_server_bridge'):
+                        create_server_bridge = getattr(_mod, 'create_server_bridge')  # type: ignore[assignment]
+                    else:
+                        raise ImportError('create_server_bridge symbol missing in loaded module')
+            else:
+                raise ImportError(f'server_bridge.py not found at expected path: {_srv_path}')
+        except Exception as _path_err:  # noqa: BLE001
+            combined_err = f"{_rel_err}; {_abs_err}; {_path_err}"
+            print(f"Error: Could not import server_bridge: {combined_err}")
+            server_bridge_error = str(combined_err)
+            def create_server_bridge(real_server: Any | None = None) -> Any:  # type: ignore[override]
+                if real_server is None:
+                    raise ValueError("ServerBridge requires a real server instance. Mock data support has been removed.")
+                raise ImportError(f"ServerBridge module not available: {server_bridge_error}")
+
+# Final safety net: dynamic import attempt if create_server_bridge still missing
+if 'create_server_bridge' not in globals():  # pragma: no cover - rare path
+    try:
+        import importlib
+        _mod = importlib.import_module('utils.server_bridge')
+        if hasattr(_mod, 'create_server_bridge'):
+            create_server_bridge = getattr(_mod, 'create_server_bridge')  # type: ignore[assignment]
+            print("Info: Loaded create_server_bridge via dynamic import fallback")
+    except Exception as _dyn_err:  # noqa: BLE001
+        print(f"Error: Dynamic import of server_bridge failed: {_dyn_err}")
 
 # Exported runtime flags for tests and integration checks
 REAL_SERVER_AVAILABLE = False
@@ -189,11 +268,16 @@ try:
     project_root = os.path.dirname(fletv2_root)
     main_db_path = os.path.join(project_root, "defensive.db")
 
+    # Add project_root to sys.path BEFORE import to ensure python_server module is found
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+        logger.info(f"Added project root to sys.path: {project_root}")
+
     # Set environment variable BEFORE importing BackupServer to ensure proper initialization
     os.environ['BACKUP_DATABASE_PATH'] = main_db_path
     logger.info(f"Set BACKUP_DATABASE_PATH environment variable to: {main_db_path}")
 
-    # Import the BackupServer AFTER setting environment variables
+    # Import the BackupServer AFTER setting environment variables and path
     from python_server.server.server import BackupServer
     logger.info("BackupServer class imported successfully")
 
@@ -283,7 +367,7 @@ except Exception as e:
 
 # Direct server integration support (no adapter layer needed)
 # The BackupServer has built-in ServerBridge compatibility
-real_server_available = REAL_SERVER_AVAILABLE  # Will be set to True when server is injected
+real_server_available = REAL_SERVER_AVAILABLE  # Will be True if server initialized above
 create_fletv2_server = None  # Legacy - not needed for direct integration
 
 # Ensure project root is in path for direct execution
@@ -291,9 +375,13 @@ project_root = os.path.dirname(__file__)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Application bridge type - will be updated when real server is injected
-bridge_type = "Placeholder Data Development Mode"
-logger.info("🧪 Using placeholder data for development (real server can be injected)")
+# Application bridge type - set based on real server availability
+if REAL_SERVER_AVAILABLE:
+    bridge_type = "Real Server Production Mode"
+    logger.info("✅ Real server mode active - production integration engaged")
+else:
+    bridge_type = "Placeholder Data Development Mode"
+    logger.info("🧪 Using placeholder data for development (real server can be injected)")
 
 
 class FletV2App(ft.Row):
@@ -309,6 +397,7 @@ class FletV2App(ft.Row):
 
     def __init__(self, page: ft.Page, real_server: Any | None = None) -> None:
         super().__init__()
+        print("🚀🚀🚀 FletV2App __init__ called 🚀🚀🚀")
         self.page: ft.Page = page  # Ensure page is never None
         self.expand = True
 
@@ -320,6 +409,20 @@ class FletV2App(ft.Row):
         self.nav_rail_extended: bool = True
         self._loaded_views: dict[str, ft.Control] = {}
         self._background_tasks: set[Any] = set()
+        self._loading_view: bool = False  # Guard against concurrent view loads
+        self._startup_profile: list[tuple[str, float]] = []
+
+        # Startup profiling helpers (opt-in via FLET_STARTUP_PROFILER=1)
+        def _profile_enabled() -> bool:
+            return os.environ.get('FLET_STARTUP_PROFILER') == '1'
+
+        def _mark(label: str) -> None:
+            if _profile_enabled():
+                self._startup_profile.append((label, time.perf_counter()))
+
+        self._profile_enabled = _profile_enabled  # type: ignore[attr-defined]
+        self._profile_mark = _mark  # type: ignore[attr-defined]
+        self._profile_mark('init:start')
 
         # Initialize server bridge - prefer real server instance
         global bridge_type, real_server_available, real_server_instance
@@ -355,10 +458,18 @@ class FletV2App(ft.Row):
                     # Don't fall back to placeholder since ServerBridge now requires real server
                     raise test_error
             else:
-                # No real server available - ServerBridge now requires real server instance
-                logger.error("❌ No real server available - ServerBridge requires real server instance")
-                logger.error("Application cannot start without a real server instance")
-                raise RuntimeError("ServerBridge requires real server instance. Mock data support has been removed.")
+                # No real server available - check for GUI-only mode
+                gui_only_mode = os.environ.get('FLET_GUI_ONLY_MODE', '0') == '1'
+                if gui_only_mode:
+                    logger.warning("⚠️ Starting in GUI-only mode without server bridge")
+                    logger.warning("GUI will be functional but data operations will show empty states")
+                    self.server_bridge = None
+                    bridge_type = "GUI-Only Mode (No Server)"
+                    real_server_available = False
+                else:
+                    logger.error("❌ No real server available - ServerBridge requires real server instance")
+                    logger.error("Set FLET_GUI_ONLY_MODE=1 to start GUI without server, or provide a real server instance")
+                    raise RuntimeError("ServerBridge requires real server instance. Use FLET_GUI_ONLY_MODE=1 for GUI-only mode.")
         except Exception as bridge_ex:
             logger.error(f"❌ Server bridge initialization failed: {bridge_ex}")
             logger.error("Application cannot continue without properly configured server bridge")
@@ -369,6 +480,7 @@ class FletV2App(ft.Row):
 
         # Initialize state manager for reactive UI updates - after server bridge is ready
         self._initialize_state_manager()
+        self._profile_mark('state_manager:initialized')
 
         # Comment 12: Track current view dispose function for proper StateManager cleanup
         self._current_view_dispose: Callable[[], None] | None = None
@@ -446,28 +558,111 @@ class FletV2App(ft.Row):
         logger.info("Setting up page connection handler")
         page.on_connect = self._on_page_connect
 
-        # Load dashboard immediately instead of waiting for page connection
-        logger.info("Loading initial dashboard view immediately")
-        try:
-            self._load_view("dashboard")
-            logger.info("Initial dashboard view loaded successfully")
-        except Exception as ex:
-            logger.error(f"Failed to load initial dashboard view: {ex}", exc_info=True)
-            # Fallback: show error in content area
+        # Dashboard will be loaded after page connection to ensure AnimatedSwitcher is attached
+        logger.info("Dashboard will be loaded after page connection is established")
+
+        # If integrated GUI embedding is disabled (browser-only mode), some environments may not
+        # trigger page.on_connect before the process exits. Proactively load the dashboard to
+        # replace the placeholder immediately in that mode.
+        proactive_disabled = os.environ.get('FLET_DISABLE_PROACTIVE_LOAD') == '1'
+        if os.environ.get('CYBERBACKUP_DISABLE_INTEGRATED_GUI') == '1' and not proactive_disabled:
             try:
-                self.content_area.content.content = ft.Container(
-                    content=ft.Text(f"Failed to load dashboard: {ex}", color=ft.Colors.ERROR),
-                    padding=20,
-                    expand=True
-                )
-                self.content_area.content.update()
-            except Exception as fallback_ex:
-                logger.error(f"Even fallback failed: {fallback_ex}")
+                logger.info("Integrated GUI disabled - proactively loading dashboard view immediately")
+                print("🚀🚀🚀 MAIN APP: LOADING DASHBOARD PROACTIVELY 🚀🚀🚀")
+                self._load_view("dashboard")
+                print("🚀🚀🚀 MAIN APP: DASHBOARD LOAD CALLED 🚀🚀🚀")
+                self._profile_mark('dashboard:proactive_load_called')
+                async def _force_dashboard_visible() -> None:
+                    try:
+                        await asyncio.sleep(0.75)
+                        if self._current_view_name == "dashboard":
+                            animated_switcher = getattr(self.content_area, 'content', None)
+                            dash_ctrl = getattr(animated_switcher, 'content', None) if animated_switcher else None
+                            if dash_ctrl is not None and getattr(dash_ctrl, 'opacity', 1.0) == 0.0:
+                                logger.warning("Dashboard still hidden after delay; forcing opacity to 1.0 (fallback)")
+                                with contextlib.suppress(Exception):
+                                    dash_ctrl.opacity = 1.0
+                                    dash_ctrl.update()
+                    except Exception as guard_err:  # noqa: BLE001
+                        logger.error(f"Dashboard visibility safeguard failed: {guard_err}")
+                if hasattr(self.page, 'run_task'):
+                    self.page.run_task(_force_dashboard_visible)
+                else:
+                    asyncio.get_event_loop().create_task(_force_dashboard_visible())
+            except Exception as immediate_err:  # noqa: BLE001
+                logger.error(f"Immediate dashboard load failed: {immediate_err}")
+                print(f"🚀🚀🚀 MAIN APP: DASHBOARD LOAD FAILED: {immediate_err} 🚀🚀🚀")
+
+        # Fallback safeguard: In some browser-mode launches page.on_connect may not fire reliably.
+        # Schedule a lightweight check that loads the dashboard if nothing has replaced the
+        # placeholder after a short delay. This prevents the UI from being stuck on the
+        # initial "Loading Application..." card indefinitely.
+        try:  # Guard against any unexpected runtime issues
+            async def _ensure_initial_view_loaded() -> None:
+                try:
+                    await asyncio.sleep(1.0)
+                    # Only act if still no view and we haven't already performed a fallback
+                    if self._current_view_name is None:
+                        if not getattr(self, "_initial_view_fallback_triggered", False):
+                            logger.warning("on_connect handler did not load a view within timeout; loading dashboard fallback")
+                            with contextlib.suppress(Exception):
+                                self._load_view("dashboard")
+                            self._initial_view_fallback_triggered = True  # type: ignore[attr-defined]
+                    else:
+                        logger.debug("[FALLBACK_CHECK] Initial view already loaded; skipping 1s timeout fallback")
+                except Exception as inner_err:  # noqa: BLE001
+                    logger.error(f"_ensure_initial_view_loaded task failed: {inner_err}")
+            if not proactive_disabled and not getattr(self, "_initial_view_fallback_scheduled", False):
+                self._initial_view_fallback_scheduled = True  # type: ignore[attr-defined]
+                if hasattr(self.page, 'run_task'):
+                    self.page.run_task(_ensure_initial_view_loaded)
+                else:
+                    asyncio.get_event_loop().create_task(_ensure_initial_view_loaded())
+            else:
+                # Even when proactive disabled, schedule a later safety load (longer delay) so user isn't stuck
+                async def _disabled_mode_delayed_load() -> None:
+                    try:
+                        await asyncio.sleep(2.0)
+                        # If view already loaded, skip loudly only first time for diagnostics
+                        if self._current_view_name is not None:
+                            if not getattr(self, "_disabled_safety_skip_logged", False):
+                                logger.debug("[DISABLED_PROACTIVE] Safety timer fired but dashboard already loaded; skipping")
+                                self._disabled_safety_skip_logged = True  # type: ignore[attr-defined]
+                            return
+                        # Only trigger once
+                        if getattr(self, "_disabled_safety_triggered", False):
+                            return
+                        logger.warning("[DISABLED_PROACTIVE] Forcing initial dashboard load (safety)")
+                        with contextlib.suppress(Exception):
+                            self._load_view("dashboard")
+                        self._disabled_safety_triggered = True  # type: ignore[attr-defined]
+                    except Exception as delayed_err:  # noqa: BLE001
+                        logger.error(f"Disabled proactive delayed load failed: {delayed_err}")
+                # Schedule at most once
+                if not getattr(self, "_disabled_safety_scheduled", False):
+                    self._disabled_safety_scheduled = True  # type: ignore[attr-defined]
+                    if hasattr(self.page, 'run_task'):
+                        self.page.run_task(_disabled_mode_delayed_load)
+                    else:
+                        asyncio.get_event_loop().create_task(_disabled_mode_delayed_load())
+        except Exception as schedule_err:  # noqa: BLE001
+            logger.error(f"Failed to schedule initial view fallback: {schedule_err}")
 
     def _initialize_state_manager(self) -> None:
         """Initialize state manager with server bridge integration for reactive UI updates"""
         try:
+            # Try relative import first
             from .utils.state_manager import create_state_manager
+        except ImportError:
+            try:
+                # Fallback to absolute import
+                from utils.state_manager import create_state_manager  # type: ignore[import-not-found]
+            except ImportError:
+                logger.warning("State manager not available, UI updates will be manual")
+                self.state_manager = None
+                return
+
+        try:
             # Pass server_bridge for enhanced server-mediated operations
             self.state_manager = create_state_manager(self.page, self.server_bridge)
 
@@ -475,9 +670,6 @@ class FletV2App(ft.Row):
             self._setup_cross_view_reactivity()
 
             logger.info("State manager initialized with server bridge integration and cross-view reactivity")
-        except ImportError:
-            logger.warning("State manager not available, UI updates will be manual")
-            self.state_manager = None
         except Exception as e:
             logger.error(f"Failed to initialize state manager: {e}")
             self.state_manager = None
@@ -593,22 +785,28 @@ class FletV2App(ft.Row):
             logger.info(f"Files count changed: {len(old_files)} -> {len(new_files)}")
 
     def _on_page_connect(self, e: ft.ControlEvent) -> None:
-        """Called when page is connected - handle reconnection scenarios."""
-        logger.info("Page connected event received")
-        # Dashboard is already loaded in constructor, but we can refresh if needed
+        """Called when page is connected - now load the dashboard with proper page attachment."""
+        logger.info("🔌 Page connected event received - loading dashboard")
+
+        # Now load the dashboard since AnimatedSwitcher is properly attached to the page
         try:
-            # Check if we need to refresh the current view
-            animated_switcher = self.content_area.content
-            if hasattr(animated_switcher, 'content') and animated_switcher.content:
-                current_content = animated_switcher.content
-                if hasattr(current_content, '_on_page_connect'):
-                    current_content._on_page_connect()
-                    logger.info("Current view page connect callback executed")
-        except Exception as fallback_error:
-            logger.error(f"Error view display failed: {fallback_error}")
-            # Last resort
-            with contextlib.suppress(Exception):
-                self.page.update()
+            self._load_view("dashboard")
+            logger.info("✅ Dashboard loaded successfully after page connection")
+        except Exception as ex:
+            logger.error(f"❌ Failed to load dashboard after page connection: {ex}", exc_info=True)
+            # Fallback: show error in content area
+            try:
+                self.content_area.content.content = ft.Container(
+                    content=ft.Text(f"Failed to load dashboard: {ex}", color=ft.Colors.ERROR),
+                    padding=20,
+                    expand=True
+                )
+                self.content_area.content.update()
+            except Exception as fallback_error:
+                logger.error(f"Error view display failed: {fallback_error}")
+                # Last resort
+                with contextlib.suppress(Exception):
+                    self.page.update()
         # Window settings - Updated to requested size 1730x1425
         if hasattr(self.page, 'window_min_width'):
             self.page.window_min_width = 1200  # Slightly larger minimum for better UX
@@ -1247,8 +1445,111 @@ class FletV2App(ft.Row):
 
     def _update_content_area(self, animated_switcher: Any, content: Any, view_name: str) -> bool:
         """Update content area with error handling and fallback strategies."""
+        logger.info(f"🎨 Updating content area for {view_name}")
+        logger.info(f"   Content type: {type(content)}")
+        logger.info(f"   AnimatedSwitcher type: {type(animated_switcher)}")
+        # Diagnostics: environment flags for dashboard rendering troubleshooting
+        # FLET_BYPASS_SWITCHER=1  -> avoid AnimatedSwitcher entirely (direct assign)
+        # FLET_DASHBOARD_DEBUG=1  -> elevate dashboard logger level to show warnings
+        # FLET_DASHBOARD_TEST_MARKER=0 -> hide vivid test marker banner
+        bypass_switcher = os.environ.get('FLET_BYPASS_SWITCHER') == '1'
+        if bypass_switcher:
+            logger.warning("BYPASS_SWITCHER active - inserting content directly (no AnimatedSwitcher transition)")
+            try:
+                # Direct assignment: replace container's content attribute entirely
+                self.content_area.content = content
+                # Extra diagnostics for blank dashboard issue
+                if os.environ.get('FLET_DASHBOARD_CONTENT_DEBUG') == '1' and view_name == 'dashboard':
+                    try:
+                        root = self.content_area.content
+                        root_type = type(root).__name__
+                        has_controls = hasattr(root, 'controls') and bool(getattr(root, 'controls'))
+                        has_content = hasattr(root, 'content') and bool(getattr(root, 'content'))
+                        logger.warning(
+                            f"[CONTENT_DEEP] Root after assign type={root_type} has_controls={has_controls} has_content={has_content} expand={getattr(root,'expand',None)}"
+                        )
+                        # If Column wrapper pattern, inspect first level
+                        if hasattr(root, 'content') and getattr(root, 'content'):
+                            inner = getattr(root, 'content')
+                            logger.warning(
+                                f"[CONTENT_DEEP] Inner content type={type(inner).__name__} has_controls={hasattr(inner,'controls') and bool(getattr(inner,'controls'))} expand={getattr(inner,'expand',None)}"
+                            )
+                    except Exception as _deep_err:  # noqa: BLE001
+                        logger.warning(f"[CONTENT_DEEP] deep diagnostics failed: {_deep_err}")
+                if getattr(content, 'opacity', None) == 0.0:
+                    try:
+                        content.opacity = 1.0
+                    except Exception:  # noqa: BLE001
+                        pass
+                with contextlib.suppress(Exception):
+                    if hasattr(self.content_area, 'update'):
+                        self.content_area.update()
+                # Enumerate first-level children for diagnostics
+                try:
+                    child_summary = []
+                    container_content = getattr(self.content_area, 'content', None)
+                    if hasattr(container_content, 'controls'):
+                        for idx, ctrl in enumerate(getattr(container_content, 'controls', [])[:10]):  # limit
+                            child_summary.append(f"[{idx}] {ctrl.__class__.__name__}")
+                    logger.warning(
+                        f"[CONTENT_DIAG] After direct insert: content_area.content={type(container_content).__name__}; children={child_summary}"
+                    )
+                except Exception as _enum_err:  # noqa: BLE001
+                    logger.warning(f"[CONTENT_DIAG] Child enumeration failed: {_enum_err}")
+                # Optional deep recursive enumeration if requested
+                # Always enumerate for dashboard view OR when explicit env flag set
+                if view_name == 'dashboard' or os.environ.get('FLET_DASHBOARD_ENUM') == '1':
+                    try:
+                        def _enum(ctrl, depth=0, max_depth=3):  # noqa: ANN001
+                            try:
+                                if ctrl is None:
+                                    return
+                                ctrl_type = ctrl.__class__.__name__
+                                prefix = '  ' * depth
+                                # attempt to read a text property if present
+                                text_val = ''
+                                if hasattr(ctrl, 'text') and getattr(ctrl, 'text'):
+                                    text_val = f" text={getattr(ctrl, 'text')!r}"
+                                logger.warning(f"[ENUM] {prefix}{ctrl_type}{text_val}")
+                                if depth >= max_depth:
+                                    return
+                                children = []
+                                if hasattr(ctrl, 'controls') and getattr(ctrl, 'controls'):
+                                    children = list(getattr(ctrl, 'controls'))  # type: ignore[arg-type]
+                                elif hasattr(ctrl, 'content') and getattr(ctrl, 'content'):
+                                    children = [getattr(ctrl, 'content')]
+                                for ch in children[:30]:
+                                    _enum(ch, depth + 1, max_depth)
+                            except Exception as enum_err:  # noqa: BLE001
+                                logger.warning(f"[ENUM] enumeration error depth {depth}: {enum_err}")
+                        logger.warning('[ENUM] ---- BEGIN DASHBOARD CONTROL TREE ----')
+                        _enum(self.content_area.content)
+                        logger.warning('[ENUM] ---- END DASHBOARD CONTROL TREE ----')
+                    except Exception as top_enum_err:  # noqa: BLE001
+                        logger.warning(f"[ENUM] top-level enumeration failed: {top_enum_err}")
+                # Still schedule subscriptions if present
+                if hasattr(content, '_setup_subscriptions') and callable(getattr(content, '_setup_subscriptions')):
+                    async def _subs_wrapper():  # noqa: D401
+                        try:
+                            setup_cb = getattr(content, '_setup_subscriptions')
+                            res = setup_cb()
+                            if asyncio.iscoroutine(res):
+                                await res
+                            logger.warning("[CONTENT_DIAG] _setup_subscriptions executed (bypass mode)")
+                        except Exception as sub_err:  # noqa: BLE001
+                            logger.warning(f"Subscription setup failed (bypass mode): {sub_err}")
+                    if hasattr(self.page, 'run_task'):
+                        self.page.run_task(_subs_wrapper)
+                return True
+            except Exception as bypass_err:  # noqa: BLE001
+                logger.error(f"Bypass switcher failed, falling back to AnimatedSwitcher path: {bypass_err}")
+
         if hasattr(animated_switcher, 'content'):
             animated_switcher.content = content
+            logger.info(f"✅ Set content on AnimatedSwitcher")
+        else:
+            logger.warning(f"⚠️ AnimatedSwitcher has no 'content' attribute")
+
         update_success = False
 
         # Smart update - check if control is attached to page before updating
@@ -1258,10 +1559,10 @@ class FletV2App(ft.Row):
                 if hasattr(animated_switcher, 'update'):
                     animated_switcher.update()
                 update_success = True
-                logger.info(f"Successfully loaded {view_name} view")
+                logger.info(f"✅ Successfully loaded {view_name} view via AnimatedSwitcher.update()")
             else:
                 # Control not yet attached, use page update as fallback
-                logger.debug("AnimatedSwitcher not yet attached to page, using page update")
+                logger.warning("⚠️ AnimatedSwitcher not yet attached to page, using page update")
                 self.page.update()  # type: ignore[call-arg]
                 update_success = True
                 logger.info(f"Successfully loaded {view_name} view (page update fallback)")
@@ -1278,6 +1579,17 @@ class FletV2App(ft.Row):
         if not update_success:
             logger.error(f"Failed to load {view_name} view - UI update failed")
             return False
+
+        # Force visibility if dashboard and still hidden
+        if view_name == 'dashboard':
+            try:
+                if getattr(content, 'opacity', 1.0) == 0.0:
+                    logger.warning("Dashboard opacity still 0 after update; forcing to 1.0")
+                    content.opacity = 1.0
+                    with contextlib.suppress(Exception):
+                        content.update()
+            except Exception as vis_err:  # noqa: BLE001
+                logger.debug(f"Failed forcing dashboard opacity: {vis_err}")
 
         # Set up subscriptions after view is added to page and updated
         # (prevents "Control must be added to page first" error)
@@ -1327,16 +1639,46 @@ class FletV2App(ft.Row):
 
     def _perform_view_loading(self, view_name: str) -> bool:
         """Perform the core view loading logic."""
+        logger.info(f"🔄 Starting view loading for: {view_name}")
+
         # Comment 12: Dispose of current view before loading new one
         self._dispose_current_view(view_name)
 
         # Get view configuration
         module_name, function_name, actual_view_name = self._get_view_config(view_name)
+        logger.info(f"📦 View config - module: {module_name}, function: {function_name}")
 
         # Dynamic import and view creation
-        module = __import__(module_name, fromlist=[function_name])
-        view_function = getattr(module, function_name)
-        content, dispose_func = self._create_enhanced_view(view_function, actual_view_name)
+        try:
+            logger.debug(f"Attempting dynamic import for view module '{module_name}'")
+            module = __import__(module_name, fromlist=[function_name])
+            logger.info(f"✅ Successfully imported module: {module_name}")
+
+            if not hasattr(module, function_name):
+                raise AttributeError(f"Module '{module_name}' missing '{function_name}'")
+            view_function = getattr(module, function_name)
+            logger.info(f"✅ Successfully got view function: {function_name}")
+
+            content, dispose_func = self._create_enhanced_view(view_function, actual_view_name)
+            logger.info(f"✅ Successfully created view content, type: {type(content)}")
+        except Exception as e:
+            logger.error(f"❌ Error during view creation for {view_name}: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            # Special handling: if dashboard fails, attempt stub
+            if view_name == "dashboard":
+                try:
+                    logger.warning("Attempting fallback stub dashboard due to failure")
+                    from views.dashboard_stub import create_dashboard_stub  # type: ignore[import-not-found]
+                    stub_content = create_dashboard_stub(self.page)
+                    content = stub_content
+                    dispose_func = lambda: None  # noqa: E731
+                    logger.info("Loaded dashboard stub successfully")
+                except Exception as stub_err:  # noqa: BLE001
+                    logger.error(f"Dashboard stub load failed: {stub_err}")
+                    raise
+            else:
+                raise
 
         # Store dispose function for cleanup (Comment 12)
         self._current_view_dispose = dispose_func
@@ -1350,8 +1692,30 @@ class FletV2App(ft.Row):
 
     def _load_view(self, view_name: str) -> bool:
         """Load view with enhanced infrastructure support and dynamic animated transitions."""
+        print(f"🚀🚀🚀 MAIN APP: _load_view called with {view_name} 🚀🚀🚀")
         try:
+            # Concurrency guard
+            if self._loading_view:
+                logger.warning(f"[VIEW_LOAD_GUARD] A view load is already in progress; skipping '{view_name}' request")
+                return True
+            self._loading_view = True
+            # Guard against redundant reloads of the same view unless forced
+            if (
+                view_name == getattr(self, '_current_view_name', None)
+                and os.environ.get('FLET_FORCE_VIEW_RELOAD') != '1'
+            ):
+                logger.debug(
+                    "Skipping reload for view '%s' (already current). Set FLET_FORCE_VIEW_RELOAD=1 to force rebuild.",
+                    view_name
+                )
+                self._loading_view = False
+                return True
+            if getattr(self, '_profile_enabled', lambda: False)():  # type: ignore[attr-defined]
+                self._profile_mark(f'load:{view_name}:start')  # type: ignore[attr-defined]
             update_success = self._perform_view_loading(view_name)
+            print(f"🚀🚀🚀 MAIN APP: _perform_view_loading returned {update_success} for {view_name} 🚀🚀🚀")
+            if getattr(self, '_profile_enabled', lambda: False)():  # type: ignore[attr-defined]
+                self._profile_mark(f'load:{view_name}:end')  # type: ignore[attr-defined]
 
             if not update_success:
                 logger.error(f"View loading failed for {view_name} - falling back to error view")
@@ -1388,6 +1752,28 @@ class FletV2App(ft.Row):
                 with contextlib.suppress(Exception):
                     self.page.update()  # type: ignore[call-arg]
             return False
+        finally:
+            # Release concurrency guard
+            self._loading_view = False
+            # Dump profiling markers once after first dashboard load end
+            if (
+                view_name == 'dashboard'
+                and getattr(self, '_profile_enabled', lambda: False)()  # type: ignore[attr-defined]
+                and not hasattr(self, '_startup_profile_dumped')
+            ):
+                try:
+                    marks = getattr(self, '_startup_profile', [])  # type: ignore[attr-defined]
+                    if marks:
+                        base = marks[0][1]
+                        prev = base
+                        logger.warning('[STARTUP_PROFILE] ---- Startup Timing ----')
+                        for label, ts in marks:
+                            logger.warning('[STARTUP_PROFILE] %6.3f (+%5.3f) %s', ts - base, ts - prev, label)
+                            prev = ts
+                        logger.warning('[STARTUP_PROFILE] -------------------------')
+                    self._startup_profile_dumped = True  # type: ignore[attr-defined]
+                except Exception:  # noqa: BLE001
+                    pass
 
     def _extract_content_and_dispose(self, result_t: tuple[Any, ...]) -> tuple[Any, Callable[[], None] | None]:
         """Extract content and dispose function from result tuple."""
@@ -1417,6 +1803,29 @@ class FletV2App(ft.Row):
     ) -> tuple[Any, Callable[[], None] | None]:
         """Create view with state manager integration - now required for all views."""
         try:
+            # Lightweight per-view cache to avoid reconstructing heavy views (dashboard) repeatedly
+            # Only enabled for views explicitly marked safe for reuse (currently: dashboard) to
+            # prevent stale state issues on views requiring fresh data bindings.
+            if not hasattr(self, "_view_cache"):
+                # view_name -> (content, dispose_func)
+                self._view_cache: dict[str, tuple[Any, Callable[[], None] | None]] = {}
+            cache_enabled = (view_name == "dashboard")
+            if cache_enabled and view_name in self._view_cache:
+                cached_content, cached_dispose = self._view_cache[view_name]
+                try:
+                    logger.warning(
+                        "[VIEW_CACHE] Reusing cached %s view (no reconstruction) type=%s disposed=%s",
+                        view_name, type(cached_content).__name__, cached_dispose is None
+                    )
+                    if os.environ.get('FLET_DASHBOARD_CONTENT_DEBUG') == '1' and view_name == 'dashboard':
+                        # Lightweight cache integrity check
+                        has_children = hasattr(cached_content, 'controls') and bool(getattr(cached_content, 'controls'))
+                        logger.warning(
+                            f"[VIEW_CACHE] Cached dashboard control integrity: has_children={has_children} opacity={getattr(cached_content,'opacity',None)}"
+                        )
+                except Exception:  # noqa: BLE001
+                    pass
+                return cached_content, cached_dispose
             # All views now require state_manager as per Phase 2 refactor
             result = view_function(self.server_bridge, self.page, self.state_manager)
             logger.debug(f"View function returned: {type(result)} for {view_name}")
@@ -1431,6 +1840,13 @@ class FletV2App(ft.Row):
             # Backward compatibility: create auto-dispose function
             # Track subscriptions for automatic cleanup
             dispose_func = self._create_auto_dispose_for_view(view_name)
+            # Store in cache if eligible
+            if cache_enabled:
+                try:
+                    self._view_cache[view_name] = (result, dispose_func)
+                    logger.debug("[VIEW_CACHE] Stored %s view in cache (type=%s)", view_name, type(result).__name__)
+                except Exception:  # noqa: BLE001
+                    pass
             return result, dispose_func
 
         except Exception as e:
@@ -1471,6 +1887,7 @@ class FletV2App(ft.Row):
 # Simple application entry point
 async def main(page: ft.Page, real_server: Any | None = None) -> None:
     """Simple main function - supports optional real server injection."""
+    print("🚀🚀🚀 MAIN FUNCTION CALLED 🚀🚀🚀")
     def on_window_event(e: ft.ControlEvent) -> None:
         """Handle window events to force sizing."""
         if hasattr(e, 'data') and e.data in ("focus", "ready"):
@@ -1501,7 +1918,9 @@ async def main(page: ft.Page, real_server: Any | None = None) -> None:
         page.title = "Backup Server Management"
 
         # Create and add the simple desktop app with optional real server injection
+        print("🚀🚀🚀 CREATING FletV2App 🚀🚀🚀")
         app = FletV2App(page, real_server=real_server)
+        print("🚀🚀🚀 FletV2App CREATED 🚀🚀🚀")
         # Expose app instance on page for programmatic navigation from views (lightweight glue)
         with contextlib.suppress(Exception):
             if hasattr(page, '__dict__'):
@@ -1605,4 +2024,63 @@ if __name__ == "__main__":
     async def main_with_server(page: ft.Page) -> None:
         await main(page, backup_server)
 
-    asyncio.run(ft.app_async(target=main_with_server, view=ft.AppView.WEB_BROWSER, port=8550))  # type: ignore[attr-defined]
+    # Dynamically resolve a free port starting from preferred 8550 with robust IPv4 + IPv6 checks
+    def _is_port_free(port: int) -> bool:
+        import socket as _sock
+        sockets: list[tuple[_sock.socket, str]] = []
+        try:
+            for family in (getattr(_sock, 'AF_INET', None), getattr(_sock, 'AF_INET6', None)):
+                if family is None:
+                    continue
+                try:
+                    s = _sock.socket(family, _sock.SOCK_STREAM)
+                    s.setsockopt(_sock.SOL_SOCKET, _sock.SO_REUSEADDR, 1)
+                    bind_addr = ('::', port, 0, 0) if family == _sock.AF_INET6 else ('0.0.0.0', port)
+                    s.bind(bind_addr)
+                    sockets.append((s, 'ipv6' if family == _sock.AF_INET6 else 'ipv4'))
+                except OSError:
+                    # Any bind failure indicates port in use
+                    return False
+            return True
+        finally:
+            for s, _ in sockets:
+                with contextlib.suppress(Exception):
+                    s.close()
+
+    _preferred_port = 8550
+    _port_candidate = None
+    for candidate in range(_preferred_port, _preferred_port + 25):
+        if _is_port_free(candidate):
+            _port_candidate = candidate
+            break
+    if _port_candidate is None:
+        print("Warning: Could not find free port in preferred range; letting OS choose")
+        _port_candidate = 0  # OS-assigned ephemeral port
+    elif _port_candidate != _preferred_port:
+        print(f"Info: Preferred port {_preferred_port} in use; using {_port_candidate} instead")
+
+    try:
+        asyncio.run(ft.app_async(target=main_with_server, view=ft.AppView.WEB_BROWSER, port=_port_candidate))  # type: ignore[attr-defined]
+    except OSError as bind_err:  # Port race condition fallback
+        print(f"Port {_port_candidate} bind failed ({bind_err}); retrying with ephemeral port")
+        asyncio.run(ft.app_async(target=main_with_server, view=ft.AppView.WEB_BROWSER, port=0))  # type: ignore[attr-defined]
+    except ImportError as imp_err:
+        # FastAPI / pydantic_core compatibility issue (often on bleeding-edge Python versions)
+        err_text = str(imp_err)
+        if 'pydantic_core' in err_text or 'fastapi' in err_text:
+            print("Browser mode failed due to FastAPI/Pydantic import issue; falling back to native app view")
+            try:
+                asyncio.run(ft.app_async(target=main_with_server, view=ft.AppView.FLET_APP, port=_port_candidate))  # type: ignore[attr-defined]
+            except Exception as fallback_err:  # noqa: BLE001
+                import traceback as _tb
+                print("Native app view fallback failed:", fallback_err)
+                print(_tb.format_exc())
+                print("Attempting minimal fallback view (no specific AppView)")
+                try:
+                    asyncio.run(ft.app_async(target=main_with_server, port=_port_candidate))  # type: ignore[attr-defined]
+                except Exception as minimal_err:  # noqa: BLE001
+                    print("Minimal fallback also failed, aborting startup:", minimal_err)
+                    print(_tb.format_exc())
+                    raise
+        else:
+            raise

@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 import traceback
 from datetime import datetime
@@ -99,8 +100,8 @@ def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: str | N
         logging.getLogger('Shared.utils.process_monitor').setLevel(logging.WARNING)  # Reduce process monitor logs
         logging.getLogger('Shared.utils.process_monitor_gui').setLevel(logging.WARNING)
 
-        # Application-specific loggers - reduce verbosity for cleaner output
-        logging.getLogger('views.dashboard').setLevel(logging.ERROR)  # Suppress ALL dashboard debug logs
+        # Application-specific loggers - reduce verbosity for cleaner output (allow override below)
+        logging.getLogger('views.dashboard').setLevel(logging.ERROR)  # Suppress dashboard logs unless explicitly overridden
         logging.getLogger('views').setLevel(logging.WARNING)  # Suppress all view debug logs
         logging.getLogger('FletV2.main').setLevel(logging.WARNING)  # Reduce main app logs to warnings only
         logging.getLogger('utils.server_bridge').setLevel(logging.WARNING)  # Reduce bridge logs
@@ -153,6 +154,13 @@ def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: str | N
         # Set the custom exception hook
         sys.excepthook = custom_exception_hook
         _debug_setup_done = True
+
+        # Conditional override: allow targeted dashboard diagnostics without increasing global verbosity
+        if os.environ.get("FLET_DASHBOARD_DEBUG") == "1":  # pragma: no cover - diagnostic mode
+            logging.getLogger('views.dashboard').setLevel(logging.WARNING)
+            logging.getLogger('views.dashboard').warning(
+                "[DASHBOARD_DEBUG] FLET_DASHBOARD_DEBUG=1 -> elevating dashboard logger to WARNING"
+            )
 
         setup_logger = logging.getLogger("FletV2.debug_setup")
         setup_logger.info("Enhanced terminal debugging setup complete")

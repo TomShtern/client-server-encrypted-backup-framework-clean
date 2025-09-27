@@ -17,6 +17,8 @@
         "bierner.markdown-mermaid",
         "github.copilot-workspace",
         "nvidia.nsight-copilot",
-        "anthropic.claude-code"
+        "anthropic.claude-code",
+        "keploy.keployio",
+        "dbcode.dbcode"
     ]
 }

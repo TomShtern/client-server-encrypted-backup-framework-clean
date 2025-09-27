@@ -25,7 +25,7 @@ This is a **production-grade 5-layer encrypted backup system** with hybrid web-t
 ```
 Web UI → Flask API Bridge → C++ Client (subprocess) → Python Server → Flet Desktop GUI
   ↓           ↓                    ↓                     ↓                     ↓
-HTTP      RealBackupExecutor    --batch mode       Custom Binary       Material Design 3
+HTTP      RealBackupExecutor    --batch mode       Custom Binary TCP   Material Design 3
 requests  process management   + transfer.info     Custom Binary TCP   Server Management
 ```
 
@@ -59,7 +59,7 @@ pytest tests/
 pytest tests/test_specific_file.py::TestClass::test_method -v
 
 # Test Integration: pytest tests/integration/ -v
-pytest tests/integration/ -v
+pytest tests tests/integration/ -v
 ```
 
 #### C++
@@ -99,6 +99,10 @@ python scripts/one_click_build_and_run.py
 - **Logging**: Use logger instead of print() for debugging
 - **File Size**: Keep files under 650 lines, decompose larger files
 - **Framework Harmony**: Prefer Flet built-ins over custom solutions
+- **Reasoning**: Apply sequential thinking MCP (Meta-Cognitive Programming) as much as possible to identify all problems/issues before attempting fixes. Use websearch and context7 MCP when you need up to date context and docs.
+- **Proactivity**: The AI should be proactive in identifying and fixing issues, not just running tests without understanding the results. Use sequential thinking MCP every 5 tool calls to ensure a thorough understanding of the situation before proceeding with fixes.
+- **System Integrity**: Make sure you are not breaking the system and removing functionality.
+- **Problem Management**: Make sure to not cause more problems than you solve.
 
 ### Key Principles
 - **FletV2 First**: Use `FletV2/` directory exclusively (modern implementation)
@@ -106,6 +110,10 @@ python scripts/one_click_build_and_run.py
 - **Async Patterns**: Use `page.run_task()` for background operations
 - **Theme System**: Use TOKENS instead of hardcoded colors
 - **Verification**: Check `received_files/` for actual transfers (not exit codes)
+- **Avoid Assumptions**: Always check the current actual state and figure things out from there.
+- **Reasoning**: Apply the highest reasoning, take your time.
+- **System Integrity**: Make sure you are not breaking the system and removing functionality.
+- **Problem Management**: Make sure to not cause more problems than you solve.
 
 ### Testing Strategy
 - Integration tests verify end-to-end flows
@@ -125,7 +133,7 @@ self.backup_process = subprocess.Popen(
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
     text=True,
-    cwd=os.path.dirname(os.path.abspath(self.client_exe)),  # CRITICAL: Working directory
+    cwd=os.path.dirname(os.path.abspath(__file__)),  # CRITICAL: Working directory
     env=Shared.utils.utf8_solution.get_env()  # UTF-8 environment
 )
 ```
@@ -620,7 +628,7 @@ def create_data_list(items: List[Dict[str, Any]]) -> ft.Control:
         height=400  # Fixed height for virtualization
     )
 
-def create_list_item(item: Dict[str, Any]) -> ft.Control:
+def create_list_item(item: Dict[str, Any]]) -> ft.Control:
     """Create individual list item."""
     return ft.Container(
         content=ft.Row([
@@ -769,6 +777,7 @@ Configuration and Constants for FletV2.
 import os
 from pathlib import Path
 from contextlib import suppress
+from contextlib import suppress
 
 # Load environment variables from .env file if it exists
 with suppress(ImportError):
@@ -907,7 +916,7 @@ class TestSimpleServerBridge(unittest.TestCase):
         self.assertIsInstance(files, list)
 
 
-if __name__ == '__main__':
+if __name__name == '__main__':
     unittest.main()
 ```
 
@@ -915,6 +924,7 @@ if __name__ == '__main__':
 ```python
 import unittest
 from unittest.mock import Mock, patch, MagicMock
+import types # ADDED: Import for types.ModuleType - required to create a valid module object for mocking.
 
 class TestViewComponents(unittest.TestCase):
     """Test view components with proper mocking."""
@@ -930,28 +940,3 @@ class TestViewComponents(unittest.TestCase):
         self.mock_server_bridge.get_clients.return_value = [
             {
                 'client_id': 'test-1',
-                'address': '192.168.1.100',
-                'status': 'connected',
-                'connected_at': '2025-01-01T10:00:00Z',
-                'last_activity': '2025-01-01T10:30:00Z'
-            }
-        ]
-
-        # Mock state manager
-        self.mock_state_manager = Mock()
-
-    @patch('utils.user_feedback.show_success_message')
-    def test_successful_operation(self, mock_show_success):
-        """Test successful operation with mocked dependencies."""
-        # Arrange
-        from views.clients import handle_client_action
-
-        # Act
-        handle_client_action(
-            self.mock_page,
-            self.mock_server_bridge,
-            self.mock_state_manager
-        )
-
-        # Assert
-        mock_show_success.assert_called_once()

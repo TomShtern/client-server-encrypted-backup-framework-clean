@@ -30,7 +30,7 @@ def setup_modern_theme(page: ft.Page):
             secondary=BRAND_COLORS["secondary"],
             tertiary=BRAND_COLORS["accent"],
             surface=ft.Colors.SURFACE,
-            background=ft.Colors.SURFACE_TINT,
+            background=ft.Colors.SURFACE,  # ✅ FIXED: Use SURFACE instead of SURFACE_TINT
             error=BRAND_COLORS["error"],
             on_primary=ft.Colors.WHITE,
             on_secondary=ft.Colors.WHITE,
@@ -61,7 +61,7 @@ def setup_modern_theme(page: ft.Page):
             secondary="#A78BFA",         # Bright purple for dark
             tertiary="#34D399",          # Bright emerald for dark
             surface=ft.Colors.SURFACE,
-            background=ft.Colors.SURFACE_TINT,
+            background=ft.Colors.SURFACE,  # ✅ FIXED: Use SURFACE instead of SURFACE_TINT
             error="#F87171",
             on_primary=ft.Colors.WHITE,  # White text on bright blue
             on_secondary=ft.Colors.WHITE, # White text on bright purple
