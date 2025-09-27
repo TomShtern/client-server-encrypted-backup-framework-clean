@@ -86,6 +86,7 @@ python scripts/one_click_build_and_run.py
 - **Line Length**: 110 characters max
 - **Error Handling**: Try/except with specific exceptions, log errors with context
 - **Async**: Use async/await for I/O operations, avoid blocking calls
+- **Indentation**: Correct any unexpected indentation issues by ensuring code blocks are properly scoped. Run linters (e.g., `ruff check .`) to verify code style.
 
 #### C++
 - **Style**: Google C++ style with clang-format
@@ -103,6 +104,7 @@ python scripts/one_click_build_and_run.py
 - **Proactivity**: The AI should be proactive in identifying and fixing issues, not just running tests without understanding the results. Use sequential thinking MCP every 5 tool calls to ensure a thorough understanding of the situation before proceeding with fixes.
 - **System Integrity**: Make sure you are not breaking the system and removing functionality.
 - **Problem Management**: Make sure to not cause more problems than you solve.
+- **Data Source**: **ALWAYS USE REAL DATA FROM THE SERVER/DATABASE!** You can, optionally, add also a fallback to placeholder. Use real data from the python server and the sqlite3. If real data is unavailable, display 'No real data' or a simple 'loren ipsum' instead of mock data. **NEVER use mock data.**
 
 ### Key Principles
 - **FletV2 First**: Use `FletV2/` directory exclusively (modern implementation)
@@ -113,7 +115,7 @@ python scripts/one_click_build_and_run.py
 - **Avoid Assumptions**: Always check the current actual state and figure things out from there.
 - **Reasoning**: Apply the highest reasoning, take your time.
 - **System Integrity**: Make sure you are not breaking the system and removing functionality.
-- **Problem Management**: Make sure to not cause more problems than you solve.
+- **Problem Management**: Make sure you are not causing more problems than you are solving.
 
 ### Testing Strategy
 - Integration tests verify end-to-end flows
@@ -926,17 +928,4 @@ import unittest
 from unittest.mock import Mock, patch, MagicMock
 import types # ADDED: Import for types.ModuleType - required to create a valid module object for mocking.
 
-class TestViewComponents(unittest.TestCase):
-    """Test view components with proper mocking."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        # Mock Flet page
-        self.mock_page = Mock()
-        self.mock_page.update = Mock()
-
-        # Mock server bridge
-        self.mock_server_bridge = Mock()
-        self.mock_server_bridge.get_clients.return_value = [
-            {
-                'client_id': 'test-1',
+class TestView

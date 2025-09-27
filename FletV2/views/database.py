@@ -66,39 +66,9 @@ def create_database_view(
     filtered_data = []
     search_query = ""
 
-    # Mock database info for demonstration
-    def get_mock_db_info() -> dict[str, Any]:
-        """Simple database info generator."""
-        return {
-            "status": "Connected",
-            "tables": 5,
-            "total_records": 1247,
-            "size": "15.3 MB"
-        }
-
-    # Mock table data generator
-    def get_mock_table_data(table_name: str) -> list[dict[str, Any]]:
-        """Simple table data generator."""
-        if table_name == "clients":
-            return [
-                {"id": 1, "name": "Alice Johnson", "email": "alice@example.com", "status": "Active", "created": "2024-01-15"},
-                {"id": 2, "name": "Bob Smith", "email": "bob@example.com", "status": "Inactive", "created": "2024-01-10"},
-                {"id": 3, "name": "Carol Davis", "email": "carol@example.com", "status": "Active", "created": "2024-01-20"},
-                {"id": 4, "name": "David Wilson", "email": "david@example.com", "status": "Pending", "created": "2024-01-25"},
-                {"id": 5, "name": "Eve Brown", "email": "eve@example.com", "status": "Active", "created": "2024-01-30"},
-            ]
-        elif table_name == "files":
-            return [
-                {"id": 1, "filename": "document1.pdf", "size": "2.5 MB", "type": "PDF", "uploaded": "2024-01-15"},
-                {"id": 2, "filename": "image.jpg", "size": "1.2 MB", "type": "Image", "uploaded": "2024-01-16"},
-                {"id": 3, "filename": "archive.zip", "size": "5.8 MB", "type": "Archive", "uploaded": "2024-01-17"},
-            ]
-        else:
-            return [
-                {"id": 1, "column1": "Value 1", "column2": "Data A", "column3": "Info X"},
-                {"id": 2, "column1": "Value 2", "column2": "Data B", "column3": "Info Y"},
-                {"id": 3, "column1": "Value 3", "column2": "Data C", "column3": "Info Z"},
-            ]
+    # Helper for a no-data placeholder table
+    def _empty_table_placeholder() -> list[dict[str, Any]]:
+        return []
 
     # Load data from server or use mock
     def load_data() -> None:
@@ -109,13 +79,14 @@ def create_database_view(
             try:
                 result = server_bridge.get_table_data(selected_table)
                 if result.get('success'):
-                    table_data = result.get('data', [])
+                    table_data = result.get('data', {}).get('rows', []) if isinstance(result.get('data'), dict) else result.get('data') or []
                 else:
-                    table_data = get_mock_table_data(selected_table)
-            except Exception:
-                table_data = get_mock_table_data(selected_table)
+                    table_data = _empty_table_placeholder()
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"Failed loading table data: {e}")
+                table_data = _empty_table_placeholder()
         else:
-            table_data = get_mock_table_data(selected_table)
+            table_data = _empty_table_placeholder()
 
         filtered_data = table_data.copy()
         update_table()
@@ -419,14 +390,15 @@ def create_database_view(
         themed_button("Refresh", lambda _e: load_data(), "outlined", ft.Icons.REFRESH),
     ], spacing=10)
 
-    # Database stats using simple metric cards
-    db_info = get_mock_db_info()
-    stats_row = ft.Row([
-        themed_metric_card("Status", db_info["status"], ft.Icons.STORAGE),
-        themed_metric_card("Tables", str(db_info["tables"]), ft.Icons.TABLE_CHART),
-        themed_metric_card("Records", str(db_info["total_records"]), ft.Icons.STORAGE),
-        themed_metric_card("Size", db_info["size"], ft.Icons.FOLDER),
-    ], spacing=10)
+    # Database stats from real server (no mock). Use placeholders when unavailable.
+    db_status = {"status": "No data", "tables": 0, "total_records": 0, "size": "--"}
+    if server_bridge and hasattr(server_bridge, 'get_database_info'):
+        try:
+            info_res = server_bridge.get_database_info()
+            if info_res.get('success') and info_res.get('data'):
+                db_status = info_res['data']
+        except Exception as ex:  # pragma: no cover
+            logger.warning(f"Database info fetch failed: {ex}")
 
     # Enhanced table with layered card design
     table_card = themed_card(database_table, "Database Records", page)
@@ -436,13 +408,13 @@ def create_database_view(
         ft.Text("Database Management", size=28, weight=ft.FontWeight.BOLD),
         # Responsive stats row
         ft.ResponsiveRow([
-            ft.Column([themed_metric_card("Status", db_info["status"], ft.Icons.STORAGE)],
+            ft.Column([themed_metric_card("Status", db_status["status"], ft.Icons.STORAGE)],
                      col={"sm": 12, "md": 6, "lg": 3}),
-            ft.Column([themed_metric_card("Tables", str(db_info["tables"]), ft.Icons.TABLE_CHART)],
+            ft.Column([themed_metric_card("Tables", str(db_status["tables"]), ft.Icons.TABLE_CHART)],
                      col={"sm": 12, "md": 6, "lg": 3}),
-            ft.Column([themed_metric_card("Records", str(db_info["total_records"]), ft.Icons.STORAGE)],
+            ft.Column([themed_metric_card("Records", str(db_status["total_records"]), ft.Icons.STORAGE)],
                      col={"sm": 12, "md": 6, "lg": 3}),
-            ft.Column([themed_metric_card("Size", db_info["size"], ft.Icons.FOLDER)],
+            ft.Column([themed_metric_card("Size", db_status["size"], ft.Icons.FOLDER)],
                      col={"sm": 12, "md": 6, "lg": 3}),
         ]),
         actions_row,

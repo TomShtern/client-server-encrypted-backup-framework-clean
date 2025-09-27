@@ -96,12 +96,10 @@ if not hasattr(ft, "FilterChip"):
             self._refresh_style()
 
         def _handle_click(self, e: ft.ControlEvent) -> None:
-            try:
+            with _contextlib.suppress(Exception):
                 if callable(self.on_selected):
                     ev = type("Evt", (), {"control": self})()
                     self.on_selected(ev)
-            except Exception:
-                pass
 
         def _refresh_style(self) -> None:
             try:

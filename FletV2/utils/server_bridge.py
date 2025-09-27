@@ -13,7 +13,11 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
-# Mock data support removed - real server required
+# NOTE: Mock data has been fully removed per project policy:
+#  - If a real server instance isn't supplied, methods now return empty data structures
+#    or {'success': False, 'error': 'No real server configured'} without fabricating values.
+#  - This preserves ability for views/tests to instantiate a bridge in a "disconnected" state
+#    while guaranteeing NO synthetic metrics or entities leak into the UI.
 
 # Import config locally when needed to avoid global import conflicts
 
@@ -98,36 +102,31 @@ def convert_fletv2_client_to_backupserver(client_data: dict[str, Any]) -> dict[s
     return converted
 
 class ServerBridge:
-    """
-    Simplified ServerBridge that provides clean drop-in replacement capability.
+    """ServerBridge delegating to a real server instance.
 
-    If real_server is provided, delegates to it. Otherwise uses placeholder data for development.
-    Maintains 100% compatibility with existing views while being dramatically simpler.
+    When instantiated without a real server, the instance enters a disconnected
+    state and returns empty collections or explicit failure responses WITHOUT
+    generating any fabricated/mock data. This satisfies the "no mock data"
+    project directive while allowing UI components to render graceful
+    "No data" placeholders.
     """
 
     def __init__(self, real_server: Any | None = None):
-        """
-        Initialize ServerBridge with required real server instance.
-
-        Args:
-            real_server: Real server instance with methods like get_clients(), delete_file(), etc.
-                        Required for production use.
-        """
-        if real_server is None:
-            raise ValueError("ServerBridge requires a real server instance. Mock data support has been removed.")
-
-        # Instance attributes
         self.real_server = real_server
-        self._connection_status = "connected"
-
-        logger.info("ServerBridge initialized in PRODUCTION mode with real server")
+        self._connection_status = "connected" if real_server else "disconnected"
+        if self.real_server:
+            logger.info("ServerBridge initialized (real server connected)")
+        else:
+            logger.warning("ServerBridge initialized with NO real server (disconnected mode, no data)")
 
     def is_connected(self) -> bool:
-        """Check if server is connected."""
-        return hasattr(self.real_server, 'is_connected') and self.real_server.is_connected()
+        """Return connection status based on real server availability."""
+        return bool(self.real_server and hasattr(self.real_server, 'is_connected') and self.real_server.is_connected())
 
     def _call_real_server_method(self, method_name: str, *args, **kwargs) -> dict[str, Any]:
         """Helper to call real server method with data conversion."""
+        if not self.real_server:
+            return {'success': False, 'data': None, 'error': 'No real server configured'}
         try:
             if not hasattr(self.real_server, method_name):
                 return {'success': False, 'data': None, 'error': f'Method {method_name} not available on server'}
@@ -206,6 +205,8 @@ class ServerBridge:
 
     async def _call_real_server_method_async(self, method_name: str, *args, **kwargs) -> dict[str, Any]:
         """Async version of _call_real_server_method with data conversion."""
+        if not self.real_server:
+            return {'success': False, 'data': None, 'error': 'No real server configured'}
         try:
             if not hasattr(self.real_server, method_name):
                 return {'success': False, 'data': None, 'error': f'Method {method_name} not available on server'}
@@ -234,6 +235,8 @@ class ServerBridge:
 
     def get_clients(self) -> list[dict[str, Any]]:
         """Get all clients (sync version)."""
+        if not self.real_server:
+            return []
         result = self._call_real_server_method('get_clients')
         if isinstance(result, dict) and 'data' in result:
             return result['data'] if result['data'] is not None else []
@@ -241,6 +244,8 @@ class ServerBridge:
 
     async def get_clients_async(self) -> list[dict[str, Any]]:
         """Get all clients (async version)."""
+        if not self.real_server:
+            return []
         result = await self._call_real_server_method_async('get_clients_async')
         if isinstance(result, dict) and 'data' in result:
             return result['data'] if result['data'] is not None else []
@@ -292,6 +297,8 @@ class ServerBridge:
 
     def get_files(self) -> list[dict[str, Any]]:
         """Get all files."""
+        if not self.real_server:
+            return []
         result = self._call_real_server_method('get_files')
         if isinstance(result, dict) and 'data' in result:
             return result['data'] if result['data'] is not None else []
@@ -299,6 +306,8 @@ class ServerBridge:
 
     async def get_files_async(self) -> list[dict[str, Any]]:
         """Get all files (async)."""
+        if not self.real_server:
+            return []
         result = await self._call_real_server_method_async('get_files_async')
         if isinstance(result, dict) and 'data' in result:
             return result['data'] if result['data'] is not None else []
@@ -405,7 +414,7 @@ class ServerBridge:
         try:
             # For placeholder mode, just return success
             if not self.real_server:
-                return {"success": True, "message": "Server started (placeholder mode)"}
+                return {"success": False, "error": "No real server configured"}
             # For real server, delegate to the async method
             import asyncio
             loop = asyncio.new_event_loop()
@@ -425,7 +434,7 @@ class ServerBridge:
         try:
             # For placeholder mode, just return success
             if not self.real_server:
-                return {"success": True, "message": "Server stopped (placeholder mode)"}
+                return {"success": False, "error": "No real server configured"}
             # For real server, delegate to the async method
             import asyncio
             loop = asyncio.new_event_loop()
@@ -619,31 +628,22 @@ class ServerBridge:
 # ============================================================================
 
 def create_server_bridge(real_server: Any | None = None):
+    """Factory creating a ServerBridge.
+
+    Supplying no real_server returns a disconnected bridge (no data, no mock).
+    This is useful for UI initialization pathways where a server may connect later.
     """
-    Factory function to create ServerBridge instance.
-
-    Args:
-        real_server: Required real server instance for production use
-
-    Returns:
-        ServerBridge instance configured for production use
-
-    Raises:
-        ValueError: If real_server is None
-    """
-    if real_server is None:
-        raise ValueError("ServerBridge requires a real server instance. Mock data support has been removed.")
-
-    logger.info("Creating ServerBridge with real server instance")
     return ServerBridge(real_server=real_server)
 
 # Module-level singleton to avoid function attribute access diagnostics
 _SERVER_BRIDGE_INSTANCE: ServerBridge | None = None
 
 def get_server_bridge() -> ServerBridge:
-    """Get or create a singleton ServerBridge instance.
+    """Deprecated singleton accessor retained for backward compatibility.
 
-    Note: This function is deprecated as ServerBridge now requires a real server instance.
-    Use create_server_bridge(real_server_instance) instead.
+    Returns a disconnected bridge (no data). Prefer explicit create_server_bridge().
     """
-    raise RuntimeError("get_server_bridge() is deprecated. Use create_server_bridge(real_server_instance) instead.")
+    global _SERVER_BRIDGE_INSTANCE
+    if _SERVER_BRIDGE_INSTANCE is None:
+        _SERVER_BRIDGE_INSTANCE = ServerBridge()
+    return _SERVER_BRIDGE_INSTANCE

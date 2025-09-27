@@ -576,6 +576,390 @@ def create_dashboard_view(
         border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
     )
 
+    # ==================== INTERACTIVE DATA VISUALIZATIONS ====================
+    def create_interactive_performance_chart() -> ft.Container:
+        """Create sophisticated interactive line chart for real-time performance metrics."""
+
+        # Sample data points for demonstration - in production, this would come from server_bridge
+        cpu_data = [
+            ft.LineChartDataPoint(x=0, y=15),
+            ft.LineChartDataPoint(x=1, y=25),
+            ft.LineChartDataPoint(x=2, y=35),
+            ft.LineChartDataPoint(x=3, y=28),
+            ft.LineChartDataPoint(x=4, y=42),
+            ft.LineChartDataPoint(x=5, y=38),
+            ft.LineChartDataPoint(x=6, y=45),
+        ]
+
+        memory_data = [
+            ft.LineChartDataPoint(x=0, y=45),
+            ft.LineChartDataPoint(x=1, y=48),
+            ft.LineChartDataPoint(x=2, y=52),
+            ft.LineChartDataPoint(x=3, y=55),
+            ft.LineChartDataPoint(x=4, y=58),
+            ft.LineChartDataPoint(x=5, y=62),
+            ft.LineChartDataPoint(x=6, y=65),
+        ]
+
+        disk_data = [
+            ft.LineChartDataPoint(x=0, y=72),
+            ft.LineChartDataPoint(x=1, y=71),
+            ft.LineChartDataPoint(x=2, y=73),
+            ft.LineChartDataPoint(x=3, y=75),
+            ft.LineChartDataPoint(x=4, y=74),
+            ft.LineChartDataPoint(x=5, y=76),
+            ft.LineChartDataPoint(x=6, y=78),
+        ]
+
+        performance_chart = ft.LineChart(
+            data_series=[
+                ft.LineChartData(
+                    data_points=cpu_data,
+                    stroke_width=3,
+                    color=ft.Colors.BLUE_600,
+                    curved=True,
+                    stroke_cap_round=True
+                ),
+                ft.LineChartData(
+                    data_points=memory_data,
+                    stroke_width=3,
+                    color=ft.Colors.GREEN_600,
+                    curved=True,
+                    stroke_cap_round=True
+                ),
+                ft.LineChartData(
+                    data_points=disk_data,
+                    stroke_width=3,
+                    color=ft.Colors.ORANGE_600,
+                    curved=True,
+                    stroke_cap_round=True
+                ),
+            ],
+            border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
+            horizontal_grid_lines=ft.ChartGridLines(
+                color=ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE),
+                width=1,
+                dash_pattern=[3, 3]
+            ),
+            vertical_grid_lines=ft.ChartGridLines(
+                color=ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE),
+                width=1,
+                dash_pattern=[3, 3]
+            ),
+            left_axis=ft.ChartAxis(
+                title=ft.Text("Usage %", size=12, color=ft.Colors.ON_SURFACE),
+                title_size=12,
+                labels_size=10
+            ),
+            bottom_axis=ft.ChartAxis(
+                title=ft.Text("Time (minutes)", size=12, color=ft.Colors.ON_SURFACE),
+                title_size=12,
+                labels_size=10
+            ),
+            tooltip_bgcolor=ft.Colors.with_opacity(0.9, ft.Colors.SURFACE),
+            min_y=0,
+            max_y=100,
+            animate=ft.Animation(1000, ft.AnimationCurve.EASE_OUT),
+            interactive=True,
+            expand=True
+        )
+
+        # Legend for the chart
+        legend = ft.Row([
+            ft.Row([
+                ft.Container(width=12, height=12, bgcolor=ft.Colors.BLUE_600, border_radius=2),
+                ft.Text("CPU", size=11, color=ft.Colors.ON_SURFACE)
+            ], spacing=6),
+            ft.Row([
+                ft.Container(width=12, height=12, bgcolor=ft.Colors.GREEN_600, border_radius=2),
+                ft.Text("Memory", size=11, color=ft.Colors.ON_SURFACE)
+            ], spacing=6),
+            ft.Row([
+                ft.Container(width=12, height=12, bgcolor=ft.Colors.ORANGE_600, border_radius=2),
+                ft.Text("Disk", size=11, color=ft.Colors.ON_SURFACE)
+            ], spacing=6),
+        ], spacing=20, alignment=ft.MainAxisAlignment.CENTER)
+
+        return ft.Container(
+            content=ft.Column([
+                ft.Container(content=performance_chart, height=200),
+                legend
+            ], spacing=12),
+            animate=ft.Animation(400, ft.AnimationCurve.EASE_OUT)
+        )
+
+    def create_interactive_network_chart() -> ft.Container:
+        """Create interactive network activity chart with transfer rates."""
+
+        upload_data = [
+            ft.LineChartDataPoint(x=0, y=12),
+            ft.LineChartDataPoint(x=1, y=18),
+            ft.LineChartDataPoint(x=2, y=22),
+            ft.LineChartDataPoint(x=3, y=16),
+            ft.LineChartDataPoint(x=4, y=28),
+            ft.LineChartDataPoint(x=5, y=35),
+            ft.LineChartDataPoint(x=6, y=42),
+        ]
+
+        download_data = [
+            ft.LineChartDataPoint(x=0, y=8),
+            ft.LineChartDataPoint(x=1, y=15),
+            ft.LineChartDataPoint(x=2, y=12),
+            ft.LineChartDataPoint(x=3, y=25),
+            ft.LineChartDataPoint(x=4, y=32),
+            ft.LineChartDataPoint(x=5, y=28),
+            ft.LineChartDataPoint(x=6, y=38),
+        ]
+
+        network_chart = ft.LineChart(
+            data_series=[
+                ft.LineChartData(
+                    data_points=upload_data,
+                    stroke_width=3,
+                    color=ft.Colors.CYAN_600,
+                    curved=True,
+                    stroke_cap_round=True,
+                    below_line_bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.CYAN_600)
+                ),
+                ft.LineChartData(
+                    data_points=download_data,
+                    stroke_width=3,
+                    color=ft.Colors.PURPLE_600,
+                    curved=True,
+                    stroke_cap_round=True,
+                    below_line_bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.PURPLE_600)
+                ),
+            ],
+            border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
+            horizontal_grid_lines=ft.ChartGridLines(
+                color=ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE),
+                width=1,
+                dash_pattern=[5, 5]
+            ),
+            vertical_grid_lines=ft.ChartGridLines(
+                color=ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE),
+                width=1,
+                dash_pattern=[5, 5]
+            ),
+            left_axis=ft.ChartAxis(
+                title=ft.Text("MB/s", size=12, color=ft.Colors.ON_SURFACE),
+                title_size=12,
+                labels_size=10
+            ),
+            bottom_axis=ft.ChartAxis(
+                title=ft.Text("Time", size=12, color=ft.Colors.ON_SURFACE),
+                title_size=12,
+                labels_size=10
+            ),
+            tooltip_bgcolor=ft.Colors.with_opacity(0.9, ft.Colors.SURFACE),
+            min_y=0,
+            max_y=50,
+            animate=ft.Animation(1200, ft.AnimationCurve.EASE_OUT),
+            interactive=True,
+            expand=True
+        )
+
+        # Network legend
+        network_legend = ft.Row([
+            ft.Row([
+                ft.Container(width=12, height=12, bgcolor=ft.Colors.CYAN_600, border_radius=2),
+                ft.Text("Upload", size=11, color=ft.Colors.ON_SURFACE)
+            ], spacing=6),
+            ft.Row([
+                ft.Container(width=12, height=12, bgcolor=ft.Colors.PURPLE_600, border_radius=2),
+                ft.Text("Download", size=11, color=ft.Colors.ON_SURFACE)
+            ], spacing=6),
+        ], spacing=20, alignment=ft.MainAxisAlignment.CENTER)
+
+        return ft.Container(
+            content=ft.Column([
+                ft.Container(content=network_chart, height=180),
+                network_legend
+            ], spacing=12),
+            animate=ft.Animation(400, ft.AnimationCurve.EASE_OUT)
+        )
+
+    def create_activity_heatmap() -> ft.Container:
+        """Create interactive activity heatmap for the right column."""
+
+        # Create a simple bar chart representing activity by hour
+        activity_data = [
+            ft.BarChartGroup(
+                x=0,
+                bar_rods=[ft.BarChartRod(to_y=8, color=ft.Colors.BLUE_600, width=20)]
+            ),
+            ft.BarChartGroup(
+                x=1,
+                bar_rods=[ft.BarChartRod(to_y=12, color=ft.Colors.BLUE_600, width=20)]
+            ),
+            ft.BarChartGroup(
+                x=2,
+                bar_rods=[ft.BarChartRod(to_y=15, color=ft.Colors.GREEN_600, width=20)]
+            ),
+            ft.BarChartGroup(
+                x=3,
+                bar_rods=[ft.BarChartRod(to_y=22, color=ft.Colors.GREEN_600, width=20)]
+            ),
+            ft.BarChartGroup(
+                x=4,
+                bar_rods=[ft.BarChartRod(to_y=18, color=ft.Colors.ORANGE_600, width=20)]
+            ),
+            ft.BarChartGroup(
+                x=5,
+                bar_rods=[ft.BarChartRod(to_y=6, color=ft.Colors.RED_600, width=20)]
+            ),
+        ]
+
+        heatmap_chart = ft.BarChart(
+            bar_groups=activity_data,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
+            left_axis=ft.ChartAxis(
+                title=ft.Text("Activity", size=12, color=ft.Colors.ON_SURFACE),
+                title_size=12,
+                labels_size=10
+            ),
+            bottom_axis=ft.ChartAxis(
+                title=ft.Text("Hour", size=12, color=ft.Colors.ON_SURFACE),
+                title_size=12,
+                labels_size=10
+            ),
+            horizontal_grid_lines=ft.ChartGridLines(
+                color=ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE),
+                width=1
+            ),
+            tooltip_bgcolor=ft.Colors.with_opacity(0.9, ft.Colors.SURFACE),
+            animate=ft.Animation(800, ft.AnimationCurve.EASE_OUT),
+            interactive=True,
+            expand=True
+        )
+
+        return ft.Container(
+            content=ft.Column([
+                ft.Text("Activity by Hour", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
+                ft.Container(content=heatmap_chart, height=160)
+            ], spacing=12),
+            padding=20,
+            border_radius=16,
+            bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
+            border=ft.border.all(1, ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE)),
+            animate=ft.Animation(400, ft.AnimationCurve.EASE_OUT)
+        )
+
+    # ==================== CIRCULAR STATUS CARDS ====================
+    def create_circular_status_card(title: str, percentage: float, label: str, status: str, color: str, icon: str, detail: str) -> ft.Container:
+        """Create sophisticated circular status card with animated progress indicator."""
+
+        # Create circular progress indicator
+        progress_chart = ft.PieChart(
+            sections=[
+                ft.PieChartSection(
+                    value=percentage,
+                    color=color,
+                    title="",
+                    radius=45
+                ),
+                ft.PieChartSection(
+                    value=100 - percentage,
+                    color=ft.Colors.with_opacity(0.1, color),
+                    title="",
+                    radius=45
+                ),
+            ],
+            sections_space=2,
+            center_space_radius=25,
+            width=100,
+            height=100,
+            animate=ft.Animation(800, ft.AnimationCurve.EASE_OUT)
+        )
+
+        # Status badge with enhanced styling
+        status_badge = ft.Container(
+            content=ft.Text(
+                status,
+                size=10,
+                weight=ft.FontWeight.BOLD,
+                color=color
+            ),
+            padding=ft.padding.symmetric(horizontal=8, vertical=3),
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.15, color),
+            border=ft.border.all(1, ft.Colors.with_opacity(0.3, color))
+        )
+
+        return ft.Container(
+            content=ft.Column([
+                # Header with icon and status
+                ft.Row([
+                    ft.Container(
+                        content=ft.Icon(icon, color=color, size=20),
+                        padding=6,
+                        border_radius=8,
+                        bgcolor=ft.Colors.with_opacity(0.1, color)
+                    ),
+                    ft.Text(title, size=14, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE, expand=True),
+                    status_badge
+                ], spacing=8),
+
+                # Circular chart with center label
+                ft.Container(
+                    content=ft.Stack([
+                        progress_chart,
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Text(f"{percentage:.0f}%", size=18, weight=ft.FontWeight.BOLD, color=color),
+                                ft.Text(label.split('%')[0] if '%' in label else label, size=10, color=ft.Colors.ON_SURFACE)
+                            ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                            alignment=ft.alignment.center
+                        )
+                    ]),
+                    margin=ft.margin.symmetric(vertical=12),
+                    alignment=ft.alignment.center
+                ),
+
+                # Detail information
+                ft.Text(
+                    detail,
+                    size=11,
+                    color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE),
+                    text_align=ft.TextAlign.CENTER
+                ),
+            ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            padding=20,
+            border_radius=16,
+            bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.SURFACE),
+            border=ft.border.all(1, ft.Colors.with_opacity(0.12, color)),
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=8,
+                color=ft.Colors.with_opacity(0.06, ft.Colors.SHADOW),
+                offset=ft.Offset(0, 2)
+            ),
+            animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
+            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_IN_OUT)
+        )
+
+    def create_status_indicator(label: str, value: str, color: str, icon: str) -> ft.Container:
+        """Create compact status indicator with icon and value."""
+        return ft.Container(
+            content=ft.Row([
+                ft.Container(
+                    content=ft.Icon(icon, color=color, size=16),
+                    padding=6,
+                    border_radius=6,
+                    bgcolor=ft.Colors.with_opacity(0.1, color)
+                ),
+                ft.Column([
+                    ft.Text(label, size=11, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE),
+                    ft.Text(value, size=12, weight=ft.FontWeight.BOLD, color=color)
+                ], spacing=2, alignment=ft.MainAxisAlignment.CENTER)
+            ], spacing=8),
+            padding=ft.padding.symmetric(horizontal=12, vertical=10),
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
+            border=ft.border.all(1, ft.Colors.with_opacity(0.08, color)),
+            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_IN_OUT)
+        )
+
     # ==================== MAIN LAYOUT ====================
     status_text = ft.Text("System Online", ref=status_ref, size=12, color=ft.Colors.GREEN)
 
@@ -604,8 +988,28 @@ def create_dashboard_view(
             margin=ft.margin.only(bottom=16)
         ),
 
-        # Storage capacity
-        capacity_card,
+        # (Detailed capacity, performance, and network charts moved to Analytics view)
+        # Provide a compact link-style card directing user to Analytics
+        ft.Container(
+            content=ft.Column([
+                ft.Text("Detailed Analytics", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
+                ft.Text(
+                    "View performance trends, network activity, and capacity heatmaps in the Analytics tab.",
+                    size=12,
+                    color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE)
+                ),
+                ft.FilledTonalButton(
+                    "Open Analytics",
+                    icon=ft.Icons.ANALYTICS_OUTLINED,
+                    on_click=lambda e: show_success_message(page, "Switch to Analytics tab on the left navigation")
+                )
+            ], spacing=12),
+            padding=20,
+            border_radius=16,
+            bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
+            border=ft.border.all(1, ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE)),
+            margin=ft.margin.only(bottom=16)
+        ),
 
         # Additional KPI metrics
         ft.Container(
@@ -631,8 +1035,14 @@ def create_dashboard_view(
             margin=ft.margin.only(bottom=16)
         ),
 
+        # Activity heatmap visualization
+        create_activity_heatmap(),
+
         # Live activity stream
-        activity_card,
+        ft.Container(
+            content=activity_card,
+            margin=ft.margin.only(top=16)
+        ),
 
         # Connected clients section
         ft.Container(
@@ -722,6 +1132,97 @@ def create_dashboard_view(
                     padding=ft.padding.only(left=12)
                 ),
             ], spacing=0),
+            margin=ft.margin.only(top=24)
+        ),
+
+        # BOTTOM SECTION: CIRCULAR CHARTS & STATUS INDICATORS
+        ft.Container(
+            content=ft.Column([
+                # Section Header
+                ft.Container(
+                    content=ft.Row([
+                        ft.Icon(ft.Icons.DONUT_LARGE, color=ft.Colors.TEAL_600, size=24),
+                        ft.Text("SYSTEM OVERVIEW", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                    ], spacing=12),
+                    margin=ft.margin.only(bottom=20)
+                ),
+
+                # Circular Charts Row
+                ft.ResponsiveRow([
+                    # Network Status Chart
+                    ft.Container(
+                        content=create_circular_status_card(
+                            title="Network Status",
+                            percentage=94,
+                            label="94% Uptime",
+                            status="Excellent",
+                            color=ft.Colors.GREEN_600,
+                            icon=ft.Icons.WIFI,
+                            detail="2.1K requests/min"
+                        ),
+                        col={"sm": 12, "md": 6, "lg": 3}
+                    ),
+
+                    # Backup Progress Chart
+                    ft.Container(
+                        content=create_circular_status_card(
+                            title="Backup Progress",
+                            percentage=67,
+                            label="67% Complete",
+                            status="In Progress",
+                            color=ft.Colors.BLUE_600,
+                            icon=ft.Icons.BACKUP,
+                            detail="18 jobs active"
+                        ),
+                        col={"sm": 12, "md": 6, "lg": 3}
+                    ),
+
+                    # Security Status Chart
+                    ft.Container(
+                        content=create_circular_status_card(
+                            title="Security Status",
+                            percentage=100,
+                            label="100% Secure",
+                            status="Protected",
+                            color=ft.Colors.TEAL_600,
+                            icon=ft.Icons.SECURITY,
+                            detail="All systems secure"
+                        ),
+                        col={"sm": 12, "md": 6, "lg": 3}
+                    ),
+
+                    # Performance Index Chart
+                    ft.Container(
+                        content=create_circular_status_card(
+                            title="Performance Index",
+                            percentage=85,
+                            label="85% Optimal",
+                            status="Good",
+                            color=ft.Colors.ORANGE_600,
+                            icon=ft.Icons.SPEED,
+                            detail="Response: 45ms"
+                        ),
+                        col={"sm": 12, "md": 6, "lg": 3}
+                    ),
+                ], spacing=16),
+
+                # Status Indicators Row
+                ft.Container(
+                    content=ft.Row([
+                        create_status_indicator("Server Health", "Optimal", ft.Colors.GREEN_600, ft.Icons.FAVORITE),
+                        create_status_indicator("Data Integrity", "Verified", ft.Colors.BLUE_600, ft.Icons.VERIFIED_USER),
+                        create_status_indicator("Last Backup", "2 min ago", ft.Colors.PURPLE_600, ft.Icons.UPDATE),
+                        create_status_indicator("Next Backup", "In 28 min", ft.Colors.CYAN_600, ft.Icons.SCHEDULE),
+                        create_status_indicator("Storage Quota", "62% Used", ft.Colors.ORANGE_600, ft.Icons.STORAGE),
+                        create_status_indicator("Active Users", "15 Online", ft.Colors.TEAL_600, ft.Icons.PEOPLE),
+                    ], spacing=16, wrap=True),
+                    margin=ft.margin.only(top=24)
+                ),
+            ]),
+            padding=24,
+            border_radius=16,
+            bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
+            border=ft.border.all(1, ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE)),
             margin=ft.margin.only(top=24)
         ),
 

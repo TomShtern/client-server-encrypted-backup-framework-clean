@@ -8,125 +8,65 @@ import sys
 import unittest
 from unittest.mock import Mock, patch
 
+try:  # pragma: no cover - only for environment without flet
+    import flet  # noqa: F401
+except Exception:  # noqa: BLE001
+    flet = None  # type: ignore
+
 # Set debug mode to enable mock data
 os.environ['FLET_V2_DEBUG'] = 'true'
 
 # Add the FletV2 directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from utils.server_bridge import ServerBridge, create_server_bridge
+from utils.server_bridge import ServerBridge, create_server_bridge  # create_server_bridge retained for backward compat
 
 
-class TestSimpleServerBridge(unittest.TestCase):
-    """Test cases for the simple bridge interface (now unified ServerBridge)."""
+class TestServerBridgeNoMock(unittest.TestCase):
+    """Tests for ServerBridge in no-mock (disconnected) mode."""
 
     def setUp(self):
-        """Set up test fixtures before each test method."""
         with patch('utils.server_bridge.logger'):
-            self.bridge = ServerBridge()
+            self.bridge = ServerBridge()  # No real server
 
-    def test_initialization(self):
-        """Test that the bridge initializes correctly."""
+    def test_initialization_disconnected(self):
+        if flet is None:
+            self.skipTest("Skipping test: flet dependency not installed")
         self.assertIsInstance(self.bridge, ServerBridge)
-        self.assertTrue(self.bridge.is_connected())
+        self.assertFalse(self.bridge.is_connected(), "Bridge without real server should be disconnected")
 
-    def test_get_clients(self):
-        """Test getting client data."""
-        clients = self.bridge.get_clients()
-        self.assertIsInstance(clients, list)
-        self.assertGreater(len(clients), 0)
+    def test_get_clients_empty(self):
+        self.assertEqual(self.bridge.get_clients(), [], "Expected empty client list without real server")
 
-        # Check structure of first client
-        if clients:
-            client = clients[0]  # clients is a list, accessing first element
-            required_keys = ['id', 'name', 'status', 'last_seen']
-            for key in required_keys:
-                self.assertIn(key, client)
+    def test_get_files_empty(self):
+        self.assertEqual(self.bridge.get_files(), [], "Expected empty file list without real server")
 
-    def test_get_files(self):
-        """Test getting file data."""
-        files = self.bridge.get_files()
-        self.assertIsInstance(files, list)
+    def test_database_info_failure(self):
+        getter = getattr(self.bridge, 'get_database_info', None)
+        if getter is None:
+            self.skipTest("ServerBridge.get_database_info not implemented in this build")
+        info = getter()  # type: ignore[call-arg]
+        # Without real server expect failure structure
+        self.assertIsInstance(info, dict)
+        self.assertIn('success', info)
+        self.assertFalse(info['success'])
 
-        # Check structure of first file
-        if files:
-            file_data = files[0]  # files is a list, accessing first element
-            required_keys = ['id', 'name', 'size', 'client_id']
-            for key in required_keys:
-                self.assertIn(key, file_data)
-
-    def test_get_database_info(self):
-        """Test getting database information."""
-        db_info_result = self.bridge.get_database_info()
-        self.assertIsInstance(db_info_result, dict)
-
-        # Check that it has the expected structure
-        self.assertIn('success', db_info_result)
-        self.assertIn('data', db_info_result)
-        self.assertIn('error', db_info_result)
-
-        # Check the data structure
-        db_info = db_info_result['data']
-        required_keys = ['status', 'tables', 'total_records', 'size']
-        for key in required_keys:
-            self.assertIn(key, db_info)
-
-    def test_disconnect_client(self):
-        """Test disconnecting a client."""
-        result = self.bridge.disconnect_client("client_001")
-        self.assertTrue(result)
-
-    def test_delete_client(self):
-        """Test deleting a client."""
-        result = self.bridge.delete_client("client_001")
-        self.assertTrue(result)
-
-    def test_is_connected(self):
-        """Test checking connection status."""
-        result = self.bridge.is_connected()
-        self.assertTrue(result)
-
-    def test_create_simple_server_bridge_factory(self):
-        """Test the factory function."""
+    def test_factory_returns_disconnected(self):
         with patch('utils.server_bridge.logger'):
-            bridge = create_server_bridge()
-            self.assertIsInstance(bridge, ServerBridge)
+            bridge = create_server_bridge()  # disconnected bridge
+        self.assertFalse(bridge.is_connected(), "Factory without real server should yield disconnected bridge")
 
-    def test_mock_data_disabled_with_real_server(self):
-        """Test that mock data is disabled when real server is provided."""
-        # Create a mock real server with the required methods
-        mock_real_server = Mock()
-        mock_real_server.is_connected.return_value = True
-        mock_real_server.get_clients = Mock(return_value=[])  # Real server returns list directly
-
-        # Create bridge with real server
-        bridge_with_real_server = ServerBridge(real_server=mock_real_server)
-
-        # Verify that mock database is not used
-        self.assertIsNone(bridge_with_real_server._mock_db)
-        self.assertFalse(bridge_with_real_server._use_mock_data)
-
-        # Test that methods return empty data instead of mock data
-        result = bridge_with_real_server.get_all_clients_from_db()
-        self.assertIsInstance(result, dict)
-        self.assertIn('success', result)
-        self.assertIn('data', result)
-        self.assertIn('error', result)
-        self.assertEqual(len(result['data']), 0)  # Should be empty, not mock data
-
-    def test_mock_data_enabled_without_real_server(self):
-        """Test that mock data is enabled when no real server is provided."""
-        # Create bridge without real server (mock mode)
-        bridge_mock_mode = ServerBridge()
-
-        # Verify that mock database is used
-        self.assertIsNotNone(bridge_mock_mode._mock_db)
-        self.assertTrue(bridge_mock_mode._use_mock_data)
-
-        # Test that methods return mock data
-        clients = bridge_mock_mode.get_clients()
-        self.assertIsInstance(clients, list)
-        self.assertGreater(len(clients), 0)  # Should have mock data
+    def test_real_server_delegation(self):
+        if flet is None:
+            self.skipTest("Skipping test: flet dependency not installed")
+        mock_real = Mock()
+        mock_real.is_connected.return_value = True
+        mock_real.get_clients = Mock(return_value=[{'id': '1', 'name': 'Real', 'last_seen': 'now', 'files_count': 0}])
+        bridge = ServerBridge(real_server=mock_real)
+        self.assertTrue(bridge.is_connected())
+        clients = bridge.get_clients()
+        self.assertEqual(len(clients), 1)
+        self.assertEqual(clients[0]['name'], 'Real')
 
 
 if __name__ == '__main__':
