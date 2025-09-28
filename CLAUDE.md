@@ -6,6 +6,14 @@
 
 ---
 
+Flet GUI Design Schematic:
+Combining Neumorphism, Glassmorphism, and Material Design 3 into a single, cohesive interface is an advanced design exercise. The key is to assign each style a specific role within the UI hierarchy so they complement each other instead of clashing.
+Here is how such a combination could be logically structured:
+Material Design 3 (The Foundation): This style is best used for the core interactive elements and the overall system of color and typography. Its focus on accessibility, clear button states (hover, pressed), and adaptive color palettes ("Material You") makes it the perfect base for ensuring the dashboard is usable. We'll use it for buttons, icons, sliders, and the dynamic color scheme that provides the vibrant background.
+Neumorphism (The Structure): This style excels at creating soft, tactile surfaces. It can be used for the main background panels or "baseplates" of the dashboard, creating a subtle, extruded container from which other elements emerge. This gives the dashboard a soft, physical feel without compromising the clarity of the interactive elements.
+Glassmorphism (The Focal Point): This style is perfect for creating a sense of depth and highlighting the most important information. We'll use it for the primary data cards or modal windows that "float" above the Neumorphic base. The frosted glass effect will allow the Material Design 3 dynamic background color to show through, tying the whole design together.
+
+
 ## 🎯 STRATEGIC CODE GENERATION DIRECTIVES
 
 ### **Immediate Decision Framework**
@@ -249,13 +257,13 @@ from utils.user_feedback import show_success_message, show_error_message
 
 ### **Common Error Patterns & 5-Second Fixes**
 
-| **Error Pattern** | **Instant Fix** |
-|------------------|-----------------|
-| `AttributeError: 'NoneType' object has no attribute 'update'` | Add `if ref.current:` check |
-| `RuntimeError: asyncio.run() cannot be called from a running event loop` | Use `page.run_task()` instead |
-| `UnicodeDecodeError` in subprocess | Import `Shared.utils.utf8_solution` |
-| UI not updating after data change | Use `control.update()` on specific ref |
-| Changes not reflecting in development | Restart with `flet run -r main.py` |
+| **Error Pattern**                                                        | **Instant Fix**                        |
+|--------------------------------------------------------------------------|----------------------------------------|
+| `AttributeError: 'NoneType' object has no attribute 'update'`            | Add `if ref.current:` check            |
+| `RuntimeError: asyncio.run() cannot be called from a running event loop` | Use `page.run_task()` instead          |
+| `UnicodeDecodeError` in subprocess                                       | Import `Shared.utils.utf8_solution`    |
+| UI not updating after data change                                        | Use `control.update()` on specific ref |
+| Changes not reflecting in development                                    | Restart with `flet run -r main.py`     |
 
 ---
 

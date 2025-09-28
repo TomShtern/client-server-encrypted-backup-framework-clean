@@ -17,6 +17,7 @@ File kept <650 lines and line length <=110 chars.
 # ===================== Imports =====================
 from __future__ import annotations
 import asyncio
+import contextlib
 import json
 import os
 import sys
@@ -31,7 +32,7 @@ import Shared.utils.utf8_solution as _  # noqa: F401
 from FletV2.utils.debug_setup import get_logger
 from FletV2.utils.server_bridge import ServerBridge
 from FletV2.utils.state_manager import StateManager
-from FletV2.utils.ui_components import themed_button, themed_card, themed_metric_card
+from FletV2.utils.ui_components import themed_button, themed_metric_card
 from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger("analytics_view")
@@ -40,11 +41,23 @@ logger = get_logger("analytics_view")
 def _safe(control_ref: ft.Ref[Any], setter: Callable[[Any], None]) -> None:
     ctrl = control_ref.current
     if ctrl and getattr(ctrl, "page", None):
-        try:
+        with contextlib.suppress(Exception):  # pragma: no cover
             setter(ctrl)
             ctrl.update()
-        except Exception:  # pragma: no cover
-            pass
+
+
+def _safe_ctrl(ctrl: Any, op: Callable[[Any], None]) -> None:
+    """Safely perform an operation on a control if it's attached to a page.
+
+    This is used for controls we don't hold via Ref (e.g., children in loops or placeholder
+    text) to avoid the recurring 'Text Control must be added to the page first' runtime
+    exceptions that were causing app restarts. (Root cause: updates fired before Flet
+    finished attaching the view to the live page tree.)
+    """
+    if ctrl and getattr(ctrl, "page", None):
+        with contextlib.suppress(Exception):  # pragma: no cover
+            op(ctrl)
+            ctrl.update()
 
 
 def create_analytics_view(server_bridge: ServerBridge | None, page: ft.Page,
@@ -243,9 +256,10 @@ def create_analytics_view(server_bridge: ServerBridge | None, page: ft.Page,
             heatmap_chart.max_y = 10
 
         heatmap_chart.bar_groups = groups
+        # Guard placeholder visibility update (was previously unguarded and could fire
+        # before attachment, producing the error the user reported).
         if heatmap_placeholder_ref.current:
-            heatmap_placeholder_ref.current.visible = len(groups) == 0
-            heatmap_placeholder_ref.current.update()
+            _safe_ctrl(heatmap_placeholder_ref.current, lambda c: setattr(c, 'visible', len(groups) == 0))
 
     heatmap_placeholder = ft.Text("No activity data", size=11, color=ft.Colors.ON_SURFACE_VARIANT,
                                    italic=True, ref=heatmap_placeholder_ref, visible=True)
@@ -327,9 +341,17 @@ def create_analytics_view(server_bridge: ServerBridge | None, page: ft.Page,
 
     # ------------- Auto Refresh -------------
     async def _loop():  # pragma: no cover (timing)
+        # High-frequency loop only active when user enabled auto-refresh
         while auto_refresh and not disposed:
             _update_all()
             await asyncio.sleep(2)
+
+    async def _baseline_loop():  # pragma: no cover (timing)
+        # Always-on low frequency refresh to populate data without user interaction
+        while not disposed:
+            with contextlib.suppress(Exception):  # pragma: no cover
+                _update_all()
+            await asyncio.sleep(5)
 
     def _toggle_auto(e):  # pragma: no cover
         nonlocal auto_refresh, refresh_task
@@ -557,7 +579,18 @@ def create_analytics_view(server_bridge: ServerBridge | None, page: ft.Page,
         capacity_activity_row,
     ], expand=True, spacing=26, scroll=ft.ScrollMode.AUTO)
 
-    analytics_container = themed_card(main_content, 'System Analytics Dashboard')
+    # Explicitly ensure visibility true (defensive)
+    for ctrl in (tiles_row, usage_tiles, pies_row, perf_row, capacity_activity_row):
+        with contextlib.suppress(Exception):  # pragma: no cover
+            ctrl.visible = True
+
+    # Direct wrapper (removed themed_card to eliminate potential layout clipping issue)
+    analytics_wrapper = ft.Container(
+        content=main_content,
+        expand=True,
+        padding=ft.padding.symmetric(horizontal=24, vertical=16),
+        bgcolor=ft.Colors.with_opacity(0.01, ft.Colors.SURFACE),
+    )
 
     async def _entrance():  # pragma: no cover (visual)
         for group in (usage_tiles, pies_row, perf_row, capacity_activity_row):
@@ -566,15 +599,43 @@ def create_analytics_view(server_bridge: ServerBridge | None, page: ft.Page,
             await asyncio.sleep(0.07)
             if hasattr(group, 'controls'):
                 for child in group.controls[:8]:
-                    if isinstance(child, ft.Container):
-                        child.opacity = 1
-                        child.update()
+                    # Apply animation only if container and already attached
+                    if isinstance(child, ft.Container) and getattr(child, 'page', None):
+                        with contextlib.suppress(Exception):  # pragma: no cover
+                            child.opacity = 1
+                            child.update()
+
+    async def _deferred_initial_update():  # pragma: no cover (timing)
+        """Defer first metrics update until the wrapper is attached.
+
+        Previously `_update_all()` executed immediately in `setup_subscriptions()`,
+        racing with Flet's attachment phase and leading to update calls on unattached
+        controls (root cause of crash loop). We now poll briefly (up to ~1.5s) for
+        attachment before performing the first update.
+        """
+        for attempt in range(30):
+            if disposed:
+                return
+            if getattr(analytics_wrapper, 'page', None):
+                logger.debug("Analytics initial update after %d attempts", attempt)
+                _update_all()
+                return
+            await asyncio.sleep(0.05)
+        # Fallback if never attached (should be rare)
+        logger.debug("Analytics initial update fallback (not detected attached)")
+        if not disposed:
+            _update_all()
 
     def setup_subscriptions() -> None:
         nonlocal refresh_task
-        _update_all()
+        # Defer initial update to avoid updating unattached controls
         if page and hasattr(page, 'run_task'):
+            page.run_task(_deferred_initial_update)
             page.run_task(_entrance)
+            # Start baseline periodic refresh
+            page.run_task(_baseline_loop)
+        else:
+            _update_all()
 
     def dispose() -> None:
         nonlocal disposed
@@ -583,4 +644,4 @@ def create_analytics_view(server_bridge: ServerBridge | None, page: ft.Page,
             page.overlay.remove(file_picker)
         logger.debug('Disposed analytics view')
 
-    return analytics_container, dispose, setup_subscriptions
+    return analytics_wrapper, dispose, setup_subscriptions

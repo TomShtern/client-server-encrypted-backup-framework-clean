@@ -5,6 +5,9 @@ Test script to check if hero_metrics_section is included in dashboard.
 
 import os
 import sys
+from unittest.mock import Mock
+
+import flet as ft
 
 # Add paths
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -22,26 +25,26 @@ os.environ['FLET_DASHBOARD_TEST_MARKER'] = '1'
 
 try:
     from FletV2.views.dashboard import create_dashboard_view
-    print("✅ Successfully imported create_dashboard_view")
+    from utils.server_bridge import create_server_bridge
+    from utils.state_manager import create_state_manager
+    print("✅ Successfully imported create_dashboard_view and real components")
 
-    # Mock page and dependencies
-    class MockPage:
-        def update(self): pass
-        def run_task(self, coro): pass
+    # Mock page with proper spec (UI component, not data)
+    mock_page = Mock(spec=ft.Page)
 
-    class MockServerBridge:
-        pass
+    # Use real server_bridge and state_manager (no mock data)
+    try:
+        server_bridge = create_server_bridge()
+        state_manager = create_state_manager() # type: ignore
+        print("✅ Using real server_bridge and state_manager")
+    except Exception as e:
+        print(f"❌ Failed to create real components: {e}")
+        print("No real data available - cannot run test")
+        sys.exit(1)
 
-    class MockStateManager:
-        pass
-
-    mock_page = MockPage()
-    mock_server_bridge = MockServerBridge()
-    mock_state_manager = MockStateManager()
-
-    # Try to create the dashboard
+    # Try to create the dashboard (correct argument order: page, server_bridge, state_manager)
     print("🔄 Attempting to create dashboard...")
-    result = create_dashboard_view(mock_server_bridge, mock_page, mock_state_manager)
+    result = create_dashboard_view(mock_page, server_bridge, state_manager)  # type: ignore
     print("✅ Dashboard creation completed")
 
     if isinstance(result, tuple) and len(result) == 3:

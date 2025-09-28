@@ -102,17 +102,14 @@ if not hasattr(ft, "FilterChip"):
                     self.on_selected(ev)
 
         def _refresh_style(self) -> None:
-            try:
+            with _contextlib.suppress(Exception):
                 if self.selected:
                     self._button.bgcolor = ft.Colors.PRIMARY
                     self._button.color = ft.Colors.ON_PRIMARY
                 else:
                     self._button.bgcolor = None
                     self._button.color = None
-                with _contextlib.suppress(Exception):
-                    self._button.update()
-            except Exception:
-                pass
+                self._button.update()
 
         def update(self, *args: Any, **kwargs: Any) -> None:
             self._refresh_style()
@@ -157,15 +154,11 @@ def _install_global_exception_handlers() -> None:  # pragma: no cover - diagnost
         previous_hook = None  # type: ignore[assignment]
 
     def _excepthook(exc_type, exc, tb):  # type: ignore[override]
-        try:
+        with _contextlib.suppress(Exception):  # noqa: BLE001
             logger.critical("UNCAUGHT EXCEPTION (sys.excepthook)", exc_info=(exc_type, exc, tb))
-        except Exception:  # noqa: BLE001
-            pass
         if previous_hook and previous_hook is not sys.excepthook:  # avoid recursion
-            try:
+            with _contextlib.suppress(Exception):  # noqa: BLE001
                 previous_hook(exc_type, exc, tb)  # type: ignore[misc]
-            except Exception:  # noqa: BLE001
-                pass
 
     try:
         sys.excepthook = _excepthook  # type: ignore[assignment]
@@ -177,11 +170,9 @@ def _install_global_exception_handlers() -> None:  # pragma: no cover - diagnost
         loop = asyncio.get_event_loop()
 
         def _loop_exception_handler(loop_obj, context):  # type: ignore[no-untyped-def]
-            try:
+            with _contextlib.suppress(Exception):  # noqa: BLE001
                 msg = context.get("message") or "Asyncio loop exception"
                 logger.critical(f"ASYNCIO LOOP EXCEPTION: {msg}", exc_info=context.get("exception"))
-            except Exception:  # noqa: BLE001
-                pass
 
         loop.set_exception_handler(_loop_exception_handler)
     except Exception as _loop_err:  # noqa: BLE001
@@ -1450,12 +1441,28 @@ class FletV2App(ft.Row):
         # FLET_BYPASS_SWITCHER=1  -> avoid AnimatedSwitcher entirely (direct assign)
         # FLET_DASHBOARD_DEBUG=1  -> elevate dashboard logger level to show warnings
         # FLET_DASHBOARD_TEST_MARKER=0 -> hide vivid test marker banner
-        bypass_switcher = os.environ.get('FLET_BYPASS_SWITCHER') == '1'
+        # For reliability, always bypass AnimatedSwitcher for the dashboard view and
+        # use the direct assignment path. This avoids timing/attachment issues where
+        # AnimatedSwitcher isn't attached yet in some browser-launch environments.
+        # The env var `FLET_BYPASS_SWITCHER=1` can still force bypass for other views.
+        bypass_switcher = os.environ.get('FLET_BYPASS_SWITCHER') == '1' or view_name == 'dashboard'
         if bypass_switcher:
             logger.warning("BYPASS_SWITCHER active - inserting content directly (no AnimatedSwitcher transition)")
             try:
                 # Direct assignment: replace container's content attribute entirely
-                self.content_area.content = content
+                if view_name == 'dashboard':
+                    # Wrap dashboard content with a lightweight Column that places a
+                    # visible marker at the top. This helps verify rendering and is
+                    # a reversible smoke-test which avoids depending on AnimatedSwitcher.
+                    try:
+                        marker = ft.Text("DASHBOARD VISIBLE", size=20, color=ft.Colors.RED)
+                        wrapped = ft.Column([marker, content], spacing=12, expand=True)
+                        self.content_area.content = wrapped
+                    except Exception:
+                        # Fallback to direct assignment if wrapping fails
+                        self.content_area.content = content
+                else:
+                    self.content_area.content = content
                 # Extra diagnostics for blank dashboard issue
                 if os.environ.get('FLET_DASHBOARD_CONTENT_DEBUG') == '1' and view_name == 'dashboard':
                     try:
@@ -1475,10 +1482,8 @@ class FletV2App(ft.Row):
                     except Exception as _deep_err:  # noqa: BLE001
                         logger.warning(f"[CONTENT_DEEP] deep diagnostics failed: {_deep_err}")
                 if getattr(content, 'opacity', None) == 0.0:
-                    try:
+                    with _contextlib.suppress(Exception):  # noqa: BLE001
                         content.opacity = 1.0
-                    except Exception:  # noqa: BLE001
-                        pass
                 with contextlib.suppress(Exception):
                     if hasattr(self.content_area, 'update'):
                         self.content_area.update()
@@ -1494,9 +1499,131 @@ class FletV2App(ft.Row):
                     )
                 except Exception as _enum_err:  # noqa: BLE001
                     logger.warning(f"[CONTENT_DIAG] Child enumeration failed: {_enum_err}")
-                # Optional deep recursive enumeration if requested
-                # Always enumerate for dashboard view OR when explicit env flag set
-                if view_name == 'dashboard' or os.environ.get('FLET_DASHBOARD_ENUM') == '1':
+                # Quick visual smoke-test: insert a bright marker at top of dashboard content so
+                # we can confirm whether the control was actually rendered in the browser.
+                # This is intentionally non-destructive and guarded to avoid duplicate markers.
+                try:
+                    if view_name == 'dashboard':
+                        marker_added = False
+                        marker = ft.Text("DASHBOARD VISIBLE", size=20, color=ft.Colors.RED)
+                        # Prefer inserting into .content.controls (common pattern)
+                        inner = getattr(self.content_area, 'content', None)
+                        target = None
+                        if inner is not None and hasattr(inner, 'content') and getattr(inner, 'content'):
+                            target = getattr(inner, 'content')
+                        elif inner is not None and hasattr(inner, 'controls'):
+                            target = inner
+
+                        if target is not None and hasattr(target, 'controls'):
+                            controls_list = getattr(target, 'controls')
+                            # Avoid duplicate markers
+                            if not any(getattr(c, 'text', None) == 'DASHBOARD VISIBLE' for c in controls_list):
+                                controls_list.insert(0, marker)
+                                marker_added = True
+                                with contextlib.suppress(Exception):
+                                    if hasattr(target, 'update'):
+                                        target.update()
+                                with contextlib.suppress(Exception):
+                                    if hasattr(self.content_area, 'update'):
+                                        self.content_area.update()
+                        if marker_added:
+                            logger.warning('[CONTENT_DIAG] Inserted visual dashboard marker for smoke-test')
+                except Exception:
+                    pass
+
+                # If requested, try to find the INNER DASHBOARD TEST control text in the
+                # assigned content area and log whether it is present. This helps
+                # determine whether nested controls are attached but occluded.
+                if os.environ.get('FLET_DASHBOARD_INNER_TEST') == '1' and view_name == 'dashboard':
+                    try:
+                        root = getattr(self.content_area, 'content', None)
+
+                        def _find_text(ctrl, target: str) -> bool:
+                            """Recursively search for Text control with matching text."""
+                            try:
+                                if ctrl is None:
+                                    return False
+                                # Direct Text control
+                                if isinstance(ctrl, ft.Text):
+                                    # Text stores content in .value or .text in different versions
+                                    if getattr(ctrl, 'value', None) == target or getattr(ctrl, 'text', None) == target:
+                                        return True
+                                # Check common container patterns
+                                content = getattr(ctrl, 'content', None)
+                                if content and _find_text(content, target):
+                                    return True
+                                controls = getattr(ctrl, 'controls', None)
+                                if controls:
+                                    for c in controls:
+                                        if _find_text(c, target):
+                                            return True
+                            except Exception:
+                                return False
+                            return False
+
+                        found = _find_text(root, 'INNER DASHBOARD TEST')
+                        logger.warning(f"[CONTENT_DEEP] INNER DASHBOARD TEST presence={found}")
+                    except Exception as _deep_err:  # noqa: BLE001
+                        logger.warning(f"[CONTENT_DEEP] inner-test detection failed: {_deep_err}")
+                    # Inspect page.overlay for possible occluding controls
+                    try:
+                        if hasattr(self.page, 'overlay'):
+                            overlays = list(getattr(self.page, 'overlay'))
+                            logger.warning(f"[OVERLAY] count={len(overlays)} types={[type(o).__name__ for o in overlays]}")
+                            for i, o in enumerate(overlays[:10]):
+                                try:
+                                    bg = getattr(o, 'bgcolor', None)
+                                    w = getattr(o, 'width', None)
+                                    h = getattr(o, 'height', None)
+                                    logger.warning(f"[OVERLAY] [{i}] type={type(o).__name__} bgcolor={bg} width={w} height={h}")
+                                except Exception:
+                                    logger.warning(f"[OVERLAY] [{i}] inspect failed")
+                    except Exception as _ov_err:  # noqa: BLE001
+                        logger.warning(f"[OVERLAY] overlay inspection failed: {_ov_err}")
+
+                    # Additional deep inspection of the main dashboard container to
+                    # capture opacity/bgcolor/size/expand which may indicate an
+                    # occluding parent or invisible children.
+                    if os.environ.get('FLET_DASHBOARD_ENUM') == '1':
+                        try:
+                            def _inspect(ctrl, depth=0, max_depth=5):
+                                if ctrl is None:
+                                    return
+                                try:
+                                    info = {
+                                        'type': type(ctrl).__name__,
+                                        'opacity': getattr(ctrl, 'opacity', None),
+                                        'bgcolor': getattr(ctrl, 'bgcolor', None),
+                                        'expand': getattr(ctrl, 'expand', None),
+                                        'width': getattr(ctrl, 'width', None),
+                                        'height': getattr(ctrl, 'height', None),
+                                        'border_radius': getattr(ctrl, 'border_radius', None),
+                                        'visible': getattr(ctrl, 'visible', None),
+                                    }
+                                    logger.warning(f"[INSPECT]{'  '*depth}{info}")
+                                except Exception:
+                                    logger.warning(f"[INSPECT]{'  '*depth}inspect_error for {type(ctrl).__name__}")
+                                if depth >= max_depth:
+                                    return
+                                # Recurse into common children
+                                children = []
+                                if hasattr(ctrl, 'controls') and getattr(ctrl, 'controls'):
+                                    children = list(getattr(ctrl, 'controls'))
+                                elif hasattr(ctrl, 'content') and getattr(ctrl, 'content'):
+                                    children = [getattr(ctrl, 'content')]
+                                for ch in children[:50]:
+                                    _inspect(ch, depth+1, max_depth)
+
+                            root = getattr(self.content_area, 'content', None)
+                            logger.warning('[INSPECT] Beginning deep inspect of content_area.content')
+                            _inspect(root, 0, 4)
+                            logger.warning('[INSPECT] End deep inspect')
+                        except Exception as _insp_err:
+                            logger.warning(f"[INSPECT] deep inspect failed: {_insp_err}")
+                # Optional deep recursive enumeration if explicitly requested.
+                # Heavy enumeration/logging is only enabled when FLET_DASHBOARD_ENUM=1
+                # to avoid performance and log floods during normal runs.
+                if os.environ.get('FLET_DASHBOARD_ENUM') == '1':
                     try:
                         def _enum(ctrl, depth=0, max_depth=3):  # noqa: ANN001
                             try:
@@ -1525,6 +1652,55 @@ class FletV2App(ft.Row):
                         logger.warning('[ENUM] ---- END DASHBOARD CONTROL TREE ----')
                     except Exception as top_enum_err:  # noqa: BLE001
                         logger.warning(f"[ENUM] top-level enumeration failed: {top_enum_err}")
+                # Optional quick fix: force visibility/opacities on assigned controls
+                # This is gated behind an env var so it's safe and reversible.
+                if os.environ.get('FLET_DASHBOARD_FORCE_VISIBLE') == '1' and view_name == 'dashboard':
+                    try:
+                        logger.warning('[FORCE] FLET_DASHBOARD_FORCE_VISIBLE active - forcing opacity/visible on dashboard controls')
+
+                        def _force_visible(ctrl, depth=0, max_depth=8):
+                            if ctrl is None:
+                                return
+                            try:
+                                # Set visible/opacities where applicable
+                                if hasattr(ctrl, 'opacity'):
+                                    try:
+                                        ctrl.opacity = 1.0
+                                    except Exception:
+                                        pass
+                                if hasattr(ctrl, 'visible'):
+                                    try:
+                                        ctrl.visible = True
+                                    except Exception:
+                                        pass
+                                # Try to update control so runtime repaints
+                                with contextlib.suppress(Exception):
+                                    if hasattr(ctrl, 'update'):
+                                        ctrl.update()
+                            except Exception:
+                                pass
+                            if depth >= max_depth:
+                                return
+                            # Recurse into common children
+                            children = []
+                            try:
+                                if hasattr(ctrl, 'controls') and getattr(ctrl, 'controls'):
+                                    children = list(getattr(ctrl, 'controls'))
+                                elif hasattr(ctrl, 'content') and getattr(ctrl, 'content'):
+                                    children = [getattr(ctrl, 'content')]
+                            except Exception:
+                                children = []
+                            for ch in children[:200]:
+                                _force_visible(ch, depth + 1, max_depth)
+
+                        try:
+                            _force_visible(getattr(self.content_area, 'content', None), 0, 6)
+                            logger.warning('[FORCE] Completed forcing visibility on dashboard tree')
+                        except Exception as _ferr:
+                            logger.warning(f"[FORCE] force-visible pass failed: {_ferr}")
+                    except Exception:
+                        logger.warning('[FORCE] Unexpected error while forcing visibility')
+
                 # Still schedule subscriptions if present
                 if hasattr(content, '_setup_subscriptions') and callable(getattr(content, '_setup_subscriptions')):
                     async def _subs_wrapper():  # noqa: D401
@@ -1544,9 +1720,9 @@ class FletV2App(ft.Row):
 
         if hasattr(animated_switcher, 'content'):
             animated_switcher.content = content
-            logger.info(f"✅ Set content on AnimatedSwitcher")
+            logger.info("✅ Set content on AnimatedSwitcher")
         else:
-            logger.warning(f"⚠️ AnimatedSwitcher has no 'content' attribute")
+            logger.warning("⚠️ AnimatedSwitcher has no 'content' attribute")
 
         update_success = False
 
@@ -1586,6 +1762,68 @@ class FletV2App(ft.Row):
                     content.opacity = 1.0
                     with contextlib.suppress(Exception):
                         content.update()
+                # Also ensure nested child controls are visible in case entrance animations didn't run
+                try:
+                    def _force_visible(ctrl, depth=0, max_depth=10):
+                        if ctrl is None:
+                            return
+                        # Force common visibility attributes
+                        try:
+                            if getattr(ctrl, 'visible', None) is False:
+                                ctrl.visible = True
+                        except Exception:
+                            pass
+
+                        try:
+                            if getattr(ctrl, 'opacity', None) is not None and getattr(ctrl, 'opacity') != 1.0:
+                                ctrl.opacity = 1.0
+                        except Exception:
+                            pass
+
+                        # Update the control if possible
+                        with contextlib.suppress(Exception):
+                            if hasattr(ctrl, 'update'):
+                                try:
+                                    ctrl.update()
+                                except Exception:
+                                    pass
+
+                        if depth >= max_depth:
+                            return
+
+                        # Recurse into children stored in common places
+                        try:
+                            # .controls is a list of children for many Flet containers
+                            if hasattr(ctrl, 'controls') and getattr(ctrl, 'controls'):
+                                for ch in list(getattr(ctrl, 'controls')):
+                                    _force_visible(ch, depth+1, max_depth)
+
+                            # .content may contain a single child control
+                            if hasattr(ctrl, 'content') and getattr(ctrl, 'content'):
+                                _force_visible(getattr(ctrl, 'content'), depth+1, max_depth)
+
+                            # Some composite controls store children under .rows or .columns
+                            if hasattr(ctrl, 'rows') and getattr(ctrl, 'rows'):
+                                for ch in list(getattr(ctrl, 'rows')):
+                                    _force_visible(ch, depth+1, max_depth)
+                            if hasattr(ctrl, 'columns') and getattr(ctrl, 'columns'):
+                                for ch in list(getattr(ctrl, 'columns')):
+                                    _force_visible(ch, depth+1, max_depth)
+                        except Exception:
+                            pass
+
+                    _force_visible(content, 0, 10)
+                    # Try to ensure page refresh if available
+                    try:
+                        if hasattr(self, 'page') and self.page is not None:
+                            with contextlib.suppress(Exception):
+                                self.page.update()
+                    except Exception:
+                        pass
+
+                    logger.info('[DASH_FIX] Forced nested dashboard controls visible (aggressive)')
+                except Exception as _fv_err:  # noqa: BLE001
+                    logger.warning(f"[DASH_FIX] failed to force nested visibility: {_fv_err}")
             except Exception as vis_err:  # noqa: BLE001
                 logger.debug(f"Failed forcing dashboard opacity: {vis_err}")
 
@@ -1613,7 +1851,58 @@ class FletV2App(ft.Row):
                             logger.warning(f"Failed to set up subscriptions for {view_name}: {sub_error}")
 
                     if hasattr(self.page, 'run_task'):
-                        self.page.run_task(setup_subs)
+                        async def _wait_and_setup():
+                            # Wait until the control is attached to a page or timeout
+                            try:
+                                timeout = 2.0
+                                interval = 0.05
+                                waited = 0.0
+                                attached = False
+                                while waited < timeout:
+                                    try:
+                                        # check common attachment points
+                                        if hasattr(content, 'page') and getattr(content, 'page'):
+                                            attached = True
+                                            break
+                                        # content might be wrapped in content_area
+                                        if hasattr(self, 'content_area') and getattr(self, 'content_area'):
+                                            ca = getattr(self, 'content_area')
+                                            if hasattr(ca, 'content') and getattr(ca, 'content'):
+                                                inner = getattr(ca, 'content')
+                                                if hasattr(inner, 'page') and getattr(inner, 'page'):
+                                                    attached = True
+                                                    break
+                                        # AnimatedSwitcher may attach the content later
+                                        try:
+                                            animated_switcher = getattr(self, '_animated_switcher', None)
+                                            if animated_switcher and hasattr(animated_switcher, 'page') and getattr(animated_switcher, 'page'):
+                                                attached = True
+                                                break
+                                        except Exception:
+                                            pass
+                                    except Exception:
+                                        pass
+                                    await asyncio.sleep(interval)
+                                    waited += interval
+
+                                if not attached:
+                                    logger.warning(f"Setup subscriptions: content not attached after {timeout}s, proceeding anyway")
+
+                                # Call the actual setup callback
+                                try:
+                                    if asyncio.iscoroutinefunction(setup_cb):
+                                        await setup_cb()
+                                    else:
+                                        res = setup_cb()
+                                        if asyncio.iscoroutine(res):
+                                            await res
+                                    logger.warning(f"[CONTENT_DIAG] _setup_subscriptions executed for {view_name} (waiter)")
+                                except Exception as e:
+                                    logger.warning(f"Subscription setup failed in waiter: {e}")
+                            except Exception as outer_e:
+                                logger.warning(f"Subscription waiter failed: {outer_e}")
+
+                        self.page.run_task(_wait_and_setup)
                 except Exception as sub_error:
                     logger.warning(f"Failed to schedule subscription setup for {view_name}: {sub_error}")
             else:
@@ -1664,18 +1953,17 @@ class FletV2App(ft.Row):
             import traceback
             logger.error(f"Full traceback: {traceback.format_exc()}")
             # Special handling: if dashboard fails, attempt stub
-            if view_name == "dashboard":
-                try:
-                    logger.warning("Attempting fallback stub dashboard due to failure")
-                    from views.dashboard_stub import create_dashboard_stub  # type: ignore[import-not-found]
-                    stub_content = create_dashboard_stub(self.page)
-                    content = stub_content
-                    dispose_func = lambda: None  # noqa: E731
-                    logger.info("Loaded dashboard stub successfully")
-                except Exception as stub_err:  # noqa: BLE001
-                    logger.error(f"Dashboard stub load failed: {stub_err}")
-                    raise
-            else:
+            if view_name != "dashboard":
+                raise
+            try:
+                logger.warning("Attempting fallback stub dashboard due to failure")
+                from views.dashboard_stub import create_dashboard_stub  # type: ignore[import-not-found]
+                stub_content = create_dashboard_stub(self.page)
+                content = stub_content
+                dispose_func = lambda: None  # noqa: E731
+                logger.info("Loaded dashboard stub successfully")
+            except Exception as stub_err:  # noqa: BLE001
+                logger.error(f"Dashboard stub load failed: {stub_err}")
                 raise
 
         # Store dispose function for cleanup (Comment 12)
@@ -1759,9 +2047,8 @@ class FletV2App(ft.Row):
                 and getattr(self, '_profile_enabled', lambda: False)()  # type: ignore[attr-defined]
                 and not hasattr(self, '_startup_profile_dumped')
             ):
-                try:
-                    marks = getattr(self, '_startup_profile', [])  # type: ignore[attr-defined]
-                    if marks:
+                with _contextlib.suppress(Exception):  # noqa: BLE001
+                    if (marks := getattr(self, '_startup_profile', [])):  # type: ignore[attr-defined]
                         base = marks[0][1]
                         prev = base
                         logger.warning('[STARTUP_PROFILE] ---- Startup Timing ----')
@@ -1770,8 +2057,6 @@ class FletV2App(ft.Row):
                             prev = ts
                         logger.warning('[STARTUP_PROFILE] -------------------------')
                     self._startup_profile_dumped = True  # type: ignore[attr-defined]
-                except Exception:  # noqa: BLE001
-                    pass
 
     def _extract_content_and_dispose(self, result_t: tuple[Any, ...]) -> tuple[Any, Callable[[], None] | None]:
         """Extract content and dispose function from result tuple."""
@@ -1786,10 +2071,30 @@ class FletV2App(ft.Row):
             setup_subscriptions_func = cast(Callable[..., Any], result_t[2])
             # Store setup function for later execution
             content._setup_subscriptions = setup_subscriptions_func
+            # Lightweight diagnostics for dashboard content (helps debug blank UI)
+            if view_name == 'dashboard':
+                try:
+                    ctrl = content
+                    desc = type(ctrl).__name__
+                    has_controls = hasattr(ctrl, 'controls') and bool(getattr(ctrl, 'controls'))
+                    children_count = len(getattr(ctrl, 'controls', [])) if hasattr(ctrl, 'controls') else (1 if getattr(ctrl, 'content', None) else 0)
+                    logger.warning(f"[DASH_DBG] dashboard content type={desc} has_controls={has_controls} children_count={children_count}")
+                except Exception as _dbg_err:
+                    logger.warning(f"[DASH_DBG] inspection failed: {_dbg_err}")
             logger.debug(f"Successfully processed 3-tuple for {view_name}")
             return content, dispose_func
         elif len(result_t) == 2:
             content, dispose_func = self._extract_content_and_dispose(result_t)
+            # Lightweight diagnostics for dashboard content (helps debug blank UI)
+            if view_name == 'dashboard':
+                try:
+                    ctrl = content
+                    desc = type(ctrl).__name__
+                    has_controls = hasattr(ctrl, 'controls') and bool(getattr(ctrl, 'controls'))
+                    children_count = len(getattr(ctrl, 'controls', [])) if hasattr(ctrl, 'controls') else (1 if getattr(ctrl, 'content', None) else 0)
+                    logger.warning(f"[DASH_DBG] dashboard content type={desc} has_controls={has_controls} children_count={children_count}")
+                except Exception as _dbg_err:
+                    logger.warning(f"[DASH_DBG] inspection failed: {_dbg_err}")
             logger.debug(f"Successfully processed 2-tuple for {view_name}")
             return content, dispose_func
         else:
@@ -1810,7 +2115,7 @@ class FletV2App(ft.Row):
             cache_enabled = (view_name == "dashboard")
             if cache_enabled and view_name in self._view_cache:
                 cached_content, cached_dispose = self._view_cache[view_name]
-                try:
+                with _contextlib.suppress(Exception):  # noqa: BLE001
                     logger.warning(
                         "[VIEW_CACHE] Reusing cached %s view (no reconstruction) type=%s disposed=%s",
                         view_name, type(cached_content).__name__, cached_dispose is None
@@ -1821,8 +2126,6 @@ class FletV2App(ft.Row):
                         logger.warning(
                             f"[VIEW_CACHE] Cached dashboard control integrity: has_children={has_children} opacity={getattr(cached_content,'opacity',None)}"
                         )
-                except Exception:  # noqa: BLE001
-                    pass
                 return cached_content, cached_dispose
             # All views now require state_manager as per Phase 2 refactor
             result = view_function(self.server_bridge, self.page, self.state_manager)
@@ -1840,11 +2143,9 @@ class FletV2App(ft.Row):
             dispose_func = self._create_auto_dispose_for_view(view_name)
             # Store in cache if eligible
             if cache_enabled:
-                try:
+                with _contextlib.suppress(Exception):  # noqa: BLE001
                     self._view_cache[view_name] = (result, dispose_func)
                     logger.debug("[VIEW_CACHE] Stored %s view in cache (type=%s)", view_name, type(result).__name__)
-                except Exception:  # noqa: BLE001
-                    pass
             return result, dispose_func
 
         except Exception as e:

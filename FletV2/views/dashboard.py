@@ -19,6 +19,7 @@ ADVANCED FEATURES:
 import asyncio
 import os
 import sys
+import logging
 from datetime import datetime, timedelta
 from typing import Any, Callable
 import time
@@ -47,18 +48,64 @@ def create_dashboard_view(
 ) -> tuple[ft.Control, Callable, Callable]:
     """Create sophisticated design competition-winning dashboard with advanced Material 3 patterns."""
 
-    # Advanced Material 3 theme setup with nested theming capability
+    # 🎨 SOPHISTICATED TRI-STYLE THEME - MATERIAL 3 + NEUMORPHISM + GLASSMORPHISM
     if page is not None:
         setup_modern_theme(page)
-        # Enable advanced Material 3 features
+        # Material Design 3 Foundation with Neumorphic & Glassmorphic Support
         page.theme = ft.Theme(
-            color_scheme_seed=ft.Colors.DEEP_PURPLE,
-            use_material3=True
+            color_scheme_seed=ft.Colors.CYAN,
+            use_material3=True,
+            color_scheme=ft.ColorScheme(
+                primary=ft.Colors.CYAN,
+                on_primary=ft.Colors.WHITE,
+                primary_container=ft.Colors.CYAN,
+                on_primary_container=ft.Colors.WHITE,
+                secondary=ft.Colors.TEAL,
+                on_secondary=ft.Colors.WHITE,
+                secondary_container=ft.Colors.TEAL,
+                on_secondary_container=ft.Colors.WHITE,
+                tertiary=ft.Colors.PURPLE,
+                on_tertiary=ft.Colors.WHITE,
+                # Neumorphic base colors
+                surface="#F8FAFC",  # Light neumorphic base
+                on_surface=ft.Colors.BLACK,
+                surface_variant="#E2E8F0",  # Neumorphic variant
+                on_surface_variant=ft.Colors.BLACK,
+                outline=ft.Colors.with_opacity(0.2, ft.Colors.GREY),
+                outline_variant=ft.Colors.with_opacity(0.1, ft.Colors.GREY),
+                shadow=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
+                surface_tint=ft.Colors.CYAN
+            )
         )
         page.dark_theme = ft.Theme(
-            color_scheme_seed=ft.Colors.INDIGO,
-            use_material3=True
+            color_scheme_seed=ft.Colors.CYAN_400,
+            use_material3=True,
+            color_scheme=ft.ColorScheme(
+                primary=ft.Colors.CYAN_400,
+                on_primary=ft.Colors.GREY_900,
+                primary_container=ft.Colors.CYAN_800,
+                on_primary_container=ft.Colors.CYAN_100,
+                secondary=ft.Colors.TEAL_400,
+                on_secondary=ft.Colors.GREY_900,
+                secondary_container=ft.Colors.TEAL_800,
+                on_secondary_container=ft.Colors.TEAL_100,
+                tertiary=ft.Colors.PURPLE_400,
+                on_tertiary=ft.Colors.GREY_900,
+                # Dark neumorphic base colors
+                surface="#1E293B",  # Dark neumorphic base
+                on_surface=ft.Colors.WHITE,
+                surface_variant="#334155",  # Dark neumorphic variant
+                on_surface_variant=ft.Colors.GREY_300,
+                outline=ft.Colors.with_opacity(0.3, ft.Colors.GREY_600),
+                outline_variant=ft.Colors.with_opacity(0.2, ft.Colors.GREY_700),
+                shadow=ft.Colors.with_opacity(0.3, ft.Colors.BLACK),
+                surface_tint=ft.Colors.CYAN_400
+            )
         )
+        page.theme_mode = ft.ThemeMode.SYSTEM
+
+        # Sophisticated gradient background for tri-style depth
+        page.bgcolor = "#F1F5F9"  # Light neumorphic background
 
     # ==================== REFS FOR EFFICIENT UPDATES ====================
     # Hero metrics refs
@@ -85,73 +132,152 @@ def create_dashboard_view(
     activity_search_ref = ft.Ref[ft.TextField]()
     status_ref = ft.Ref[ft.Text]()
 
-    # ==================== SOPHISTICATED HERO METRICS ====================
+    # ==================== TRI-STYLE HERO METRICS (GLASSMORPHIC FOCAL POINTS) ====================
     def create_hero_card(label: str, value_ref: ft.Ref[ft.Text], color: str, icon: str, trend: str = "+0") -> ft.Container:
-        """Create sophisticated animated hero card with neumorphism and magnetic hover effects."""
-        # Fix: Replace if-expression with 'or' for conciseness (addresses line ~224)
+        """🌟 ULTIMATE GLASSMORPHISM HERO CARD - PREMIUM FOCAL POINT"""
         trend = trend or "+0"
-        trend_color = ft.Colors.GREEN_400 if trend.startswith('+') and trend != '+0' else ft.Colors.AMBER_400 if trend.startswith('-') else ft.Colors.BLUE_GREY_400
+        trend_color = ft.Colors.GREEN_600 if trend.startswith('+') and trend != '+0' else ft.Colors.ORANGE_600 if trend.startswith('-') else ft.Colors.BLUE_GREY_400
 
-        # Gradient background container for depth
-        gradient_container = ft.Container(
+        # 💎 ULTIMATE GLASSMORPHISM HERO CARD - FLOATING PREMIUM ELEMENT
+        return ft.Container(
             content=ft.Column([
-                # Header with icon and trend indicator
+                # Header with ultimate glassmorphic styling
                 ft.Row([
                     ft.Row([
-                        ft.Icon(icon, size=20, color=ft.Colors.with_opacity(0.8, color)),
-                        ft.Text(label, size=14, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
-                    ], spacing=8),
+                        ft.Container(
+                            content=ft.Icon(icon, size=24, color=color),
+                            padding=14,
+                            border_radius=16,
+                            # ULTIMATE GLASSMORPHISM ICON - INTENSE GLOW
+                            bgcolor=ft.Colors.with_opacity(0.3, color),
+                            border=ft.border.all(2, ft.Colors.with_opacity(0.6, color)),
+                            blur=ft.Blur(sigma_x=12, sigma_y=12),
+                            shadow=[
+                                # Primary intense glow
+                                ft.BoxShadow(
+                                    spread_radius=0,
+                                    blur_radius=20,
+                                    color=ft.Colors.with_opacity(0.6, color),
+                                    offset=ft.Offset(0, 4)
+                                ),
+                                # Secondary halo glow
+                                ft.BoxShadow(
+                                    spread_radius=0,
+                                    blur_radius=35,
+                                    color=ft.Colors.with_opacity(0.4, color),
+                                    offset=ft.Offset(0, 8)
+                                )
+                            ]
+                        ),
+                        ft.Container(
+                            content=ft.Text(
+                                label,
+                                size=16,
+                                weight=ft.FontWeight.BOLD,
+                                color=ft.Colors.ON_SURFACE,
+                                font_family="Inter"
+                            ),
+                            # Text glow effect
+                            shadow=ft.BoxShadow(
+                                spread_radius=0,
+                                blur_radius=8,
+                                color=ft.Colors.with_opacity(0.2, color),
+                                offset=ft.Offset(0, 0)
+                            )
+                        ),
+                    ], spacing=12),
                     ft.Container(
-                        content=ft.Text(trend, size=11, weight=ft.FontWeight.BOLD, color=trend_color),
-                        padding=ft.padding.symmetric(horizontal=10, vertical=4),
-                        border_radius=16,
-                        bgcolor=ft.Colors.with_opacity(0.15, trend_color),
-                        border=ft.border.all(1, ft.Colors.with_opacity(0.3, trend_color)),
-                        animate=ft.Animation(200, ft.AnimationCurve.EASE_IN_OUT)
+                        content=ft.Text(
+                            trend,
+                            size=12,
+                            weight=ft.FontWeight.BOLD,
+                            color=trend_color
+                        ),
+                        padding=ft.padding.symmetric(horizontal=14, vertical=6),
+                        border_radius=20,
+                        # Ultimate glassmorphic trend badge
+                        bgcolor=ft.Colors.with_opacity(0.25, trend_color),
+                        border=ft.border.all(2, ft.Colors.with_opacity(0.5, trend_color)),
+                        blur=ft.Blur(sigma_x=8, sigma_y=8),
+                        shadow=ft.BoxShadow(
+                            spread_radius=0,
+                            blur_radius=15,
+                            color=ft.Colors.with_opacity(0.4, trend_color),
+                            offset=ft.Offset(0, 3)
+                        )
                     )
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
 
-                # Large value with subtle animation
+                # Large value with intense glow
                 ft.Container(
-                    content=ft.Text("--", ref=value_ref, size=42, weight=ft.FontWeight.BOLD, color=color),
+                    content=ft.Text("--", ref=value_ref, size=42, weight=ft.FontWeight.BOLD, color=color, font_family="Inter"),
                     animate_scale=ft.Animation(400, ft.AnimationCurve.BOUNCE_OUT),
-                    scale=1
+                    scale=1,
+                    # Intense value glow
+                    shadow=[
+                        ft.BoxShadow(
+                            spread_radius=0,
+                            blur_radius=15,
+                            color=ft.Colors.with_opacity(0.5, color),
+                            offset=ft.Offset(0, 0)
+                        ),
+                        ft.BoxShadow(
+                            spread_radius=0,
+                            blur_radius=25,
+                            color=ft.Colors.with_opacity(0.3, color),
+                            offset=ft.Offset(0, 0)
+                        )
+                    ]
                 ),
 
-                # Subtle progress indicator
+                # Ultimate glassmorphic progress indicator
                 ft.Container(
-                    width=60,
-                    height=3,
-                    border_radius=2,
+                    width=100,
+                    height=6,
+                    border_radius=3,
                     bgcolor=ft.Colors.with_opacity(0.2, color),
+                    border=ft.border.all(1, ft.Colors.with_opacity(0.4, color)),
                     content=ft.Container(
-                        width=30,
-                        height=3,
-                        border_radius=2,
+                        width=50,
+                        height=6,
+                        border_radius=3,
                         bgcolor=color,
-                        animate_size=ft.Animation(800, ft.AnimationCurve.EASE_OUT)
+                        animate_size=ft.Animation(800, ft.AnimationCurve.EASE_OUT),
+                        shadow=ft.BoxShadow(
+                            spread_radius=0,
+                            blur_radius=12,
+                            color=ft.Colors.with_opacity(0.6, color),
+                            offset=ft.Offset(0, 0)
+                        )
                     ),
                     alignment=ft.alignment.center_left
                 )
-            ], spacing=12),
-            padding=24,
-            border_radius=20,
-            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SURFACE),
-            border=ft.border.all(1.5, ft.Colors.with_opacity(0.12, color)),
-            # Neumorphism shadow effect
-            shadow=ft.BoxShadow(
-                spread_radius=1,
-                blur_radius=8,
-                color=ft.Colors.with_opacity(0.1, ft.Colors.SHADOW),
-                offset=ft.Offset(0, 4)
-            ),
-            # Advanced animations
+            ], spacing=18),
+            padding=32,
+            border_radius=24,
+            # 💎 ULTIMATE GLASSMORPHISM - PREMIUM FLOATING CARD
+            bgcolor=ft.Colors.with_opacity(0.15, ft.Colors.WHITE),
+            border=ft.border.all(2.5, ft.Colors.with_opacity(0.4, ft.Colors.WHITE)),
+            blur=ft.Blur(sigma_x=20, sigma_y=20),
+            shadow=[
+                # Primary dramatic shadow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=40,
+                    color=ft.Colors.with_opacity(0.25, ft.Colors.SHADOW),
+                    offset=ft.Offset(0, 12)
+                ),
+                # Secondary color glow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=60,
+                    color=ft.Colors.with_opacity(0.3, color),
+                    offset=ft.Offset(0, 20)
+                )
+            ],
             animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
-            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_IN_OUT),
-            animate_opacity=ft.Animation(250, ft.AnimationCurve.EASE_OUT)
+            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_IN_OUT)
         )
-
-        return gradient_container
 
     # Create sophisticated hero cards with icons
     total_clients_card = create_hero_card("Total Clients", total_clients_ref, ft.Colors.BLUE_600, ft.Icons.PEOPLE_ALT, "+2")
@@ -199,60 +325,117 @@ def create_dashboard_view(
 
     # ==================== ADVANCED KPI CARDS ====================
     def create_kpi_card(label: str, value_ref: ft.Ref[ft.Text], icon: str, color: str, progress_ref: ft.Ref[ft.ProgressBar] = None) -> ft.Container:
-        """Create advanced KPI card with progressive enhancement and microinteractions."""
+        """🏠 DEEP NEUMORPHISM KPI CARD - STRUCTURAL DEPTH LAYER"""
 
-        # Create animated progress bar if reference provided
+        # Create deep neumorphic progress bar if reference provided
         progress_bar = None
         if progress_ref:
             progress_bar = ft.Container(
-                content=ft.ProgressBar(
-                    ref=progress_ref,
-                    value=0,
-                    color=color,
-                    bgcolor=ft.Colors.with_opacity(0.2, color),
-                    height=3,
-                    border_radius=2
+                content=ft.Container(
+                    content=ft.ProgressBar(
+                        ref=progress_ref,
+                        value=0,
+                        color=color,
+                        bgcolor=ft.Colors.with_opacity(0.15, color),
+                        height=5,
+                        border_radius=3
+                    ),
+                    # DEEP INSET NEUMORPHIC PROGRESS TRACK
+                    padding=3,
+                    border_radius=6,
+                    bgcolor=ft.Colors.SURFACE,
+                    shadow=[
+                        # Inner shadow for deep inset effect
+                        ft.BoxShadow(
+                            spread_radius=0,
+                            blur_radius=8,
+                            color=ft.Colors.with_opacity(0.3, ft.Colors.SHADOW),
+                            offset=ft.Offset(2, 2)
+                        )
+                    ]
                 ),
-                margin=ft.margin.only(top=8),
+                margin=ft.margin.only(top=12),
                 animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT)
             )
 
         card_content = ft.Column([
-            # Header with enhanced icon
+            # Header with deep neumorphic icon
             ft.Row([
                 ft.Container(
                     content=ft.Icon(icon, size=22, color=color),
-                    padding=8,
-                    border_radius=10,
-                    bgcolor=ft.Colors.with_opacity(0.1, color),
+                    padding=12,
+                    border_radius=14,
+                    # DEEP NEUMORPHIC ICON - PRONOUNCED RAISED EFFECT
+                    bgcolor=ft.Colors.SURFACE,
+                    shadow=[
+                        # Light shadow (top-left)
+                        ft.BoxShadow(
+                            spread_radius=2,
+                            blur_radius=15,
+                            color=ft.Colors.with_opacity(0.6, ft.Colors.WHITE),
+                            offset=ft.Offset(-6, -6)
+                        ),
+                        # Dark shadow (bottom-right)
+                        ft.BoxShadow(
+                            spread_radius=2,
+                            blur_radius=15,
+                            color=ft.Colors.with_opacity(0.3, ft.Colors.SHADOW),
+                            offset=ft.Offset(6, 6)
+                        )
+                    ],
                     animate_scale=ft.Animation(200, ft.AnimationCurve.BOUNCE_OUT)
                 ),
-                ft.Text(label, size=13, color=ft.Colors.ON_SURFACE, weight=ft.FontWeight.W_600)
-            ], spacing=12),
+                ft.Text(label, size=15, color=ft.Colors.ON_SURFACE, weight=ft.FontWeight.BOLD, font_family="Inter")
+            ], spacing=14),
 
-            # Value with enhanced styling
+            # Value with neumorphic depth
             ft.Container(
-                content=ft.Text("--", ref=value_ref, size=28, weight=ft.FontWeight.BOLD, color=color),
+                content=ft.Text("--", ref=value_ref, size=32, weight=ft.FontWeight.BOLD, color=color, font_family="Inter"),
                 animate_scale=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
-                margin=ft.margin.only(top=4)
+                margin=ft.margin.only(top=8, bottom=4),
+                # Value depth effect
+                shadow=ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=6,
+                    color=ft.Colors.with_opacity(0.15, ft.Colors.SHADOW),
+                    offset=ft.Offset(2, 2)
+                )
             ),
 
             # Optional progress bar
             progress_bar or ft.Container(height=0)
-        ], spacing=6)
+        ], spacing=8)
 
         return ft.Container(
             content=card_content,
-            padding=20,
-            border_radius=16,
-            bgcolor=ft.Colors.with_opacity(0.04, ft.Colors.SURFACE),
-            border=ft.border.all(1, ft.Colors.with_opacity(0.15, color)),
-            shadow=ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=6,
-                color=ft.Colors.with_opacity(0.08, ft.Colors.SHADOW),
-                offset=ft.Offset(0, 2)
-            ),
+            padding=26,
+            border_radius=20,
+            # 🏠 DEEP NEUMORPHISM - PRONOUNCED STRUCTURAL DEPTH
+            bgcolor=ft.Colors.SURFACE,
+            # Multiple shadow system for deep neumorphic effect
+            shadow=[
+                # Primary light shadow (top-left)
+                ft.BoxShadow(
+                    spread_radius=3,
+                    blur_radius=20,
+                    color=ft.Colors.with_opacity(0.5, ft.Colors.WHITE),
+                    offset=ft.Offset(-8, -8)
+                ),
+                # Primary dark shadow (bottom-right)
+                ft.BoxShadow(
+                    spread_radius=3,
+                    blur_radius=20,
+                    color=ft.Colors.with_opacity(0.25, ft.Colors.SHADOW),
+                    offset=ft.Offset(8, 8)
+                ),
+                # Secondary depth shadow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=12,
+                    color=ft.Colors.with_opacity(0.1, ft.Colors.SHADOW),
+                    offset=ft.Offset(4, 4)
+                )
+            ],
             animate=ft.Animation(250, ft.AnimationCurve.EASE_OUT),
             animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_IN_OUT)
         )
@@ -296,67 +479,150 @@ def create_dashboard_view(
 
     # ==================== ADVANCED SYSTEM METRICS ====================
     def create_metric_tile(title: str, progress_ref: ft.Ref[ft.ProgressBar], text_ref: ft.Ref[ft.Text], color: str, icon: str) -> ft.Container:
-        """Create sophisticated metric tile with Material 3 Expressive loading indicators and real-time animations."""
+        """🎭 ULTIMATE NEUMORPHISM METRIC TILE - DEEP STRUCTURAL ARCHITECTURE"""
 
-        # Create wavy progress bar container (Material 3 Expressive style)
-        progress_container = ft.Container(
-            content=ft.Column([
-                # Animated progress bar with variable height
-                ft.ProgressBar(
-                    ref=progress_ref,
-                    value=0.0,
-                    color=color,
-                    bgcolor=ft.Colors.with_opacity(0.15, color),
-                    height=6,
-                    border_radius=3
+        # Create deeply inset neumorphic progress bar
+        progress_bar = ft.Container(
+            content=ft.ProgressBar(
+                ref=progress_ref,
+                value=0.0,
+                color=color,
+                bgcolor=ft.Colors.with_opacity(0.1, color),
+                height=8,
+                border_radius=4
+            ),
+            # ULTIMATE INSET CONTAINER FOR PROGRESS
+            padding=ft.padding.all(6),
+            border_radius=10,
+            bgcolor=ft.Colors.SURFACE_TINT,
+            shadow=[
+                # Deep inner shadow for ultimate inset effect
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=12,
+                    color=ft.Colors.with_opacity(0.4, ft.Colors.SHADOW),
+                    offset=ft.Offset(3, 3)
                 ),
-                # Subtle pulse indicator for real-time updates
-                ft.Container(
-                    width=4,
-                    height=4,
-                    border_radius=2,
-                    bgcolor=color,
-                    animate_scale=ft.Animation(1000, ft.AnimationCurve.EASE_IN_OUT),
-                    animate_opacity=ft.Animation(1000, ft.AnimationCurve.EASE_IN_OUT)
+                # Secondary inner shadow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=6,
+                    color=ft.Colors.with_opacity(0.2, ft.Colors.SHADOW),
+                    offset=ft.Offset(1, 1)
                 )
-            ], spacing=4),
-            animate_size=ft.Animation(300, ft.AnimationCurve.EASE_OUT)
+            ]
         )
 
-        return ft.Container(
-            content=ft.Column([
-                # Header with enhanced icon
-                ft.Row([
-                    ft.Container(
-                        content=ft.Icon(icon, size=18, color=color),
-                        padding=6,
-                        border_radius=8,
-                        bgcolor=ft.Colors.with_opacity(0.12, color),
-                        animate_scale=ft.Animation(200, ft.AnimationCurve.BOUNCE_OUT)
-                    ),
-                    ft.Text(title, size=14, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE)
-                ], spacing=10),
-
-                # Large percentage value
+        # Ultimate neumorphic metric content
+        metric_content = ft.Column([
+            # Header with ULTIMATE raised neumorphic icon
+            ft.Row([
                 ft.Container(
-                    content=ft.Text("--", ref=text_ref, size=24, weight=ft.FontWeight.BOLD, color=color),
-                    animate_scale=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
-                    margin=ft.margin.only(top=4, bottom=8)
+                    content=ft.Icon(icon, size=24, color=color),
+                    padding=14,
+                    border_radius=16,
+                    # ULTIMATE NEUMORPHIC ICON - EXTREME RAISED EFFECT
+                    bgcolor=ft.Colors.SURFACE,
+                    shadow=[
+                        # Primary light shadow (top-left)
+                        ft.BoxShadow(
+                            spread_radius=2,
+                            blur_radius=18,
+                            color=ft.Colors.with_opacity(0.7, ft.Colors.WHITE),
+                            offset=ft.Offset(-6, -6)
+                        ),
+                        # Primary dark shadow (bottom-right)
+                        ft.BoxShadow(
+                            spread_radius=2,
+                            blur_radius=18,
+                            color=ft.Colors.with_opacity(0.35, ft.Colors.SHADOW),
+                            offset=ft.Offset(6, 6)
+                        ),
+                        # Tertiary depth shadow
+                        ft.BoxShadow(
+                            spread_radius=0,
+                            blur_radius=8,
+                            color=ft.Colors.with_opacity(0.15, ft.Colors.SHADOW),
+                            offset=ft.Offset(3, 3)
+                        )
+                    ],
+                    animate_scale=ft.Animation(200, ft.AnimationCurve.BOUNCE_OUT)
                 ),
+                ft.Text(
+                    title,
+                    size=16,
+                    weight=ft.FontWeight.BOLD,
+                    color=ft.Colors.ON_SURFACE,
+                    font_family="Inter"
+                )
+            ], spacing=14),
 
-                # Advanced progress visualization
-                progress_container
-            ], spacing=8),
-            padding=20,
-            border_radius=16,
-            bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.SURFACE),
-            border=ft.border.all(1, ft.Colors.with_opacity(0.1, color)),
-            shadow=ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=8,
-                color=ft.Colors.with_opacity(0.06, ft.Colors.SHADOW),
-                offset=ft.Offset(0, 3)
+            # Large percentage value with ultimate depth
+            ft.Container(
+                content=ft.Text("--", ref=text_ref, size=28, weight=ft.FontWeight.BOLD, color=color, font_family="Inter"),
+                animate_scale=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
+                margin=ft.margin.only(top=14, bottom=14),
+                # ULTIMATE TEXT DEPTH EFFECT
+                shadow=[
+                    ft.BoxShadow(
+                        spread_radius=0,
+                        blur_radius=8,
+                        color=ft.Colors.with_opacity(0.2, ft.Colors.SHADOW),
+                        offset=ft.Offset(2, 2)
+                    ),
+                    ft.BoxShadow(
+                        spread_radius=0,
+                        blur_radius=4,
+                        color=ft.Colors.with_opacity(0.1, ft.Colors.SHADOW),
+                        offset=ft.Offset(1, 1)
+                    )
+                ]
             ),
+
+            # Ultimate inset progress container
+            ft.Container(
+                content=progress_bar,
+                padding=ft.padding.symmetric(vertical=8)
+            )
+        ], spacing=10)
+
+        # 🎭 ULTIMATE NEUMORPHISM METRIC TILE - EXTREME STRUCTURAL DEPTH
+        return ft.Container(
+            content=metric_content,
+            padding=30,
+            border_radius=22,
+            bgcolor=ft.Colors.SURFACE,
+            # ULTIMATE MULTIPLE SHADOW SYSTEM FOR EXTREME NEUMORPHIC EFFECT
+            shadow=[
+                # Primary light shadow (top-left) - EXTREME
+                ft.BoxShadow(
+                    spread_radius=4,
+                    blur_radius=25,
+                    color=ft.Colors.with_opacity(0.6, ft.Colors.WHITE),
+                    offset=ft.Offset(-10, -10)
+                ),
+                # Primary dark shadow (bottom-right) - EXTREME
+                ft.BoxShadow(
+                    spread_radius=4,
+                    blur_radius=25,
+                    color=ft.Colors.with_opacity(0.3, ft.Colors.SHADOW),
+                    offset=ft.Offset(10, 10)
+                ),
+                # Secondary depth shadow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=15,
+                    color=ft.Colors.with_opacity(0.15, ft.Colors.SHADOW),
+                    offset=ft.Offset(6, 6)
+                ),
+                # Tertiary ambient shadow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=8,
+                    color=ft.Colors.with_opacity(0.1, ft.Colors.SHADOW),
+                    offset=ft.Offset(3, 3)
+                )
+            ],
             animate=ft.Animation(250, ft.AnimationCurve.EASE_OUT)
         )
 
@@ -464,54 +730,100 @@ def create_dashboard_view(
         animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_OUT)
     )
 
-    # Sophisticated activity card with nested theming
+    # 💫 ULTIMATE GLASSMORPHISM ACTIVITY SECTION - PREMIUM FOCAL SHOWCASE
     activity_card = ft.Container(
         content=ft.Column([
-            # Header with enhanced styling
+            # Header with ultimate glassmorphic styling
             ft.Row([
                 ft.Row([
                     ft.Container(
-                        content=ft.Icon(ft.Icons.TIMELINE, color=ft.Colors.PURPLE_600, size=24),
-                        padding=8,
-                        border_radius=10,
-                        bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.PURPLE_600),
-                        animate_scale=ft.Animation(200, ft.AnimationCurve.BOUNCE_OUT)
+                        content=ft.Icon(ft.Icons.TIMELINE, color=ft.Colors.PURPLE_400, size=26),
+                        padding=16,
+                        border_radius=16,
+                        # ULTIMATE GLASSMORPHISM ICON WITH EXTREME GLOW
+                        bgcolor=ft.Colors.with_opacity(0.3, ft.Colors.PURPLE_600),
+                        border=ft.border.all(2.5, ft.Colors.with_opacity(0.5, ft.Colors.PURPLE_400)),
+                        blur=ft.Blur(sigma_x=15, sigma_y=15),
+                        shadow=[
+                            # Primary purple glow
+                            ft.BoxShadow(
+                                spread_radius=0,
+                                blur_radius=25,
+                                color=ft.Colors.with_opacity(0.6, ft.Colors.PURPLE_600),
+                                offset=ft.Offset(0, 6)
+                            ),
+                            # Secondary halo glow
+                            ft.BoxShadow(
+                                spread_radius=0,
+                                blur_radius=40,
+                                color=ft.Colors.with_opacity(0.4, ft.Colors.PURPLE_400),
+                                offset=ft.Offset(0, 12)
+                            )
+                        ]
                     ),
-                    ft.Text("Live Activity Stream", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                ], spacing=12),
+                    ft.Text(
+                        "Live Activity Stream",
+                        size=18,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ON_SURFACE,
+                        font_family="Inter"
+                    ),
+                ], spacing=14),
                 activity_search,
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, wrap=True),
 
-            # Filter chips with enhanced spacing
+            # Filter chips with glassmorphic enhancement
             ft.Container(
                 content=activity_filter_chips,
-                margin=ft.margin.only(top=8, bottom=4)
+                margin=ft.margin.only(top=14, bottom=10)
             ),
 
-            # Activity list with nested theme
+            # Activity list with ULTIMATE glassmorphic container
             ft.Container(
                 content=activity_list,
-                theme=ft.Theme(
-                    color_scheme=ft.ColorScheme(
-                        primary=ft.Colors.PURPLE_600,
-                        surface=ft.Colors.with_opacity(0.03, ft.Colors.PURPLE_100)
+                border_radius=18,
+                # ULTIMATE GLASSMORPHIC INNER CONTAINER
+                bgcolor=ft.Colors.with_opacity(0.12, ft.Colors.WHITE),
+                border=ft.border.all(2, ft.Colors.with_opacity(0.3, ft.Colors.OUTLINE)),
+                blur=ft.Blur(sigma_x=15, sigma_y=15),
+                shadow=[
+                    ft.BoxShadow(
+                        spread_radius=0,
+                        blur_radius=20,
+                        color=ft.Colors.with_opacity(0.2, ft.Colors.SHADOW),
+                        offset=ft.Offset(0, 6)
+                    ),
+                    ft.BoxShadow(
+                        spread_radius=0,
+                        blur_radius=35,
+                        color=ft.Colors.with_opacity(0.1, ft.Colors.PURPLE_600),
+                        offset=ft.Offset(0, 10)
                     )
-                ),
-                border_radius=12,
-                bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
-                border=ft.border.all(1, ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE))
+                ]
             ),
-        ], spacing=16),
-        padding=24,
-        border_radius=20,
-        bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
-        border=ft.border.all(1.5, ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)),
-        shadow=ft.BoxShadow(
-            spread_radius=1,
-            blur_radius=12,
-            color=ft.Colors.with_opacity(0.08, ft.Colors.SHADOW),
-            offset=ft.Offset(0, 4)
-        ),
+        ], spacing=20),
+        padding=32,
+        border_radius=24,
+        # 💫 ULTIMATE GLASSMORPHISM - PREMIUM FLOATING SHOWCASE
+        bgcolor=ft.Colors.with_opacity(0.15, ft.Colors.WHITE),
+        border=ft.border.all(2.5, ft.Colors.with_opacity(0.4, ft.Colors.WHITE)),
+        blur=ft.Blur(sigma_x=20, sigma_y=20),
+        shadow=[
+            # Primary dramatic shadow
+            ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=40,
+                color=ft.Colors.with_opacity(0.25, ft.Colors.SHADOW),
+                offset=ft.Offset(0, 12)
+            ),
+            # Secondary purple glow
+            ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=60,
+                color=ft.Colors.with_opacity(0.3, ft.Colors.PURPLE_900),
+                offset=ft.Offset(0, 20)
+            )
+        ],
         animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT)
     )
 
@@ -523,19 +835,36 @@ def create_dashboard_view(
         padding=ft.padding.all(8)
     )
 
+    # Clean Clients Section
     clients_card = ft.Container(
         content=ft.Column([
             ft.Row([
-                ft.Icon(ft.Icons.PEOPLE, color=ft.Colors.BLUE),
-                ft.Text("Connected Clients", size=16, weight=ft.FontWeight.BOLD),
-                ft.FilledTonalButton("View All", icon=ft.Icons.ARROW_FORWARD),
+                ft.Row([
+                    ft.Container(
+                        content=ft.Icon(ft.Icons.PEOPLE, color=ft.Colors.BLUE_600, size=20),
+                        padding=8,
+                        border_radius=10,
+                        bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.BLUE_600)
+                    ),
+                    ft.Text("Connected Clients", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                ], spacing=8),
+                ft.FilledTonalButton(
+                    "View All",
+                    icon=ft.Icons.ARROW_FORWARD
+                ),
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             clients_list,
         ], spacing=12),
         padding=20,
         border_radius=16,
-        bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
+        bgcolor=ft.Colors.SURFACE,
         border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
+        shadow=ft.BoxShadow(
+            spread_radius=0,
+            blur_radius=8,
+            color=ft.Colors.with_opacity(0.06, ft.Colors.SHADOW),
+            offset=ft.Offset(0, 2)
+        ),
     )
 
     # ==================== CAPACITY CHART SECTION ====================
@@ -553,27 +882,53 @@ def create_dashboard_view(
     capacity_card = ft.Container(
         content=ft.Column([
             ft.Row([
-                ft.Icon(ft.Icons.PIE_CHART, color=ft.Colors.ORANGE),
-                ft.Text("Storage Capacity", size=16, weight=ft.FontWeight.BOLD),
+                ft.Container(
+                    content=ft.Icon(ft.Icons.PIE_CHART, color=ft.Colors.ORANGE_400, size=20),
+                    padding=8,
+                    border_radius=10,
+                    bgcolor=ft.Colors.with_opacity(0.15, ft.Colors.ORANGE_600),
+                    border=ft.border.all(1, ft.Colors.with_opacity(0.3, ft.Colors.ORANGE_400)),
+                    shadow=ft.BoxShadow(
+                        spread_radius=0,
+                        blur_radius=6,
+                        color=ft.Colors.with_opacity(0.4, ft.Colors.ORANGE_600),
+                        offset=ft.Offset(0, 2)
+                    )
+                ),
+                ft.Text("Storage Capacity", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.CYAN_50),
             ], spacing=8),
             ft.Row([
                 capacity_chart,
                 ft.Column([
-                    ft.Text("45% Used", size=14, weight=ft.FontWeight.W_500),
-                    ft.Text("342 GB / 750 GB", size=12, color=ft.Colors.ON_SURFACE),
+                    ft.Text("45% Used", size=14, weight=ft.FontWeight.W_500, color=ft.Colors.CYAN_50),
+                    ft.Text("342 GB / 750 GB", size=12, color=ft.Colors.with_opacity(0.8, ft.Colors.CYAN_50)),
                     ft.Container(
-                        content=ft.Text("Healthy", size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN),
-                        padding=ft.padding.symmetric(horizontal=8, vertical=4),
-                        border_radius=12,
-                        bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.GREEN)
+                        content=ft.Text("Healthy", size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_400),
+                        padding=ft.padding.symmetric(horizontal=10, vertical=4),
+                        border_radius=14,
+                        bgcolor=ft.Colors.with_opacity(0.15, ft.Colors.GREEN_400),
+                        border=ft.border.all(1, ft.Colors.with_opacity(0.3, ft.Colors.GREEN_400)),
+                        shadow=ft.BoxShadow(
+                            spread_radius=0,
+                            blur_radius=4,
+                            color=ft.Colors.with_opacity(0.3, ft.Colors.GREEN_400),
+                            offset=ft.Offset(0, 1)
+                        )
                     )
                 ], spacing=8)
             ], spacing=20)
         ], spacing=12),
         padding=20,
-        border_radius=16,
-        bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
-        border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
+        border_radius=20,
+        # Glass morphism capacity card
+        bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.CYAN_900),
+        border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.CYAN_400)),
+        shadow=ft.BoxShadow(
+            spread_radius=0,
+            blur_radius=15,
+            color=ft.Colors.with_opacity(0.3, ft.Colors.CYAN_900),
+            offset=ft.Offset(0, 5)
+        ),
     )
 
     # ==================== INTERACTIVE DATA VISUALIZATIONS ====================
@@ -847,116 +1202,306 @@ def create_dashboard_view(
 
     # ==================== CIRCULAR STATUS CARDS ====================
     def create_circular_status_card(title: str, percentage: float, label: str, status: str, color: str, icon: str, detail: str) -> ft.Container:
-        """Create sophisticated circular status card with animated progress indicator."""
+        """🔮 ULTIMATE GLASSMORPHISM CIRCULAR STATUS CARD - PREMIUM SHOWCASE ELEMENT"""
 
-        # Create circular progress indicator
-        progress_chart = ft.PieChart(
-            sections=[
-                ft.PieChartSection(
-                    value=percentage,
-                    color=color,
-                    title="",
-                    radius=45
+        # Create ULTIMATE circular progress indicator with dramatic glow
+        progress_chart = ft.Container(
+            content=ft.PieChart(
+                sections=[
+                    ft.PieChartSection(
+                        value=percentage,
+                        color=color,
+                        title="",
+                        radius=55
+                    ),
+                    ft.PieChartSection(
+                        value=100 - percentage,
+                        color=ft.Colors.with_opacity(0.1, color),
+                        title="",
+                        radius=55
+                    ),
+                ],
+                sections_space=4,
+                center_space_radius=35,
+                width=120,
+                height=120,
+                animate=ft.Animation(800, ft.AnimationCurve.EASE_OUT)
+            ),
+            # ULTIMATE CHART GLOW EFFECT
+            shadow=[
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=30,
+                    color=ft.Colors.with_opacity(0.4, color),
+                    offset=ft.Offset(0, 0)
                 ),
-                ft.PieChartSection(
-                    value=100 - percentage,
-                    color=ft.Colors.with_opacity(0.1, color),
-                    title="",
-                    radius=45
-                ),
-            ],
-            sections_space=2,
-            center_space_radius=25,
-            width=100,
-            height=100,
-            animate=ft.Animation(800, ft.AnimationCurve.EASE_OUT)
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=50,
+                    color=ft.Colors.with_opacity(0.2, color),
+                    offset=ft.Offset(0, 0)
+                )
+            ]
         )
 
-        # Status badge with enhanced styling
+        # ULTIMATE glassmorphic status badge
         status_badge = ft.Container(
             content=ft.Text(
                 status,
-                size=10,
+                size=12,
                 weight=ft.FontWeight.BOLD,
                 color=color
             ),
-            padding=ft.padding.symmetric(horizontal=8, vertical=3),
-            border_radius=12,
-            bgcolor=ft.Colors.with_opacity(0.15, color),
-            border=ft.border.all(1, ft.Colors.with_opacity(0.3, color))
+            padding=ft.padding.symmetric(horizontal=14, vertical=6),
+            border_radius=18,
+            # ULTIMATE GLASSMORPHIC BADGE
+            bgcolor=ft.Colors.with_opacity(0.25, color),
+            border=ft.border.all(2, ft.Colors.with_opacity(0.5, color)),
+            blur=ft.Blur(sigma_x=10, sigma_y=10),
+            shadow=[
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=15,
+                    color=ft.Colors.with_opacity(0.5, color),
+                    offset=ft.Offset(0, 4)
+                ),
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=25,
+                    color=ft.Colors.with_opacity(0.3, color),
+                    offset=ft.Offset(0, 8)
+                )
+            ]
         )
 
         return ft.Container(
             content=ft.Column([
-                # Header with icon and status
+                # Header with ULTIMATE glassmorphic icon and status
                 ft.Row([
                     ft.Container(
-                        content=ft.Icon(icon, color=color, size=20),
-                        padding=6,
-                        border_radius=8,
-                        bgcolor=ft.Colors.with_opacity(0.1, color)
+                        content=ft.Icon(icon, color=color, size=26),
+                        padding=14,
+                        border_radius=16,
+                        # ULTIMATE GLASSMORPHIC ICON WITH EXTREME GLOW
+                        bgcolor=ft.Colors.with_opacity(0.3, color),
+                        border=ft.border.all(2.5, ft.Colors.with_opacity(0.6, color)),
+                        blur=ft.Blur(sigma_x=12, sigma_y=12),
+                        shadow=[
+                            # Primary intense glow
+                            ft.BoxShadow(
+                                spread_radius=0,
+                                blur_radius=25,
+                                color=ft.Colors.with_opacity(0.6, color),
+                                offset=ft.Offset(0, 6)
+                            ),
+                            # Secondary halo glow
+                            ft.BoxShadow(
+                                spread_radius=0,
+                                blur_radius=40,
+                                color=ft.Colors.with_opacity(0.4, color),
+                                offset=ft.Offset(0, 12)
+                            )
+                        ]
                     ),
-                    ft.Text(title, size=14, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE, expand=True),
+                    ft.Text(
+                        title,
+                        size=16,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ON_SURFACE,
+                        expand=True,
+                        font_family="Inter"
+                    ),
                     status_badge
-                ], spacing=8),
+                ], spacing=12),
 
-                # Circular chart with center label
+                # Circular chart with ULTIMATE glassmorphic center label
                 ft.Container(
                     content=ft.Stack([
                         progress_chart,
                         ft.Container(
                             content=ft.Column([
-                                ft.Text(f"{percentage:.0f}%", size=18, weight=ft.FontWeight.BOLD, color=color),
-                                ft.Text(label.split('%')[0] if '%' in label else label, size=10, color=ft.Colors.ON_SURFACE)
-                            ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                                ft.Container(
+                                    content=ft.Text(
+                                        f"{percentage:.0f}%",
+                                        size=22,
+                                        weight=ft.FontWeight.BOLD,
+                                        color=color,
+                                        font_family="Inter"
+                                    ),
+                                    # ULTIMATE TEXT GLOW
+                                    shadow=[
+                                        ft.BoxShadow(
+                                            spread_radius=0,
+                                            blur_radius=12,
+                                            color=ft.Colors.with_opacity(0.5, color),
+                                            offset=ft.Offset(0, 0)
+                                        ),
+                                        ft.BoxShadow(
+                                            spread_radius=0,
+                                            blur_radius=20,
+                                            color=ft.Colors.with_opacity(0.3, color),
+                                            offset=ft.Offset(0, 0)
+                                        )
+                                    ]
+                                ),
+                                ft.Text(
+                                    label.split('%')[0] if '%' in label else label,
+                                    size=12,
+                                    color=ft.Colors.ON_SURFACE,
+                                    font_family="Inter"
+                                )
+                            ], spacing=3, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                             alignment=ft.alignment.center
                         )
                     ]),
-                    margin=ft.margin.symmetric(vertical=12),
+                    margin=ft.margin.symmetric(vertical=18),
                     alignment=ft.alignment.center
                 ),
 
-                # Detail information
-                ft.Text(
-                    detail,
-                    size=11,
-                    color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE),
-                    text_align=ft.TextAlign.CENTER
+                # Detail information with ULTIMATE glassmorphic styling
+                ft.Container(
+                    content=ft.Text(
+                        detail,
+                        size=13,
+                        color=ft.Colors.ON_SURFACE,
+                        text_align=ft.TextAlign.CENTER,
+                        font_family="Inter"
+                    ),
+                    # Detail background glow
+                    shadow=ft.BoxShadow(
+                        spread_radius=0,
+                        blur_radius=8,
+                        color=ft.Colors.with_opacity(0.15, color),
+                        offset=ft.Offset(0, 0)
+                    )
                 ),
-            ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            padding=20,
-            border_radius=16,
-            bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.SURFACE),
-            border=ft.border.all(1, ft.Colors.with_opacity(0.12, color)),
-            shadow=ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=8,
-                color=ft.Colors.with_opacity(0.06, ft.Colors.SHADOW),
-                offset=ft.Offset(0, 2)
-            ),
+            ], spacing=14, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            padding=30,
+            border_radius=28,
+            # 🔮 ULTIMATE GLASSMORPHISM CIRCULAR CARD - PREMIUM SHOWCASE ELEMENT
+            bgcolor=ft.Colors.with_opacity(0.18, ft.Colors.WHITE),
+            border=ft.border.all(3, ft.Colors.with_opacity(0.5, ft.Colors.WHITE)),
+            blur=ft.Blur(sigma_x=20, sigma_y=20),
+            # ULTIMATE multi-layer shadow system
+            shadow=[
+                # Primary dramatic shadow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=35,
+                    color=ft.Colors.with_opacity(0.25, ft.Colors.SHADOW),
+                    offset=ft.Offset(0, 12)
+                ),
+                # Secondary color glow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=50,
+                    color=ft.Colors.with_opacity(0.4, color),
+                    offset=ft.Offset(0, 18)
+                ),
+                # Tertiary halo effect
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=70,
+                    color=ft.Colors.with_opacity(0.2, color),
+                    offset=ft.Offset(0, 25)
+                )
+            ],
             animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
             animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_IN_OUT)
         )
 
     def create_status_indicator(label: str, value: str, color: str, icon: str) -> ft.Container:
-        """Create compact status indicator with icon and value."""
+        """💎 ULTIMATE GLASSMORPHISM STATUS INDICATOR - PREMIUM DETAIL SHOWCASE"""
         return ft.Container(
             content=ft.Row([
                 ft.Container(
-                    content=ft.Icon(icon, color=color, size=16),
-                    padding=6,
-                    border_radius=6,
-                    bgcolor=ft.Colors.with_opacity(0.1, color)
+                    content=ft.Icon(icon, color=color, size=20),
+                    padding=12,
+                    border_radius=14,
+                    # ULTIMATE GLASSMORPHIC ICON WITH DRAMATIC GLOW
+                    bgcolor=ft.Colors.with_opacity(0.3, color),
+                    border=ft.border.all(2, ft.Colors.with_opacity(0.5, color)),
+                    blur=ft.Blur(sigma_x=10, sigma_y=10),
+                    shadow=[
+                        # Primary intense glow
+                        ft.BoxShadow(
+                            spread_radius=0,
+                            blur_radius=18,
+                            color=ft.Colors.with_opacity(0.5, color),
+                            offset=ft.Offset(0, 3)
+                        ),
+                        # Secondary halo glow
+                        ft.BoxShadow(
+                            spread_radius=0,
+                            blur_radius=30,
+                            color=ft.Colors.with_opacity(0.3, color),
+                            offset=ft.Offset(0, 6)
+                        )
+                    ]
                 ),
                 ft.Column([
-                    ft.Text(label, size=11, weight=ft.FontWeight.W_500, color=ft.Colors.ON_SURFACE),
-                    ft.Text(value, size=12, weight=ft.FontWeight.BOLD, color=color)
-                ], spacing=2, alignment=ft.MainAxisAlignment.CENTER)
-            ], spacing=8),
-            padding=ft.padding.symmetric(horizontal=12, vertical=10),
-            border_radius=12,
-            bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
-            border=ft.border.all(1, ft.Colors.with_opacity(0.08, color)),
+                    ft.Text(
+                        label,
+                        size=13,
+                        weight=ft.FontWeight.W_600,
+                        color=ft.Colors.ON_SURFACE,
+                        font_family="Inter"
+                    ),
+                    ft.Container(
+                        content=ft.Text(
+                            value,
+                            size=14,
+                            weight=ft.FontWeight.BOLD,
+                            color=color,
+                            font_family="Inter"
+                        ),
+                        # ULTIMATE VALUE TEXT GLOW
+                        shadow=[
+                            ft.BoxShadow(
+                                spread_radius=0,
+                                blur_radius=8,
+                                color=ft.Colors.with_opacity(0.4, color),
+                                offset=ft.Offset(0, 0)
+                            ),
+                            ft.BoxShadow(
+                                spread_radius=0,
+                                blur_radius=15,
+                                color=ft.Colors.with_opacity(0.2, color),
+                                offset=ft.Offset(0, 0)
+                            )
+                        ]
+                    )
+                ], spacing=4, alignment=ft.MainAxisAlignment.CENTER)
+            ], spacing=14),
+            padding=ft.padding.symmetric(horizontal=18, vertical=16),
+            border_radius=18,
+            # 💎 ULTIMATE GLASSMORPHISM STATUS INDICATOR
+            bgcolor=ft.Colors.with_opacity(0.15, ft.Colors.WHITE),
+            border=ft.border.all(2, ft.Colors.with_opacity(0.4, ft.Colors.WHITE)),
+            blur=ft.Blur(sigma_x=12, sigma_y=12),
+            shadow=[
+                # Primary dramatic shadow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=20,
+                    color=ft.Colors.with_opacity(0.2, ft.Colors.SHADOW),
+                    offset=ft.Offset(0, 6)
+                ),
+                # Secondary color accent glow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=35,
+                    color=ft.Colors.with_opacity(0.25, color),
+                    offset=ft.Offset(0, 10)
+                ),
+                # Tertiary ambient glow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=50,
+                    color=ft.Colors.with_opacity(0.15, color),
+                    offset=ft.Offset(0, 15)
+                )
+            ],
             animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_IN_OUT)
         )
 
@@ -975,17 +1520,78 @@ def create_dashboard_view(
             margin=ft.margin.only(bottom=16)
         ),
 
-        # System Performance section
+        # 🏭 ULTIMATE NEUMORPHISM SYSTEM PERFORMANCE - ARCHITECTURAL DEPTH
         ft.Container(
             content=ft.Column([
-                ft.Text("System Performance", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
+                ft.Row([
+                    ft.Container(
+                        content=ft.Icon(ft.Icons.SPEED, color=ft.Colors.BLUE_600, size=26),
+                        padding=16,
+                        border_radius=18,
+                        # ULTIMATE RAISED NEUMORPHIC ICON
+                        bgcolor=ft.Colors.SURFACE,
+                        shadow=[
+                            # Primary light shadow (top-left)
+                            ft.BoxShadow(
+                                spread_radius=2,
+                                blur_radius=18,
+                                color=ft.Colors.with_opacity(0.6, ft.Colors.WHITE),
+                                offset=ft.Offset(-6, -6)
+                            ),
+                            # Primary dark shadow (bottom-right)
+                            ft.BoxShadow(
+                                spread_radius=2,
+                                blur_radius=18,
+                                color=ft.Colors.with_opacity(0.35, ft.Colors.SHADOW),
+                                offset=ft.Offset(6, 6)
+                            )
+                        ]
+                    ),
+                    ft.Text(
+                        "System Performance",
+                        size=20,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ON_SURFACE,
+                        font_family="Inter"
+                    ),
+                ], spacing=14),
                 metrics_row,
-            ], spacing=12),
-            padding=20,
-            border_radius=16,
-            bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
-            border=ft.border.all(1, ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE)),
-            margin=ft.margin.only(bottom=16)
+            ], spacing=18),
+            padding=30,
+            border_radius=24,
+            # 🏭 ULTIMATE NEUMORPHISM - ARCHITECTURAL STRUCTURAL ELEMENT
+            bgcolor=ft.Colors.SURFACE,
+            shadow=[
+                # Primary light shadow (top-left) - EXTREME
+                ft.BoxShadow(
+                    spread_radius=4,
+                    blur_radius=30,
+                    color=ft.Colors.with_opacity(0.5, ft.Colors.WHITE),
+                    offset=ft.Offset(-12, -12)
+                ),
+                # Primary dark shadow (bottom-right) - EXTREME
+                ft.BoxShadow(
+                    spread_radius=4,
+                    blur_radius=30,
+                    color=ft.Colors.with_opacity(0.3, ft.Colors.SHADOW),
+                    offset=ft.Offset(12, 12)
+                ),
+                # Secondary depth shadow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=18,
+                    color=ft.Colors.with_opacity(0.15, ft.Colors.SHADOW),
+                    offset=ft.Offset(8, 8)
+                ),
+                # Tertiary ambient shadow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=10,
+                    color=ft.Colors.with_opacity(0.1, ft.Colors.SHADOW),
+                    offset=ft.Offset(4, 4)
+                )
+            ],
+            margin=ft.margin.only(bottom=24)
         ),
 
         # (Detailed capacity, performance, and network charts moved to Analytics view)
@@ -1011,16 +1617,77 @@ def create_dashboard_view(
             margin=ft.margin.only(bottom=16)
         ),
 
-        # Additional KPI metrics
+        # 🏭 ULTIMATE NEUMORPHISM KPI SECTION - ARCHITECTURAL DEPTH
         ft.Container(
             content=ft.Column([
-                ft.Text("Key Performance Indicators", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
+                ft.Row([
+                    ft.Container(
+                        content=ft.Icon(ft.Icons.ANALYTICS, color=ft.Colors.PURPLE_600, size=26),
+                        padding=16,
+                        border_radius=18,
+                        # ULTIMATE RAISED NEUMORPHIC ICON
+                        bgcolor=ft.Colors.SURFACE,
+                        shadow=[
+                            # Primary light shadow (top-left)
+                            ft.BoxShadow(
+                                spread_radius=2,
+                                blur_radius=18,
+                                color=ft.Colors.with_opacity(0.6, ft.Colors.WHITE),
+                                offset=ft.Offset(-6, -6)
+                            ),
+                            # Primary dark shadow (bottom-right)
+                            ft.BoxShadow(
+                                spread_radius=2,
+                                blur_radius=18,
+                                color=ft.Colors.with_opacity(0.35, ft.Colors.SHADOW),
+                                offset=ft.Offset(6, 6)
+                            )
+                        ]
+                    ),
+                    ft.Text(
+                        "Key Performance Indicators",
+                        size=20,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ON_SURFACE,
+                        font_family="Inter"
+                    ),
+                ], spacing=14),
                 kpi_row,
-            ], spacing=12),
-            padding=20,
-            border_radius=16,
-            bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
-            border=ft.border.all(1, ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE)),
+            ], spacing=18),
+            padding=30,
+            border_radius=24,
+            # 🏭 ULTIMATE NEUMORPHISM - ARCHITECTURAL STRUCTURAL ELEMENT
+            bgcolor=ft.Colors.SURFACE,
+            shadow=[
+                # Primary light shadow (top-left) - EXTREME
+                ft.BoxShadow(
+                    spread_radius=4,
+                    blur_radius=30,
+                    color=ft.Colors.with_opacity(0.5, ft.Colors.WHITE),
+                    offset=ft.Offset(-12, -12)
+                ),
+                # Primary dark shadow (bottom-right) - EXTREME
+                ft.BoxShadow(
+                    spread_radius=4,
+                    blur_radius=30,
+                    color=ft.Colors.with_opacity(0.3, ft.Colors.SHADOW),
+                    offset=ft.Offset(12, 12)
+                ),
+                # Secondary depth shadow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=18,
+                    color=ft.Colors.with_opacity(0.15, ft.Colors.SHADOW),
+                    offset=ft.Offset(8, 8)
+                ),
+                # Tertiary ambient shadow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=10,
+                    color=ft.Colors.with_opacity(0.1, ft.Colors.SHADOW),
+                    offset=ft.Offset(4, 4)
+                )
+            ],
         )
     ], spacing=0, scroll=ft.ScrollMode.AUTO)
 
@@ -1051,69 +1718,163 @@ def create_dashboard_view(
         ),
     ], spacing=0, scroll=ft.ScrollMode.AUTO)
 
+    # Optional inner test controls (guarded by env var) to diagnose rendering/overlay issues.
+    # Set environment variable FLET_DASHBOARD_INNER_TEST=1 to enable this during debugging.
+    test_controls: list[ft.Control] = []
+    if os.environ.get("FLET_DASHBOARD_INNER_TEST") == "1":
+        test_controls.append(
+            ft.Container(
+                content=ft.Text("INNER DASHBOARD TEST", color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD),
+                width=600,
+                height=160,
+                alignment=ft.alignment.center,
+                bgcolor=ft.Colors.RED,
+                padding=20,
+                border_radius=12,
+            )
+        )
+
     main_content = ft.Column([
-        # SOPHISTICATED HEADER - DESIGN COMPETITION WINNER
+        # 🎆 ULTIMATE GLASSMORPHISM HEADER - COMPETITION WINNING HERO ELEMENT
         ft.Container(
             content=ft.Row([
-                # Main title with professional styling
-                ft.Text(
-                    "FILE SERVER OVERVIEW",
-                    size=36,
-                    weight=ft.FontWeight.BOLD,
-                    color=ft.Colors.WHITE,
-                    font_family="Inter"
+                # Main title with ultimate glow effect
+                ft.Container(
+                    content=ft.Text(
+                        "FILE SERVER OVERVIEW",
+                        size=42,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ON_SURFACE,
+                        font_family="Inter"
+                    ),
+                    # INTENSE TITLE GLOW EFFECT
+                    shadow=[
+                        ft.BoxShadow(
+                            spread_radius=0,
+                            blur_radius=20,
+                            color=ft.Colors.with_opacity(0.4, ft.Colors.CYAN_600),
+                            offset=ft.Offset(0, 0)
+                        ),
+                        ft.BoxShadow(
+                            spread_radius=0,
+                            blur_radius=35,
+                            color=ft.Colors.with_opacity(0.2, ft.Colors.CYAN_400),
+                            offset=ft.Offset(0, 0)
+                        )
+                    ]
                 ),
 
-                # Connection status and controls
+                # Connection status and controls with ULTIMATE glassmorphism
                 ft.Row([
-                    # Connection status indicator with glass morphism
+                    # ULTIMATE glassmorphic connection status
                     ft.Container(
                         content=ft.Row([
                             ft.Icon(
                                 ft.Icons.CHECK_CIRCLE,
-                                size=20,
-                                color=ft.Colors.GREEN_400
+                                size=24,
+                                color=ft.Colors.GREEN_600
                             ),
                             ft.Text(
                                 "CONNECTED TO SERVER",
-                                size=14,
-                                weight=ft.FontWeight.W_600,
-                                color=ft.Colors.GREEN_400
+                                size=15,
+                                weight=ft.FontWeight.BOLD,
+                                color=ft.Colors.GREEN_600
                             )
-                        ], spacing=8),
-                        padding=ft.padding.symmetric(horizontal=16, vertical=8),
-                        border_radius=20,
-                        bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.GREEN_400),
-                        border=ft.border.all(1, ft.Colors.with_opacity(0.3, ft.Colors.GREEN_400)),
+                        ], spacing=12),
+                        padding=ft.padding.symmetric(horizontal=20, vertical=12),
+                        border_radius=26,
+                        # ULTIMATE GLASSMORPHISM CONNECTION STATUS
+                        bgcolor=ft.Colors.with_opacity(0.25, ft.Colors.GREEN_600),
+                        border=ft.border.all(2.5, ft.Colors.with_opacity(0.6, ft.Colors.GREEN_600)),
+                        blur=ft.Blur(sigma_x=15, sigma_y=15),
+                        shadow=[
+                            # Primary green glow
+                            ft.BoxShadow(
+                                spread_radius=0,
+                                blur_radius=25,
+                                color=ft.Colors.with_opacity(0.5, ft.Colors.GREEN_600),
+                                offset=ft.Offset(0, 6)
+                            ),
+                            # Secondary halo
+                            ft.BoxShadow(
+                                spread_radius=0,
+                                blur_radius=40,
+                                color=ft.Colors.with_opacity(0.3, ft.Colors.GREEN_400),
+                                offset=ft.Offset(0, 10)
+                            )
+                        ],
                         animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT)
                     ),
 
-                    # Refresh button with enhanced styling
+                    # ULTIMATE glassmorphic refresh button
                     ft.Container(
                         content=ft.IconButton(
                             icon=ft.Icons.REFRESH,
-                            icon_color=ft.Colors.CYAN_400,
+                            icon_color=ft.Colors.CYAN_600,
+                            icon_size=24,
                             tooltip="Refresh Dashboard",
                             on_click=lambda e: refresh_all_data()
                         ),
-                        padding=4,
-                        border_radius=12,
-                        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.CYAN_400),
-                        border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.CYAN_400)),
+                        padding=8,
+                        border_radius=18,
+                        # ULTIMATE GLASSMORPHISM REFRESH BUTTON
+                        bgcolor=ft.Colors.with_opacity(0.2, ft.Colors.CYAN_600),
+                        border=ft.border.all(2, ft.Colors.with_opacity(0.5, ft.Colors.CYAN_600)),
+                        blur=ft.Blur(sigma_x=12, sigma_y=12),
+                        shadow=[
+                            # Primary cyan glow
+                            ft.BoxShadow(
+                                spread_radius=0,
+                                blur_radius=20,
+                                color=ft.Colors.with_opacity(0.4, ft.Colors.CYAN_600),
+                                offset=ft.Offset(0, 4)
+                            ),
+                            # Secondary halo
+                            ft.BoxShadow(
+                                spread_radius=0,
+                                blur_radius=30,
+                                color=ft.Colors.with_opacity(0.2, ft.Colors.CYAN_400),
+                                offset=ft.Offset(0, 8)
+                            )
+                        ],
                         animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_IN_OUT)
                     )
-                ], spacing=16),
+                ], spacing=20),
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            padding=ft.padding.all(24),
-            border_radius=16,
-            bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.SURFACE),
-            border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
-            margin=ft.margin.only(bottom=24),
+            padding=ft.padding.all(32),
+            border_radius=28,
+            # 🎆 ULTIMATE GLASSMORPHISM HEADER - PREMIUM HERO SHOWCASE
+            # Gate header background with env var to test occlusion: set FLET_DASHBOARD_HIDE_PANEL=1 to hide
+            bgcolor=(ft.Colors.with_opacity(0.18, ft.Colors.WHITE) if os.environ.get('FLET_DASHBOARD_HIDE_PANEL') != '1' else None),
+            border=ft.border.all(3, ft.Colors.with_opacity(0.4, ft.Colors.WHITE)),
+            blur=ft.Blur(sigma_x=25, sigma_y=25),
+            shadow=[
+                # Primary dramatic shadow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=50,
+                    color=ft.Colors.with_opacity(0.3, ft.Colors.SHADOW),
+                    offset=ft.Offset(0, 15)
+                ),
+                # Secondary color glow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=80,
+                    color=ft.Colors.with_opacity(0.2, ft.Colors.CYAN_900),
+                    offset=ft.Offset(0, 25)
+                )
+            ],
+            margin=ft.margin.only(bottom=32),
             animate=ft.Animation(400, ft.AnimationCurve.EASE_OUT)
         ),
 
         # Hero metrics (4 key indicators at top)
         hero_row,
+        *test_controls,
+
+        # Optional inner test marker (guarded by env var) to diagnose rendering/overlay issues
+        # Set environment variable FLET_DASHBOARD_INNER_TEST=1 to enable this during debugging.
+        # This is temporary and safe to leave gated by the env var.
 
         # TWO-COLUMN MAIN LAYOUT MATCHING REFERENCE
         ft.Container(
@@ -1135,16 +1896,70 @@ def create_dashboard_view(
             margin=ft.margin.only(top=24)
         ),
 
-        # BOTTOM SECTION: CIRCULAR CHARTS & STATUS INDICATORS
+        # 🎆 ULTIMATE GLASSMORPHISM SHOWCASE - PREMIUM SYSTEM OVERVIEW
         ft.Container(
             content=ft.Column([
-                # Section Header
+                # Section Header with ULTIMATE glassmorphism
                 ft.Container(
                     content=ft.Row([
-                        ft.Icon(ft.Icons.DONUT_LARGE, color=ft.Colors.TEAL_600, size=24),
-                        ft.Text("SYSTEM OVERVIEW", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                    ], spacing=12),
-                    margin=ft.margin.only(bottom=20)
+                        ft.Container(
+                            content=ft.Icon(ft.Icons.DONUT_LARGE, color=ft.Colors.TEAL_400, size=30),
+                            padding=18,
+                            border_radius=20,
+                            # ULTIMATE GLASSMORPHIC ICON WITH EXTREME GLOW
+                            bgcolor=ft.Colors.with_opacity(0.35, ft.Colors.TEAL_600),
+                            border=ft.border.all(3, ft.Colors.with_opacity(0.6, ft.Colors.TEAL_400)),
+                            blur=ft.Blur(sigma_x=15, sigma_y=15),
+                            shadow=[
+                                # Primary intense teal glow
+                                ft.BoxShadow(
+                                    spread_radius=0,
+                                    blur_radius=30,
+                                    color=ft.Colors.with_opacity(0.7, ft.Colors.TEAL_600),
+                                    offset=ft.Offset(0, 6)
+                                ),
+                                # Secondary halo glow
+                                ft.BoxShadow(
+                                    spread_radius=0,
+                                    blur_radius=50,
+                                    color=ft.Colors.with_opacity(0.5, ft.Colors.TEAL_400),
+                                    offset=ft.Offset(0, 12)
+                                ),
+                                # Tertiary ambient glow
+                                ft.BoxShadow(
+                                    spread_radius=0,
+                                    blur_radius=70,
+                                    color=ft.Colors.with_opacity(0.3, ft.Colors.TEAL_300),
+                                    offset=ft.Offset(0, 20)
+                                )
+                            ]
+                        ),
+                        ft.Container(
+                            content=ft.Text(
+                                "SYSTEM OVERVIEW",
+                                size=24,
+                                weight=ft.FontWeight.BOLD,
+                                color=ft.Colors.ON_SURFACE,
+                                font_family="Inter"
+                            ),
+                            # ULTIMATE TITLE GLOW EFFECT
+                            shadow=[
+                                ft.BoxShadow(
+                                    spread_radius=0,
+                                    blur_radius=20,
+                                    color=ft.Colors.with_opacity(0.4, ft.Colors.TEAL_600),
+                                    offset=ft.Offset(0, 0)
+                                ),
+                                ft.BoxShadow(
+                                    spread_radius=0,
+                                    blur_radius=35,
+                                    color=ft.Colors.with_opacity(0.2, ft.Colors.TEAL_400),
+                                    offset=ft.Offset(0, 0)
+                                )
+                            ]
+                        ),
+                    ], spacing=18),
+                    margin=ft.margin.only(bottom=28)
                 ),
 
                 # Circular Charts Row
@@ -1206,24 +2021,66 @@ def create_dashboard_view(
                     ),
                 ], spacing=16),
 
-                # Status Indicators Row
+                # Status Indicators Row with ULTIMATE glassmorphic container
                 ft.Container(
-                    content=ft.Row([
-                        create_status_indicator("Server Health", "Optimal", ft.Colors.GREEN_600, ft.Icons.FAVORITE),
-                        create_status_indicator("Data Integrity", "Verified", ft.Colors.BLUE_600, ft.Icons.VERIFIED_USER),
-                        create_status_indicator("Last Backup", "2 min ago", ft.Colors.PURPLE_600, ft.Icons.UPDATE),
-                        create_status_indicator("Next Backup", "In 28 min", ft.Colors.CYAN_600, ft.Icons.SCHEDULE),
-                        create_status_indicator("Storage Quota", "62% Used", ft.Colors.ORANGE_600, ft.Icons.STORAGE),
-                        create_status_indicator("Active Users", "15 Online", ft.Colors.TEAL_600, ft.Icons.PEOPLE),
-                    ], spacing=16, wrap=True),
-                    margin=ft.margin.only(top=24)
+                    content=ft.Container(
+                        content=ft.Row([
+                            create_status_indicator("Server Health", "Optimal", ft.Colors.GREEN_600, ft.Icons.FAVORITE),
+                            create_status_indicator("Data Integrity", "Verified", ft.Colors.BLUE_600, ft.Icons.VERIFIED_USER),
+                            create_status_indicator("Last Backup", "2 min ago", ft.Colors.PURPLE_600, ft.Icons.UPDATE),
+                            create_status_indicator("Next Backup", "In 28 min", ft.Colors.CYAN_600, ft.Icons.SCHEDULE),
+                            create_status_indicator("Storage Quota", "62% Used", ft.Colors.ORANGE_600, ft.Icons.STORAGE),
+                            create_status_indicator("Active Users", "15 Online", ft.Colors.TEAL_600, ft.Icons.PEOPLE),
+                        ], spacing=24, wrap=True),
+                        padding=24,
+                        border_radius=22,
+                        # ULTIMATE INNER GLASSMORPHIC CONTAINER FOR STATUS INDICATORS
+                        bgcolor=ft.Colors.with_opacity(0.12, ft.Colors.WHITE),
+                        border=ft.border.all(2, ft.Colors.with_opacity(0.3, ft.Colors.WHITE)),
+                        blur=ft.Blur(sigma_x=15, sigma_y=15),
+                        shadow=[
+                            ft.BoxShadow(
+                                spread_radius=0,
+                                blur_radius=25,
+                                color=ft.Colors.with_opacity(0.2, ft.Colors.SHADOW),
+                                offset=ft.Offset(0, 8)
+                            )
+                        ]
+                    ),
+                    margin=ft.margin.only(top=32)
                 ),
             ]),
-            padding=24,
-            border_radius=16,
-            bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
-            border=ft.border.all(1, ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE)),
-            margin=ft.margin.only(top=24)
+            padding=36,
+            border_radius=32,
+            # 🎆 ULTIMATE GLASSMORPHISM SHOWCASE - PREMIUM SYSTEM OVERVIEW
+            # Gate main overview background with env var to test occlusion: set FLET_DASHBOARD_HIDE_PANEL=1 to hide
+            bgcolor=(ft.Colors.with_opacity(0.18, ft.Colors.WHITE) if os.environ.get('FLET_DASHBOARD_HIDE_PANEL') != '1' else None),
+            border=ft.border.all(3, ft.Colors.with_opacity(0.5, ft.Colors.WHITE)),
+            blur=ft.Blur(sigma_x=25, sigma_y=25),
+            shadow=[
+                # Primary dramatic shadow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=60,
+                    color=ft.Colors.with_opacity(0.3, ft.Colors.SHADOW),
+                    offset=ft.Offset(0, 18)
+                ),
+                # Secondary teal glow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=90,
+                    color=ft.Colors.with_opacity(0.25, ft.Colors.TEAL_600),
+                    offset=ft.Offset(0, 30)
+                ),
+                # Tertiary ambient glow
+                ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=120,
+                    color=ft.Colors.with_opacity(0.15, ft.Colors.CYAN_400),
+                    offset=ft.Offset(0, 40)
+                )
+            ],
+            margin=ft.margin.only(top=32)
         ),
 
     ], spacing=24, scroll=ft.ScrollMode.AUTO)
@@ -1232,7 +2089,8 @@ def create_dashboard_view(
         content=main_content,
         expand=True,
         padding=ft.padding.symmetric(horizontal=24, vertical=16),
-        bgcolor=ft.Colors.with_opacity(0.01, ft.Colors.SURFACE),
+        # Clean dashboard background - let theme handle it
+        bgcolor=None,
     )
 
     # ==================== REAL SERVER DATA INTEGRATION ====================
@@ -1256,6 +2114,9 @@ def create_dashboard_view(
         'metrics_visible': False,
         'entrance_completed': False
     }
+
+    # Simple logger for diagnostics
+    logger = logging.getLogger("FletV2.views.dashboard")
 
     def get_activity_icon_color(activity_type: str) -> tuple[str, str]:
         """Get sophisticated icon and color for activity type with Material 3 colors."""
@@ -1385,9 +2246,14 @@ def create_dashboard_view(
         """Animate individual list item entrance."""
         if delay > 0:
             await asyncio.sleep(delay / 1000)
-        item.opacity = 1
-        item.offset = ft.Offset(0, 0)
-        item.update()
+        print(f"[ANIM] animate_list_item start delay={delay} id={id(item)}")
+        try:
+            item.opacity = 1
+            item.offset = ft.Offset(0, 0)
+            item.update()
+            print(f"[ANIM] animate_list_item applied opacity=1 id={id(item)}")
+        except Exception as e:
+            print(f"[ANIM] animate_list_item error id={id(item)}: {e}")
 
     async def filter_activity(filter_type: str):
         """Filter activity by type with smooth transitions."""
@@ -1547,6 +2413,14 @@ def create_dashboard_view(
         refresh_active = True
 
         try:
+            # Guard: ensure primary status control is attached before proceeding; otherwise defer
+            if not (status_ref.current and getattr(status_ref.current, 'page', None)):
+                # Short grace period for attachment after view insertion
+                await asyncio.sleep(0.2)
+                if not (status_ref.current and getattr(status_ref.current, 'page', None)):
+                    # Still not attached; skip this cycle to avoid 'Control must be added' errors
+                    refresh_active = False
+                    return
             # Show refreshing state with animation
             if status_ref.current:
                 status_ref.current.value = "Refreshing..."
@@ -1695,37 +2569,48 @@ def create_dashboard_view(
     async def perform_entrance_animations():
         """Perform sophisticated entrance animations for all dashboard elements."""
         try:
+            print("[ANIM] perform_entrance_animations START")
             # Stagger the entrance animations for visual appeal
             await asyncio.sleep(0.1)  # Small initial delay
 
             # Animate hero cards entrance
             for i, card_container in enumerate(hero_row.controls):
+                print(f"[ANIM] hero_card[{i}] before opacity={getattr(card_container, 'opacity', None)}")
                 card_container.opacity = 1
                 card_container.update()
+                print(f"[ANIM] hero_card[{i}] after opacity={getattr(card_container, 'opacity', None)}")
                 await asyncio.sleep(0.1)
 
             animation_state['hero_cards_visible'] = True
+            print("[ANIM] hero_cards_visible set True")
             await asyncio.sleep(0.2)
 
             # Animate KPI cards entrance
             for i, card_container in enumerate(kpi_row.controls):
+                print(f"[ANIM] kpi_card[{i}] before opacity={getattr(card_container, 'opacity', None)}")
                 card_container.opacity = 1
                 card_container.offset = ft.Offset(0, 0)
                 card_container.update()
+                print(f"[ANIM] kpi_card[{i}] after opacity={getattr(card_container, 'opacity', None)}")
                 await asyncio.sleep(0.1)
 
             animation_state['kpi_cards_visible'] = True
+            print("[ANIM] kpi_cards_visible set True")
             await asyncio.sleep(0.2)
 
             # Animate system metrics entrance
             for i, metric_container in enumerate(metrics_row.controls):
+                print(f"[ANIM] metric[{i}] before opacity={getattr(metric_container, 'opacity', None)}")
                 metric_container.opacity = 1
                 metric_container.offset = ft.Offset(0, 0)
                 metric_container.update()
+                print(f"[ANIM] metric[{i}] after opacity={getattr(metric_container, 'opacity', None)}")
                 await asyncio.sleep(0.1)
 
             animation_state['metrics_visible'] = True
+            print("[ANIM] metrics_visible set True")
             animation_state['entrance_completed'] = True
+            print("[ANIM] perform_entrance_animations COMPLETE")
 
         except Exception as e:
             print(f"Entrance animation error: {e}")
@@ -1734,15 +2619,22 @@ def create_dashboard_view(
         """Enhanced background refresh loop with real-time updates."""
         try:
             # Perform entrance animations first
+            print("[REFRESH] refresh_loop starting - scheduling entrance animations if available")
             if page and hasattr(page, 'run_task'):
                 entrance_animation_task = page.run_task(perform_entrance_animations)
+                print("[REFRESH] entrance_animation_task scheduled via page.run_task")
+            else:
+                print("[REFRESH] page.run_task not available - scheduling directly")
 
+            # Allow a brief window for all controls to attach before first refresh
+            await asyncio.sleep(0.3)
             # Initial data load
             await refresh_data()
 
             # Real-time refresh loop
             while not stop_refresh:
                 try:
+                    print("[REFRESH] refresh_loop tick - calling refresh_data")
                     await asyncio.sleep(15)  # 15-second interval for real-time feel
                     await refresh_data()
                 except Exception as e:
@@ -1755,10 +2647,13 @@ def create_dashboard_view(
     def setup_subscriptions():
         """Setup sophisticated background refresh and real-time data subscriptions."""
         nonlocal refresh_task
+        print("[SUBS] setup_subscriptions called")
         if page and hasattr(page, 'run_task'):
             refresh_task = page.run_task(refresh_loop)
+            print("[SUBS] refresh_task scheduled via page.run_task")
         else:
             refresh_task = asyncio.create_task(refresh_loop())
+            print("[SUBS] refresh_task scheduled via asyncio.create_task")
 
     def dispose():
         """Clean disposal of resources and animations."""

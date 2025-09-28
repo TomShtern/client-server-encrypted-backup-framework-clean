@@ -45,12 +45,12 @@ def create_dashboard_view(
         setup_modern_theme(page)
 
     # Refs for precise updates (10x performance)
-    total_clients_ref = ft.Ref[ft.Text]()
-    active_transfers_ref = ft.Ref[ft.Text]()
-    uptime_ref = ft.Ref[ft.Text]()
+    total_clients_ref = ft.Ref[ft.TextControl]()  # ✅ FIXED: Use ft.TextControl for type compatibility
+    active_transfers_ref = ft.Ref[ft.TextControl]()  # ✅ FIXED: Use ft.TextControl for type compatibility
+    uptime_ref = ft.Ref[ft.TextControl]()  # ✅ FIXED: Use ft.TextControl for type compatibility
 
     # Hero metrics with proper refs
-    def create_hero_card(label: str, value_ref: ft.Ref[ft.Text], color: str) -> ft.Container:
+    def create_hero_card(label: str, value_ref: ft.Ref[ft.TextControl], color: str) -> ft.Container:  # ✅ FIXED: Update parameter type
         return ft.Container(
             content=ft.Column([
                 ft.Text(
@@ -85,7 +85,7 @@ def create_dashboard_view(
     ], run_spacing=20, spacing=20)
 
     # Status indicators
-    status_ref = ft.Ref[ft.Text]()
+    status_ref = ft.Ref[ft.TextControl]()  # ✅ FIXED: Use ft.TextControl for type compatibility
     status_text = ft.Text("Ready", ref=status_ref, size=12, color=ft.Colors.ON_SURFACE)
 
     # Main layout
@@ -117,7 +117,7 @@ def create_dashboard_view(
         content=main_content,
         expand=True,
         padding=ft.padding.symmetric(horizontal=32, vertical=24),
-        bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE_VARIANT),  # ✅ FIXED: Visible
+        bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),  # ✅ FIXED: Visible
     )
 
     # ✅ FIXED: Async-safe refresh logic
@@ -137,30 +137,41 @@ def create_dashboard_view(
 
             # Get data from server bridge with fallback
             if server_bridge:
-                try:
-                    result = await asyncio.get_event_loop().run_in_executor(
-                        None, server_bridge.get_system_stats
-                    )
-                    if result.get('success'):
-                        data = result.get('data', {})
+                # Define a local function to compute stats using existing ServerBridge methods
+                def get_stats():
+                    if server_bridge is None:  # ✅ FIXED: Check for None to avoid attribute access errors
+                        return {'success': False, 'error': 'Server bridge not available'}
+                    try:
+                        clients = server_bridge.get_clients()  # Existing method
+                        files = server_bridge.get_files()      # Existing method
+                        return {
+                            'success': True,
+                            'data': {
+                                'total_clients': len(clients) if clients else 0,
+                                'active_transfers': len(files) if files else 0,  # Assuming files represent active transfers
+                                'uptime': 'N/A'  # Fallback; update if real data becomes available
+                            }
+                        }
+                    except Exception as e:
+                        return {'success': False, 'error': str(e)}
 
-                        # Update hero metrics safely
-                        if total_clients_ref.current:
-                            total_clients_ref.current.value = str(data.get('total_clients', 0))
-                            total_clients_ref.current.update()
+                # Execute the stats computation in a thread pool
+                result = await asyncio.get_event_loop().run_in_executor(None, get_stats)
+                if result.get('success'):
+                    data = result.get('data', {})
 
-                        if active_transfers_ref.current:
-                            active_transfers_ref.current.value = str(data.get('active_transfers', 0))
-                            active_transfers_ref.current.update()
+                    # Update hero metrics safely
+                    if total_clients_ref.current:
+                        total_clients_ref.current.value = str(data.get('total_clients', 0))
+                        total_clients_ref.current.update()
 
-                        if uptime_ref.current:
-                            uptime_ref.current.value = data.get('uptime', '0m')
-                            uptime_ref.current.update()
+                    if active_transfers_ref.current:
+                        active_transfers_ref.current.value = str(data.get('active_transfers', 0))
+                        active_transfers_ref.current.update()
 
-                except Exception as e:
-                    print(f"Server bridge error: {e}")
-                    # Use fallback data
-                    pass
+                    if uptime_ref.current:
+                        uptime_ref.current.value = data.get('uptime', 'N/A')
+                        uptime_ref.current.update()
 
             # Update status
             if status_ref.current:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Minimal stub dashboard view used when full dashboard fails to load.
-
+I DONT SEE THE USE OF THE USELESS FILE. CONSIDER DELETE IT.
 This keeps the UI responsive and surfaces an explicit diagnostic panel so the
 user knows the primary dashboard module encountered a problem.
 """
@@ -80,5 +80,4 @@ def create_dashboard_stub(page: ft.Page | None = None) -> ft.Control:
     except Exception:
         pass
 
-    return diag
     return diag

@@ -9,6 +9,7 @@ Let Flet do the heavy lifting. We compose, not reinvent.
 
 from collections.abc import Callable
 from typing import Any
+import contextlib
 
 import flet as ft
 from theme import get_design_tokens
@@ -90,21 +91,22 @@ def create_simple_bar_chart(data_points: list, labels: list, colors: list) -> ft
     """Create a simple bar chart for data visualization."""
     # Create bar groups from data
     bar_groups = []
-    for i, (value, label, color) in enumerate(zip(data_points, labels, colors, strict=False)):
-        bar_groups.append(
-            ft.BarChartGroup(
-                x=i,
-                bar_rods=[
-                    ft.BarChartRod(
-                        to_y=value,
-                        color=color,
-                        width=20,
-                        border_radius=4,
-                    )
-                ]
-            )
+    bar_groups.extend(
+        ft.BarChartGroup(
+            x=i,
+            bar_rods=[
+                ft.BarChartRod(
+                    to_y=value,
+                    color=color,
+                    width=20,
+                    border_radius=4,
+                )
+            ],
         )
-
+        for i, (value, label, color) in enumerate(
+            zip(data_points, labels, colors, strict=False)
+        )
+    )
     return ft.BarChart(
         bar_groups=bar_groups,
         width=400,
@@ -117,17 +119,16 @@ def create_simple_bar_chart(data_points: list, labels: list, colors: list) -> ft
 
 def create_simple_pie_chart(sections: list) -> ft.PieChart:
     """Create a simple pie chart for data visualization."""
-    pie_sections = []
-    for section in sections:
-        pie_sections.append(
-            ft.PieChartSection(
-                value=section["value"],
-                color=section["color"],
-                title=section["title"],
-                radius=section.get("radius", 80),
-                badge=ft.Text(f"{section['value']}%", size=10, color=ft.Colors.WHITE)
-            )
+    pie_sections = [
+        ft.PieChartSection(
+            value=section["value"],
+            color=section["color"],
+            title=section["title"],
+            radius=section.get("radius", 80),
+            badge=ft.Text(f"{section['value']}%", size=10, color=ft.Colors.WHITE)
         )
+        for section in sections
+    ]
 
     return ft.PieChart(
         sections=pie_sections,
@@ -737,22 +738,16 @@ def create_modern_progress_indicator(operation: str, state_manager=None) -> ft.C
 # File operations helpers
 def safe_update_control(control: ft.Control, force: bool = False) -> bool:
     """Safe control update helper."""
-    try:
+    with contextlib.suppress(Exception):
         if hasattr(control, 'update'):
             control.update()
             return True
-    except Exception:
-        pass
     return False
 
 
 def safe_update_controls(*controls: ft.Control, force: bool = False) -> int:
     """Safe multiple control update helper."""
-    count = 0
-    for control in controls:
-        if safe_update_control(control, force):
-            count += 1
-    return count
+    return sum(safe_update_control(control, force) for control in controls)
 
 # ======================================================================
 # PHASE 1: STANDARDIZED COMPONENT PRIMITIVES (additive, non-breaking)
@@ -771,7 +766,6 @@ def AppCard(
     tooltip: str | None = None,
 ) -> ft.Container:
     """Unified card: subtle border + elevation, consistent padding & radius."""
-    pad = padding if padding is not None else _SP["xl"]
     body = content
     header_controls: list[ft.Control] = []
     if title is not None or actions:
@@ -788,7 +782,7 @@ def AppCard(
             *header_controls,
             body
         ], spacing=_SP["lg"]),
-        padding=ft.padding.all(pad),
+        padding=ft.padding.all(padding if padding is not None else _SP["xl"]),
         border=ft.border.all(1, ft.Colors.OUTLINE),
         border_radius=_RD["card"],
         shadow=ft.BoxShadow(spread_radius=0, blur_radius=14, offset=ft.Offset(0, 6), color=ft.Colors.with_opacity(0.12, ft.Colors.BLACK)),

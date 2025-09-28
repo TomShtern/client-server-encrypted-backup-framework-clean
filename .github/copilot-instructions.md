@@ -3,7 +3,6 @@ description: AI rules derived by SpecStory from the project AI interaction histo
 globs: *
 ---
 
-```markdown
 ---
 description: AI rules derived by SpecStory from the project AI interaction history
 ---
@@ -643,7 +642,7 @@ def create_list_item(item: Dict[str, Any]]) -> ft.Control:
         ]),
         padding=12,
         border_radius=8,
-        bgcolor=ft.Colors.SURFACE_VARIANT
+        bgcolor=ft.Colors.SURFACE_VARIANT,
     )
 ```
 
@@ -787,7 +786,7 @@ with suppress(ImportError):
     load_dotenv()
 
 # Debug mode - controls visibility of mock data and debug features
-DEBUG_MODE = os.environ.get('FLET_V2_DEBUG', 'false').lower() == 'true'
+DEBUG_MODE = os.environ.get('FLET_V_DEBUG', 'false').lower() == 'true'
 
 # Secure secret handling from environment variables
 GITHUB_PERSONAL_ACCESS_TOKEN = os.environ.get('GITHUB_PERSONAL_ACCESS_TOKEN')
@@ -830,7 +829,7 @@ CONNECTION_TIMEOUT = 30  # seconds
 def validate_environment():
     """Validate required environment variables and provide helpful errors."""
     required_vars = {
-        'FLET_V2_DEBUG': 'Controls debug mode and mock data visibility',
+        'FLET_V_DEBUG': 'Controls debug mode and mock data visibility',
         'REAL_SERVER_URL': 'URL for production server integration',
         'BACKUP_SERVER_TOKEN': 'Authentication token for server API'
     }
@@ -878,7 +877,7 @@ import os
 from unittest.mock import Mock, patch
 
 # Set debug mode to enable mock data
-os.environ['FLET_V2_DEBUG'] = 'true'
+os.environ['FLET_V_DEBUG'] = 'true'
 
 # Add the FletV2 directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -917,15 +916,15 @@ class TestSimpleServerBridge(unittest.TestCase):
         files = self.bridge.get_files()
         self.assertIsInstance(files, list)
 
+        # Add mocking for ServerBridge to resolve type mismatch errors when testing views
 
-if __name__name == '__main__':
-    unittest.main()
+#### Mocking
+
+When mocking `ServerBridge` in tests, use `unittest.mock.Mock` with `spec=ServerBridge` to ensure type compatibility:
+
+```python
+    from utils.server_bridge import ServerBridge
+    from unittest.
 ```
 
-#### Mocking Patterns
-```python
-import unittest
-from unittest.mock import Mock, patch, MagicMock
-import types # ADDED: Import for types.ModuleType - required to create a valid module object for mocking.
-
-class TestView
+### Debug
