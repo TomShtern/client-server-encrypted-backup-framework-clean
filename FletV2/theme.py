@@ -1,34 +1,79 @@
 #!/usr/bin/env python3
 """
-Simplified FletV2 Theme System - Following the Flet Simplicity Principle
-Uses Flet's built-in ft.Theme, ft.ColorScheme, and ft.TextTheme instead of custom over-engineering.
-
-Reduced from 947 lines to ~250 lines while maintaining all functionality.
+Sophisticated FletV2 Theme System - Material Design 3 + Neumorphism + Glassmorphism
+Flet 0.28.3 implementation with triple design system architecture.
+Foundation: Material Design 3 semantic colors and typography
+Structure: Neumorphic soft shadows and tactile depth
+Focus: Glassmorphic transparency and blur effects
 """
 
 from typing import cast
 
 import flet as ft
 
-# Core brand colors - simplified palette
+# Material Design 3 semantic color system with enhanced palette
 BRAND_COLORS = {
-    "primary": "#3B82F6",      # Vibrant blue
-    "secondary": "#8B5CF6",    # Vibrant purple
-    "accent": "#10B981",       # Fresh emerald
-    "success": "#22C55E",
-    "warning": "#EAB308",
-    "error": "#EF4444",
+    "primary": "#3B82F6",      # Material Blue 500
+    "secondary": "#8B5CF6",    # Material Purple 500
+    "tertiary": "#10B981",     # Material Emerald 500
+    "success": "#22C55E",      # Material Green 500
+    "warning": "#EAB308",      # Material Yellow 500
+    "error": "#EF4444",        # Material Red 500
+    "info": "#0EA5E9",         # Material Sky 500
+    "surface": "#F8FAFC",      # Material Slate 50
+    "surface_variant": "#F1F5F9",  # Material Slate 100
+    "outline": "#CBD5E1",      # Material Slate 300
 }
 
-def setup_modern_theme(page: ft.Page):
-    """Set up 2025 modern theme using Flet's built-in capabilities."""
+# Neumorphic shadow configurations
+NEUMORPHIC_SHADOWS = {
+    "raised": {
+        "light_shadow": {
+            "color": "#FFFFFF",
+            "opacity": 0.8,
+            "offset": (-4, -4),
+            "blur": 8
+        },
+        "dark_shadow": {
+            "color": "#000000",
+            "opacity": 0.15,
+            "offset": (4, 4),
+            "blur": 8
+        }
+    },
+    "inset": {
+        "light_shadow": {
+            "color": "#FFFFFF",
+            "opacity": 0.6,
+            "offset": (-2, -2),
+            "blur": 6
+        },
+        "dark_shadow": {
+            "color": "#000000",
+            "opacity": 0.2,
+            "offset": (2, 2),
+            "blur": 6
+        }
+    }
+}
+
+# Glassmorphic configuration
+GLASSMORPHIC_CONFIG = {
+    "background_opacity": 0.08,
+    "border_opacity": 0.12,
+    "blur_sigma": 20,
+    "backdrop_blur": 15
+}
+
+def setup_sophisticated_theme(page: ft.Page):
+    """Set up Material Design 3 + Neumorphism + Glassmorphism theme system."""
 
     # Light theme using Flet's ColorScheme
     page.theme = ft.Theme(
         color_scheme=ft.ColorScheme(
             primary=BRAND_COLORS["primary"],
             secondary=BRAND_COLORS["secondary"],
-            tertiary=BRAND_COLORS["accent"],
+            tertiary=BRAND_COLORS["tertiary"],
             surface=ft.Colors.SURFACE,
             background=ft.Colors.SURFACE,  # ✅ FIXED: Use SURFACE instead of SURFACE_TINT
             error=BRAND_COLORS["error"],
@@ -50,11 +95,11 @@ def setup_modern_theme(page: ft.Page):
             label_large=ft.TextStyle(size=14, weight=ft.FontWeight.W_500),
         ),
         font_family="Inter",
-        visual_density=ft.VisualDensity.COMPACT,
+        visual_density=ft.VisualDensity.STANDARD,
         use_material3=True
     )
 
-    # Dark theme using Flet's ColorScheme
+    # Material Design 3 dark theme with enhanced colors for neumorphism
     page.dark_theme = ft.Theme(
         color_scheme=ft.ColorScheme(
             primary="#60A5FA",           # Bright blue for dark
@@ -80,7 +125,7 @@ def setup_modern_theme(page: ft.Page):
             label_large=ft.TextStyle(size=14, weight=ft.FontWeight.W_500, color="#9CA3AF"),
         ),
         font_family="Inter",
-        visual_density=ft.VisualDensity.COMPACT,
+        visual_density=ft.VisualDensity.STANDARD,
         use_material3=True
     )
 
@@ -265,8 +310,131 @@ def get_design_tokens() -> dict:
         }
     }
 
+# Triple design system helper functions
+def create_material_card(content: ft.Control) -> ft.Container:
+    """Create Material Design 3 card with elevation."""
+    return ft.Container(
+        content=content,
+        bgcolor=ft.Colors.SURFACE,
+        border_radius=12,
+        padding=ft.padding.all(16),
+        shadow=ft.BoxShadow(
+            blur_radius=3,
+            offset=ft.Offset(0, 1),
+            color=ft.Colors.with_opacity(0.12, ft.Colors.BLACK)
+        )
+    )
+
+def create_neumorphic_container(
+    content: ft.Control,
+    effect_type: str = "raised",  # "raised" or "inset"
+    hover_effect: bool = True
+) -> ft.Container:
+    """Create neumorphic container with dual shadow effects."""
+    shadow_config = NEUMORPHIC_SHADOWS[effect_type]
+
+    shadows = [
+        # Dark shadow
+        ft.BoxShadow(
+            spread_radius=1,
+            blur_radius=shadow_config["dark_shadow"]["blur"],
+            color=ft.Colors.with_opacity(
+                shadow_config["dark_shadow"]["opacity"],
+                shadow_config["dark_shadow"]["color"]
+            ),
+            offset=ft.Offset(*shadow_config["dark_shadow"]["offset"]),
+            blur_style=ft.ShadowBlurStyle.INNER if effect_type == "inset" else ft.ShadowBlurStyle.NORMAL
+        ),
+        # Light highlight
+        ft.BoxShadow(
+            spread_radius=1,
+            blur_radius=shadow_config["light_shadow"]["blur"],
+            color=ft.Colors.with_opacity(
+                shadow_config["light_shadow"]["opacity"],
+                shadow_config["light_shadow"]["color"]
+            ),
+            offset=ft.Offset(*shadow_config["light_shadow"]["offset"]),
+            blur_style=ft.ShadowBlurStyle.INNER if effect_type == "inset" else ft.ShadowBlurStyle.NORMAL
+        ),
+    ]
+
+    return ft.Container(
+        content=content,
+        bgcolor=ft.Colors.SURFACE,
+        border_radius=20,
+        padding=ft.padding.all(24),
+        shadow=shadows,
+        animate=ft.Animation(200) if hover_effect else None
+    )
+
+def create_glassmorphic_container(
+    content: ft.Control,
+    intensity: str = "medium"  # "light", "medium", "strong"
+) -> ft.Container:
+    """Create glassmorphic container with blur and transparency."""
+    intensity_config = {
+        "light": {"opacity": 0.05, "border_opacity": 0.08, "blur": 10},
+        "medium": {"opacity": 0.08, "border_opacity": 0.12, "blur": 15},
+        "strong": {"opacity": 0.12, "border_opacity": 0.18, "blur": 20}
+    }
+
+    config = intensity_config[intensity]
+
+    return ft.Container(
+        content=content,
+        border_radius=16,
+        padding=ft.padding.all(20),
+        bgcolor=ft.Colors.with_opacity(config["opacity"], ft.Colors.SURFACE_VARIANT),
+        border=ft.border.all(1, ft.Colors.with_opacity(config["border_opacity"], ft.Colors.OUTLINE)),
+        blur=ft.Blur(sigma_x=config["blur"], sigma_y=config["blur"], tile_mode=ft.TileMode.MIRROR)
+    )
+
+def get_neumorphic_shadows(effect_type: str = "raised") -> list[ft.BoxShadow]:
+    """Get neumorphic shadow configuration."""
+    shadow_config = NEUMORPHIC_SHADOWS[effect_type]
+    return [
+        ft.BoxShadow(
+            spread_radius=1,
+            blur_radius=shadow_config["dark_shadow"]["blur"],
+            color=ft.Colors.with_opacity(
+                shadow_config["dark_shadow"]["opacity"],
+                shadow_config["dark_shadow"]["color"]
+            ),
+            offset=ft.Offset(*shadow_config["dark_shadow"]["offset"]),
+            blur_style=ft.ShadowBlurStyle.INNER if effect_type == "inset" else ft.ShadowBlurStyle.NORMAL
+        ),
+        ft.BoxShadow(
+            spread_radius=1,
+            blur_radius=shadow_config["light_shadow"]["blur"],
+            color=ft.Colors.with_opacity(
+                shadow_config["light_shadow"]["opacity"],
+                shadow_config["light_shadow"]["color"]
+            ),
+            offset=ft.Offset(*shadow_config["light_shadow"]["offset"]),
+            blur_style=ft.ShadowBlurStyle.INNER if effect_type == "inset" else ft.ShadowBlurStyle.NORMAL
+        ),
+    ]
+
+def create_glassmorphic_status_badge(text: str, color: str = ft.Colors.BLUE) -> ft.Container:
+    """Create glassmorphic status badge with blur effect."""
+    return ft.Container(
+        content=ft.Text(
+            text,
+            size=12,
+            weight=ft.FontWeight.W_600,
+            color=color
+        ),
+        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+        border_radius=20,
+        bgcolor=ft.Colors.with_opacity(0.1, color),
+        border=ft.border.all(1, ft.Colors.with_opacity(0.2, color)),
+        blur=ft.Blur(sigma_x=10, sigma_y=10, tile_mode=ft.TileMode.MIRROR)
+    )
+
 # Maintain compatibility with existing code by providing aliases
+setup_modern_theme = setup_sophisticated_theme  # Backward compatibility
 create_modern_button_style = themed_button
-create_modern_card_container = create_modern_card
+create_modern_card_container = create_neumorphic_container
+create_modern_card = create_material_card
 create_trend_indicator = create_status_badge
 create_text_with_typography = lambda text, typography_type, **kwargs: ft.Text(text, **kwargs)

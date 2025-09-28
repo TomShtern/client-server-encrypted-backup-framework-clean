@@ -924,7 +924,4 @@ When mocking `ServerBridge` in tests, use `unittest.mock.Mock` with `spec=Server
 
 ```python
     from utils.server_bridge import ServerBridge
-    from unittest.
-```
-
-### Debug
+    from unittest.mock.Mock import Mock
