@@ -165,16 +165,22 @@ def _install_global_exception_handlers() -> None:  # pragma: no cover - diagnost
     except Exception:  # noqa: BLE001
         logger.warning("Failed to install sys.excepthook override")
 
-    # Asyncio loop exception handler
+    # Asyncio loop exception handler - fix Python 3.13 compatibility
     try:
-        loop = asyncio.get_event_loop()
+        # Use get_running_loop() for Python 3.13 compatibility
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop, skip loop exception handler setup
+            loop = None
 
         def _loop_exception_handler(loop_obj, context):  # type: ignore[no-untyped-def]
             with _contextlib.suppress(Exception):  # noqa: BLE001
                 msg = context.get("message") or "Asyncio loop exception"
                 logger.critical(f"ASYNCIO LOOP EXCEPTION: {msg}", exc_info=context.get("exception"))
 
-        loop.set_exception_handler(_loop_exception_handler)
+        if loop:  # Only set handler if we have a running loop
+            loop.set_exception_handler(_loop_exception_handler)
     except Exception as _loop_err:  # noqa: BLE001
         logger.warning(f"Failed to set asyncio loop exception handler: {_loop_err}")
 
@@ -558,8 +564,19 @@ class FletV2App(ft.Row):
             try:
                 logger.info("Integrated GUI disabled - proactively loading dashboard view immediately")
                 print("🚀🚀🚀 MAIN APP: LOADING DASHBOARD PROACTIVELY 🚀🚀🚀")
-                self._load_view("dashboard")
-                print("🚀🚀🚀 MAIN APP: DASHBOARD LOAD CALLED 🚀🚀🚀")
+                async def _proactive_load_dashboard() -> None:
+                    try:
+                        await asyncio.sleep(0.1)
+                        self._load_view("dashboard", force_reload=True)
+                        print("🚀🚀🚀 MAIN APP: DASHBOARD LOAD CALLED 🚀🚀🚀")
+                    except Exception as immediate_err:  # noqa: BLE001
+                        logger.error(f"Immediate dashboard load failed in proactive task: {immediate_err}")
+                        print(f"🚀🚀🚀 MAIN APP: DASHBOARD LOAD FAILED: {immediate_err} 🚀🚀🚀")
+
+                if hasattr(self.page, 'run_task'):
+                    self.page.run_task(_proactive_load_dashboard)
+                else:
+                    asyncio.get_event_loop().create_task(_proactive_load_dashboard())
                 self._profile_mark('dashboard:proactive_load_called')
                 async def _force_dashboard_visible() -> None:
                     try:
@@ -595,7 +612,7 @@ class FletV2App(ft.Row):
                         if not getattr(self, "_initial_view_fallback_triggered", False):
                             logger.warning("on_connect handler did not load a view within timeout; loading dashboard fallback")
                             with contextlib.suppress(Exception):
-                                self._load_view("dashboard")
+                                self._load_view("dashboard", force_reload=True)
                             self._initial_view_fallback_triggered = True  # type: ignore[attr-defined]
                     else:
                         logger.debug("[FALLBACK_CHECK] Initial view already loaded; skipping 1s timeout fallback")
@@ -623,7 +640,7 @@ class FletV2App(ft.Row):
                             return
                         logger.warning("[DISABLED_PROACTIVE] Forcing initial dashboard load (safety)")
                         with contextlib.suppress(Exception):
-                            self._load_view("dashboard")
+                            self._load_view("dashboard", force_reload=True)
                         self._disabled_safety_triggered = True  # type: ignore[attr-defined]
                     except Exception as delayed_err:  # noqa: BLE001
                         logger.error(f"Disabled proactive delayed load failed: {delayed_err}")
@@ -777,25 +794,43 @@ class FletV2App(ft.Row):
         """Called when page is connected - now load the dashboard with proper page attachment."""
         logger.info("🔌 Page connected event received - loading dashboard")
 
-        # Now load the dashboard since AnimatedSwitcher is properly attached to the page
-        try:
-            self._load_view("dashboard")
-            logger.info("✅ Dashboard loaded successfully after page connection")
-        except Exception as ex:
-            logger.error(f"❌ Failed to load dashboard after page connection: {ex}", exc_info=True)
-            # Fallback: show error in content area
+        # Now load the dashboard after ensuring AnimatedSwitcher is attached to the page
+        async def _reload_dashboard_when_ready() -> None:
             try:
-                self.content_area.content.content = ft.Container(
-                    content=ft.Text(f"Failed to load dashboard: {ex}", color=ft.Colors.ERROR),
-                    padding=20,
-                    expand=True
-                )
-                self.content_area.content.update()
-            except Exception as fallback_error:
-                logger.error(f"Error view display failed: {fallback_error}")
-                # Last resort
-                with contextlib.suppress(Exception):
-                    self.page.update()
+                timeout = 2.0
+                interval = 0.05
+                waited = 0.0
+                animated_switcher = getattr(self.content_area, 'content', None)
+                while waited < timeout:
+                    try:
+                        if getattr(animated_switcher, 'page', None):
+                            break
+                    except Exception:
+                        pass
+                    await asyncio.sleep(interval)
+                    waited += interval
+                self._load_view("dashboard", force_reload=True)
+                logger.info("✅ Dashboard loaded successfully after page connection")
+            except Exception as ex:  # noqa: BLE001
+                logger.error(f"❌ Failed to load dashboard after page connection: {ex}", exc_info=True)
+                # Fallback: show error in content area
+                try:
+                    self.content_area.content.content = ft.Container(
+                        content=ft.Text(f"Failed to load dashboard: {ex}", color=ft.Colors.ERROR),
+                        padding=20,
+                        expand=True
+                    )
+                    self.content_area.content.update()
+                except Exception as fallback_error:  # noqa: BLE001
+                    logger.error(f"Error view display failed: {fallback_error}")
+                    # Last resort
+                    with contextlib.suppress(Exception):
+                        self.page.update()
+
+        if hasattr(self.page, 'run_task'):
+            self.page.run_task(_reload_dashboard_when_ready)
+        else:
+            asyncio.get_event_loop().create_task(_reload_dashboard_when_ready())
         # Window settings - Updated to requested size 1730x1425
         if hasattr(self.page, 'window_min_width'):
             self.page.window_min_width = 1200  # Slightly larger minimum for better UX
@@ -878,7 +913,7 @@ class FletV2App(ft.Row):
             if current_index is not None and current_index < len(view_names):
                 current_view = view_names[current_index]
                 logger.info(f"Refreshing view: {current_view}")
-                self._load_view(current_view)
+                self._load_view(current_view, force_reload=True)
 
     def _switch_to_view(self, index: int) -> None:
         """Switch to a specific view by index."""
@@ -1444,25 +1479,29 @@ class FletV2App(ft.Row):
         # For reliability, always bypass AnimatedSwitcher for the dashboard view and
         # use the direct assignment path. This avoids timing/attachment issues where
         # AnimatedSwitcher isn't attached yet in some browser-launch environments.
-        # The env var `FLET_BYPASS_SWITCHER=1` can still force bypass for other views.
-        bypass_switcher = os.environ.get('FLET_BYPASS_SWITCHER') == '1' or view_name == 'dashboard'
+        # CRITICAL FIX: Don't bypass AnimatedSwitcher for dashboard - this causes stuck loading
+        # Only bypass if explicitly requested via env var
+        bypass_switcher = os.environ.get('FLET_BYPASS_SWITCHER') == '1'
+
+        # First try using AnimatedSwitcher properly
+        if not bypass_switcher:
+            try:
+                logger.info(f"✅ Using AnimatedSwitcher for {view_name}")
+                animated_switcher.content = content
+                animated_switcher.update()
+                logger.info(f"✅ AnimatedSwitcher updated successfully for {view_name}")
+                return True
+            except Exception as switcher_error:
+                logger.error(f"❌ AnimatedSwitcher failed for {view_name}: {switcher_error} - falling back to bypass")
+                bypass_switcher = True
+
+        # Fallback: bypass AnimatedSwitcher only if it fails or explicitly requested
         if bypass_switcher:
             logger.warning("BYPASS_SWITCHER active - inserting content directly (no AnimatedSwitcher transition)")
             try:
                 # Direct assignment: replace container's content attribute entirely
-                if view_name == 'dashboard':
-                    # Wrap dashboard content with a lightweight Column that places a
-                    # visible marker at the top. This helps verify rendering and is
-                    # a reversible smoke-test which avoids depending on AnimatedSwitcher.
-                    try:
-                        marker = ft.Text("DASHBOARD VISIBLE", size=20, color=ft.Colors.RED)
-                        wrapped = ft.Column([marker, content], spacing=12, expand=True)
-                        self.content_area.content = wrapped
-                    except Exception:
-                        # Fallback to direct assignment if wrapping fails
-                        self.content_area.content = content
-                else:
-                    self.content_area.content = content
+                # Assign content directly without debug markers
+                self.content_area.content = content
                 # Extra diagnostics for blank dashboard issue
                 if os.environ.get('FLET_DASHBOARD_CONTENT_DEBUG') == '1' and view_name == 'dashboard':
                     try:
@@ -1499,37 +1538,7 @@ class FletV2App(ft.Row):
                     )
                 except Exception as _enum_err:  # noqa: BLE001
                     logger.warning(f"[CONTENT_DIAG] Child enumeration failed: {_enum_err}")
-                # Quick visual smoke-test: insert a bright marker at top of dashboard content so
-                # we can confirm whether the control was actually rendered in the browser.
-                # This is intentionally non-destructive and guarded to avoid duplicate markers.
-                try:
-                    if view_name == 'dashboard':
-                        marker_added = False
-                        marker = ft.Text("DASHBOARD VISIBLE", size=20, color=ft.Colors.RED)
-                        # Prefer inserting into .content.controls (common pattern)
-                        inner = getattr(self.content_area, 'content', None)
-                        target = None
-                        if inner is not None and hasattr(inner, 'content') and getattr(inner, 'content'):
-                            target = getattr(inner, 'content')
-                        elif inner is not None and hasattr(inner, 'controls'):
-                            target = inner
-
-                        if target is not None and hasattr(target, 'controls'):
-                            controls_list = getattr(target, 'controls')
-                            # Avoid duplicate markers
-                            if not any(getattr(c, 'text', None) == 'DASHBOARD VISIBLE' for c in controls_list):
-                                controls_list.insert(0, marker)
-                                marker_added = True
-                                with contextlib.suppress(Exception):
-                                    if hasattr(target, 'update'):
-                                        target.update()
-                                with contextlib.suppress(Exception):
-                                    if hasattr(self.content_area, 'update'):
-                                        self.content_area.update()
-                        if marker_added:
-                            logger.warning('[CONTENT_DIAG] Inserted visual dashboard marker for smoke-test')
-                except Exception:
-                    pass
+                # Remove temporary visual marker injection code to avoid UI artifacts
 
                 # If requested, try to find the INNER DASHBOARD TEST control text in the
                 # assigned content area and log whether it is present. This helps
@@ -1544,7 +1553,7 @@ class FletV2App(ft.Row):
                                 if ctrl is None:
                                     return False
                                 # Direct Text control
-                                if isinstance(ctrl, ft.Text):
+                                if ctrl.__class__.__name__ == "Text":
                                     # Text stores content in .value or .text in different versions
                                     if getattr(ctrl, 'value', None) == target or getattr(ctrl, 'text', None) == target:
                                         return True
@@ -1976,7 +1985,7 @@ class FletV2App(ft.Row):
         animated_switcher = self.content_area.content
         return self._update_content_area(animated_switcher, content, view_name)
 
-    def _load_view(self, view_name: str) -> bool:
+    def _load_view(self, view_name: str, force_reload: bool = False) -> bool:
         """Load view with enhanced infrastructure support and dynamic animated transitions."""
         print(f"🚀🚀🚀 MAIN APP: _load_view called with {view_name} 🚀🚀🚀")
         try:
@@ -1987,7 +1996,8 @@ class FletV2App(ft.Row):
             self._loading_view = True
             # Guard against redundant reloads of the same view unless forced
             if (
-                view_name == getattr(self, '_current_view_name', None)
+                not force_reload
+                and view_name == getattr(self, '_current_view_name', None)
                 and os.environ.get('FLET_FORCE_VIEW_RELOAD') != '1'
             ):
                 logger.debug(
@@ -2165,7 +2175,7 @@ class FletV2App(ft.Row):
         def _on_return_button_click(e: ft.ControlEvent) -> None:
             # Explicit typed handler to satisfy static analysis
             try:
-                self._load_view("dashboard")
+                self._load_view("dashboard", force_reload=True)
             except Exception:
                 logger.exception("Failed to switch to dashboard from error view")
 

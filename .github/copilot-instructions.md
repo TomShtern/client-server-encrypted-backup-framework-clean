@@ -23,7 +23,7 @@ This is a **production-grade 5-layer encrypted backup system** with hybrid web-t
 
 ```
 Web UI → Flask API Bridge → C++ Client (subprocess) → Python Server → Flet Desktop GUI
-  ↓           ↓                    ↓                     ↓                     ↓
+  ↓           ↓                    ↓                     ↓
 HTTP      RealBackupExecutor    --batch mode       Custom Binary TCP   Material Design 3
 requests  process management   + transfer.info     Custom Binary TCP   Server Management
 ```
@@ -531,7 +531,7 @@ def bad_state_management():
 
 ### UI Component Patterns
 
-**CRITICAL**: Use themed UI components for consistent styling and maintainability.
+**CRITICAL**: Use themed UI components for consistent styling and maintainability. **Simplify designs and avoid overly complex layouts or effects that can cause rendering issues, especially with shadows.**
 
 #### Themed Component Usage
 ```python
@@ -923,5 +923,4 @@ class TestSimpleServerBridge(unittest.TestCase):
 When mocking `ServerBridge` in tests, use `unittest.mock.Mock` with `spec=ServerBridge` to ensure type compatibility:
 
 ```python
-    from utils.server_bridge import ServerBridge
-    from unittest.mock.Mock import Mock
+    from
