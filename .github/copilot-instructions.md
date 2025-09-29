@@ -69,7 +69,7 @@ python -m compileall FletV2/main.py
 # Build: cmake with vcpkg toolchain
 cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake" && cmake --build build --config Release
 
-# Format: clang-format -i file.cpp (Google style, 100 cols, 4-space indent)
+# Format: clang-format -i file.cpp (Google style, 100 cols, 4-space indent, Google style)
 clang-format -i file.cpp
 ```
 
@@ -113,11 +113,12 @@ python scripts/one_click_build_and_run.py
 - **Proactivity**: The AI should be proactive in identifying and fixing issues, not just running tests without understanding the results. Use sequential thinking MCP every 5 tool calls to ensure a thorough understanding of the situation before proceeding with fixes.
 - **System Integrity**: Make sure you are not breaking the system and removing functionality.
 - **Problem Management**: Make sure to not cause more problems than you solve.
-- **Data Source**: **ALWAYS USE REAL DATA FROM THE SERVER/DATABASE!** You can, optionally, add also a fallback to placeholder. Use real data from the python server and the sqlite3. If real data is unavailable, display 'No real data' or a simple 'loren ipsum' instead of mock data. **NEVER use mock data.**
+- **Data Source**: **ALWAYS USE REAL DATA FROM THE SERVER/DATABASE!** You can, optionally, add also a fallback to placeholder 'loren ipsum' instead of mock data. **NEVER use mock data.**
 - **Bug Fixing**: When fixing errors, focus on syntax errors without changing functionality. Ensure that the code remains unbroken and that no new problems are introduced.
 - **Code Quality**: Make sure there are no code/functions duplications and no redundencies.
 - **Flet Version**: Ensure you are doing things with Flet 0.28.3 idioms in mind. Always avoid costume complex long solutions where there is a Flet native better and simpler way. Use context7 if you are not sure about something, it has instructions for everything.
 - **Ruff**: When addressing Ruff issues, ensure you are not breaking the code and not removing functionality, and make sure to not create more problems than you solve.
+- **Context7 MCP Usage**: Use context7 MCP more than a few times. When working with Flet, reference the official docs from context7 about version 0.28.3. **Create `Flet_Snnipets.md` to document Flet methods, features, built-in behaviors, anti-patterns, and recovery tips. The total length of the new markdown doc should be shorter than 500 LOC, ideally around 200-350 LOC.** When working with Flet, reference the official docs from context7 about version 0.28.3.
 
 ### Key Principles
 - **FletV2 First**: Use `FletV2/` directory exclusively (modern implementation)
@@ -193,7 +194,7 @@ sys.path.insert(0, parent_dir)
 ```python
 # 1. Standard library imports (alphabetical)
 import asyncio
-import contextlib
+import contextlib # ADDED: for contextlib.suppress
 import logging
 import os
 import sys
@@ -874,25 +875,3 @@ DEBUG = True  # No way to change in production
 # ❌ WRONG: No validation of required config
 # Missing validation leads to runtime errors
 ```
-
-### Testing Patterns
-
-**CRITICAL**: Follow proper testing patterns for reliable and maintainable tests.
-
-#### Unit Test Structure
-```python
-#!/usr/bin/env python3
-"""
-Unit tests for the server bridge modules.
-"""
-
-import unittest
-import sys
-import os
-from unittest.mock import Mock, patch
-
-# Set debug mode to enable mock data
-os.environ['FLET_V_DEBUG'] = 'true'
-
-# Add the FletV2 directory to the path
-sys.path.insert(0,

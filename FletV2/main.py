@@ -481,7 +481,9 @@ class FletV2App(ft.Row):
         logger.info(f"Real server available: {real_server_available}")
 
         # Initialize state manager for reactive UI updates - after server bridge is ready
+        print("🔧 About to initialize state manager...")
         self._initialize_state_manager()
+        print("✅ State manager initialized")
         self._profile_mark('state_manager:initialized')
 
         # Comment 12: Track current view dispose function for proper StateManager cleanup
@@ -546,8 +548,10 @@ class FletV2App(ft.Row):
         )
 
         # Create navigation rail (using simple approach with collapsible functionality)
+        print("🔧 About to create navigation rail...")
         self.nav_rail_extended = True  # Track extended state
         self.nav_rail = self._create_navigation_rail()
+        print("✅ Navigation rail created")
 
         # Build layout: NavigationRail + content area (pure Flet pattern)
         self.controls = [
@@ -571,6 +575,8 @@ class FletV2App(ft.Row):
         # trigger page.on_connect before the process exits. Proactively load the dashboard to
         # replace the placeholder immediately in that mode.
         proactive_disabled = os.environ.get('FLET_DISABLE_PROACTIVE_LOAD') == '1'
+        # Fixed: Re-enable proactive loading with safer async mechanism
+        print("🔧 ENABLING SAFE DASHBOARD LOADING MECHANISM")
         if os.environ.get('CYBERBACKUP_DISABLE_INTEGRATED_GUI') == '1' and not proactive_disabled:
             try:
                 logger.info("Integrated GUI disabled - proactively loading dashboard view immediately")
@@ -595,6 +601,145 @@ class FletV2App(ft.Row):
                 logger.error(f"Proactive dashboard loading failed: {e}")
 
         # Post-update adjustments handled in _post_content_update
+
+    def _initialize_state_manager(self) -> None:
+        """Initialize the state manager for reactive UI updates."""
+        try:
+            from utils.state_manager import create_state_manager
+            self.state_manager = create_state_manager(self.server_bridge)
+            logger.info("✅ State manager initialized successfully")
+        except ImportError as e:
+            logger.warning(f"Could not import state manager: {e}")
+            self.state_manager = None
+
+    def _get_view_config(self, view_name: str) -> tuple[str, str, str]:
+        """Get view configuration for dynamic import."""
+        view_configs = {
+            "dashboard": ("views.dashboard", "create_dashboard_view", "dashboard"),
+            "clients": ("views.clients", "create_clients_view", "clients"),
+            "files": ("views.files", "create_files_view", "files"),
+            "database": ("views.database", "create_database_view", "database"),
+            "analytics": ("views.analytics", "create_analytics_view", "analytics"),
+            "logs": ("views.logs", "create_logs_view", "logs"),
+            "settings": ("views.settings", "create_settings_view", "settings"),
+        }
+        return view_configs.get(view_name, ("views.dashboard", "create_dashboard_view", "dashboard"))
+
+    def _set_animation_for_view(self, view_name: str) -> None:
+        """Set animation for view transitions."""
+        try:
+            animated_switcher = self.content_area.content
+            if isinstance(animated_switcher, ft.AnimatedSwitcher):
+                animated_switcher.transition = ft.AnimatedSwitcherTransition.FADE
+                animated_switcher.duration = 200
+        except Exception as e:
+            logger.debug(f"Failed to set animation for {view_name}: {e}")
+
+    def navigate_to(self, view_name: str) -> None:
+        """Navigate to a specific view."""
+        try:
+            self._load_view(view_name, force_reload=False)
+            logger.info(f"Navigated to {view_name}")
+        except Exception as e:
+            logger.error(f"Navigation to {view_name} failed: {e}")
+
+    def _create_navigation_rail(self) -> ft.Container:
+        """Create the navigation rail with modern Material Design 3 styling."""
+        def on_nav_change(e: ft.ControlEvent) -> None:
+            try:
+                selected_index = e.control.selected_index
+                view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
+                if 0 <= selected_index < len(view_names):
+                    view_name = view_names[selected_index]
+                    self.navigate_to(view_name)
+            except Exception as nav_error:
+                logger.error(f"Navigation error: {nav_error}")
+
+        rail = ft.NavigationRail(
+            selected_index=0,
+            label_type=ft.NavigationRailLabelType.ALL,
+            min_width=100,
+            min_extended_width=200,
+            group_alignment=-0.9,
+            destinations=[
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.DASHBOARD_OUTLINED,
+                    selected_icon=ft.Icons.DASHBOARD,
+                    label="Dashboard"
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.PEOPLE_OUTLINED,
+                    selected_icon=ft.Icons.PEOPLE,
+                    label="Clients"
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.FOLDER_OUTLINED,
+                    selected_icon=ft.Icons.FOLDER,
+                    label="Files"
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.STORAGE_OUTLINED,
+                    selected_icon=ft.Icons.STORAGE,
+                    label="Database"
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.ANALYTICS_OUTLINED,
+                    selected_icon=ft.Icons.ANALYTICS,
+                    label="Analytics"
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.LIST_ALT_OUTLINED,
+                    selected_icon=ft.Icons.LIST_ALT,
+                    label="Logs"
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.SETTINGS_OUTLINED,
+                    selected_icon=ft.Icons.SETTINGS,
+                    label="Settings"
+                ),
+            ],
+            on_change=on_nav_change,
+            extended=self.nav_rail_extended,
+        )
+
+        return ft.Container(
+            content=rail,
+            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SURFACE),
+            border_radius=ft.BorderRadius(0, 16, 16, 0),
+            padding=ft.Padding(8, 12, 8, 12),
+        )
+
+    def _on_page_connect(self, e: ft.ControlEvent) -> None:
+        """Handle page connection event."""
+        try:
+            logger.info("Page connected - loading initial dashboard view")
+            self.navigate_to("dashboard")
+        except Exception as connect_error:
+            logger.error(f"Page connect error: {connect_error}")
+
+    async def initialize(self) -> None:
+        """Initialize the application."""
+        try:
+            # Apply theme
+            setup_modern_theme(self.page)
+
+            # Add the app to the page
+            self.page.add(self)
+
+            # Set page properties
+            self.page.title = "FletV2 - Encrypted Backup Framework"
+            self.page.window.width = 1200
+            self.page.window.height = 800
+            self.page.window.min_width = 800
+            self.page.window.min_height = 600
+
+            # Update the page
+            self.page.update()
+
+            logger.info("✅ FletV2 application initialized successfully")
+        except Exception as e:
+            logger.error(f"❌ Application initialization failed: {e}")
+            raise
 
     def _dispose_current_view(self, new_view_name: str) -> None:
         """Dispose of the current view before loading a new one."""
@@ -947,9 +1092,15 @@ class FletV2App(ft.Row):
 
     def _load_view(self, view_name: str, force_reload: bool = False) -> bool:
         """Load view with simplified and thread-safe mechanism."""
+
+        print(f"🔧 _load_view called for: {view_name}")
+        print(f"🔧 Force reload: {force_reload}")
+        print(f"🔧 Loading view flag: {self._loading_view}")
+
         # Prevent multiple simultaneous view loads
         if self._loading_view:
             logger.warning(f"View load in progress. Skipping '{view_name}' request.")
+            print(f"❌ Skipping {view_name} - load in progress")
             return False
 
         # Check if view reload is necessary
