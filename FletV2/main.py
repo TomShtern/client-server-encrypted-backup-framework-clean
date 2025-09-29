@@ -1040,7 +1040,12 @@ class FletV2App(ft.Row):
                         )
                 return cached_content, cached_dispose
             # All views now require state_manager as per Phase 2 refactor
-            result = view_function(self.server_bridge, self.page, self.state_manager)
+            # PHASE 4.1: Special handling for dashboard navigation
+            if view_name == "dashboard":
+                # Dashboard gets additional navigation callback for clickable metric cards
+                result = view_function(self.server_bridge, self.page, self.state_manager, self.navigate_to)
+            else:
+                result = view_function(self.server_bridge, self.page, self.state_manager)
             logger.debug(f"View function returned: {type(result)} for {view_name}")
 
             # Comment 12: Check if view returned dispose function and subscription setup (new pattern)

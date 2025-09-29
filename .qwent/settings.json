@@ -1,0 +1,70 @@
+{
+  "showMemoryUsage": true,
+  "loadMemoryFromIncludeDirectories": true,
+
+  "showLineNumbers": true,
+  "contextFileName": "AGENTS.md, QWEN.md, claude.md, copilot-instructions.md",
+   "preferredEditor": "vscode",
+   "tavilyApiKey": "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",
+     "telemetry": {
+    "enabled": false
+  },
+   "checkpointing": {
+    "enabled": true
+  },
+  "fileFiltering": {
+  "respectGitIgnore": false,
+  "enableRecursiveFileSearch": true
+},
+"chatCompression": {
+  "contextPercentageThreshold": 0.7
+},
+"summarizeToolOutput": {
+  "run_shell_command": {
+    "tokenBudget": 10000
+  }
+},
+  "mcpServers": {
+    "Context7": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@upstash/context7-mcp",
+        "--key",
+        "0a368012-9074-4960-8fd8-a08aff2667f2"
+      ]
+    },
+    "sequentialthinking": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "filesystem": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "C://Users//tom7s//Desktopp"
+      ]
+    },
+    "memory": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    }
+  }
+}

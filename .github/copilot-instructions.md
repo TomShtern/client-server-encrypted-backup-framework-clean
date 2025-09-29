@@ -119,6 +119,22 @@ python scripts/one_click_build_and_run.py
 - **Flet Version**: Ensure you are doing things with Flet 0.28.3 idioms in mind. Always avoid costume complex long solutions where there is a Flet native better and simpler way. Use context7 if you are not sure about something, it has instructions for everything.
 - **Ruff**: When addressing Ruff issues, ensure you are not breaking the code and not removing functionality, and make sure to not create more problems than you solve.
 - **Context7 MCP Usage**: Use context7 MCP more than a few times. When working with Flet, reference the official docs from context7 about version 0.28.3. **Create `Flet_Snnipets.md` to document Flet methods, features, built-in behaviors, anti-patterns, and recovery tips. The total length of the new markdown doc should be shorter than 500 LOC, ideally around 200-350 LOC.** When working with Flet, reference the official docs from context7 about version 0.28.3.
+- **Configuration Search**: When asked to find a configuration value (e.g., a timeout), use workspace grep to locate the exact string and its assigned value.
+- **settings.local.json**: Ensure the `settings.local.json` file does not contain any duplicate entries in the `"allow"` array.
+- **Emergency GUI**: When fixing issues in `emergency_gui.py` related to missing imports or dependencies, define a simple, self-contained stub for the missing function directly in the file. This creates a basic control that matches the expected return signature (e.g., `dashboard_control, dispose_func, setup_func`), ensuring the code runs without external dependencies.
+- **Qwen Code Configuration**:
+  - `contentGenerator.timeout`: This key is not present in your repository files, but it is referenced repeatedly in Qwen Code issues and the Qwen Code docs as the configuration property to increase the streaming/setup timeout for content generation (i.e., streaming responses).
+  - Place a settings file at either:
+    - Project-level: `<project-root>/.qwen/settings.json`
+    - User-level: `%USERPROFILE%\.qwen\settings.json` (on Windows; equivalently `~/.qwen/settings.json`)
+  - The timeout is a request timeout for the content generator (the CLI’s model/API calls).
+  - Units: milliseconds (the settings schema says "Request timeout in milliseconds.").
+  - Semantics: the maximum wall‑clock time allowed for a single generation request to complete. If a request exceeds this time the client will abort/consider it failed. It’s a total request timeout, not a per‑token inactivity timeout.
+  - Value behavior:
+    - Any positive integer = timeout in milliseconds (e.g., 30000 = 30 seconds).
+    - `0` (or omitted/undefined depending on implementation) — effectively disables the timeout (no client‑side abort).
+  - Interaction with `maxRetries`: if a request times out, the client may retry up to `contentGenerator.maxRetries` times (so a short timeout + retries can cause multiple fast retry attempts).
+  - Practical recommendation: pick a reasonable timeout for your network and model latency (30_000–60_000 ms is common). If you want no client-side cutoff, keep `0`.
 
 ### Key Principles
 - **FletV2 First**: Use `FletV2/` directory exclusively (modern implementation)
@@ -819,59 +835,4 @@ VERIFY_TLS = os.environ.get('VERIFY_TLS', 'true').lower() == 'true'
 if DEBUG_MODE:
     if not GITHUB_PERSONAL_ACCESS_TOKEN:
         print("Warning: GITHUB_PERSONAL_ACCESS_TOKEN not set")
-    if not SERVER_API_KEY:
-        print("Warning: SERVER_API_KEY not set")
-    if not DATABASE_PASSWORD:
-        print("Warning: DATABASE_PASSWORD not set")
-    if not REAL_SERVER_URL:
-        print("Info: REAL_SERVER_URL not set - running in mock mode unless a real server is injected")
-    if REAL_SERVER_URL and not REAL_SERVER_URL.startswith(('https://', 'http://')):
-        print("Warning: REAL_SERVER_URL should start with https:// or http://")
-    if not BACKUP_SERVER_TOKEN:
-        print("Info: BACKUP_SERVER_TOKEN not set - endpoints requiring auth will fail in real mode")
-
-# Mock data visibility - when False, mock data is only used when server is unavailable
-SHOW_MOCK_DATA = DEBUG_MODE
-
-# Async operation delays for simulation
-ASYNC_DELAY = 0.5  # seconds
-
-# Server connection timeout
-CONNECTION_TIMEOUT = 30  # seconds
-```
-
-#### Environment Variable Validation
-```python
-def validate_environment():
-    """Validate required environment variables and provide helpful errors."""
-    required_vars = {
-        'FLET_V_DEBUG': 'Controls debug mode and mock data visibility',
-        'REAL_SERVER_URL': 'URL for production server integration',
-        'BACKUP_SERVER_TOKEN': 'Authentication token for server API'
-    }
-
-    missing_vars = []
-    for var, description in required_vars.items():
-        if not os.environ.get(var):
-            missing_vars.append(f"{var}: {description}")
-
-    if missing_vars:
-        print("⚠️  Missing environment variables:")
-        for var_info in missing_vars:
-            print(f"   - {var_info}")
-        print("\nCreate a .env file or set these environment variables.")
-
-    return len(missing_vars) == 0
-```
-
-#### Configuration Anti-Patterns (AVOID)
-```python
-# ❌ WRONG: Hardcoded configuration values
-API_URL = "http://localhost:8000"  # Don't hardcode!
-
-# ❌ WRONG: No environment variable loading
-DEBUG = True  # No way to change in production
-
-# ❌ WRONG: No validation of required config
-# Missing validation leads to runtime errors
-```
+    if not SERVER_API

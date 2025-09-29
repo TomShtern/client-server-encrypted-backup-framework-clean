@@ -11,7 +11,7 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 # Path setup
 _views_dir = os.path.dirname(os.path.abspath(__file__))
@@ -30,7 +30,8 @@ logger = logging.getLogger(__name__)
 def create_dashboard_view(
     server_bridge: Any | None,
     page: ft.Page,
-    state_manager: Any | None
+    state_manager: Any | None,
+    navigate_callback: Callable[[str], None] | None = None
 ) -> tuple[ft.Control, Callable, Callable]:
     """Create an advanced dashboard with real server integration and performance optimization."""
 
@@ -43,10 +44,15 @@ def create_dashboard_view(
     storage_value_ref = ft.Ref[ft.Text]()
     uptime_value_ref = ft.Ref[ft.Text]()
 
-    # Progress bar refs
-    storage_progress_ref = ft.Ref[ft.ProgressBar]()
-    cpu_progress_ref = ft.Ref[ft.ProgressBar]()
-    memory_progress_ref = ft.Ref[ft.ProgressBar]()
+    # PHASE 4.2: Enhanced circular gauge refs
+    storage_progress_ref = ft.Ref[ft.ProgressRing]()
+    cpu_progress_ref = ft.Ref[ft.ProgressRing]()
+    memory_progress_ref = ft.Ref[ft.ProgressRing]()
+
+    # PHASE 4.2: Performance gauge containers (for accessing additional status refs)
+    storage_gauge_container = None
+    cpu_gauge_container = None
+    memory_gauge_container = None
 
     # Status and control refs
     last_update_ref = ft.Ref[ft.Text]()
@@ -225,18 +231,42 @@ def create_dashboard_view(
                 uptime_value_ref.current.value = data.get('uptime_formatted', 'N/A')
                 uptime_value_ref.current.update()
 
-            # Update progress bars with smooth transitions
-            if storage_progress_ref.current:
-                storage_progress_ref.current.value = min(1.0, data.get('storage_percentage', 0) / 100)
-                storage_progress_ref.current.update()
+            # PHASE 4.2: Update enhanced circular gauges with status indicators
+            def update_gauge_with_status(progress_ref, container, value, label):
+                """Update circular gauge with status indicators and percentage display."""
+                if not progress_ref.current or not container:
+                    return
+                # Update main progress ring
+                progress_ref.current.value = min(1.0, value / 100)
+                progress_ref.current.update()
 
-            if cpu_progress_ref.current:
-                cpu_progress_ref.current.value = min(1.0, data.get('cpu_usage', 0) / 100)
-                cpu_progress_ref.current.update()
+                # Update percentage display
+                if hasattr(container, 'percentage_ref') and container.percentage_ref.current:
+                    container.percentage_ref.current.value = f"{int(value)}%"
+                    container.percentage_ref.current.update()
 
-            if memory_progress_ref.current:
-                memory_progress_ref.current.value = min(1.0, data.get('memory_usage', 0) / 100)
-                memory_progress_ref.current.update()
+                # Update status indicators based on threshold
+                if hasattr(container, 'get_threshold_status'):
+                    icon, color, text = container.get_threshold_status(value)
+
+                    if hasattr(container, 'status_icon_ref') and container.status_icon_ref.current:
+                        container.status_icon_ref.current.name = icon
+                        container.status_icon_ref.current.color = color
+                        container.status_icon_ref.current.update()
+
+                    if hasattr(container, 'status_text_ref') and container.status_text_ref.current:
+                        container.status_text_ref.current.value = text
+                        container.status_text_ref.current.color = color
+                        container.status_text_ref.current.update()
+
+            # Update all performance gauges with enhanced status
+            storage_usage = data.get('storage_percentage', 0)
+            cpu_usage = data.get('cpu_usage', 0)
+            memory_usage = data.get('memory_usage', 0)
+
+            update_gauge_with_status(storage_progress_ref, storage_gauge_container, storage_usage, "Storage")
+            update_gauge_with_status(cpu_progress_ref, cpu_gauge_container, cpu_usage, "CPU")
+            update_gauge_with_status(memory_progress_ref, memory_gauge_container, memory_usage, "Memory")
 
             # Update activity stream
             activities = data.get('recent_activities', [])
@@ -255,7 +285,7 @@ def create_dashboard_view(
             update_status_indicator(False)
 
     def update_activity_stream(activities: list):
-        """Update the activity stream with new data."""
+        """PHASE 4.2: Update the premium activity timeline with enhanced data."""
         try:
             if not activity_list_ref.current:
                 return
@@ -263,22 +293,50 @@ def create_dashboard_view(
             # Clear existing activities
             activity_list_ref.current.controls.clear()
 
-            # Add new activity items
-            for activity in activities[:10]:  # Limit to 10 most recent
+            # PHASE 4.2: Enhanced activity timeline generation
+            recent_activities = activities[:8]  # Limit to 8 for better visual balance
+
+            for i, activity in enumerate(recent_activities):
+                is_last_item = (i == len(recent_activities) - 1)
+
                 activity_item = create_activity_item(
-                    activity.get('client', 'Unknown'),
+                    activity.get('client', 'Unknown Client'),
                     activity.get('action', 'Unknown Action'),
                     activity.get('status', 'Unknown'),
-                    activity.get('time', datetime.now().isoformat())
+                    activity.get('time', datetime.now().isoformat()),
+                    is_last=is_last_item
                 )
                 activity_list_ref.current.controls.append(activity_item)
 
-            # Add placeholder if no activities
+            # PHASE 4.2: Enhanced placeholder with premium styling
             if not activities:
-                placeholder = ft.ListTile(
-                    title=ft.Text("No recent activity"),
-                    subtitle=ft.Text("Waiting for server events..."),
-                    leading=ft.Icon(ft.Icons.INFO_OUTLINE, color=ft.Colors.GREY)
+                placeholder = ft.Container(
+                    content=ft.Column([
+                        ft.Container(
+                            content=ft.Icon(
+                                ft.Icons.TIMELINE,
+                                size=32,
+                                color=ft.Colors.with_opacity(0.4, ft.Colors.ON_SURFACE)
+                            ),
+                            alignment=ft.alignment.center,
+                            margin=ft.Margin(0, 0, 0, 12)
+                        ),
+                        ft.Text(
+                            "No Recent Activity",
+                            size=16,
+                            weight=ft.FontWeight.W_600,
+                            color=ft.Colors.ON_SURFACE,
+                            text_align=ft.TextAlign.CENTER
+                        ),
+                        ft.Text(
+                            "Activity will appear here as clients connect and perform operations",
+                            size=12,
+                            color=ft.Colors.with_opacity(0.6, ft.Colors.ON_SURFACE),
+                            text_align=ft.TextAlign.CENTER
+                        )
+                    ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
+                    padding=40,
+                    alignment=ft.alignment.center
                 )
                 activity_list_ref.current.controls.append(placeholder)
 
@@ -326,12 +384,69 @@ def create_dashboard_view(
                 logger.error(f"Background refresh error: {e}")
                 await asyncio.sleep(refresh_interval * 2)  # Backoff on error
 
-    # === UI COMPONENT BUILDERS ===
-    def create_enhanced_metric_card(title: str, value_ref: ft.Ref, icon: str, color: str) -> ft.Container:
-        """PHASE 3.1: Material Design 3 Foundation - Premium metric card with proper MD3 styling."""
+    # === NAVIGATION HANDLERS (PHASE 4.1) ===
 
-        # Material Design 3 elevation and surface hierarchy
-        return ft.Container(
+    def navigate_to_clients(e):
+        """Navigate to clients page - using app's navigation system."""
+        try:
+            if navigate_callback:
+                navigate_callback("clients")
+                logger.info("Navigated to clients page")
+            else:
+                logger.warning("No navigation callback available")
+        except Exception as nav_error:
+            logger.error(f"Navigation to clients failed: {nav_error}")
+
+    def navigate_to_files(e):
+        """Navigate to files page."""
+        try:
+            if navigate_callback:
+                navigate_callback("files")
+                logger.info("Navigated to files page")
+            else:
+                logger.warning("No navigation callback available")
+        except Exception as nav_error:
+            logger.error(f"Navigation to files failed: {nav_error}")
+
+    def navigate_to_database(e):
+        """Navigate to database page."""
+        try:
+            if navigate_callback:
+                navigate_callback("database")
+                logger.info("Navigated to database page")
+            else:
+                logger.warning("No navigation callback available")
+        except Exception as nav_error:
+            logger.error(f"Navigation to database failed: {nav_error}")
+
+    def navigate_to_analytics(e):
+        """Navigate to analytics page."""
+        try:
+            if navigate_callback:
+                navigate_callback("analytics")
+                logger.info("Navigated to analytics page")
+            else:
+                logger.warning("No navigation callback available")
+        except Exception as nav_error:
+            logger.error(f"Navigation to analytics failed: {nav_error}")
+
+    # === UI COMPONENT BUILDERS ===
+    def create_enhanced_metric_card(title: str, value_ref: ft.Ref, icon: str, color: str, on_click=None, destination_hint: str = "") -> ft.Container:
+        """PHASE 4.1: Interactive Metric Card - Clickable with navigation and hover states."""
+
+        # Track hover state for visual feedback
+        is_hovered = False
+
+        def on_hover_change(e):
+            nonlocal is_hovered
+            is_hovered = e.data == "true"
+            # Update card appearance on hover if clickable
+            if on_click:
+                container.bgcolor = ft.Colors.with_opacity(0.08, color) if is_hovered else ft.Colors.SURFACE
+                container.update()
+
+        # Material Design 3 interactive container
+        container = ft.Container(
             content=ft.Column([
                 # MD3 Header with proper icon-text relationship
                 ft.Row([
@@ -372,7 +487,27 @@ def create_dashboard_view(
                         border_radius=3
                     ),
                     margin=ft.Margin(0, 8, 0, 0)
+                ),
+
+                # PHASE 4.1: Navigation hint for clickable cards
+                ft.Container(
+                    content=ft.Row([
+                        ft.Text(
+                            f"Click to view {destination_hint}" if on_click and destination_hint else "",
+                            size=11,
+                            color=ft.Colors.with_opacity(0.7, color),
+                            italic=True
+                        ),
+                        ft.Icon(
+                            ft.Icons.ARROW_FORWARD_IOS,
+                            size=12,
+                            color=ft.Colors.with_opacity(0.7, color)
+                        ) if on_click else ft.Container()
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    visible=bool(on_click),  # Only show if clickable
+                    margin=ft.Margin(0, 4, 0, 0)
                 )
+
             ], spacing=8, alignment=ft.MainAxisAlignment.START),
 
             # MD3 Surface styling with elevation
@@ -383,107 +518,372 @@ def create_dashboard_view(
             width=240,  # Optimized for desktop
             height=180,
 
-            # MD3 interaction states
+            # MD3 interaction states with Phase 4.1 enhancements
             animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
             shadow=ft.BoxShadow(
                 spread_radius=0,
                 blur_radius=4,
                 color=ft.Colors.with_opacity(0.08, ft.Colors.BLACK),
                 offset=ft.Offset(0, 2)
-            )
+            ),
+
+            # PHASE 4.1: Interactive behaviors
+            on_click=on_click or None,
+            on_hover=on_hover_change if on_click else None,
+            tooltip=f"Click to navigate to {destination_hint}" if on_click and destination_hint else None
         )
+
+        return container
 
     def create_progress_indicator_card(title: str, progress_ref: ft.Ref, color: str) -> ft.Container:
-        """PHASE 3.1: Material Design 3 Performance Card - Enhanced progress visualization."""
-        return ft.Container(
-            content=ft.Column([
-                # MD3 Title with proper hierarchy
-                ft.Text(
-                    title,
-                    size=16,
-                    weight=ft.FontWeight.W_600,
-                    color=ft.Colors.ON_SURFACE
-                ),
+        """PHASE 4.2: Premium Circular Gauge with Status Thresholds and Micro-animations."""
 
-                # Spacer for visual breathing
-                ft.Container(height=8),
+        # Create additional refs for enhanced status display
+        status_icon_ref = ft.Ref[ft.Icon]()
+        status_text_ref = ft.Ref[ft.Text]()
+        percentage_ref = ft.Ref[ft.Text]()
 
-                # MD3 Enhanced progress bar with background
-                ft.Container(
-                    content=ft.ProgressBar(
-                        ref=progress_ref,
-                        value=0,
-                        color=color,
-                        bgcolor=ft.Colors.with_opacity(0.12, color),
-                        height=10,
-                        border_radius=5
-                    ),
-                    margin=ft.Margin(0, 4, 0, 4)
-                ),
+        def get_threshold_status(value: float) -> tuple[str, str, str]:
+            """Determine status based on performance thresholds."""
+            if value >= 90:
+                return ft.Icons.ERROR, ft.Colors.RED, "Critical"
+            elif value >= 75:
+                return ft.Icons.WARNING_AMBER, ft.Colors.ORANGE, "High"
+            elif value >= 50:
+                return ft.Icons.INFO, ft.Colors.BLUE, "Moderate"
+            else:
+                return ft.Icons.CHECK_CIRCLE, ft.Colors.GREEN, "Optimal"
 
-                # MD3 Percentage display
-                ft.Text(
-                    "0%",
-                    size=14,
-                    weight=ft.FontWeight.W_500,
-                    color=ft.Colors.ON_SURFACE
+        # Track hover state for premium interactions
+        is_hovered = False
+
+        def on_hover_change(e):
+            nonlocal is_hovered
+            is_hovered = e.data == "true"
+            # Subtle scale and shadow enhancement on hover
+            container.scale = 1.02 if is_hovered else 1.0
+            if is_hovered:
+                container.shadow = ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=12,
+                    color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
+                    offset=ft.Offset(0, 6)
                 )
-            ], spacing=4, alignment=ft.MainAxisAlignment.START),
+            else:
+                container.shadow = ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=6,
+                    color=ft.Colors.with_opacity(0.08, ft.Colors.BLACK),
+                    offset=ft.Offset(0, 2)
+                )
+            container.update()
 
-            # MD3 Container styling
-            padding=20,
-            border_radius=12,
+        # PHASE 4.2: Premium circular gauge container
+        container = ft.Container(
+            content=ft.Column([
+                # Enhanced header with status indicator
+                ft.Row([
+                    ft.Text(
+                        title,
+                        size=16,
+                        weight=ft.FontWeight.W_600,
+                        color=ft.Colors.ON_SURFACE
+                    ),
+                    ft.Container(
+                        content=ft.Row([
+                            ft.Icon(
+                                ft.Icons.CHECK_CIRCLE,
+                                ref=status_icon_ref,
+                                size=16,
+                                color=ft.Colors.GREEN
+                            ),
+                            ft.Text(
+                                "Optimal",
+                                ref=status_text_ref,
+                                size=11,
+                                weight=ft.FontWeight.W_500,
+                                color=ft.Colors.GREEN
+                            )
+                        ], spacing=4),
+                        opacity=0.8
+                    )
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+
+                # PHASE 4.2: Sophisticated circular gauge design
+                ft.Container(
+                    content=ft.Stack([
+                        # Background arc
+                        ft.ProgressRing(
+                            value=1.0,
+                            color=ft.Colors.with_opacity(0.08, color),
+                            stroke_width=10,
+                            width=90,
+                            height=90
+                        ),
+                        # Active progress ring with rounded caps
+                        ft.ProgressRing(
+                            ref=progress_ref,
+                            value=0.0,
+                            color=color,
+                            stroke_width=10,
+                            stroke_cap=ft.StrokeCap.ROUND,
+                            width=90,
+                            height=90,
+                            animate_rotation=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT)
+                        ),
+                        # Center content with value and label
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Text(
+                                    "0%",
+                                    ref=percentage_ref,
+                                    size=20,
+                                    weight=ft.FontWeight.BOLD,
+                                    color=ft.Colors.ON_SURFACE,
+                                    text_align=ft.TextAlign.CENTER
+                                ),
+                                ft.Text(
+                                    "Load",
+                                    size=11,
+                                    color=ft.Colors.with_opacity(0.6, ft.Colors.ON_SURFACE),
+                                    text_align=ft.TextAlign.CENTER
+                                )
+                            ], spacing=2, alignment=ft.MainAxisAlignment.CENTER),
+                            width=90,
+                            height=90,
+                            alignment=ft.alignment.center
+                        )
+                    ], width=90, height=90),
+                    alignment=ft.alignment.center,
+                    margin=ft.Margin(0, 12, 0, 8)
+                ),
+
+                # PHASE 4.2: Enhanced footer with trend indicator
+                ft.Row([
+                    ft.Text(
+                        "Real-time",
+                        size=11,
+                        color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE)
+                    ),
+                    ft.Container(
+                        content=ft.Row([
+                            ft.Icon(
+                                ft.Icons.TRENDING_UP,
+                                size=12,
+                                color=ft.Colors.with_opacity(0.6, color)
+                            ),
+                            ft.Text(
+                                "Live",
+                                size=10,
+                                weight=ft.FontWeight.W_500,
+                                color=ft.Colors.with_opacity(0.6, color)
+                            )
+                        ], spacing=2)
+                    )
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+            ], spacing=8, alignment=ft.MainAxisAlignment.START),
+
+            # PHASE 4.2: Premium container with enhanced styling and interactions
+            padding=18,
+            border_radius=16,  # Larger radius for premium feel
             bgcolor=ft.Colors.SURFACE,
-            border=ft.border.all(1, ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE)),
-            width=220,
-            height=120,
-            animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
+            border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
+            width=200,
+            height=170,  # Taller for circular gauge
+            animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+            animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
+            on_hover=on_hover_change,
             shadow=ft.BoxShadow(
                 spread_radius=0,
-                blur_radius=2,
-                color=ft.Colors.with_opacity(0.05, ft.Colors.BLACK),
-                offset=ft.Offset(0, 1)
+                blur_radius=6,
+                color=ft.Colors.with_opacity(0.08, ft.Colors.BLACK),
+                offset=ft.Offset(0, 2)
             )
         )
 
-    def create_activity_item(client: str, action: str, status: str, timestamp: str = None) -> ft.ListTile:
-        """Create an activity list item with enhanced styling."""
-        # Status color mapping
-        status_colors = {
-            'Complete': ft.Colors.GREEN,
-            'In Progress': ft.Colors.ORANGE,
-            'Error': ft.Colors.RED,
-            'Pending': ft.Colors.BLUE
+        # Attach additional refs for external updates
+        container.status_icon_ref = status_icon_ref
+        container.status_text_ref = status_text_ref
+        container.percentage_ref = percentage_ref
+        container.get_threshold_status = get_threshold_status
+
+        return container
+
+    def create_activity_item(client: str, action: str, status: str, timestamp: Optional[str] = None, is_last: bool = False) -> ft.Container:
+        """PHASE 4.2: Premium Activity Timeline Item - Enhanced with connecting lines and micro-animations."""
+
+        # Enhanced status configuration with icons and descriptions
+        status_config = {
+            'Complete': {
+                'color': ft.Colors.GREEN,
+                'icon': ft.Icons.CHECK_CIRCLE,
+                'description': 'Successfully completed'
+            },
+            'In Progress': {
+                'color': ft.Colors.BLUE,
+                'icon': ft.Icons.SYNC,
+                'description': 'Currently processing'
+            },
+            'Error': {
+                'color': ft.Colors.RED,
+                'icon': ft.Icons.ERROR,
+                'description': 'Failed with error'
+            },
+            'Pending': {
+                'color': ft.Colors.ORANGE,
+                'icon': ft.Icons.PENDING,
+                'description': 'Waiting to start'
+            }
         }
 
-        status_color = status_colors.get(status, ft.Colors.GREY)
+        config = status_config.get(status, {
+            'color': ft.Colors.GREY,
+            'icon': ft.Icons.HELP_OUTLINE,
+            'description': 'Unknown status'
+        })
 
-        # Format timestamp
+        # Enhanced timestamp formatting
         if timestamp:
             try:
                 dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                time_str = dt.strftime('%H:%M:%S')
-            except:
+                time_str = dt.strftime('%H:%M')
+                date_str = dt.strftime('%m/%d')
+                relative_time = f"{(datetime.now() - dt.replace(tzinfo=None)).seconds // 60}m ago"
+            except Exception:
                 time_str = "Unknown"
+                date_str = ""
+                relative_time = ""
         else:
-            time_str = datetime.now().strftime('%H:%M:%S')
+            now = datetime.now()
+            time_str = now.strftime('%H:%M')
+            date_str = now.strftime('%m/%d')
+            relative_time = "Just now"
 
-        return ft.ListTile(
-            leading=ft.CircleAvatar(
-                content=ft.Text(client[:1].upper(), size=12),
-                bgcolor=status_color,
-                color=ft.Colors.WHITE,
-                radius=16
-            ),
-            title=ft.Text(f"{client}", size=14, weight=ft.FontWeight.W_500),
-            subtitle=ft.Text(f"{action} • {time_str}", size=12),
-            trailing=ft.Container(
-                content=ft.Text(status, size=10, color=ft.Colors.WHITE),
-                padding=ft.Padding(6, 2, 6, 2),
-                bgcolor=status_color,
-                border_radius=8
-            )
+        # Track hover state for interactions
+        is_hovered = False
+
+        def on_hover_change(e):
+            nonlocal is_hovered
+            is_hovered = e.data == "true"
+            # Subtle highlight on hover
+            container.bgcolor = ft.Colors.with_opacity(0.04, config['color']) if is_hovered else ft.Colors.TRANSPARENT
+            container.update()
+
+        # PHASE 4.2: Professional timeline item design
+        container = ft.Container(
+            content=ft.Row([
+                # Timeline indicator column
+                ft.Container(
+                    content=ft.Column([
+                        # Status icon with enhanced design
+                        ft.Container(
+                            content=ft.Icon(
+                                config['icon'],
+                                size=18,
+                                color=ft.Colors.WHITE
+                            ),
+                            width=32,
+                            height=32,
+                            bgcolor=config['color'],
+                            border_radius=16,
+                            alignment=ft.alignment.center,
+                            shadow=ft.BoxShadow(
+                                spread_radius=0,
+                                blur_radius=4,
+                                color=ft.Colors.with_opacity(0.3, config['color']),
+                                offset=ft.Offset(0, 2)
+                            )
+                        ),
+                        # Connecting line (except for last item)
+                        ft.Container() if is_last else ft.Container(
+                                                    width=2,
+                                                    height=0 if is_last else 40,
+                                                    bgcolor=ft.Colors.with_opacity(0.2, config['color']),
+                                                    margin=ft.Margin(15, 4, 15, 0)
+                                                )
+                    ], spacing=0),
+                    width=60
+                ),
+
+                # Content area with enhanced information hierarchy
+                ft.Expanded(
+                    child=ft.Column([
+                        # Primary content row
+                        ft.Row([
+                            ft.Column([
+                                # Client name with emphasis
+                                ft.Text(
+                                    client,
+                                    size=15,
+                                    weight=ft.FontWeight.W_600,
+                                    color=ft.Colors.ON_SURFACE
+                                ),
+                                # Action description
+                                ft.Text(
+                                    action,
+                                    size=13,
+                                    color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE),
+                                    max_lines=2,
+                                    overflow=ft.TextOverflow.ELLIPSIS
+                                )
+                            ], spacing=2, expand=True),
+
+                            # Time and status information
+                            ft.Column([
+                                ft.Text(
+                                    time_str,
+                                    size=12,
+                                    weight=ft.FontWeight.W_500,
+                                    color=ft.Colors.ON_SURFACE,
+                                    text_align=ft.TextAlign.RIGHT
+                                ),
+                                ft.Text(
+                                    relative_time,
+                                    size=10,
+                                    color=ft.Colors.with_opacity(0.6, ft.Colors.ON_SURFACE),
+                                    text_align=ft.TextAlign.RIGHT
+                                )
+                            ], spacing=1, alignment=ft.CrossAxisAlignment.END)
+                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+
+                        # Status badge with enhanced design
+                        ft.Container(
+                            content=ft.Row([
+                                ft.Container(
+                                    width=4,
+                                    height=4,
+                                    bgcolor=config['color'],
+                                    border_radius=2
+                                ),
+                                ft.Text(
+                                    status,
+                                    size=11,
+                                    weight=ft.FontWeight.W_500,
+                                    color=config['color']
+                                ),
+                                ft.Text(
+                                    f"• {config['description']}",
+                                    size=10,
+                                    color=ft.Colors.with_opacity(0.6, ft.Colors.ON_SURFACE),
+                                    italic=True
+                                )
+                            ], spacing=6),
+                            margin=ft.Margin(0, 4, 0, 0)
+                        )
+                    ], spacing=4, alignment=ft.CrossAxisAlignment.START)
+                )
+            ], spacing=0),
+
+            # PHASE 4.2: Enhanced container with hover interactions
+            padding=ft.Padding(12, 8, 12, 8),
+            border_radius=8,
+            bgcolor=ft.Colors.TRANSPARENT,
+            on_hover=on_hover_change,
+            animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
+            margin=ft.Margin(0, 0, 0, 4)
         )
+
+        return container
 
     # === UI LAYOUT CONSTRUCTION ===
 
@@ -528,45 +928,78 @@ def create_dashboard_view(
         border=ft.border.only(bottom=ft.BorderSide(2, ft.Colors.PRIMARY_CONTAINER))
     )
 
-    # PHASE 2: Premium Desktop-Optimized Metrics Layout
-    # Using golden ratio (1.618) and desktop-first approach
+    # PHASE 4.1: Interactive Desktop-Optimized Metrics Layout with Navigation
+    # Using golden ratio (1.618) and desktop-first approach + clickable cards
     metrics_row = ft.ResponsiveRow([
         ft.Container(
-            create_enhanced_metric_card("Active Clients", clients_count_ref, ft.Icons.PEOPLE, ft.Colors.BLUE),
+            create_enhanced_metric_card(
+                "Active Clients",
+                clients_count_ref,
+                ft.Icons.PEOPLE,
+                ft.Colors.BLUE,
+                on_click=navigate_to_clients,
+                destination_hint="clients page"
+            ),
             col={"lg": 3, "md": 6, "sm": 12},  # Desktop-first: 4 columns on large screens
             padding=ft.Padding(0, 0, 16, 0)  # Golden ratio spacing: 16px gaps
         ),
         ft.Container(
-            create_enhanced_metric_card("Total Files", files_count_ref, ft.Icons.FOLDER_COPY, ft.Colors.GREEN),
+            create_enhanced_metric_card(
+                "Total Files",
+                files_count_ref,
+                ft.Icons.FOLDER_COPY,
+                ft.Colors.GREEN,
+                on_click=navigate_to_files,
+                destination_hint="files page"
+            ),
             col={"lg": 3, "md": 6, "sm": 12},
             padding=ft.Padding(0, 0, 16, 0)
         ),
         ft.Container(
-            create_enhanced_metric_card("Storage Used", storage_value_ref, ft.Icons.STORAGE, ft.Colors.ORANGE),
+            create_enhanced_metric_card(
+                "Storage Used",
+                storage_value_ref,
+                ft.Icons.STORAGE,
+                ft.Colors.ORANGE,
+                on_click=navigate_to_database,
+                destination_hint="database page"
+            ),
             col={"lg": 3, "md": 6, "sm": 12},
             padding=ft.Padding(0, 0, 16, 0)
         ),
         ft.Container(
-            create_enhanced_metric_card("System Uptime", uptime_value_ref, ft.Icons.SCHEDULE, ft.Colors.PURPLE),
+            create_enhanced_metric_card(
+                "System Uptime",
+                uptime_value_ref,
+                ft.Icons.SCHEDULE,
+                ft.Colors.PURPLE,
+                on_click=navigate_to_analytics,
+                destination_hint="analytics page"
+            ),
             col={"lg": 3, "md": 6, "sm": 12},
             padding=ft.Padding(0, 0, 0, 0)  # No right padding on last item
         ),
     ], spacing=0)  # Use container padding instead of run_spacing for precise control
 
-    # PHASE 2: Premium Desktop Performance Layout
+    # PHASE 4.2: Enhanced Performance Layout with Container References
+    # Store container references for status updates
+    storage_gauge_container = create_progress_indicator_card("Storage Usage", storage_progress_ref, ft.Colors.ORANGE)
+    cpu_gauge_container = create_progress_indicator_card("CPU Performance", cpu_progress_ref, ft.Colors.RED)
+    memory_gauge_container = create_progress_indicator_card("Memory Usage", memory_progress_ref, ft.Colors.BLUE)
+
     performance_row = ft.ResponsiveRow([
         ft.Container(
-            create_progress_indicator_card("Storage Usage", storage_progress_ref, ft.Colors.ORANGE),
+            storage_gauge_container,
             col={"lg": 4, "md": 4, "sm": 12},  # Desktop-optimized: 3 columns
             padding=ft.Padding(0, 0, 16, 0)
         ),
         ft.Container(
-            create_progress_indicator_card("CPU Performance", cpu_progress_ref, ft.Colors.RED),
+            cpu_gauge_container,
             col={"lg": 4, "md": 4, "sm": 12},
             padding=ft.Padding(0, 0, 16, 0)
         ),
         ft.Container(
-            create_progress_indicator_card("Memory Usage", memory_progress_ref, ft.Colors.BLUE),
+            memory_gauge_container,
             col={"lg": 4, "md": 4, "sm": 12},
             padding=ft.Padding(0, 0, 0, 0)
         ),

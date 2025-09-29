@@ -25,13 +25,32 @@ import Shared.utils.utf8_solution
 
 import flet as ft
 
-# Direct import to avoid server bridge imports
-try:
-    from views.dashboard import _create_emergency_simple_dashboard
-    dashboard_available = True
-except ImportError:
-    dashboard_available = False
-    print("Warning: Emergency dashboard not available")
+# Define a simple stub for the emergency dashboard directly in this file
+# to avoid import issues and keep it self-contained
+def _create_emergency_simple_dashboard(page: ft.Page):
+    """Create a minimal emergency dashboard control."""
+    def on_refresh(e):
+        # Simple refresh action (no-op for demo)
+        print("Emergency dashboard refreshed")
+
+    # Basic dashboard content
+    dashboard_control = ft.Container(
+        content=ft.Column([
+            ft.Text("Emergency Dashboard", size=24, weight=ft.FontWeight.BOLD),
+            ft.Text("This is a minimal demo dashboard.", color=ft.Colors.AMBER),
+            ft.ElevatedButton("Refresh", icon=ft.Icons.REFRESH, on_click=on_refresh)
+        ], spacing=20, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+        padding=20
+    )
+
+    # Stub dispose and setup functions (no-ops for simplicity)
+    dispose_func = lambda: None
+    setup_func = lambda: None
+
+    return dashboard_control, dispose_func, setup_func
+
+# Always assume dashboard is available since we're defining it here
+dashboard_available = True
 
 def main(page: ft.Page):
     """Minimal main function that shows dashboard immediately."""
@@ -67,7 +86,7 @@ def main(page: ft.Page):
             # Show simple error message
             page.add(ft.Text(f"Emergency Dashboard Error: {e}", color=ft.Colors.RED))
     else:
-        # Ultra-minimal fallback
+        # Ultra-minimal fallback (shouldn't reach here now)
         page.add(ft.Column([
             ft.Text("FletV2 Dashboard", size=24, weight=ft.FontWeight.BOLD),
             ft.Text("Emergency mode - Dashboard components not available", color=ft.Colors.AMBER),
