@@ -11,20 +11,51 @@ This demonstrates the clean architecture:
 - Resizable desktop app configuration
 """
 
-# CRITICAL: Ensure FletV2 root is on sys.path BEFORE any other imports
+# Standard library imports
+import asyncio
+import contextlib
 import os
 import sys
+import time  # For optional startup profiling
+from collections.abc import Callable
+from typing import Any, cast
+
+# Third-party imports
+import flet as ft
+
+
+def _bootstrap_paths() -> tuple[str, str, str, str]:
+    """Ensure repo directories are registered on sys.path for local imports."""
+    here_path = os.path.abspath(__file__)
+    base_dir = os.path.dirname(here_path)
+    parent_dir = os.path.dirname(base_dir)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+
+    if os.path.basename(base_dir) == "FletV2":
+        flet_root = base_dir
+    else:
+        flet_root = os.path.dirname(base_dir)
+
+    repository_root = os.path.dirname(flet_root)
+    if flet_root not in sys.path:
+        sys.path.insert(0, flet_root)
+    if repository_root not in sys.path:
+        sys.path.insert(0, repository_root)
+
+    if base_dir not in sys.path:
+        sys.path.insert(0, base_dir)
+
+    return here_path, flet_root, repository_root, base_dir
+
+
+_here, flet_v2_root, repo_root, project_root = _bootstrap_paths()
 
 # ALWAYS import UTF-8 solution FIRST to fix encoding issues
 # This MUST be imported before any subprocess or console operations
 try:
-    # Try to add parent directory to path for Shared module access
-    _current_dir = os.path.dirname(os.path.abspath(__file__))
-    _parent_dir = os.path.dirname(_current_dir)
-    if _parent_dir not in sys.path:
-        sys.path.insert(0, _parent_dir)
-
     import Shared.utils.utf8_solution as _utf8_solution
+
     # Ensure initialization for side effects
     _utf8_solution.ensure_initialized()
 except ImportError as e:
@@ -32,48 +63,6 @@ except ImportError as e:
     # Set basic UTF-8 environment as fallback
     os.environ.setdefault("PYTHONUTF8", "1")
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
-
-# Idempotent bootstrap: ensure both the FletV2 package root and the repository root
-# are on sys.path so runtime imports like `utils.*` and `Shared.*` resolve whether
-# the app is launched from the repo root, FletV2 folder, or elsewhere.
-_here = os.path.abspath(__file__)
-_base = os.path.dirname(_here)
-# If this file is directly in FletV2/, _base will be the FletV2 folder
-if os.path.basename(_base) == "FletV2":
-    flet_v2_root = _base
-else:
-    # File may be in a subfolder of FletV2; the parent of the file's dir is FletV2
-    flet_v2_root = os.path.dirname(_base)
-
-# Repo root is the parent of the FletV2 root
-repo_root = os.path.dirname(flet_v2_root)
-
-# Insert flet_v2_root first so `import utils` resolves to FletV2/utils
-if flet_v2_root not in sys.path:
-    sys.path.insert(0, flet_v2_root)
-
-# Ensure the repo root is available for sibling packages (Shared, python_server, api_server)
-if repo_root not in sys.path:
-    sys.path.insert(0, repo_root)
-
-# Best-effort: Also ensure the project root (one level up from this file) is present
-project_root = os.path.dirname(_here)
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# Standard library imports
-import asyncio
-import time  # For optional startup profiling
-import contextlib
-
-# Compatibility shim: ensure ft.FilterChip exists for older/newer flet builds
-import contextlib as _contextlib
-import socket
-from collections.abc import Callable
-from typing import Any, cast
-
-# Third-party imports
-import flet as ft
 
 if not hasattr(ft, "FilterChip"):
     class FilterChip(ft.Container):  # sourcery skip: remove-unnecessary-cast, remove-unnecessary-try-except
@@ -92,17 +81,21 @@ if not hasattr(ft, "FilterChip"):
                 on_click=self._handle_click,
                 style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=16)),
             )
-            super().__init__(content=self._button, padding=ft.padding.symmetric(horizontal=6, vertical=2), **kwargs)
+            super().__init__(
+                content=self._button,
+                padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                **kwargs,
+            )
             self._refresh_style()
 
         def _handle_click(self, e: ft.ControlEvent) -> None:
-            with _contextlib.suppress(Exception):
+            with contextlib.suppress(Exception):
                 if callable(self.on_selected):
                     ev = type("Evt", (), {"control": self})()
                     self.on_selected(ev)
 
         def _refresh_style(self) -> None:
-            with _contextlib.suppress(Exception):
+            with contextlib.suppress(Exception):
                 if self.selected:
                     self._button.bgcolor = ft.Colors.PRIMARY
                     self._button.color = ft.Colors.ON_PRIMARY
@@ -116,7 +109,7 @@ if not hasattr(ft, "FilterChip"):
             try:
                 super().update(*args, **kwargs)
             except Exception:
-                with _contextlib.suppress(Exception):
+                with contextlib.suppress(Exception):
                     self._button.update()
 
     ft.FilterChip = cast(Any, FilterChip)  # type: ignore[attr-defined]
@@ -131,7 +124,10 @@ except ImportError:
     import logging
     # Optional already imported at top
 
-    def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: str | None = None) -> logging.Logger:
+    def setup_terminal_debugging(
+        log_level: int = logging.INFO,
+        logger_name: str | None = None,
+    ) -> logging.Logger:
         logger = logging.getLogger(logger_name or __name__)
         if not logger.handlers:
             handler = logging.StreamHandler()
@@ -150,19 +146,19 @@ os.environ.setdefault("PYTHONUTF8", "1")
 def _install_global_exception_handlers() -> None:  # pragma: no cover - diagnostic utility
     try:
         previous_hook = sys.excepthook
-    except Exception:  # noqa: BLE001
+    except Exception:
         previous_hook = None  # type: ignore[assignment]
 
     def _excepthook(exc_type, exc, tb):  # type: ignore[override]
-        with _contextlib.suppress(Exception):  # noqa: BLE001
+        with contextlib.suppress(Exception):
             logger.critical("UNCAUGHT EXCEPTION (sys.excepthook)", exc_info=(exc_type, exc, tb))
         if previous_hook and previous_hook is not sys.excepthook:  # avoid recursion
-            with _contextlib.suppress(Exception):  # noqa: BLE001
+            with contextlib.suppress(Exception):
                 previous_hook(exc_type, exc, tb)  # type: ignore[misc]
 
     try:
         sys.excepthook = _excepthook  # type: ignore[assignment]
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.warning("Failed to install sys.excepthook override")
 
     # Asyncio loop exception handler - fix Python 3.13 compatibility
@@ -175,13 +171,13 @@ def _install_global_exception_handlers() -> None:  # pragma: no cover - diagnost
             loop = None
 
         def _loop_exception_handler(loop_obj, context):  # type: ignore[no-untyped-def]
-            with _contextlib.suppress(Exception):  # noqa: BLE001
+            with contextlib.suppress(Exception):
                 msg = context.get("message") or "Asyncio loop exception"
                 logger.critical(f"ASYNCIO LOOP EXCEPTION: {msg}", exc_info=context.get("exception"))
 
         if loop:  # Only set handler if we have a running loop
             loop.set_exception_handler(_loop_exception_handler)
-    except Exception as _loop_err:  # noqa: BLE001
+    except Exception as _loop_err:
         logger.warning(f"Failed to set asyncio loop exception handler: {_loop_err}")
 
 _install_global_exception_handlers()
@@ -221,18 +217,21 @@ except ImportError as _rel_err:  # pragma: no cover - fallback path
                     _mod = _importlib_util.module_from_spec(_spec)  # type: ignore[arg-type]
                     _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
                     if hasattr(_mod, 'create_server_bridge'):
-                        create_server_bridge = getattr(_mod, 'create_server_bridge')  # type: ignore[assignment]
+                        create_server_bridge = _mod.create_server_bridge  # type: ignore[assignment]
                     else:
                         raise ImportError('create_server_bridge symbol missing in loaded module')
             else:
                 raise ImportError(f'server_bridge.py not found at expected path: {_srv_path}')
-        except Exception as _path_err:  # noqa: BLE001
+        except Exception as _path_err:
             combined_err = f"{_rel_err}; {_abs_err}; {_path_err}"
             print(f"Error: Could not import server_bridge: {combined_err}")
             server_bridge_error = str(combined_err)
             def create_server_bridge(real_server: Any | None = None) -> Any:  # type: ignore[override]
                 if real_server is None:
-                    raise ValueError("ServerBridge requires a real server instance. Mock data support has been removed.")
+                    raise ValueError(
+                        "ServerBridge requires a real server instance. "
+                        "Mock data support has been removed."
+                    )
                 raise ImportError(f"ServerBridge module not available: {server_bridge_error}")
 
 # Final safety net: dynamic import attempt if create_server_bridge still missing
@@ -241,9 +240,9 @@ if 'create_server_bridge' not in globals():  # pragma: no cover - rare path
         import importlib
         _mod = importlib.import_module('utils.server_bridge')
         if hasattr(_mod, 'create_server_bridge'):
-            create_server_bridge = getattr(_mod, 'create_server_bridge')  # type: ignore[assignment]
+            create_server_bridge = _mod.create_server_bridge  # type: ignore[assignment]
             print("Info: Loaded create_server_bridge via dynamic import fallback")
-    except Exception as _dyn_err:  # noqa: BLE001
+    except Exception as _dyn_err:
         print(f"Error: Dynamic import of server_bridge failed: {_dyn_err}")
 
 # Exported runtime flags for tests and integration checks (real server required unless GUI-only override)
@@ -348,15 +347,21 @@ try:
 
 except ImportError as e:
     logger.error(f"Could not import BackupServer - check if python_server is available: {e}")
-    logger.warning("Real server unavailable. Set FLET_GUI_ONLY_MODE=1 for limited GUI-only mode or fix import.")
+    logger.warning(
+        "Real server unavailable. Set FLET_GUI_ONLY_MODE=1 for limited GUI-only mode or fix import."
+    )
     real_server_instance = None
 except FileNotFoundError as e:
     logger.error(f"Database file not found: {e}")
-    logger.warning("Real server startup blocked by missing database. Provide database or set FLET_GUI_ONLY_MODE=1.")
+    logger.warning(
+        "Real server startup blocked by missing database. Provide database or set FLET_GUI_ONLY_MODE=1."
+    )
     real_server_instance = None
 except Exception as e:
     logger.error(f"Failed to initialize BackupServer: {e}")
-    logger.warning("Real server initialization failed. Use FLET_GUI_ONLY_MODE=1 for GUI-only diagnostics if needed.")
+    logger.warning(
+        "Real server initialization failed. Use FLET_GUI_ONLY_MODE=1 for GUI-only diagnostics if needed."
+    )
     real_server_instance = None
 
 # Direct server integration support (no adapter layer needed)
@@ -443,7 +448,9 @@ class FletV2App(ft.Row):
                         logger.warning(f"Server bridge test returned unexpected format: {type(test_result)}")
                 except Exception as test_error:
                     logger.error(f"Server bridge test failed: {test_error}")
-                    logger.error("CRITICAL: Real server integration failed - this may indicate compatibility issues")
+                    logger.error(
+                        "CRITICAL: Real server integration failed - this may indicate compatibility issues"
+                    )
                     # Don't fall back to placeholder since ServerBridge now requires real server
                     raise test_error
             else:
@@ -457,8 +464,14 @@ class FletV2App(ft.Row):
                     real_server_available = False
                 else:
                     logger.error("❌ No real server available - ServerBridge requires real server instance")
-                    logger.error("Set FLET_GUI_ONLY_MODE=1 to start GUI without server, or provide a real server instance")
-                    raise RuntimeError("ServerBridge requires real server instance. Use FLET_GUI_ONLY_MODE=1 for GUI-only mode.")
+                    logger.error(
+                        "Set FLET_GUI_ONLY_MODE=1 to start GUI without server, or provide a real "
+                        "server instance"
+                    )
+                    raise RuntimeError(
+                        "ServerBridge requires real server instance. Use FLET_GUI_ONLY_MODE=1 for "
+                        "GUI-only mode."
+                    )
         except Exception as bridge_ex:
             logger.error(f"❌ Server bridge initialization failed: {bridge_ex}")
             logger.error("Application cannot continue without properly configured server bridge")
@@ -567,388 +580,21 @@ class FletV2App(ft.Row):
                         await asyncio.sleep(0.1)
                         if not self._dashboard_loading and not self._dashboard_loaded:
                             self._dashboard_loading = True
-def _load_view(self, view_name: str, force_reload: bool = False) -> bool:
-        """Load view with simplified and thread-safe mechanism."""
-        # Prevent multiple simultaneous view loads
-        if self._loading_view:
-            logger.warning(f"View load in progress. Skipping '{view_name}' request.")
-            return False
+                            self._load_view("dashboard", force_reload=False)
+                            self._dashboard_loaded = True
+                            print("🚀🚀🚀 MAIN APP: DASHBOARD LOAD CALLED 🚀🚀🚀")
+                    except Exception as immediate_err:
+                        logger.error(f"Immediate dashboard load failed in proactive task: {immediate_err}")
+                        print(f"🚀🚀🚀 MAIN APP: DASHBOARD LOAD FAILED: {immediate_err} 🚀🚀🚀")
+                    finally:
+                        self._dashboard_loading = False
 
-        # Check if view reload is necessary
-        if not force_reload and view_name == getattr(self, '_current_view_name', None):
-            logger.debug(f"Skipping reload for view '{view_name}' (already current)")
-            return True
+                # Run the async task
+                self.page.run_task(_proactive_load_dashboard)
+            except Exception as e:
+                logger.error(f"Proactive dashboard loading failed: {e}")
 
-        try:
-            self._loading_view = True
-            except Exception as switcher_error:
-                logger.error(f"❌ AnimatedSwitcher failed for {view_name}: {switcher_error} - falling back to bypass")
-                bypass_switcher = True
-
-        # Fallback: bypass AnimatedSwitcher only if it fails or explicitly requested
-        if bypass_switcher:
-            logger.warning("BYPASS_SWITCHER active - inserting content directly (no AnimatedSwitcher transition)")
-            try:
-                # Direct assignment: replace container's content attribute entirely
-                # Assign content directly without debug markers
-                self.content_area.content = content
-                # Extra diagnostics for blank dashboard issue
-                if os.environ.get('FLET_DASHBOARD_CONTENT_DEBUG') == '1' and view_name == 'dashboard':
-                    try:
-                        root = self.content_area.content
-                        root_type = type(root).__name__
-                        has_controls = hasattr(root, 'controls') and bool(getattr(root, 'controls'))
-                        has_content = hasattr(root, 'content') and bool(getattr(root, 'content'))
-                        logger.warning(
-                            f"[CONTENT_DEEP] Root after assign type={root_type} has_controls={has_controls} has_content={has_content} expand={getattr(root,'expand',None)}"
-                        )
-                        # If Column wrapper pattern, inspect first level
-                        if hasattr(root, 'content') and getattr(root, 'content'):
-                            inner = getattr(root, 'content')
-                            logger.warning(
-                                f"[CONTENT_DEEP] Inner content type={type(inner).__name__} has_controls={hasattr(inner,'controls') and bool(getattr(inner,'controls'))} expand={getattr(inner,'expand',None)}"
-                            )
-                    except Exception as _deep_err:  # noqa: BLE001
-                        logger.warning(f"[CONTENT_DEEP] deep diagnostics failed: {_deep_err}")
-                if getattr(content, 'opacity', None) == 0.0:
-                    with _contextlib.suppress(Exception):  # noqa: BLE001
-                        content.opacity = 1.0
-                with contextlib.suppress(Exception):
-                    if hasattr(self.content_area, 'update'):
-                        self.content_area.update()
-                # Enumerate first-level children for diagnostics
-                try:
-                    child_summary = []
-                    container_content = getattr(self.content_area, 'content', None)
-                    if hasattr(container_content, 'controls'):
-                        for idx, ctrl in enumerate(getattr(container_content, 'controls', [])[:10]):  # limit
-                            child_summary.append(f"[{idx}] {ctrl.__class__.__name__}")
-                    logger.warning(
-                        f"[CONTENT_DIAG] After direct insert: content_area.content={type(container_content).__name__}; children={child_summary}"
-                    )
-                except Exception as _enum_err:  # noqa: BLE001
-                    logger.warning(f"[CONTENT_DIAG] Child enumeration failed: {_enum_err}")
-                # Remove temporary visual marker injection code to avoid UI artifacts
-
-                # If requested, try to find the INNER DASHBOARD TEST control text in the
-                # assigned content area and log whether it is present. This helps
-                # determine whether nested controls are attached but occluded.
-                if os.environ.get('FLET_DASHBOARD_INNER_TEST') == '1' and view_name == 'dashboard':
-                    try:
-                        root = getattr(self.content_area, 'content', None)
-
-                        def _find_text(ctrl, target: str) -> bool:
-                            """Recursively search for Text control with matching text."""
-                            try:
-                                if ctrl is None:
-                                    return False
-                                # Direct Text control
-                                if ctrl.__class__.__name__ == "Text" and (getattr(ctrl, 'value', None) == target or getattr(ctrl, 'text', None) == target):
-                                    return True
-                                # Check common container patterns
-                                content = getattr(ctrl, 'content', None)
-                                if content and _find_text(content, target):
-                                    return True
-                                controls = getattr(ctrl, 'controls', None)
-                                if controls:
-                                    for c in controls:
-                                        if _find_text(c, target):
-                                            return True
-                            except Exception:
-                                return False
-                            return False
-
-                        found = _find_text(root, 'INNER DASHBOARD TEST')
-                        logger.warning(f"[CONTENT_DEEP] INNER DASHBOARD TEST presence={found}")
-                    except Exception as _deep_err:  # noqa: BLE001
-                        logger.warning(f"[CONTENT_DEEP] inner-test detection failed: {_deep_err}")
-                    # Inspect page.overlay for possible occluding controls
-                    try:
-                        if hasattr(self.page, 'overlay'):
-                            overlays = list(getattr(self.page, 'overlay'))
-                            logger.warning(f"[OVERLAY] count={len(overlays)} types={[type(o).__name__ for o in overlays]}")
-                            for i, o in enumerate(overlays[:10]):
-                                try:
-                                    bg = getattr(o, 'bgcolor', None)
-                                    w = getattr(o, 'width', None)
-                                    h = getattr(o, 'height', None)
-                                    logger.warning(f"[OVERLAY] [{i}] type={type(o).__name__} bgcolor={bg} width={w} height={h}")
-                                except Exception:
-                                    logger.warning(f"[OVERLAY] [{i}] inspect failed")
-                    except Exception as _ov_err:  # noqa: BLE001
-                        logger.warning(f"[OVERLAY] overlay inspection failed: {_ov_err}")
-
-                    # Additional deep inspection of the main dashboard container to
-                    # capture opacity/bgcolor/size/expand which may indicate an
-                    # occluding parent or invisible children.
-                    if os.environ.get('FLET_DASHBOARD_ENUM') == '1':
-                        try:
-                            def _inspect(ctrl, depth=0, max_depth=5):
-                                if ctrl is None:
-                                    return
-                                try:
-                                    info = {
-                                        'type': type(ctrl).__name__,
-                                        'opacity': getattr(ctrl, 'opacity', None),
-                                        'bgcolor': getattr(ctrl, 'bgcolor', None),
-                                        'expand': getattr(ctrl, 'expand', None),
-                                        'width': getattr(ctrl, 'width', None),
-                                        'height': getattr(ctrl, 'height', None),
-                                        'border_radius': getattr(ctrl, 'border_radius', None),
-                                        'visible': getattr(ctrl, 'visible', None),
-                                    }
-                                    logger.warning(f"[INSPECT]{'  '*depth}{info}")
-                                except Exception:
-                                    logger.warning(f"[INSPECT]{'  '*depth}inspect_error for {type(ctrl).__name__}")
-                                if depth >= max_depth:
-                                    return
-                                # Recurse into common children
-                                children = []
-                                if hasattr(ctrl, 'controls') and getattr(ctrl, 'controls'):
-                                    children = list(getattr(ctrl, 'controls'))
-                                elif hasattr(ctrl, 'content') and getattr(ctrl, 'content'):
-                                    children = [getattr(ctrl, 'content')]
-                                for ch in children[:50]:
-                                    _inspect(ch, depth+1, max_depth)
-
-                            root = getattr(self.content_area, 'content', None)
-                            logger.warning('[INSPECT] Beginning deep inspect of content_area.content')
-                            _inspect(root, 0, 4)
-                            logger.warning('[INSPECT] End deep inspect')
-                        except Exception as _insp_err:
-                            logger.warning(f"[INSPECT] deep inspect failed: {_insp_err}")
-                # Optional deep recursive enumeration if explicitly requested.
-                # Heavy enumeration/logging is only enabled when FLET_DASHBOARD_ENUM=1
-                # to avoid performance and log floods during normal runs.
-                if os.environ.get('FLET_DASHBOARD_ENUM') == '1':
-                    try:
-                        def _enum(ctrl, depth=0, max_depth=3):  # noqa: ANN001
-                            try:
-                                if ctrl is None:
-                                    return
-                                ctrl_type = ctrl.__class__.__name__
-                                prefix = '  ' * depth
-                                # attempt to read a text property if present
-                                text_val = ''
-                                if hasattr(ctrl, 'text') and getattr(ctrl, 'text'):
-                                    text_val = f" text={getattr(ctrl, 'text')!r}"
-                                logger.warning(f"[ENUM] {prefix}{ctrl_type}{text_val}")
-                                if depth >= max_depth:
-                                    return
-                                children = []
-                                if hasattr(ctrl, 'controls') and getattr(ctrl, 'controls'):
-                                    children = list(getattr(ctrl, 'controls'))  # type: ignore[arg-type]
-                                elif hasattr(ctrl, 'content') and getattr(ctrl, 'content'):
-                                    children = [getattr(ctrl, 'content')]
-                                for ch in children[:30]:
-                                    _enum(ch, depth + 1, max_depth)
-                            except Exception as enum_err:  # noqa: BLE001
-                                logger.warning(f"[ENUM] enumeration error depth {depth}: {enum_err}")
-                        logger.warning('[ENUM] ---- BEGIN DASHBOARD CONTROL TREE ----')
-                        _enum(self.content_area.content)
-                        logger.warning('[ENUM] ---- END DASHBOARD CONTROL TREE ----')
-                    except Exception as top_enum_err:  # noqa: BLE001
-                        logger.warning(f"[ENUM] top-level enumeration failed: {top_enum_err}")
-                # Optional quick fix: force visibility/opacities on assigned controls
-                # This is gated behind an env var so it's safe and reversible.
-                if os.environ.get('FLET_DASHBOARD_FORCE_VISIBLE') == '1' and view_name == 'dashboard':
-                    try:
-                        logger.warning('[FORCE] FLET_DASHBOARD_FORCE_VISIBLE active - forcing opacity/visible on dashboard controls')
-
-                        def _force_visible_bypass(ctrl, depth=0, max_depth=8):
-                            if ctrl is None:
-                                return
-                            with _contextlib.suppress(Exception):
-                                # Set visible/opacities where applicable
-                                if hasattr(ctrl, 'opacity'):
-                                    with _contextlib.suppress(Exception):
-                                        ctrl.opacity = 1.0
-                                if hasattr(ctrl, 'visible'):
-                                    with _contextlib.suppress(Exception):
-                                        ctrl.visible = True
-                                # Try to update control so runtime repaints
-                                with contextlib.suppress(Exception):
-                                    if hasattr(ctrl, 'update'):
-                                        ctrl.update()
-                            if depth >= max_depth:
-                                return
-                            # Recurse into common children
-                            children = []
-                            try:
-                                if hasattr(ctrl, 'controls') and getattr(ctrl, 'controls'):
-                                    children = list(getattr(ctrl, 'controls'))
-                                elif hasattr(ctrl, 'content') and getattr(ctrl, 'content'):
-                                    children = [getattr(ctrl, 'content')]
-                            except Exception:
-                                children = []
-                            for ch in children[:200]:
-                                _force_visible_bypass(ch, depth + 1, max_depth)
-
-                        try:
-                            _force_visible_bypass(getattr(self.content_area, 'content', None), 0, 6)
-                            logger.warning('[FORCE] Completed forcing visibility on dashboard tree')
-                        except Exception as _ferr:
-                            logger.warning(f"[FORCE] force-visible pass failed: {_ferr}")
-                    except Exception:
-                        logger.warning('[FORCE] Unexpected error while forcing visibility')
-
-            # Add missing except for outer direct-assignment diagnostics try block
-            # This ensures syntax validity without altering existing diagnostic behavior.
-            except Exception as direct_assign_error:  # noqa: BLE001
-                logger.error(f"[CONTENT_DIAG] Direct content assignment diagnostics failed: {direct_assign_error}")
-
-        # Force visibility if dashboard and still hidden
-        if view_name == 'dashboard':
-            try:
-                if getattr(content, 'opacity', 1.0) == 0.0:
-                    logger.warning("Dashboard opacity still 0 after update; forcing to 1.0")
-                    content.opacity = 1.0
-                    with contextlib.suppress(Exception):
-                        content.update()
-                # Also ensure nested child controls are visible in case entrance animations didn't run
-                try:
-                    def _force_visible_recursive(ctrl, depth=0, max_depth=10):
-                        if ctrl is None:
-                            return
-                        # Force common visibility attributes
-                        with _contextlib.suppress(Exception):
-                            if getattr(ctrl, 'visible', None) is False:
-                                ctrl.visible = True
-                        with _contextlib.suppress(Exception):
-                            if getattr(ctrl, 'opacity', None) is not None and getattr(ctrl, 'opacity') != 1.0:
-                                ctrl.opacity = 1.0
-                        # Update the control if possible
-                        with contextlib.suppress(Exception):
-                            if hasattr(ctrl, 'update'):
-                                try:
-                                    ctrl.update()
-                                except Exception:
-                                    pass
-
-                        if depth >= max_depth:
-                            return
-
-                        # Recurse into children stored in common places
-                        try:
-                            # .controls is a list of children for many Flet containers
-                            if hasattr(ctrl, 'controls') and getattr(ctrl, 'controls'):
-                                for ch in list(getattr(ctrl, 'controls')):
-                                    _force_visible_recursive(ch, depth+1, max_depth)
-
-                            # .content may contain a single child control
-                            if hasattr(ctrl, 'content') and getattr(ctrl, 'content'):
-                                _force_visible_recursive(getattr(ctrl, 'content'), depth+1, max_depth)
-
-                            # Some composite controls store children under .rows or .columns
-                            if hasattr(ctrl, 'rows') and getattr(ctrl, 'rows'):
-                                for ch in list(getattr(ctrl, 'rows')):
-                                    _force_visible_recursive(ch, depth+1, max_depth)
-                            if hasattr(ctrl, 'columns') and getattr(ctrl, 'columns'):
-                                for ch in list(getattr(ctrl, 'columns')):
-                                    _force_visible_recursive(ch, depth+1, max_depth)
-                        except Exception:
-                            pass
-
-                    _force_visible_recursive(content, 0, 10)
-                    # Try to ensure page refresh if available
-                    try:
-                        if hasattr(self, 'page') and self.page is not None:
-                          with contextlib.suppress(Exception):
-                            self.page.update()
-                    except Exception:
-                        pass
-
-                    logger.info('[DASH_FIX] Forced nested dashboard controls visible (aggressive)')
-                except Exception as _fv_err:  # noqa: BLE001
-                    logger.warning(f"[DASH_FIX] failed to force nested visibility: {_fv_err}")
-            except Exception as vis_err:  # noqa: BLE001
-                logger.debug(f"Failed forcing dashboard opacity: {vis_err}")
-
-        # Set up subscriptions after view is added to page and updated
-        # (prevents "Control must be added to page first" error)
-        if hasattr(content, '_setup_subscriptions'):
-            setup_cb = getattr(content, '_setup_subscriptions', None)
-            # Only proceed if the attribute is callable; skip falsy/non-callable values (e.g., 0)
-            if callable(setup_cb):
-                try:
-                    # Use page.run_task to defer subscription setup to next event loop iteration
-                    # This ensures all controls are properly attached to the page hierarchy
-                    async def setup_subs() -> None:
-                        try:
-                            # If the setup callback is defined as a coroutine function, await it directly
-                            if asyncio.iscoroutinefunction(setup_cb):
-                                await setup_cb()
-                            else:
-                                # Call the setup function; if it returns a coroutine, await that
-                                result = setup_cb()
-                                if asyncio.iscoroutine(result):
-                                    await result
-                            logger.debug(f"Set up subscriptions for {view_name} view")
-                        except Exception as sub_error:
-                            logger.warning(f"Failed to set up subscriptions for {view_name}: {sub_error}")
-
-                    if hasattr(self.page, 'run_task'):
-                        async def _wait_and_setup():
-                            # Wait until the control is attached to a page or timeout
-                            try:
-                                timeout = 2.0
-                                interval = 0.05
-                                waited = 0.0
-                                attached = False
-                                while waited < timeout:
-                                    try:
-                                        # check common attachment points
-                                        if hasattr(content, 'page') and getattr(content, 'page'):
-                                            attached = True
-                                            break
-                                        # content might be wrapped in content_area
-                                        if hasattr(self, 'content_area') and getattr(self, 'content_area'):
-                                            ca = getattr(self, 'content_area')
-                                            if hasattr(ca, 'content') and getattr(ca, 'content'):
-                                                inner = getattr(ca, 'content')
-                                                if hasattr(inner, 'page') and getattr(inner, 'page'):
-                                                    attached = True
-                                                    break
-                                        # AnimatedSwitcher may attach the content later
-                                        try:
-                                            animated_switcher = getattr(self, '_animated_switcher', None)
-                                            if animated_switcher and hasattr(animated_switcher, 'page') and getattr(animated_switcher, 'page'):
-                                                attached = True
-                                                break
-                                        except Exception:
-                                            pass
-                                    except Exception:
-                                        pass
-                                    await asyncio.sleep(interval)
-                                    waited += interval
-
-                                if not attached:
-                                    logger.warning(f"Setup subscriptions: content not attached after {timeout}s, proceeding anyway")
-
-                                # Call the actual setup callback
-                                try:
-                                    if asyncio.iscoroutinefunction(setup_cb):
-                                        await setup_cb()
-                                    else:
-                                        res = setup_cb()
-                                        if asyncio.iscoroutine(res):
-                                            await res
-                                    logger.warning(f"[CONTENT_DIAG] _setup_subscriptions executed for {view_name} (waiter)")
-                                except Exception as e:
-                                    logger.warning(f"Subscription setup failed in waiter: {e}")
-                            except Exception as outer_e:
-                                logger.warning(f"Subscription waiter failed: {outer_e}")
-
-                        self.page.run_task(_wait_and_setup)
-                except Exception as sub_error:
-                    logger.warning(f"Failed to schedule subscription setup for {view_name}: {sub_error}")
-            else:
-                logger.debug(
-                    f"Skipping subscription setup for {view_name}: _setup_subscriptions is not callable "
-                    f"(type={type(setup_cb).__name__})"
-                )
-
-        return True
+        # Post-update adjustments handled in _post_content_update
 
     def _dispose_current_view(self, new_view_name: str) -> None:
         """Dispose of the current view before loading a new one."""
@@ -999,7 +645,7 @@ def _load_view(self, view_name: str, force_reload: bool = False) -> bool:
                 content = stub_content
                 dispose_func = lambda: None  # noqa: E731
                 logger.info("Loaded dashboard stub successfully")
-            except Exception as stub_err:  # noqa: BLE001
+            except Exception as stub_err:
                 logger.error(f"Dashboard stub load failed: {stub_err}")
                 raise
 
@@ -1011,8 +657,12 @@ def _load_view(self, view_name: str, force_reload: bool = False) -> bool:
 
         # Update content area using AnimatedSwitcher for smooth transitions
         animated_switcher = self.content_area.content
-def _update_content_area(self, animated_switcher, content, view_name: str):
+        return self._update_content_area(animated_switcher, content, view_name)
+
+    def _update_content_area(self, animated_switcher, content, view_name: str) -> bool:
         """Safely update the content area with simplified view loading"""
+        # Store reference for diagnostics that need to inspect attachment state later
+        self._animated_switcher = animated_switcher
         try:
             # Unique and stable key for AnimatedSwitcher
             content.key = f"{view_name}_view_{int(time.time() * 1000)}"
@@ -1023,6 +673,9 @@ def _update_content_area(self, animated_switcher, content, view_name: str):
                 animated_switcher.transition = ft.AnimatedSwitcherTransition.FADE
                 animated_switcher.update()
 
+            # Post-update visibility and subscription management
+            self._post_content_update(content, view_name)
+
             logger.info(f"Successfully updated content area with {view_name}")
             return True
         except Exception as e:
@@ -1031,89 +684,140 @@ def _update_content_area(self, animated_switcher, content, view_name: str):
         finally:
             self._loading_view = False
 
-        # Check if view reload is necessary
-        if not force_reload and view_name == getattr(self, '_current_view_name', None):
-            logger.debug(f"Skipping reload for view '{view_name}' (already current)")
-            return True
+    def _post_content_update(self, content: Any, view_name: str) -> None:
+        """Handle visibility and subscription setup after content update."""
+        if content is None:
+            return
+
+        # Force visibility if dashboard content remains hidden
+        if view_name == 'dashboard':
+            try:
+                if getattr(content, 'opacity', 1.0) == 0.0:
+                    logger.warning("Dashboard opacity still 0 after update; forcing to 1.0")
+                    content.opacity = 1.0
+                    with contextlib.suppress(Exception):
+                        content.update()
+
+                def _force_visible_recursive(ctrl, depth: int = 0, max_depth: int = 10) -> None:
+                    if ctrl is None:
+                        return
+                    with contextlib.suppress(Exception):
+                        if hasattr(ctrl, 'visible') and ctrl.visible is False:
+                            ctrl.visible = True
+                    with contextlib.suppress(Exception):
+                        if hasattr(ctrl, 'opacity') and ctrl.opacity is not None and ctrl.opacity != 1.0:
+                            ctrl.opacity = 1.0
+                    with contextlib.suppress(Exception):
+                        if hasattr(ctrl, 'update'):
+                            try:
+                                ctrl.update()
+                            except Exception:
+                                pass
+
+                    if depth >= max_depth:
+                        return
+
+                    try:
+                        if hasattr(ctrl, 'controls') and ctrl.controls:
+                            for child in list(ctrl.controls):
+                                _force_visible_recursive(child, depth + 1, max_depth)
+
+                        if hasattr(ctrl, 'content') and ctrl.content:
+                            _force_visible_recursive(ctrl.content, depth + 1, max_depth)
+
+                        if hasattr(ctrl, 'rows') and ctrl.rows:
+                            for child in list(ctrl.rows):
+                                _force_visible_recursive(child, depth + 1, max_depth)
+                        if hasattr(ctrl, 'columns') and ctrl.columns:
+                            for child in list(ctrl.columns):
+                                _force_visible_recursive(child, depth + 1, max_depth)
+                    except Exception:
+                        pass
+
+                _force_visible_recursive(content, 0, 10)
+
+                try:
+                    if hasattr(self, 'page') and self.page is not None:
+                        with contextlib.suppress(Exception):
+                            self.page.update()
+                except Exception:
+                    pass
+
+                logger.info('[DASH_FIX] Forced nested dashboard controls visible (aggressive)')
+            except Exception as vis_err:
+                logger.debug(f"Failed forcing dashboard opacity: {vis_err}")
+
+        # Schedule subscription setup once control is attached to the page
+        setup_cb = getattr(content, '_setup_subscriptions', None)
+        if not callable(setup_cb):
+            logger.debug(
+                f"Skipping subscription setup for {view_name}: _setup_subscriptions is not callable "
+                f"(type={type(setup_cb).__name__})"
+            )
+            return
 
         try:
-            self._loading_view = True
-            self._loading_view = True
-            # Guard against redundant reloads of the same view unless forced
-            if (
-                not force_reload
-                and view_name == getattr(self, '_current_view_name', None)
-                and os.environ.get('FLET_FORCE_VIEW_RELOAD') != '1'
-            ):
-                logger.debug(
-                    "Skipping reload for view '%s' (already current). Set FLET_FORCE_VIEW_RELOAD=1 to force rebuild.",
-                    view_name
-                )
-                self._loading_view = False
-                return True
-            if getattr(self, '_profile_enabled', lambda: False)():  # type: ignore[attr-defined]
-                self._profile_mark(f'load:{view_name}:start')  # type: ignore[attr-defined]
-            update_success = self._perform_view_loading(view_name)
-            print(f"🚀🚀🚀 MAIN APP: _perform_view_loading returned {update_success} for {view_name} 🚀🚀🚀")
-            if getattr(self, '_profile_enabled', lambda: False)():  # type: ignore[attr-defined]
-                self._profile_mark(f'load:{view_name}:end')  # type: ignore[attr-defined]
-
-            if not update_success:
-                logger.error(f"View loading failed for {view_name} - falling back to error view")
-                # Clean up if update failed
-                if self._current_view_dispose:
+            if hasattr(self.page, 'run_task'):
+                async def _wait_and_setup() -> None:
                     try:
-                        self._current_view_dispose()
-                    except Exception as cleanup_error:
-                        logger.warning(f"Failed to cleanup after failed view load: {cleanup_error}")
-                self._current_view_dispose = None
-                self._current_view_name = None
-                return False
+                        timeout = 2.0
+                        interval = 0.05
+                        waited = 0.0
+                        attached = False
+                        while waited < timeout:
+                            try:
+                                if hasattr(content, 'page') and content.page:
+                                    attached = True
+                                    break
 
-            return True
+                                if hasattr(self, 'content_area') and self.content_area:
+                                    container = self.content_area
+                                    if hasattr(container, 'content') and container.content:
+                                        inner = container.content
+                                        if hasattr(inner, 'page') and inner.page:
+                                            attached = True
+                                            break
 
-        except Exception as e:
-            logger.error(f"Failed to load view {view_name}: {e}")
-            # Simple error fallback
-            try:
-                animated_switcher = self.content_area.content
-                error_view = self._create_error_view(str(e))
-                if hasattr(animated_switcher, 'content'):
-                    animated_switcher.content = error_view  # type: ignore[attr-defined]
-                    with contextlib.suppress(Exception):
-                        animated_switcher.update()  # type: ignore[call-arg]
-                    logger.warning(f"Showing error view for {view_name}")
-                else:
-                    # Fallback: replace entire content area content
-                    self.content_area.content = error_view
-                    self.content_area.update()
-            except Exception as fallback_error:
-                logger.error(f"Error view display failed: {fallback_error}")
-                # Last resort
-                with contextlib.suppress(Exception):
-                    self.page.update()  # type: ignore[call-arg]
-            return False
-        finally:
-            # Release concurrency guard
-            self._loading_view = False
-            # Dump profiling markers once after first dashboard load end
-            if (
-                view_name == 'dashboard'
-                and getattr(self, '_profile_enabled', lambda: False)()  # type: ignore[attr-defined]
-                and not hasattr(self, '_startup_profile_dumped')
-            ):
-                with _contextlib.suppress(Exception):  # noqa: BLE001
-                    if (marks := getattr(self, '_startup_profile', [])):  # type: ignore[attr-defined]
-                        base = marks[0][1]
-                        prev = base
-                        logger.warning('[STARTUP_PROFILE] ---- Startup Timing ----')
-                        for label, ts in marks:
-                            logger.warning('[STARTUP_PROFILE] %6.3f (+%5.3f) %s', ts - base, ts - prev, label)
-                            prev = ts
-                        logger.warning('[STARTUP_PROFILE] -------------------------')
-                    self._startup_profile_dumped = True  # type: ignore[attr-defined]
+                                animated = getattr(self, '_animated_switcher', None)
+                                if animated and hasattr(animated, 'page') and animated.page:
+                                    attached = True
+                                    break
+                            except Exception:
+                                pass
+                            await asyncio.sleep(interval)
+                            waited += interval
 
-    def _extract_content_and_dispose(self, result_t: tuple[Any, ...]) -> tuple[Any, Callable[[], None] | None]:
+                        if not attached:
+                            logger.warning(
+                                "Setup subscriptions: content not attached after %ss, proceeding anyway",
+                                timeout,
+                            )
+
+                        try:
+                            if asyncio.iscoroutinefunction(setup_cb):
+                                await setup_cb()
+                            else:
+                                result = setup_cb()
+                                if asyncio.iscoroutine(result):
+                                    await result
+                            logger.debug(f"Set up subscriptions for {view_name} view")
+                            logger.warning(
+                                "[CONTENT_DIAG] _setup_subscriptions executed for %s (waiter)",
+                                view_name,
+                            )
+                        except Exception as setup_error:
+                            logger.warning(f"Subscription setup failed in waiter: {setup_error}")
+                    except Exception as outer_error:
+                        logger.warning(f"Subscription waiter failed: {outer_error}")
+
+                self.page.run_task(_wait_and_setup)
+        except Exception as sub_error:
+            logger.warning(f"Failed to schedule subscription setup for {view_name}: {sub_error}")
+
+    def _extract_content_and_dispose(
+        self,
+        result_t: tuple[Any, ...],
+    ) -> tuple[Any, Callable[[], None] | None]:
         """Extract content and dispose function from result tuple."""
         content = result_t[0]
         dispose_func = cast(Callable[[], None] | None, result_t[1])
@@ -1124,18 +828,27 @@ def _update_content_area(self, animated_switcher, content, view_name: str):
         try:
             ctrl = content
             desc = type(ctrl).__name__
-            has_controls = hasattr(ctrl, 'controls') and bool(getattr(ctrl, 'controls'))
-            children_count = (
-                len(getattr(ctrl, 'controls', []))
-                if hasattr(ctrl, 'controls') else (1 if getattr(ctrl, 'content', None) else 0)
-            )
+            has_controls = hasattr(ctrl, 'controls') and bool(ctrl.controls)
+            if hasattr(ctrl, 'controls'):
+                children_count = len(ctrl.controls)
+            elif hasattr(ctrl, 'content') and ctrl.content:
+                children_count = 1
+            else:
+                children_count = 0
             logger.warning(
-                f"[DASH_DBG] dashboard content type={desc} has_controls={has_controls} children_count={children_count}"
+                "[DASH_DBG] dashboard content type=%s has_controls=%s children_count=%s",
+                desc,
+                has_controls,
+                children_count,
             )
-        except Exception as _dbg_err:  # noqa: BLE001
+        except Exception as _dbg_err:
             logger.warning(f"[DASH_DBG] inspection failed: {_dbg_err}")
 
-    def _process_view_result_tuple(self, result_t: tuple[Any, ...], view_name: str) -> tuple[Any, Callable[[], None] | None]:
+    def _process_view_result_tuple(
+        self,
+        result_t: tuple[Any, ...],
+        view_name: str,
+    ) -> tuple[Any, Callable[[], None] | None]:
         """Process view result tuple (deduplicated)."""
         length = len(result_t)
         if length not in (2, 3):
@@ -1163,20 +876,22 @@ def _update_content_area(self, animated_switcher, content, view_name: str):
             # prevent stale state issues on views requiring fresh data bindings.
             if not hasattr(self, "_view_cache"):
                 # view_name -> (content, dispose_func)
-                self._view_cache: dict[str, tuple[Any, Callable[[], None] | None]] = {}
+                self._view_cache = {}
             cache_enabled = (view_name == "dashboard")
             if cache_enabled and view_name in self._view_cache:
                 cached_content, cached_dispose = self._view_cache[view_name]
-                with _contextlib.suppress(Exception):  # noqa: BLE001
+                with contextlib.suppress(Exception):
                     logger.warning(
                         "[VIEW_CACHE] Reusing cached %s view (no reconstruction) type=%s disposed=%s",
                         view_name, type(cached_content).__name__, cached_dispose is None
                     )
                     if os.environ.get('FLET_DASHBOARD_CONTENT_DEBUG') == '1' and view_name == 'dashboard':
                         # Lightweight cache integrity check
-                        has_children = hasattr(cached_content, 'controls') and bool(getattr(cached_content, 'controls'))
+                        has_children = hasattr(cached_content, 'controls') and bool(cached_content.controls)
                         logger.warning(
-                            f"[VIEW_CACHE] Cached dashboard control integrity: has_children={has_children} opacity={getattr(cached_content,'opacity',None)}"
+                            "[VIEW_CACHE] Cached dashboard control integrity: has_children=%s opacity=%s",
+                            has_children,
+                            getattr(cached_content, 'opacity', None),
                         )
                 return cached_content, cached_dispose
             # All views now require state_manager as per Phase 2 refactor
@@ -1195,9 +910,13 @@ def _update_content_area(self, animated_switcher, content, view_name: str):
             dispose_func = self._create_auto_dispose_for_view(view_name)
             # Store in cache if eligible
             if cache_enabled:
-                with _contextlib.suppress(Exception):  # noqa: BLE001
+                with contextlib.suppress(Exception):
                     self._view_cache[view_name] = (result, dispose_func)
-                    logger.debug("[VIEW_CACHE] Stored %s view in cache (type=%s)", view_name, type(result).__name__)
+                    logger.debug(
+                        "[VIEW_CACHE] Stored %s view in cache (type=%s)",
+                        view_name,
+                        type(result).__name__,
+                    )
             return result, dispose_func
 
         except Exception as e:
@@ -1217,7 +936,16 @@ def _update_content_area(self, animated_switcher, content, view_name: str):
         def _on_return_button_click(e: ft.ControlEvent) -> None:
             # Explicit typed handler to satisfy static analysis
             try:
-def _load_view(self, view_name: str, force_reload: bool = False) -> bool:
+                self.navigate_to("dashboard")
+            except Exception as nav_error:
+                logger.error(f"Navigation error: {nav_error}")
+
+        return ft.Column([
+            ft.Text(error_message, size=16, color=ft.Colors.RED),
+            ft.ElevatedButton("Return to Dashboard", on_click=_on_return_button_click)
+        ], spacing=10)
+
+    def _load_view(self, view_name: str, force_reload: bool = False) -> bool:
         """Load view with simplified and thread-safe mechanism."""
         # Prevent multiple simultaneous view loads
         if self._loading_view:
@@ -1231,7 +959,23 @@ def _load_view(self, view_name: str, force_reload: bool = False) -> bool:
 
         try:
             self._loading_view = True
+            result = self._perform_view_loading(view_name)
+            return result
+        except Exception as e:
+            logger.error(f"Failed to load view {view_name}: {e}")
+            return False
+        finally:
+            self._loading_view = False
 
+
+async def main(page: ft.Page, backup_server) -> None:
+    """Main Flet application entry point."""
+    app = FletV2App(page, backup_server)
+    await app.initialize()
+
+
+def run_application():
+    """Initialize and run the FletV2 application."""
     # Initialize real server for standalone mode
     backup_server = None
     if REAL_SERVER_AVAILABLE and real_server_instance is not None:
@@ -1294,28 +1038,55 @@ def _load_view(self, view_name: str, force_reload: bool = False) -> bool:
         print(f"Info: Preferred port {_preferred_port} in use; using {_port_candidate} instead")
 
     try:
-        asyncio.run(ft.app_async(target=main_with_server, view=ft.AppView.WEB_BROWSER, port=_port_candidate))  # type: ignore[attr-defined]
+        asyncio.run(
+            ft.app_async(
+                target=main_with_server,
+                view=ft.AppView.WEB_BROWSER,
+                port=_port_candidate,
+            )
+        )  # type: ignore[attr-defined]
     except OSError as bind_err:  # Port race condition fallback
         print(f"Port {_port_candidate} bind failed ({bind_err}); retrying with ephemeral port")
-        asyncio.run(ft.app_async(target=main_with_server, view=ft.AppView.WEB_BROWSER, port=0))  # type: ignore[attr-defined]
+        asyncio.run(
+            ft.app_async(
+                target=main_with_server,
+                view=ft.AppView.WEB_BROWSER,
+                port=0,
+            )
+        )  # type: ignore[attr-defined]
     except ImportError as imp_err:
         # FastAPI / pydantic_core compatibility issue (often on bleeding-edge Python versions)
         err_text = str(imp_err)
         if 'pydantic_core' in err_text or 'fastapi' in err_text:
             print("Browser mode failed due to FastAPI/Pydantic import issue; falling back to native app view")
             try:
-                asyncio.run(ft.app_async(target=main_with_server, view=ft.AppView.FLET_APP, port=_port_candidate))  # type: ignore[attr-defined]
-            except Exception as fallback_err:  # noqa: BLE001
+                asyncio.run(
+                    ft.app_async(
+                        target=main_with_server,
+                        view=ft.AppView.FLET_APP,
+                        port=_port_candidate,
+                    )
+                )  # type: ignore[attr-defined]
+            except Exception as fallback_err:
                 import traceback as _tb
                 print("Native app view fallback failed:", fallback_err)
                 print(_tb.format_exc())
                 print("Attempting minimal fallback view (no specific AppView)")
                 try:
-                    asyncio.run(ft.app_async(target=main_with_server, port=_port_candidate))  # type: ignore[attr-defined]
-                except Exception as minimal_err:  # noqa: BLE001
+                    asyncio.run(
+                        ft.app_async(
+                            target=main_with_server,
+                            port=_port_candidate,
+                        )
+                    )  # type: ignore[attr-defined]
+                except Exception as minimal_err:
                     print("Minimal fallback also failed, aborting startup:", minimal_err)
                     print(_tb.format_exc())
                     raise
         else:
             # If ImportError wasn't the known FastAPI/pydantic issue, re-raise to surface original problem
             raise
+
+
+if __name__ == "__main__":
+    run_application()

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
-Clean Dashboard View - Material Design 3
-Simplified, robust implementation focusing on functionality and clean layouts.
+Simple Dashboard with Basic Controls
+Focusing on functionality over complex styling
 """
 
-import asyncio
 import os
 import sys
 from datetime import datetime
@@ -21,33 +20,23 @@ for _path in (_flet_v2_root, _repo_root):
 import flet as ft
 import Shared.utils.utf8_solution as _  # noqa: F401
 
-from theme import setup_sophisticated_theme
-from utils.server_bridge import ServerBridge
-from utils.state_manager import StateManager
-from utils.user_feedback import show_success_message, show_error_message
-
 def create_dashboard_view(
-    server_bridge: ServerBridge | None,
+    server_bridge: Any | None,
     page: ft.Page,
-    _state_manager: StateManager | None
+    _state_manager: Any | None
 ) -> tuple[ft.Control, Callable, Callable]:
-    """Create clean, functional dashboard using Flet built-in components."""
-
-    # Apply theme
-    if page:
-        setup_sophisticated_theme(page)
+    """Create a simple, functional dashboard using basic Flet components."""
 
     # Refs for dynamic content
     clients_ref = ft.Ref[ft.Text]()
     files_ref = ft.Ref[ft.Text]()
     storage_ref = ft.Ref[ft.Text]()
     uptime_ref = ft.Ref[ft.Text]()
-    status_ref = ft.Ref[ft.Text]()
 
     # Progress refs
-    storage_progress_ref = ft.Ref[ft.ProgressRing]()
-    cpu_progress_ref = ft.Ref[ft.ProgressRing]()
-    memory_progress_ref = ft.Ref[ft.ProgressRing]()
+    storage_progress_ref = ft.Ref[ft.ProgressBar]()
+    cpu_progress_ref = ft.Ref[ft.ProgressBar]()
+    memory_progress_ref = ft.Ref[ft.ProgressBar]()
 
     # Get server data
     def get_server_data():
@@ -58,6 +47,7 @@ def create_dashboard_view(
                     return result.get('data', {})
             except Exception:
                 pass
+
         # Fallback data
         return {
             'clients': 8,
@@ -89,7 +79,7 @@ def create_dashboard_view(
             uptime_ref.current.value = data.get('uptime', 'N/A')
             uptime_ref.current.update()
 
-        # Update progress rings
+        # Update progress bars
         if storage_progress_ref.current:
             storage_progress_ref.current.value = data.get('storage_used', 0) / 100
             storage_progress_ref.current.update()
@@ -102,158 +92,99 @@ def create_dashboard_view(
             memory_progress_ref.current.value = data.get('memory_usage', 0) / 100
             memory_progress_ref.current.update()
 
-    # Clean metric card
+    # Simple metric card
     def create_metric_card(title: str, value_ref, icon: str, color: str) -> ft.Container:
         return ft.Container(
             content=ft.Column([
                 ft.Row([
-                    ft.Icon(icon, color=color, size=24),
-                    ft.Text(title, size=14, weight=ft.FontWeight.W_500)
-                ], alignment=ft.MainAxisAlignment.START),
-                ft.Container(
-                    content=ft.Text("0", ref=value_ref, size=32, weight=ft.FontWeight.BOLD, color=color),
-                    margin=ft.margin.only(top=8)
-                ),
-            ], spacing=4),
-            padding=16,
-            border_radius=8,
-            bgcolor=ft.Colors.SURFACE,
-            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT)
+                    ft.Icon(icon, color=color),
+                    ft.Text(title)
+                ]),
+                ft.Text("0", ref=value_ref),
+                ft.ProgressBar(value=0, color=color)
+            ], spacing=10),
+            padding=10,
+            border_radius=10,
+            border=ft.border.all(1, ft.Colors.OUTLINE),
+            width=200,
+            height=150
         )
 
-    # Clean progress gauge
-    def create_progress_gauge(title: str, progress_ref, icon: str, color: str) -> ft.Container:
-        return ft.Container(
-            content=ft.Column([
-                ft.Row([
-                    ft.Icon(icon, color=color, size=24),
-                    ft.Text(title, size=14, weight=ft.FontWeight.W_500)
-                ], alignment=ft.MainAxisAlignment.START),
-                ft.Container(
-                    content=ft.ProgressRing(
-                        ref=progress_ref,
-                        width=60,
-                        height=60,
-                        stroke_width=6,
-                        color=color,
-                        bgcolor=ft.Colors.SURFACE,
-                        value=0
-                    ),
-                    alignment=ft.alignment.center,
-                    margin=ft.margin.only(top=12)
-                )
-            ], spacing=4),
-            padding=16,
-            border_radius=8,
-            bgcolor=ft.Colors.SURFACE,
-            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT)
-        )
-
-    # Clean activity panel
-    def create_activity_panel() -> ft.Container:
-        activities = [
-            ["Client-001", "Backup Complete", "2 min ago", "Success"],
-            ["Client-003", "File Transfer", "5 min ago", "In Progress"],
-            ["Client-007", "System Scan", "8 min ago", "Success"],
-            ["Client-012", "Data Sync", "12 min ago", "Success"],
-            ["Client-017", "Snapshot", "16 min ago", "Success"],
-            ["Client-021", "Restore", "21 min ago", "In Progress"],
-        ]
-
-        list_items = []
-        for c, action, when, status in activities:
-            color = ft.Colors.GREEN if status == "Success" else ft.Colors.BLUE if status == "In Progress" else ft.Colors.ORANGE
-            list_items.append(
-                ft.Container(
-                    content=ft.Row([
-                        ft.Container(
-                            content=ft.Icon(ft.Icons.CIRCLE, size=8, color=color),
-                            width=16,
-                            alignment=ft.alignment.center_left,
-                        ),
-                        ft.Text(c, size=12, weight=ft.FontWeight.W_500, expand=True),
-                        ft.Text(action, size=11, color=ft.Colors.ON_SURFACE_VARIANT, expand=True),
-                        ft.Text(when, size=10, color=ft.Colors.OUTLINE),
-                    ], spacing=8),
-                    padding=ft.padding.symmetric(horizontal=8, vertical=4),
-                    border_radius=6,
-                    bgcolor=ft.Colors.SURFACE
-                )
-            )
-
-        return ft.Container(
-            content=ft.Column([
-                ft.Text("Recent Activity", size=16, weight=ft.FontWeight.W_600),
-                ft.Container(
-                    content=ft.ListView(list_items, spacing=4, padding=ft.padding.only(top=8)),
-                    height=200
-                )
-            ], spacing=8),
-            padding=16,
-            border_radius=8,
-            bgcolor=ft.Colors.SURFACE,
-            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT)
-        )
-
-    # Clean header
+    # Simple header
     header = ft.Container(
-        content=ft.Column([
-            ft.Text("SERVER DASHBOARD", size=28, weight=ft.FontWeight.BOLD),
-            ft.Text("Real-time system monitoring", size=14, color=ft.Colors.ON_SURFACE_VARIANT)
-        ], spacing=4),
-        padding=ft.padding.all(20),
-        margin=ft.margin.only(bottom=16)
-    )
-
-    # Status bar
-    status_bar = ft.Container(
         content=ft.Row([
-            ft.Row([
-                ft.Icon(ft.Icons.CIRCLE, color=ft.Colors.GREEN, size=12),
-                ft.Text("All systems normal", size=12)
-            ], spacing=6),
-            ft.Row([
-                ft.Icon(ft.Icons.REFRESH, size=14, color=ft.Colors.BLUE),
-                ft.Text("Live", size=11)
-            ], spacing=6)
+            ft.Text(
+                "SERVER DASHBOARD",
+                size=24,
+                weight=ft.FontWeight.BOLD
+            ),
+            ft.IconButton(ft.Icons.REFRESH, on_click=lambda _: update_data())
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-        padding=ft.padding.symmetric(horizontal=12, vertical=6),
-        margin=ft.margin.only(bottom=12),
-        border_radius=6,
-        bgcolor=ft.Colors.SURFACE,
-        border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT)
+        padding=10,
+        border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE))
     )
 
     # Metrics row
     metrics_row = ft.Row([
         create_metric_card("Active Clients", clients_ref, ft.Icons.PEOPLE, ft.Colors.BLUE),
-        create_metric_card("Total Files", files_ref, ft.Icons.FOLDER, ft.Colors.GREEN),
+        create_metric_card("Total Files", files_ref, ft.Icons.FOLDER_COPY, ft.Colors.GREEN),
         create_metric_card("Storage Used", storage_ref, ft.Icons.STORAGE, ft.Colors.ORANGE),
-        create_metric_card("Uptime", uptime_ref, ft.Icons.TIMER, ft.Colors.PURPLE),
-    ], spacing=12, wrap=True)
+        create_metric_card("System Uptime", uptime_ref, ft.Icons.SCHEDULE, ft.Colors.PURPLE),
+    ], spacing=10, wrap=True)
 
     # Performance row
     performance_row = ft.Row([
-        create_progress_gauge("Storage", storage_progress_ref, ft.Icons.STORAGE, ft.Colors.ORANGE),
-        create_progress_gauge("CPU Usage", cpu_progress_ref, ft.Icons.MEMORY, ft.Colors.RED),
-        create_progress_gauge("Memory", memory_progress_ref, ft.Icons.DEVELOPER_BOARD, ft.Colors.BLUE),
-    ], spacing=12, wrap=True)
+        ft.Container(
+            content=ft.Column([
+                ft.Text("Storage Usage"),
+                ft.ProgressBar(ref=storage_progress_ref, value=0, color=ft.Colors.ORANGE)
+            ]),
+            width=200,
+            padding=10
+        ),
+        ft.Container(
+            content=ft.Column([
+                ft.Text("CPU Performance"),
+                ft.ProgressBar(ref=cpu_progress_ref, value=0, color=ft.Colors.RED)
+            ]),
+            width=200,
+            padding=10
+        ),
+        ft.Container(
+            content=ft.Column([
+                ft.Text("Memory Usage"),
+                ft.ProgressBar(ref=memory_progress_ref, value=0, color=ft.Colors.BLUE)
+            ]),
+            width=200,
+            padding=10
+        )
+    ], spacing=10, wrap=True)
 
-    # Activity section
-    activity_section = create_activity_panel()
+    # Recent activity (simplified)
+    def create_activity_item(client: str, action: str, status: str):
+        return ft.ListTile(
+            title=ft.Text(client),
+            subtitle=ft.Text(f"{action} - {status}")
+        )
+
+    activities = [
+        create_activity_item("Client-001", "Backup", "Complete"),
+        create_activity_item("Client-003", "File Transfer", "In Progress"),
+        create_activity_item("Client-007", "System Scan", "Complete")
+    ]
+
+    activity_list = ft.ListView(controls=activities, spacing=10, width=600)
 
     # Main dashboard container
-    dashboard_container = ft.Container(
-        content=ft.Column([
-            header,
-            status_bar,
-            metrics_row,
-            performance_row,
-            activity_section,
-        ], spacing=16, scroll=ft.ScrollMode.AUTO),
-        padding=20,
-        expand=True
-    )
+    dashboard_container = ft.Column([
+        header,
+        ft.Text("System Metrics", size=18, weight=ft.FontWeight.BOLD),
+        metrics_row,
+        ft.Text("Performance", size=18, weight=ft.FontWeight.BOLD),
+        performance_row,
+        ft.Text("Recent Activity", size=18, weight=ft.FontWeight.BOLD),
+        activity_list
+    ], spacing=10, scroll=ft.ScrollMode.AUTO)
 
     def setup_subscriptions():
         """Initialize dashboard data."""

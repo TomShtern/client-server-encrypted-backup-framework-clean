@@ -384,9 +384,9 @@ def create_glassmorphic_container(
         content=content,
         border_radius=16,
         padding=ft.padding.all(20),
-        bgcolor=ft.Colors.with_opacity(config["opacity"], ft.Colors.SURFACE_VARIANT),
+        bgcolor=ft.Colors.with_opacity(config["opacity"], ft.Colors.SURFACE),
         border=ft.border.all(1, ft.Colors.with_opacity(config["border_opacity"], ft.Colors.OUTLINE)),
-        blur=ft.Blur(sigma_x=config["blur"], sigma_y=config["blur"], tile_mode=ft.TileMode.MIRROR)
+        blur=ft.Blur(sigma_x=config["blur"], sigma_y=config["blur"])
     )
 
 def get_neumorphic_shadows(effect_type: str = "raised") -> list[ft.BoxShadow]:
@@ -428,13 +428,13 @@ def create_glassmorphic_status_badge(text: str, color: str = ft.Colors.BLUE) -> 
         border_radius=20,
         bgcolor=ft.Colors.with_opacity(0.1, color),
         border=ft.border.all(1, ft.Colors.with_opacity(0.2, color)),
-        blur=ft.Blur(sigma_x=10, sigma_y=10, tile_mode=ft.TileMode.MIRROR)
+        blur=ft.Blur(sigma_x=10, sigma_y=10)
     )
 
 # Maintain compatibility with existing code by providing aliases
 setup_modern_theme = setup_sophisticated_theme  # Backward compatibility
 create_modern_button_style = themed_button
 create_modern_card_container = create_neumorphic_container
-create_modern_card = create_material_card
 create_trend_indicator = create_status_badge
+create_text_with_typography = lambda text, typography_type, **kwargs: ft.Text(text, **kwargs)
 create_text_with_typography = lambda text, typography_type, **kwargs: ft.Text(text, **kwargs)

@@ -59,6 +59,9 @@ pytest tests/test_specific_file.py::TestClass::test_method -v
 
 # Test Integration: pytest tests/integration/ -v
 pytest tests tests/integration/ -v
+
+# Compile all Python files
+python -m compileall FletV2/main.py
 ```
 
 #### C++
@@ -86,6 +89,13 @@ python scripts/one_click_build_and_run.py
 - **Error Handling**: Try/except with specific exceptions, log errors with context
 - **Async**: Use async/await for I/O operations, avoid blocking calls
 - **Indentation**: Correct any unexpected indentation issues by ensuring code blocks are properly scoped. Run linters (e.g., `ruff check .`) to verify code style.
+- **Sourcery**: Address all sourcery warnings in the `#file:main.py`.
+- **Problems View**: The Problems view in VS Code groups problems by source (e.g., extensions, linters) in tree view mode. Multiple groups can appear for the same file if multiple tools are enabled. Use the `problems.defaultViewMode` setting to switch to table view for a flat list. Pylance (Microsoft's Python language server) groups its findings by type in the Problems panel:
+    1. **Syntax Errors** - Parse/compilation issues
+    2. **Type Errors** - Type checking violations
+    3. **Import Issues** - Module resolution problems
+    4. **Code Analysis** - Potential bugs or improvements
+    5. **Information** - Hints and suggestions
 
 #### C++
 - **Style**: Google C++ style with clang-format
@@ -104,6 +114,10 @@ python scripts/one_click_build_and_run.py
 - **System Integrity**: Make sure you are not breaking the system and removing functionality.
 - **Problem Management**: Make sure to not cause more problems than you solve.
 - **Data Source**: **ALWAYS USE REAL DATA FROM THE SERVER/DATABASE!** You can, optionally, add also a fallback to placeholder. Use real data from the python server and the sqlite3. If real data is unavailable, display 'No real data' or a simple 'loren ipsum' instead of mock data. **NEVER use mock data.**
+- **Bug Fixing**: When fixing errors, focus on syntax errors without changing functionality. Ensure that the code remains unbroken and that no new problems are introduced.
+- **Code Quality**: Make sure there are no code/functions duplications and no redundencies.
+- **Flet Version**: Ensure you are doing things with Flet 0.28.3 idioms in mind. Always avoid costume complex long solutions where there is a Flet native better and simpler way. Use context7 if you are not sure about something, it has instructions for everything.
+- **Ruff**: When addressing Ruff issues, ensure you are not breaking the code and not removing functionality, and make sure to not create more problems than you solve.
 
 ### Key Principles
 - **FletV2 First**: Use `FletV2/` directory exclusively (modern implementation)
@@ -115,6 +129,7 @@ python scripts/one_click_build_and_run.py
 - **Reasoning**: Apply the highest reasoning, take your time.
 - **System Integrity**: Make sure you are not breaking the system and removing functionality.
 - **Problem Management**: Make sure you are not causing more problems than you are solving.
+- **Code Removal**: Remove bad/unused/wrong/not appropriate/falty/duplicated/ redunded /unwanted/unnedded code, if this could be done without braking the system and not changing functionality.
 
 ### Testing Strategy
 - Integration tests verify end-to-end flows
@@ -130,9 +145,9 @@ python scripts/one_click_build_and_run.py
 # File Lifecycle: SynchronizedFileManager prevents race conditions
 self.backup_process = subprocess.Popen(
     [self.client_exe, "--batch"],  # --batch prevents hanging in subprocess
-    stdin=subprocess.PIPE,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE,
+    stdin=self.PIPE,
+    stdout=self.PIPE,
+    stderr=self.PIPE,
     text=True,
     cwd=os.path.dirname(os.path.abspath(__file__)),  # CRITICAL: Working directory
     env=Shared.utils.utf8_solution.get_env()  # UTF-8 environment
@@ -232,7 +247,7 @@ def create_view(page: ft.Page, server_bridge, state_manager) -> ft.Control:
             show_error_message(page, f"Refresh failed: {ex}")
 
     refresh_btn = themed_button(text="Refresh", on_click=on_refresh, icon=ft.Icons.REFRESH)
-    items = ft.Column(scroll=ft.ScrollMode.AUTO)
+    items = ft.Column(scroll=ft.ScrollMode=ft.ScrollMode.AUTO)
     return ft.Container(content=ft.Column([ft.Row([ft.Text("Example"), refresh_btn]), items]), padding=20)
 ```
 
@@ -880,47 +895,4 @@ from unittest.mock import Mock, patch
 os.environ['FLET_V_DEBUG'] = 'true'
 
 # Add the FletV2 directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-from utils.server_bridge import ServerBridge, create_server_bridge
-
-
-class TestSimpleServerBridge(unittest.TestCase):
-    """Test cases for the simple bridge interface (now unified ServerBridge)."""
-
-    def setUp(self):
-        """Set up test fixtures before each test method."""
-        with patch('utils.server_bridge.logger'):
-            self.bridge = ServerBridge()
-
-    def test_initialization(self):
-        """Test that the bridge initializes correctly."""
-        self.assertIsInstance(self.bridge, ServerBridge)
-        self.assertTrue(self.bridge.is_connected())
-
-    def test_get_clients(self):
-        """Test getting client data."""
-        clients = self.bridge.get_clients()
-        self.assertIsInstance(clients, list)
-        self.assertGreater(len(clients), 0)
-
-        # Check structure of first client
-        if clients:
-            client = clients[0]  # clients is a list, accessing first element
-            required_keys = ['client_id', 'address', 'status', 'connected_at', 'last_activity']
-            for (key) in required_keys:
-                self.assertIn(key, client)
-
-    def test_get_files(self):
-        """Test getting file data."""
-        files = self.bridge.get_files()
-        self.assertIsInstance(files, list)
-
-        # Add mocking for ServerBridge to resolve type mismatch errors when testing views
-
-#### Mocking
-
-When mocking `ServerBridge` in tests, use `unittest.mock.Mock` with `spec=ServerBridge` to ensure type compatibility:
-
-```python
-    from
+sys.path.insert(0,
