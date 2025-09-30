@@ -67,37 +67,22 @@ def create_files_view(
     type_filter = "all"
     files_data = []
 
-    # Mock file data for demonstration
-    def get_mock_files() -> list[dict[str, Any]]:
-        """Simple mock file data generator."""
-        return [
-            {"id": "file_001", "name": "backup_001.pdf", "size": 1024*512, "type": "document",
-             "status": "complete", "modified": "2025-01-17 14:20:15", "path": "/backup/file_001.pdf"},
-            {"id": "file_002", "name": "image_002.jpg", "size": 1024*256, "type": "image",
-             "status": "verified", "modified": "2025-01-17 13:45:22", "path": "/backup/file_002.jpg"},
-            {"id": "file_003", "name": "video_003.mp4", "size": 1024*1024*50, "type": "video",
-             "status": "uploading", "modified": "2025-01-17 14:30:10", "path": "/backup/file_003.mp4"},
-            {"id": "file_004", "name": "script_004.py", "size": 1024*8, "type": "code",
-             "status": "complete", "modified": "2025-01-17 12:15:33", "path": "/backup/file_004.py"},
-            {"id": "file_005", "name": "archive_005.zip", "size": 1024*1024*10, "type": "archive",
-             "status": "failed", "modified": "2025-01-17 11:30:45", "path": "/backup/file_005.zip"},
-            {"id": "file_006", "name": "document_006.txt", "size": 1024*4, "type": "document",
-             "status": "queued", "modified": "2025-01-17 14:35:12", "path": "/backup/file_006.txt"},
-        ]
-
-    # Load file data from server or use mock
+    # Load file data from server
     def load_files_data() -> None:
-        """Load file data using server bridge or mock."""
+        """Load file data using server bridge."""
         nonlocal files_data
 
-        if server_bridge:
-            try:
-                result = server_bridge.get_files()
-                files_data = result if isinstance(result, list) else get_mock_files()
-            except Exception:
-                files_data = get_mock_files()
-        else:
-            files_data = get_mock_files()
+        if not server_bridge:
+            logger.error("Server bridge not available - cannot fetch files")
+            files_data = []
+            return
+
+        try:
+            result = server_bridge.get_files()
+            files_data = result if isinstance(result, list) else []
+        except Exception as ex:
+            logger.error(f"Failed to fetch files from server: {ex}")
+            files_data = []
 
         update_table()
 
@@ -265,13 +250,8 @@ def create_files_view(
                     else:
                         show_error_message(page, f"Download failed: {result.get('error', 'Unknown error')}")
                 else:
-                    # Mock download - create a simple text file
-                    async with aiofiles.open(e.path, 'w') as f:
-                        await f.write(f"Mock file content for {file.get('name')}\n")
-                        await f.write(f"Size: {format_file_size(file.get('size', 0))}\n")
-                        await f.write(f"Type: {file.get('type', 'unknown')}\n")
-                        await f.write(f"Downloaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    show_success_message(page, f"Downloaded {file.get('name')} (mock mode)")
+                    show_error_message(page, "Server not connected. Please start the backup server.")
+                    return
             except Exception as ex:
                 show_error_message(page, f"Download error: {ex}")
 
@@ -320,15 +300,9 @@ def create_files_view(
             except Exception as ex:
                 show_error_message(page, f"Verification error: {ex}")
         else:
-            # Mock verification
-            mock_hash = hashlib.sha256(f"mock_{file_name}_{datetime.now().isoformat()}".encode()).hexdigest()
-            verification_data = {
-                'size': file.get('size', 0),
-                'modified': file.get('modified', 'Unknown'),
-                'hash': mock_hash,
-                'status': 'verified'
-            }
-            show_verification_dialog(file_name, verification_data, "Mock")
+            if not server_bridge:
+                show_error_message(page, "Server not connected. Please start the backup server.")
+                return
 
     def show_verification_dialog(file_name: str, data: dict[str, Any], mode: str) -> None:
         """Show verification results dialog."""
@@ -374,10 +348,8 @@ def create_files_view(
                 except Exception as ex:
                     show_error_message(page, f"Error: {ex}")
             else:
-                # Mock success - remove from local data
-                files_data[:] = [f for f in files_data if f.get('id') != file.get('id')]
-                show_success_message(page, f"File {file.get('name')} deleted (mock mode)")
-                update_table()
+                show_error_message(page, "Server not connected. Please start the backup server.")
+                return
 
             page.close(delete_dialog)
 

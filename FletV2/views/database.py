@@ -67,26 +67,33 @@ def create_database_view(
     search_query = ""
 
     # Helper for a no-data placeholder table
-    def _empty_table_placeholder() -> list[dict[str, Any]]:
-        return []
-
-    # Load data from server or use mock
     def load_data() -> None:
-        """Load database data using server bridge or mock."""
+        """Load database data using server bridge."""
         nonlocal table_data, filtered_data
 
-        if server_bridge:
-            try:
-                result = server_bridge.get_table_data(selected_table)
-                if result.get('success'):
-                    table_data = result.get('data', {}).get('rows', []) if isinstance(result.get('data'), dict) else result.get('data') or []
-                else:
-                    table_data = _empty_table_placeholder()
-            except Exception as e:  # pragma: no cover
-                logger.warning(f"Failed loading table data: {e}")
-                table_data = _empty_table_placeholder()
-        else:
-            table_data = _empty_table_placeholder()
+        if not server_bridge:
+            logger.error("Server bridge not available")
+            show_error_message(page, "Server not connected. Please start the backup server.")
+            table_data = []
+            filtered_data = []
+            update_table()
+            return
+
+        try:
+            result = server_bridge.get_table_data(selected_table)
+            if not result.get('success'):
+                logger.error(f"Failed to fetch data for {selected_table}: {result.get('error', 'Unknown error')}")
+                show_error_message(page, f"Failed to load {selected_table} table: {result.get('error', 'Unknown error')}")
+                table_data = []
+                filtered_data = []
+            else:
+                # Ensure we handle both dict and list results consistently
+                table_data = result.get('data', {}).get('rows', []) if isinstance(result.get('data'), dict) else result.get('data', [])
+                logger.info(f"Loaded {len(table_data)} records for {selected_table}")
+        except Exception as ex:
+            logger.error(f"Exception while loading {selected_table} data: {ex}")
+            show_error_message(page, f"Error loading {selected_table} table: {str(ex)}")
+            table_data = []
 
         filtered_data = table_data.copy()
         update_table()
@@ -196,7 +203,11 @@ def create_database_view(
 
     # Edit record dialog using Flet's AlertDialog
     def edit_record(record: dict[str, Any]) -> None:
-        """Simple edit dialog using AlertDialog."""
+        """Edit record dialog with server integration."""
+        if not server_bridge:
+            show_error_message(page, "Server not connected. Please start the backup server.")
+            return
+
         fields = {}
 
         # Create text fields for each editable column (skip id)
@@ -211,21 +222,28 @@ def create_database_view(
                 field_controls.append(field)
 
         def save_changes(_e: ft.ControlEvent) -> None:
-            """Save edited record."""
-            # Update the record with new values
+            """Save edited record via server bridge."""
             updated_record = record.copy()
             for key, field in fields.items():
                 updated_record[key] = field.value
 
-            # Update in data
-            for i, row in enumerate(table_data):
-                if row.get('id') == record.get('id'):
-                    table_data[i] = updated_record
-                    break
+            try:
+                result = server_bridge.update_table_record(selected_table, updated_record)
+                if result.get('success'):
+                    # Update local data with server-confirmed record
+                    updated_record = result.get('data', updated_record)
+                    for i, row in enumerate(table_data):
+                        if row.get('id') == record.get('id'):
+                            table_data[i] = updated_record
+                            break
 
-            apply_search()  # Refresh the view
-            page.close(edit_dialog)
-            show_success_message(page, "Record updated successfully")
+                    apply_search()  # Refresh the view
+                    page.close(edit_dialog)
+                    show_success_message(page, "Record updated successfully")
+                else:
+                    show_error_message(page, f"Failed to update record: {result.get('error', 'Unknown error')}")
+            except Exception as ex:
+                show_error_message(page, f"Error updating record: {str(ex)}")
 
         edit_dialog = ft.AlertDialog(
             title=ft.Text("Edit Record"),
@@ -238,15 +256,25 @@ def create_database_view(
 
         page.open(edit_dialog)
 
-    # Delete record dialog using Flet's AlertDialog
     def delete_record(record: dict[str, Any]) -> None:
-        """Simple delete confirmation dialog."""
+        """Delete record with server integration."""
+        if not server_bridge:
+            show_error_message(page, "Server not connected. Please start the backup server.")
+            return
+
         def confirm_delete(_e: ft.ControlEvent) -> None:
-            # Remove from data
-            table_data[:] = [row for row in table_data if row.get('id') != record.get('id')]
-            apply_search()  # Refresh the view
-            page.close(delete_dialog)
-            show_success_message(page, "Record deleted successfully")
+            try:
+                result = server_bridge.delete_table_record(selected_table, record.get('id'))
+                if result.get('success'):
+                    # Remove from local data after server confirms deletion
+                    table_data[:] = [row for row in table_data if row.get('id') != record.get('id')]
+                    apply_search()  # Refresh the view
+                    page.close(delete_dialog)
+                    show_success_message(page, "Record deleted successfully")
+                else:
+                    show_error_message(page, f"Failed to delete record: {result.get('error', 'Unknown error')}")
+            except Exception as ex:
+                show_error_message(page, f"Error deleting record: {str(ex)}")
 
         delete_dialog = ft.AlertDialog(
             title=ft.Text("Confirm Delete"),
@@ -259,9 +287,12 @@ def create_database_view(
 
         page.open(delete_dialog)
 
-    # Add new record dialog
     def add_record() -> None:
-        """Simple add record dialog."""
+        """Add new record with server integration."""
+        if not server_bridge:
+            show_error_message(page, "Server not connected. Please start the backup server.")
+            return
+
         if not table_data:
             show_error_message(page, "No table selected")
             return
@@ -278,38 +309,25 @@ def create_database_view(
                 field_controls.append(field)
 
         def save_new_record(_e: ft.ControlEvent) -> None:
-            """Save new record."""
-            # Create new record
-            new_record = {}
-
-            # Generate new ID
-            try:
-                # Handle both string and integer IDs
-                ids = []
-                for row in table_data:
-                    row_id = row.get('id', 0)
-                    if isinstance(row_id, str):
-                        try:
-                            ids.append(int(row_id))
-                        except ValueError:
-                            ids.append(0)
-                    else:
-                        ids.append(int(row_id) if row_id else 0)
-                max_id = max(ids, default=0)
-                new_record['id'] = max_id + 1
-            except Exception:
-                # Fallback: use timestamp-based ID
-                import time
-                new_record['id'] = int(time.time() * 1000) % 1000000
-
-            # Add field values
+            """Save new record via server bridge."""
+            # Prepare new record data
+            new_record_data = {}
             for key, field in fields.items():
-                new_record[key] = field.value
+                new_record_data[key] = field.value
 
-            table_data.append(new_record)
-            apply_search()  # Refresh the view
-            page.close(add_dialog)
-            show_success_message(page, "Record added successfully")
+            try:
+                result = server_bridge.add_table_record(selected_table, new_record_data)
+                if result.get('success'):
+                    # Use server-returned record to ensure consistency
+                    new_record = result.get('data', new_record_data)
+                    table_data.append(new_record)
+                    apply_search()  # Refresh the view
+                    page.close(add_dialog)
+                    show_success_message(page, "Record added successfully")
+                else:
+                    show_error_message(page, f"Failed to add record: {result.get('error', 'Unknown error')}")
+            except Exception as ex:
+                show_error_message(page, f"Error adding record: {str(ex)}")
 
         add_dialog = ft.AlertDialog(
             title=ft.Text("Add New Record"),
@@ -390,15 +408,25 @@ def create_database_view(
         themed_button("Refresh", lambda _e: load_data(), "outlined", ft.Icons.REFRESH),
     ], spacing=10)
 
-    # Database stats from real server (no mock). Use placeholders when unavailable.
-    db_status = {"status": "No data", "tables": 0, "total_records": 0, "size": "--"}
-    if server_bridge and hasattr(server_bridge, 'get_database_info'):
+    # Database stats from server with error handling
+    db_status = {"status": "Server not connected", "tables": 0, "total_records": 0, "size": "--"}
+    if not server_bridge:
+        logger.error("Server bridge not available for database info")
+        show_error_message(page, "Server not connected. Cannot retrieve database statistics.")
+    else:
         try:
             info_res = server_bridge.get_database_info()
-            if info_res.get('success') and info_res.get('data'):
-                db_status = info_res['data']
-        except Exception as ex:  # pragma: no cover
-            logger.warning(f"Database info fetch failed: {ex}")
+            if not info_res.get('success'):
+                logger.error(f"Failed to fetch database info: {info_res.get('error', 'Unknown error')}")
+                show_error_message(page, f"Could not retrieve database statistics: {info_res.get('error', 'Unknown error')}")
+                db_status["status"] = "Database info unavailable"
+            else:
+                db_status = info_res.get('data', db_status)
+                logger.info(f"Database info retrieved successfully: {db_status}")
+        except Exception as ex:
+            logger.error(f"Exception while fetching database info: {ex}")
+            show_error_message(page, f"Error retrieving database statistics: {str(ex)}")
+            db_status["status"] = "Error fetching info"
 
     # Enhanced table with layered card design
     table_card = themed_card(database_table, "Database Records", page)

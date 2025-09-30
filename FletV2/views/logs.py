@@ -72,28 +72,16 @@ logging.getLogger().addHandler(_flet_log_capture)
 # ======================================================================================
 
 def get_system_logs(server_bridge: Any | None) -> list[dict]:
-    """Get system logs from server or fallback data."""
-    if server_bridge and hasattr(server_bridge, 'get_logs'):
-        try:
-            logs = server_bridge.get_logs()
-            if logs and isinstance(logs, list):
-                return logs
-        except Exception:
-            pass
-
-    # Fallback sample logs
-    return [
-        {"time": "18:48:54", "level": "INFO", "component": "MainThread", "message": "=== BACKUP-SERVER LOGGING INITIALIZED ==="},
-        {"time": "18:48:54", "level": "INFO", "component": "MainThread", "message": "Console Level: INFO"},
-        {"time": "18:48:54", "level": "INFO", "component": "MainThread", "message": "File Level: DEBUG"},
-        {"time": "18:48:54", "level": "INFO", "component": "GUI", "message": "[GUI] Embedded GUI disable flag value: '1'"},
-        {"time": "18:48:56", "level": "INFO", "component": "FletV2App", "message": "State manager initialized"},
-        {"time": "18:48:56", "level": "INFO", "component": "FletV2App", "message": "Navigation rail created"},
-        {"time": "18:48:57", "level": "WARNING", "component": "dashboard", "message": "Failed to unsubscribe from state manager"},
-        {"time": "18:48:57", "level": "ERROR", "component": "dashboard", "message": "Control lifecycle error detected"},
-        {"time": "18:48:58", "level": "DEBUG", "component": "analytics", "message": "Analytics view loaded successfully"},
-        {"time": "18:48:58", "level": "INFO", "component": "logs", "message": "Logs view initialized with dual-tab system"},
-    ]
+    """Get system logs from server or return empty list."""
+    if not server_bridge:
+        return []  # Return empty, not mock data
+    try:
+        result = server_bridge.get_logs()
+        if isinstance(result, dict) and result.get('success'):
+            return result.get('data', [])
+        return []
+    except Exception:
+        return []
 
 
 # ======================================================================================
@@ -180,10 +168,9 @@ def create_logs_view(
     # Create Flet logs tab content
     def get_flet_logs():
         """Get logs from the Flet log capture handler."""
-        return _flet_log_capture.logs if _flet_log_capture.logs else [
-            {"time": datetime.now().strftime("%H:%M:%S"), "level": "INFO", "component": "flet", "message": "Flet framework initialized successfully"},
-            {"time": datetime.now().strftime("%H:%M:%S"), "level": "DEBUG", "component": "flet.page", "message": "Page created with Material Design 3 theme"},
-        ]
+        if _flet_log_capture and _flet_log_capture.logs:
+            return _flet_log_capture.logs
+        return []  # Empty, not mock data
 
     flet_logs_table = create_log_table(get_flet_logs(), "flet_logs")
     flet_logs_content = ft.Container(

@@ -90,35 +90,25 @@ def create_clients_view(
     status_filter = "all"
     clients_data = []
 
-    # Mock client data for demonstration
-    def get_mock_clients() -> list[dict[str, Any]]:
-        """Simple mock client data generator."""
-        return [
-            {"id": "client-001", "name": "Desktop-PC-01", "status": "Connected",
-             "last_seen": "2025-01-17 14:30:25", "files_count": 15, "ip_address": "192.168.1.100"},
-            {"id": "client-002", "name": "Laptop-User-02", "status": "Disconnected",
-             "last_seen": "2025-01-17 13:45:10", "files_count": 8, "ip_address": "192.168.1.101"},
-            {"id": "client-003", "name": "Server-Backup-03", "status": "Connecting",
-             "last_seen": "2025-01-17 14:35:18", "files_count": 42, "ip_address": "192.168.1.102"},
-            {"id": "client-004", "name": "Mobile-Device-04", "status": "Connected",
-             "last_seen": "2025-01-17 14:36:22", "files_count": 23, "ip_address": "192.168.1.103"},
-            {"id": "client-005", "name": "WorkStation-05", "status": "Disconnected",
-             "last_seen": "2025-01-17 12:20:45", "files_count": 67, "ip_address": "192.168.1.104"},
-        ]
-
     def _fetch_clients_sync() -> list[dict[str, Any]]:
-        """Retrieve clients synchronously from bridge with graceful fallback."""
-        if server_bridge:
-            try:
-                result = server_bridge.get_clients()
-                if isinstance(result, list):
-                    return result
-                if isinstance(result, dict) and result.get("success"):
-                    data = result.get("data", [])
-                    return data if isinstance(data, list) else get_mock_clients()
-            except Exception as ex:
-                logger.debug(f"Falling back to mock clients: {ex}")
-        return get_mock_clients()
+        """Retrieve clients synchronously from real server only."""
+        if not server_bridge:
+            logger.error("Server bridge not available - cannot fetch clients")
+            return []
+
+        try:
+            result = server_bridge.get_clients()
+            if isinstance(result, list):
+                return result
+            if isinstance(result, dict) and result.get("success"):
+                data = result.get("data", [])
+                return data if isinstance(data, list) else []
+        except Exception as ex:
+            logger.error(f"Failed to fetch clients from server: {ex}")
+            return []
+
+        logger.warning("Server returned unexpected response format")
+        return []
 
     async def _fetch_clients_async() -> list[dict[str, Any]]:
         loop = asyncio.get_event_loop()
@@ -329,10 +319,9 @@ def create_clients_view(
                 except Exception as ex:
                     show_error_message(page, f"Error: {ex}")
             else:
-                # Mock success
-                show_success_message(page, f"Client {client.get('name')} disconnected (mock mode)")
-                update_stats()
-                load_clients_data()
+                # No server connection
+                show_error_message(page, "Server not connected. Please start the backup server.")
+                return
 
             page.close(confirm_dialog)
 
@@ -365,11 +354,9 @@ def create_clients_view(
                 except Exception as ex:
                     show_error_message(page, f"Error: {ex}")
             else:
-                # Mock success - remove from local data
-                clients_data = [c for c in clients_data if c.get('id') != client.get('id')]
-                show_success_message(page, f"Client {client.get('name')} deleted (mock mode)")
-                update_stats()
-                update_table()
+                # No server connection
+                show_error_message(page, "Server not connected. Please start the backup server.")
+                return
 
             page.close(delete_dialog)
 
@@ -423,11 +410,9 @@ def create_clients_view(
                 except Exception as ex:
                     show_error_message(page, f"Error: {ex}")
             else:
-                # Mock success - add to local data
-                clients_data.append(new_client)
-                show_success_message(page, f"Client {new_client['name']} added (mock mode)")
-                update_stats()
-                update_table()
+                # No server connection
+                show_error_message(page, "Server not connected. Please start the backup server.")
+                return
 
             page.close(add_dialog)
 
@@ -480,14 +465,9 @@ def create_clients_view(
                 except Exception as ex:
                     show_error_message(page, f"Error: {ex}")
             else:
-                # Mock success - update in local data
-                for i, c in enumerate(clients_data):
-                    if c.get('id') == client.get('id'):
-                        clients_data[i] = updated_client
-                        break
-                show_success_message(page, f"Client {updated_client['name']} updated (mock mode)")
-                update_stats()
-                update_table()
+                # No server connection
+                show_error_message(page, "Server not connected. Please start the backup server.")
+                return
 
             page.close(edit_dialog)
 
