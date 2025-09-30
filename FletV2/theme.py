@@ -660,6 +660,17 @@ def create_glassmorphic_status_badge(text: str, color: str = ft.Colors.BLUE) -> 
         blur=ft.Blur(sigma_x=10, sigma_y=10)
     )
 
+
+def create_skeleton_loader(height: int = 20, width: int | None = None, radius: int = 8) -> ft.Container:
+    """Create a skeleton loader for loading states."""
+    return ft.Container(
+        height=height,
+        width=width,
+        border_radius=radius,
+        bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.SURFACE_VARIANT),
+        animate=ft.Animation(1000, ft.AnimationCurve.EASE_IN_OUT)
+    )
+
 # ========================================================================================
 # MICRO-ANIMATION HELPERS
 # Performance: GPU-accelerated properties only (scale, opacity, rotation)

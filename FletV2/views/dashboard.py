@@ -90,22 +90,39 @@ def create_dashboard_view(
 
     # === SERVER CONNECTION DETECTION ===
     def is_real_server_connected() -> bool:
-        """Detect if connected to real server vs mock data - with health check."""
+        """Detect if connected to real server vs mock data.
+
+        Returns True ONLY if a real BackupServer instance is running.
+        Returns False for demo mode with mock data.
+        """
+        # DEBUG: Print actual state
+        logger.info(f"[STATUS_DEBUG] server_bridge exists: {server_bridge is not None}")
+        if server_bridge:
+            logger.info(f"[STATUS_DEBUG] has real_server attr: {hasattr(server_bridge, 'real_server')}")
+            if hasattr(server_bridge, 'real_server'):
+                logger.info(f"[STATUS_DEBUG] real_server value: {server_bridge.real_server}")
+                logger.info(f"[STATUS_DEBUG] real_server is None: {server_bridge.real_server is None}")
+
         if not server_bridge:
             return False
-        # Check if server_bridge has real_server attribute and it's not None
-        if not hasattr(server_bridge, 'real_server') or server_bridge.real_server is None:
+        # Check if server_bridge has real_server attribute
+        if not hasattr(server_bridge, 'real_server'):
             return False
-        # FIX: Verify server is actually responsive with health check
+        # CRITICAL: In demo mode, real_server is explicitly None
+        if server_bridge.real_server is None:
+            logger.info("[STATUS_DEBUG] Returning False - no real server (demo mode)")
+            return False
+        # If we got here, there's a real_server object - verify it's actually running
         try:
-            # Check for common server health indicators
             if hasattr(server_bridge.real_server, 'is_running'):
-                return server_bridge.real_server.is_running()
-            # Fallback: check if server object has expected methods (duck typing)
-            has_methods = (hasattr(server_bridge.real_server, 'get_clients') or
-                          hasattr(server_bridge.real_server, 'get_dashboard_summary'))
-            return has_methods
-        except Exception:
+                result = server_bridge.real_server.is_running()
+                logger.info(f"[STATUS_DEBUG] is_running() returned: {result}")
+                return result
+            # If no is_running method, assume it's running if it exists
+            logger.info("[STATUS_DEBUG] Returning True - real_server exists (no is_running method)")
+            return True
+        except Exception as e:
+            logger.info(f"[STATUS_DEBUG] Exception checking server: {e}")
             return False
 
     def get_relative_time(timestamp: float) -> str:
@@ -314,16 +331,18 @@ def create_dashboard_view(
             logger.debug(f"Error setting loading state: {e}")
 
     def update_status_indicator(connected: bool):
-        """Update dual status indicators (GUI + Server)."""
+        """Update dual status indicators with proper color scheme.
+
+        Colors: Gray=offline, Green=connected, Red=error, Orange=warning
+        """
         try:
             # GUI status is always operational (always green)
             # No update needed as it's static
 
             # Update server status indicator
             if server_status_ref.current:
-                # FIX: Show green if we successfully got data (even if mock data in demo mode)
-                # The 'connected' parameter indicates successful data retrieval
-                server_connected = connected
+                # Only show green if REAL server is connected (not mock data)
+                server_connected = connected and is_real_server_connected()
                 status_color = ft.Colors.GREEN_400 if server_connected else ft.Colors.GREY_500
                 status_text = "Server" if server_connected else "Server"
                 status_tooltip = "Server connected" if server_connected else "Server disconnected"
@@ -1139,7 +1158,8 @@ def create_dashboard_view(
                             bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.GREEN_400),
                             tooltip="GUI is operational"
                         ),
-                        # Server Status (start green - will be updated dynamically if connection fails)
+                        # Server Status (gray=offline, green=connected, red=error, orange=warning)
+                        # TEST: Force RED to verify code is reloading
                         ft.Container(
                             ref=server_status_ref,
                             content=ft.Row([
@@ -1147,19 +1167,22 @@ def create_dashboard_view(
                                     width=8,
                                     height=8,
                                     border_radius=4,
-                                    bgcolor=ft.Colors.GREEN_400,  # Start green, updated by update_status_indicator()
+                                    bgcolor=ft.Colors.RED,  # TEST: Force RED
                                 ),
                                 ft.Text(
                                     "Server",
                                     size=11,
                                     weight=ft.FontWeight.W_500,
-                                    color=ft.Colors.GREEN_400  # Start green, updated by update_status_indicator()
+                                    color=ft.Colors.RED  # TEST: Force RED
                                 )
                             ], spacing=4, tight=True),
                             padding=ft.Padding(6, 4, 6, 4),
                             border_radius=8,
-                            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.GREEN_400),  # Start green
-                            tooltip="Server operational (demo mode with mock data)"
+                            bgcolor=ft.Colors.with_opacity(
+                                0.1,
+                                ft.Colors.GREEN_400 if is_real_server_connected() else ft.Colors.GREY_500
+                            ),
+                            tooltip="Server connected" if is_real_server_connected() else "Server offline (using mock data)"
                         ),
                     ], spacing=6),
                 ], spacing=12),
@@ -1378,8 +1401,8 @@ def create_dashboard_view(
             logger.info("Setting up dashboard with proper Flet async patterns")
 
             # Set initial loading values
-            # NOTE: Don't call update_status_indicator(False) here - initial state is green
-            # It will be updated by refresh_dashboard_data() based on actual connection status
+            # Set status based on actual server connection (gray if no real server)
+            update_status_indicator(is_real_server_connected())
             if last_update_ref.current:
                 last_update_ref.current.value = "Loading..."
                 last_update_ref.current.update()

@@ -176,6 +176,20 @@ python scripts/one_click_build_and_run.py
     - Provide tooltips for collapsed state.
     - Use descriptive icons + accessible_text on buttons.
     - Ensure contrast ratios — primary text on surface should meet 4.5:1 where possible.
+- **Blank Gray Screens on Analytics and Logs Pages**: If encountering blank gray screens on the analytics and logs pages, investigate the following:
+  - **Structural Issues**: The Flet Specialist's extensive modifications may have introduced structural problems preventing proper content rendering.
+  - **Ref-Based Updates**: Ensure complex ref-based updates are functioning correctly.
+  - **Loading Overlays**: Verify that loading overlays are not blocking content. Ensure overlays are hidden (visible=False and opacity=0) when not loading.
+  - **Container/Stack Structure**: Check for issues with the container and stack structures.
+  - **Async Loading**: Investigate potential async loading problems with skeleton placeholders.
+  - **Overlay or Stack ordering**: A loading overlay may be placed on top of the content and left visible or opaque, blocking user content (most common cause when views show a gray surface only). Ensure that the content is the first child and the overlay is the last child in a Stack (Stack renders children in order; last on top). Example: ensure `Stack(children=[content_container, overlay])` so the overlay is placed above the content only when needed. Toggle the overlay child `visible` and `opacity` instead of only toggling a top-level `visible` flag.
+  - **Controls Visibility**: Controls may be set to visible=False or opacity=0 and never re-enabled, possibly via refs or async loading code that never completes or fails silently.
+  - **Refs and Deferred Updates**: Code may be updating controls before they are attached, or using controls reference wrongly (e.g., expecting .controls to exist when it's None), so nothing gets added to the UI. Ensure that after any `.controls` modification you call `.update()` on that parent control. Ensure the ref is not None before using; add a small wait (`page.run_task`) to populate after attachment or add safe guards like `if ref.current is None: skip update and log a warning, then schedule a retry`. Wrap dynamic control population in a small function and call it with `page.run_task` or schedule via `page.add_post_frame_callback` equivalent (Flet has `page.add_auto_close`? If not, call `page.update` after adding).
+  - **Layout Structure**: Using Container vs Column vs Stack incorrectly may cause scroll or layout to be collapsed to zero height.
+  - **Suppressed Exceptions**: Exceptions swallowed by `with contextlib.suppress(Exception)` in critical places, may be hiding the real error (a later AI/engineer should disable suppression to see the real stacktrace while debugging). Replace broad `contextlib.suppress(Exception)` with `logging.exception` to capture real errors during debug.
+  - **Logs View Attachment Diagnostic**: Add a small diagnostic log + `page.update` in `logs.py`'s `setup_subscriptions` to verify that the Logs view is attaching correctly.
+- **Embedded GUI**: To enable the embedded GUI set `CYBERBACKUP_DISABLE_INTEGRATED_GUI=0`. The server checks the environment flag incorrectly; the condition should treat only `'1'` as disable.
+- **Data Type Handling in Logs View**: When handling data in the logs view, especially data received from the server, ensure that variables declared as lists are not inadvertently reassigned to dictionaries. Use temporary variables to inspect the server response and normalize the data into a consistent list format before further processing. This avoids static type checker errors and ensures that list operations are performed on valid list objects.
 
 ### Key Principles
 - **FletV2 First**: Use `FletV2/` directory exclusively (modern implementation)
@@ -188,6 +202,7 @@ python scripts/one_click_build_and_run.py
 - **System Integrity**: Make sure you are not breaking the system and removing functionality.
 - **Problem Management**: Make sure you are not causing more problems than you are solving.
 - **Code Removal**: Remove bad/unused/wrong/not appropriate/falty/duplicated/ redunded /unwanted/unnedded code, if this could be done without braking the system and not changing functionality.
+- **Tri-Style Design**: Maintain the tri-style design (Material Design 3 + Neumorphism + Glassmorphism) when modifying the UI.
 
 ### Testing Strategy
 - Integration tests verify end-to-end flows
@@ -672,83 +687,3 @@ import flet as ft
 logger = logging.getLogger(__name__)
 
 class FletV2App(ft.Row):
-    # ...existing code...
-    def _post_content_update(self, content: Any, view_name: str) -> None:
-        """Handle visibility and subscription setup after content update."""
-        if content is None:
-            return
-
-        # Force visibility if dashboard content remains hidden
-        if view_name == 'dashboard':
-            try:
-                if getattr(content, 'opacity', 1.0) == 0.0:
-                    logger.warning("Dashboard opacity still 0 after update; forcing to 1.0")
-                    content.opacity = 1.0
-                    with contextlib.suppress(Exception):
-                        content.update()
-
-                def _force_visible_recursive(ctrl, depth: int = 0, max_depth: int = 10) -> None:
-                    if ctrl is None:
-                        return
-
-                    # Prefer contextlib.suppress for concise suppressed-exception blocks
-                    with contextlib.suppress(Exception):
-                        if hasattr(ctrl, 'visible') and ctrl.visible is False:
-                            ctrl.visible = True
-
-                    with contextlib.suppress(Exception):
-                        if hasattr(ctrl, 'opacity') and ctrl.opacity is not None and ctrl.opacity != 1.0:
-                            ctrl.opacity = 1.0
-
-                    with contextlib.suppress(Exception):
-                        if hasattr(ctrl, 'update'):
-                            try:
-                                ctrl.update()
-                            except Exception:
-                                # Keep the inner safety for update() call failures
-                                pass
-
-                    if depth >= max_depth:
-                        return
-
-                    # Suppress errors across recursive descent (safer and clearer than a bare try/except)
-                    with contextlib.suppress(Exception):
-                        if hasattr(ctrl, 'controls') and ctrl.controls:
-                            for child in list(ctrl.controls):
-                                _force_visible_recursive(child, depth + 1, max_depth)
-
-                        if hasattr(ctrl, 'content') and ctrl.content:
-                            _force_visible_recursive(ctrl.content, depth + 1, max_depth)
-
-                        if hasattr(ctrl, 'rows') and ctrl.rows:
-                            for child in list(ctrl.rows):
-                                _force_visible_recursive(child, depth + 1, max_depth)
-
-                        if hasattr(ctrl, 'columns') and ctrl.columns:
-                            for child in list(ctrl.columns):
-                                _force_visible_recursive(child, depth + 1, max_depth)
-
-                _force_visible_recursive(content, 0, 10)
-
-                # Use contextlib.suppress for page.update safety
-                with contextlib.suppress(Exception):
-                    if hasattr(self, 'page') and self.page is not None:
-                        self.page.update()
-
-                logger.info('[DASH_FIX] Forced nested dashboard controls visible (aggressive)')
-            except Exception as vis_err:
-                logger.debug(f"Failed forcing dashboard opacity: {vis_err}")
-
-        # ...existing code...
-
-        # Schedule subscription setup once control is attached to the page
-        setup_cb = getattr(content, '_setup_subscriptions', None)
-        if not callable(setup_cb):
-            logger.debug(
-                f"Skipping subscription setup for {view_name}: _setup_subscriptions is not callable "
-                f"(type={type(setup_cb).__name__})"
-            )
-            return
-
-        try:
-            if hasattr(self

@@ -342,8 +342,7 @@ class BackupServer:
             if client_identifier in self.clients_by_name:
                 # Found by name
                 client_id_bytes = self.clients_by_name[client_identifier]
-                client = self.clients.get(client_id_bytes)
-                if client:
+                if client := self.clients.get(client_id_bytes):
                     return self._format_response(True, {
                         'id': client.id.hex(),
                         'name': client.name,
@@ -351,18 +350,14 @@ class BackupServer:
                     })
 
             # Try to resolve by hex ID
-            try:
+            with contextlib.suppress(ValueError):
                 client_id_bytes = bytes.fromhex(client_identifier)
-                client = self.clients.get(client_id_bytes)
-                if client:
+                if client := self.clients.get(client_id_bytes):
                     return self._format_response(True, {
                         'id': client.id.hex(),
                         'name': client.name,
                         'public_key_size': len(client.public_key_bytes) if client.public_key_bytes else 0
                     })
-            except ValueError:
-                pass  # Not a valid hex string
-
             return self._format_response(False, error=f"Client '{client_identifier}' not found")
         except Exception as e:
             logger.error(f"Failed to resolve client {client_identifier}: {e}")
@@ -703,8 +698,7 @@ class BackupServer:
 
             # Remove from in-memory store
             with self.clients_lock:
-                client = self.clients.pop(client_id_bytes, None)
-                if client:
+                if client := self.clients.pop(client_id_bytes, None):
                     self.clients_by_name.pop(client.name, None)
 
             # Delete from database
@@ -790,17 +784,12 @@ class BackupServer:
     def delete_file(self, file_id: str) -> dict[str, Any]:
         """Delete a file - delegates to db_manager.delete_file()."""
         try:
-            # Note: The file_id format needs to be clarified based on the actual database schema
-            # For now, assuming it's in format "client_id:filename" or similar
-            if ':' in file_id:
-                client_id_str, filename = file_id.split(':', 1)
-                # Pass client_id_str (hex string) directly to db_manager.delete_file instead of converting to bytes
-                success = self.db_manager.delete_file(client_id_str, filename)
-            else:
+            if ':' not in file_id:
                 # Fallback: try to parse as a single identifier
                 return self._format_response(False, error="Invalid file_id format. Expected 'client_id:filename'")
 
-            if success:
+            client_id_str, filename = file_id.split(':', 1)
+            if success := self.db_manager.delete_file(client_id_str, filename):
                 return self._format_response(True, {'deleted': True})
             else:
                 return self._format_response(False, error="Failed to delete file")

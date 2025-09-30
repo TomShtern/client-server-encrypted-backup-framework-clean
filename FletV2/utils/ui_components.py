@@ -784,7 +784,7 @@ def AppCard(
         ], spacing=_SP["lg"]),
         padding=ft.padding.all(padding if padding is not None else _SP["xl"]),
         border=ft.border.all(1, ft.Colors.OUTLINE),
-        border_radius=_RD["card"],
+        border_radius=_RD["lg"],
         shadow=ft.BoxShadow(spread_radius=0, blur_radius=14, offset=ft.Offset(0, 6), color=ft.Colors.with_opacity(0.12, ft.Colors.BLACK)),
         bgcolor=ft.Colors.SURFACE,
         # Micro-interactions
@@ -807,7 +807,7 @@ def AppButton(
         ft.Text(text, size=14, weight=ft.FontWeight.W_500),
     ], spacing=_SP["sm"], tight=True)
 
-    shape = ft.RoundedRectangleBorder(radius=_RD["button"])
+    shape = ft.RoundedRectangleBorder(radius=_RD["md"])  # Use 'md' radius for buttons
     padding = ft.padding.symmetric(horizontal=_SP["xl"], vertical=_SP["md"])
 
     if variant == "outline":
@@ -855,7 +855,7 @@ def DataTableWrapper(table: ft.DataTable) -> ft.Container:
         content=table,
         padding=ft.padding.all(_SP["lg"]),
         border=ft.border.all(1, ft.Colors.OUTLINE),
-        border_radius=_RD["card"],
+        border_radius=_RD["lg"],
         bgcolor=ft.Colors.SURFACE,
     )
 
