@@ -1,4 +1,7 @@
+
 # Client-Server Encrypted Backup Framework - Agent Instructions
+
+IMPORTANT: For extremely important AI guidance, rules, and data please consult the `#file:AI-Context` folder. Additional important documentation and design reference materials are in the `#file:important_docs` folder. Use `AI-Context` first for critical decisions.
 
 ## Project Overview
 

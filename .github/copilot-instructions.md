@@ -17,6 +17,8 @@ description: AI rules derived by SpecStory from the project AI interaction histo
 
 # Client-Server Encrypted Backup Framework - AI Development Guide
 
+This AI Development Guide should be read in conjunction with the `#file:AI-Context` folder (for extremely important documentation, data, information, and rules) and the `#file:important_docs` folder (for important information and documentation).
+
 ## 🏗️ System Architecture Overview
 
 This is a **production-grade 5-layer encrypted backup system** with hybrid web-to-native-desktop architecture:
@@ -136,7 +138,7 @@ python scripts/one_click_build_and_run.py
   - Interaction with `maxRetries`: if a request times out, the client may retry up to `contentGenerator.maxRetries` times (so a short timeout + retries can cause multiple fast retry attempts).
   - Practical recommendation: pick a reasonable timeout for your network and model latency (30_000–60_000 ms is common). If you want no client-side cutoff, keep `0`.
 - **Flet GUI Startup**: The Flet GUI should start successfully and run in browser mode by default. If port 8550 is already in use, the application will use port 8551 or 8552. The GUI should be fully operational for managing the encrypted backup system.
-- **GUI Access**: The Flet GUI is accessible via a web browser. The application typically runs on port 8550 by default and will use ports 8551/8552 if 8550 is occupied. Navigate to `http://localhost:8550` (or 8551/8552 if port 8550 is in use) to access the GUI.
+- **GUI Access**: The Flet GUI is accessible via a web browser. The application typically runs on port 8550 by default and will use ports 8551/8552 if port 8550 is in use. Navigate to `http://localhost:8550` (or 8551/8552 if port 8550 is in use) to access the GUI.
 - **GUI-Only Mode**: When running in GUI-only mode, ensure the `backup_server` parameter is set to `None` when calling `main.main(page, backup_server=None)` to trigger Lorem ipsum placeholder data. The Flet GUI should start successfully and run in browser mode by default. If port 8550 is already in use, the application will use port 8551.
 - **Navigation Bar Styling**: When improving the navigation bar's design, adhere to the following specifications:
   - **Layout**:
@@ -190,6 +192,11 @@ python scripts/one_click_build_and_run.py
   - **Logs View Attachment Diagnostic**: Add a small diagnostic log + `page.update` in `logs.py`'s `setup_subscriptions` to verify that the Logs view is attaching correctly.
 - **Embedded GUI**: To enable the embedded GUI set `CYBERBACKUP_DISABLE_INTEGRATED_GUI=0`. The server checks the environment flag incorrectly; the condition should treat only `'1'` as disable.
 - **Data Type Handling in Logs View**: When handling data in the logs view, especially data received from the server, ensure that variables declared as lists are not inadvertently reassigned to dictionaries. Use temporary variables to inspect the server response and normalize the data into a consistent list format before further processing. This avoids static type checker errors and ensures that list operations are performed on valid list objects.
+- **Flet GUI Startup**: The Flet GUI is now running! The GUI should now be accessible in the web browser. The application is running with:
+  - Embedded GUI disabled (as expected for FletV2)
+  - Logging initialized with console and file output
+  - The server is ready to accept connections
+  The Flet GUI should open automatically in the default web browser. If it doesn't appear, you can typically access it at `http://localhost:8550` (or ports 8551/8552 if 8550 is occupied).
 
 ### Key Principles
 - **FletV2 First**: Use `FletV2/` directory exclusively (modern implementation)
@@ -246,6 +253,9 @@ def _generate_transfer_info(self, server_ip, server_port, username, file_path):
 ---
 
 # FletV2 Development Guide (Concise)
+
+This AI Development Guide should be read in conjunction with the `#file:AI-Context` folder (for extremely important documentation, data, information, and rules) and the `#file:important_docs` folder (for important information and documentation).
+
 This guide codifies the essential rules to generate high-quality, compatible, and efficient code for this repository, focused on the FletV2 application. It consolidates prior guidance into a single DRY reference.
 
 CRITICAL: Work exclusively in `FletV2/`. The legacy `flet_server_gui/` is obsolete and kept only as a reference for anti-patterns to avoid. When in doubt, prefer Flet built-ins and patterns shown here. See `FletV2/important_docs/` for examples.
@@ -661,29 +671,4 @@ def _force_visible_recursive(ctrl, depth: int = 0, max_depth: int = 10) -> None:
                 _force_visible_recursive(child, depth + 1, max_depth)
 
         if hasattr(ctrl, 'content') and ctrl.content:
-            _force_visible_recursive(ctrl.content, depth + 1, max_depth)
-
-        if hasattr(ctrl, 'rows') and ctrl.rows:
-            for child in list(ctrl.rows):
-                _force_visible_recursive(child, depth + 1, max_depth)
-
-        if hasattr(ctrl, 'columns') and ctrl.columns:
-            for child in list(ctrl.columns):
-                _force_visible_recursive(child, depth + 1, max_depth)
-```
-
-#### Subscription Waiter
-
-The subscription waiter in `_post_content_update` should use `contextlib.suppress` to handle exceptions during attachment checks and subscription setup. Ensure that both the inner and outer `try` blocks within the `_wait_and_setup` coroutine are properly completed with appropriate exception handling.
-
-```python
-import asyncio
-import contextlib
-import logging
-from typing import Any, Callable, cast
-
-import flet as ft
-
-logger = logging.getLogger(__name__)
-
-class FletV2App(ft.Row):
+            _

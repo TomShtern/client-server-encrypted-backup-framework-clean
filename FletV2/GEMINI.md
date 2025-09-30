@@ -1,3 +1,5 @@
+IMPORTANT: For extremely important AI guidance, rules, and data please consult the `#file:AI-Context` folder. Additional important documentation and design reference materials are in the `#file:important_docs` folder. Use `AI-Context` first for critical decisions.
+
 ## Project Overview
 
 This project is a desktop backup management application named FletV2, built with Flet and Python. It provides a graphical user interface for managing a backup server, including features like viewing server status, managing clients, browsing files, and monitoring analytics. The application is designed with a clean architecture, emphasizing simplicity, maintainability, and performance by adhering to Flet's best practices.

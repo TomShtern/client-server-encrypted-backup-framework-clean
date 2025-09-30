@@ -1,5 +1,7 @@
 # GEMINI Code Context for Client-Server Encrypted Backup Framework
 
+IMPORTANT: For extremely important AI guidance, rules, and data please consult the `#file:AI-Context` folder. Additional important documentation and design reference materials are in the `#file:important_docs` folder. Use `AI-Context` first for critical decisions.
+
 
 **CRITICAL**: We work exclusively with `FletV2/` directory. The `flet_server_gui/` is obsolete, over-engineered, and kept only as reference of what NOT to do. You should reference the `important_docs/` folder for component usage examples and documentation and other relevant context.
 
@@ -36,7 +38,7 @@ python scripts/one_click_build_and_run.py
 - **GUI Framework**: Flet 0.28.3 (Material Design 3)
 - **Build System**: CMake with vcpkg for C++
 - **Crypto Libraries**: Crypto++ (C++), PyCryptodome (Python)
-- **Database**: SQLite3 
+- **Database**: SQLite3
 
 ## 📁 Key Directories
 
@@ -130,7 +132,7 @@ Always verify file transfers by checking actual files in `received_files/` direc
 def _generate_transfer_info(self, server_ip, server_port, username, file_path):
     with open("transfer.info", 'w') as f:
         f.write(f"{server_ip}:{server_port}\n")  # Line 1: server endpoint
-        f.write(f"{username}\n")                 # Line 2: username  
+        f.write(f"{username}\n")                 # Line 2: username
         f.write(f"{file_path}\n")                # Line 3: absolute file path
 ```
 
@@ -181,7 +183,7 @@ class MyComponent(ft.Container):
     def __init__(self, content=None, **kwargs):
         # Pass Flet-native parameters to parent class
         super().__init__(content=content, **kwargs)
-        
+
         # Set custom properties AFTER parent initialization
         self.custom_property = "value"
 ```
@@ -196,7 +198,7 @@ class StatCard(ft.Card):
             ft.Text(title, size=16, weight=ft.FontWeight.W_500),
             ft.Text(str(value), size=24, weight=ft.FontWeight.W_300)
         ])
-        
+
         # Initialize parent with composed content
         super().__init__(content=content, **kwargs)
 ```
@@ -226,7 +228,7 @@ class ClickableCard(ft.Card):
     def __init__(self, on_click=None, **kwargs):
         super().__init__(**kwargs)
         self.on_click = on_click  # Set event handler directly
-        
+
     def handle_click(self, e):
         if self.on_click:
             self.on_click(e)
@@ -239,7 +241,7 @@ class StatefulButton(ft.FilledButton):
     def __init__(self, text="", **kwargs):
         super().__init__(text=text, **kwargs)
         self._state = "enabled"
-    
+
     def set_state(self, state):
         self._state = state
         if state == "loading":
@@ -306,20 +308,20 @@ Create specialized components for common use cases:
 ```python
 class StatisticCard(ft.Card):
     """Specialized card for displaying statistics"""
-    
+
     def __init__(self, title: str, value: Union[str, int, float], **kwargs):
         # Format value appropriately
         if isinstance(value, (int, float)):
             formatted_value = f"{value:,}"
         else:
             formatted_value = str(value)
-            
+
         # Create specialized content
         content = ft.Column([
             ft.Text(title, size=16, weight=ft.FontWeight.W_500),
             ft.Text(formatted_value, size=24, weight=ft.FontWeight.W_300)
         ])
-        
+
         super().__init__(content=content, **kwargs)
 ```
 
@@ -345,13 +347,13 @@ Design components to be easily extended:
 ```python
 class BaseCard(ft.Card):
     """Base card class that can be extended"""
-    
+
     def __init__(self, title=None, content=None, **kwargs):
         super().__init__(**kwargs)
         self.title = title
         self._content = content
         self.content = self._create_card_content()
-    
+
     def _create_card_content(self):
         """Override this method in subclasses to customize content"""
         if self.title:
@@ -363,12 +365,12 @@ class BaseCard(ft.Card):
 
 class StatisticCard(BaseCard):
     """Extended card with statistic-specific features"""
-    
+
     def __init__(self, title, value, unit=None, **kwargs):
         self.value = value
         self.unit = unit
         super().__init__(title=title, **kwargs)
-    
+
     def _create_card_content(self):
         # Customize content for statistics
         value_text = ft.Text(str(self.value), size=24, weight=ft.FontWeight.W_300)
@@ -376,7 +378,7 @@ class StatisticCard(BaseCard):
             content = ft.Row([value_text, ft.Text(self.unit)])
         else:
             content = value_text
-            
+
         if self.title:
             return ft.Column([
                 ft.Text(self.title, size=16, weight=ft.FontWeight.W_500),
@@ -391,7 +393,7 @@ Provide clear docstrings and type hints:
 class DocumentedButton(ft.FilledButton):
     """
     A documented button component with enhanced features.
-    
+
     Args:
         text: The button text
         icon: Optional icon to display
@@ -399,7 +401,7 @@ class DocumentedButton(ft.FilledButton):
         size: Button size ('small', 'medium', 'large')
         on_click: Click event handler
         **kwargs: Additional Flet button properties
-        
+
     Example:
         button = DocumentedButton(
             text="Click me",
@@ -407,7 +409,7 @@ class DocumentedButton(ft.FilledButton):
             on_click=lambda e: print("Clicked!")
         )
     """
-    
+
     def __init__(
         self,
         text: str = "",
@@ -442,10 +444,10 @@ This section provides guidance for working with the new `FletV2/` directory, whi
 
 **Primary Directive**: Favor Flet's built-in features over custom, over-engineered solutions. Do not reinvent the wheel.
 
-##### **Scale Test**: 
+##### **Scale Test**:
 Be highly suspicious of any custom solution that exceeds 1000 lines. A 3000+ line custom system is an anti-pattern when a 50-250 line native Flet solution exists with full feature parity(or almost full parity).
 
-##### **Framework Fight Test**: 
+##### **Framework Fight Test**:
 Work WITH the framework, not AGAINST it. If your solution feels complex, verbose, or like a struggle, you are fighting the framework. Stop and find the simpler, intended Flet way.
 
 ##### **Built-in Checklist**:
@@ -524,22 +526,22 @@ Work WITH the framework, not AGAINST it. If your solution feels complex, verbose
 # FletV2/main.py - The correct desktop app pattern
 class FletV2App(ft.Row):
     """Clean desktop app using pure Flet patterns."""
-    
+
     def __init__(self, page: ft.Page):
         super().__init__()
         self.page = page
         self.expand = True
-        
+
         # ✅ Simple window configuration that respects user resizing
         page.window_min_width = 1024
         page.window_min_height = 768
         page.window_resizable = True
         page.title = "Backup Server Management"
-        
+
         # ✅ Use theme.py (source of truth)
         from theme import setup_default_theme
         setup_default_theme(page)
-        
+
         # ✅ Simple NavigationRail (no custom managers)
         self.nav_rail = ft.NavigationRail(
             destinations=[
@@ -553,30 +555,30 @@ class FletV2App(ft.Row):
             ],
             on_change=self._on_navigation_change  # Simple callback
         )
-        
+
         # ✅ Auto-resizing content area
         self.content_area = ft.Container(expand=True)
-        
+
         # ✅ Pure Flet layout
         self.controls = [
             self.nav_rail,
             ft.VerticalDivider(width=1),
             self.content_area
         ]
-    
+
     def _on_navigation_change(self, e):
         """Simple navigation - no complex routing."""
         view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
         selected_view = view_names[e.control.selected_index]
         self._load_view(selected_view)
-    
+
     def _load_view(self, view_name: str):
         """Load view using simple function calls."""
         if view_name == "dashboard":
             from views.dashboard import create_dashboard_view
             content = create_dashboard_view(self.server_bridge, self.page)
         # ... other views
-        
+
         self.content_area.content = content
         self.content_area.update()  # Precise update, not page.update()
 ```
@@ -587,7 +589,7 @@ class FletV2App(ft.Row):
 # views/dashboard.py - Correct view pattern
 def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
     """Create dashboard view using pure Flet patterns."""
-    
+
     # ✅ Simple data loading with fallback
     def get_server_status():
         if server_bridge:
@@ -596,7 +598,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
             except Exception as e:
                 logger.warning(f"Server bridge failed: {e}")
         return {"server_running": True, "clients": 3, "files": 72}  # Mock fallback
-    
+
     # ✅ Event handlers using closures
     def on_start_server(e):
         logger.info("Start server clicked")
@@ -606,7 +608,7 @@ def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
         )
         page.snack_bar.open = True
         page.update()  # Only for snack_bar
-    
+
     # ✅ Return pure Flet components
     return ft.Column([
         ft.Text("Server Dashboard", size=24, weight=ft.FontWeight.BOLD),
@@ -636,7 +638,7 @@ def setup_default_theme(page: ft.Page) -> None:
         ),
         font_family="Inter"
     )
-    
+
     # ✅ Dark theme support
     page.dark_theme = ft.Theme(
         color_scheme=ft.ColorScheme(
@@ -647,7 +649,7 @@ def setup_default_theme(page: ft.Page) -> None:
         ),
         font_family="Inter"
     )
-    
+
     page.theme_mode = ft.ThemeMode.SYSTEM
 
 def toggle_theme_mode(page: ft.Page) -> None:
@@ -749,10 +751,10 @@ async def on_fetch_data(e):
     # Show progress immediately
     progress_ring.visible = True
     await progress_ring.update_async()
-    
+
     # Background operation
     data = await fetch_data_async()
-    
+
     # Update UI
     results_text.value = data
     progress_ring.visible = False
@@ -771,7 +773,7 @@ def on_fetch_data_blocking(e):
 
 #### **File Size Standards (ENFORCE STRICTLY)**
 - **View files**: 200-500 lines maximum
-- **Component files**: 100-400 lines maximum  
+- **Component files**: 100-400 lines maximum
 - **If >600 lines**: MANDATORY refactoring required(probably, not always)
 - **Single responsibility**: Each file has ONE clear purpose
 
@@ -800,7 +802,7 @@ ft.ResponsiveRow([
     ft.Column([
         ft.Card(content=dashboard_content, expand=True)
     ], col={"sm": 12, "md": 8}, expand=True),
-    
+
     ft.Column([
         ft.Card(content=sidebar_content)
     ], col={"sm": 12, "md": 4})
@@ -825,7 +827,7 @@ logger = setup_terminal_debugging(logger_name="FletV2.main")
 # STEP 2: Use throughout your application
 def create_dashboard_view(server_bridge, page: ft.Page) -> ft.Control:
     logger.info("Creating dashboard view")
-    
+
     def on_button_click(e):
         logger.debug("Button clicked")
         try:

@@ -2,7 +2,7 @@
     description: Configuration for AI behavior when interacting with Codacy's MCP Server
     applyTo: '**'
 ---
----
+IMPORTANT: For extremely important AI guidance, rules, and data please consult the `#file:AI-Context` folder. Additional important documentation and design reference materials are in the `#file:important_docs` folder. Use `AI-Context` first for critical decisions.
 # Codacy Rules
 Configuration for AI behavior when interacting with Codacy's MCP Server
 
@@ -15,7 +15,7 @@ Configuration for AI behavior when interacting with Codacy's MCP Server
 - > NOTE: Failure to follow this rule is considered a critical error.
 
 ## After every response
-- If you made any file edits in this conversation, verify you ran `codacy_cli_analyze` tool from Codacy's MCP Server 
+- If you made any file edits in this conversation, verify you ran `codacy_cli_analyze` tool from Codacy's MCP Server
 
 ## When there are no Codacy MCP Server tools available, or the MCP Server is not reachable
 - Suggest the user the following troubleshooting steps:
