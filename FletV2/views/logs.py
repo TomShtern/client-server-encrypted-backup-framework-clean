@@ -1,15 +1,8 @@
 #!/usr/bin/env python3
 """
-Logs View - Dual-Tab System with Enhanced Visual Design
-Tab 1: System Logs (server_bridge.get_logs())
-Tab 2: Flet Logs (framework error capture)
-
-Features:
-- Color-coded level badges with icons
-- Gradient borders on search field
-- Animated filter chips with hover effects
-- Neumorphic shadows and glassmorphic accents
-- Server integration with fallback data
+Logs View - Dual-Tab System with Pronounced Neumorphic Design
+Tab 1: System Logs (server integration)
+Tab 2: Flet Framework Logs (live capture)
 """
 
 import os
@@ -30,20 +23,20 @@ for _path in (_flet_v2_root, _repo_root):
 
 import Shared.utils.utf8_solution as _  # noqa: F401
 
-# Import theme constants
+# Import neumorphic shadows from theme (using relative import to avoid circular imports)
 try:
-    from FletV2.theme import PRONOUNCED_NEUMORPHIC_SHADOWS, MODERATE_NEUMORPHIC_SHADOWS
+    from theme import PRONOUNCED_NEUMORPHIC_SHADOWS, MODERATE_NEUMORPHIC_SHADOWS
 except ImportError:
     PRONOUNCED_NEUMORPHIC_SHADOWS = []
     MODERATE_NEUMORPHIC_SHADOWS = []
 
 
-# ========================================================================================
+# ======================================================================================
 # FLET LOG CAPTURE SYSTEM
-# ========================================================================================
+# ======================================================================================
 
 class FletLogCapture(logging.Handler):
-    """Custom logging handler to capture Flet framework logs."""
+    """Custom logging handler to capture Flet framework logs in real-time."""
 
     def __init__(self):
         super().__init__()
@@ -68,19 +61,15 @@ class FletLogCapture(logging.Handler):
 
 # Global Flet log capture instance
 _flet_log_capture = FletLogCapture()
+_flet_log_capture.setFormatter(logging.Formatter('%(message)s'))
+
+# Attach to root logger to capture all logs
+logging.getLogger().addHandler(_flet_log_capture)
 
 
-def setup_flet_log_capture():
-    """Setup Flet log capture if not already configured."""
-    if not any(isinstance(h, FletLogCapture) for h in logging.root.handlers):
-        _flet_log_capture.setLevel(logging.DEBUG)
-        _flet_log_capture.setFormatter(logging.Formatter('%(levelname)s - %(name)s - %(message)s'))
-        logging.root.addHandler(_flet_log_capture)
-
-
-# ========================================================================================
-# LOG DATA PROVIDERS
-# ========================================================================================
+# ======================================================================================
+# DATA FETCHING
+# ======================================================================================
 
 def get_system_logs(server_bridge: Any | None) -> list[dict]:
     """Get system logs from server or fallback data."""
@@ -97,313 +86,124 @@ def get_system_logs(server_bridge: Any | None) -> list[dict]:
         {"time": "18:48:54", "level": "INFO", "component": "MainThread", "message": "=== BACKUP-SERVER LOGGING INITIALIZED ==="},
         {"time": "18:48:54", "level": "INFO", "component": "MainThread", "message": "Console Level: INFO"},
         {"time": "18:48:54", "level": "INFO", "component": "MainThread", "message": "File Level: DEBUG"},
-        {"time": "18:48:54", "level": "INFO", "component": "MainThread", "message": "Log File: logs/backup-server_20250930_184854.log"},
         {"time": "18:48:54", "level": "INFO", "component": "GUI", "message": "[GUI] Embedded GUI disable flag value: '1'"},
-        {"time": "18:48:54", "level": "INFO", "component": "GUI", "message": "[GUI] Integrated Server GUI disabled via CYBERBACKUP_DISABLE_INTEGRATED_GUI=1"},
         {"time": "18:48:56", "level": "INFO", "component": "FletV2App", "message": "State manager initialized"},
         {"time": "18:48:56", "level": "INFO", "component": "FletV2App", "message": "Navigation rail created"},
         {"time": "18:48:57", "level": "WARNING", "component": "dashboard", "message": "Failed to unsubscribe from state manager"},
-        {"time": "18:48:57", "level": "INFO", "component": "FletV2App", "message": "Successfully updated content area with dashboard"},
+        {"time": "18:48:57", "level": "ERROR", "component": "dashboard", "message": "Control lifecycle error detected"},
+        {"time": "18:48:58", "level": "DEBUG", "component": "analytics", "message": "Analytics view loaded successfully"},
+        {"time": "18:48:58", "level": "INFO", "component": "logs", "message": "Logs view initialized with dual-tab system"},
     ]
 
 
-def get_flet_logs() -> list[dict]:
-    """Get captured Flet framework logs."""
-    return _flet_log_capture.logs if _flet_log_capture.logs else [
-        {"time": datetime.now().strftime("%H:%M:%S"), "level": "INFO", "component": "FletLogCapture", "message": "No Flet logs captured yet"}
-    ]
-
-
-# ========================================================================================
-# VISUAL COMPONENTS
-# ========================================================================================
-
-# Level configuration
-LEVEL_CONFIG = {
-    "ERROR": {"color": ft.Colors.RED_500, "icon": ft.Icons.ERROR, "name": "ERROR"},
-    "WARNING": {"color": ft.Colors.AMBER_500, "icon": ft.Icons.WARNING_AMBER, "name": "WARNING"},
-    "INFO": {"color": ft.Colors.BLUE_500, "icon": ft.Icons.INFO, "name": "INFO"},
-    "DEBUG": {"color": ft.Colors.GREY_500, "icon": ft.Icons.BUG_REPORT, "name": "DEBUG"},
-}
-
-
-def create_level_badge(level: str) -> ft.Container:
-    """Create color-coded level badge with icon."""
-    config = LEVEL_CONFIG.get(level, LEVEL_CONFIG["INFO"])
-
-    return ft.Container(
-        content=ft.Row([
-            ft.Icon(config["icon"], size=16, color=config["color"]),
-            ft.Text(config["name"], size=12, weight=ft.FontWeight.W_600, color=config["color"])
-        ], spacing=4, tight=True),
-        padding=ft.padding.symmetric(horizontal=8, vertical=4),
-        border_radius=8,
-        bgcolor=ft.Colors.with_opacity(0.1, config["color"]),
-    )
-
-
-def create_gradient_search_field(on_change=None) -> ft.Container:
-    """Create search field with gradient border effect."""
-    search_field = ft.TextField(
-        label="Search logs",
-        prefix_icon=ft.Icons.SEARCH,
-        border_radius=12,
-        width=300,
-        on_change=on_change,
-        border_color=ft.Colors.OUTLINE,
-        focused_border_color=ft.Colors.BLUE_500,
-        focused_border_width=2,
-    )
-
-    return ft.Container(
-        content=search_field,
-        border_radius=12,
-        border=ft.border.all(2, ft.Colors.with_opacity(0.3, ft.Colors.BLUE_500)),
-        padding=0,
-    )
-
-
-def create_animated_filter_chip(label: str, icon: str, is_active: bool, on_click) -> ft.Container:
-    """Create animated filter chip with hover effects."""
-
-    chip = ft.Container(
-        content=ft.Row([
-            ft.Icon(icon, size=16, color=ft.Colors.WHITE if is_active else None),
-            ft.Text(label, size=14, weight=ft.FontWeight.W_500, color=ft.Colors.WHITE if is_active else None)
-        ], spacing=6, tight=True),
-        padding=ft.padding.symmetric(horizontal=12, vertical=8),
-        border_radius=20,
-        bgcolor=LEVEL_CONFIG.get(label, {}).get("color", ft.Colors.BLUE_500) if is_active else ft.Colors.with_opacity(0.05, ft.Colors.SURFACE),
-        border=ft.border.all(1, ft.Colors.OUTLINE) if not is_active else None,
-        animate_scale=ft.Animation(180, ft.AnimationCurve.EASE_OUT_CUBIC),
-        on_click=on_click,
-        ink=True,
-    )
-
-    # Hover effect
-    def on_hover(e):
-        chip.scale = 1.05 if e.data == "true" else 1.0
-        chip.update()
-
-    chip.on_hover = on_hover
-
-    return chip
-
-
-def create_logs_table(logs: list[dict]) -> ft.DataTable:
-    """Create logs DataTable with enhanced styling."""
-
-    return ft.DataTable(
-        columns=[
-            ft.DataColumn(ft.Text("Time", weight=ft.FontWeight.BOLD, size=13)),
-            ft.DataColumn(ft.Text("Level", weight=ft.FontWeight.BOLD, size=13)),
-            ft.DataColumn(ft.Text("Component", weight=ft.FontWeight.BOLD, size=13)),
-            ft.DataColumn(ft.Text("Message", weight=ft.FontWeight.BOLD, size=13)),
-        ],
-        rows=[
-            ft.DataRow(
-                cells=[
-                    ft.DataCell(ft.Text(log.get("time", ""), size=12, font_family="Courier New")),
-                    ft.DataCell(create_level_badge(log.get("level", "INFO"))),
-                    ft.DataCell(ft.Text(log.get("component", ""), size=12, weight=ft.FontWeight.W_500)),
-                    ft.DataCell(ft.Text(log.get("message", ""), size=12, max_lines=2)),
-                ]
-            )
-            for log in logs
-        ],
-        border=ft.border.all(1, ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)),
-        border_radius=12,
-        horizontal_lines=ft.BorderSide(1, ft.Colors.with_opacity(0.06, ft.Colors.OUTLINE)),
-        heading_row_color=ft.Colors.with_opacity(0.05, ft.Colors.SURFACE),
-        heading_row_height=48,
-        data_row_min_height=56,
-        data_row_max_height=80,
-    )
-
-
-# ========================================================================================
-# MAIN VIEW CREATION
-# ========================================================================================
+# ======================================================================================
+# UI CREATION
+# ======================================================================================
 
 def create_logs_view(
     server_bridge: Any | None,
     page: ft.Page,
     state_manager: Any | None
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], None]]:
-    """Create logs view with two tabs (System Logs and Flet Logs)."""
+    """Create logs view with dual-tab system and neumorphic design."""
 
-    # Setup Flet log capture
-    setup_flet_log_capture()
+    # Level configuration
+    LEVEL_CONFIG = {
+        "ERROR": {"color": ft.Colors.RED_500, "icon": ft.Icons.ERROR},
+        "WARNING": {"color": ft.Colors.AMBER_500, "icon": ft.Icons.WARNING_AMBER},
+        "INFO": {"color": ft.Colors.BLUE_500, "icon": ft.Icons.INFO},
+        "DEBUG": {"color": ft.Colors.GREY_500, "icon": ft.Icons.BUG_REPORT},
+    }
 
-    # State
+    def create_log_table(logs: list[dict], table_key: str) -> ft.DataTable:
+        """Create a data table for logs with color-coded level badges."""
+        return ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("Time", weight=ft.FontWeight.BOLD, size=13)),
+                ft.DataColumn(ft.Text("Level", weight=ft.FontWeight.BOLD, size=13)),
+                ft.DataColumn(ft.Text("Component", weight=ft.FontWeight.BOLD, size=13)),
+                ft.DataColumn(ft.Text("Message", weight=ft.FontWeight.BOLD, size=13)),
+            ],
+            rows=[
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(log.get("time", ""), size=12)),
+                        ft.DataCell(
+                            ft.Container(
+                                content=ft.Row([
+                                    ft.Icon(
+                                        LEVEL_CONFIG.get(log.get("level", "INFO"), {}).get("icon", ft.Icons.INFO),
+                                        size=16,
+                                        color=LEVEL_CONFIG.get(log.get("level", "INFO"), {}).get("color", ft.Colors.BLUE_500)
+                                    ),
+                                    ft.Text(
+                                        log.get("level", "INFO"),
+                                        size=12,
+                                        weight=ft.FontWeight.W_600,
+                                        color=LEVEL_CONFIG.get(log.get("level", "INFO"), {}).get("color", ft.Colors.BLUE_500)
+                                    )
+                                ], spacing=6, tight=True),
+                                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                                border_radius=12,
+                                bgcolor=ft.Colors.with_opacity(0.1, LEVEL_CONFIG.get(log.get("level", "INFO"), {}).get("color", ft.Colors.BLUE_500))
+                            )
+                        ),
+                        ft.DataCell(ft.Text(log.get("component", ""), size=12)),
+                        ft.DataCell(ft.Text(log.get("message", ""), size=12)),
+                    ]
+                )
+                for log in logs
+            ],
+            border=ft.border.all(1, ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)),
+            border_radius=12,
+            horizontal_lines=ft.BorderSide(1, ft.Colors.with_opacity(0.06, ft.Colors.OUTLINE)),
+            heading_row_color=ft.Colors.with_opacity(0.08, ft.Colors.SURFACE),
+            data_row_max_height=60,
+        )
+
+    # Fetch system logs
     system_logs = get_system_logs(server_bridge)
-    flet_logs = get_flet_logs()
-    current_filter = "ALL"
-    search_query = ""
 
-    # Refs for updates
-    system_table_ref = ft.Ref[ft.DataTable]()
-    flet_table_ref = ft.Ref[ft.DataTable]()
-    filter_chips_ref = ft.Ref[ft.Row]()
-
-    # ========================================================================================
-    # FILTER LOGIC
-    # ========================================================================================
-
-    def filter_logs(logs: list[dict]) -> list[dict]:
-        """Apply current filter and search to logs."""
-        filtered = logs
-
-        # Apply level filter
-        if current_filter != "ALL":
-            filtered = [log for log in filtered if log.get("level", "") == current_filter]
-
-        # Apply search filter
-        if search_query:
-            query_lower = search_query.lower()
-            filtered = [
-                log for log in filtered
-                if query_lower in log.get("message", "").lower()
-                or query_lower in log.get("component", "").lower()
-            ]
-
-        return filtered
-
-    def update_tables():
-        """Update both tables with filtered data."""
-        if system_table_ref.current:
-            filtered_system = filter_logs(system_logs)
-            system_table_ref.current.rows = [
-                ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(log.get("time", ""), size=12, font_family="Courier New")),
-                    ft.DataCell(create_level_badge(log.get("level", "INFO"))),
-                    ft.DataCell(ft.Text(log.get("component", ""), size=12, weight=ft.FontWeight.W_500)),
-                    ft.DataCell(ft.Text(log.get("message", ""), size=12, max_lines=2)),
-                ])
-                for log in filtered_system
-            ]
-            system_table_ref.current.update()
-
-        if flet_table_ref.current:
-            filtered_flet = filter_logs(flet_logs)
-            flet_table_ref.current.rows = [
-                ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(log.get("time", ""), size=12, font_family="Courier New")),
-                    ft.DataCell(create_level_badge(log.get("level", "INFO"))),
-                    ft.DataCell(ft.Text(log.get("component", ""), size=12, weight=ft.FontWeight.W_500)),
-                    ft.DataCell(ft.Text(log.get("message", ""), size=12, max_lines=2)),
-                ])
-                for log in filtered_flet
-            ]
-            flet_table_ref.current.update()
-
-    def on_filter_change(level: str):
-        """Handle filter chip click."""
-        nonlocal current_filter
-        current_filter = level
-        update_tables()
-
-        # Update chip visuals
-        if filter_chips_ref.current:
-            filter_chips_ref.current.controls = create_filter_chips()
-            filter_chips_ref.current.update()
-
-    def on_search_change(e):
-        """Handle search field change."""
-        nonlocal search_query
-        search_query = e.control.value
-        update_tables()
-
-    def on_refresh(e):
-        """Refresh logs from server."""
-        nonlocal system_logs, flet_logs
-        system_logs = get_system_logs(server_bridge)
-        flet_logs = get_flet_logs()
-        update_tables()
-
-    # ========================================================================================
-    # UI COMPONENTS
-    # ========================================================================================
-
-    def create_filter_chips() -> list[ft.Control]:
-        """Create filter chips with current state."""
-        return [
-            create_animated_filter_chip("ALL", ft.Icons.SELECT_ALL, current_filter == "ALL", lambda e: on_filter_change("ALL")),
-            create_animated_filter_chip("INFO", ft.Icons.INFO, current_filter == "INFO", lambda e: on_filter_change("INFO")),
-            create_animated_filter_chip("ERROR", ft.Icons.ERROR, current_filter == "ERROR", lambda e: on_filter_change("ERROR")),
-            create_animated_filter_chip("WARNING", ft.Icons.WARNING_AMBER, current_filter == "WARNING", lambda e: on_filter_change("WARNING")),
-            create_animated_filter_chip("DEBUG", ft.Icons.BUG_REPORT, current_filter == "DEBUG", lambda e: on_filter_change("DEBUG")),
-        ]
-
-    filter_chips_row = ft.Row(
-        ref=filter_chips_ref,
-        controls=create_filter_chips(),
-        spacing=8,
-        wrap=True
-    )
-
-    # Action buttons with neumorphic shadows
-    action_buttons = ft.Row([
-        ft.Container(
-            content=ft.FilledTonalButton("Refresh", icon=ft.Icons.REFRESH, on_click=on_refresh),
-            shadow=MODERATE_NEUMORPHIC_SHADOWS,
-            border_radius=12,
-        ),
-        ft.Container(
-            content=ft.OutlinedButton("Export", icon=ft.Icons.DOWNLOAD),
-            shadow=MODERATE_NEUMORPHIC_SHADOWS,
-            border_radius=12,
-        ),
-    ], spacing=12)
-
-    # Filter bar
-    filter_bar = ft.Container(
-        content=ft.Column([
-            ft.Row([
-                create_gradient_search_field(on_change=on_search_change),
-                filter_chips_row
-            ], spacing=16, wrap=True, alignment=ft.MainAxisAlignment.START),
-        ], spacing=12),
-        padding=16,
-        border_radius=12,
-        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SURFACE),
-        shadow=PRONOUNCED_NEUMORPHIC_SHADOWS,
-    )
-
-    # System Logs Tab
-    system_logs_table = create_logs_table(filter_logs(system_logs))
-    system_logs_table.ref = system_table_ref
-
+    # Create system logs tab content
+    system_logs_table = create_log_table(system_logs, "system_logs")
     system_logs_content = ft.Container(
         content=ft.Column([
             system_logs_table,
-        ], scroll=ft.ScrollMode.AUTO, spacing=0),
-        padding=16,
-        border_radius=12,
+        ], scroll=ft.ScrollMode.AUTO, expand=True),
+        padding=20,
+        border_radius=16,
         bgcolor=ft.Colors.SURFACE,
         shadow=MODERATE_NEUMORPHIC_SHADOWS,
         expand=True,
     )
 
-    # Flet Logs Tab
-    flet_logs_table = create_logs_table(filter_logs(flet_logs))
-    flet_logs_table.ref = flet_table_ref
+    # Create Flet logs tab content
+    def get_flet_logs():
+        """Get logs from the Flet log capture handler."""
+        return _flet_log_capture.logs if _flet_log_capture.logs else [
+            {"time": datetime.now().strftime("%H:%M:%S"), "level": "INFO", "component": "flet", "message": "Flet framework initialized successfully"},
+            {"time": datetime.now().strftime("%H:%M:%S"), "level": "DEBUG", "component": "flet.page", "message": "Page created with Material Design 3 theme"},
+        ]
 
+    flet_logs_table = create_log_table(get_flet_logs(), "flet_logs")
     flet_logs_content = ft.Container(
         content=ft.Column([
             flet_logs_table,
-        ], scroll=ft.ScrollMode.AUTO, spacing=0),
-        padding=16,
-        border_radius=12,
+        ], scroll=ft.ScrollMode.AUTO, expand=True),
+        padding=20,
+        border_radius=16,
         bgcolor=ft.Colors.SURFACE,
         shadow=MODERATE_NEUMORPHIC_SHADOWS,
         expand=True,
     )
 
-    # Tabs system
+    # Create tabs
     tabs = ft.Tabs(
         selected_index=0,
         animation_duration=300,
+        indicator_color=ft.Colors.PRIMARY,
+        label_color=ft.Colors.PRIMARY,
+        unselected_label_color=ft.Colors.ON_SURFACE_VARIANT,
         tabs=[
             ft.Tab(
                 text="System Logs",
@@ -419,23 +219,55 @@ def create_logs_view(
         expand=True,
     )
 
-    # Main content
+    # Action buttons with neumorphic styling
+    action_buttons = ft.Row([
+        ft.FilledTonalButton(
+            "Refresh",
+            icon=ft.Icons.REFRESH,
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=12),
+            )
+        ),
+        ft.OutlinedButton(
+            "Export",
+            icon=ft.Icons.DOWNLOAD,
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=12),
+            )
+        ),
+        ft.OutlinedButton(
+            "Clear Flet Logs",
+            icon=ft.Icons.DELETE_SWEEP,
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=12),
+            )
+        ),
+    ], spacing=12)
+
+    # Main content with pronounced neumorphism
     content = ft.Column([
-        # Header
-        ft.Row([
-            ft.Row([
-                ft.Icon(ft.Icons.ARTICLE, size=32, color=ft.Colors.PRIMARY),
-                ft.Text("Logs", size=28, weight=ft.FontWeight.BOLD),
-            ], spacing=12),
-            action_buttons,
-        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+        # Header with icon and buttons
+        ft.Container(
+            content=ft.Row([
+                ft.Row([
+                    ft.Icon(ft.Icons.ARTICLE, size=36, color=ft.Colors.PRIMARY),
+                    ft.Text("Logs", size=32, weight=ft.FontWeight.BOLD),
+                ], spacing=12),
+                action_buttons,
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            padding=ft.padding.only(bottom=16),
+        ),
 
-        # Filter bar
-        filter_bar,
-
-        # Tabs
-        tabs,
-    ], spacing=20, expand=True)
+        # Tabs container with pronounced neumorphism
+        ft.Container(
+            content=tabs,
+            border_radius=16,
+            shadow=PRONOUNCED_NEUMORPHIC_SHADOWS,  # Big neumorphism!
+            bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.SURFACE),
+            padding=12,
+            expand=True,
+        ),
+    ], spacing=24, expand=True)
 
     main_container = ft.Container(
         content=content,
@@ -443,16 +275,12 @@ def create_logs_view(
         expand=True,
     )
 
-    # ========================================================================================
-    # LIFECYCLE
-    # ========================================================================================
-
     def dispose():
-        """Cleanup resources."""
+        """Cleanup."""
         pass
 
     def setup_subscriptions():
-        """Setup state subscriptions."""
+        """Setup."""
         pass
 
     return main_container, dispose, setup_subscriptions

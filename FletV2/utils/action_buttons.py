@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 
 import flet as ft
-from utils.debug_setup import get_logger
+from FletV2.utils.debug_setup import get_logger
 from utils.ui_components import create_modern_progress_indicator
 from views.settings_state import EnhancedSettingsState
 

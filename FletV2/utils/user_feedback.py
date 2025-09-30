@@ -7,7 +7,7 @@ Standardized dialog patterns and user feedback to eliminate the 15+ repeated Ale
 from collections.abc import Callable
 
 import flet as ft
-from utils.debug_setup import get_logger
+from FletV2.utils.debug_setup import get_logger
 
 logger = get_logger(__name__)
 

@@ -10,7 +10,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from utils.debug_setup import get_logger
+from FletV2.utils.debug_setup import get_logger
 from views.settings_state import EnhancedSettingsState
 
 logger = get_logger(__name__)

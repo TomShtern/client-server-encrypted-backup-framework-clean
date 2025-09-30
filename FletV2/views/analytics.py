@@ -20,9 +20,9 @@ for _path in (_flet_v2_root, _repo_root):
 
 import Shared.utils.utf8_solution as _  # noqa: F401
 
-# Import neumorphic shadows from theme
+# Import neumorphic shadows from theme (using relative import to avoid circular imports)
 try:
-    from FletV2.theme import PRONOUNCED_NEUMORPHIC_SHADOWS, MODERATE_NEUMORPHIC_SHADOWS
+    from theme import PRONOUNCED_NEUMORPHIC_SHADOWS, MODERATE_NEUMORPHIC_SHADOWS
 except ImportError:
     PRONOUNCED_NEUMORPHIC_SHADOWS = []
     MODERATE_NEUMORPHIC_SHADOWS = []
@@ -64,21 +64,18 @@ def create_analytics_view(
         sample_success_rate = 98.3
         sample_avg_size_gb = 3.09
 
-    # Metric card helper with enhanced visuals
+    # Metric card helper
     def create_metric_card(title: str, value: str, icon: str, color: str) -> ft.Container:
-        """Create visually enhanced metric card with hover animation."""
-        card_container = ft.Container(
+        return ft.Container(
             content=ft.Column([
                 ft.Row([
-                    # Enhanced icon container: 56x56 with gradient overlay effect
                     ft.Container(
-                        content=ft.Icon(icon, color=color, size=28),
-                        width=56,
-                        height=56,
-                        bgcolor=ft.Colors.with_opacity(0.15, color),
-                        border_radius=28,
+                        content=ft.Icon(icon, color=color, size=24),
+                        width=48,
+                        height=48,
+                        bgcolor=ft.Colors.with_opacity(0.12, color),
+                        border_radius=24,
                         alignment=ft.alignment.center,
-                        border=ft.border.all(2, ft.Colors.with_opacity(0.2, color)),
                     ),
                     ft.Text(title, size=14, weight=ft.FontWeight.W_500),
                 ], spacing=12),
@@ -87,40 +84,31 @@ def create_analytics_view(
             padding=20,
             border_radius=16,
             bgcolor=ft.Colors.SURFACE,
-            shadow=PRONOUNCED_NEUMORPHIC_SHADOWS,  # Pronounced for prominence
+            shadow=MODERATE_NEUMORPHIC_SHADOWS,  # Moderate neumorphism
             expand=True,
-            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT_CUBIC),
         )
 
-        # Add hover effect
-        def on_hover(e):
-            card_container.scale = 1.03 if e.data == "true" else 1.0
-            card_container.update()
-
-        card_container.on_hover = on_hover
-        return card_container
-
-    # Metric cards row with richer colors (Material 500 series)
+    # Metric cards row
     metrics_row = ft.ResponsiveRow([
         ft.Container(
-            create_metric_card("Total Backups", str(sample_backups), ft.Icons.BACKUP, ft.Colors.BLUE_500),
+            create_metric_card("Total Backups", str(sample_backups), ft.Icons.BACKUP, ft.Colors.BLUE_400),
             col={"sm": 12, "md": 6, "lg": 3}
         ),
         ft.Container(
-            create_metric_card("Total Storage", f"{sample_storage_gb} GB", ft.Icons.STORAGE, ft.Colors.GREEN_500),
+            create_metric_card("Total Storage", f"{sample_storage_gb} GB", ft.Icons.STORAGE, ft.Colors.GREEN_400),
             col={"sm": 12, "md": 6, "lg": 3}
         ),
         ft.Container(
-            create_metric_card("Success Rate", f"{sample_success_rate}%", ft.Icons.CHECK_CIRCLE, ft.Colors.PURPLE_500),
+            create_metric_card("Success Rate", f"{sample_success_rate}%", ft.Icons.CHECK_CIRCLE, ft.Colors.PURPLE_400),
             col={"sm": 12, "md": 6, "lg": 3}
         ),
         ft.Container(
-            create_metric_card("Avg Backup Size", f"{sample_avg_size_gb} GB", ft.Icons.PIE_CHART, ft.Colors.AMBER_500),
+            create_metric_card("Avg Backup Size", f"{sample_avg_size_gb} GB", ft.Icons.PIE_CHART, ft.Colors.AMBER_400),
             col={"sm": 12, "md": 6, "lg": 3}
         ),
     ], spacing=16)
 
-    # Enhanced sample chart data with gradient fill
+    # Sample chart data
     backup_trend_chart = ft.LineChart(
         data_series=[
             ft.LineChartData(
@@ -133,20 +121,10 @@ def create_analytics_view(
                     ft.LineChartDataPoint(5, 50),
                     ft.LineChartDataPoint(6, 45),
                 ],
-                stroke_width=4,  # Increased from 3 to 4px
-                color=ft.Colors.BLUE_500,  # Richer color
+                stroke_width=3,
+                color=ft.Colors.BLUE_400,
                 curved=True,
                 stroke_cap_round=True,
-                # Add gradient fill under curve
-                gradient=ft.LinearGradient(
-                    begin=ft.alignment.top_center,
-                    end=ft.alignment.bottom_center,
-                    colors=[
-                        ft.Colors.with_opacity(0.3, ft.Colors.BLUE_500),
-                        ft.Colors.with_opacity(0.05, ft.Colors.BLUE_500),
-                    ]
-                ),
-                below_line=True,
             )
         ],
         border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE)),
@@ -175,24 +153,24 @@ def create_analytics_view(
         max_x=6,
     )
 
-    # Storage by client chart with richer colors
+    # Storage by client chart
     storage_chart = ft.BarChart(
         bar_groups=[
             ft.BarChartGroup(
                 x=0,
-                bar_rods=[ft.BarChartRod(from_y=0, to_y=850, width=40, color=ft.Colors.BLUE_500, border_radius=4)],
+                bar_rods=[ft.BarChartRod(from_y=0, to_y=850, width=40, color=ft.Colors.BLUE_400, border_radius=4)],
             ),
             ft.BarChartGroup(
                 x=1,
-                bar_rods=[ft.BarChartRod(from_y=0, to_y=1200, width=40, color=ft.Colors.GREEN_500, border_radius=4)],
+                bar_rods=[ft.BarChartRod(from_y=0, to_y=1200, width=40, color=ft.Colors.GREEN_400, border_radius=4)],
             ),
             ft.BarChartGroup(
                 x=2,
-                bar_rods=[ft.BarChartRod(from_y=0, to_y=950, width=40, color=ft.Colors.PURPLE_500, border_radius=4)],
+                bar_rods=[ft.BarChartRod(from_y=0, to_y=950, width=40, color=ft.Colors.PURPLE_400, border_radius=4)],
             ),
             ft.BarChartGroup(
                 x=3,
-                bar_rods=[ft.BarChartRod(from_y=0, to_y=700, width=40, color=ft.Colors.AMBER_500, border_radius=4)],
+                bar_rods=[ft.BarChartRod(from_y=0, to_y=700, width=40, color=ft.Colors.AMBER_400, border_radius=4)],
             ),
         ],
         border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE)),
@@ -218,31 +196,31 @@ def create_analytics_view(
         max_y=1400,
     )
 
-    # File type distribution with richer colors
+    # File type distribution
     file_type_chart = ft.PieChart(
         sections=[
             ft.PieChartSection(
                 value=40,
                 title="Documents",
-                color=ft.Colors.BLUE_500,
+                color=ft.Colors.BLUE_400,
                 radius=80,
             ),
             ft.PieChartSection(
                 value=30,
                 title="Images",
-                color=ft.Colors.GREEN_500,
+                color=ft.Colors.GREEN_400,
                 radius=80,
             ),
             ft.PieChartSection(
                 value=20,
                 title="Videos",
-                color=ft.Colors.PURPLE_500,
+                color=ft.Colors.PURPLE_400,
                 radius=80,
             ),
             ft.PieChartSection(
                 value=10,
                 title="Other",
-                color=ft.Colors.AMBER_500,
+                color=ft.Colors.AMBER_400,
                 radius=80,
             ),
         ],
@@ -250,7 +228,7 @@ def create_analytics_view(
         center_space_radius=0,
     )
 
-    # Charts row with enhanced styling and hover effects
+    # Charts row
     charts_row = ft.ResponsiveRow([
         # Backup trends
         ft.Container(
@@ -261,13 +239,11 @@ def create_analytics_view(
                     height=300,
                 ),
             ], spacing=12),
-            padding=24,  # Increased padding
+            padding=20,
             border_radius=16,
             bgcolor=ft.Colors.SURFACE,
-            shadow=MODERATE_NEUMORPHIC_SHADOWS,
-            col={"sm": 12, "md": 12, "lg": 8},
-            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT_CUBIC),
-            on_hover=lambda e: _on_chart_hover(e, e.control),
+            shadow=MODERATE_NEUMORPHIC_SHADOWS,  # Moderate neumorphism
+            col={"sm": 12, "md": 12, "lg": 8}
         ),
         # File type distribution
         ft.Container(
@@ -279,22 +255,15 @@ def create_analytics_view(
                     alignment=ft.alignment.center,
                 ),
             ], spacing=12),
-            padding=24,  # Increased padding
+            padding=20,
             border_radius=16,
             bgcolor=ft.Colors.SURFACE,
-            shadow=MODERATE_NEUMORPHIC_SHADOWS,
-            col={"sm": 12, "md": 12, "lg": 4},
-            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT_CUBIC),
-            on_hover=lambda e: _on_chart_hover(e, e.control),
+            shadow=MODERATE_NEUMORPHIC_SHADOWS,  # Moderate neumorphism
+            col={"sm": 12, "md": 12, "lg": 4}
         ),
     ], spacing=16)
 
-    def _on_chart_hover(e, control):
-        """Subtle hover effect for chart containers."""
-        control.scale = 1.01 if e.data == "true" else 1.0
-        control.update()
-
-    # Storage by client with enhanced styling
+    # Storage by client
     storage_row = ft.Container(
         content=ft.Column([
             ft.Text("Storage by Client", size=18, weight=ft.FontWeight.W_600),
@@ -303,49 +272,31 @@ def create_analytics_view(
                 height=300,
             ),
         ], spacing=12),
-        padding=24,  # Increased padding
+        padding=20,
         border_radius=16,
         bgcolor=ft.Colors.SURFACE,
-        shadow=MODERATE_NEUMORPHIC_SHADOWS,
-        animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT_CUBIC),
-        on_hover=lambda e: _on_chart_hover(e, e.control),
+        shadow=MODERATE_NEUMORPHIC_SHADOWS,  # Moderate neumorphism
     )
 
-    # Time period selector with neumorphic styling
-    period_selector = ft.Container(
-        content=ft.Row([
-            ft.Text("Time Period:", size=14, weight=ft.FontWeight.W_500),
-            ft.SegmentedButton(
-                segments=[
-                    ft.Segment(value="7d", label=ft.Text("7 Days")),
-                    ft.Segment(value="30d", label=ft.Text("30 Days")),
-                    ft.Segment(value="90d", label=ft.Text("90 Days")),
-                    ft.Segment(value="all", label=ft.Text("All Time")),
-                ],
-                selected={"7d"},
-            ),
-        ], spacing=12),
-        padding=12,
-        border_radius=12,
-        bgcolor=ft.Colors.with_opacity(0.3, ft.Colors.SURFACE),
-        shadow=[
-            ft.BoxShadow(
-                spread_radius=1,
-                blur_radius=4,
-                color=ft.Colors.with_opacity(0.1, "#000000"),
-                offset=ft.Offset(2, 2),
-            )
-        ],
-    )
+    # Time period selector
+    period_selector = ft.Row([
+        ft.Text("Time Period:", size=14, weight=ft.FontWeight.W_500),
+        ft.SegmentedButton(
+            segments=[
+                ft.Segment(value="7d", label=ft.Text("7 Days")),
+                ft.Segment(value="30d", label=ft.Text("30 Days")),
+                ft.Segment(value="90d", label=ft.Text("90 Days")),
+                ft.Segment(value="all", label=ft.Text("All Time")),
+            ],
+            selected={"7d"},
+        ),
+    ], spacing=12)
 
-    # Main content with enhanced spacing and header
+    # Main content
     content = ft.Column([
-        # Enhanced header with icon and larger text
+        # Header
         ft.Row([
-            ft.Row([
-                ft.Icon(ft.Icons.ANALYTICS, size=36, color=ft.Colors.PRIMARY),
-                ft.Text("Analytics Dashboard", size=32, weight=ft.FontWeight.BOLD),
-            ], spacing=12),
+            ft.Text("Analytics Dashboard", size=28, weight=ft.FontWeight.BOLD),
             period_selector,
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, wrap=True),
 
@@ -357,7 +308,7 @@ def create_analytics_view(
 
         # Storage
         storage_row,
-    ], spacing=24, expand=True, scroll=ft.ScrollMode.AUTO)
+    ], spacing=20, expand=True, scroll=ft.ScrollMode.AUTO)
 
     main_container = ft.Container(
         content=content,

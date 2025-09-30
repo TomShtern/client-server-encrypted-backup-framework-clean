@@ -197,6 +197,7 @@ python scripts/one_click_build_and_run.py
   - Logging initialized with console and file output
   - The server is ready to accept connections
   The Flet GUI should open automatically in the default web browser. If it doesn't appear, you can typically access it at `http://localhost:8550` (or ports 8551/8552 if 8550 is occupied).
+- **FletV2 Analysis**: Before making any changes to `FletV2`, analyze the folder for issues, problems, flaws, wrongs, anti-patterns, and bad practices using context7 MCP for up-to-date official context, documentation, and information to verify that all is going the way it should be going.
 
 ### Key Principles
 - **FletV2 First**: Use `FletV2/` directory exclusively (modern implementation)
@@ -665,10 +666,4 @@ def _force_visible_recursive(ctrl, depth: int = 0, max_depth: int = 10) -> None:
         return
 
     # Suppress errors across recursive descent (safer and clearer than a bare try/except)
-    with contextlib.suppress(Exception):
-        if hasattr(ctrl, 'controls') and ctrl.controls:
-            for child in list(ctrl.controls):
-                _force_visible_recursive(child, depth + 1, max_depth)
-
-        if hasattr(ctrl, 'content') and ctrl.content:
-            _
+    with contextlib.

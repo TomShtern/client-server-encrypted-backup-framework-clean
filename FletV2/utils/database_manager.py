@@ -13,7 +13,7 @@ from typing import Any
 project_root = os.path.join(os.path.dirname(__file__), "..", "..")
 sys.path.insert(0, project_root)
 
-from utils.debug_setup import get_logger
+from FletV2.utils.debug_setup import get_logger
 
 logger = get_logger(__name__)
 

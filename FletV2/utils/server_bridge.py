@@ -263,6 +263,14 @@ class ServerBridge:
         """Add a new client (sync version)."""
         return self._call_real_server_method('add_client', client_data)
 
+    def update_client(self, client_id: str, updated_data: dict[str, Any]) -> dict[str, Any]:
+        """Update an existing client (sync version)."""
+        return self._call_real_server_method('update_client', client_id, updated_data)
+
+    async def update_client_async(self, client_id: str, updated_data: dict[str, Any]) -> dict[str, Any]:
+        """Update an existing client (async version)."""
+        return await self._call_real_server_method_async('update_client_async', client_id, updated_data)
+
     def delete_client(self, client_id: str) -> dict[str, Any]:
         """Delete a client (sync version)."""
         return self._call_real_server_method('delete_client', client_id)

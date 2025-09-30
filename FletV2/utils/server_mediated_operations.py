@@ -10,7 +10,7 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-from utils.debug_setup import get_logger
+from FletV2.utils.debug_setup import get_logger
 from utils.state_manager import StateManager
 from utils.user_feedback import show_error_message, show_success_message
 

@@ -622,6 +622,7 @@ class FletV2App(ft.Row):
             "analytics": ("views.analytics", "create_analytics_view", "analytics"),
             "logs": ("views.logs", "create_logs_view", "logs"),
             "settings": ("views.settings", "create_settings_view", "settings"),
+            "experimental": ("views.experimental", "create_experimental_view", "experimental"),
         }
         return view_configs.get(view_name, ("views.dashboard", "create_dashboard_view", "dashboard"))
 
@@ -639,7 +640,7 @@ class FletV2App(ft.Row):
         """Navigate to a specific view and sync navigation rail."""
         try:
             # Update navigation rail selected index
-            view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
+            view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings", "experimental"]
             if view_name in view_names:
                 new_index = view_names.index(view_name)
                 if hasattr(self, '_nav_rail_control') and self._nav_rail_control:
@@ -662,7 +663,7 @@ class FletV2App(ft.Row):
         def on_nav_change(e: ft.ControlEvent) -> None:
             try:
                 selected_index = e.control.selected_index
-                view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
+                view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings", "experimental"]
                 if 0 <= selected_index < len(view_names):
                     view_name = view_names[selected_index]
                     self.navigate_to(view_name)
@@ -742,6 +743,12 @@ class FletV2App(ft.Row):
                     icon=ft.Icons.SETTINGS_OUTLINED,
                     selected_icon=ft.Icons.SETTINGS,
                     label="Settings",
+                    padding=ft.Padding(8, 8, 8, 8)
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.SCIENCE_OUTLINED,
+                    selected_icon=ft.Icons.SCIENCE,
+                    label="Experimental",
                     padding=ft.Padding(8, 8, 8, 8)
                 ),
             ],

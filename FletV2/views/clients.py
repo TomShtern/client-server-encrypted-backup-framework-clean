@@ -214,6 +214,8 @@ def create_clients_view(
                                 items=[
                                     ft.PopupMenuItem(text="View Details", icon=ft.Icons.INFO,
                                                    on_click=lambda _e, c=client: view_client_details(c)),
+                                    ft.PopupMenuItem(text="Edit", icon=ft.Icons.EDIT,
+                                                   on_click=lambda _e, c=client: edit_client(c)),
                                     ft.PopupMenuItem(text="Disconnect", icon=ft.Icons.LOGOUT,
                                                    on_click=lambda _e, c=client: disconnect_client(c)),
                                     ft.PopupMenuItem(text="Delete", icon=ft.Icons.DELETE,
@@ -438,6 +440,66 @@ def create_clients_view(
             ],
         )
         page.open(add_dialog)
+
+    def edit_client(client: dict[str, Any]) -> None:
+        """Edit existing client dialog."""
+        nonlocal clients_data
+        name_field = ft.TextField(label="Client Name", value=client.get('name', ''), hint_text="Enter client name")
+        ip_field = ft.TextField(label="IP Address", value=client.get('ip_address', ''), hint_text="Enter IP address")
+        status_dropdown = ft.Dropdown(
+            label="Status",
+            value=client.get('status', 'Disconnected'),
+            options=[
+                ft.dropdown.Option("Connected"),
+                ft.dropdown.Option("Disconnected"),
+                ft.dropdown.Option("Connecting"),
+            ]
+        )
+
+        def save_changes(_e: ft.ControlEvent) -> None:
+            if not name_field.value or not name_field.value.strip():
+                show_error_message(page, "Client name is required")
+                return
+
+            updated_client = {
+                **client,  # Keep existing fields
+                "name": name_field.value.strip(),
+                "ip_address": ip_field.value.strip() if ip_field.value else client.get('ip_address', 'Unknown'),
+                "status": status_dropdown.value,
+                "last_seen": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+
+            if server_bridge:
+                try:
+                    result = server_bridge.update_client(client.get('id'), updated_client)
+                    if result.get('success'):
+                        show_success_message(page, f"Client {updated_client['name']} updated")
+                        load_clients_data()
+                    else:
+                        show_error_message(page, f"Failed to update client: {result.get('error', 'Unknown error')}")
+                except Exception as ex:
+                    show_error_message(page, f"Error: {ex}")
+            else:
+                # Mock success - update in local data
+                for i, c in enumerate(clients_data):
+                    if c.get('id') == client.get('id'):
+                        clients_data[i] = updated_client
+                        break
+                show_success_message(page, f"Client {updated_client['name']} updated (mock mode)")
+                update_stats()
+                update_table()
+
+            page.close(edit_dialog)
+
+        edit_dialog = ft.AlertDialog(
+            title=ft.Text(f"Edit Client: {client.get('name', 'Unknown')}"),
+            content=ft.Column([name_field, ip_field, status_dropdown], height=200, scroll=ft.ScrollMode.AUTO),
+            actions=[
+                ft.TextButton("Cancel", on_click=lambda _e: page.close(edit_dialog)),
+                ft.FilledButton("Save", on_click=save_changes),
+            ],
+        )
+        page.open(edit_dialog)
 
     # Search and filter handlers
     def on_search_change(e: ft.ControlEvent) -> None:

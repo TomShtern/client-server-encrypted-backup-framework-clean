@@ -52,7 +52,7 @@ from functools import wraps
 from typing import Any
 
 import flet as ft
-from utils.debug_setup import get_logger
+from FletV2.utils.debug_setup import get_logger
 from utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger(__name__)

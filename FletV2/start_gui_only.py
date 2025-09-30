@@ -40,4 +40,6 @@ if __name__ == "__main__":
         app = main.FletV2App(page, real_server=None)
         await app.initialize()
 
+    # Desktop mode (web mode has environment conflicts - keeping it simple)
+    # Note: Web hot-reload available via: flet run -r main.py
     ft.app(target=gui_only_main, view=ft.AppView.FLET_APP)

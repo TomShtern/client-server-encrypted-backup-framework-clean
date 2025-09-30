@@ -12,7 +12,8 @@ __all__ = [
     "database",
     "files",
     "logs",
-    "settings"
+    "settings",
+    "experimental"
 ]
 
 # Import modules on demand to prevent startup failures
@@ -40,6 +41,9 @@ def __getattr__(name):
             elif name == "settings":
                 from . import settings
                 return settings
+            elif name == "experimental":
+                from . import experimental
+                return experimental
         except ImportError as e:
             print(f"Warning: Could not import {name}: {e}")
             return None
